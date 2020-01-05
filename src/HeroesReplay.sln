@@ -1,0 +1,24 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29613.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay", "HeroesReplay\HeroesReplay.csproj", "{FF909A91-167D-419B-8104-16E1764B2330}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FF909A91-167D-419B-8104-16E1764B2330}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF909A91-167D-419B-8104-16E1764B2330}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF909A91-167D-419B-8104-16E1764B2330}.Release|Any CPU.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6CBF207C-29AE-40CE-B87C-DBE75223CD46}
+	EndGlobalSection
+EndGlobal
