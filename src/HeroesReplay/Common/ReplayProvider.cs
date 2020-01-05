@@ -11,15 +11,15 @@ namespace HeroesReplay
     {
         private readonly string path;
 
-        public Queue<Game> Games { get; }
-        public List<Game> Complete { get; }
+        public Queue<Game> Unwatched { get; }
+        public List<Game> Watched { get; }
 
         public ReplayProvider(string path)
         {
             this.path = path;
 
-            Games = new Queue<Game>();
-            Complete = new List<Game>();
+            Unwatched = new Queue<Game>();
+            Watched = new List<Game>();
         }
 
         public void LoadAndParseReplays(int count = 5)
@@ -28,17 +28,17 @@ namespace HeroesReplay
 
             foreach (var replayPath in Directory.EnumerateFiles(path, "*.StormReplay", SearchOption.AllDirectories).OrderByDescending(x => File.GetCreationTime(x)))
             {
-                if (Complete.Any(g => g.Path == replayPath)) continue;
+                if (Watched.Any(g => g.Path == replayPath)) continue;
 
                 var (result, replay) = DataParser.ParseReplay(File.ReadAllBytes(replayPath));
 
                 if (result == DataParser.ReplayParseResult.Success && GameSpectator.SupportedModes.Contains(replay.GameMode))
                 {
                     Console.WriteLine($"Loaded {replayPath} into the queue.");
-                    Games.Enqueue(new Game(replayPath, replay));
+                    Unwatched.Enqueue(new Game(replayPath, replay));
                 }
 
-                if (Games.Count == count) break;
+                if (Unwatched.Count == count) break;
             }
 
             return;

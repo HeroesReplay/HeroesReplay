@@ -18,7 +18,7 @@ namespace HeroesReplay
 
                     while (!consoleWaiter.IsSet)
                     {
-                        if (provider.Games.TryDequeue(out Game game))
+                        if (provider.Unwatched.TryDequeue(out Game game))
                         {
                             using (var session = new GameController(game))
                             {
@@ -26,12 +26,11 @@ namespace HeroesReplay
                                 {
                                     using (var waiter = new ManualResetEventSlim())
                                     {
-                                        session.GameEnded += (sender, e) => OnTerminated(waiter, session);
-                                        session.Start();
+                                        session.GameEnded += (sender, e) => OnTerminated(waiter, session); // when the game has ended
 
-                                        waiter.Wait();
-
-                                        provider.Complete.Add(game);
+                                        session.Start(); // Start watching and spectating
+                                        waiter.Wait(); // Wait until game replay has reached the end
+                                        provider.Watched.Add(game); // Add to watched list
                                     }
                                 }
                                 else
@@ -51,8 +50,8 @@ namespace HeroesReplay
 
         private static void OnTerminated(ManualResetEventSlim waiter, GameController controller)
         {
-            controller.TryKillGameProcess();
-            waiter.Set();
+            controller.TryKillGameProcess(); // Kill the game process
+            waiter.Set(); // Unblock the waiter to continue
         }
     }
 }
