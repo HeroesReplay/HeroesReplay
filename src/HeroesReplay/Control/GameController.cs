@@ -32,25 +32,9 @@ namespace HeroesReplay
             spectator = new GameSpectator(game);
         }
 
-        public bool TryLaunchGameProcess()
-        {
-            return Win32.TryLaunchGame(game);
-        }
+        public bool TryLaunchGameProcess() => Win32.TryLaunchGame(game);
 
-        public bool TryKillGameProcess()
-        {
-            try
-            {
-                Process.GetProcessesByName("HeroesOfTheStorm_x64")[0].Kill();
-                return true;
-            }
-            catch (Exception e)
-            {
-
-            }
-
-            return false;
-        }
+        public bool TryKillGameProcess() => Win32.TryKillGame();
 
         public void Stop()
         {
@@ -62,7 +46,6 @@ namespace HeroesReplay
         {
             UnRegisterListeners();
             RegisterListeners();
-
             spectator.Start();
         }
 
@@ -88,7 +71,7 @@ namespace HeroesReplay
 
             spectator.HeroChange += OnHeroChange;
             spectator.PanelChange += OnPanelChange;
-            spectator.Paused += OnGameStarted;
+            spectator.Started += OnGameStarted;
         }
 
         private void UnRegisterListeners()
@@ -99,7 +82,7 @@ namespace HeroesReplay
 
             spectator.HeroChange -= OnHeroChange;
             spectator.PanelChange -= OnPanelChange;
-            spectator.Paused -= OnGameStarted;
+            spectator.Started -= OnGameStarted;
         }
 
         private void OnHeroChange(object sender, EventData<Player> e) => SendFocusHero(e);
@@ -107,13 +90,17 @@ namespace HeroesReplay
         private void OnPanelChange(object sender, EventData<Panel> e) => SendPanelChange(e);
 
         private void OnGameStarted(object sender, EventData<TimeSpan> e)
-        {
+        { 
             Win32.SendToggleZoom(); // Max Zoom
             Win32.SendToggleChat(); // Hide Chat
         }
 
         private void SendFocusHero(EventData<Player> e)
         {
+            if (spectator.State == SpectatorState.Paused) return;
+
+            Console.WriteLine($"Focusing {e.Data.Character}. Reason: {e.Message}");
+
             for (int index = 0; index < 10; index++)
             {
                 if (e.Replay.Players[index] == e.Data)

@@ -1,9 +1,7 @@
 ﻿using Heroes.ReplayParser;
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
 using System.Linq;
 using System.Threading;
 
@@ -30,28 +28,20 @@ namespace HeroesReplay
                 current = value;
             }
         }
-
-        public bool IsRunning => stopwatch.IsRunning;
-
+        
         public SpectatorState State
         {
-            get
-            {
-                if (stopwatch.Elapsed >= Replay.ReplayLength && stopwatch.IsRunning) return SpectatorState.EndOfGame;
-                if (stopwatch.Elapsed == TimeSpan.Zero && !stopwatch.IsRunning) return SpectatorState.StartOfGame;
-                if (stopwatch.IsRunning) return SpectatorState.Running;
-                return SpectatorState.Paused;
-            }
+            get => state;
             set
             {
-                if (State != value)
+                if (state != value)
                 {
                     if (value == SpectatorState.EndOfGame)
                     {
                         Ended?.Invoke(this, new EventData<TimeSpan>(Replay, stopwatch.Elapsed, value.ToString()));
                     }
 
-                    if (value == SpectatorState.StartOfGame)
+                    if (value == SpectatorState.Running)
                     {
                         stopwatch.Start();
                         Started?.Invoke(this, new EventData<TimeSpan>(Replay, stopwatch.Elapsed, $"started at {stopwatch.Elapsed}"));
@@ -64,7 +54,7 @@ namespace HeroesReplay
                     }
                 }
 
-                State = value;
+                state = value;
             }
         }
 
@@ -87,6 +77,7 @@ namespace HeroesReplay
         private Thread playerThread;
         private Thread stateThread;
 
+        private SpectatorState state;
         private Game game;
         private ViewContextBuilder view;
 
@@ -158,36 +149,52 @@ namespace HeroesReplay
 
                         if (context.Deaths.Any())
                         {
+                            // TODO: better logic
+
                             foreach (var unit in context.Deaths)
                             {
-                                HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "PlayerDeaths"));
-                                Thread.Sleep(stopwatch.Elapsed - unit.TimeSpanDied.Value);
+                                var reason =  unit.PlayerKilledBy == unit.PlayerControlledBy ? "Suicide" : (unit.PlayerKilledBy != null ? "Death" : "Environment");
+                                HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.PlayerKilledBy ?? unit.PlayerControlledBy, reason));
+                                Thread.Sleep(TimeSpan.FromSeconds(3)); 
                             }
                         }
                         else if (context.Objectives.Any())
                         {
+                            // TODO: better logic
+
                             foreach (var unit in context.Objectives)
                             {
-                                HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "PlayersObjectives"));
-                                Thread.Sleep(stopwatch.Elapsed - unit.TimeSpanDied.Value);
+                                HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "Objectives"));
+                                Thread.Sleep(1000);
                             }
                         }
                         else if (context.Structures.Any())
                         {
+                            // TODO: better logic
+
                             foreach (var unit in context.Structures)
                             {
-                                HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "PlayersStructures"));
-                                Thread.Sleep(stopwatch.Elapsed - unit.TimeSpanDied.Value);
+                                HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "Structures"));
+                                Thread.Sleep(5000);
                             }
                         }
                         else if (context.Alive.Any())
                         {
+                            // TODO: better logic
+
+                            // Give every alive player equal view time?
                             foreach (var player in context.Alive)
                             {
-                                HeroChange?.Invoke(this, new EventData<Player>(Replay, player, "PlayersAlive"));
+                                HeroChange?.Invoke(this, new EventData<Player>(Replay, player, "Alive"));
                                 Thread.Sleep(TimeSpan.FromSeconds(10.0 / context.Alive.Count()));
                             }
+
+                            // Give 5 seconds to a random alive player
+                            //HeroChange?.Invoke(this, new EventData<Player>(Replay, context.Alive.PickRandomPlayer(), "Alive");
+                            //Thread.Sleep(5000);
                         }
+
+                        
                     }
                     catch (Exception e)
                     {
@@ -244,50 +251,53 @@ namespace HeroesReplay
         {
             while (stateThread != null)
             {
+                LogTimerToConsole();
+
                 try
                 {
-                    if (stopwatch.Elapsed >= Replay.ReplayLength)
+                    if (State == SpectatorState.Loading)
                     {
-                        State = SpectatorState.EndOfGame;
+                        if (StateDetector.TryDetectStart(out bool detected))
+                        {
+                            if (detected) State = SpectatorState.Running;
+                        }
+                    }
+                    else if (State == SpectatorState.Paused)
+                    {
+                        if (StateDetector.TryIsRunning(out bool running))
+                        {
+                            if (running) State = SpectatorState.Running;
+                        }
+                    }
+                    else if (State == SpectatorState.Running)
+                    {
+                        if (StateDetector.TryIsPaused(out bool paused))
+                        {
+                            if (paused) State = SpectatorState.Paused;
+                        }
+                    }
+                    else if (stopwatch.Elapsed >= Replay.ReplayLength)
+                    {
+                        if (StateDetector.TryIsPaused(out bool paused))
+                        {
+                            State = SpectatorState.EndOfGame;
+                        }
                     }
 
                     if (State == SpectatorState.Loading)
                     {
-                        if (TryDetectGame())
-                        {
-                            State = SpectatorState.StartOfGame;
-                        }
+                        Thread.Sleep(100);
                     }
-
-                    if (State == SpectatorState.Paused)
+                    else
                     {
-                        // try detect unpaused
-                        if (TryIsRunning(out var running))
-                        {
-                            if(running) State = SpectatorState.Running;
-
-                        }
+                        Thread.Sleep(500);
                     }
 
-                    if (State == SpectatorState.Running)
-                    {
-                        // try detect pause
-                        if (TryIsPaused(out var paused))
-                        {
-                            if (paused) State = SpectatorState.Paused;                                
-                        }
-                    }
-
-                    // Start, Paused
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine(e.Message);
                 }
-
-                LogTimerToConsole();
-
-                Thread.Sleep(TimeSpan.FromSeconds(1));
             }
         }
 
@@ -298,67 +308,5 @@ namespace HeroesReplay
                 Console.WriteLine("Timer: " + Timer);
             }
         }
-
-        private bool TryIsRunning(out bool running)
-        {
-            running = false;
-
-            try
-            {
-                if (Win32.TryGetScreenshot(out Bitmap screenshot))
-                {
-                    // TODO: if image contains [Pause Icon] return true
-                }
-
-                return false;
-            }
-            catch (Exception e)
-            {
-
-            }
-
-            return false;
-        }
-
-        private bool TryIsPaused(out bool paused)
-        {
-            paused = false;
-
-            try
-            {
-                if (Win32.TryGetScreenshot(out Bitmap screenshot))
-                {
-                    // TODO: if image contains [Play Icon] return true
-                }
-
-                return false;
-            }
-            catch (Exception e)
-            {
-
-            }
-
-            return false;
-        }
-
-        private bool TryDetectGame()
-        {
-            try
-            {
-                if (Win32.TryGetScreenshot(out Bitmap screenshot))
-                {
-                    // TODO: if image contains [Pause Icon] return true
-                }
-
-                return false;
-            }
-            catch (Exception e)
-            {
-
-            }
-
-            return false;
-        }
-
     }
 }

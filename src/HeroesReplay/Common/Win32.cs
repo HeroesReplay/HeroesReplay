@@ -23,12 +23,27 @@ namespace HeroesReplay
         public const int CAPTUREBLT = 0x40000000;
         public const int VK_RETURN = 0x0D;
 
+        public static bool TryKillGame()
+        {
+            try
+            {
+                Process.GetProcessesByName("HeroesOfTheStorm_x64")[0].Kill();
+                return true;
+            }
+            catch (Exception)
+            {
+
+            }
+
+            return false;
+        }
+
         public static bool TryLaunchGame(Game game)
         {
             using (var battleNet = Process.Start(@"C:\Program Files (x86)\Battle.net\Battle.net.exe", "--game heroes"))
             {
                 battleNet.WaitForExit();
-                Thread.Sleep(1000);
+                Thread.Sleep(TimeSpan.FromSeconds(5));
 
                 SendEnterByHandle(Launcher.MainWindowHandle);
 
