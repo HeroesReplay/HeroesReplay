@@ -9,20 +9,20 @@ using System.Runtime.InteropServices;
 
 namespace HeroesReplay
 {
-    public static class StateDetector
+    public class StateDetector : IDisposable
     {
-        static Bitmap Zeros { get; }
-        static Bitmap Play { get; }
-        static string Assets { get; }
+        private readonly Bitmap zerosTimer;
+        private readonly Bitmap playButton;
 
-        static StateDetector()
+        public StateDetector()
         {
-            Assets = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Assets");
-            Zeros = (Bitmap) Image.FromFile(Path.Combine(Assets, "START.png"));
-            Play = (Bitmap) Image.FromFile(Path.Combine(Assets, "PLAY.png"));
+            var assetsPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Assets");
+
+            zerosTimer = (Bitmap) Image.FromFile(Path.Combine(assetsPath, "START.png"));
+            playButton = (Bitmap) Image.FromFile(Path.Combine(assetsPath, "PLAY.png"));
         }
 
-        public static bool TryIsRunning(out bool running)
+        public bool TryIsRunning(out bool running)
         {
             running = false;
 
@@ -31,7 +31,7 @@ namespace HeroesReplay
                 if (Win32.TryGetScreenshot(out Bitmap screenshot))
                 {
                     var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
-                    running = !Find(controls, Play).HasValue;
+                    running = !Find(controls, playButton).HasValue;
                     return true;
                 }
             }
@@ -43,7 +43,7 @@ namespace HeroesReplay
             return false;
         }
 
-        public static bool TryIsPaused(out bool paused)
+        public bool TryIsPaused(out bool paused)
         {
             paused = false;
 
@@ -52,7 +52,7 @@ namespace HeroesReplay
                 if (Win32.TryGetScreenshot(out Bitmap screenshot))
                 {
                     var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
-                    paused = Find(controls, Play).HasValue;
+                    paused = Find(controls, playButton).HasValue;
                     return true;
                 }
             }
@@ -64,7 +64,7 @@ namespace HeroesReplay
             return false;
         }
 
-        public static bool TryDetectStart(out bool detected)
+        public bool TryDetectStart(out bool detected)
         {
             detected = false;
 
@@ -74,7 +74,7 @@ namespace HeroesReplay
                 {
                     var timer = screenshot.Clone(new Rectangle(new Point((screenshot.Width / 2) - 100, 0), new Size(200, 100)), PixelFormat.Format32bppArgb);
                     var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
-                    detected = Find(timer, Zeros).HasValue;
+                    detected = Find(timer, zerosTimer).HasValue;
                     return true;
                 }
             }
@@ -87,7 +87,7 @@ namespace HeroesReplay
         }
 
 
-        public static Point? Find(Bitmap haystack, Bitmap needle)
+        public  Point? Find(Bitmap haystack, Bitmap needle)
         {
             if (null == haystack || null == needle) return null;
             if (haystack.Width < needle.Width || haystack.Height < needle.Height) return null;
@@ -163,5 +163,10 @@ namespace HeroesReplay
             return true;
         }
 
+        public void Dispose()
+        {
+            zerosTimer?.Dispose();
+            playButton?.Dispose();
+        }
     }
 }

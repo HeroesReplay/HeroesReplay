@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace HeroesReplay
@@ -11,7 +12,7 @@ namespace HeroesReplay
 
             using (var consoleWaiter = new ManualResetEventSlim())
             {
-                using (var provider = new ReplayProvider(@"G:\replays"))
+                using (var provider = new ReplayProvider("G:\\replays"))
                 {
                     Console.CancelKeyPress += (sender, e) =>
                     {
@@ -28,9 +29,14 @@ namespace HeroesReplay
                                 {
                                     using (var waiter = new ManualResetEventSlim())
                                     {
-                                        session.GameEnded += (sender, e) => OnTerminated(waiter, session); // when the game has ended
-                                        session.GameStarted += (sender, e) => Console.WriteLine("Game started");
-                                        session.GamePaused += (sender, e) => Console.WriteLine("Game paused");
+                                        session.StateChanged += (sender, e) =>
+                                        {
+                                            if (e.Data.Current == GameState.EndOfGame)
+                                            {
+                                                session.TryKillGameProcess();
+                                                waiter.Set();
+                                            }
+                                        };
 
                                         session.Start(); // Start watching and spectating
                                         waiter.Wait(); // Wait until game replay has reached the end
@@ -52,12 +58,6 @@ namespace HeroesReplay
 
                 }
             }
-        }
-
-        private static void OnTerminated(ManualResetEventSlim waiter, GameController controller)
-        {
-            controller.TryKillGameProcess(); // Kill the game process
-            waiter.Set(); // Unblock the waiter to continue
         }
     }
 }

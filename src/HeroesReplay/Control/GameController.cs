@@ -12,11 +12,8 @@ namespace HeroesReplay
     public class GameController : IDisposable
     {
         public event EventHandler<EventData<Player>> HeroChange;
-        public event EventHandler<EventData<Panel>> PanelChange;
-
-        public event EventHandler<EventData<TimeSpan>> GameEnded;
-        public event EventHandler<EventData<TimeSpan>> GamePaused;
-        public event EventHandler<EventData<TimeSpan>> GameStarted;
+        public event EventHandler<EventData<GamePanel>> PanelChange;
+        public event EventHandler<EventData<StateDelta>> StateChanged;
 
         public event EventHandler<EventArgs> TogglePause;
         public event EventHandler<EventArgs> ToggleZoom;
@@ -65,39 +62,38 @@ namespace HeroesReplay
 
         private void RegisterListeners()
         {
-            spectator.Started += GameStarted;
-            spectator.Ended += GameEnded;
-            spectator.Paused += GameStarted;
+            spectator.StateChange += StateChanged;
 
             spectator.HeroChange += OnHeroChange;
             spectator.PanelChange += OnPanelChange;
-            spectator.Started += OnGameStarted;
+            spectator.StateChange += OnStateChanged;
         }
 
         private void UnRegisterListeners()
         {
-            spectator.Started -= GameStarted;
-            spectator.Paused -= GamePaused;
-            spectator.Ended -= GameEnded;
+            spectator.StateChange -= StateChanged;
 
             spectator.HeroChange -= OnHeroChange;
             spectator.PanelChange -= OnPanelChange;
-            spectator.Started -= OnGameStarted;
+            spectator.StateChange -= OnStateChanged;
         }
 
         private void OnHeroChange(object sender, EventData<Player> e) => SendFocusHero(e);
 
-        private void OnPanelChange(object sender, EventData<Panel> e) => SendPanelChange(e);
+        private void OnPanelChange(object sender, EventData<GamePanel> e) => SendPanelChange(e);
 
-        private void OnGameStarted(object sender, EventData<TimeSpan> e)
-        { 
-            Win32.SendToggleZoom(); // Max Zoom
-            Win32.SendToggleChat(); // Hide Chat
+        private void OnStateChanged(object sender, EventData<StateDelta> e)
+        {
+            if (e.Data.Previous == GameState.Loading && e.Data.Current == GameState.Running)
+            {
+                Win32.SendToggleZoom(); // Max Zoom
+                Win32.SendToggleChat(); // Hide Chat
+            }
         }
 
         private void SendFocusHero(EventData<Player> e)
         {
-            if (spectator.State == SpectatorState.Paused) return;
+            if (spectator.GameState == GameState.Paused) return;
 
             Console.WriteLine($"Focusing {e.Data.Character}. Reason: {e.Message}");
 
@@ -110,6 +106,6 @@ namespace HeroesReplay
             }
         }
 
-        private void SendPanelChange(EventData<Panel> e) => Win32.SendPanelChange(e.Data);
+        private void SendPanelChange(EventData<GamePanel> e) => Win32.SendPanelChange(e.Data);
     }
 }

@@ -6,28 +6,34 @@ using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace HeroesReplay
-{
-    public static partial class Win32
+{    
+    public static class Win32
     {
-        private static readonly Keys[] KEYS_HEROES = new Keys[] { Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7, Keys.D8, Keys.D9, Keys.D0 };
-        private static readonly Keys[] KEYS_CONSOLE_PANEL = new Keys[] { Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7, Keys.D8 };
+        private const string GameProcessName = "HeroesOfTheStorm_x64";
+        private const string BNetProcessName = "Battle.net";
 
-        private static Process Game => Process.GetProcessesByName("HeroesOfTheStorm_x64")[0];
-        private static Process Launcher => Process.GetProcessesByName("Battle.net")[0];
+        private static readonly Keys[] KEYS_HEROES = { Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7, Keys.D8, Keys.D9, Keys.D0 };
+        private static readonly Keys[] KEYS_CONSOLE_PANEL = { Keys.D1, Keys.D2, Keys.D3, Keys.D4, Keys.D5, Keys.D6, Keys.D7, Keys.D8 };
+
+        private static Process Game => Process.GetProcessesByName(GameProcessName)[0];
+
+        private static Process Launcher => Process.GetProcessesByName(BNetProcessName)[0];
         private static IntPtr GameWindowHandle => Game.MainWindowHandle;
 
         public const int WM_KEYDOWN = 0x100;
         public const int WM_KEYUP = 0x101;
         public const int WM_CHAR = 0x102;
+
         public const int SRCCOPY = 0x00CC0020;
         public const int CAPTUREBLT = 0x40000000;
-        public const int VK_RETURN = 0x0D;
+
+        public static bool IsGameRunning => Process.GetProcessesByName(GameProcessName).Any();
 
         public static bool TryKillGame()
         {
             try
             {
-                Process.GetProcessesByName("HeroesOfTheStorm_x64")[0].Kill();
+                Game.Kill();
                 return true;
             }
             catch (Exception)
@@ -40,30 +46,30 @@ namespace HeroesReplay
 
         public static bool TryLaunchGame(Game game)
         {
-            using (var battleNet = Process.Start(@"C:\Program Files (x86)\Battle.net\Battle.net.exe", "--game heroes"))
+            using (var heroesOfTheStorm = Process.Start(@"C:\Program Files (x86)\Battle.net\Battle.net.exe", "--game heroes"))
             {
-                battleNet.WaitForExit();
+                heroesOfTheStorm.WaitForExit();
+
                 Thread.Sleep(TimeSpan.FromSeconds(5));
 
                 SendEnterByHandle(Launcher.MainWindowHandle);
 
-                while (!Process.GetProcessesByName("HeroesOfTheStorm_x64").Any())
+                while (!IsGameRunning)
                 {
                     Console.WriteLine("Launching...");
                     Thread.Sleep(TimeSpan.FromSeconds(1));
                 }
 
-                if (Process.GetProcessesByName("HeroesOfTheStorm_x64").Any())
+                if (IsGameRunning)
                 {
                     Console.WriteLine($"Selecting {game.Path}");
 
                     Thread.Sleep(TimeSpan.FromSeconds(10));
 
-                    using (var switcher = Process.Start(@"G:\Heroes of the Storm\Support64\HeroesSwitcher_x64.exe", $"\"{game.Path}\""))
+                    using (var replaySelector = Process.Start(@"G:\Heroes of the Storm\Support64\HeroesSwitcher_x64.exe", $"\"{game.Path}\""))
                     {
-                        switcher.WaitForExit();
-
-                        Thread.Sleep(TimeSpan.FromSeconds(1));
+                        replaySelector.WaitForExit();
+                        Thread.Sleep(TimeSpan.FromSeconds(5));
                         return true;
                     }
                 }
@@ -127,11 +133,11 @@ namespace HeroesReplay
             SendMessage(GameWindowHandle, WM_KEYUP, Keys.ControlKey, IntPtr.Zero);
         }
 
-        public static void SendPanelChange(Panel panel)
+        public static void SendPanelChange(GamePanel gamePanel)
         {
             SendMessage(GameWindowHandle, WM_KEYDOWN, Keys.ControlKey, IntPtr.Zero);
-            SendMessage(GameWindowHandle, WM_KEYDOWN, KEYS_CONSOLE_PANEL[Convert.ToInt32(panel)], IntPtr.Zero);
-            SendMessage(GameWindowHandle, WM_KEYUP, KEYS_CONSOLE_PANEL[Convert.ToInt32(panel)], IntPtr.Zero);
+            SendMessage(GameWindowHandle, WM_KEYDOWN, KEYS_CONSOLE_PANEL[Convert.ToInt32(gamePanel)], IntPtr.Zero);
+            SendMessage(GameWindowHandle, WM_KEYUP, KEYS_CONSOLE_PANEL[Convert.ToInt32(gamePanel)], IntPtr.Zero);
             SendMessage(GameWindowHandle, WM_KEYUP, Keys.ControlKey, IntPtr.Zero);
         }
 
@@ -166,25 +172,22 @@ namespace HeroesReplay
 
             try
             {
-                using (var game = Process.GetProcessesByName("HeroesOfTheStorm_x64")[0])
+                GetWindowRect(Game.MainWindowHandle, out RECT region);
+
+                gameWnd = Game.MainWindowHandle;
+                gameDc = GetWindowDC(gameWnd);
+                memoryDc = CreateCompatibleDC(gameDc);
+
+                Rectangle rectangle = Rectangle.FromLTRB(region.Left, region.Top, region.Right, region.Bottom);
+
+                bitmap = CreateCompatibleBitmap(gameDc, rectangle.Width, rectangle.Height);
+                oldBitmap = SelectObject(memoryDc, bitmap);
+
+                success = BitBlt(memoryDc, 0, 0, rectangle.Width, rectangle.Height, gameDc, region.Left, region.Top, SRCCOPY | CAPTUREBLT);
+
+                if (success)
                 {
-                    GetWindowRect(game.MainWindowHandle, out RECT region);
-
-                    gameWnd = game.MainWindowHandle;
-                    gameDc = GetWindowDC(gameWnd);
-                    memoryDc = CreateCompatibleDC(gameDc);
-
-                    Rectangle rectangle = Rectangle.FromLTRB(region.Left, region.Top, region.Right, region.Bottom);
-
-                    bitmap = CreateCompatibleBitmap(gameDc, rectangle.Width, rectangle.Height);
-                    oldBitmap = SelectObject(memoryDc, bitmap);
-
-                    success = BitBlt(memoryDc, 0, 0, rectangle.Width, rectangle.Height, gameDc, region.Left, region.Top, SRCCOPY | CAPTUREBLT);
-
-                    if (success)
-                    {
-                        screenshot = Image.FromHbitmap(bitmap);
-                    }
+                    screenshot = Image.FromHbitmap(bitmap);
                 }
             }
             catch (Exception e)

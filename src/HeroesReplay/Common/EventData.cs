@@ -1,5 +1,4 @@
 ﻿using Heroes.ReplayParser;
-
 using System;
 
 namespace HeroesReplay

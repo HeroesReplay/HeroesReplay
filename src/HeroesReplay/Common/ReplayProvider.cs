@@ -40,8 +40,6 @@ namespace HeroesReplay
 
                 if (Unwatched.Count == count) break;
             }
-
-            return;
         }
 
         public void Dispose()
