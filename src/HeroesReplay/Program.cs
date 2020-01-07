@@ -1,63 +1,38 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace HeroesReplay
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-            Win32.TryKillGame();
-
-            using (var consoleWaiter = new ManualResetEventSlim())
+            using(var cancellationTokenSource = new CancellationTokenSource())
             {
-                using (var provider = new ReplayProvider("G:\\replays"))
+                Console.CancelKeyPress += (sender, e) => 
                 {
-                    Console.CancelKeyPress += (sender, e) =>
+                    e.Cancel = true;
+                    cancellationTokenSource.Cancel();
+                    Console.WriteLine("Service shutdown requested.");
+                    Console.WriteLine("Please wait.");
+                };
+
+                using(var spectator = new GameSpectator(new StateDetector()))
+                {
+                    using(var controller = new GameController(spectator))
                     {
-                        consoleWaiter.Set();
-                    };
+                        var service = new ReplayService(new GameProvider("G:\\replays\\input", "G:\\replays\\finished", "G:\\replays\\invalid"), controller);
+                        
+                        await service.RunAsync(cancellationTokenSource.Token);
 
-                    while (!consoleWaiter.IsSet)
-                    {
-                        if (provider.Unwatched.TryDequeue(out Game game))
-                        {
-                            using (var session = new GameController(game))
-                            {
-                                if (session.TryLaunchGameProcess())
-                                {
-                                    using (var waiter = new ManualResetEventSlim())
-                                    {
-                                        session.StateChanged += (sender, e) =>
-                                        {
-                                            if (e.Data.Current == GameState.EndOfGame)
-                                            {
-                                                session.TryKillGameProcess();
-                                                waiter.Set();
-                                            }
-                                        };
-
-                                        session.Start(); // Start watching and spectating
-                                        waiter.Wait(); // Wait until game replay has reached the end
-
-                                        provider.Watched.Add(game); // Add to watched list
-                                    }
-                                }
-                                else
-                                {
-                                    Console.WriteLine("Could not launch game process.");
-                                }
-                            }
-                        }
-                        else
-                        {
-                            provider.LoadAndParseReplays(count: 5);
-                        }
+                        Win32.TryKillGame();
                     }
-
                 }
             }
+
+            Console.WriteLine("Service shutdown.");
+            await Task.Delay(5000);
         }
     }
 }

@@ -1,7 +1,7 @@
 ﻿using Heroes.ReplayParser;
-
 using System;
-using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace HeroesReplay
 {
@@ -11,46 +11,44 @@ namespace HeroesReplay
     /// </summary>
     public class GameController : IDisposable
     {
-        public event EventHandler<EventData<Player>> HeroChange;
-        public event EventHandler<EventData<GamePanel>> PanelChange;
-        public event EventHandler<EventData<StateDelta>> StateChanged;
-
-        public event EventHandler<EventArgs> TogglePause;
-        public event EventHandler<EventArgs> ToggleZoom;
-        public event EventHandler<EventArgs> ToggleDetails;
-        public event EventHandler<EventArgs> ToggleConsole;
-
         private readonly GameSpectator spectator;
-        private readonly Game game;
 
-        public GameController(Game game)
+        public GameController(GameSpectator spectator)
         {
-            this.game = game;
-            spectator = new GameSpectator(game);
+            this.spectator = spectator;
+
+            spectator.HeroChange += OnHeroChange;
+            spectator.PanelChange += OnPanelChange;
+            spectator.StateChange += OnStateChange;
         }
 
-        public bool TryLaunchGameProcess() => Win32.TryLaunchGame(game);
-
-        public bool TryKillGameProcess() => Win32.TryKillGame();
-
-        public void Stop()
+        public async Task RunAsync(Game game, CancellationToken token)
         {
-            UnRegisterListeners();
-            spectator.Stop();
-        }
+            if (Win32.TryKillGame())
+            {
+                await Task.Delay(5000, token);
+            }
 
-        public void Start()
-        {
-            UnRegisterListeners();
-            RegisterListeners();
-            spectator.Start();
+            if (await Win32.TryLaunchAsync(game, token))
+            {
+                await spectator.RunAsync(game, token);
+            }
         }
 
         public void SendToggleChat() => Win32.SendToggleChat();
 
         public void SendToggleTime() => Win32.SendToggleTime();
 
-        public void SendTogglePause() => Win32.SendTogglePause();
+        public void SendTogglePause()
+        {
+            Win32.SendTogglePause();
+
+            if (spectator.GameState == GameState.Running)
+                spectator.GameState = GameState.Paused;
+
+            if (spectator.GameState == GameState.Paused)
+                spectator.GameState = GameState.Running;
+        }
 
         public void SendToggleControls() => Win32.SendToggleControls();
 
@@ -58,54 +56,47 @@ namespace HeroesReplay
 
         public void SendToggleInfoPanel() => Win32.SendToggleInfoPanel();
 
-        public void Dispose() => spectator?.Dispose();
+        private void OnHeroChange(object sender, GameEvent<Player> e) => SendFocusHero(e);
 
-        private void RegisterListeners()
-        {
-            spectator.StateChange += StateChanged;
+        private void OnPanelChange(object sender, GameEvent<GamePanel> e) => SendPanelChange(e);
 
-            spectator.HeroChange += OnHeroChange;
-            spectator.PanelChange += OnPanelChange;
-            spectator.StateChange += OnStateChanged;
-        }
-
-        private void UnRegisterListeners()
-        {
-            spectator.StateChange -= StateChanged;
-
-            spectator.HeroChange -= OnHeroChange;
-            spectator.PanelChange -= OnPanelChange;
-            spectator.StateChange -= OnStateChanged;
-        }
-
-        private void OnHeroChange(object sender, EventData<Player> e) => SendFocusHero(e);
-
-        private void OnPanelChange(object sender, EventData<GamePanel> e) => SendPanelChange(e);
-
-        private void OnStateChanged(object sender, EventData<StateDelta> e)
+        private void OnStateChange(object sender, GameEvent<StateDelta> e)
         {
             if (e.Data.Previous == GameState.Loading && e.Data.Current == GameState.Running)
             {
+                Console.WriteLine($"Game started, zooming out and disabling chat.");
+
                 Win32.SendToggleZoom(); // Max Zoom
+
                 Win32.SendToggleChat(); // Hide Chat
             }
         }
 
-        private void SendFocusHero(EventData<Player> e)
+        private void SendFocusHero(GameEvent<Player> e)
         {
-            if (spectator.GameState == GameState.Paused) return;
-
             Console.WriteLine($"Focusing {e.Data.Character}. Reason: {e.Message}");
 
             for (int index = 0; index < 10; index++)
             {
-                if (e.Replay.Players[index] == e.Data)
+                if (e.Game.Replay.Players[index] == e.Data)
                 {
                     Win32.SendFocusHero(index);
                 }
             }
         }
 
-        private void SendPanelChange(EventData<GamePanel> e) => Win32.SendPanelChange(e.Data);
+        private void SendPanelChange(GameEvent<GamePanel> e)
+        {
+            Console.WriteLine($"Switching Panel: {e.Data}");
+
+            Win32.SendPanelChange(e.Data);
+        }
+
+        public void Dispose()
+        {
+            spectator.HeroChange += OnHeroChange;
+            spectator.PanelChange += OnPanelChange;
+            spectator.StateChange += OnStateChange;
+        }
     }
 }

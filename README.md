@@ -8,7 +8,7 @@ This project is in the early phase. Many things have not been worked out yet.
 
 ## Goals of the project
 
-- Develop game state detection for `loading`, `playing`, `paused`, `ended` states.
+- Develop better game state detection for `loading`, `playing`, `paused`, `ended` states.
 - Add Twitch chat integration for several features (voting, game controls)
 - Improve the existing spectate logic
 - Intigration of [HotsApi](http://hotsapi.net/) for limitless replays
@@ -22,17 +22,13 @@ It uses the library [Heroes.ReplayParser](https://github.com/barrett777/Heroes.R
 ## Features
 
 - Focuses on heroes that will die or kill an enemy hero
-- Focuses on heroes doing objectives
+- Focuses on heroes doing team or map objectives (gem collecting, for example)
 - Focuses on heroes destroying structures
 
 - Selects the talent tree panel when a team has just recieved new talents
 - Selects the objective panel when an objective has been won
 - Selects the Kill Death Assists panel when a hero dies
 - Cycles through all panels throughout the game
-
-## Prerequisites
-
-- Possibly OpenCV once i get game state detection working
 
 ## Dependencies
 

@@ -1,50 +1,72 @@
-﻿using Heroes.ReplayParser;
-
+﻿
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 
 namespace HeroesReplay
 {
-    public class ReplayProvider : IDisposable
+
+    public class GameProvider : Queue<Game>
     {
-        private readonly string path;
+        private readonly string input;
+        private readonly string finished;
+        private readonly string invalid;
 
-        public Queue<Game> Unwatched { get; }
-        public List<Game> Watched { get; }
-
-        public ReplayProvider(string path)
+        public GameProvider(string input, string finished, string invalid)
         {
-            this.path = path;
+            this.input = input;
+            this.finished = finished;
+            this.invalid = invalid;
 
-            Unwatched = new Queue<Game>();
-            Watched = new List<Game>();
+            Initialize();
         }
 
-        public void LoadAndParseReplays(int count = 5)
+        private void Initialize()
         {
-            Console.WriteLine($"Loading and parsing {count} replays into the queue.");
-
-            foreach (var replayPath in Directory.EnumerateFiles(path, "*.StormReplay", SearchOption.AllDirectories).OrderByDescending(x => File.GetCreationTime(x)))
+            foreach(var directory in new[] { input, finished, invalid })
             {
-                if (Watched.Any(g => g.Path == replayPath)) continue;
-
-                var (result, replay) = DataParser.ParseReplay(File.ReadAllBytes(replayPath));
-
-                if (result == DataParser.ReplayParseResult.Success && GameSpectator.SupportedModes.Contains(replay.GameMode))
-                {
-                    Console.WriteLine($"Loaded {replayPath} into the queue.");
-                    Unwatched.Enqueue(new Game(replayPath, replay));
-                }
-
-                if (Unwatched.Count == count) break;
+                if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
             }
         }
 
-        public void Dispose()
+        public new bool TryDequeue(out Game game)
         {
+            bool result = false;
 
+            if (base.TryDequeue(out game))
+            {
+                result = game.IsValid;
+                
+                if (!game.IsValid)
+                {
+                    var before = game.Path;
+                    var after = Path.Combine(invalid, Path.GetFileName(game.Path));
+
+                    File.Move(before, after);
+
+                    File.WriteAllLines(Path.Combine(invalid, Path.GetFileName(after)) + ".invalid.txt", new[]
+                    {
+                        $"Result: {game.Result}",
+                        $"Version: {Assembly.GetAssembly(typeof(Heroes.ReplayParser.DataParser)).GetName().Version}",
+                        $"File: {game.Path}"
+                    });
+                }   
+            }
+
+            return result;
+        }
+
+        public void MoveToFinished(Game game) => File.Move(game.Path, Path.Combine(finished, Path.GetFileName(game.Path)));
+
+        public void LoadReplays()
+        {
+            foreach (var file in Directory.GetFiles(input, "*.StormReplay").OrderBy(random => Guid.NewGuid()))
+            {
+                if (this.Any(g => g.Path == file)) continue;
+                this.Enqueue(new Game(file));
+            }
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace HeroesReplay
 {    
@@ -44,32 +45,34 @@ namespace HeroesReplay
             return false;
         }
 
-        public static bool TryLaunchGame(Game game)
+        public static async Task<bool> TryLaunchAsync(Game game, CancellationToken token)
         {
             using (var heroesOfTheStorm = Process.Start(@"C:\Program Files (x86)\Battle.net\Battle.net.exe", "--game heroes"))
             {
                 heroesOfTheStorm.WaitForExit();
 
-                Thread.Sleep(TimeSpan.FromSeconds(5));
+                await Task.Delay(5000, token);
 
                 SendEnterByHandle(Launcher.MainWindowHandle);
 
-                while (!IsGameRunning)
+                while (!IsGameRunning && !token.IsCancellationRequested)
                 {
                     Console.WriteLine("Launching...");
-                    Thread.Sleep(TimeSpan.FromSeconds(1));
+                    await Task.Delay(5000, token);
                 }
 
                 if (IsGameRunning)
                 {
+                    await Task.Delay(5000, token);
+
                     Console.WriteLine($"Selecting {game.Path}");
 
-                    Thread.Sleep(TimeSpan.FromSeconds(10));
+                    await Task.Delay(5000, token);
 
                     using (var replaySelector = Process.Start(@"G:\Heroes of the Storm\Support64\HeroesSwitcher_x64.exe", $"\"{game.Path}\""))
                     {
                         replaySelector.WaitForExit();
-                        Thread.Sleep(TimeSpan.FromSeconds(5));
+                        await Task.Delay(5000, token);
                         return true;
                     }
                 }

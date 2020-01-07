@@ -1,4 +1,7 @@
-﻿using Heroes.ReplayParser;
+﻿using System;
+using System.IO;
+using Heroes.ReplayParser;
+using static Heroes.ReplayParser.DataParser;
 
 namespace HeroesReplay
 {
@@ -7,12 +10,20 @@ namespace HeroesReplay
     /// </summary>
     public class Game
     {
-        public Replay Replay { get; }
+        public Lazy<(ReplayParseResult Result, Replay Replay)> Parsed { get; }
+        public Replay Replay => Parsed.Value.Replay;
+        public ReplayParseResult Result => Parsed.Value.Result;
         public string Path { get; }
+        public bool IsValid => Result == ReplayParseResult.Success;
 
-        public Game(string path, Replay replay)
+        public Game(string path)
         {
-            Replay = replay;
+            Parsed = new Lazy<(ReplayParseResult Result, Replay Replay)>(() => 
+            { 
+                var (result, replay) = ParseReplay(File.ReadAllBytes(path)); 
+                return (result, replay);
+            });
+
             Path = path;
         }
     }

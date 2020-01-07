@@ -26,9 +26,11 @@ namespace HeroesReplay
             return units.Select(unit => unit.PlayerControlledBy).OrderBy(u => Guid.NewGuid()).Distinct().First();
         }
 
-        public static bool WithinViewSpan(this Unit unit, TimeSpan timer, TimeSpan upper) => unit.TimeSpanDied.HasValue && unit.TimeSpanDied.Value > timer && unit.TimeSpanDied.Value.Subtract(timer) <= upper;
+        public static bool HasPlayerAssociated(this Unit unit) => unit.PlayerKilledBy != null || unit.PlayerControlledBy != null;
 
-        public static bool WillDie(this Unit unit) => unit.TimeSpanDied.HasValue;
+        public static bool IsHero(this Unit unit) => unit.Group == Unit.UnitGroup.Hero;        
+
+        public static bool IsWithinViewSpan(this Unit unit, TimeSpan timer, TimeSpan upper) => unit.TimeSpanDied.HasValue && unit.TimeSpanDied.Value > timer && unit.TimeSpanDied.Value.Subtract(timer) <= upper;
 
         public static bool WithinViewSpan(this TimeSpan value, TimeSpan timer, TimeSpan upper) => value > timer && value.Subtract(timer) <= upper;
 

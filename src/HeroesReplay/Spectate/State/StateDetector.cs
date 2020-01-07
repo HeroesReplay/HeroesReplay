@@ -87,7 +87,7 @@ namespace HeroesReplay
         }
 
 
-        public  Point? Find(Bitmap haystack, Bitmap needle)
+        public Point? Find(Bitmap haystack, Bitmap needle)
         {
             if (null == haystack || null == needle) return null;
             if (haystack.Width < needle.Width || haystack.Height < needle.Height) return null;

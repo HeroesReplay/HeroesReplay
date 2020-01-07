@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using ThreadState = System.Threading.ThreadState;
+using System.Threading.Tasks;
 
 namespace HeroesReplay
 {
@@ -12,9 +12,9 @@ namespace HeroesReplay
     /// The Game spectator manages the state (paused, running, start, end) and fires events when it detects these changes.
     /// The Game spectator does NOT send commands to the game, it only raises events to which the game controller should respond with.
     /// </summary>
-    public class GameSpectator
+    public class GameSpectator : IDisposable
     {
-        public static readonly List<GameMode> SupportedModes = new List<GameMode> { GameMode.Brawl, GameMode.HeroLeague, GameMode.QuickMatch, GameMode.UnrankedDraft };
+        public static readonly GameMode[] SupportedModes = { GameMode.Brawl, GameMode.HeroLeague, GameMode.QuickMatch, GameMode.UnrankedDraft };
 
         public GamePanel Current
         {
@@ -23,7 +23,7 @@ namespace HeroesReplay
             {
                 if (current != value)
                 {
-                    PanelChange?.Invoke(this, new EventData<GamePanel>(Replay, value, "Change"));
+                    PanelChange?.Invoke(this, new GameEvent<GamePanel>(Game, value, "Change"));
                 }
 
                 current = value;
@@ -37,114 +37,68 @@ namespace HeroesReplay
             {
                 if (gameState != value)
                 {
-                    StateChange?.Invoke(this, new EventData<StateDelta>(Replay, new StateDelta(gameState, value), $"{stopwatch.Elapsed}"));
+                    StateChange?.Invoke(this, new GameEvent<StateDelta>(Game, new StateDelta(gameState, value), $"{stopwatch.Elapsed}"));
                 }
 
-                if (value == GameState.EndOfGame) stopwatch.Stop();
-                if (value == GameState.Running) stopwatch.Start();
-                if (value == GameState.Paused) stopwatch.Stop();
+                if (value == GameState.Loading) stopwatch.Reset();
+                else if (value == GameState.Running) stopwatch.Start();
+                else if (value == GameState.Paused) stopwatch.Stop();
                 
                 gameState = value;
             }
         }
 
-        public TimeSpan PanelWait { get; set; } = TimeSpan.FromSeconds(10);
-
-        public event EventHandler<EventData<Player>> HeroChange;
-        public event EventHandler<EventData<GamePanel>> PanelChange;
-        public event EventHandler<EventData<StateDelta>> StateChange;
-
-        public TimeSpan Timer => stopwatch.Elapsed;
-
-        private List<Player> bluePlayers = new List<Player>();
-        private List<Player> redPlayers = new List<Player>();
+        public event EventHandler<GameEvent<Player>> HeroChange;
+        public event EventHandler<GameEvent<GamePanel>> PanelChange;
+        public event EventHandler<GameEvent<StateDelta>> StateChange;
 
         private Stopwatch stopwatch = new Stopwatch();
-
-        private Thread panelThread;
-        private Thread playerThread;
-        private Thread stateThread;
-        
         private GameState gameState;
         private GamePanel current;
-
-        private readonly Game game;
-        private readonly ViewBuilder viewBuilder;
+        
+        private ViewBuilder ViewBuilder => new ViewBuilder(stopwatch, Game);
         private readonly StateDetector stateDetector;
         private readonly List<GamePanel> panels = Enum.GetValues(typeof(GamePanel)).Cast<GamePanel>().ToList();
 
-        private Replay Replay => game.Replay;
-
-        public GameSpectator(Game game)
+        public Game Game { get; private set; }
+        
+        public GameSpectator(StateDetector stateDetector)
         {
-            this.game = game;
-            this.stateDetector = new StateDetector();
-            this.viewBuilder = new ViewBuilder(stopwatch, Replay);
-
-            stateThread = new Thread(StateLoop);
-            playerThread = new Thread(PlayerLoop);
-            panelThread = new Thread(PanelLoop);
+            this.stateDetector = stateDetector;            
         }
 
-        public void Start()
+        public async Task RunAsync(Game game, CancellationToken token)
         {
-            if (playerThread.ThreadState == ThreadState.Unstarted)
-                playerThread.Start();
+            Game = game;
+            GameState = GameState.Loading;
 
-            if (panelThread.ThreadState == ThreadState.Unstarted)
-                panelThread.Start();
+            var panels = Task.Run(() => PanelLoopAsync(token), token);
+            var players = Task.Run(() => PlayerLoopAsync(token), token);
+            var state = Task.Run(() => StartEndDetectorLoop(token), token);
 
-            if (stateThread.ThreadState == ThreadState.Unstarted)
-                stateThread.Start();
+            await Task.WhenAll(state, players, panels);
         }
 
-        public void Stop()
-        {
-            GameState = GameState.Paused;
-        }
+        public void Dispose() => stateDetector?.Dispose();
 
-        public void Reset()
+        private async Task PlayerLoopAsync(CancellationToken token)
         {
-            stopwatch.Stop();
-            stopwatch.Reset();
-            bluePlayers.Clear();
-            redPlayers.Clear();
-            bluePlayers.AddRange(Replay.Players.Take(5));
-            redPlayers.AddRange(Replay.Players.TakeLast(5));
-        }
-
-        public void Dispose()
-        {
-            bluePlayers = null;
-            redPlayers = null;
-            HeroChange = null;
-            PanelChange = null;
-            stopwatch = null;
-
-            playerThread = null;
-            panelThread = null;
-            stateThread = null;
-        }
-
-        private void PlayerLoop()
-        {
-            while (playerThread != null)
+            while (!token.IsCancellationRequested && GameState != GameState.EndOfGame)
             {
-                while (stopwatch.IsRunning)
+                while (stopwatch.IsRunning && !token.IsCancellationRequested)
                 {
                     try
                     {
-                        var viewSpan = viewBuilder.TheNext(10).Seconds;
+                        var viewSpan = ViewBuilder.TheNext(10).Seconds;
 
                         if (viewSpan.Deaths.Any())
                         {
                             // TODO: better logic
-
                             foreach (var unit in viewSpan.Deaths)
                             {
                                 var reason =  unit.PlayerKilledBy == unit.PlayerControlledBy ? "Suicide" : (unit.PlayerKilledBy != null ? "Death" : "Environment");
-                                HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.PlayerKilledBy ?? unit.PlayerControlledBy, reason));
-                                Thread.Sleep(TimeSpan.FromSeconds(3)); 
+                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, unit.PlayerControlledBy, reason));
+                                await Task.Delay(unit.TimeSpanDied.Value - stopwatch.Elapsed); 
                             }
                         }
                         else if (viewSpan.MapObjectives.Any())
@@ -152,8 +106,8 @@ namespace HeroesReplay
                             // TODO: better logic
                             foreach (var unit in viewSpan.MapObjectives)
                             {
-                                HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "MapObjectives"));
-                                Thread.Sleep(2000);
+                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "MapObjectives"));
+                                await Task.Delay(unit.TimeSpanDied.Value - stopwatch.Elapsed);
                             }
                         }
                         else if (viewSpan.TeamObjectives.Any())
@@ -162,37 +116,25 @@ namespace HeroesReplay
 
                             foreach (var unit in viewSpan.TeamObjectives)
                             {
-                                if (unit.Player != null)
-                                {
-                                    HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.Player, "TeamObjectives"));
-                                    Thread.Sleep(2000);
-                                }
+                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, unit.Player, "TeamObjectives"));
+                                await Task.Delay(unit.TimeSpan - stopwatch.Elapsed);
                             }
                         }
                         else if (viewSpan.Structures.Any())
                         {
-                            // TODO: better logic
-
                             foreach (var unit in viewSpan.Structures)
                             {
-                                HeroChange?.Invoke(this, new EventData<Player>(Replay, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "Structures"));
-                                Thread.Sleep(5000);
+                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "Structures"));
+                                await Task.Delay(unit.TimeSpanDied.Value - stopwatch.Elapsed);
                             }
                         }
                         else if (viewSpan.Alive.Any())
                         {
-                            // TODO: better logic
-
-                            // Give every alive player equal view time?
-                            foreach (var player in viewSpan.Alive)
+                            foreach (var player in viewSpan.Alive.OrderBy(x => Guid.NewGuid()).Take(2))
                             {
-                                HeroChange?.Invoke(this, new EventData<Player>(Replay, player, "Alive"));
-                                Thread.Sleep(TimeSpan.FromSeconds(10.0 / viewSpan.Alive.Count()));
+                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, player, "Alive"));
+                                await Task.Delay(TimeSpan.FromSeconds(5));
                             }
-
-                            // Give 5 seconds to a random alive player
-                            //HeroChange?.Invoke(this, new EventData<Player>(Replay, context.Alive.PickRandomPlayer(), "Alive");
-                            //Thread.Sleep(5000);
                         }
                     }
                     catch (Exception e)
@@ -201,109 +143,60 @@ namespace HeroesReplay
                     }
                 }
 
-                Thread.Sleep(100);
+                await Task.Delay(100);
             }
         }
 
-        private void PanelLoop()
+        private async Task PanelLoopAsync(CancellationToken token)
         {
-            while (panelThread != null)
+            while (!token.IsCancellationRequested && GameState != GameState.EndOfGame)
             {
-                while (stopwatch.IsRunning)
+                while (stopwatch.IsRunning && !token.IsCancellationRequested)
                 {
                     try
-                    {
-                        var viewSpan = viewBuilder.TheNext(5).Seconds;
+                    {   
+                        var viewSpan = ViewBuilder.TheNext(5).Seconds;
 
-                        if (viewSpan.Talents.Any())
-                        {
-                            Current = GamePanel.Talents;
-                        }
-                        else if (viewSpan.TeamObjectives.Any())
-                        {
-                            Current = GamePanel.CarriedObjectives;
-                        }
-                        else if (viewSpan.Deaths.Any())
-                        {
-                            Current = GamePanel.KillsDeathsAssists;
-                        }
+                        if (viewSpan.Talents.Any()) Current = GamePanel.Talents;
+                        else if (viewSpan.TeamObjectives.Any() || viewSpan.MapObjectives.Any()) Current = GamePanel.CarriedObjectives;
+                        else if (viewSpan.Deaths.Any()) Current = GamePanel.KillsDeathsAssists;
                         else
                         {
                             int next = panels.IndexOf(Current) + 1;
                             Current = next >= panels.Count ? panels.First() : panels[next];
                         }
+
+                        await Task.Delay(viewSpan.Upper);
+
                     }
                     catch (Exception e)
                     {
                         Console.WriteLine(e.Message);
                     }
-
-                    Thread.Sleep(PanelWait);
                 }
 
-                Thread.Sleep(200);
+                await Task.Delay(100);
             }
         }
 
-        private void StateLoop()
+        private async Task StartEndDetectorLoop(CancellationToken token)
         {
-            while (stateThread != null)
+            while (!token.IsCancellationRequested && GameState != GameState.EndOfGame)
             {
-                LogTimerToConsole();
+                if (stopwatch.Elapsed.Seconds % 2 == 0) Console.WriteLine("Timer: " + stopwatch.Elapsed);
 
                 try
                 {
-                    if (GameState == GameState.Loading)
-                    {
-                        if (stateDetector.TryDetectStart(out bool detected))
-                        {
-                            if (detected) GameState = GameState.Running;
-                        }
-                    }
-                    else if (GameState == GameState.Paused)
-                    {
-                        if (stateDetector.TryIsRunning(out bool running))
-                        {
-                            if (running) GameState = GameState.Running;
-                        }
-                    }
-                    else if (GameState == GameState.Running)
-                    {
-                        if (stateDetector.TryIsPaused(out bool paused))
-                        {
-                            if (paused) GameState = GameState.Paused;
-                        }
-                    }
-                    else if (stopwatch.Elapsed >= Replay.ReplayLength)
-                    {
-                        if (stateDetector.TryIsPaused(out bool ended))
-                        {
-                            if (ended) GameState = GameState.EndOfGame;
-                        }
-                    }
+                    if (GameState == GameState.Loading && stateDetector.TryDetectStart(out bool isLoaded) && isLoaded) GameState = GameState.Running;
+                    else if (stopwatch.Elapsed >= Game.Replay.ReplayLength && stateDetector.TryIsPaused(out bool isEnded) && isEnded) GameState = GameState.EndOfGame;
 
-                    if (GameState == GameState.Loading)
-                    {
-                        Thread.Sleep(100);
-                    }
-                    else
-                    {
-                        Thread.Sleep(500);
-                    }
-
+                    if (GameState == GameState.Running) await Task.Delay(TimeSpan.FromSeconds(1)); // we've begun, we dont need to check so often
+                    else if(GameState == GameState.Loading) await Task.Delay(TimeSpan.FromSeconds(0.25)); // we have not detected the start of the game, check rigorously 
                 }
                 catch (Exception e)
                 {
                     Console.WriteLine(e.Message);
                 }
-            }
-        }
-
-        private void LogTimerToConsole()
-        {
-            if ((int)Timer.TotalSeconds % 2 == 0)
-            {
-                Console.WriteLine("Timer: " + Timer);
             }
         }
     }

@@ -14,23 +14,23 @@ namespace HeroesReplay
     {
         private readonly int seconds;
         private readonly Stopwatch stopwatch;
-        private readonly Replay replay;
+        private readonly Game game;
 
-        public ViewBuilder(Stopwatch stopwatch, Replay replay)
+        public ViewBuilder(Stopwatch stopwatch, Game game)
         {
             this.stopwatch = stopwatch;
-            this.replay = replay;
+            this.game = game;
         }
 
-        private ViewBuilder(Stopwatch stopwatch, Replay replay, int seconds)
+        private ViewBuilder(Stopwatch stopwatch, Game game, int seconds)
         {
             this.seconds = seconds;
-            this.replay = replay;
+            this.game = game;
             this.stopwatch = stopwatch;
         }
 
-        public ViewBuilder TheNext(int seconds) => new ViewBuilder(stopwatch, replay, seconds);
+        public ViewBuilder TheNext(int seconds) => new ViewBuilder(stopwatch, game, seconds);
 
-        public ViewSpan Seconds => new ViewSpan(stopwatch, replay, TimeSpan.FromSeconds(seconds));
+        public ViewSpan Seconds => new ViewSpan(stopwatch, game, TimeSpan.FromSeconds(seconds));
     }
 }
