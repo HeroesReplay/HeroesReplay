@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,26 +10,31 @@ namespace HeroesReplay
     {
         static async Task Main(string[] args)
         {
-            using(var cancellationTokenSource = new CancellationTokenSource())
+            var serviceProvider = new ServiceCollection()
+                .AddLogging(configuration => configuration.AddConsole())
+                .AddTransient<StateDetector>()
+                .AddTransient<GameSpectator>()
+                .AddTransient<ReplayService>()
+                .AddTransient<GameProvider>()
+                .AddTransient<GameController>()
+                .AddTransient<GameWrapper>()
+                .BuildServiceProvider();
+
+            using(var scope = serviceProvider.CreateScope())
             {
-                Console.CancelKeyPress += (sender, e) => 
-                {
-                    e.Cancel = true;
-                    cancellationTokenSource.Cancel();
-                    Console.WriteLine("Service shutdown requested.");
-                    Console.WriteLine("Please wait.");
-                };
+                var service = scope.ServiceProvider.GetRequiredService<ReplayService>();
 
-                using(var spectator = new GameSpectator(new StateDetector()))
+                using (var cancellationTokenSource = new CancellationTokenSource())
                 {
-                    using(var controller = new GameController(spectator))
+                    Console.CancelKeyPress += (sender, e) =>
                     {
-                        var service = new ReplayService(new GameProvider("G:\\replays\\input", "G:\\replays\\finished", "G:\\replays\\invalid"), controller);
-                        
-                        await service.RunAsync(cancellationTokenSource.Token);
+                        e.Cancel = true;
+                        cancellationTokenSource.Cancel();
+                        Console.WriteLine("Service shutdown requested.");
+                        Console.WriteLine("Please wait.");
+                    };
 
-                        Win32.TryKillGame();
-                    }
+                    await service.RunAsync(cancellationTokenSource.Token);
                 }
             }
 

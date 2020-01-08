@@ -16,6 +16,21 @@ namespace HeroesReplay
         private readonly Stopwatch stopwatch;
         private readonly Game game;
 
+        public ViewSpan Seconds()
+        {
+            var now = Now;
+            return new ViewSpan(game.Replay, now, now.Add(TimeSpan.FromSeconds(seconds)));
+        }
+
+        private TimeSpan Now
+        {
+            get
+            {
+                var duration = stopwatch.Elapsed.Duration();
+                return new TimeSpan(duration.Days, duration.Hours, duration.Minutes, duration.Seconds, 0);
+            }
+        }
+
         public ViewBuilder(Stopwatch stopwatch, Game game)
         {
             this.stopwatch = stopwatch;
@@ -30,7 +45,5 @@ namespace HeroesReplay
         }
 
         public ViewBuilder TheNext(int seconds) => new ViewBuilder(stopwatch, game, seconds);
-
-        public ViewSpan Seconds => new ViewSpan(stopwatch, game, TimeSpan.FromSeconds(seconds));
     }
 }

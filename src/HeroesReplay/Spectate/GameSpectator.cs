@@ -1,4 +1,5 @@
 ﻿using Heroes.ReplayParser;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -12,190 +13,235 @@ namespace HeroesReplay
     /// The Game spectator manages the state (paused, running, start, end) and fires events when it detects these changes.
     /// The Game spectator does NOT send commands to the game, it only raises events to which the game controller should respond with.
     /// </summary>
-    public class GameSpectator : IDisposable
+    public sealed class GameSpectator : IDisposable
     {
         public static readonly GameMode[] SupportedModes = { GameMode.Brawl, GameMode.HeroLeague, GameMode.QuickMatch, GameMode.UnrankedDraft };
 
-        public GamePanel Current
+        public GamePanel CurrentPanel
         {
-            get => current;
+            get => currentPlanel;
             set
             {
-                if (current != value)
+                if (currentPlanel != value)
                 {
-                    PanelChange?.Invoke(this, new GameEvent<GamePanel>(Game, value, "Change"));
+                    PanelChange?.Invoke(this, new GameEventArgs<GamePanel>(Game, value, "Change"));
                 }
 
-                current = value;
+                currentPlanel = value;
             }
         }
-        
-        public GameState GameState
+
+        (TimeSpan Timer, Unit Unit, Player Player, String Reason) CurrentFocus
         {
-            get => gameState;
+            get => currentFocus;
             set
             {
-                if (gameState != value)
+                if (currentFocus.Player != value.Player && value.Player != null)
                 {
-                    StateChange?.Invoke(this, new GameEvent<StateDelta>(Game, new StateDelta(gameState, value), $"{stopwatch.Elapsed}"));
+                    HeroChange?.Invoke(this, new GameEventArgs<Player>(Game, value.Player, value.Reason));
+                }
+
+                currentFocus = value;
+            }
+        }
+
+        public GameState CurrentState
+        {
+            get => currentState;
+            set
+            {
+                if (currentState != value)
+                {
+                    StateChange?.Invoke(this, new GameEventArgs<StateDelta>(Game, new StateDelta(currentState, value), $"{stopwatch.Elapsed}"));
                 }
 
                 if (value == GameState.Loading) stopwatch.Reset();
                 else if (value == GameState.Running) stopwatch.Start();
                 else if (value == GameState.Paused) stopwatch.Stop();
-                
-                gameState = value;
+
+                currentState = value;
             }
         }
 
-        public event EventHandler<GameEvent<Player>> HeroChange;
-        public event EventHandler<GameEvent<GamePanel>> PanelChange;
-        public event EventHandler<GameEvent<StateDelta>> StateChange;
+        public event EventHandler<GameEventArgs<Player>> HeroChange;
+        public event EventHandler<GameEventArgs<GamePanel>> PanelChange;
+        public event EventHandler<GameEventArgs<StateDelta>> StateChange;
 
-        private Stopwatch stopwatch = new Stopwatch();
-        private GameState gameState;
-        private GamePanel current;
-        
-        private ViewBuilder ViewBuilder => new ViewBuilder(stopwatch, Game);
-        private readonly StateDetector stateDetector;
+        private readonly Stopwatch stopwatch = new Stopwatch();
+
+        private GameState currentState;
+        private GamePanel currentPlanel;
+        private (TimeSpan Time, Unit Unit, Player Player, String Reason) currentFocus;
+
+        private ViewBuilder viewBuilder;
+        private readonly ILogger<GameSpectator> logger;
+        private readonly StateDetector stateDetector;        
         private readonly List<GamePanel> panels = Enum.GetValues(typeof(GamePanel)).Cast<GamePanel>().ToList();
 
         public Game Game { get; private set; }
-        
-        public GameSpectator(StateDetector stateDetector)
+
+        public GameSpectator(ILogger<GameSpectator> logger, StateDetector stateDetector)
         {
-            this.stateDetector = stateDetector;            
+            this.logger = logger;
+            this.stateDetector = stateDetector;
         }
 
         public async Task RunAsync(Game game, CancellationToken token)
         {
             Game = game;
-            GameState = GameState.Loading;
+            CurrentState = GameState.Loading;
+            viewBuilder = new ViewBuilder(stopwatch, Game);
 
             var panels = Task.Run(() => PanelLoopAsync(token), token);
-            var players = Task.Run(() => PlayerLoopAsync(token), token);
-            var state = Task.Run(() => StartEndDetectorLoop(token), token);
+            var players = Task.Run(() => FocusLoopAsync(token), token);
+            var state = Task.Run(() => StartEndDetectorLoopAsync(token), token);
 
-            await Task.WhenAll(state, players, panels);
+            await Task.WhenAll(state, players, panels).ConfigureAwait(false);
         }
 
-        public void Dispose() => stateDetector?.Dispose();
-
-        private async Task PlayerLoopAsync(CancellationToken token)
+        public void Dispose()
         {
-            while (!token.IsCancellationRequested && GameState != GameState.EndOfGame)
+            stateDetector?.Dispose();
+        }
+
+        private async Task FocusLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested && CurrentState != GameState.EndOfGame)
             {
-                while (stopwatch.IsRunning && !token.IsCancellationRequested)
+                while (CurrentState == GameState.Running && !token.IsCancellationRequested)
                 {
                     try
                     {
-                        var viewSpan = ViewBuilder.TheNext(10).Seconds;
-
-                        if (viewSpan.Deaths.Any())
+                        using (var viewSpan = viewBuilder.TheNext(10).Seconds())
                         {
-                            // TODO: better logic
-                            foreach (var unit in viewSpan.Deaths)
-                            {
-                                var reason =  unit.PlayerKilledBy == unit.PlayerControlledBy ? "Suicide" : (unit.PlayerKilledBy != null ? "Death" : "Environment");
-                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, unit.PlayerControlledBy, reason));
-                                await Task.Delay(unit.TimeSpanDied.Value - stopwatch.Elapsed); 
-                            }
-                        }
-                        else if (viewSpan.MapObjectives.Any())
-                        {
-                            // TODO: better logic
-                            foreach (var unit in viewSpan.MapObjectives)
-                            {
-                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "MapObjectives"));
-                                await Task.Delay(unit.TimeSpanDied.Value - stopwatch.Elapsed);
-                            }
-                        }
-                        else if (viewSpan.TeamObjectives.Any())
-                        {
-                            // TODO: better logic
-
-                            foreach (var unit in viewSpan.TeamObjectives)
-                            {
-                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, unit.Player, "TeamObjectives"));
-                                await Task.Delay(unit.TimeSpan - stopwatch.Elapsed);
-                            }
-                        }
-                        else if (viewSpan.Structures.Any())
-                        {
-                            foreach (var unit in viewSpan.Structures)
-                            {
-                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "Structures"));
-                                await Task.Delay(unit.TimeSpanDied.Value - stopwatch.Elapsed);
-                            }
-                        }
-                        else if (viewSpan.Alive.Any())
-                        {
-                            foreach (var player in viewSpan.Alive.OrderBy(x => Guid.NewGuid()).Take(2))
-                            {
-                                HeroChange?.Invoke(this, new GameEvent<Player>(Game, player, "Alive"));
-                                await Task.Delay(TimeSpan.FromSeconds(5));
-                            }
+                            await HandleFocusAsync(viewSpan);
                         }
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e.Message);
+                        logger.LogError(e, e.Message);
                     }
                 }
 
-                await Task.Delay(100);
+                await Task.Delay(1000, token);
+            }
+        }
+
+        private async Task HandleFocusAsync(ViewSpan viewSpan)
+        {
+            if (viewSpan.Deaths.Any())
+            {
+                foreach (Unit unit in viewSpan.Deaths)
+                {
+                    CurrentFocus = (viewSpan.Start, unit, unit.PlayerControlledBy, "Death");
+                    await Task.Delay(unit.TimeSpanDied.Value - viewSpan.Start);
+                }
+            }
+            else if (viewSpan.MapObjectives.Any())
+            {
+                var distribution =  TimeSpan.FromSeconds(viewSpan.Range.TotalSeconds / viewSpan.MapObjectives.Length);
+
+                foreach (var unit in viewSpan.MapObjectives)
+                {
+                    CurrentFocus = (viewSpan.Start, null, unit.PlayerKilledBy ?? unit.PlayerControlledBy, "MapObjectives");
+                    await Task.Delay(distribution);
+                }
+            }
+            else if (viewSpan.TeamObjectives.Any())
+            {
+                var distribution = TimeSpan.FromSeconds(viewSpan.Range.TotalSeconds / viewSpan.TeamObjectives.Length);
+
+                foreach (TeamObjective unit in viewSpan.TeamObjectives)
+                {
+                    CurrentFocus = (viewSpan.Start, null, unit.Player, "TeamObjectives");
+                    await Task.Delay(distribution);
+                }
+            }
+            else if (viewSpan.Structures.Any())
+            {
+                var distribution = TimeSpan.FromSeconds(viewSpan.Range.TotalSeconds / viewSpan.Structures.Length);
+
+                foreach (Unit unit in viewSpan.Structures)
+                {
+                    CurrentFocus = (viewSpan.Start, unit, unit.PlayerKilledBy, "Structures");
+                    await Task.Delay(distribution);
+                }
+            }
+            else if (viewSpan.Alive.Any())
+            {
+                var distribution = TimeSpan.FromSeconds(viewSpan.Range.TotalSeconds / viewSpan.Alive.Length);
+
+                foreach (Player player in viewSpan.Alive)
+                {
+                    CurrentFocus = (viewSpan.Start, null, player, "Alive");
+                    await Task.Delay(distribution);
+                }
             }
         }
 
         private async Task PanelLoopAsync(CancellationToken token)
         {
-            while (!token.IsCancellationRequested && GameState != GameState.EndOfGame)
+            while (!token.IsCancellationRequested && CurrentState != GameState.EndOfGame)
             {
-                while (stopwatch.IsRunning && !token.IsCancellationRequested)
+                while (CurrentState == GameState.Running && !token.IsCancellationRequested)
                 {
                     try
-                    {   
-                        var viewSpan = ViewBuilder.TheNext(5).Seconds;
-
-                        if (viewSpan.Talents.Any()) Current = GamePanel.Talents;
-                        else if (viewSpan.TeamObjectives.Any() || viewSpan.MapObjectives.Any()) Current = GamePanel.CarriedObjectives;
-                        else if (viewSpan.Deaths.Any()) Current = GamePanel.KillsDeathsAssists;
-                        else
+                    {
+                        using (var viewSpan = viewBuilder.TheNext(10).Seconds())
                         {
-                            int next = panels.IndexOf(Current) + 1;
-                            Current = next >= panels.Count ? panels.First() : panels[next];
+                            if (viewSpan.Talents.Any()) CurrentPanel = GamePanel.Talents;
+                            else if (viewSpan.TeamObjectives.Any() || viewSpan.MapObjectives.Any()) CurrentPanel = GamePanel.CarriedObjectives;
+                            else if (viewSpan.Deaths.Any()) CurrentPanel = GamePanel.KillsDeathsAssists;
+                            else
+                            {
+                                int next = panels.IndexOf(CurrentPanel) + 1;
+                                CurrentPanel = next >= panels.Count ? panels.First() : panels[next];
+                            }
+
+                            await Task.Delay(viewSpan.Range);
                         }
-
-                        await Task.Delay(viewSpan.Upper);
-
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e.Message);
+                        logger.LogError(e, e.Message);
                     }
                 }
 
-                await Task.Delay(100);
+                await Task.Delay(1000, token);
             }
         }
 
-        private async Task StartEndDetectorLoop(CancellationToken token)
+        private async Task StartEndDetectorLoopAsync(CancellationToken token)
         {
-            while (!token.IsCancellationRequested && GameState != GameState.EndOfGame)
+            while (!token.IsCancellationRequested && CurrentState != GameState.EndOfGame)
             {
-                if (stopwatch.Elapsed.Seconds % 2 == 0) Console.WriteLine("Timer: " + stopwatch.Elapsed);
-
                 try
                 {
-                    if (GameState == GameState.Loading && stateDetector.TryDetectStart(out bool isLoaded) && isLoaded) GameState = GameState.Running;
-                    else if (stopwatch.Elapsed >= Game.Replay.ReplayLength && stateDetector.TryIsPaused(out bool isEnded) && isEnded) GameState = GameState.EndOfGame;
+                    while(CurrentState == GameState.Loading)
+                    {
+                        logger.LogInformation("Waiting for start...");
 
-                    if (GameState == GameState.Running) await Task.Delay(TimeSpan.FromSeconds(1)); // we've begun, we dont need to check so often
-                    else if(GameState == GameState.Loading) await Task.Delay(TimeSpan.FromSeconds(0.25)); // we have not detected the start of the game, check rigorously 
+                        if (CurrentState == GameState.Loading && stateDetector.TryDetectStart(out bool isLoaded) && isLoaded)
+                        {
+                            CurrentState = GameState.Running;
+                        }
+
+                        await Task.Delay(TimeSpan.FromSeconds(1), token);
+                    }
+
+                    var duration = stopwatch.Elapsed.Duration();
+
+                    if (duration >= Game.Replay.ReplayLength && stateDetector.TryIsPaused(out bool isEnded) && isEnded)
+                    {
+                        CurrentState = GameState.EndOfGame;
+                    }
+
+                    Console.WriteLine("Timer: " + new TimeSpan(duration.Hours, duration.Minutes, duration.Seconds));
+                    await Task.Delay(TimeSpan.FromSeconds(1));
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e.Message);
+                    logger.LogError(e, e.Message);
                 }
             }
         }

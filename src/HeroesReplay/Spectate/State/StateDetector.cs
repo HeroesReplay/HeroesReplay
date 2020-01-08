@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -9,17 +10,21 @@ using System.Runtime.InteropServices;
 
 namespace HeroesReplay
 {
-    public class StateDetector : IDisposable
+    public sealed class StateDetector : IDisposable
     {
-        private readonly Bitmap zerosTimer;
-        private readonly Bitmap playButton;
+        private readonly Bitmap zerosTimer = (Bitmap)Image.FromFile(Path.Combine(AssetsPath, "START.png"));
+        private readonly Bitmap playButton = (Bitmap)Image.FromFile(Path.Combine(AssetsPath, "PLAY.png"));
 
-        public StateDetector()
+        private readonly ILogger<StateDetector> logger;
+        private readonly GameWrapper wrapper;
+
+        private static Assembly Assembly => Assembly.GetExecutingAssembly();
+        private static readonly string AssetsPath = Path.Combine(Path.GetDirectoryName(Assembly.Location), "Assets");
+
+        public StateDetector(ILogger<StateDetector> logger, GameWrapper wrapper)
         {
-            var assetsPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Assets");
-
-            zerosTimer = (Bitmap) Image.FromFile(Path.Combine(assetsPath, "START.png"));
-            playButton = (Bitmap) Image.FromFile(Path.Combine(assetsPath, "PLAY.png"));
+            this.logger = logger;
+            this.wrapper = wrapper;           
         }
 
         public bool TryIsRunning(out bool running)
@@ -28,16 +33,16 @@ namespace HeroesReplay
 
             try
             {
-                if (Win32.TryGetScreenshot(out Bitmap screenshot))
+                if (wrapper.TryGetScreenshot(out Bitmap screenshot))
                 {
                     var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
                     running = !Find(controls, playButton).HasValue;
                     return true;
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
-
+                logger.LogError(e, e.Message);
             }
 
             return false;
@@ -49,16 +54,16 @@ namespace HeroesReplay
 
             try
             {
-                if (Win32.TryGetScreenshot(out Bitmap screenshot))
+                if (wrapper.TryGetScreenshot(out Bitmap screenshot))
                 {
                     var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
                     paused = Find(controls, playButton).HasValue;
                     return true;
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
-
+                logger.LogError(e, e.Message);
             }
 
             return false;
@@ -70,17 +75,17 @@ namespace HeroesReplay
 
             try
             {
-                if (Win32.TryGetScreenshot(out Bitmap screenshot))
+                if (wrapper.TryGetScreenshot(out Bitmap screenshot))
                 {
-                    var timer = screenshot.Clone(new Rectangle(new Point((screenshot.Width / 2) - 100, 0), new Size(200, 100)), PixelFormat.Format32bppArgb);
-                    var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
-                    detected = Find(timer, zerosTimer).HasValue;
+                    // var timer = screenshot.Clone(new Rectangle(new Point((screenshot.Width / 2) - 100, 0), new Size(200, 100)), PixelFormat.Format32bppArgb);
+                    // var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
+                    detected = Find(screenshot, zerosTimer).HasValue;
                     return true;
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
-
+                logger.LogError(e, e.Message);
             }
 
             return false;
@@ -153,7 +158,7 @@ namespace HeroesReplay
             return true;
         }
 
-        private static bool IsNeedlePresentAtLocation(int[][] haystack, int[][] needle, System.Drawing.Point point, int alreadyVerified)
+        private static bool IsNeedlePresentAtLocation(int[][] haystack, int[][] needle, Point point, int alreadyVerified)
         {
             for (int y = alreadyVerified; y < needle.Length; ++y)
             {

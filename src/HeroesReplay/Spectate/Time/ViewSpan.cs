@@ -1,8 +1,7 @@
 ﻿using Heroes.ReplayParser;
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace HeroesReplay
@@ -10,39 +9,53 @@ namespace HeroesReplay
     /// <summary>
     /// The ViewSpan is a way to filter out information from the replay file that is not of interest within the given timespan.
     /// </summary>
-    public class ViewSpan
+    public class ViewSpan : IDisposable
     {
-        public IEnumerable<Unit> Deaths => KilledByPlayers.Concat(KilledByOther);
-        public IEnumerable<Unit> MapObjectives => Units.Where(unit => unit.Group == Unit.UnitGroup.MapObjective);
-        public IEnumerable<Unit> Structures => Units.Where(unit => unit.Group == Unit.UnitGroup.Structures);
-        public IEnumerable<Player> Alive => BlueAlive.Concat(RedAlive);
-        public IEnumerable<TimeSpan> Talents => BlueTalentTimes.Concat(RedTalentTimes).Where(timeSpan => timeSpan.WithinViewSpan(Timer, Upper)).OrderBy(timeSpan => timeSpan);
-        public IEnumerable<TeamObjective> TeamObjectives => replay.TeamObjectives.SelectMany(teamObjectives => teamObjectives).Where(teamObjective => teamObjective.WithinViewSpan(Timer, Upper) && teamObjective.Player != null).OrderBy(u => u.TimeSpan);
+        public Unit[] Deaths { get; }
+        public Unit[] MapObjectives { get; }
+        public Unit[] Structures { get; }
+        public Player[] Alive { get; }
+        public (int Team, TimeSpan TalentTime)[] Talents { get; }
+        public TeamObjective[] TeamObjectives { get; }
 
-        public TimeSpan Upper { get; }
+        public TimeSpan End { get; }
+        public TimeSpan Start { get; }
 
-        private readonly Replay replay;
-        private readonly Stopwatch stopWatch;
-        
+        public TimeSpan Range => End - Start;
+
         private static readonly int[] TalentLevels = new[] { 1, 4, 7, 10, 13, 16, 20 };
 
-        public ViewSpan(Stopwatch stopWatch, Game game, TimeSpan upper)
+        private Unit[] Units { get; }
+        private Replay Replay { get; }
+
+        public ViewSpan(Replay replay, TimeSpan start, TimeSpan end)
         {
-            this.Upper = upper;
-            this.replay = game.Replay;
-            this.stopWatch = stopWatch;
+            this.End = end;
+            this.Start = start;
+            this.Replay = replay;
+
+            Units = replay.Units.Where(unit =>
+                unit.IsWithin(start, end) &&  // this unit dies (so we know it's interesting
+                unit.IsPlayerReferenced() &&  // a player is somehow linked, which we can focus
+                    (unit.IsMapObjective() ||  // its a map objective
+                    unit.IsStructure() || // or a structure
+                    unit.IsCamp() || // is a camp
+                    unit.IsHero()) // is controlled by a hero
+                 ).ToArray();
+                
+
+            this.Deaths = Units.Where(unit => unit.IsHero()).OrderByDeath().ToArray();
+            this.MapObjectives = Units.Where(unit => unit.IsMapObjective()).OrderBy(mapObjective => mapObjective.TimeSpanDied.Value).ToArray();
+            this.Structures = Units.Where(unit => unit.IsStructure()).OrderByDeath().ToArray();
+
+            this.Alive = Replay.Players.Where(player => !player.HeroUnits.Any(unit => unit.IsWithin(Start, End))).ToArray();
+            this.Talents =Replay.TeamLevels.SelectMany(teamLevels => teamLevels).Where(teamLevel => TalentLevels.Contains(teamLevel.Key)).Where(teamLevel => teamLevel.Value.IsWithin(Start, End)).Select(x => (Team: x.Key, TalentTime: x.Value)).OrderBy(team => team.TalentTime).ToArray();
+            this.TeamObjectives = Replay.TeamObjectives.SelectMany(teamObjectives => teamObjectives).Where(teamObjective => teamObjective.TimeSpan.IsWithin(start, end) && teamObjective.Player != null).OrderBy(objective => objective.TimeSpan).ToArray();
         }
 
-        private TimeSpan Timer => stopWatch.Elapsed;
-
-        private IEnumerable<Unit> Units => replay.Units.Where(unit => unit.IsWithinViewSpan(Timer, Upper) && unit.HasPlayerAssociated()).OrderBy(unit => unit.TimeSpanDied);
-        private IEnumerable<Unit> KilledByPlayers => Units.Where(unit => unit.IsHero() && unit.PlayerKilledBy != null);
-        private IEnumerable<Unit> KilledByOther => Units.Where(unit => unit.IsHero() && unit.PlayerKilledBy == null);
-
-        private IEnumerable<Player> BlueAlive => replay.Players.Take(5).Where(player => !player.HeroUnits.Any(unit => unit.IsWithinViewSpan(Timer, Upper)));
-        private IEnumerable<Player> RedAlive => replay.Players.Skip(5).Where(player => !player.HeroUnits.Any(unit => unit.IsWithinViewSpan(Timer, Upper)));
-
-        private IEnumerable<TimeSpan> BlueTalentTimes => replay.TeamLevels[0].Where(teamLevel => TalentLevels.Contains(teamLevel.Key)).Select(teamLevel => teamLevel.Value);
-        private IEnumerable<TimeSpan> RedTalentTimes => replay.TeamLevels[1].Where(teamLevel => TalentLevels.Contains(teamLevel.Key)).Select(teamLevel => teamLevel.Value);
+        public void Dispose()
+        {
+            
+        }
     }
 }
