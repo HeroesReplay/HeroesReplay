@@ -24,7 +24,7 @@ namespace HeroesReplay
         public StateDetector(ILogger<StateDetector> logger, GameWrapper wrapper)
         {
             this.logger = logger;
-            this.wrapper = wrapper;           
+            this.wrapper = wrapper;
         }
 
         public bool TryIsRunning(out bool running)
@@ -35,9 +35,14 @@ namespace HeroesReplay
             {
                 if (wrapper.TryGetScreenshot(out Bitmap screenshot))
                 {
-                    var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
-                    running = !Find(controls, playButton).HasValue;
-                    return true;
+                    using (screenshot)
+                    {
+                        using (var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb))
+                        {
+                            running = !Find(controls, playButton).HasValue;
+                            return true;
+                        }
+                    }
                 }
             }
             catch (Exception e)
@@ -77,6 +82,7 @@ namespace HeroesReplay
             {
                 if (wrapper.TryGetScreenshot(out Bitmap screenshot))
                 {
+                    
                     // var timer = screenshot.Clone(new Rectangle(new Point((screenshot.Width / 2) - 100, 0), new Size(200, 100)), PixelFormat.Format32bppArgb);
                     // var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
                     detected = Find(screenshot, zerosTimer).HasValue;
@@ -90,8 +96,7 @@ namespace HeroesReplay
 
             return false;
         }
-
-
+        
         public Point? Find(Bitmap haystack, Bitmap needle)
         {
             if (null == haystack || null == needle) return null;
@@ -109,6 +114,35 @@ namespace HeroesReplay
             }
 
             return null;
+        }
+
+        // Timer & Score
+        private Bitmap GetTopCenter(Bitmap bitmap)
+        {
+            var third = (bitmap.Width / 3);
+            return bitmap.Clone(Rectangle.FromLTRB(left: (bitmap.Width / 2) - (third / 2), top: 0, right: bitmap.Width - third, bottom: bitmap.Height / 2), bitmap.PixelFormat);
+        }
+
+        private Bitmap GetTopLeft(Bitmap bitmap)
+        {
+            return bitmap.Clone(Rectangle.FromLTRB(left: 0, top: 0, right: bitmap.Width / 2, bottom: bitmap.Height / 2), bitmap.PixelFormat);
+        }
+
+        private Bitmap GetTopRight(Bitmap bitmap)
+        {
+            return bitmap.Clone(Rectangle.FromLTRB(left: bitmap.Width / 2, top: 0, right: bitmap.Width, bottom: bitmap.Height / 2), bitmap.PixelFormat);
+        }
+
+        // Observer Controls
+        private Bitmap GetBottomLeft(Bitmap bitmap)
+        {
+            return bitmap.Clone(Rectangle.FromLTRB(left: 0, top: bitmap.Height / 2, right: bitmap.Width / 2, bottom: bitmap.Height), bitmap.PixelFormat);
+        }
+
+        // Mini map
+        private Bitmap GetBottomRight(Bitmap bitmap)
+        {
+            return bitmap.Clone(Rectangle.FromLTRB(left: bitmap.Width / 2, top: bitmap.Height / 2, right: bitmap.Width, bottom: bitmap.Height), bitmap.PixelFormat);
         }
 
         private static int[][] GetPixelArray(Bitmap bitmap)

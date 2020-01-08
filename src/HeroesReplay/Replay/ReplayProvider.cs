@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace HeroesReplay
@@ -10,26 +9,26 @@ namespace HeroesReplay
     public sealed class GameProvider : Queue<string>
     {
         private readonly string input;
-        private readonly string finished;
-        private readonly string invalid;
+        private readonly string finishedPath;
+        private readonly string invalidPath;
 
         public GameProvider() : this("G:\\replays\\input", "G:\\replays\\finished", "G:\\replays\\invalid")
         {
 
         }
 
-        public GameProvider(string input, string finished, string invalid)
+        public GameProvider(string input, string finishedPath, string invalidPath)
         {
             this.input = input;
-            this.finished = finished;
-            this.invalid = invalid;
+            this.finishedPath = finishedPath;
+            this.invalidPath = invalidPath;
 
             Initialize();
         }
 
         private void Initialize()
         {
-            foreach(var directory in new[] { input, finished, invalid })
+            foreach(var directory in new[] { input, finishedPath, invalidPath })
             {
                 if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
             }
@@ -48,7 +47,20 @@ namespace HeroesReplay
             return (Success: false, Game: null);
         }
 
-        public void MoveToFinished(Game game) => File.Move(game.FilePath, Path.Combine(finished, Path.GetFileName(game.FilePath)));
+        public async Task MoveToInvalidAsync(Game game) => await MoveAsync(game.FilePath, invalidPath);
+
+        public async Task MoveToFinishedAsync(Game game) => await MoveAsync(game.FilePath, finishedPath);
+
+        private async Task MoveAsync(string sourcePath, string destinationPath)
+        {
+            await using (Stream source = File.Open(sourcePath, FileMode.Open))
+            {
+                await using (Stream destination = File.Create(Path.Combine(destinationPath)))
+                {
+                    await source.CopyToAsync(destination);
+                }
+            }
+        }
 
         public void LoadReplays()
         {

@@ -34,7 +34,7 @@ namespace HeroesReplay
                             await controller.RunAsync(game, token);
                         }
                     }
-                    catch(Exception)
+                    catch (Exception)
                     {
 
                     }

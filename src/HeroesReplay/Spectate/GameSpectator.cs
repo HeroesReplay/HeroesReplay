@@ -19,15 +19,15 @@ namespace HeroesReplay
 
         public GamePanel CurrentPanel
         {
-            get => currentPlanel;
+            get => currentPanel;
             set
             {
-                if (currentPlanel != value)
+                if (currentPanel != value)
                 {
                     PanelChange?.Invoke(this, new GameEventArgs<GamePanel>(Game, value, "Change"));
                 }
 
-                currentPlanel = value;
+                currentPanel = value;
             }
         }
 
@@ -70,7 +70,7 @@ namespace HeroesReplay
         private readonly Stopwatch stopwatch = new Stopwatch();
 
         private GameState currentState;
-        private GamePanel currentPlanel;
+        private GamePanel currentPanel;
         private (TimeSpan Time, Unit Unit, Player Player, String Reason) currentFocus;
 
         private ViewBuilder viewBuilder;
@@ -198,7 +198,7 @@ namespace HeroesReplay
                                 CurrentPanel = next >= panels.Count ? panels.First() : panels[next];
                             }
 
-                            await Task.Delay(viewSpan.Range);
+                            await Task.Delay(viewSpan.Range, token);
                         }
                     }
                     catch (Exception e)
@@ -237,7 +237,7 @@ namespace HeroesReplay
                     }
 
                     Console.WriteLine("Timer: " + new TimeSpan(duration.Hours, duration.Minutes, duration.Seconds));
-                    await Task.Delay(TimeSpan.FromSeconds(1));
+                    await Task.Delay(TimeSpan.FromSeconds(1), token);
                 }
                 catch (Exception e)
                 {
