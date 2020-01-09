@@ -1,55 +1,47 @@
 ﻿
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HeroesReplay
 {
     public sealed class GameProvider : Queue<string>
     {
-        private readonly string input;
-        private readonly string finishedPath;
-        private readonly string invalidPath;
+        private readonly ILogger<GameProvider> logger;
+        private readonly IConfiguration configuration;
 
-        public GameProvider() : this("G:\\replays\\input", "G:\\replays\\finished", "G:\\replays\\invalid")
+        public GameProvider(ILogger<GameProvider> logger, IConfiguration configuration)
         {
-
-        }
-
-        public GameProvider(string input, string finishedPath, string invalidPath)
-        {
-            this.input = input;
-            this.finishedPath = finishedPath;
-            this.invalidPath = invalidPath;
-
-            Initialize();
-        }
-
-        private void Initialize()
-        {
-            foreach(var directory in new[] { input, finishedPath, invalidPath })
-            {
-                if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-            }
+            this.logger = logger;
+            this.configuration = configuration;
         }
 
         public async Task<(bool Success, Game Game)> TryLoadAsync()
         {
             if (TryDequeue(out var path))
             {
+                logger.LogInformation("Dequeued: " + path);
+
                 var (result, replay) = Heroes.ReplayParser.DataParser.ParseReplay(path, true, false, false, false);
 
                 if (result != Heroes.ReplayParser.DataParser.ReplayParseResult.Exception && result != Heroes.ReplayParser.DataParser.ReplayParseResult.PreAlphaWipe && result != Heroes.ReplayParser.DataParser.ReplayParseResult.Incomplete)
+                {
+                    logger.LogInformation("Parse Success: " + path);
                     return (Success: true, Game: new Game(path, replay));
+                }
+                else
+                {
+                    logger.LogInformation("Parse Error: " + path);
+                    logger.LogInformation("Result: " + result);
+                }
             }
 
             return (Success: false, Game: null);
         }
-
-        public async Task MoveToInvalidAsync(Game game) => await MoveAsync(game.FilePath, invalidPath);
-
-        public async Task MoveToFinishedAsync(Game game) => await MoveAsync(game.FilePath, finishedPath);
 
         private async Task MoveAsync(string sourcePath, string destinationPath)
         {
@@ -64,9 +56,20 @@ namespace HeroesReplay
 
         public void LoadReplays()
         {
-            foreach (var file in Directory.GetFiles(input, "*.StormReplay"))
+            if (configuration.GetValue<bool>("replays:load.replay.files.user.documents"))
             {
-                if (!Contains(file)) Enqueue(file);
+                var replays = Directory
+                    .GetFiles(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm", "Accounts"), "*.StormReplay", SearchOption.AllDirectories)
+                    .OrderBy(replay => File.GetCreationTime(replay));
+
+                foreach (var replay in replays)
+                {
+                    if (!Contains(replay))
+                    {
+                        logger.LogInformation("Queued: " + replay);
+                        Enqueue(replay);
+                    }
+                }
             }
         }
     }

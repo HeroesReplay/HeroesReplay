@@ -1,7 +1,5 @@
 ﻿using Heroes.ReplayParser;
-
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace HeroesReplay
@@ -20,12 +18,10 @@ namespace HeroesReplay
 
         public TimeSpan End { get; }
         public TimeSpan Start { get; }
-
         public TimeSpan Range => End - Start;
 
         private static readonly int[] TalentLevels = new[] { 1, 4, 7, 10, 13, 16, 20 };
-
-        private Unit[] Units { get; }
+        private Unit[] Units { get; set; }
         private Replay Replay { get; }
 
         public ViewSpan(Replay replay, TimeSpan start, TimeSpan end)
@@ -42,20 +38,30 @@ namespace HeroesReplay
                     unit.IsCamp() || // is a camp
                     unit.IsHero()) // is controlled by a hero
                  ).ToArray();
-                
 
             this.Deaths = Units.Where(unit => unit.IsHero()).OrderByDeath().ToArray();
-            this.MapObjectives = Units.Where(unit => unit.IsMapObjective()).OrderBy(mapObjective => mapObjective.TimeSpanDied.Value).ToArray();
+            this.MapObjectives = Units.Where(unit => unit.IsMapObjective()).OrderByDeath().ToArray();
             this.Structures = Units.Where(unit => unit.IsStructure()).OrderByDeath().ToArray();
 
-            this.Alive = Replay.Players.Where(player => !player.HeroUnits.Any(unit => unit.IsWithin(Start, End))).ToArray();
-            this.Talents =Replay.TeamLevels.SelectMany(teamLevels => teamLevels).Where(teamLevel => TalentLevels.Contains(teamLevel.Key)).Where(teamLevel => teamLevel.Value.IsWithin(Start, End)).Select(x => (Team: x.Key, TalentTime: x.Value)).OrderBy(team => team.TalentTime).ToArray();
-            this.TeamObjectives = Replay.TeamObjectives.SelectMany(teamObjectives => teamObjectives).Where(teamObjective => teamObjective.TimeSpan.IsWithin(start, end) && teamObjective.Player != null).OrderBy(objective => objective.TimeSpan).ToArray();
+            this.Alive = Replay.Players
+                .Where(player => !player.HeroUnits.Any(unit => unit.IsWithin(Start, End))).ToArray();
+
+            this.Talents = Replay.TeamLevels
+                .SelectMany(teamLevels => teamLevels)
+                .Where(teamLevel => TalentLevels.Contains(teamLevel.Key))
+                .Where(teamLevel => teamLevel.Value.IsWithin(Start, End))
+                .Select(x => (Team: x.Key, TalentTime: x.Value))
+                .OrderBy(team => team.TalentTime).ToArray();
+            
+            this.TeamObjectives = Replay.TeamObjectives
+                .SelectMany(teamObjectives => teamObjectives)
+                .Where(teamObjective => teamObjective.TimeSpan.IsWithin(start, end) && teamObjective.Player != null)
+                .OrderBy(objective => objective.TimeSpan).ToArray();
         }
 
         public void Dispose()
         {
-            
+
         }
     }
 }

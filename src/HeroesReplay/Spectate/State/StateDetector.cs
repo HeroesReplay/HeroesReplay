@@ -1,46 +1,63 @@
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using Windows.Graphics.Imaging;
+using Windows.Media.Ocr;
+using Windows.Storage.Streams;
 
 namespace HeroesReplay
 {
-    public sealed class StateDetector : IDisposable
+    public sealed class StateDetector
     {
-        private readonly Bitmap zerosTimer = (Bitmap)Image.FromFile(Path.Combine(AssetsPath, "START.png"));
-        private readonly Bitmap playButton = (Bitmap)Image.FromFile(Path.Combine(AssetsPath, "PLAY.png"));
-
         private readonly ILogger<StateDetector> logger;
         private readonly GameWrapper wrapper;
-
-        private static Assembly Assembly => Assembly.GetExecutingAssembly();
-        private static readonly string AssetsPath = Path.Combine(Path.GetDirectoryName(Assembly.Location), "Assets");
+        private readonly OcrEngine ocrEngine;
+        private readonly ImageCodecInfo imageCodecInfo;
+        private readonly Encoder encoder = Encoder.Quality;
 
         public StateDetector(ILogger<StateDetector> logger, GameWrapper wrapper)
         {
             this.logger = logger;
             this.wrapper = wrapper;
+
+            this.ocrEngine = OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("en"));
+            this.imageCodecInfo = GetEncoder(ImageFormat.Bmp);
         }
 
-        public bool TryIsRunning(out bool running)
+        public async Task<(bool Success, TimeSpan Elapsed)> TryGetTimerAsync()
         {
-            running = false;
-
             try
             {
                 if (wrapper.TryGetScreenshot(out Bitmap screenshot))
                 {
                     using (screenshot)
                     {
-                        using (var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb))
+                        using (var controls = GetControlsClosed(screenshot))
                         {
-                            running = !Find(controls, playButton).HasValue;
-                            return true;
+                            using(var softwareBitmap = await GetSoftwareBitmapAsync(controls))
+                            {
+                                var results = await ocrEngine.RecognizeAsync(softwareBitmap);
+
+                                if (results != null && results.Lines.Count > 0 && results.Text.Contains(":"))
+                                {
+                                    var time = results.Lines[0].Text;
+                                    var segments = time.Split(":");
+
+                                    if (segments.Length == 3)
+                                    {
+                                        return (Success: true, Elapsed: new TimeSpan(hours: int.Parse(segments[0]), minutes: int.Parse(segments[1]), seconds: int.Parse(segments[2])));
+                                    }
+                                    else if (segments.Length == 2)
+                                    {
+                                        return (Success: true, Elapsed: new TimeSpan(hours: 0, minutes: int.Parse(segments[0]), seconds: int.Parse(segments[1])));
+                                    }
+                                }
+                            }
+
+                            return (Success: false, TimeSpan.Zero);
                         }
                     }
                 }
@@ -50,162 +67,53 @@ namespace HeroesReplay
                 logger.LogError(e, e.Message);
             }
 
-            return false;
-        }
-
-        public bool TryIsPaused(out bool paused)
-        {
-            paused = false;
-
-            try
-            {
-                if (wrapper.TryGetScreenshot(out Bitmap screenshot))
-                {
-                    var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
-                    paused = Find(controls, playButton).HasValue;
-                    return true;
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, e.Message);
-            }
-
-            return false;
-        }
-
-        public bool TryDetectStart(out bool detected)
-        {
-            detected = false;
-
-            try
-            {
-                if (wrapper.TryGetScreenshot(out Bitmap screenshot))
-                {
-                    
-                    // var timer = screenshot.Clone(new Rectangle(new Point((screenshot.Width / 2) - 100, 0), new Size(200, 100)), PixelFormat.Format32bppArgb);
-                    // var controls = screenshot.Clone(new Rectangle(0, screenshot.Height - 150, 150, 150), PixelFormat.Format32bppArgb);
-                    detected = Find(screenshot, zerosTimer).HasValue;
-                    return true;
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, e.Message);
-            }
-
-            return false;
-        }
-        
-        public Point? Find(Bitmap haystack, Bitmap needle)
-        {
-            if (null == haystack || null == needle) return null;
-            if (haystack.Width < needle.Width || haystack.Height < needle.Height) return null;
-
-            var haystackArray = GetPixelArray(haystack);
-            var needleArray = GetPixelArray(needle);
-
-            foreach (var firstLineMatchPoint in FindMatch(haystackArray.Take(haystack.Height - needle.Height), needleArray[0]))
-            {
-                if (IsNeedlePresentAtLocation(haystackArray, needleArray, firstLineMatchPoint, 1))
-                {
-                    return firstLineMatchPoint;
-                }
-            }
-
-            return null;
-        }
-
-        // Timer & Score
-        private Bitmap GetTopCenter(Bitmap bitmap)
-        {
-            var third = (bitmap.Width / 3);
-            return bitmap.Clone(Rectangle.FromLTRB(left: (bitmap.Width / 2) - (third / 2), top: 0, right: bitmap.Width - third, bottom: bitmap.Height / 2), bitmap.PixelFormat);
-        }
-
-        private Bitmap GetTopLeft(Bitmap bitmap)
-        {
-            return bitmap.Clone(Rectangle.FromLTRB(left: 0, top: 0, right: bitmap.Width / 2, bottom: bitmap.Height / 2), bitmap.PixelFormat);
-        }
-
-        private Bitmap GetTopRight(Bitmap bitmap)
-        {
-            return bitmap.Clone(Rectangle.FromLTRB(left: bitmap.Width / 2, top: 0, right: bitmap.Width, bottom: bitmap.Height / 2), bitmap.PixelFormat);
+            return (Success: false, TimeSpan.Zero);
         }
 
         // Observer Controls
-        private Bitmap GetBottomLeft(Bitmap bitmap)
+        private Bitmap GetControlsOpen(Bitmap bitmap)
         {
-            return bitmap.Clone(Rectangle.FromLTRB(left: 0, top: bitmap.Height / 2, right: bitmap.Width / 2, bottom: bitmap.Height), bitmap.PixelFormat);
+            return bitmap.Clone(new Rectangle(new Point(20, bitmap.Height - 170), new Size(480, 160)), bitmap.PixelFormat);
         }
 
-        // Mini map
-        private Bitmap GetBottomRight(Bitmap bitmap)
+        // Observer Controls
+        private Bitmap GetControlsClosed(Bitmap bitmap)
         {
-            return bitmap.Clone(Rectangle.FromLTRB(left: bitmap.Width / 2, top: bitmap.Height / 2, right: bitmap.Width, bottom: bitmap.Height), bitmap.PixelFormat);
+            return bitmap.Clone(new Rectangle(new Point(20, bitmap.Height - 135), new Size(200, 50)), bitmap.PixelFormat);
         }
 
-        private static int[][] GetPixelArray(Bitmap bitmap)
+        private Bitmap GetTopTimer(Bitmap bitmap)
         {
-            var result = new int[bitmap.Height][];
-            var bitmapData = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            return bitmap.Clone(new Rectangle(new Point(bitmap.Width / 2 - 50, 15), new Size(100, 30)), bitmap.PixelFormat);
+        }
 
-            for (int y = 0; y < bitmap.Height; ++y)
+        private ImageCodecInfo GetEncoder(ImageFormat format)
+        {
+            ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
+
+            foreach (ImageCodecInfo codec in codecs)
             {
-                result[y] = new int[bitmap.Width];
-                Marshal.Copy(bitmapData.Scan0 + y * bitmapData.Stride, result[y], 0, result[y].Length);
-            }
-
-            bitmap.UnlockBits(bitmapData);
-
-            return result;
-        }
-
-        private static IEnumerable<Point> FindMatch(IEnumerable<int[]> haystackLines, int[] needleLine)
-        {
-            var y = 0;
-
-            foreach (var haystackLine in haystackLines)
-            {
-                for (int x = 0, n = haystackLine.Length - needleLine.Length; x < n; ++x)
+                if (codec.FormatID == format.Guid)
                 {
-                    if (ContainSameElements(haystackLine, x, needleLine, 0, needleLine.Length))
-                    {
-                        yield return new Point(x, y);
-                    }
-
-                }
-                y += 1;
-            }
-        }
-
-        private static bool ContainSameElements(int[] first, int firstStart, int[] second, int secondStart, int length)
-        {
-            for (int i = 0; i < length; ++i)
-            {
-                if (first[i + firstStart] != second[i + secondStart])
-                {
-                    return false;
+                    return codec;
                 }
             }
-
-            return true;
+            return null;
         }
 
-        private static bool IsNeedlePresentAtLocation(int[][] haystack, int[][] needle, Point point, int alreadyVerified)
+        private async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
         {
-            for (int y = alreadyVerified; y < needle.Length; ++y)
+            using (var stream = new InMemoryRandomAccessStream())
             {
-                if (!ContainSameElements(haystack[y + point.Y], point.X, needle[y], 0, needle.Length)) return false;
+                using (EncoderParameters encoderParamters = new EncoderParameters(1))
+                {
+                    EncoderParameter parameter = new EncoderParameter(encoder, 50L);
+                    encoderParamters.Param[0] = parameter;
+                    bitmap.Save(stream.AsStream(), imageCodecInfo, encoderParamters);
+                    BitmapDecoder decoder = await BitmapDecoder.CreateAsync(BitmapDecoder.BmpDecoderId, stream);
+                    return await decoder.GetSoftwareBitmapAsync();
+                }
             }
-
-            return true;
-        }
-
-        public void Dispose()
-        {
-            zerosTimer?.Dispose();
-            playButton?.Dispose();
         }
     }
 }

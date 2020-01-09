@@ -13,37 +13,25 @@ namespace HeroesReplay
     public class ViewBuilder
     {
         private readonly int seconds;
-        private readonly Stopwatch stopwatch;
-        private readonly Game game;
+        private GameSpectator spectator;
 
         public ViewSpan Seconds()
         {
-            var now = Now;
-            return new ViewSpan(game.Replay, now, now.Add(TimeSpan.FromSeconds(seconds)));
+            var now = spectator.Timer;
+            return new ViewSpan(spectator.Game.Replay, now, now.Add(TimeSpan.FromSeconds(seconds)));
+        }
+        
+        public ViewBuilder(GameSpectator spectator)
+        {   
+            this.spectator = spectator;
         }
 
-        private TimeSpan Now
-        {
-            get
-            {
-                var duration = stopwatch.Elapsed.Duration();
-                return new TimeSpan(duration.Days, duration.Hours, duration.Minutes, duration.Seconds, 0);
-            }
-        }
-
-        public ViewBuilder(Stopwatch stopwatch, Game game)
-        {
-            this.stopwatch = stopwatch;
-            this.game = game;
-        }
-
-        private ViewBuilder(Stopwatch stopwatch, Game game, int seconds)
+        private ViewBuilder(GameSpectator spectator, int seconds)
         {
             this.seconds = seconds;
-            this.game = game;
-            this.stopwatch = stopwatch;
+            this.spectator = spectator;
         }
 
-        public ViewBuilder TheNext(int seconds) => new ViewBuilder(stopwatch, game, seconds);
+        public ViewBuilder TheNext(int seconds) => new ViewBuilder(spectator, seconds);
     }
 }

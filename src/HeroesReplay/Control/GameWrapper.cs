@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -15,6 +17,8 @@ namespace HeroesReplay
 
         private readonly Key[] KEYS_HEROES = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Key.D0 };
         private readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
+        private readonly IConfiguration configuration;
+        private readonly ILogger<GameWrapper> logger;
 
         private Process Game => Process.GetProcessesByName(GameProcessName)[0];
         private Process Launcher => Process.GetProcessesByName(BNetProcessName)[0];
@@ -35,6 +39,9 @@ namespace HeroesReplay
             try
             {
                 Game.Kill();
+
+                logger.LogInformation("Killed game process at " + DateTime.Now);
+
                 return true;
             }
             catch (Exception)
@@ -50,19 +57,24 @@ namespace HeroesReplay
             // replayinterface=AhliObs 0.66.StormInterface
         }
 
+        public GameWrapper(IConfiguration configuration, ILogger<GameWrapper> logger)
+        {
+            this.configuration = configuration;
+            this.logger = logger;
+        }
+
         public async Task<bool> TryLaunchAsync(Game game, CancellationToken token)
         {
-            if (IsGameRunning)
+            if (IsGameRunning && TryKillGame())
             {
-                if (TryKillGame())
-                {
-                    await Task.Delay(8000, token); // wait so bnet goes from disabled 'Playing' button to clickable 'Play'  button.
-                }
+                await Task.Delay(8000, token); // wait so bnet goes from disabled 'Playing' button to clickable 'Play'  button.
             }
 
-            using (var heroesOfTheStorm = Process.Start(@"C:\Program Files (x86)\Battle.net\Battle.net.exe", "--game heroes"))
+            var battlenetExe = Path.Combine(configuration.GetValue<string>("bnet"), "Battle.net.exe");
+
+            using (var battlenetProcess = Process.Start(battlenetExe, arguments: "--game heroes"))
             {
-                heroesOfTheStorm.WaitForExit();
+                battlenetProcess.WaitForExit();
 
                 await Task.Delay(8000, token);
 
@@ -70,22 +82,24 @@ namespace HeroesReplay
 
                 while (!IsGameRunning && !token.IsCancellationRequested)
                 {
-                    Console.WriteLine("Launching...");
+                    logger.LogInformation("Launching...");
                     await Task.Delay(8000, token);
                 }
 
                 if (IsGameRunning)
                 {
-                    Console.WriteLine("Launched...");
+                    logger.LogInformation("Launched...");
                     await Task.Delay(8000, token);
 
                     Game.WaitForInputIdle();
 
-                    Console.WriteLine($"Selecting {game.Name}");
+                    logger.LogInformation($"Selecting {game.Name}");
 
-                    using (var replaySelector = Process.Start(@"G:\Heroes of the Storm\Support64\HeroesSwitcher_x64.exe", $"\"{game.FilePath}\""))
+                    var switcherExe = Path.Combine(configuration.GetValue<string>("hots"), "Support64", "HeroesSwitcher_x64.exe");
+
+                    using (var switcherProcess = Process.Start(switcherExe, $"\"{game.FilePath}\""))
                     {
-                        replaySelector.WaitForExit();
+                        switcherProcess.WaitForExit();
 
                         Console.WriteLine($"Selected {game.Name}");
 

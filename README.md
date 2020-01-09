@@ -32,8 +32,9 @@ It uses the library [Heroes.ReplayParser](https://github.com/barrett777/Heroes.R
 
 ## Dependencies
 
-- .NET Core 3.1 (This project targets the .NET Core runtime)
+- .NET Core 3.1
 - Heroes.ReplayParser (The `.StormReplay` file parser)
+- Microsoft.Windows.SDK.Contracts (Windows Native Ocr Engine)
 
 ## Contributing
 

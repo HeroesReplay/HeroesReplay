@@ -52,11 +52,11 @@ namespace HeroesReplay
         {
             wrapper.SendTogglePause();
 
-            if (spectator.CurrentState == GameState.Running)
-                spectator.CurrentState = GameState.Paused;
+            if (spectator.State == GameState.Running)
+                spectator.State = GameState.Paused;
 
-            if (spectator.CurrentState == GameState.Paused)
-                spectator.CurrentState = GameState.Running;
+            if (spectator.State == GameState.Paused)
+                spectator.State = GameState.Running;
         }
 
         public void SendToggleControls() => wrapper.SendToggleControls();
@@ -71,9 +71,9 @@ namespace HeroesReplay
 
         private void OnStateChange(object sender, GameEventArgs<StateDelta> e)
         {
-            if (e.Data.Previous == GameState.Loading && e.Data.Current == GameState.Running)
+            if (e.Data.Previous == GameState.StartOfGame && e.Data.Current == GameState.Running)
             {
-                Console.WriteLine($"Game started, zooming out and disabling chat.");
+                logger.LogInformation($"Game started, zooming out and disabling chat. Thread: {Thread.CurrentThread.ManagedThreadId}");
 
                 wrapper.SendToggleZoom(); // Max Zoom
 
@@ -83,12 +83,12 @@ namespace HeroesReplay
 
         private void SendFocusHero(GameEventArgs<Player> e)
         {
-            Console.WriteLine($"Focusing {e.Data.Character}. Reason: {e.Message}");
-
             for (int index = 0; index < 10; index++)
             {
                 if (e.Game.Replay.Players[index] == e.Data)
                 {
+                    logger.LogInformation($"Focusing {e.Data.Character}. Reason: {e.Message}. Thread: {Thread.CurrentThread.ManagedThreadId}");
+
                     wrapper.SendFocusHero(index);
                 }
             }
@@ -96,7 +96,8 @@ namespace HeroesReplay
 
         private void SendPanelChange(GameEventArgs<GamePanel> e)
         {
-            Console.WriteLine($"Switching Panel: {e.Data}");
+            logger.LogInformation($"Switching Panel: {e.Data}. Thread: {Thread.CurrentThread.ManagedThreadId}");
+
             wrapper.SendPanelChange(e.Data);
         }
 

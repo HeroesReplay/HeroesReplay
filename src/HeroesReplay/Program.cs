@@ -1,6 +1,8 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,15 +14,16 @@ namespace HeroesReplay
         {
             var serviceProvider = new ServiceCollection()
                 .AddLogging(configuration => configuration.AddConsole())
-                .AddTransient<StateDetector>()
-                .AddTransient<GameSpectator>()
-                .AddTransient<ReplayService>()
-                .AddTransient<GameProvider>()
-                .AddTransient<GameController>()
-                .AddTransient<GameWrapper>()
+                .AddSingleton<StateDetector>()
+                .AddSingleton<GameSpectator>()
+                .AddSingleton<ReplayService>()
+                .AddSingleton<GameProvider>()
+                .AddSingleton<GameController>()
+                .AddSingleton<GameWrapper>()
+                .AddSingleton<IConfiguration>((provider) => new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json").Build())
                 .BuildServiceProvider();
 
-            using(var scope = serviceProvider.CreateScope())
+            using (var scope = serviceProvider.CreateScope())
             {
                 var service = scope.ServiceProvider.GetRequiredService<ReplayService>();
 

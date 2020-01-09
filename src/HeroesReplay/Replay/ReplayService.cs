@@ -1,4 +1,5 @@
 using Heroes.ReplayParser;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using System.Threading;
@@ -8,11 +9,13 @@ namespace HeroesReplay
 {
     public class ReplayService
     {
+        private readonly ILogger<ReplayService> logger;
         private readonly GameProvider provider;
         private readonly GameController controller;
 
-        public ReplayService(GameProvider provider, GameController controller)
+        public ReplayService(ILogger<ReplayService> logger, GameProvider provider, GameController controller)
         {
+            this.logger = logger;
             this.provider = provider;
             this.controller = controller;
         }
@@ -38,9 +41,13 @@ namespace HeroesReplay
                     {
 
                     }
+
+                    logger.LogInformation("Replays in queue: " + provider.Count);
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(10), token);
+                logger.LogInformation("Finished all replays in queue.");
+
+                await Task.Delay(TimeSpan.FromSeconds(5), token);
             }
         }
     }
