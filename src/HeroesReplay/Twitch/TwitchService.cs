@@ -5,9 +5,9 @@ namespace HeroesReplay
 {
     public class TwitchService
     {
-        private readonly GameController controller;
+        private readonly GameRunner controller;
 
-        public TwitchService(GameController controller)
+        public TwitchService(GameRunner controller)
         {
             this.controller = controller;
         }

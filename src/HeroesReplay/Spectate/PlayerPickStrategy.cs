@@ -38,6 +38,6 @@
         /// <summary>
         /// From a moment in time, pick a player with the most deaths
         /// </summary>
-        MostDeaths,
+        MostDeaths
     }
 }

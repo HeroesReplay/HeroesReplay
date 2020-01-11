@@ -4,13 +4,13 @@ namespace HeroesReplay
 {
     public class GameEventArgs<T> : EventArgs
     {
-        public Game Game { get; }
+        public StormReplay StormReplay { get; }
         public T Data { get; }
         public string Message { get; }
 
-        public GameEventArgs(Game game, T data, string message)
+        public GameEventArgs(StormReplay stormReplay, T data, string message)
         {
-            Game = game;
+            StormReplay = stormReplay;
             Message = message;
             Data = data;
         }

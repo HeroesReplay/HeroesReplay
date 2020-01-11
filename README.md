@@ -8,9 +8,11 @@ This project is in the early phase. Many things have not been worked out yet.
 
 ## Goals of the project
 
-- Develop better game state detection for `loading`, `playing`, `paused`, `ended` states.
-- Add Twitch chat integration for several features (voting, game controls)
+- Develop roboust state detection for `loading`, `playing`, `paused`, `ended` states.
 - Improve the existing spectate logic
+- Add ping events to focus hero criteria, e.g select heroes who are pinged of danger or ping for assistance.
+
+- Add Twitch chat integration for several features (voting, game controls)
 - Intigration of [HotsApi](http://hotsapi.net/) for limitless replays
 - Host a 24/7 stream similar to [SaltyTeemo](https://www.twitch.tv/saltyteemo)
 
@@ -18,13 +20,15 @@ This project is in the early phase. Many things have not been worked out yet.
 
 Heroes Replay is a project that automates playing and spectating `.StormReplay` files using the Heroes of the Storm game client. 
 It uses the library [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) to parse the replay file in order to determine what should be on focus during the replay.
+When running the application, it must run under admin privileges otherwise the screen capture of the window processes will fail.
 
 ## Features
+
+- Loads replay files and attemps to launch and spectate each replay.
 
 - Focuses on heroes that will die or kill an enemy hero
 - Focuses on heroes doing team or map objectives (gem collecting, for example)
 - Focuses on heroes destroying structures
-
 - Selects the talent tree panel when a team has just recieved new talents
 - Selects the objective panel when an objective has been won
 - Selects the Kill Death Assists panel when a hero dies
@@ -32,7 +36,7 @@ It uses the library [Heroes.ReplayParser](https://github.com/barrett777/Heroes.R
 
 ## Dependencies
 
-- .NET Core 3.1
+- .NET Core 3.1 & C# 8.0
 - Heroes.ReplayParser (The `.StormReplay` file parser)
 - Microsoft.Windows.SDK.Contracts (Windows Native Ocr Engine)
 
