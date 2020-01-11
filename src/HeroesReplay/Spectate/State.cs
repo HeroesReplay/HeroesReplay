@@ -1,11 +1,11 @@
 ﻿namespace HeroesReplay
 {
-    public enum GameState
+    public enum State
     {
         /// <summary>
         /// This is when the replay file is loading and the replay timer has not yet started in the game client
         /// </summary>
-        Loading,
+        StartOfGame,
 
         /// <summary>
         /// This is when the game has come to an end (with an end screen etc) and the vote button has been detected?

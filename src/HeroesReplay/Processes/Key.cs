@@ -1,6 +1,5 @@
 ﻿namespace HeroesReplay
 {
-
     public enum Key
     {
         /// <summary>The bitmask to extract a key code from a key value.</summary>

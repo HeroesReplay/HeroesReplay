@@ -1,8 +1,10 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using System;
+﻿using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay
 {
@@ -12,17 +14,22 @@ namespace HeroesReplay
         {
             var serviceProvider = new ServiceCollection()
                 .AddLogging(configuration => configuration.AddConsole())
-                .AddTransient<StateDetector>()
-                .AddTransient<GameSpectator>()
-                .AddTransient<ReplayService>()
-                .AddTransient<GameProvider>()
-                .AddTransient<GameController>()
-                .AddTransient<GameWrapper>()
+                .AddSingleton<IConfiguration>(provider => new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json").Build())
+                .AddSingleton<Spectator>()
+                .AddSingleton<ReplayConsumer>()
+                .AddSingleton<StormReplayProvider>()
+                .AddSingleton<GameRunner>()
+                .AddSingleton<HeroesOfTheStorm>()
+                .AddSingleton<BattleNet>()
+                .AddSingleton<AdminChecker>()
+                .AddSingleton<IStormReplayAnalyzer, DefaultStormReplayAnalyzer>()
                 .BuildServiceProvider();
 
-            using(var scope = serviceProvider.CreateScope())
+            using (var scope = serviceProvider.CreateScope())
             {
-                var service = scope.ServiceProvider.GetRequiredService<ReplayService>();
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                var adminChecker = scope.ServiceProvider.GetRequiredService<AdminChecker>(); 
+                var replayConsumer = scope.ServiceProvider.GetRequiredService<ReplayConsumer>();
 
                 using (var cancellationTokenSource = new CancellationTokenSource())
                 {
@@ -30,15 +37,25 @@ namespace HeroesReplay
                     {
                         e.Cancel = true;
                         cancellationTokenSource.Cancel();
-                        Console.WriteLine("Service shutdown requested.");
-                        Console.WriteLine("Please wait.");
+                        logger.LogInformation("Service shutdown requested.");
+                        logger.LogInformation("Please wait.");
                     };
 
-                    await service.RunAsync(cancellationTokenSource.Token);
+                    if (adminChecker.IsAdministrator())
+                    {
+                        await replayConsumer.RunAsync(cancellationTokenSource.Token);
+                    }
+                    else
+                    {
+                        logger.LogCritical("This application must run as Administrator or screen capture will fail.");
+                        Console.WriteLine("Press any key to exit.");
+                        Console.ReadLine();
+                    }
                 }
+
+                logger.LogInformation("Service shutdown.");
             }
 
-            Console.WriteLine("Service shutdown.");
             await Task.Delay(5000);
         }
     }

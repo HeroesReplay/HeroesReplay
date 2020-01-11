@@ -1,6 +1,6 @@
 ﻿namespace HeroesReplay
 {
-    public enum GamePanel
+    public enum Panel
     {
         Talents,
         DeathDamageRole,
