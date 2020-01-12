@@ -9,22 +9,28 @@ using Polly;
 
 namespace HeroesReplay
 {
+    /// <summary>
+    /// A wrapper around the Battle.net process and Battle.net launcher
+    /// </summary>
     public class BattleNet : ProcessWrapper
     {
         private readonly string launcherPath;
-        private readonly string battlenetDirectory;
-        private readonly string selectHeroesArgument;
-        private readonly string battlenetExe;
+        
+        private const string CLIENT_GAME_RUNNING_TEXT = "Game is running.";
+        private const string CLIENT_PLAY_BUTTON_TEXT = "PLAY";
+        private const string CLIENT_SHOP_HEROES_TEXT = "Shop Heroes of the Storm";
 
-        public BattleNet(IConfiguration configuration, ILogger<BattleNet> logger) : base(logger, "Battle.net", Path.Combine(configuration.GetValue<string>("bnet")))
+        private const string BATTLE_NET_LAUNCHER_EXE = "Battle.net Launcher.exe";
+        private const string BATTLE_NET_EXE = "Battle.net.exe";
+        private const string PROCESS_NAME = "Battle.net";
+        private const string SELECT_HEROES_ARG = "--game heroes";
+
+        public BattleNet(IConfiguration configuration, ILogger<BattleNet> logger, CancellationTokenSource source) : base(logger, PROCESS_NAME, Path.Combine(configuration.GetValue<string>("bnet", string.Empty), BATTLE_NET_EXE), source)
         {
-            battlenetDirectory = configuration.GetValue<string>("bnet");
-            launcherPath = Path.Combine(battlenetDirectory, "Battle.net Launcher.exe");
-            battlenetExe = Path.Combine(battlenetDirectory, "Battle.net.exe");
-            selectHeroesArgument = "--game heroes";
+            launcherPath = Path.Combine(configuration.GetValue<string>("bnet"), BATTLE_NET_LAUNCHER_EXE);
         }
 
-        public async Task<bool> WaitForBattleNetAsync(CancellationToken token = default)
+        public async Task<bool> WaitForBattleNetAsync()
         {
             if (IsRunning) return true;
 
@@ -35,23 +41,23 @@ namespace HeroesReplay
                 return await Policy
                     .HandleResult<bool>(result => result == false)
                     .WaitAndRetryAsync(5, count => TimeSpan.FromSeconds(10))
-                    .ExecuteAsync(async t => IsRunning, token);
+                    .ExecuteAsync(async t => IsRunning, Token);
             }
         }
 
-        public async Task<bool> WaitForGameLaunchedAsync(CancellationToken token = default)
+        public async Task<bool> WaitForGameLaunchedAsync()
         {
             return await Policy
                 .HandleResult<bool>(result => result == false)
                 .WaitAndRetryAsync(5, count => TimeSpan.FromSeconds(10))
                 .ExecuteAsync(async () =>
                 {
-                    var selected = await WaitForGameSelectedAsync(token);
+                    var selected = await WaitForGameSelectedAsync();
 
                     if (selected)
                     {
                         ActivatePlayNowButton();
-                        return await WaitForGameRunningAsync(token);
+                        return await WaitForGameRunningAsync();
                     }
 
                     return false;
@@ -59,31 +65,31 @@ namespace HeroesReplay
                 });
         }
 
-        private async Task<bool> IsPlayButtonEnabledAsync(CancellationToken token = default)
+        private async Task<bool> IsPlayButtonEnabledAsync()
         {
             return await Policy
                 .HandleResult<bool>(enabled => enabled == false)
                 .WaitAndRetryAsync(5, count => TimeSpan.FromSeconds(5))
-                .ExecuteAsync(async t => await GetWindowContainsAsync(WindowScreenCapture.CPU, "PLAY"), token);
+                .ExecuteAsync(async t => await GetWindowContainsAsync(WindowScreenCapture.CPU, CLIENT_PLAY_BUTTON_TEXT), Token);
         }
 
-        private async Task<bool> WaitForGameRunningAsync(CancellationToken token = default)
+        private async Task<bool> WaitForGameRunningAsync()
         {
             return await Policy
                 .HandleResult<bool>(running => running == false)
                 .WaitAndRetryAsync(5, count => TimeSpan.FromSeconds(5))
-                .ExecuteAsync(async t => await GetWindowContainsAsync(WindowScreenCapture.CPU, "Game is running.", "Shop Heroes of the Storm"), token);
+                .ExecuteAsync(async t => await GetWindowContainsAsync(WindowScreenCapture.CPU, CLIENT_GAME_RUNNING_TEXT, CLIENT_SHOP_HEROES_TEXT), Token);
         }
 
-        private async Task<bool> WaitForGameSelectedAsync(CancellationToken token = default)
+        private async Task<bool> WaitForGameSelectedAsync()
         {
             if (IsRunning)
             {
-                using (var p = Process.Start(battlenetExe, arguments: selectHeroesArgument))
+                using (var p = Process.Start(ProcessPath, arguments: SELECT_HEROES_ARG))
                 {
                     p.WaitForExit();
 
-                    return await GetWindowContainsAsync(WindowScreenCapture.CPU, "Shop Heroes of the Storm");
+                    return await GetWindowContainsAsync(WindowScreenCapture.CPU, CLIENT_SHOP_HEROES_TEXT);
                 }
             }
 

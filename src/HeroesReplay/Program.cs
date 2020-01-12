@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,51 +13,27 @@ namespace HeroesReplay
     {
         static async Task Main(string[] args)
         {
-            var serviceProvider = new ServiceCollection()
-                .AddLogging(configuration => configuration.AddConsole())
-                .AddSingleton<IConfiguration>(provider => new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json").Build())
-                .AddSingleton<Spectator>()
-                .AddSingleton<ReplayConsumer>()
-                .AddSingleton<StormReplayProvider>()
-                .AddSingleton<GameRunner>()
+            ServiceProvider serviceProvider = new ServiceCollection()
+                .AddLogging(loggingBuilder => loggingBuilder.AddConsole())
+                .AddSingleton<IConfiguration>(provider => new ConfigurationBuilder().SetBasePath(Directory.GetCurrentDirectory()).AddJsonFile("appsettings.json").AddCommandLine(args).Build())
                 .AddSingleton<HeroesOfTheStorm>()
                 .AddSingleton<BattleNet>()
-                .AddSingleton<AdminChecker>()
                 .AddSingleton<IStormReplayAnalyzer, DefaultStormReplayAnalyzer>()
+                .AddSingleton<Spectator>()
+                .AddSingleton<StormReplayProvider>()
+                .AddSingleton<ReplayConsumer>()
+                .AddSingleton<GameRunner>()
+                .AddSingleton<AdminChecker>()
+                .AddSingleton<ConsoleService>()
+                .AddSingleton<CancellationTokenSource>()
+                .AddSingleton<EntryPoint>()
                 .BuildServiceProvider();
 
-            using (var scope = serviceProvider.CreateScope())
+            using (IServiceScope scope = serviceProvider.CreateScope())
             {
-                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-                var adminChecker = scope.ServiceProvider.GetRequiredService<AdminChecker>(); 
-                var replayConsumer = scope.ServiceProvider.GetRequiredService<ReplayConsumer>();
-
-                using (var cancellationTokenSource = new CancellationTokenSource())
-                {
-                    Console.CancelKeyPress += (sender, e) =>
-                    {
-                        e.Cancel = true;
-                        cancellationTokenSource.Cancel();
-                        logger.LogInformation("Service shutdown requested.");
-                        logger.LogInformation("Please wait.");
-                    };
-
-                    if (adminChecker.IsAdministrator())
-                    {
-                        await replayConsumer.RunAsync(cancellationTokenSource.Token);
-                    }
-                    else
-                    {
-                        logger.LogCritical("This application must run as Administrator or screen capture will fail.");
-                        Console.WriteLine("Press any key to exit.");
-                        Console.ReadLine();
-                    }
-                }
-
-                logger.LogInformation("Service shutdown.");
+                var entryPoint = scope.ServiceProvider.GetRequiredService<EntryPoint>();
+                await entryPoint.RunHeroesReplayAsync();
             }
-
-            await Task.Delay(5000);
         }
     }
 }

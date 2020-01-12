@@ -5,17 +5,49 @@
    "version": "0.2.0",
    "configurations": [
         {
-            "name": ".NET Core Launch (console)",
+            "name": "REPLAY NO LAUNCH",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            // If you have changed target frameworks, make sure to update the program path.
             "program": "${workspaceFolder}/src/HeroesReplay/bin/Debug/netcoreapp3.1/HeroesReplay.dll",
-            "args": [],
-            "cwd": "${workspaceFolder}/src/HeroesReplay",
-            // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
-            "console": "internalConsole",
-            "stopAtEntry": false
+            "args": [
+                "--replay=C:\\temp\\2020-01-02 00.04.01 Tomb of the Spider Queen.StormReplay",
+                "--launch=false",
+                "--bnet=C:\\Program Files (x86)\\Battle.net"
+            ],
+            "cwd": "${workspaceFolder}/src/HeroesReplay",            
+            "console": "externalTerminal",
+            "stopAtEntry": true
+        },
+        {
+            "name": "REPLAY WITH LAUNCH",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/HeroesReplay/bin/Debug/netcoreapp3.1/HeroesReplay.dll",
+            "args": [
+                "--replay=C:\\temp\\2020-01-02 00.04.01 Tomb of the Spider Queen.StormReplay",
+                "--launch=true",
+                "--bnet=C:\\Program Files (x86)\\Battle.net"
+            ],
+            "cwd": "${workspaceFolder}/src/HeroesReplay",            
+            "console": "externalTerminal",
+            "stopAtEntry": true
+        },
+        {
+            "name": "REPLAYS FOLDER",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/HeroesReplay/bin/Debug/netcoreapp3.1/HeroesReplay.dll",
+            "args": [
+                "--replay=${workspaceFolder}\\replays\\hour-long-replay-provided-by-mgatner.StormReplay",
+                "--launch=false",
+                "--bnet=C:\\Program Files (x86)\\Battle.net"
+            ],
+            "cwd": "${workspaceFolder}/src/HeroesReplay",            
+            "console": "externalTerminal",
+            "stopAtEntry": true
         },
         {
             "name": ".NET Core Attach",

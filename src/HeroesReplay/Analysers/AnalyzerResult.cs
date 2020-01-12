@@ -17,16 +17,16 @@ namespace HeroesReplay
         public TimeSpan Range => End - Start;
         public StormReplay StormReplay { get; }
 
-        public AnalyzerResult(StormReplay stormReplay, TimeSpan start, TimeSpan end, List<Unit> deaths, List<Unit> mapObjectives, List<Unit> structures, List<Player> alive, List<(int Team, TimeSpan TalentTime)> talents, List<TeamObjective> teamObjectives)
+        public AnalyzerResult(StormReplay stormReplay, TimeSpan start, TimeSpan end, List<Unit> playerDeaths, List<Unit> mapObjectives, List<Unit> structures, List<Player> playersAlive, List<(int Team, TimeSpan TalentTime)> talents, List<TeamObjective> teamObjectives)
         {
             StormReplay = stormReplay ?? throw new ArgumentNullException(nameof(stormReplay));
             Start = start;
             End = end;
 
-            Deaths = deaths ?? throw new ArgumentNullException(nameof(deaths));
+            Deaths = playerDeaths ?? throw new ArgumentNullException(nameof(playerDeaths));
             MapObjectives = mapObjectives ?? throw new ArgumentNullException(nameof(mapObjectives));
             Structures = structures ?? throw new ArgumentNullException(nameof(structures));
-            Alive = alive ?? throw new ArgumentNullException(nameof(alive));
+            Alive = playersAlive ?? throw new ArgumentNullException(nameof(playersAlive));
             Talents = talents ?? throw new ArgumentNullException(nameof(talents));
             TeamObjectives = teamObjectives ?? throw new ArgumentNullException(nameof(teamObjectives));
         }

@@ -1,0 +1,12 @@
+{
+    "profiles": {
+        "Replays": {
+            "commandName": "Project",
+            "commandLineArgs": "--replays=\"G:\\replays\\input\" --launch=true --bnet=\"C:\\Program Files (x86)\\Battle.net\""
+        },
+        "Replay": {
+            "commandName": "Project",
+            "commandLineArgs": "--replay=\"C:\\path\\to\\my\\replay.StormReplay\" --launch=true --bnet=\"C:\\Program Files (x86)\\Battle.net\""
+        }
+    }
+}

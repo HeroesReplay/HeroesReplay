@@ -8,26 +8,23 @@ This project is in the early phase. Many things have not been worked out yet.
 
 ## Goals of the project
 
-- Develop roboust state detection for `loading`, `playing`, `paused`, `ended` states.
+- Develop robust state detection for `loading`, `playing`, `paused`, `ended` states.
 - Improve the existing spectate logic
 - Add ping events to focus hero criteria, e.g select heroes who are pinged of danger or ping for assistance.
-
 - Add Twitch chat integration for several features (voting, game controls)
 - Intigration of [HotsApi](http://hotsapi.net/) for limitless replays
 - Host a 24/7 stream similar to [SaltyTeemo](https://www.twitch.tv/saltyteemo)
 
 ## About
 
-Heroes Replay is a project that automates playing and spectating `.StormReplay` files using the Heroes of the Storm game client. 
-It uses the library [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) to parse the replay file in order to determine what should be on focus during the replay.
-When running the application, it must run under admin privileges otherwise the screen capture of the window processes will fail.
+Heroes Replay is a project that automates spectating `.StormReplay` files.  
+It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) to parse the replay file and then using that information, it can decide which heroes and panels to select.
 
 ## Features
 
 - Loads replay files and attemps to launch and spectate each replay.
-
 - Focuses on heroes that will die or kill an enemy hero
-- Focuses on heroes doing team or map objectives (gem collecting, for example)
+- Focuses on heroes doing team or map objectives (gem and doubloon collecting for example)
 - Focuses on heroes destroying structures
 - Selects the talent tree panel when a team has just recieved new talents
 - Selects the objective panel when an objective has been won
@@ -36,9 +33,60 @@ When running the application, it must run under admin privileges otherwise the s
 
 ## Dependencies
 
-- .NET Core 3.1 & C# 8.0
-- Heroes.ReplayParser (The `.StormReplay` file parser)
-- Microsoft.Windows.SDK.Contracts (Windows Native Ocr Engine)
+- [.NET Core 3.1](https://dotnet.microsoft.com/download/dotnet-core/3.1) a cross-platform version of .NET for building websites, services, and console apps.
+- [Microsoft.Extensions](https://github.com/dotnet/extensions) for dependency injection, logging, and configuration.
+- [Polly](https://github.com/App-vNext/Polly) for resilience and transient-fault-handling.
+- [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) for parsing Heroes of the Storm  `StormReplay` files.
+- [Microsoft.Windows.SDK.Contracts](https://www.nuget.org/packages/Microsoft.Windows.SDK.Contracts) for the WinRT `Windows.Media.Ocr`.
+
+## Building the application
+
+### From the command line
+
+```powershell
+git clone http://github.com/HeroesReplay/HeroesReplay.git
+cd ./HeroesReplay/src/HeroesReplay/
+dotnet build
+```
+
+### From Visual Studio 2019 or Visual Studio Code
+
+`Ctrl+Shift+B` can be used to build the project.
+
+## Running the application
+
+There are a few ways to run the application.
+
+### Spectate a replay that is currently running
+
+- This will attempt to find an existing `HeroesOfTheStorm_x64.exe` process.
+- You must ensure the replay argument you pass is the replay that is running.
+
+```powershell
+dotnet run --replay="C:\path\to\your\replay.StormReplay" --launch=false
+```
+
+### Spectate a replay that is not currently running
+
+- This will terminate any existing `HeroesOfTheStorm_x64.exe` process.
+- This will launch the main `HeroesOfTheStorm_x64.exe` parent process, then execute the `HeroesSwitcher_x64.exe` to launch the correct `HeroesOfTheStorm_x64.exe` version that matches the version header in the replay file.
+
+```powershell
+dotnet run --bnet="C:\Program Files (x86)\Battle.net" --replay="C:\path\to\your\replay.StormReplay" --launch=true
+```
+
+### Spectate replay files in a directory
+
+- This behaves similar to running an individual replay file, but will attempt to load, parse and spectate each replay in the directory, one after another.
+
+```powershell
+dotnet run --bnet="C:\Program Files (x86)\Battle.net" --replays="C:\path\to\your\replays"
+```
+
+## Debugging from Visual Studio 2019 or Visual Studio Code
+
+You can hit `Ctrl+F5` to launch the project from the IDE.  
+Arguments are set in the `launch.json` and `launchSettings.json` files.
 
 ## Contributing
 
@@ -49,7 +97,7 @@ When running the application, it must run under admin privileges otherwise the s
 5. Submit a pull request :D
 
 ## License
- 
+
 The MIT License (MIT)
 
 Copyright (c) 2020 Patrick Magee

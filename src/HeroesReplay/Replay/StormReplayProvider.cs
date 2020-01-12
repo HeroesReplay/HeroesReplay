@@ -1,5 +1,4 @@
-﻿#nullable enable
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,6 +6,7 @@ using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using static Heroes.ReplayParser.DataParser;
 
 namespace HeroesReplay
 {
@@ -17,7 +17,7 @@ namespace HeroesReplay
         private readonly ILogger<StormReplayProvider> logger;
         private readonly IConfiguration configuration;
         private readonly Queue<string> queue;
-        private readonly string defaultReplaysPath;
+        private readonly string replaysDirectory;
 
         private const string FileExtension = "*.StormReplay";
 
@@ -25,8 +25,22 @@ namespace HeroesReplay
         {
             this.logger = logger;
             this.configuration = configuration;
-            queue = new Queue<string>();
-            defaultReplaysPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm", "Accounts");
+            this.queue = new Queue<string>();
+            this.replaysDirectory = configuration.GetValue<string>("replays", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm", "Accounts"));
+        }
+
+        public async Task<StormReplay?> TryLoadReplayAsync(string path)
+        {
+            byte[] bytes = await File.ReadAllBytesAsync(path);
+            (ReplayParseResult result, Replay replay) = ParseReplay(bytes, true, false);
+
+            if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
+            {
+                logger.LogInformation("Parse Success: " + path);
+                return new StormReplay(path, replay);
+            }
+
+            return null;
         }
 
         public async Task<StormReplay?> TryLoadReplayAsync()
@@ -63,15 +77,12 @@ namespace HeroesReplay
 
         public void LoadReplays()
         {
-            if (configuration.GetValue<bool>("replays:load.default.location"))
+            foreach (string file in Directory.GetFiles(replaysDirectory, FileExtension, SearchOption.AllDirectories).OrderBy(File.GetCreationTime))
             {
-                foreach (string file in Directory.GetFiles(defaultReplaysPath, FileExtension, SearchOption.AllDirectories).OrderBy(File.GetCreationTime))
+                if (!queue.Contains(file))
                 {
-                    if (!queue.Contains(file))
-                    {
-                        logger.LogInformation("Queued: " + file);
-                        queue.Enqueue(file);
-                    }
+                    logger.LogInformation("Queued: " + file);
+                    queue.Enqueue(file);
                 }
             }
         }

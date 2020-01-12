@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
@@ -14,8 +15,8 @@ namespace HeroesReplay
 {
     public class ProcessWrapper : IDisposable
     {
-        private IntPtr deviceContext = IntPtr.Zero;
-        private IntPtr compatibleDeviceContext = IntPtr.Zero;
+        private IntPtr _deviceContext = IntPtr.Zero;
+        private IntPtr _compatibleDeviceContext = IntPtr.Zero;
         private RECT? rect;
 
         private Rectangle? Dimensions
@@ -42,13 +43,13 @@ namespace HeroesReplay
         {
             get
             {
-                if (compatibleDeviceContext == IntPtr.Zero)
+                if (_compatibleDeviceContext == IntPtr.Zero)
                 {
                     Logger.LogInformation("Caching CompatibleDeviceContext");
-                    compatibleDeviceContext = NativeMethods.CreateCompatibleDC(deviceContext);
+                    _compatibleDeviceContext = NativeMethods.CreateCompatibleDC(_deviceContext);
                 }
 
-                return compatibleDeviceContext;
+                return _compatibleDeviceContext;
             }
         }
 
@@ -56,12 +57,12 @@ namespace HeroesReplay
         {
             get
             {
-                if (deviceContext == IntPtr.Zero)
+                if (_deviceContext == IntPtr.Zero)
                 {
                     Logger.LogInformation("Caching DeviceContext");
-                    deviceContext = NativeMethods.GetWindowDC(WindowHandle);
+                    _deviceContext = NativeMethods.GetWindowDC(WindowHandle);
                 }
-                return deviceContext;
+                return _deviceContext;
             }
         }
 
@@ -87,15 +88,18 @@ namespace HeroesReplay
 
         private readonly OcrEngine ocrEngine = OcrEngine.TryCreateFromUserProfileLanguages();
 
-        public ProcessWrapper(ILogger<ProcessWrapper> logger, string processName, string processPath)
+        protected CancellationToken Token { get; }
+
+        public ProcessWrapper(ILogger<ProcessWrapper> logger, string processName, string processPath, CancellationTokenSource source)
         {
             this.Logger = logger;
             this.ProcessName = processName;
             this.ProcessPath = processPath;
+            this.Token = source.Token;
         }
 
         // Windows desktop applications
-        protected Bitmap? TryPrintScreen()
+        protected Bitmap? TryPrintWindow()
         {
             if (Dimensions == null) return null;
 
@@ -139,9 +143,15 @@ namespace HeroesReplay
                     bitmap = NativeMethods.CreateCompatibleBitmap(DeviceContext, Dimensions.Value.Width, Dimensions.Value.Height);
                     oldBitmap = NativeMethods.SelectObject(CompatibleDeviceContext, bitmap);
 
+                    // To speed this up, don't copy the entire width/height of the application
                     if (NativeMethods.BitBlt(CompatibleDeviceContext, 0, 0, Dimensions.Value.Width, Dimensions.Value.Height, DeviceContext, Dimensions.Value.Left, Dimensions.Value.Top, SRCCOPY))
                     {
                         return Image.FromHbitmap(bitmap);
+                    }
+                    else
+                    {
+                        NativeMethods.DeleteDC(_compatibleDeviceContext);
+                        NativeMethods.ReleaseDC(WindowHandle, _deviceContext);
                     }
                 }
             }
@@ -159,22 +169,22 @@ namespace HeroesReplay
             return null;
         }
 
+        // https://docs.microsoft.com/en-us/dotnet/framework/winforms/advanced/how-to-set-jpeg-compression-level
+        // The only way to convert from Bitmap to SoftwareBitmap is to save the Bitmap into a Stream
         protected async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
         {
             using (var stream = new InMemoryRandomAccessStream())
             {
                 ImageCodecInfo? imageCodecInfo = GetEncoder(ImageFormat.Bmp);
 
-                using (EncoderParameters encoderParameters = new EncoderParameters(1))
-                {
-                    EncoderParameter encoderParameter = new EncoderParameter(Encoder.Quality, 50L);
-                    encoderParameters.Param[0] = encoderParameter;
+                EncoderParameters encoderParameters = new EncoderParameters(1);
+                EncoderParameter encoderParameter = new EncoderParameter(Encoder.Quality, 50L);
+                encoderParameters.Param[0] = encoderParameter;
 
-                    bitmap.Save(stream.AsStream(), imageCodecInfo, encoderParameters);
+                bitmap.Save(stream.AsStream(), imageCodecInfo, encoderParameters);
 
-                    BitmapDecoder decoder = await BitmapDecoder.CreateAsync(BitmapDecoder.BmpDecoderId, stream);
-                    return await decoder.GetSoftwareBitmapAsync();
-                }
+                BitmapDecoder decoder = await BitmapDecoder.CreateAsync(BitmapDecoder.BmpDecoderId, stream);
+                return await decoder.GetSoftwareBitmapAsync();
             }
         }
 
@@ -182,7 +192,7 @@ namespace HeroesReplay
         {
             Bitmap? bitmap = capture switch
             {
-                WindowScreenCapture.CPU => TryPrintScreen(),
+                WindowScreenCapture.CPU => TryPrintWindow(),
                 WindowScreenCapture.GPU => TryBitBlt(),
                 _ => throw new ArgumentOutOfRangeException(nameof(capture), capture, "Unhandled Capture method.")
             };
@@ -220,6 +230,11 @@ namespace HeroesReplay
                 {
                     return result;
                 }
+                else
+                {
+                    Logger.LogDebug("Could not extract OCR result for: " + string.Join(", ", lines) + ". Saving image to disk.");
+                    bitmap.Save("C:\\temp\\" + Guid.NewGuid() + ".bmp", ImageFormat.Bmp);
+                }
 
                 return null;
             }
@@ -233,8 +248,8 @@ namespace HeroesReplay
 
         public void Dispose()
         {
-            NativeMethods.DeleteDC(compatibleDeviceContext);
-            NativeMethods.ReleaseDC(WindowHandle, deviceContext);
+            NativeMethods.DeleteDC(_compatibleDeviceContext);
+            NativeMethods.ReleaseDC(WindowHandle, _deviceContext);
         }
     }
 }

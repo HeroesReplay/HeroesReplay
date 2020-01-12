@@ -1,10 +1,7 @@
 ﻿using System;
-using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay
@@ -15,13 +12,15 @@ namespace HeroesReplay
         private readonly BattleNet battleNet;
         private readonly HeroesOfTheStorm heroesOfTheStorm;
         private readonly Spectator spectator;
+        private readonly CancellationToken token;
 
-        public GameRunner(ILogger<GameRunner> logger, BattleNet battleNet, HeroesOfTheStorm heroesOfTheStorm, Spectator spectator)
+        public GameRunner(ILogger<GameRunner> logger, BattleNet battleNet, HeroesOfTheStorm heroesOfTheStorm, Spectator spectator, CancellationTokenSource source)
         {
             this.logger = logger;
             this.battleNet = battleNet;
             this.heroesOfTheStorm = heroesOfTheStorm;
             this.spectator = spectator;
+            this.token = source.Token;
         }
 
         private void RegisterEvents()
@@ -37,52 +36,48 @@ namespace HeroesReplay
             spectator.PanelChange -= OnPanelChange;
             spectator.StateChange -= OnStateChange;
         }
-        
 
-        /// <summary>
-        /// Starts Battle.net if it is not running.
-        /// Launches the game via Battle.net
-        /// Waits until the main HeroesOfTheStorm_x64.exe is finished
-        /// Calls the HeroSwitcher_x64.exe which detects which game client needs to launch that supports the replay file.
-        /// </summary>
-        public async Task RunAsync(StormReplay stormReplay, CancellationToken token = default)
+        private async Task RunAsync(StormReplay stormReplay)
+        {
+            await spectator.SpectateAsync(stormReplay);
+        }
+
+        private async Task LaunchAndRunAsync(StormReplay stormReplay)
         {
             try
             {
-                RegisterEvents();
-
                 heroesOfTheStorm.KillGame();
                 await heroesOfTheStorm.SetGameVariables();
 
-                var started = await battleNet.WaitForBattleNetAsync(token);
+                var started = await battleNet.WaitForBattleNetAsync();
 
                 if (!started)
                 {
                     throw new Exception("BattleNet process was not found, so cannot attempt to start the game.");
                 }
 
-                var launched = await battleNet.WaitForGameLaunchedAsync(token);
+                var launched = await battleNet.WaitForGameLaunchedAsync();
 
                 if (!launched)
                 {
                     throw new Exception("Game process was not found launched.");
                 }
 
-                var selected = await heroesOfTheStorm.WaitForSelectedReplayAsync(stormReplay, token);
+                var selected = await heroesOfTheStorm.WaitForSelectedReplayAsync(stormReplay);
 
                 if (!selected)
                 {
                     throw new Exception("Game process version not found matching replay version: " + stormReplay.Replay.ReplayVersion);
                 }
 
-                var loading = await heroesOfTheStorm.WaitForMapLoadingAsync(stormReplay, token);
+                var loading = await heroesOfTheStorm.WaitForMapLoadingAsync(stormReplay);
 
                 if (!loading)
                 {
                     throw new Exception("Game process not found in loading state.");
                 }
 
-                await spectator.SpectateAsync(stormReplay, token);
+                await spectator.SpectateAsync(stormReplay);
             }
             catch (Exception e)
             {
@@ -90,9 +85,34 @@ namespace HeroesReplay
             }
             finally
             {
-                DeregisterEvents();
-
                 heroesOfTheStorm.KillGame();
+            }
+        }
+
+        /// <summary>
+        /// Starts Battle.net if it is not running.
+        /// Launches the game via Battle.net
+        /// Waits until the main HeroesOfTheStorm_x64.exe is finished
+        /// Calls the HeroSwitcher_x64.exe which detects which game client needs to launch that supports the replay file.
+        /// </summary>
+        public async Task RunAsync(StormReplay stormReplay, bool launchGame)
+        {
+            try
+            {
+                RegisterEvents();
+
+                if (launchGame)
+                {
+                    await LaunchAndRunAsync(stormReplay);
+                }
+                else
+                {
+                    await RunAsync(stormReplay);
+                }
+            }
+            finally
+            {
+                DeregisterEvents();
             }
         }
 
@@ -110,13 +130,14 @@ namespace HeroesReplay
 
         private void OnStateChange(object sender, GameEventArgs<StateDelta> e)
         {
-            if (e.Data.Previous != State.StartOfGame || e.Data.Current != State.Running) return;
+            if (e.Data.Previous == State.StartOfGame && e.Data.Current == State.Running)
+            {
+                logger.LogInformation($"StormReplay started, zooming out and disabling chat. Thread: {Thread.CurrentThread.ManagedThreadId}");
 
-            logger.LogInformation($"StormReplay started, zooming out and disabling chat. Thread: {Thread.CurrentThread.ManagedThreadId}");
+                heroesOfTheStorm.SendToggleZoom(); // Max Zoom
 
-            // heroesOfTheStorm.SendToggleZoom(); // Max Zoom
-
-            // heroesOfTheStorm.SendToggleChat(); // Hide Chat
+                heroesOfTheStorm.SendToggleChat(); // Hide Chat
+            }
         }
 
         private void OnHeroChange(object sender, GameEventArgs<Player> e)

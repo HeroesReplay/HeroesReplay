@@ -59,7 +59,7 @@ namespace HeroesReplay
             get => timer;
             set
             {
-                if (value != timer) logger.LogInformation($"Timer: {timer}. Now: {DateTime.Now}. Thread: {Thread.CurrentThread.ManagedThreadId}");
+                if (value != timer) logger.LogInformation($"Timer: {timer}");
 
                 if (value == TimeSpan.Zero) State = State.StartOfGame;
                 else if (value >= StormReplay.Replay.ReplayLength) State = State.EndOfGame;
@@ -76,24 +76,22 @@ namespace HeroesReplay
         private readonly HeroesOfTheStorm heroesOfTheStorm;
         private readonly IStormReplayAnalyzer analyzer;
         private readonly List<Panel> panels = Enum.GetValues(typeof(Panel)).Cast<Panel>().ToList();
+        private readonly CancellationToken token;
 
-        public Spectator(ILogger<Spectator> logger, HeroesOfTheStorm heroesOfTheStorm, IStormReplayAnalyzer analyzer)
+        public Spectator(ILogger<Spectator> logger, HeroesOfTheStorm heroesOfTheStorm, IStormReplayAnalyzer analyzer, CancellationTokenSource source)
         {
             this.logger = logger;
             this.heroesOfTheStorm = heroesOfTheStorm;
             this.analyzer = analyzer;
+            this.token = source.Token;
         }
 
-        public async Task SpectateAsync(StormReplay stormReplay, CancellationToken token)
+        public async Task SpectateAsync(StormReplay stormReplay)
         {
             StormReplay = stormReplay;
             State = State.StartOfGame;
 
-            var panelLoopTask = Task.Run(() => PanelLoopAsync(token), token);
-            var focusLoopTask = Task.Run(() => FocusLoopAsync(token), token);
-            var stateLoopTask = Task.Run(() => StateLoopAsync(token), token);
-
-            await Task.WhenAll(stateLoopTask, focusLoopTask, panelLoopTask);
+            await Task.WhenAll(Task.Run(PanelLoopAsync, token), Task.Run(FocusLoopAsync, token), Task.Run(StateLoopAsync, token));
         }
 
         public void Dispose()
@@ -101,7 +99,7 @@ namespace HeroesReplay
 
         }
 
-        private async Task FocusLoopAsync(CancellationToken token)
+        private async Task FocusLoopAsync()
         {
             while (!token.IsCancellationRequested && State != State.EndOfGame)
             {
@@ -168,7 +166,7 @@ namespace HeroesReplay
             }
         }
 
-        private async Task PanelLoopAsync(CancellationToken token)
+        private async Task PanelLoopAsync()
         {
             while (!token.IsCancellationRequested && State != State.EndOfGame)
             {
@@ -208,7 +206,7 @@ namespace HeroesReplay
             }
         }
 
-        private async Task StateLoopAsync(CancellationToken token)
+        private async Task StateLoopAsync()
         {
             while (!token.IsCancellationRequested && State != State.EndOfGame)
             {
