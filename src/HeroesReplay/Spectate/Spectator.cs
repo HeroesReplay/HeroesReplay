@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using HeroesReplay.Selector;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay
@@ -26,14 +27,17 @@ namespace HeroesReplay
             }
         }
 
-        public (TimeSpan Timer, Unit Unit, Player Player, String Reason) Focus
+        public PlayerSelect Player
         {
-            get => focus;
+            get => player;
             set
             {
-                if (focus.Player != value.Player && value.Player != null) HeroChange?.Invoke(this, new GameEventArgs<Player>(StormReplay, value.Player, value.Reason));
+                if (player.Player != value.Player)
+                {
+                    HeroChange?.Invoke(this, new GameEventArgs<Player>(StormReplay, value.Player, value.Reason.ToString()));
+                }
 
-                focus = value;
+                player = value;
             }
         }
 
@@ -52,7 +56,7 @@ namespace HeroesReplay
         private State state;
         private Panel panel;
         private TimeSpan timer;
-        private (TimeSpan Time, Unit Unit, Player Player, String Reason) focus;
+        private PlayerSelect player;
 
         public TimeSpan Timer
         {
@@ -73,14 +77,16 @@ namespace HeroesReplay
         public StormReplay StormReplay { get; set; }
 
         private readonly ILogger<Spectator> logger;
+        private readonly PrioritySelector prioritySelector;
         private readonly HeroesOfTheStorm heroesOfTheStorm;
         private readonly IStormReplayAnalyzer analyzer;
         private readonly List<Panel> panels = Enum.GetValues(typeof(Panel)).Cast<Panel>().ToList();
         private readonly CancellationToken token;
 
-        public Spectator(ILogger<Spectator> logger, HeroesOfTheStorm heroesOfTheStorm, IStormReplayAnalyzer analyzer, CancellationTokenSource source)
+        public Spectator(ILogger<Spectator> logger, PrioritySelector prioritySelector, HeroesOfTheStorm heroesOfTheStorm, IStormReplayAnalyzer analyzer, CancellationTokenSource source)
         {
             this.logger = logger;
+            this.prioritySelector = prioritySelector;
             this.heroesOfTheStorm = heroesOfTheStorm;
             this.analyzer = analyzer;
             this.token = source.Token;
@@ -107,55 +113,10 @@ namespace HeroesReplay
                 {
                     try
                     {
-                        AnalyzerResult result = Analyze.Seconds(10);
-
-                        if (result.Deaths.Any())
+                        foreach (PlayerSelect playerSelect in prioritySelector.Prioritize(Analyze.Seconds(10)))
                         {
-                            foreach (Unit unit in result.Deaths)
-                            {
-                                var diff = unit.TimeSpanDied.Value - result.Start;
-                                Focus = (result.Start, unit, unit.PlayerControlledBy, $"Death in {diff}");
-                                await Task.Delay(diff);
-                            }
-                        }
-                        else if (result.MapObjectives.Any())
-                        {
-                            foreach (var unit in result.MapObjectives)
-                            {
-                                var diff = unit.TimeSpanDied.Value - result.Start;
-                                Focus = (result.Start, null, unit.PlayerKilledBy ?? unit.PlayerControlledBy, $"MapObjective in {diff}");
-                                await Task.Delay(unit.TimeSpanDied.Value - result.Start);
-                            }
-                        }
-                        else if (result.TeamObjectives.Any())
-                        {
-                            foreach (TeamObjective objective in result.TeamObjectives)
-                            {
-                                var diff = objective.TimeSpan - result.Start;
-                                Focus = (result.Start, null, objective.Player, $"TeamObjective in {diff}");
-                                await Task.Delay(diff);
-                            }
-                        }
-                        else if (result.Structures.Any())
-                        {
-                            foreach (Unit unit in result.Structures.Take(2))
-                            {
-                                var diff = unit.TimeSpanDied.Value - result.Start;
-                                Focus = (result.Start, unit, unit.PlayerKilledBy, $"Structure in {diff}");
-                                await Task.Delay(diff, token);
-                            }
-                        }
-                        else if (result.Alive.Any())
-                        {
-                            foreach (Player player in result.Alive.Take(2))
-                            {
-                                Focus = (result.Start, null, player, "Alive");
-                                await Task.Delay(5000, token);
-                            }
-                        }
-                        else
-                        {
-                            await result.Delay(token);
+                            Player = playerSelect;
+                            await Player.WatchAsync();
                         }
                     }
                     catch (Exception e)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Selector;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ namespace HeroesReplay
                 .AddSingleton<HeroesOfTheStorm>()
                 .AddSingleton<BattleNet>()
                 .AddSingleton<IStormReplayAnalyzer, DefaultStormReplayAnalyzer>()
+                .AddSingleton<PrioritySelector>()
                 .AddSingleton<Spectator>()
                 .AddSingleton<StormReplayProvider>()
                 .AddSingleton<ReplayConsumer>()

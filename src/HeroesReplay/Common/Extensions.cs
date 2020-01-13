@@ -6,7 +6,7 @@ namespace HeroesReplay
 {
     public static class Extensions
     {
-        public static Task Delay(this AnalyzerResult result, CancellationToken token = default) => Task.Delay(result.Range, token);
+        public static Task Delay(this AnalyzerResult result, CancellationToken token = default) => Task.Delay(result.Time, token);
 
         /// <summary>
         /// The in-game timer at the top has a NEGATIVE offset of 610.

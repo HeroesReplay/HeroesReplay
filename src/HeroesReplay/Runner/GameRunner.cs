@@ -132,7 +132,7 @@ namespace HeroesReplay
         {
             if (e.Data.Previous == State.StartOfGame && e.Data.Current == State.Running)
             {
-                logger.LogInformation($"StormReplay started, zooming out and disabling chat. Thread: {Thread.CurrentThread.ManagedThreadId}");
+                logger.LogInformation($"StormReplay started, zooming out and disabling chat.");
 
                 heroesOfTheStorm.SendToggleZoom(); // Max Zoom
 
@@ -146,7 +146,7 @@ namespace HeroesReplay
             {
                 if (e.StormReplay.Replay.Players[index] == e.Data)
                 {
-                    logger.LogInformation($"Focusing {e.Data.Character}. Reason: {e.Message}. Thread: {Thread.CurrentThread.ManagedThreadId}");
+                    logger.LogInformation($"Focusing {e.Data.Character}. Reason: {e.Message}.");
 
                     heroesOfTheStorm.SendFocusHero(index);
                 }
@@ -155,7 +155,7 @@ namespace HeroesReplay
 
         private void OnPanelChange(object sender, GameEventArgs<Panel> e)
         {
-            logger.LogInformation($"Switching Panel: {e.Data}. Thread: {Thread.CurrentThread.ManagedThreadId}");
+            logger.LogInformation($"Switching Panel: {e.Data}.");
 
             heroesOfTheStorm.SendPanelChange(e.Data);
         }

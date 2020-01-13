@@ -33,6 +33,7 @@ namespace HeroesReplay
                 stormReplay: stormReplay,
                 start: start,
                 end: end,
+                time: (end - start),
                 playerDeaths: dead.Where(unit => unit.IsHero()).ToList(),
                 mapObjectives: dead.Where(unit => unit.IsMapObjective()).ToList(),
                 structures: structures,
