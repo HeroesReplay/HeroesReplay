@@ -66,7 +66,8 @@ heroesreplay.exe [arguments]
 ```
 
 ### From the project folder
-``
+
+```
 cd /src/HeroesReplay.CLI/
 dotnet run heroesreplay [arguments]
 ```
