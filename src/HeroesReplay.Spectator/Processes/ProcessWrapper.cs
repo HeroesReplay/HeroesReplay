@@ -9,12 +9,15 @@ using System.Threading.Tasks;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Spectator
 {
     public partial class ProcessWrapper : IDisposable
     {
+        
+
         private IntPtr _deviceContext = IntPtr.Zero;
         private IntPtr _compatibleDeviceContext = IntPtr.Zero;
         private RECT? rect;
@@ -69,22 +72,26 @@ namespace HeroesReplay.Spectator
         public bool IsRunning => Process.GetProcessesByName(ProcessName).Any();
 
         protected string ProcessName { get; }
-        protected string ProcessPath { get; }
+        
         protected ILogger<ProcessWrapper> Logger { get; }
+
+        protected IConfiguration Configuration { get;  }
 
         protected Process WrappedProcess => Process.GetProcessesByName(ProcessName)[0];
         protected IntPtr WindowHandle => WrappedProcess.MainWindowHandle;
 
         private readonly OcrEngine ocrEngine = OcrEngine.TryCreateFromUserProfileLanguages();
 
-        protected CancellationToken Token { get; }
+        private readonly CancellationTokenProvider provider;
 
-        public ProcessWrapper(CancellationTokenProvider provider, ILogger<ProcessWrapper> logger, string processName, string processPath)
+        protected CancellationToken Token => provider.Token;
+
+        public ProcessWrapper(CancellationTokenProvider provider, ILogger<ProcessWrapper> logger, IConfiguration configuration, string processName)
         {
-            this.Token = provider.Token;
             this.Logger = logger;
+            this.Configuration = configuration;
+            this.provider = provider;
             this.ProcessName = processName;
-            this.ProcessPath = processPath;
         }
 
         // Windows desktop applications

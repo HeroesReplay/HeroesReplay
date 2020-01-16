@@ -48,6 +48,8 @@ namespace HeroesReplay.Spectator
             }
         }
 
+        private CancellationToken Token => tokenProvider.Token;
+
         private AnalyerResultBuilder Analyze => new AnalyerResultBuilder().WithSpectator(this).WithAnalyzer(analyzer);
 
         private State state;
@@ -73,19 +75,21 @@ namespace HeroesReplay.Spectator
 
         public StormReplay StormReplay { get; set; }
 
+        
+
         private readonly ILogger<Spectator> logger;
         private readonly StormPlayerSelector selector;
         private readonly HeroesOfTheStorm heroesOfTheStorm;
-        private readonly CancellationToken token;
-        private readonly IStormReplayAnalyzer analyzer;
+        private readonly CancellationTokenProvider tokenProvider;
+        private readonly StormReplayAnalyzer analyzer;
         private readonly List<Panel> panels = Enum.GetValues(typeof(Panel)).Cast<Panel>().ToList();
 
-        public Spectator(ILogger<Spectator> logger, StormPlayerSelector selector, HeroesOfTheStorm heroesOfTheStorm, CancellationTokenProvider tokenProvider, IStormReplayAnalyzer analyzer)
+        public Spectator(ILogger<Spectator> logger, StormPlayerSelector selector, HeroesOfTheStorm heroesOfTheStorm, CancellationTokenProvider tokenProvider, StormReplayAnalyzer analyzer)
         {
-            this.token = tokenProvider.Token;
             this.logger = logger;
             this.selector = selector;
             this.heroesOfTheStorm = heroesOfTheStorm;
+            this.tokenProvider = tokenProvider;
             this.analyzer = analyzer;
         }
 
@@ -93,7 +97,7 @@ namespace HeroesReplay.Spectator
         {
             StormReplay = stormReplay;
             State = State.StartOfGame;
-            await Task.WhenAll(Task.Run(PanelLoopAsync, token), Task.Run(FocusLoopAsync, token), Task.Run(StateLoopAsync, token));
+            await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));
         }
 
         public void Dispose()
@@ -105,11 +109,9 @@ namespace HeroesReplay.Spectator
 
         private async Task FocusLoopAsync()
         {
-            while (State != State.EndOfGame)
+            while (State != State.EndOfGame && !Token.IsCancellationRequested)
             {
-                token.ThrowIfCancellationRequested();
-
-                while (State == State.Running)
+                while (State == State.Running && !Token.IsCancellationRequested)
                 {
                     try
                     {
@@ -117,16 +119,26 @@ namespace HeroesReplay.Spectator
 
                         foreach (StormPlayer player in selector.Select(analyzerResult))
                         {
-                            StormPlayer = player;
                             TimeSpan duration = player.When - Timer;
 
-                            if (duration <= TimeSpan.Zero)
+                            if (duration <= TimeSpan.Zero || duration.TotalSeconds >= Constants.Heroes.MAX_KILL_STREAK_POTENTIAL.TotalSeconds)
                             {
+                                // This tends to happen when the OCR engine recognized result of the 'Timer' is invalid
+                                // TODO: Improve OCR by pre-processing the image. (cleaner, contrast, bigger etc)
+
                                 logger.LogInformation($"Focused: {StormPlayer.Player.Character}. Reason: {StormPlayer.Reason}. INVALID DURATION: {duration}.");
+                                continue;
+                            }
+
+                            StormPlayer = player;
+
+                            if (player.Reason == SelectorReason.Alive)
+                            {
+                                await Task.Delay(player.When, Token);
                             }
                             else
                             {
-                                await Task.Delay(duration, token);
+                                await Task.Delay(duration, Token);
                             }
 
                         }
@@ -141,11 +153,9 @@ namespace HeroesReplay.Spectator
 
         private async Task PanelLoopAsync()
         {
-            while (State != State.EndOfGame)
+            while (State != State.EndOfGame && !Token.IsCancellationRequested)
             {
-                token.ThrowIfCancellationRequested();
-
-                while (State == State.Running)
+                while (State == State.Running && !Token.IsCancellationRequested)
                 {
                     try
                     {
@@ -171,22 +181,22 @@ namespace HeroesReplay.Spectator
                         }
                         else Panel = panels.IndexOf(Panel) + 1 >= panels.Count ? panels.First() : panels[panels.IndexOf(Panel) + 1];
 
-                        await result.Delay(token);
+                        await result.Delay(Token);
                     }
                     catch (Exception e)
                     {
                         logger.LogError(e, e.Message);
                     }
                 }
+
+                await Task.Delay(TimeSpan.FromSeconds(5), Token);
             }
         }
 
         private async Task StateLoopAsync()
         {
-            while (State != State.EndOfGame)
+            while (State != State.EndOfGame && !Token.IsCancellationRequested)
             {
-                token.ThrowIfCancellationRequested();
-
                 try
                 {
                     TimeSpan? elapsed = await heroesOfTheStorm.TryGetTimerAsync();
@@ -197,7 +207,7 @@ namespace HeroesReplay.Spectator
                         logger.LogInformation($"Focused: {StormPlayer.Player.Character}. Reason: {StormPlayer.Reason}. Countdown: {(StormPlayer.When - Timer).TotalSeconds}s ");
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(1), token); // The analyzer checks for 10 seconds into the future, so checking every 5 seconds gives us enough time to analyze with accuracy?
+                    await Task.Delay(TimeSpan.FromSeconds(1), Token); // The analyzer checks for 10 seconds into the future, so checking every 5 seconds gives us enough time to analyze with accuracy?
                 }
                 catch (Exception e)
                 {

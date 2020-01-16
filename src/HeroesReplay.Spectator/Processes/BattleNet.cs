@@ -13,18 +13,20 @@ namespace HeroesReplay.Spectator
     /// </summary>
     public class BattleNet : ProcessWrapper
     {
-        private readonly string launcherPath;
+        private string LauncherPath => Path.Combine(Configuration.GetValue<string>("bnet"), Constants.Bnet.BATTLE_NET_LAUNCHER_EXE);
 
-        public BattleNet(CancellationTokenProvider tokenProvider, IConfiguration configuration, ILogger<BattleNet> logger) : base(tokenProvider, logger, Constants.Bnet.BATTLE_NET_PROCESS_NAME, Path.Combine(configuration.GetValue<string>("bnet"), Constants.Bnet.BATTLE_NET_EXE))
+        private string ProcessPath => Path.Combine(Configuration.GetValue<string>("bnet"), Constants.Bnet.BATTLE_NET_EXE);
+
+        public BattleNet(CancellationTokenProvider tokenProvider, IConfiguration configuration, ILogger<BattleNet> logger) : base(tokenProvider, logger, configuration, Constants.Bnet.BATTLE_NET_PROCESS_NAME)
         {
-            launcherPath = Path.Combine(configuration.GetValue<string>("bnet"), Constants.Bnet.BATTLE_NET_LAUNCHER_EXE);
+            
         }
 
         public async Task<bool> WaitForBattleNetAsync()
         {
             if (IsRunning) return true;
 
-            using (Process p = Process.Start(launcherPath))
+            using (Process p = Process.Start(LauncherPath))
             {
                 p.WaitForExit();
 

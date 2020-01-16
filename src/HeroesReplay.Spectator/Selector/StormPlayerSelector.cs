@@ -25,12 +25,24 @@ namespace HeroesReplay.Spectator
             {
                 return HandleStructures(result);
             }
+            else if (result.PingSources.Any())
+            {
+                return HandlePings(result);
+            }
             else if (result.PlayersAlive.Any())
             {
                 return HandleAlive(result);
             }
 
             return Enumerable.Empty<StormPlayer>();
+        }
+
+        private IEnumerable<StormPlayer> HandlePings(AnalyzerResult result)
+        {
+            foreach (GameEvent ping in result.PingSources)
+            {
+                yield return new StormPlayer(ping.player, ping.TimeSpan, SelectorReason.Ping);
+            }
         }
 
         private IEnumerable<StormPlayer> HandleMapObjectives(AnalyzerResult result)

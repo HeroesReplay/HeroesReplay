@@ -12,17 +12,22 @@ namespace HeroesReplay.Spectator
         public List<Player> PlayersAlive { get; }
         public List<(int Team, TimeSpan TalentTime)> Talents { get; }
         public List<TeamObjective> TeamObjectives { get; }
+        public List<GameEvent> PingSources { get; }
         public TimeSpan Start { get; }
         public TimeSpan End { get; }
         public TimeSpan Duration { get; }
         public StormReplay StormReplay { get; }
 
-        public AnalyzerResult(StormReplay stormReplay, TimeSpan start, TimeSpan end, TimeSpan duration, List<Unit> playerDeaths, List<Unit> mapObjectives, List<Unit> structures, List<Player> playersAlive, List<(int Team, TimeSpan TalentTime)> talents, List<TeamObjective> teamObjectives)
+        public AnalyzerResult(StormReplay stormReplay, TimeSpan start, TimeSpan end, TimeSpan duration,
+            List<Unit> playerDeaths, List<Unit> mapObjectives, List<Unit> structures, List<Player> playersAlive,
+            List<GameEvent> pings, List<(int Team, TimeSpan TalentTime)> talents, List<TeamObjective> teamObjectives)
         {
-            StormReplay = stormReplay ?? throw new ArgumentNullException(nameof(stormReplay));
             Start = start;
             End = end;
             Duration = duration;
+
+            StormReplay = stormReplay ?? throw new ArgumentNullException(nameof(stormReplay));
+            PingSources = pings ?? throw new ArgumentNullException(nameof(pings));
             PlayerDeaths = playerDeaths ?? throw new ArgumentNullException(nameof(playerDeaths));
             MapObjectives = mapObjectives ?? throw new ArgumentNullException(nameof(mapObjectives));
             Structures = structures ?? throw new ArgumentNullException(nameof(structures));

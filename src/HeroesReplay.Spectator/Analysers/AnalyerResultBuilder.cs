@@ -4,12 +4,12 @@ namespace HeroesReplay.Spectator
 {
     public sealed class AnalyerResultBuilder
     {
-        private IStormReplayAnalyzer? analyzer;
+        private StormReplayAnalyzer? analyzer;
         private TimeSpan start;
         private StormReplay? stormReplay;
         private Spectator? spectator;
 
-        public AnalyerResultBuilder WithAnalyzer(IStormReplayAnalyzer analyzer)
+        public AnalyerResultBuilder WithAnalyzer(StormReplayAnalyzer analyzer)
         {
             this.analyzer = analyzer;
             return this;

@@ -10,6 +10,7 @@
         TeamObjective,
         MapObjective,
         Structure,
-        Alive
+        Alive,
+        Ping
     }
 }

@@ -4,9 +4,9 @@ namespace HeroesReplay.Spectator
 {
     public class CancellationTokenProvider
     {
-        public CancellationToken Token { get; }
+        public CancellationToken Token { get; set; }
 
-        public CancellationTokenProvider(CancellationToken token)
+        public CancellationTokenProvider(CancellationToken token = default)
         {
             Token = token;
         }

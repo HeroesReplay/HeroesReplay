@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media.Ocr;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 
@@ -18,15 +19,12 @@ namespace HeroesReplay.Spectator
     /// </summary>
     public class HeroesOfTheStorm : ProcessWrapper
     {
-        private readonly Key[] KEYS_HEROES = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Key.D0 };
-        private readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
-
-        public HeroesOfTheStorm(CancellationTokenProvider tokenProvider, ILogger<HeroesOfTheStorm> logger) : base(tokenProvider, logger, Constants.Heroes.HEROES_PROCESS_NAME, string.Empty)
+        public HeroesOfTheStorm(CancellationTokenProvider tokenProvider, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration) : base(tokenProvider, logger, configuration, Constants.Heroes.HEROES_PROCESS_NAME)
         {
 
         }
 
-        public async Task SetGameVariables()
+        public async Task SetVariablesAsync()
         {
             string variablesPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm", "Variables.txt");
 
@@ -87,7 +85,15 @@ namespace HeroesReplay.Spectator
         {
             try
             {
-                string time = ocrResult.Lines[0].Text;
+                // sometimes OCR adds quotemarks, or mixes up 0's with O's
+                char[] sanitze = ocrResult.Lines[0].Text
+                    .Replace('O', '0')
+                    .Replace('B', '8')
+                    .Replace('o', '0')
+                    .Where(c => char.IsDigit(c) || c.Equals(':')).ToArray();
+
+                string time = new string(sanitze);
+
                 string[] segments = time.Split(':');
 
                 TimeSpan timeSpan = segments.Length switch
@@ -180,8 +186,8 @@ namespace HeroesReplay.Spectator
 
         public void SendFocusHero(int index)
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, KEYS_HEROES[index], IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, KEYS_HEROES[index], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Constants.Heroes.KEYS_HEROES[index], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Constants.Heroes.KEYS_HEROES[index], IntPtr.Zero);
         }
 
         public void SendTogglePause()
@@ -234,8 +240,8 @@ namespace HeroesReplay.Spectator
         public void SendPanelChange(Panel gamePanel)
         {
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, KEYS_CONSOLE_PANEL[(int)gamePanel], IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, KEYS_CONSOLE_PANEL[(int)gamePanel], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Constants.Heroes.KEYS_CONSOLE_PANEL[(int)gamePanel], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Constants.Heroes.KEYS_CONSOLE_PANEL[(int)gamePanel], IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 

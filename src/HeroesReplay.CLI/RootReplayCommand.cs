@@ -1,21 +1,16 @@
-﻿using System;
-using System.CommandLine;
+﻿using System.CommandLine;
 using System.CommandLine.Builder;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using HeroesReplay.Spectator;
+using Process = System.Diagnostics.Process;
 
 namespace HeroesReplay.CLI
 {
     public class RootReplayCommand : RootCommand
     {
-        public RootReplayCommand(AdminChecker adminChecker)
+        public RootReplayCommand() : base(description: "The Heroes of the Storm Automated Replay Spectator.")
         {
-            AddValidator(result => adminChecker.IsAdministrator() ? null : "You must run the application with Administrator privileges.");
-            AddValidator(result => Environment.OSVersion.Platform == PlatformID.Win32NT ? null : "Windows is the only supported OS.");
-
             AddOption(new PathOption());
             AddOption(new LaunchOption());
             AddOption(new BnetOption());

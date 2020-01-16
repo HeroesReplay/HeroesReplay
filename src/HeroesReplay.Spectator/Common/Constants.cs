@@ -30,8 +30,13 @@ namespace HeroesReplay.Spectator
 
         public static class Heroes
         {
-            public static string DOCUMENTS_HEROES_REPLAYS_PATH = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm", "Accounts");
-            public static string DOCUMENTS_HEROES_VARIABLES_PATH = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm", "Variables.txt");
+            public static readonly Key[] KEYS_HEROES = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Key.D0 };
+            public static readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
+
+            public static readonly int[] TALENT_LEVELS = { 1, 4, 7, 10, 13, 16, 20 };
+
+            public static readonly string DOCUMENTS_HEROES_REPLAYS_PATH = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm", "Accounts");
+            public static readonly string DOCUMENTS_HEROES_VARIABLES_PATH = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm", "Variables.txt");
 
             public const string HEROES_PROCESS_NAME = "HeroesOfTheStorm_x64";
             public const string HEROES_SWITCHER_PROCESS = "HeroesSwitcher_x64.exe";

@@ -5,9 +5,9 @@ using Heroes.ReplayParser;
 
 namespace HeroesReplay.Spectator
 {
-    public sealed class StormReplayAnalyzer : IStormReplayAnalyzer
+    public class StormReplayAnalyzer
     {
-        private static readonly int[] TalentLevels = { 1, 4, 7, 10, 13, 16, 20 };
+        
 
         public AnalyzerResult Analyze(StormReplay stormReplay, TimeSpan start, TimeSpan end)
         {
@@ -19,13 +19,16 @@ namespace HeroesReplay.Spectator
             List<Unit> structures = dead.Where(unit => unit.IsStructure()).ToList();
 
             List<(int Team, TimeSpan TalentTime)> talents = replay.TeamLevels.SelectMany(teamLevels => teamLevels)
-                .Where(teamLevel => TalentLevels.Contains(teamLevel.Key))
+                .Where(teamLevel => Constants.Heroes.TALENT_LEVELS.Contains(teamLevel.Key))
                 .Where(teamLevel => teamLevel.Value.IsWithin(start, end))
                 .Select(x => (Team: x.Key, TalentTime: x.Value)).OrderBy(team => team.TalentTime).ToList();
 
             List<TeamObjective> teamObjectives = replay.TeamObjectives.SelectMany(teamObjectives => teamObjectives)
                 .Where(teamObjective => teamObjective.Player != null && teamObjective.TimeSpan.IsWithin(start, end))
                 .OrderBy(objective => objective.TimeSpan).ToList();
+
+            List<GameEvent> pingSources = stormReplay.Replay.GameEvents.Where(e => e.eventType == GameEventType.CTriggerPingEvent && e.TimeSpan.IsWithin(start, end) && alive.Contains(e.player)).ToList();
+            
 
             // TODO: add players that recently killed other players (focus them instead of other alive players)
 
@@ -38,6 +41,7 @@ namespace HeroesReplay.Spectator
                 mapObjectives: dead.Where(unit => unit.IsMapObjective()).ToList(),
                 structures: structures,
                 playersAlive: alive,
+                pings: pingSources,
                 talents: talents,
                 teamObjectives: teamObjectives
             );

@@ -12,15 +12,13 @@ namespace HeroesReplay.Spectator
         private readonly BattleNet battleNet;
         private readonly HeroesOfTheStorm heroesOfTheStorm;
         private readonly Spectator spectator;
-        private readonly CancellationToken token;
 
-        public StormReplayRunner(ILogger<StormReplayRunner> logger, BattleNet battleNet, HeroesOfTheStorm heroesOfTheStorm, Spectator spectator, CancellationTokenProvider provider)
+        public StormReplayRunner(ILogger<StormReplayRunner> logger, BattleNet battleNet, HeroesOfTheStorm heroesOfTheStorm, Spectator spectator)
         {
             this.logger = logger;
             this.battleNet = battleNet;
             this.heroesOfTheStorm = heroesOfTheStorm;
             this.spectator = spectator;
-            this.token = provider.Token;
         }
 
         private void RegisterEvents()
@@ -47,7 +45,7 @@ namespace HeroesReplay.Spectator
             try
             {
                 heroesOfTheStorm.KillGame();
-                await heroesOfTheStorm.SetGameVariables();
+                await heroesOfTheStorm.SetVariablesAsync();
 
                 var started = await battleNet.WaitForBattleNetAsync();
 
