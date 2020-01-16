@@ -1,10 +1,6 @@
 # Heroes Replay
 
-Heroes of the Storm Replay
-
-## Alpha Stage
-
-This project is in the early phase. Many things have not been worked out yet.
+The Heroes of the Storm Automated Spectator
 
 ## Goals of the project
 
