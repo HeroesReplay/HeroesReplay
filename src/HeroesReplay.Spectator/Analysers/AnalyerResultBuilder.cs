@@ -1,0 +1,48 @@
+﻿using System;
+
+namespace HeroesReplay.Spectator
+{
+    public sealed class AnalyerResultBuilder
+    {
+        private IStormReplayAnalyzer? analyzer;
+        private TimeSpan start;
+        private StormReplay? stormReplay;
+        private Spectator? spectator;
+
+        public AnalyerResultBuilder WithAnalyzer(IStormReplayAnalyzer analyzer)
+        {
+            this.analyzer = analyzer;
+            return this;
+        }
+
+        public AnalyerResultBuilder WithStormReplay(StormReplay stormReplay)
+        {
+            this.stormReplay = stormReplay;
+            return this;
+        }
+
+        public AnalyerResultBuilder WithSpectator(Spectator spectator)
+        {
+            this.spectator = spectator;
+            return this;
+        }
+
+        public AnalyerResultBuilder WithStart(TimeSpan start)
+        {
+            this.start = start;
+            return this;
+        }
+
+        public AnalyzerResult Seconds(double seconds)
+        {
+            if (spectator != null)
+            {
+                TimeSpan start = spectator.Timer.Duration();
+                TimeSpan end = start.Add(TimeSpan.FromSeconds(seconds));
+                return analyzer.Analyze(spectator.StormReplay, start, end);
+            }
+
+            return analyzer.Analyze(stormReplay, start, start.Add(TimeSpan.FromSeconds(seconds)));
+        }
+    }
+}

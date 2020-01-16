@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>netcoreapp3.1</TargetFramework>
+        <StartupObject />
+        <AssemblyName>heroesreplay</AssemblyName>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+        <Optimize>false</Optimize>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="System.CommandLine.Rendering" Version="0.3.0-alpha.20054.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\HeroesReplay.Spectator\HeroesReplay.Spectator.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+</Project>

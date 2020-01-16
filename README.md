@@ -38,6 +38,7 @@ It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser)
 - [Polly](https://github.com/App-vNext/Polly) for resilience and transient-fault-handling.
 - [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) for parsing Heroes of the Storm  `StormReplay` files.
 - [Microsoft.Windows.SDK.Contracts](https://www.nuget.org/packages/Microsoft.Windows.SDK.Contracts) for the WinRT `Windows.Media.Ocr`.
+- [System.CommandLine](https://github.com/dotnet/command-line-api) for command line features.
 
 ## Building the application
 
@@ -46,7 +47,7 @@ It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser)
 ```powershell
 git clone http://github.com/HeroesReplay/HeroesReplay.git
 cd ./HeroesReplay/src/HeroesReplay/
-dotnet build
+dotnet build HeroesReplay.sln
 ```
 
 ### From Visual Studio 2019 or Visual Studio Code
@@ -57,13 +58,30 @@ dotnet build
 
 There are a few ways to run the application.
 
+### From the bin output folder
+
+```
+cd /src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/
+heroesreplay.exe [arguments]
+```
+
+### From the project folder
+``
+cd /src/HeroesReplay.CLI/
+dotnet run heroesreplay [arguments]
+```
+
 ### Spectate a replay that is currently running
 
 - This will attempt to find an existing `HeroesOfTheStorm_x64.exe` process.
 - You must ensure the replay argument you pass is the replay that is running.
 
 ```powershell
-dotnet run --replay="C:\path\to\your\replay.StormReplay" --launch=false
+heroesreplay.exe --path="C:\path\to\your\replay.StormReplay" --launch=false
+```
+
+```
+dotnet run heroesreplay --path="C:\path\to\your\replay.StormReplay" --launch=false
 ```
 
 ### Spectate a replay that is not currently running
@@ -72,7 +90,11 @@ dotnet run --replay="C:\path\to\your\replay.StormReplay" --launch=false
 - This will launch the main `HeroesOfTheStorm_x64.exe` parent process, then execute the `HeroesSwitcher_x64.exe` to launch the correct `HeroesOfTheStorm_x64.exe` version that matches the version header in the replay file.
 
 ```powershell
-dotnet run --bnet="C:\Program Files (x86)\Battle.net" --replay="C:\path\to\your\replay.StormReplay" --launch=true
+heroesreplay.exe --path="C:\path\to\your\replay.StormReplay" --launch=false
+```
+
+```powershell
+dotnet run heroesreplay --path="C:\path\to\your\replay.StormReplay" --launch=false
 ```
 
 ### Spectate replay files in a directory
@@ -80,7 +102,11 @@ dotnet run --bnet="C:\Program Files (x86)\Battle.net" --replay="C:\path\to\your\
 - This behaves similar to running an individual replay file, but will attempt to load, parse and spectate each replay in the directory, one after another.
 
 ```powershell
-dotnet run --bnet="C:\Program Files (x86)\Battle.net" --replays="C:\path\to\your\replays"
+heroesreplay.exe --path="C:\path\to\your\replays\"
+```
+
+```powershell
+dotnet run heroesreplay --path="C:\path\to\your\replays\"
 ```
 
 ## Debugging from Visual Studio 2019 or Visual Studio Code

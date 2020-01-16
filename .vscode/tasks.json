@@ -7,7 +7,7 @@
             "type": "process",
             "args": [
                 "build",
-                "${workspaceFolder}/src/HeroesReplay/HeroesReplay.csproj",
+                "${workspaceFolder}/src/HeroesReplay.sln",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -19,7 +19,7 @@
             "type": "process",
             "args": [
                 "publish",
-                "${workspaceFolder}/src/HeroesReplay/HeroesReplay.csproj",
+                "${workspaceFolder}/src/HeroesReplay.sln",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],
@@ -32,7 +32,7 @@
             "args": [
                 "watch",
                 "run",
-                "${workspaceFolder}/src/HeroesReplay/HeroesReplay.csproj",
+                "${workspaceFolder}/src/HeroesReplay.CLI/HeroesReplay.CLI.csproj",
                 "/property:GenerateFullPaths=true",
                 "/consoleloggerparameters:NoSummary"
             ],

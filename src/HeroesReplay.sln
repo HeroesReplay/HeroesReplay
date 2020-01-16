@@ -3,22 +3,40 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29613.14
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay", "HeroesReplay\HeroesReplay.csproj", "{FF909A91-167D-419B-8104-16E1764B2330}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{CA68D8AE-54AD-4BB0-B93F-A54D44AE8636}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.CLI", "HeroesReplay.CLI\HeroesReplay.CLI.csproj", "{E60B8B1F-265F-4419-9215-832793EFC7F7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.Spectator", "HeroesReplay.Spectator\HeroesReplay.Spectator.csproj", "{FF909A91-167D-419B-8104-16E1764B2330}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.Tests", "HeroesReplay.Tests\HeroesReplay.Tests.csproj", "{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.HotsApi", "HeroesReplay.HotsApi\HeroesReplay.HotsApi.csproj", "{26583BA2-B705-45E4-A5CF-3C8636BB74CE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
-	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution		
 		{FF909A91-167D-419B-8104-16E1764B2330}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{FF909A91-167D-419B-8104-16E1764B2330}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FF909A91-167D-419B-8104-16E1764B2330}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E60B8B1F-265F-4419-9215-832793EFC7F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E60B8B1F-265F-4419-9215-832793EFC7F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E60B8B1F-265F-4419-9215-832793EFC7F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E60B8B1F-265F-4419-9215-832793EFC7F7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{26583BA2-B705-45E4-A5CF-3C8636BB74CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{26583BA2-B705-45E4-A5CF-3C8636BB74CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{26583BA2-B705-45E4-A5CF-3C8636BB74CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{26583BA2-B705-45E4-A5CF-3C8636BB74CE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
