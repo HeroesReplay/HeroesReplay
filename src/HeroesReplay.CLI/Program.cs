@@ -37,7 +37,7 @@ namespace HeroesReplay.CLI
 
                 Parser parser = commandLineService.CreateCliParser();
 
-                var result = await parser.InvokeAsync(args);
+                await parser.InvokeAsync(args);
             }
         }
     }

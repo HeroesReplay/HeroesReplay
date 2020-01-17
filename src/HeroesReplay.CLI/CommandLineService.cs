@@ -1,10 +1,10 @@
 ﻿using System;
 using System.CommandLine;
-using System.CommandLine.Binding;
 using System.CommandLine.Builder;
 using System.CommandLine.Invocation;
 using System.CommandLine.Rendering;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Spectator;
@@ -36,6 +36,7 @@ namespace HeroesReplay.CLI
             return new CommandLineBuilder(command)
                 .UseMiddleware(CheckAdminMiddlewareAsync)
                 .UseMiddleware(CheckOsRequirementAsync)
+                .UseMiddleware(CheckBattleNetAsync)
                 .UseParseErrorReporting()
                 .CancelOnProcessTermination()
                 .UseVersionOption()
@@ -45,6 +46,25 @@ namespace HeroesReplay.CLI
                 .UseExceptionHandler(OnException)
                 .UseAnsiTerminalWhenAvailable()
                 .Build();
+        }
+
+        private async Task CheckBattleNetAsync(InvocationContext context, Func<InvocationContext, Task> next)
+        {
+            if (context.ParseResult.HasOption("bnet"))
+            {
+                if (context.ParseResult.ValueForOption<DirectoryInfo>("bnet").EnumerateFiles("*.exe").All(e => e.Name != Constants.Bnet.BATTLE_NET_EXE))
+                {
+                    context.Console.Out.WriteLine($"Directory provided does not contain {Constants.Bnet.BATTLE_NET_EXE}.");
+                }
+                else
+                {
+                    await next(context);
+                }
+            }
+            else
+            {
+                await next(context);
+            }
         }
 
         // ENTRY POINT TO SERVICE EXECUTION

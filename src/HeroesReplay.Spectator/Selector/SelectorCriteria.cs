@@ -1,16 +1,18 @@
 ﻿namespace HeroesReplay.Spectator
 {
-    public enum SelectorReason
+    public enum SelectorCriteria
     {
-        QuintupleKill,
+        PentaKill,
         MultiKill,
         TripleKill,
         QuadKill,
+        Kill,
         Death,
         TeamObjective,
         MapObjective,
         Structure,
         Alive,
-        Ping
+        Ping,
+        Any
     }
 }

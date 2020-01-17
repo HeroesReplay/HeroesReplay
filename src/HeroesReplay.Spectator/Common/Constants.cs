@@ -4,24 +4,6 @@ using static System.Environment;
 
 namespace HeroesReplay.Spectator
 {
-    public class Hero
-    {
-        public string Name { get; }
-        public HeroType HeroType { get;  }
-
-        public Hero(string name, HeroType heroType)
-        {
-            Name = name;
-            HeroType = heroType;    
-        }
-    }
-
-    public enum HeroType
-    {
-        Melee,
-        Ranged
-    }
-
     public static class Constants
     {
         public const string STORM_INTERFACE_NAME = "AhliObs 0.66.StormInterface";

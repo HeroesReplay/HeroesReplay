@@ -31,7 +31,7 @@ namespace HeroesReplay.Spectator
             {
                 if (value != null && value.Player != stormPlayer?.Player)
                 {
-                    HeroChange?.Invoke(this, new GameEventArgs<Player>(StormReplay, value.Player, $"{value.Reason}: {(value.When - Timer).TotalSeconds}s "));
+                    HeroChange?.Invoke(this, new GameEventArgs<Player>(StormReplay, value.Player, $"{value.Criteria}: {(value.When - Timer).TotalSeconds}s "));
                 }
 
                 stormPlayer = value;
@@ -117,7 +117,7 @@ namespace HeroesReplay.Spectator
                     {
                         AnalyzerResult analyzerResult = Analyze.Seconds(Constants.Heroes.MAX_KILL_STREAK_POTENTIAL.TotalSeconds);
 
-                        foreach (StormPlayer player in selector.Select(analyzerResult))
+                        foreach (StormPlayer player in selector.Select(analyzerResult, SelectorCriteria.Any))
                         {
                             TimeSpan duration = player.When - Timer;
 
@@ -126,13 +126,13 @@ namespace HeroesReplay.Spectator
                                 // This tends to happen when the OCR engine recognized result of the 'Timer' is invalid
                                 // TODO: Improve OCR by pre-processing the image. (cleaner, contrast, bigger etc)
 
-                                logger.LogInformation($"Focused: {StormPlayer.Player.Character}. Reason: {StormPlayer.Reason}. INVALID DURATION: {duration}.");
+                                logger.LogInformation($"Focused: {StormPlayer.Player.Character}. Reason: {StormPlayer.Criteria}. INVALID DURATION: {duration}.");
                                 continue;
                             }
 
                             StormPlayer = player;
 
-                            if (player.Reason == SelectorReason.Alive)
+                            if (player.Criteria == SelectorCriteria.Alive)
                             {
                                 await Task.Delay(player.When, Token);
                             }
@@ -204,7 +204,7 @@ namespace HeroesReplay.Spectator
 
                     if (StormPlayer != null)
                     {
-                        logger.LogInformation($"Focused: {StormPlayer.Player.Character}. Reason: {StormPlayer.Reason}. Countdown: {(StormPlayer.When - Timer).TotalSeconds}s ");
+                        logger.LogInformation($"Focused: {StormPlayer.Player.Character}. Reason: {StormPlayer.Criteria}. Countdown: {(StormPlayer.When - Timer).TotalSeconds}s ");
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(1), Token); // The analyzer checks for 10 seconds into the future, so checking every 5 seconds gives us enough time to analyze with accuracy?

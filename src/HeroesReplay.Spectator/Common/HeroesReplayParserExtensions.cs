@@ -20,5 +20,7 @@ namespace HeroesReplay.Spectator
         public static bool IsUnitGroup(this Unit unit, params Unit.UnitGroup[] unitGroups) => unitGroups.Any(group => unit.Group == group);
         public static TimeSpan GetFocusTime(this Unit unit, AnalyzerResult result) => unit.TimeSpanDied.Value - result.Start;
         public static TimeSpan GetFocusTime(this TeamObjective teamObjective, AnalyzerResult result) => teamObjective.TimeSpan- result.Start;
+
+        public static Hero? TryGetHero(this Player player) => Heroes.All.Find(hero => hero.Name.Equals(player.Character, StringComparison.InvariantCultureIgnoreCase));
     }
 }

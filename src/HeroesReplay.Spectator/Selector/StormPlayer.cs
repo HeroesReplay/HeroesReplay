@@ -7,13 +7,13 @@ namespace HeroesReplay.Spectator
     {
         public Player Player { get; }
         public TimeSpan When { get; }
-        public SelectorReason Reason { get; }
+        public SelectorCriteria Criteria { get; }
         public TimeSpan GetDuration(TimeSpan now) => now - When;
-        public StormPlayer(Player player, TimeSpan when, SelectorReason reason)
+        public StormPlayer(Player player, TimeSpan when, SelectorCriteria criteria)
         {
             Player = player;
             When = when;
-            Reason = reason;
+            Criteria = criteria;
         }
     }
 }
