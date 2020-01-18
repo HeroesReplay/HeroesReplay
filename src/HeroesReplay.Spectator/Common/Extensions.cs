@@ -8,7 +8,7 @@ namespace HeroesReplay.Spectator
 {
     public static class Extensions
     {
-        public static Task Delay(this AnalyzerResult result, CancellationToken token = default) => Task.Delay(result.Duration, token);
+        public static Task WaitCheckTime(this AnalyzerResult result, CancellationToken token = default) => Task.Delay(result.Duration, token);
 
         /// <summary>
         /// The in-game timer at the top has a NEGATIVE offset of 610.

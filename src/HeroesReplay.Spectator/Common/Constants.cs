@@ -24,7 +24,11 @@ namespace HeroesReplay.Spectator
             public const string HEROES_SWITCHER_PROCESS = "HeroesSwitcher_x64.exe";
 
             public static TimeSpan KILL_STREAK_TIMER = TimeSpan.FromSeconds(12);
-            public static TimeSpan MAX_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 4;
+
+            public static TimeSpan MAX_PENTA_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 4;
+            public static TimeSpan MAX_QUAD_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 3;
+            public static TimeSpan MAX_TRIPLE_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 2;
+            public static TimeSpan MAX_MULTI_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 1;
         }
 
         public const int WM_KEYDOWN = 0x100;

@@ -33,16 +33,16 @@ namespace HeroesReplay.Spectator
             return this;
         }
 
-        public AnalyzerResult Seconds(double seconds)
+        public AnalyzerResult Check(TimeSpan timeSpan)
         {
             if (spectator != null)
             {
                 TimeSpan start = spectator.Timer.Duration();
-                TimeSpan end = start.Add(TimeSpan.FromSeconds(seconds));
+                TimeSpan end = start.Add(timeSpan);
                 return analyzer.Analyze(spectator.StormReplay, start, end);
             }
 
-            return analyzer.Analyze(stormReplay, start, start.Add(TimeSpan.FromSeconds(seconds)));
+            return analyzer.Analyze(stormReplay, start, start.Add(timeSpan));
         }
     }
 }

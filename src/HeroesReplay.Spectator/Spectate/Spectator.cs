@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.UI.Xaml.Automation;
 using Heroes.ReplayParser;
 using Microsoft.Extensions.Logging;
 
@@ -75,7 +76,7 @@ namespace HeroesReplay.Spectator
 
         public StormReplay StormReplay { get; set; }
 
-        
+
 
         private readonly ILogger<Spectator> logger;
         private readonly StormPlayerSelector selector;
@@ -115,38 +116,114 @@ namespace HeroesReplay.Spectator
                 {
                     try
                     {
-                        AnalyzerResult analyzerResult = Analyze.Seconds(Constants.Heroes.MAX_KILL_STREAK_POTENTIAL.TotalSeconds);
+                        List<StormPlayer> penta = selector.Select(Analyze.Check(Constants.Heroes.MAX_PENTA_KILL_STREAK_POTENTIAL), SelectorCriteria.PentaKill);
 
-                        foreach (StormPlayer player in selector.Select(analyzerResult, SelectorCriteria.Any))
+                        if (penta.Any())
                         {
-                            TimeSpan duration = player.When - Timer;
-
-                            if (duration <= TimeSpan.Zero || duration.TotalSeconds >= Constants.Heroes.MAX_KILL_STREAK_POTENTIAL.TotalSeconds)
+                            foreach (StormPlayer player in penta)
                             {
-                                // This tends to happen when the OCR engine recognized result of the 'Timer' is invalid
-                                // TODO: Improve OCR by pre-processing the image. (cleaner, contrast, bigger etc)
-
-                                logger.LogInformation($"Focused: {StormPlayer.Player.Character}. Reason: {StormPlayer.Criteria}. INVALID DURATION: {duration}.");
-                                continue;
+                                await FocusPlayer(player);
                             }
+                        }
+                        else
+                        {
+                            List<StormPlayer> quad = selector.Select(Analyze.Check(Constants.Heroes.MAX_QUAD_KILL_STREAK_POTENTIAL), SelectorCriteria.QuadKill);
 
-                            StormPlayer = player;
-
-                            if (player.Criteria == SelectorCriteria.Alive)
+                            if (quad.Any())
                             {
-                                await Task.Delay(player.When, Token);
+                                foreach (StormPlayer player in quad)
+                                {
+                                    await FocusPlayer(player);
+                                }
                             }
                             else
                             {
-                                await Task.Delay(duration, Token);
-                            }
+                                List<StormPlayer> triple = selector.Select(Analyze.Check(Constants.Heroes.MAX_TRIPLE_KILL_STREAK_POTENTIAL), SelectorCriteria.TripleKill);
 
+                                if (triple.Any())
+                                {
+                                    foreach (StormPlayer player in triple)
+                                    {
+                                        await FocusPlayer(player);
+                                    }
+                                }
+                                else
+                                {
+                                    List<StormPlayer> mutli = selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), SelectorCriteria.MultiKill);
+
+                                    if (mutli.Any())
+                                    {
+                                        foreach (StormPlayer player in mutli)
+                                        {
+                                            await FocusPlayer(player);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        List<StormPlayer> singles = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), SelectorCriteria.Death);
+
+                                        if (singles.Any())
+                                        {
+                                            foreach (StormPlayer player in singles)
+                                            {
+                                                await FocusPlayer(player);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            List<StormPlayer> objectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(15)), SelectorCriteria.MapObjective, SelectorCriteria.TeamObjective, SelectorCriteria.Structure);
+
+                                            if (objectives.Any())
+                                            {
+                                                foreach (StormPlayer player in objectives)
+                                                {
+                                                    await FocusPlayer(player);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                List<StormPlayer> alive = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), SelectorCriteria.Alive);
+
+                                                foreach (var player in alive.OrderBy(rand => Guid.NewGuid()))
+                                                {
+                                                    await FocusPlayer(player);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     catch (Exception e)
                     {
                         logger.LogError(e, e.Message);
                     }
+                }
+            }
+        }
+
+        private async Task FocusPlayer(StormPlayer stormPlayer)
+        {
+            if (stormPlayer.Criteria == SelectorCriteria.Alive)
+            {
+                StormPlayer = stormPlayer;
+
+                await Task.Delay(stormPlayer.When, Token);
+            }
+            else
+            {
+                TimeSpan duration = stormPlayer.When - Timer;
+
+                if (duration <= TimeSpan.Zero)
+                {
+                    logger.LogInformation($"INVALID FOCUS: {stormPlayer.Player.Character}. REASON: {stormPlayer.Criteria}. DURATION: {duration}.");
+                }
+                else
+                {
+                    StormPlayer = stormPlayer;
+
+                    await Task.Delay(duration, Token);
                 }
             }
         }
@@ -159,29 +236,22 @@ namespace HeroesReplay.Spectator
                 {
                     try
                     {
-                        AnalyzerResult result = Analyze.Seconds(20);
+                        AnalyzerResult result = Analyze.Check(TimeSpan.FromSeconds(5));
 
                         if (result.Talents.Any()) Panel = Panel.Talents;
                         else if (result.TeamObjectives.Any()) Panel = Panel.CarriedObjectives;
                         else if (result.MapObjectives.Any()) Panel = Panel.CarriedObjectives;
-                        else if (result.PlayerDeaths.Any())
+                        else if (result.PlayerDeaths.Any()) Panel = Panel.KillsDeathsAssists;
+                        else if (result.PlayersAlive.Any())
                         {
-                            Panel = Panel switch
-                            {
-                                Panel.KillsDeathsAssists => Panel.DeathDamageRole,
-                                Panel.Talents => Panel.KillsDeathsAssists,
-                                Panel.DeathDamageRole => Panel.KillsDeathsAssists,
-                                Panel.ActionsPerMinute => Panel.KillsDeathsAssists,
-                                Panel.Experience => Panel.KillsDeathsAssists,
-                                Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists,
-                                Panel.CarriedObjectives => Panel.KillsDeathsAssists,
-                                Panel.CrowdControlEnemyHeroes => Panel.KillsDeathsAssists,
-                                _ => Panel.DeathDamageRole
-                            };
+                            Panel = panels.IndexOf(Panel) + 1 >= panels.Count ? panels.First() : panels[panels.IndexOf(Panel) + 1];
                         }
-                        else Panel = panels.IndexOf(Panel) + 1 >= panels.Count ? panels.First() : panels[panels.IndexOf(Panel) + 1];
+                        else
+                        {
+                            Panel = Panel.KillsDeathsAssists;
+                        }
 
-                        await result.Delay(Token);
+                        await result.WaitCheckTime(Token);
                     }
                     catch (Exception e)
                     {
@@ -200,14 +270,18 @@ namespace HeroesReplay.Spectator
                 try
                 {
                     TimeSpan? elapsed = await heroesOfTheStorm.TryGetTimerAsync();
-                    if (elapsed.HasValue) Timer = elapsed.Value;
+
+                    if (elapsed.HasValue)
+                    {
+                        Timer = elapsed.Value;
+                    }
 
                     if (StormPlayer != null)
                     {
                         logger.LogInformation($"Focused: {StormPlayer.Player.Character}. Reason: {StormPlayer.Criteria}. Countdown: {(StormPlayer.When - Timer).TotalSeconds}s ");
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(1), Token); // The analyzer checks for 10 seconds into the future, so checking every 5 seconds gives us enough time to analyze with accuracy?
+                    await Task.Delay(TimeSpan.FromSeconds(1), Token);
                 }
                 catch (Exception e)
                 {

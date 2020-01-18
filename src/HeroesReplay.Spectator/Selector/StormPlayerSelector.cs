@@ -7,23 +7,30 @@ namespace HeroesReplay.Spectator
 {
     public class StormPlayerSelector
     {
-        public IEnumerable<StormPlayer> Select(AnalyzerResult result, SelectorCriteria selectorCriteria)
+        public List<StormPlayer> Select(AnalyzerResult result, params SelectorCriteria[] selectorCriterion)
         {
-            return selectorCriteria switch
+            List<StormPlayer> players = new List<StormPlayer>();
+
+            foreach (var selectorCriteria in selectorCriterion)
             {
-                SelectorCriteria.Alive => HandleAlive(result),
-                SelectorCriteria.Death => HandleDeaths(result),
-                SelectorCriteria.MapObjective => HandleMapObjectives(result),
-                SelectorCriteria.Ping => HandlePings(result),
-                SelectorCriteria.Kill => HandleKills(result, 1),
-                SelectorCriteria.MultiKill => HandleKills(result, 2),
-                SelectorCriteria.TripleKill => HandleKills(result, 3),
-                SelectorCriteria.QuadKill => HandleKills(result, 4),
-                SelectorCriteria.PentaKill => HandleKills(result, 5),
-                SelectorCriteria.TeamObjective => HandleTeamObjectives(result),
-                SelectorCriteria.Structure => HandleStructures(result),
-                SelectorCriteria.Any => HandleAny(result),
-            };
+                players.AddRange(selectorCriteria switch
+                {
+                    SelectorCriteria.Alive => HandleAlive(result),
+                    SelectorCriteria.Death => HandleDeaths(result),
+                    SelectorCriteria.MapObjective => HandleMapObjectives(result),
+                    SelectorCriteria.Ping => HandlePings(result),
+                    SelectorCriteria.Kill => HandleKills(result, 1),
+                    SelectorCriteria.MultiKill => HandleKills(result, 2),
+                    SelectorCriteria.TripleKill => HandleKills(result, 3),
+                    SelectorCriteria.QuadKill => HandleKills(result, 4),
+                    SelectorCriteria.PentaKill => HandleKills(result, 5),
+                    SelectorCriteria.TeamObjective => HandleTeamObjectives(result),
+                    SelectorCriteria.Structure => HandleStructures(result),
+                    SelectorCriteria.Any => HandleAny(result),
+                });
+            }
+
+            return players.OrderBy(x => x.When).ToList();
         }
 
         private IEnumerable<StormPlayer> HandleKills(AnalyzerResult result, int count)
@@ -39,7 +46,7 @@ namespace HeroesReplay.Spectator
 
                 if (kills == count)
                 {
-                    yield return new StormPlayer(player, maxTime, SelectorCriteria.PentaKill);
+                    yield return new StormPlayer(player, maxTime, count switch { 1 => SelectorCriteria.Kill, 2 => SelectorCriteria.MultiKill, 3 => SelectorCriteria.TripleKill, 4 => SelectorCriteria.QuadKill, 5 => SelectorCriteria.PentaKill });
                 }
             }
         }
@@ -54,6 +61,7 @@ namespace HeroesReplay.Spectator
                 result.PlayersAlive.Any() ? HandleAlive(result) : Enumerable.Empty<StormPlayer>();
         }
 
+        // Ping events are only from the team which the replay file originates from
         private IEnumerable<StormPlayer> HandlePings(AnalyzerResult result)
         {
             foreach (GameEvent ping in result.PingSources)
@@ -88,12 +96,12 @@ namespace HeroesReplay.Spectator
 
         private IEnumerable<StormPlayer> HandleAlive(AnalyzerResult result)
         {
-            IEnumerable<IGrouping<int, Player>> teams = result.PlayersAlive.GroupBy(p => p.Team);
-            IEnumerable<Player> equalDistribution = teams.First().Interleave(teams.Last());
-
-            foreach (Player player in equalDistribution)
+            IEnumerable<IGrouping<int, Player>> teams = result.PlayersAlive.GroupBy(p => p.Team).ToList();
+            IEnumerable<Player> equalDistribution = teams.First().Interleave(teams.Last()).ToList();
+            
+            foreach (Player player in equalDistribution.Take(2))
             {
-                yield return new StormPlayer(player, result.Duration / result.PlayersAlive.Count, SelectorCriteria.Alive);
+                yield return new StormPlayer(player, result.Duration / 2, SelectorCriteria.Alive);
             }
         }
 
@@ -102,6 +110,15 @@ namespace HeroesReplay.Spectator
             foreach (TeamObjective objective in result.TeamObjectives)
             {
                 yield return new StormPlayer(objective.Player, objective.TimeSpan, SelectorCriteria.TeamObjective);
+            }
+
+            /*
+             * Standard camps are not captured in TeamObjectives
+             * https://github.com/barrett777/Heroes.ReplayParser/blob/2d29bf2f66bfd44c471a4214698e6b517d38ecd3/Heroes.ReplayParser/Statistics.cs#L343
+             */
+            foreach (var (player, capture) in result.Camps)
+            {
+                yield return new StormPlayer(player, capture, SelectorCriteria.TeamObjective);
             }
         }
     }
