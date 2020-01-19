@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Windows.UI.Xaml.Automation;
 using Heroes.ReplayParser;
 using Microsoft.Extensions.Logging;
 
@@ -20,7 +20,7 @@ namespace HeroesReplay.Spectator
             get => panel;
             set
             {
-                if (panel != value) PanelChange?.Invoke(this, new GameEventArgs<Panel>(StormReplay, value, "Change"));
+                if (panel != value) PanelChange?.Invoke(this, new GameEventArgs<Panel>(StormReplay, value, Timer.Duration(), value.ToString()));
                 panel = value;
             }
         }
@@ -32,7 +32,7 @@ namespace HeroesReplay.Spectator
             {
                 if (value != null && value.Player != stormPlayer?.Player)
                 {
-                    HeroChange?.Invoke(this, new GameEventArgs<Player>(StormReplay, value.Player, $"{value.Criteria}: {(value.When - Timer).TotalSeconds}s "));
+                    HeroChange?.Invoke(this, new GameEventArgs<Player>(StormReplay, value.Player, Timer.Duration(), value.Criteria.ToString()));
                 }
 
                 stormPlayer = value;
@@ -44,8 +44,12 @@ namespace HeroesReplay.Spectator
             get => state;
             set
             {
-                if (state != value) StateChange?.Invoke(this, new GameEventArgs<StateDelta>(StormReplay, new StateDelta(state, value), $"{Timer}"));
-                state = value;
+                if (state != value)
+                {
+                    StateChange?.Invoke(this, new GameEventArgs<StateDelta>(StormReplay, new StateDelta(state, value), Timer.Duration(), state.ToString()));
+
+                    state = value;
+                }
             }
         }
 
@@ -63,14 +67,26 @@ namespace HeroesReplay.Spectator
             get => timer;
             set
             {
-                if (value != timer) logger.LogInformation($"Timer: {timer}");
-
-                if (value == TimeSpan.Zero) State = State.StartOfGame;
-                else if (value >= StormReplay.Replay.ReplayLength) State = State.EndOfGame;
-                else if (value > timer) State = State.Running;
-                else if (value <= timer) State = State.Paused;
-
-                timer = value;
+                if (value == TimeSpan.Zero)
+                {
+                    timer = value;
+                    State = State.StartOfGame;
+                }
+                else if (value >= StormReplay.Replay.ReplayLength)
+                {
+                    timer = value;
+                    State = State.EndOfGame;
+                }
+                else if (value > timer)
+                {
+                    timer = value;
+                    State = State.Running;
+                }
+                else if (value <= timer)
+                {
+                    timer = value;
+                    State = State.Paused;
+                }
             }
         }
 
@@ -112,7 +128,7 @@ namespace HeroesReplay.Spectator
         {
             while (State != State.EndOfGame && !Token.IsCancellationRequested)
             {
-                while (State == State.Running && !Token.IsCancellationRequested)
+                while ((State == State.Running || Debugger.IsAttached) && !Token.IsCancellationRequested)
                 {
                     try
                     {
@@ -121,9 +137,7 @@ namespace HeroesReplay.Spectator
                         if (penta.Any())
                         {
                             foreach (StormPlayer player in penta)
-                            {
-                                await FocusPlayer(player);
-                            }
+                                await FocusPlayer(player, player.When - Timer);
                         }
                         else
                         {
@@ -132,9 +146,7 @@ namespace HeroesReplay.Spectator
                             if (quad.Any())
                             {
                                 foreach (StormPlayer player in quad)
-                                {
-                                    await FocusPlayer(player);
-                                }
+                                    await FocusPlayer(player, player.When - Timer);
                             }
                             else
                             {
@@ -143,9 +155,7 @@ namespace HeroesReplay.Spectator
                                 if (triple.Any())
                                 {
                                     foreach (StormPlayer player in triple)
-                                    {
-                                        await FocusPlayer(player);
-                                    }
+                                        await FocusPlayer(player, player.When - Timer);
                                 }
                                 else
                                 {
@@ -154,39 +164,57 @@ namespace HeroesReplay.Spectator
                                     if (mutli.Any())
                                     {
                                         foreach (StormPlayer player in mutli)
-                                        {
-                                            await FocusPlayer(player);
-                                        }
+                                            await FocusPlayer(player, player.When - Timer);
                                     }
                                     else
                                     {
-                                        List<StormPlayer> singles = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), SelectorCriteria.Death);
+                                        List<StormPlayer> deaths = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), SelectorCriteria.Death);
 
-                                        if (singles.Any())
+                                        if (deaths.Any())
                                         {
-                                            foreach (StormPlayer player in singles)
-                                            {
-                                                await FocusPlayer(player);
-                                            }
+                                            foreach (StormPlayer player in deaths)
+                                                await FocusPlayer(player, player.When - Timer);
                                         }
                                         else
                                         {
-                                            List<StormPlayer> objectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(15)), SelectorCriteria.MapObjective, SelectorCriteria.TeamObjective, SelectorCriteria.Structure);
+                                            List<StormPlayer> mapObjectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), SelectorCriteria.MapObjective);
 
-                                            if (objectives.Any())
+                                            if (mapObjectives.Any())
                                             {
-                                                foreach (StormPlayer player in objectives)
-                                                {
-                                                    await FocusPlayer(player);
-                                                }
+                                                foreach (StormPlayer player in mapObjectives)
+                                                    await FocusPlayer(player, player.When - Timer);
                                             }
                                             else
                                             {
-                                                List<StormPlayer> alive = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), SelectorCriteria.Alive);
+                                                List<StormPlayer> campObjectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), SelectorCriteria.CampObjective);
 
-                                                foreach (var player in alive.OrderBy(rand => Guid.NewGuid()))
+                                                if (campObjectives.Any())
                                                 {
-                                                    await FocusPlayer(player);
+                                                    foreach (StormPlayer player in campObjectives)
+                                                        await FocusPlayer(player, player.When - Timer);
+                                                }
+                                                else
+                                                {
+                                                    List<StormPlayer> structures = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), SelectorCriteria.Structure);
+
+                                                    if (structures.Any())
+                                                    {
+                                                        foreach (var player in structures)
+                                                            await FocusPlayer(player, player.When - Timer);
+                                                    }
+                                                    else
+                                                    {
+                                                        List<StormPlayer> alive = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), SelectorCriteria.Alive);
+
+                                                        if (alive.Any())
+                                                        {
+                                                            foreach (var player in alive.Shuffle().Take(1))
+                                                            {
+                                                                if (StormPlayer?.Criteria == SelectorCriteria.Alive && StormPlayer.Player.Team == player.Player.Team) continue;
+                                                                await FocusPlayer(player, TimeSpan.FromSeconds(5));
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -203,28 +231,17 @@ namespace HeroesReplay.Spectator
             }
         }
 
-        private async Task FocusPlayer(StormPlayer stormPlayer)
+        private async Task FocusPlayer(StormPlayer stormPlayer, TimeSpan duration)
         {
-            if (stormPlayer.Criteria == SelectorCriteria.Alive)
+            if (duration <= TimeSpan.Zero)
             {
-                StormPlayer = stormPlayer;
-
-                await Task.Delay(stormPlayer.When, Token);
+                logger.LogInformation($"INVALID FOCUS: {stormPlayer.Player.Character}. REASON: {stormPlayer.Criteria}. DURATION: {duration}.");
             }
             else
             {
-                TimeSpan duration = stormPlayer.When - Timer;
+                StormPlayer = stormPlayer;
 
-                if (duration <= TimeSpan.Zero)
-                {
-                    logger.LogInformation($"INVALID FOCUS: {stormPlayer.Player.Character}. REASON: {stormPlayer.Criteria}. DURATION: {duration}.");
-                }
-                else
-                {
-                    StormPlayer = stormPlayer;
-
-                    await Task.Delay(duration, Token);
-                }
+                await Task.Delay(duration, Token);
             }
         }
 
@@ -257,9 +274,62 @@ namespace HeroesReplay.Spectator
                     {
                         logger.LogError(e, e.Message);
                     }
+
+                    
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(5), Token);
+            }
+        }
+
+        private void PrintDebugData()
+        {
+            foreach(TrackerEvent trackerEvent in StormReplay.Replay.TrackerEvents.Where(e => e.TimeSpan == Timer))
+            {
+                string data = trackerEvent.TrackerEventType switch
+                {
+                    ReplayTrackerEvents.TrackerEventType.UnitRevivedEvent => $"[{trackerEvent.TrackerEventType}][{trackerEvent.Data}]",
+                    ReplayTrackerEvents.TrackerEventType.UnitOwnerChangeEvent => $"[{trackerEvent.TrackerEventType}][{trackerEvent.Data}]",
+                    _ => string.Empty,
+                };
+
+                if (!string.IsNullOrEmpty(data))
+                {
+                    logger.LogInformation($"[TrackerEvent]{data}");
+                }
+            }
+
+            foreach (GameEvent gameEvent in StormReplay.Replay.GameEvents.Where(e => e.TimeSpan == Timer))
+            {
+                string data = gameEvent.eventType switch
+                {
+                    GameEventType.CStartGameEvent => $"[{gameEvent.eventType}][{gameEvent.player.Character}][{gameEvent.data}]",
+                    GameEventType.CTriggerPingEvent => $"[{gameEvent.eventType}][{gameEvent.player.Character}][{gameEvent.data}]",
+                    GameEventType.CUnitClickEvent => $"[{gameEvent.eventType}][{gameEvent.player.Character}][{gameEvent.data}]",
+                    GameEventType.CCmdEvent =>  $"[{gameEvent.eventType}][{gameEvent.player.Character}][{gameEvent.data}]",
+                    _ => string.Empty,
+                };
+
+                if (!string.IsNullOrEmpty(data))
+                {
+                    logger.LogInformation($"[GameEvent]{data}");
+                }
+            }
+
+            foreach (Unit unit in StormReplay.Replay.Units.Where(u => u.TimeSpanBorn <= Timer && u.TimeSpanDied.HasValue && u.TimeSpanDied.Value >= Timer))
+            {
+                string data = unit.Group switch
+                {
+                    Unit.UnitGroup.MercenaryCamp => $"[{unit.Group}][{unit.Name}]",
+                    Unit.UnitGroup.MapObjective => $"[{unit.Group}][{unit.Name}]",
+                    Unit.UnitGroup.Miscellaneous => $"[{unit.Group}][{unit.Name}]",
+                    _ => string.Empty
+                };
+
+                if (!string.IsNullOrEmpty(data))
+                {
+                    logger.LogInformation($"[Unit]{data}");
+                }
             }
         }
 
@@ -273,15 +343,17 @@ namespace HeroesReplay.Spectator
 
                     if (elapsed.HasValue)
                     {
-                        Timer = elapsed.Value;
+                        Timer = elapsed.Value.RemoveNegativeOffset();
                     }
 
                     if (StormPlayer != null)
                     {
-                        logger.LogInformation($"Focused: {StormPlayer.Player.Character}. Reason: {StormPlayer.Criteria}. Countdown: {(StormPlayer.When - Timer).TotalSeconds}s ");
+                        logger.LogInformation($"[{StormPlayer.Player.Character}][{StormPlayer.Criteria}][{StormPlayer.When}][{Timer}][{Timer.AddNegativeOffset()}]");
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(1), Token);
+                    // PrintDebugData();
+
+                    await Task.Delay(TimeSpan.FromSeconds(0.9), Token);
                 }
                 catch (Exception e)
                 {

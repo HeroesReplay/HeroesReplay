@@ -11,7 +11,7 @@
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/HeroesReplay.CLI.exe",
             "args": [
-                "--path=${workspaceFolder}\\replays\\hour-long-replay-provided-by-mgatner.StormReplay",
+                //"--path=[YOUR REPLAY]",
                 "--launch=false"
             ],
             "cwd": "${workspaceFolder}/src/HeroesReplay.CLI",
@@ -25,7 +25,7 @@
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/HeroesReplay.CLI.exe",
             "args": [
-                "--path=${workspaceFolder}\\replays\\hour-long-replay-provided-by-mgatner.StormReplay",
+                //"--path=[YOUR REPLAY]",
                 "--launch=true"
             ],
             "cwd": "${workspaceFolder}/src/HeroesReplay.CLI",
@@ -38,7 +38,9 @@
             "request": "launch",
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/HeroesReplay.CLI.exe",
-            "args": ["--launch=true"],
+            "args": [
+                "--launch=true"
+            ],
             "cwd": "${workspaceFolder}/src/HeroesReplay.CLI",
             "console": "externalTerminal",
             "stopAtEntry": true

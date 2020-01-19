@@ -14,30 +14,29 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Spectator
 {
-    public partial class ProcessWrapper : IDisposable
+    public class ProcessWrapper : IDisposable
     {
-        
+        private IntPtr deviceContext = IntPtr.Zero;
+        private IntPtr compatibleDeviceContext = IntPtr.Zero;
+        private RECT? windowDimensions;
+        private Process process;
 
-        private IntPtr _deviceContext = IntPtr.Zero;
-        private IntPtr _compatibleDeviceContext = IntPtr.Zero;
-        private RECT? rect;
-
-        private Rectangle? Dimensions
+        protected Rectangle? Dimensions
         {
             get
             {
-                if (rect == null)
+                if (windowDimensions == null)
                 {
                     if (NativeMethods.GetWindowRect(WindowHandle, out RECT value))
                     {
                         Logger.LogInformation("Getting Window Size");
-                        rect = value;
+                        windowDimensions = value;
                     }
                 }
 
-                if (rect == null) return null;
+                if (windowDimensions == null) return null;
 
-                return Rectangle.FromLTRB(rect.Value.Left, rect.Value.Top, rect.Value.Right, rect.Value.Bottom);
+                return Rectangle.FromLTRB(windowDimensions.Value.Left, windowDimensions.Value.Top, windowDimensions.Value.Right, windowDimensions.Value.Bottom);
             }
         }
 
@@ -46,13 +45,13 @@ namespace HeroesReplay.Spectator
         {
             get
             {
-                if (_compatibleDeviceContext == IntPtr.Zero)
+                if (compatibleDeviceContext == IntPtr.Zero)
                 {
                     Logger.LogInformation("Caching CompatibleDeviceContext");
-                    _compatibleDeviceContext = NativeMethods.CreateCompatibleDC(_deviceContext);
+                    compatibleDeviceContext = NativeMethods.CreateCompatibleDC(deviceContext);
                 }
 
-                return _compatibleDeviceContext;
+                return compatibleDeviceContext;
             }
         }
 
@@ -60,24 +59,25 @@ namespace HeroesReplay.Spectator
         {
             get
             {
-                if (_deviceContext == IntPtr.Zero)
+                if (deviceContext == IntPtr.Zero)
                 {
                     Logger.LogInformation("Caching DeviceContext");
-                    _deviceContext = NativeMethods.GetWindowDC(WindowHandle);
+                    deviceContext = NativeMethods.GetWindowDC(WindowHandle);
                 }
-                return _deviceContext;
+                return deviceContext;
             }
         }
 
         public bool IsRunning => Process.GetProcessesByName(ProcessName).Any();
 
         protected string ProcessName { get; }
-        
+
         protected ILogger<ProcessWrapper> Logger { get; }
 
-        protected IConfiguration Configuration { get;  }
+        protected IConfiguration Configuration { get; }
 
         protected Process WrappedProcess => Process.GetProcessesByName(ProcessName)[0];
+
         protected IntPtr WindowHandle => WrappedProcess.MainWindowHandle;
 
         private readonly OcrEngine ocrEngine = OcrEngine.TryCreateFromUserProfileLanguages();
@@ -146,8 +146,46 @@ namespace HeroesReplay.Spectator
                     }
                     else
                     {
-                        NativeMethods.DeleteDC(_compatibleDeviceContext);
-                        NativeMethods.ReleaseDC(WindowHandle, _deviceContext);
+                        NativeMethods.DeleteDC(compatibleDeviceContext);
+                        NativeMethods.ReleaseDC(WindowHandle, deviceContext);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, $"Failed to capture bitmap of {WrappedProcess.ProcessName}");
+                throw;
+            }
+            finally
+            {
+                NativeMethods.SelectObject(CompatibleDeviceContext, oldBitmap);
+                NativeMethods.DeleteObject(bitmap);
+            }
+
+            return null;
+        }
+
+
+        protected Bitmap? TryBitBlt(Rectangle region)
+        {
+            IntPtr bitmap = IntPtr.Zero;
+            IntPtr oldBitmap = IntPtr.Zero;
+
+            try
+            {
+                if (Dimensions != null)
+                {
+                    bitmap = NativeMethods.CreateCompatibleBitmap(DeviceContext, region.Width, region.Height);
+                    oldBitmap = NativeMethods.SelectObject(CompatibleDeviceContext, bitmap);
+
+                    if (NativeMethods.BitBlt(CompatibleDeviceContext, 0, 0, region.Width, region.Height, DeviceContext, region.X, region.Y, Constants.SRCCOPY))
+                    {
+                        return Image.FromHbitmap(bitmap);
+                    }
+                    else
+                    {
+                        NativeMethods.DeleteDC(compatibleDeviceContext);
+                        NativeMethods.ReleaseDC(WindowHandle, deviceContext);
                     }
                 }
             }
@@ -241,8 +279,8 @@ namespace HeroesReplay.Spectator
 
         public void Dispose()
         {
-            NativeMethods.DeleteDC(_compatibleDeviceContext);
-            NativeMethods.ReleaseDC(WindowHandle, _deviceContext);
+            NativeMethods.DeleteDC(compatibleDeviceContext);
+            NativeMethods.ReleaseDC(WindowHandle, deviceContext);
         }
     }
 }

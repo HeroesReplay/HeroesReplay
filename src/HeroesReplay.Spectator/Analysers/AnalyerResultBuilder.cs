@@ -37,9 +37,7 @@ namespace HeroesReplay.Spectator
         {
             if (spectator != null)
             {
-                TimeSpan start = spectator.Timer.Duration();
-                TimeSpan end = start.Add(timeSpan);
-                return analyzer.Analyze(spectator.StormReplay, start, end);
+                return analyzer.Analyze(spectator.StormReplay, spectator.Timer.Duration(), spectator.Timer.Add(timeSpan));
             }
 
             return analyzer.Analyze(stormReplay, start, start.Add(timeSpan));

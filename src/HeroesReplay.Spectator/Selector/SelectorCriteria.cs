@@ -8,8 +8,9 @@
         QuadKill,
         Kill,
         Death,
-        TeamObjective,
-        MapObjective,
+        TeamObjective, // Boss Camps
+        CampObjective, // Standard Camps
+        MapObjective, // Tributes, Gems, Coins, Alters
         Structure,
         Alive,
         Ping,

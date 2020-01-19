@@ -35,6 +35,8 @@ It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser)
 - [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) for parsing Heroes of the Storm  `StormReplay` files.
 - [Microsoft.Windows.SDK.Contracts](https://www.nuget.org/packages/Microsoft.Windows.SDK.Contracts) for the WinRT `Windows.Media.Ocr`.
 - [System.CommandLine](https://github.com/dotnet/command-line-api) for command line features.
+- [xUnit](https://github.com/xunit/xunit) for unit testing.
+- [FluentAssertions](https://github.com/fluentassertions/fluentassertions) for natural and, most importantly, extremely readable tests.
 
 ## Building the application
 
@@ -52,19 +54,22 @@ dotnet build HeroesReplay.sln
 
 ## Running the application
 
-There are a few ways to run the application.
+There are a few ways to run the application explained below.
+
+- If you do not provide a value for `--bnet`, it will assume the default installation path `C:\Program Files (x86)\Battle.net`
+- If you do not provide a value for `--path`, it will default to `$env:USERPROFILE\Documents\Heroes of the Storm\Accounts`.
 
 ### From the bin output folder
 
-```
-cd /src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/
+```powershell
+cd ./src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/
 heroesreplay.exe [arguments]
 ```
 
 ### From the project folder
 
-```
-cd /src/HeroesReplay.CLI/
+```powershell
+cd ./src/HeroesReplay.CLI/
 dotnet run heroesreplay [arguments]
 ```
 

@@ -8,8 +8,11 @@ namespace HeroesReplay.Spectator
         public T Data { get; }
         public string Message { get; }
 
-        public GameEventArgs(StormReplay stormReplay, T data, string message)
+        public TimeSpan Timer { get;  }
+
+        public GameEventArgs(StormReplay stormReplay, T data, TimeSpan timer, string message)
         {
+            Timer = timer;
             StormReplay = stormReplay;
             Message = message;
             Data = data;

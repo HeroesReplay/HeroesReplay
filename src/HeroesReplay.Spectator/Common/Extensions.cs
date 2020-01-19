@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -8,13 +9,25 @@ namespace HeroesReplay.Spectator
 {
     public static class Extensions
     {
+        public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> items) => items.OrderBy(i => Guid.NewGuid());
+
         public static Task WaitCheckTime(this AnalyzerResult result, CancellationToken token = default) => Task.Delay(result.Duration, token);
 
         /// <summary>
         /// The in-game timer at the top has a NEGATIVE offset of 610.
         /// This function removes the negative offset so that it can be used for normal calculations in the replay file.
         /// </summary>
-        public static TimeSpan AddPositiveOffset(this TimeSpan timer) => timer.Add(TimeSpan.FromSeconds(timer.Seconds + 610) / 16);
+        public static TimeSpan RemoveNegativeOffset(this TimeSpan timer)
+        {
+            var bottomTimer = timer.Add(TimeSpan.FromSeconds(timer.Seconds + 610) / 16).Duration();
+            return new TimeSpan(bottomTimer.Days, bottomTimer.Hours, bottomTimer.Minutes, bottomTimer.Seconds, milliseconds: 0);
+        }
+
+        public static TimeSpan AddNegativeOffset(this TimeSpan timer)
+        {
+            var topTimer = timer.Subtract(TimeSpan.FromSeconds(timer.Seconds + 610) / 16).Duration();
+            return new TimeSpan(topTimer.Days, topTimer.Hours, topTimer.Minutes, topTimer.Seconds, milliseconds: 0);
+        }
 
         public static TimeSpan ParseTimerHours(this string time) => TimeSpan.ParseExact(time, Constants.Ocr.TIMESPAN_FORMAT_HOURS, CultureInfo.InvariantCulture);
 

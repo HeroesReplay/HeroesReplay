@@ -128,13 +128,16 @@ namespace HeroesReplay.Spectator
 
         private void OnStateChange(object sender, GameEventArgs<StateDelta> e)
         {
-            if (e.Data.Previous == State.StartOfGame && e.Data.Current == State.Running)
-            {
-                logger.LogInformation($"StormReplay started, zooming out and disabling chat.");
+            if (e.Data.Previous == State.StartOfGame && e.Data.Current == State.Running && e.Timer < TimeSpan.FromSeconds(10))
+            {   
+                heroesOfTheStorm.SendToggleChat();
+                Thread.Sleep(TimeSpan.FromSeconds(5));
 
-                // heroesOfTheStorm.SendToggleZoom(); // Max Zoom
+                heroesOfTheStorm.SendToggleControls();
+                Thread.Sleep(TimeSpan.FromSeconds(5));
 
-                // heroesOfTheStorm.SendToggleChat(); // Hide Chat
+                heroesOfTheStorm.SendToggleZoom();
+                Thread.Sleep(TimeSpan.FromSeconds(5));
             }
         }
 
@@ -144,8 +147,6 @@ namespace HeroesReplay.Spectator
             {
                 if (e.StormReplay.Replay.Players[index] == e.Data)
                 {
-                    logger.LogInformation($"Focusing {e.Data.Character}. Reason: {e.Message}.");
-
                     heroesOfTheStorm.SendFocusHero(index);
                 }
             }
@@ -153,8 +154,6 @@ namespace HeroesReplay.Spectator
 
         private void OnPanelChange(object sender, GameEventArgs<Panel> e)
         {
-            logger.LogInformation($"Switching Panel: {e.Data}.");
-
             heroesOfTheStorm.SendPanelChange(e.Data);
         }
     }

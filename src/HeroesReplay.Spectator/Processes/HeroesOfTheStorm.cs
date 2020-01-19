@@ -46,15 +46,19 @@ namespace HeroesReplay.Spectator
             await File.WriteAllLinesAsync(variablesPath, values.OrderBy(kv => kv.Key).Select(pair => $"{pair.Key}={pair.Value}"));
         }
 
+        private Rectangle TimerRegion => new Rectangle(new Point(Dimensions.Value.Width / 2 - 50, 10), new Size(100, 50));
+
         public async Task<TimeSpan?> TryGetTimerAsync()
         {
-            Bitmap? bitmap = TryBitBlt();
+            Bitmap? centerTimer = TryBitBlt(TimerRegion);
 
             try
             {
-                if (bitmap == null) return null;
+                if (centerTimer == null) return null;
 
-                using (Bitmap centerTimer = GetTimer(bitmap))
+                // now we don't copy the entire screen with BitBlt, we only copy the TimerRegion region
+                //  = GetTimer(centerTimer)
+                using (centerTimer)
                 {
                     OcrResult? result = await TryGetOcrResult(centerTimer, Constants.Ocr.TIMER_COLON);
 
@@ -64,7 +68,7 @@ namespace HeroesReplay.Spectator
 
                         if (timer != null)
                         {
-                            return timer.Value.AddPositiveOffset();
+                            return timer.Value;
                         }
                     }
                 }
@@ -75,7 +79,7 @@ namespace HeroesReplay.Spectator
             }
             finally
             {
-                bitmap?.Dispose();
+                centerTimer?.Dispose();
             }
 
             return null;
@@ -86,11 +90,7 @@ namespace HeroesReplay.Spectator
             try
             {
                 // sometimes OCR adds quotemarks, or mixes up 0's with O's
-                char[] sanitze = ocrResult.Lines[0].Text
-                    .Replace('O', '0')
-                    .Replace('B', '8')
-                    .Replace('o', '0')
-                    .Where(c => char.IsDigit(c) || c.Equals(':')).ToArray();
+                char[] sanitze = SanitizeOcrResult(ocrResult);
 
                 string time = new string(sanitze);
 
@@ -112,6 +112,17 @@ namespace HeroesReplay.Spectator
             }
 
             return null;
+        }
+
+        private static char[] SanitizeOcrResult(OcrResult ocrResult)
+        {
+            return ocrResult.Lines[0].Text
+                .Replace('O', '0')
+                .Replace("'", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace("\"", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace('o', '0')
+                .Where(c => char.IsDigit(c) || c.Equals(':'))
+                .ToArray();
         }
 
         public bool KillGame()
@@ -144,20 +155,21 @@ namespace HeroesReplay.Spectator
                         .Or<Win32Exception>()
                         .Or<NullReferenceException>()
                         .OrResult<bool>(result => result == false)
-                    .WaitAndRetryAsync(5, count => TimeSpan.FromSeconds(10))
+                    .WaitAndRetryAsync(retryCount: 15, count => TimeSpan.FromSeconds(2))
                     .ExecuteAsync(async (t) => Process.GetProcessesByName(ProcessName).Any(p => p.MainModule.FileVersionInfo.FileVersion == stormReplay.Replay.ReplayVersion), token);
             }
         }
 
         private FileInfo GetSwitcherPath()
-        {
-            DirectoryInfo current = new DirectoryInfo(Path.GetDirectoryName(WrappedProcess.MainModule.FileName));
-            FileInfo? switcher = null;
-
+        {   
             return Policy
-                .Timeout(TimeSpan.FromSeconds(10))
+                .Handle<Exception>()
+                .WaitAndRetry(retryCount: 5, (retry) => TimeSpan.FromSeconds(10))
                 .Execute(() =>
                 {
+                    DirectoryInfo current = new DirectoryInfo(Path.GetDirectoryName(WrappedProcess.MainModule.FileName));
+                    FileInfo? switcher = null;
+
                     while (switcher == null)
                     {
                         switcher = current.GetFiles(Constants.Heroes.HEROES_SWITCHER_PROCESS, SearchOption.AllDirectories).FirstOrDefault();
@@ -170,18 +182,11 @@ namespace HeroesReplay.Spectator
 
         public async Task<bool> WaitForMapLoadingAsync(StormReplay stormReplay, CancellationToken token = default)
         {
-            // check for a total of 30 seconds to see if the Loading Screen appears
-
             return await Policy
                 .Handle<Exception>() // Issue getting Process information (terminated?)
                 .OrResult<bool>(loaded => loaded == false) // it's not the game version that supports the replay
                 .WaitAndRetryAsync(15, count => TimeSpan.FromSeconds(2))
-                .ExecuteAsync(async (t) =>
-                {
-                    // stormReplay.Replay.Players.Select(p => p.Name) // We 'could' check stormPlayer names too.
-                    return await GetWindowContainsAsync(CaptureMethod.BitBlt, Constants.Ocr.LOADING_SCREEN_TEXT, stormReplay.Replay.Map);
-
-                }, token);
+                .ExecuteAsync(async (t) => await GetWindowContainsAsync(CaptureMethod.BitBlt, Constants.Ocr.LOADING_SCREEN_TEXT, stormReplay.Replay.Map), token);
         }
 
         public void SendFocusHero(int index)
@@ -212,9 +217,9 @@ namespace HeroesReplay.Spectator
         {
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.Z, IntPtr.Zero);
-            // NativeMethods.SendMessage(WindowHandle, WM_CHAR, Key.Z, IntPtr.Zero);
-            // NativeMethods.SendMessage(WindowHandle, WM_KEYUP, Key.Z, IntPtr.Zero);
-            // NativeMethods.SendMessage(WindowHandle, WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.Z, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.Z, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
         }
 
         public void SendToggleTime()
@@ -262,50 +267,5 @@ namespace HeroesReplay.Spectator
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.C, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
-
-        public void SendEnterByHandle()
-        {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.Return, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.Return, IntPtr.Zero);
-        }
-
-        // Mini map
-        private Bitmap GetBottomRight(Bitmap bitmap)
-        {
-            return bitmap.Clone(Rectangle.FromLTRB(left: bitmap.Width / 2, top: bitmap.Height / 2, right: bitmap.Width, bottom: bitmap.Height), bitmap.PixelFormat);
-        }
-
-        // Observer Controls
-        private Bitmap GetBottomLeft(Bitmap bitmap)
-        {
-            return bitmap.Clone(Rectangle.FromLTRB(left: 0, top: bitmap.Height / 2, right: bitmap.Width / 2, bottom: bitmap.Height), bitmap.PixelFormat);
-        }
-
-        // Observer Controls
-        private Bitmap GetControlsOpen(Bitmap bitmap)
-        {
-            return bitmap.Clone(
-                new Rectangle(
-                    new Point(x: 0, y: bitmap.Height - Convert.ToInt32(bitmap.Height * 0.15)), // The controls are roughly 10% of the height of the game
-                    new Size(width: Convert.ToInt32(bitmap.Width * 0.20), height: Convert.ToInt32(bitmap.Height * 0.15))), bitmap.PixelFormat); // they roughly make up 20% of the width of the game
-        }
-
-        // Observer Controls
-        private Bitmap GetControlsClosed(Bitmap bitmap)
-        {
-            return bitmap.Clone(
-                new Rectangle(new Point(x: 0, y: bitmap.Height - Convert.ToInt32(bitmap.Height * 0.10)),
-                    new Size(width: Convert.ToInt32(bitmap.Width * 0.20),
-                        height: Convert.ToInt32(bitmap.Height * 0.10))), bitmap.PixelFormat);
-        }
-
-        // This doesn't seem to work so well with the Windows.Media.Ocr 
-        // Maybe I need to cleanup and manipulate the Bitmap before sending it to Ocr processing
-        // I think its also to do with the resolution of the bitmap, i may need to enlarge it?
-        private Bitmap GetTimer(Bitmap bitmap)
-        {
-            return bitmap.Clone(new Rectangle(new Point(bitmap.Width / 2 - 50, 10), new Size(100, 50)), bitmap.PixelFormat);
-        }
-
     }
 }

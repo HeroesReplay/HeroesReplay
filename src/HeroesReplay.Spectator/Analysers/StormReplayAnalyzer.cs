@@ -7,8 +7,6 @@ namespace HeroesReplay.Spectator
 {
     public class StormReplayAnalyzer
     {
-
-
         public AnalyzerResult Analyze(StormReplay stormReplay, TimeSpan start, TimeSpan end)
         {
             Replay replay = stormReplay.Replay;
@@ -45,25 +43,22 @@ namespace HeroesReplay.Spectator
         {
             List<(Player, TimeSpan)> captures = new List<(Player, TimeSpan)>();
 
-            IEnumerable<TrackerEvent> campEvents = stormReplay.Replay.TrackerEvents.Where(e =>
-                e.TimeSpan.IsWithin(start, end) &&
-                e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent &&
-                e.Data.dictionary[0].blobText == "JungleCampCapture");
+            IEnumerable<TrackerEvent> now = stormReplay.Replay.TrackerEvents.Where(trackerEvent => trackerEvent.TimeSpan.IsWithin(start, end));
+            IEnumerable<TrackerEvent> camps = now.Where(trackerEvent => trackerEvent.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent && trackerEvent.Data.dictionary[0].blobText == "JungleCampCapture");
 
-            foreach (var capture in campEvents)
+            foreach (var capture in camps)
             {
                 long teamId = capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.Value - 1;
 
-                IEnumerable<Unit> units = stormReplay.Replay.Units.Where(unit =>
-                    unit.Group == Unit.UnitGroup.MercenaryCamp &&
-                    unit.PlayerKilledBy != null && 
-                    unit.Team.HasValue && unit.Team.Value == teamId &&
-                    unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(30)) &&
-                    unit.TimeSpanDied < capture.TimeSpan.Add(TimeSpan.FromSeconds(30)));
+                IEnumerable<Unit> units = stormReplay.Replay.Units
+                    .Where(unit => unit.Group == Unit.UnitGroup.MercenaryCamp &&
+                                   unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId &&
+                                   unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10)) &&
+                                   unit.TimeSpanDied < capture.TimeSpan.Add(TimeSpan.FromSeconds(10)));
 
                 foreach (Player player in units.Select(unit => unit.PlayerKilledBy).Distinct())
                 {
-                    captures.Add((player, units.Max(u => u.TimeSpanDied.Value)));
+                    captures.Add((player, capture.TimeSpan));
                 }
             }
 
@@ -81,7 +76,7 @@ namespace HeroesReplay.Spectator
         private static List<Player> CalculateAlivePlayers(TimeSpan start, TimeSpan end, Replay replay)
         {
             return replay.Players
-                .Where(player => !player.HeroUnits.Any(unit => unit.DiesWithin(start, end)) && player.HeroUnits.Any(unit => unit.TimeSpanBorn <= start && unit.TimeSpanDied > end))
+                .Where(player => player.HeroUnits.Any(unit => unit.TimeSpanBorn <= start && unit.TimeSpanDied > end))
                 .ToList();
         }
 
