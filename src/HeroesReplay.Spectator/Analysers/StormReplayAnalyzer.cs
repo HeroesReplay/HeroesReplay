@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Heroes.ReplayParser;
+using HeroesReplay.Shared;
 
 namespace HeroesReplay.Spectator
 {
@@ -75,15 +76,13 @@ namespace HeroesReplay.Spectator
 
         private static List<Player> CalculateAlivePlayers(TimeSpan start, TimeSpan end, Replay replay)
         {
-            return replay.Players
-                .Where(player => player.HeroUnits.Any(unit => unit.TimeSpanBorn <= start && unit.TimeSpanDied > end))
-                .ToList();
+            return replay.Players.Where(player => player.HeroUnits.Any(unit => unit.TimeSpanBorn <= start && unit.TimeSpanDied > end)).ToList();
         }
 
         private static List<Unit> CalculateDeadUnits(TimeSpan start, TimeSpan end, Replay replay)
         {
             return replay.Units
-                .Where(unit => unit.DiesWithin(start, end) && unit.IsPlayerReferenced() && (unit.IsMapObjective() || unit.IsStructure() || unit.IsCamp() || unit.IsHero()))
+                .Where(unit => unit.IsDeadWithin(start, end) && unit.IsPlayerReferenced() && (unit.IsMapObjective() || unit.IsStructure() || unit.IsCamp() || unit.IsHero()))
                 .OrderBy(unit => unit.TimeSpanDied).ToList();
         }
 

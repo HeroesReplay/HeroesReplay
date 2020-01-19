@@ -37,6 +37,8 @@ It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser)
 - [System.CommandLine](https://github.com/dotnet/command-line-api) for command line features.
 - [xUnit](https://github.com/xunit/xunit) for unit testing.
 - [FluentAssertions](https://github.com/fluentassertions/fluentassertions) for natural and, most importantly, extremely readable tests.
+- [HotsApi](http://hotsapi.net/) an open Heroes of the Storm replay database where everyone can download replays.
+- [NSwag.MSBuild](https://github.com/RicoSuter/NSwag/wiki/NSwag.MSBuild) to generate the api client for accessing the hots api database.
 
 ## Building the application
 

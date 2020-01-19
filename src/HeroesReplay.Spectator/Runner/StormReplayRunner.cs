@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using HeroesReplay.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Spectator

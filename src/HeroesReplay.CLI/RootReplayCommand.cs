@@ -2,7 +2,7 @@
 using System.CommandLine.Builder;
 using System.IO;
 using System.Linq;
-using HeroesReplay.Spectator;
+using HeroesReplay.Shared;
 using Process = System.Diagnostics.Process;
 
 namespace HeroesReplay.CLI

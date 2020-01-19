@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace HeroesReplay.Spectator
+namespace HeroesReplay.Shared
 {
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT

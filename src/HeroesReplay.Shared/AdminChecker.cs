@@ -1,6 +1,6 @@
 using System.Security.Principal;
 
-namespace HeroesReplay.Spectator
+namespace HeroesReplay.Shared
 {
     public class AdminChecker
     {

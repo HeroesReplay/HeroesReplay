@@ -1,6 +1,6 @@
 ﻿using System.Threading;
 
-namespace HeroesReplay.Spectator
+namespace HeroesReplay.Shared
 {
     public class CancellationTokenProvider
     {

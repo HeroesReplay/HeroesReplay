@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Replays;
+using HeroesReplay.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Spectator
@@ -9,11 +11,11 @@ namespace HeroesReplay.Spectator
     public class StormReplayConsumer
     {
         private readonly ILogger<StormReplayConsumer> logger;
-        private readonly StormReplayProvider provider;
+        private readonly StormReplayDirectoryProvider provider;
         private readonly StormReplayRunner runner;
         private readonly CancellationToken token;
 
-        public StormReplayConsumer(CancellationTokenProvider tokenProvider, ILogger<StormReplayConsumer> logger, StormReplayProvider provider, StormReplayRunner runner)
+        public StormReplayConsumer(CancellationTokenProvider tokenProvider, ILogger<StormReplayConsumer> logger, StormReplayDirectoryProvider provider, StormReplayRunner runner)
         {
             this.logger = logger;
             this.provider = provider;

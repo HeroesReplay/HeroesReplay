@@ -3,21 +3,21 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Heroes.ReplayParser;
+using HeroesReplay.Shared;
 using Microsoft.Extensions.Logging;
 using static Heroes.ReplayParser.DataParser;
 using static System.IO.File;
 
-namespace HeroesReplay.Spectator
+namespace HeroesReplay.Replays
 {
-    public sealed class StormReplayProvider
+    public sealed class StormReplayDirectoryProvider
     {
         public int Count => queue.Count;
 
-        private readonly ILogger<StormReplayProvider> logger;
+        private readonly ILogger<StormReplayDirectoryProvider> logger;
         private readonly Queue<string> queue;
 
-        public StormReplayProvider(ILogger<StormReplayProvider> logger)
+        public StormReplayDirectoryProvider(ILogger<StormReplayDirectoryProvider> logger)
         {
             this.logger = logger;
             queue = new Queue<string>();
@@ -25,7 +25,7 @@ namespace HeroesReplay.Spectator
 
         public async Task<StormReplay?> TryLoadReplayAsync(string path)
         {
-            (ReplayParseResult result, Replay replay) = ParseReplay(await ReadAllBytesAsync(path), true);
+            (ReplayParseResult result, Heroes.ReplayParser.Replay replay) = ParseReplay(await ReadAllBytesAsync(path), true);
 
             if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
             {
@@ -42,7 +42,7 @@ namespace HeroesReplay.Spectator
             {
                 logger.LogInformation("Dequeued: " + path);
 
-                (ReplayParseResult result, Replay replay) = ParseReplay(await ReadAllBytesAsync(path), true);
+                (ReplayParseResult result, Heroes.ReplayParser.Replay replay) = ParseReplay(await ReadAllBytesAsync(path), true);
 
                 if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
                 {
@@ -55,17 +55,6 @@ namespace HeroesReplay.Spectator
             }
 
             return null;
-        }
-
-        private async Task MoveAsync(string sourcePath, string destinationPath)
-        {
-            await using (Stream source = File.Open(sourcePath, FileMode.Open))
-            {
-                await using (Stream destination = File.Create(Path.Combine(destinationPath)))
-                {
-                    await source.CopyToAsync(destination);
-                }
-            }
         }
 
         public void LoadReplays(string directory)

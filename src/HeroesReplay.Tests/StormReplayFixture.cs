@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Heroes.ReplayParser;
+using HeroesReplay.Shared;
 using HeroesReplay.Spectator;
 
 namespace HeroesReplay.Tests

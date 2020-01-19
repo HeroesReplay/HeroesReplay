@@ -24,11 +24,16 @@
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="System.Security.Principal.Windows" Version="4.3.0" />
+        
     </ItemGroup>
 
     <ItemGroup>
         <None Include="..\.editorconfig" Link=".editorconfig" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\HeroesReplay.Replays\HeroesReplay.Replays.csproj" />
+      <ProjectReference Include="..\HeroesReplay.Shared\HeroesReplay.Shared.csproj" />
     </ItemGroup>
 
 </Project>

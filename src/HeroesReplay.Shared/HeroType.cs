@@ -1,4 +1,4 @@
-﻿namespace HeroesReplay.Spectator
+﻿namespace HeroesReplay.Shared
 {
     public enum HeroType
     {

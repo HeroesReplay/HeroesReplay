@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Heroes.ReplayParser;
+using HeroesReplay.Shared;
 
 namespace HeroesReplay.Spectator
 {

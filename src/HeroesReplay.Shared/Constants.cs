@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using static System.Environment;
 
-namespace HeroesReplay.Spectator
+namespace HeroesReplay.Shared
 {
     public static class Constants
     {
@@ -16,6 +19,8 @@ namespace HeroesReplay.Spectator
             public static readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
 
             public static readonly int[] TALENT_LEVELS = { 1, 4, 7, 10, 13, 16, 20 };
+
+            public static List<Hero> All = typeof(Shared.Heroes).GetProperties(BindingFlags.Public).Where(p => p.PropertyType == typeof(Hero)).Select(p => p.GetValue(null)).OfType<Hero>().ToList();
 
             public static readonly string DOCUMENTS_HEROES_REPLAYS_PATH = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm", "Accounts");
             public static readonly string DOCUMENTS_HEROES_VARIABLES_PATH = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm", "Variables.txt");

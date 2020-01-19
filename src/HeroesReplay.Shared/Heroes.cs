@@ -2,12 +2,10 @@
 using System.Linq;
 using System.Reflection;
 
-namespace HeroesReplay.Spectator
+namespace HeroesReplay.Shared
 {
     public static class Heroes
     {
-        public static List<Hero> All = typeof(Heroes).GetProperties(BindingFlags.Public).Where(p => p.PropertyType == typeof(Hero)).Select(p => p.GetValue(null)).OfType<Hero>().ToList();
-        
         public static Hero Abathur = new Hero("Abathur", HeroType.Melee);
         public static Hero Alarak = new Hero("Alarak", HeroType.Melee);
         public static Hero Alexstrasza = new Hero("Alexstrasza", HeroType.Ranged);

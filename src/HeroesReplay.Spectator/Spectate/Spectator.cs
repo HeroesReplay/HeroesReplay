@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using HeroesReplay.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Spectator
@@ -91,8 +92,6 @@ namespace HeroesReplay.Spectator
         }
 
         public StormReplay StormReplay { get; set; }
-
-
 
         private readonly ILogger<Spectator> logger;
         private readonly StormPlayerSelector selector;

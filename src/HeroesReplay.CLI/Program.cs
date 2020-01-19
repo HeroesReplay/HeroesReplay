@@ -2,6 +2,8 @@
 using System.CommandLine.Invocation;
 using System.IO;
 using System.Threading.Tasks;
+using HeroesReplay.Replays;
+using HeroesReplay.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -25,7 +27,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<StormReplayAnalyzer>()
                 .AddSingleton<StormPlayerSelector>()
                 .AddSingleton<Spectator>()
-                .AddSingleton<StormReplayProvider>()
+                .AddSingleton<StormReplayDirectoryProvider>()
                 .AddSingleton<StormReplayConsumer>()
                 .AddSingleton<StormReplayRunner>()
                 .AddSingleton<AdminChecker>()

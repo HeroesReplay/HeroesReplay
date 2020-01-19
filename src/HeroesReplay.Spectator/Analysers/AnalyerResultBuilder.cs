@@ -1,4 +1,5 @@
 ﻿using System;
+using HeroesReplay.Shared;
 
 namespace HeroesReplay.Spectator
 {

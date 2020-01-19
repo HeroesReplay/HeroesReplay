@@ -5,13 +5,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HeroesReplay.Spectator
+namespace HeroesReplay.Shared
 {
     public static class Extensions
     {
         public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> items) => items.OrderBy(i => Guid.NewGuid());
 
-        public static Task WaitCheckTime(this AnalyzerResult result, CancellationToken token = default) => Task.Delay(result.Duration, token);
+        
 
         /// <summary>
         /// The in-game timer at the top has a NEGATIVE offset of 610.
