@@ -1,10 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Heroes.ReplayParser;
-
-namespace HeroesReplay.Shared
+﻿namespace HeroesReplay.Shared
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using Heroes.ReplayParser;
+
     public static class HeroesReplayParserExtensions
     {
         public static bool IsPlayerReferenced(this Unit unit) => unit?.PlayerKilledBy != null || unit?.PlayerControlledBy != null;

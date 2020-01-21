@@ -5,11 +5,16 @@
         <TargetFramework>netcoreapp3.1</TargetFramework>
         <IsPackable>false</IsPackable>
         <LangVersion>8.0</LangVersion>
+        <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
         <PackageReference Include="Heroes.ReplayParser" Version="1.2.1" />
-        <PackageReference Include="System.Security.Principal.Windows" Version="4.3.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\HeroesReplay.Shared\HeroesReplay.Shared.csproj" />
     </ItemGroup>
 
 </Project>

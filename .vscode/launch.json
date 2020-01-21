@@ -5,41 +5,31 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "HOTS API",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/HeroesReplay.CLI.exe",
+            "args": ["--launch=true"],
+            "env": {
+                "HEROES_REPLAY_AWS_ACCESS_KEY": "",
+                "HEROES_REPLAY_AWS_SECRET_KEY": ""
+            },
+            "cwd": "${workspaceFolder}/src/HeroesReplay.CLI",
+            "console": "externalTerminal",
+            "stopAtEntry": true
+        },
+        {
             "name": "REPLAY NO LAUNCH",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/HeroesReplay.CLI.exe",
             "args": [
-                //"--path=[YOUR REPLAY]",
-                "--launch=false"
-            ],
-            "cwd": "${workspaceFolder}/src/HeroesReplay.CLI",
-            "console": "externalTerminal",
-            "stopAtEntry": true
-        },
-        {
-            "name": "REPLAY LAUNCH",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/HeroesReplay.CLI.exe",
-            "args": [
-                //"--path=[YOUR REPLAY]",
-                "--launch=true"
-            ],
-            "cwd": "${workspaceFolder}/src/HeroesReplay.CLI",
-            "console": "externalTerminal",
-            "stopAtEntry": true
-        },
-        {
-            "name": "REPLAYS FOLDER",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/HeroesReplay.CLI.exe",
-            "args": [
-                "--launch=true"
+                "directory|file|hotsapi",
+                "--launch=",
+                "--path=",
+                "--bnet="
             ],
             "cwd": "${workspaceFolder}/src/HeroesReplay.CLI",
             "console": "externalTerminal",

@@ -2,15 +2,12 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace HeroesReplay.Shared
 {
     public static class Extensions
     {
         public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> items) => items.OrderBy(i => Guid.NewGuid());
-
         
 
         /// <summary>

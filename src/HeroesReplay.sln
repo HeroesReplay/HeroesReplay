@@ -14,9 +14,17 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Spectator", "H
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Tests", "HeroesReplay.Tests\HeroesReplay.Tests.csproj", "{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.Shared", "HeroesReplay.Shared\HeroesReplay.Shared.csproj", "{452738F8-CBD9-4C3B-85D4-D7B7A4BB1E03}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Shared", "HeroesReplay.Shared\HeroesReplay.Shared.csproj", "{452738F8-CBD9-4C3B-85D4-D7B7A4BB1E03}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Replays", "HeroesReplay.Replays\HeroesReplay.Replays.csproj", "{2C4806FF-FEC0-4AD6-BA34-ACF7A4729A66}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.Processes", "HeroesReplay.Processes\HeroesReplay.Processes.csproj", "{1FBB5E5F-B884-403F-80C0-188B56FB1DDE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.Analyzer", "HeroesReplay.Analyzer\HeroesReplay.Analyzer.csproj", "{0E2D7D58-9519-4151-8DC9-1789B3ADF780}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.Twitch", "HeroesReplay.Twitch\HeroesReplay.Twitch.csproj", "{F94471A0-A175-4826-89D4-5D9BA89B667B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.Runner", "HeroesReplay.Runner\HeroesReplay.Runner.csproj", "{1AD5775A-47AF-4C06-867D-926B3683C880}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -43,6 +51,22 @@ Global
 		{2C4806FF-FEC0-4AD6-BA34-ACF7A4729A66}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2C4806FF-FEC0-4AD6-BA34-ACF7A4729A66}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2C4806FF-FEC0-4AD6-BA34-ACF7A4729A66}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1FBB5E5F-B884-403F-80C0-188B56FB1DDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1FBB5E5F-B884-403F-80C0-188B56FB1DDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1FBB5E5F-B884-403F-80C0-188B56FB1DDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1FBB5E5F-B884-403F-80C0-188B56FB1DDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0E2D7D58-9519-4151-8DC9-1789B3ADF780}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0E2D7D58-9519-4151-8DC9-1789B3ADF780}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0E2D7D58-9519-4151-8DC9-1789B3ADF780}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0E2D7D58-9519-4151-8DC9-1789B3ADF780}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F94471A0-A175-4826-89D4-5D9BA89B667B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F94471A0-A175-4826-89D4-5D9BA89B667B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F94471A0-A175-4826-89D4-5D9BA89B667B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F94471A0-A175-4826-89D4-5D9BA89B667B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1AD5775A-47AF-4C06-867D-926B3683C880}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1AD5775A-47AF-4C06-867D-926B3683C880}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1AD5775A-47AF-4C06-867D-926B3683C880}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1AD5775A-47AF-4C06-867D-926B3683C880}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

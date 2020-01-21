@@ -3,6 +3,9 @@
     <PropertyGroup>
         <OutputType>Library</OutputType>
         <TargetFramework>netcoreapp3.1</TargetFramework>
+        <IsPackable>false</IsPackable>
+        <LangVersion>8.0</LangVersion>
+        <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <PropertyGroup>
@@ -13,11 +16,12 @@
         <OpenApiWrapResponse>true</OpenApiWrapResponse>
         <OpenApiDocumentUrl>http://hotsapi.net/spec/hotsapi-1.0.yaml</OpenApiDocumentUrl>
     </PropertyGroup>
-    
+
     <ItemGroup>
         <PackageReference Include="AWSSDK.S3" Version="3.3.110.14" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="3.1.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.0" />
         <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+        <PackageReference Include="Heroes.ReplayParser" Version="1.2.1" />
         <PackageReference Include="NSwag.MSBuild" Version="13.2.2">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
@@ -25,13 +29,13 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\HeroesReplay.Shared\HeroesReplay.Shared.csproj" />
+        <ProjectReference Include="..\HeroesReplay.Shared\HeroesReplay.Shared.csproj" />
     </ItemGroup>
 
     <Target Name="Download" BeforeTargets="BeforeBuild">
         <DownloadFile DestinationFileName="spec.yaml" DestinationFolder="$(MSBuildProjectDirectory)" Retries="3" SourceUrl="$(OpenApiDocumentUrl)" />
     </Target>
-     
+
     <Target Name="Generate" BeforeTargets="BeforeBuild" DependsOnTargets="Download">
         <Exec Command="$(NSwagExe_Core31) openapi2csclient /input:$(MSBuildProjectDirectory)\spec.yaml /wrapresponses:$(OpenApiWrapResponse) /responseclass:$(OpenApiResponseClassName) /classname:$(OpenApiClientClassName) /namespace:$(OpenApiClientNameSpace) /usebaseurl:true /output:$(OpenApiClientFileName)" />
         <Delete Files="$(MSBuildProjectDirectory)\spec.yaml" />

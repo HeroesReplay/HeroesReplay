@@ -1,4 +1,5 @@
 using System;
+using HeroesReplay.Analyzer;
 using HeroesReplay.Spectator;
 using Xunit;
 

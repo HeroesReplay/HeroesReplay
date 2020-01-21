@@ -38,7 +38,8 @@ It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser)
 - [xUnit](https://github.com/xunit/xunit) for unit testing.
 - [FluentAssertions](https://github.com/fluentassertions/fluentassertions) for natural and, most importantly, extremely readable tests.
 - [HotsApi](http://hotsapi.net/) an open Heroes of the Storm replay database where everyone can download replays.
-- [NSwag.MSBuild](https://github.com/RicoSuter/NSwag/wiki/NSwag.MSBuild) to generate the api client for accessing the hots api database.
+- [NSwag.MSBuild](https://github.com/RicoSuter/NSwag/wiki/NSwag.MSBuild) to generate the api client for accessing HotsApi.
+- [AWSSDK.S3](https://aws.amazon.com/sdk-for-net/) to download the `.StormReplay` files hosted in the HotsApi AWS S3 storage.
 
 ## Building the application
 
@@ -56,62 +57,22 @@ dotnet build HeroesReplay.sln
 
 ## Running the application
 
-There are a few ways to run the application explained below.
-
-- If you do not provide a value for `--bnet`, it will assume the default installation path `C:\Program Files (x86)\Battle.net`
-- If you do not provide a value for `--path`, it will default to `$env:USERPROFILE\Documents\Heroes of the Storm\Accounts`.
+There are a few ways to run the application explained below. You can use the `--help` option to find out more for each command.
 
 ### From the bin output folder
 
 ```powershell
 cd ./src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/
-heroesreplay.exe [arguments]
+heroesreplay.exe --help
 ```
 
 ### From the project folder
 
 ```powershell
 cd ./src/HeroesReplay.CLI/
-dotnet run heroesreplay [arguments]
+dotnet run heroesreplay --help
 ```
 
-### Spectate a replay that is currently running
-
-- This will attempt to find an existing `HeroesOfTheStorm_x64.exe` process.
-- You must ensure the replay argument you pass is the replay that is running.
-
-```powershell
-heroesreplay.exe --path="C:\path\to\your\replay.StormReplay" --launch=false
-```
-
-```
-dotnet run heroesreplay --path="C:\path\to\your\replay.StormReplay" --launch=false
-```
-
-### Spectate a replay that is not currently running
-
-- This will terminate any existing `HeroesOfTheStorm_x64.exe` process.
-- This will launch the main `HeroesOfTheStorm_x64.exe` parent process, then execute the `HeroesSwitcher_x64.exe` to launch the correct `HeroesOfTheStorm_x64.exe` version that matches the version header in the replay file.
-
-```powershell
-heroesreplay.exe --path="C:\path\to\your\replay.StormReplay" --launch=false
-```
-
-```powershell
-dotnet run heroesreplay --path="C:\path\to\your\replay.StormReplay" --launch=false
-```
-
-### Spectate replay files in a directory
-
-- This behaves similar to running an individual replay file, but will attempt to load, parse and spectate each replay in the directory, one after another.
-
-```powershell
-heroesreplay.exe --path="C:\path\to\your\replays\"
-```
-
-```powershell
-dotnet run heroesreplay --path="C:\path\to\your\replays\"
-```
 
 ## Debugging from Visual Studio 2019 or Visual Studio Code
 

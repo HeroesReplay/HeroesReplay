@@ -1,7 +1,12 @@
 {
   "profiles": {
     "HeroesReplay.CLI": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "hotsapi",
+      "environmentVariables": {
+        "HEROES_REPLAY_AWS_ACCESS_KEY": "",
+        "HEROES_REPLAY_AWS_SECRET_KEY": ""
+      }
     }
   }
 }

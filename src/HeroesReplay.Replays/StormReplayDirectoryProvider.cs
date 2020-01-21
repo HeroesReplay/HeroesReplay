@@ -4,41 +4,27 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.Shared;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using static Heroes.ReplayParser.DataParser;
 using static System.IO.File;
 
 namespace HeroesReplay.Replays
 {
-    public sealed class StormReplayDirectoryProvider
+    public sealed class StormReplayDirectoryProvider : IStormReplayProvider
     {
-        public int Count => queue.Count;
-
         private readonly ILogger<StormReplayDirectoryProvider> logger;
         private readonly Queue<string> queue;
 
-        public StormReplayDirectoryProvider(ILogger<StormReplayDirectoryProvider> logger)
+        public StormReplayDirectoryProvider(IConfiguration configuration, ILogger<StormReplayDirectoryProvider> logger)
         {
             this.logger = logger;
-            queue = new Queue<string>();
-        }
-
-        public async Task<StormReplay?> TryLoadReplayAsync(string path)
-        {
-            (ReplayParseResult result, Heroes.ReplayParser.Replay replay) = ParseReplay(await ReadAllBytesAsync(path), true);
-
-            if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
-            {
-                logger.LogInformation("Parse Success: " + path);
-                return new StormReplay(path, replay);
-            }
-
-            return null;
+            this.queue = new Queue<string>(Directory.GetFiles(configuration.GetValue<string>("path"), Constants.STORM_REPLAY_WILDCARD, SearchOption.AllDirectories).OrderBy(File.GetCreationTime));
         }
 
         public async Task<StormReplay?> TryLoadReplayAsync()
         {
-            if (queue.TryDequeue(out var path))
+            if (queue.TryDequeue(out string? path))
             {
                 logger.LogInformation("Dequeued: " + path);
 
@@ -55,18 +41,6 @@ namespace HeroesReplay.Replays
             }
 
             return null;
-        }
-
-        public void LoadReplays(string directory)
-        {
-            foreach (string file in Directory.GetFiles(directory, Constants.STORM_REPLAY_WILDCARD, SearchOption.AllDirectories).OrderBy(File.GetCreationTime))
-            {
-                if (!queue.Contains(file))
-                {
-                    logger.LogInformation("Queued: " + file);
-                    queue.Enqueue(file);
-                }
-            }
         }
     }
 }

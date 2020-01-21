@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <OutputType>Library</OutputType>
         <TargetFramework>netcoreapp3.1</TargetFramework>
-
         <IsPackable>false</IsPackable>
-
         <AssemblyName>heroesreplay.tests</AssemblyName>
     </PropertyGroup>
 
@@ -17,6 +16,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\HeroesReplay.Analyzer\HeroesReplay.Analyzer.csproj" />
         <ProjectReference Include="..\HeroesReplay.Spectator\HeroesReplay.Spectator.csproj" />
     </ItemGroup>
 
