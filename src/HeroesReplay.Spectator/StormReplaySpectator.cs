@@ -62,32 +62,32 @@ namespace HeroesReplay.Spectator
 
         private GameState gameState;
         private GamePanel gamePanel;
-        private TimeSpan gameGameTimer;
+        private TimeSpan gameTimer;
         private StormPlayer stormPlayer;
 
         public TimeSpan GameTimer
         {
-            get => gameGameTimer;
+            get => gameTimer;
             set
             {
                 if (value == TimeSpan.Zero)
                 {
-                    gameGameTimer = value;
+                    gameTimer = value;
                     GameState = GameState.StartOfGame;
                 }
                 else if (value >= StormReplay.Replay.ReplayLength)
                 {
-                    gameGameTimer = value;
+                    gameTimer = value;
                     GameState = GameState.EndOfGame;
                 }
-                else if (value > gameGameTimer)
+                else if (value > gameTimer)
                 {
-                    gameGameTimer = value;
+                    gameTimer = value;
                     GameState = GameState.Running;
                 }
-                else if (value <= gameGameTimer)
+                else if (value <= gameTimer)
                 {
-                    gameGameTimer = value;
+                    gameTimer = value;
                     GameState = GameState.Paused;
                 }
             }
@@ -133,94 +133,29 @@ namespace HeroesReplay.Spectator
                 {
                     try
                     {
-                        List<StormPlayer> penta = selector.Select(Analyze.Check(Constants.Heroes.MAX_PENTA_KILL_STREAK_POTENTIAL), GameCriteria.PentaKill);
+                        IEnumerable<StormPlayer> selection =
+                            selector.Select(Analyze.Check(Constants.Heroes.MAX_PENTA_KILL_STREAK_POTENTIAL), GameCriteria.PentaKill).Or(
+                                selector.Select(Analyze.Check(Constants.Heroes.MAX_QUAD_KILL_STREAK_POTENTIAL), GameCriteria.QuadKill).Or(
+                                    selector.Select(Analyze.Check(Constants.Heroes.MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameCriteria.TripleKill).Or(
+                                        selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.MultiKill).Or(
+                                            selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.Kill).Or(
+                                                selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.MapObjective).Or(
+                                                    selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.CampObjective).Or(
+                                                        selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.Structure).Or(
+                                                            selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.Alive)))))))));
 
-                        if (penta.Any())
+
+                        if (selection.Any(p => p.Criteria == GameCriteria.Alive))
                         {
-                            foreach (StormPlayer player in penta)
-                                await FocusPlayer(player, player.When - GameTimer);
+                            StormPlayer player = selection.Shuffle().Take(1).First();
+                            if (StormPlayer?.Criteria == GameCriteria.Alive && StormPlayer.Player.Team == player.Player.Team) continue;
+                            await FocusPlayerAsync(player, TimeSpan.FromSeconds(5));
                         }
                         else
                         {
-                            List<StormPlayer> quad = selector.Select(Analyze.Check(Constants.Heroes.MAX_QUAD_KILL_STREAK_POTENTIAL), GameCriteria.QuadKill);
-
-                            if (quad.Any())
+                            foreach (StormPlayer player in selection)
                             {
-                                foreach (StormPlayer player in quad)
-                                    await FocusPlayer(player, player.When - GameTimer);
-                            }
-                            else
-                            {
-                                List<StormPlayer> triple = selector.Select(Analyze.Check(Constants.Heroes.MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameCriteria.TripleKill);
-
-                                if (triple.Any())
-                                {
-                                    foreach (StormPlayer player in triple)
-                                        await FocusPlayer(player, player.When - GameTimer);
-                                }
-                                else
-                                {
-                                    List<StormPlayer> mutli = selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.MultiKill);
-
-                                    if (mutli.Any())
-                                    {
-                                        foreach (StormPlayer player in mutli)
-                                            await FocusPlayer(player, player.When - GameTimer);
-                                    }
-                                    else
-                                    {
-                                        List<StormPlayer> deaths = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.Death);
-
-                                        if (deaths.Any())
-                                        {
-                                            foreach (StormPlayer player in deaths)
-                                                await FocusPlayer(player, player.When - GameTimer);
-                                        }
-                                        else
-                                        {
-                                            List<StormPlayer> mapObjectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.MapObjective);
-
-                                            if (mapObjectives.Any())
-                                            {
-                                                foreach (StormPlayer player in mapObjectives)
-                                                    await FocusPlayer(player, player.When - GameTimer);
-                                            }
-                                            else
-                                            {
-                                                List<StormPlayer> campObjectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.CampObjective);
-
-                                                if (campObjectives.Any())
-                                                {
-                                                    foreach (StormPlayer player in campObjectives)
-                                                        await FocusPlayer(player, player.When - GameTimer);
-                                                }
-                                                else
-                                                {
-                                                    List<StormPlayer> structures = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.Structure);
-
-                                                    if (structures.Any())
-                                                    {
-                                                        foreach (var player in structures)
-                                                            await FocusPlayer(player, player.When - GameTimer);
-                                                    }
-                                                    else
-                                                    {
-                                                        List<StormPlayer> alive = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.Alive);
-
-                                                        if (alive.Any())
-                                                        {
-                                                            foreach (var player in alive.Shuffle().Take(1))
-                                                            {
-                                                                if (StormPlayer?.Criteria == GameCriteria.Alive && StormPlayer.Player.Team == player.Player.Team) continue;
-                                                                await FocusPlayer(player, TimeSpan.FromSeconds(5));
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                await FocusPlayerAsync(player, player.When - GameTimer);
                             }
                         }
                     }
@@ -232,9 +167,10 @@ namespace HeroesReplay.Spectator
             }
         }
 
-        private async Task FocusPlayer(StormPlayer stormPlayer, TimeSpan duration)
+        private async Task FocusPlayerAsync(StormPlayer stormPlayer, TimeSpan duration)
         {
-            if (duration <= TimeSpan.Zero)
+            // If the duration is negative, or the current timer + duration is still greater than when the timer it was calculated with or if the game timer is less than the timer it was taken again, we have an error
+            if (duration <= TimeSpan.Zero || stormPlayer.Timer > GameTimer)
             {
                 logger.LogInformation($"INVALID FOCUS: {stormPlayer.Player.Character}. REASON: {stormPlayer.Criteria}. DURATION: {duration}.");
             }
@@ -283,7 +219,7 @@ namespace HeroesReplay.Spectator
 
         private void PrintDebugData()
         {
-            foreach(TrackerEvent trackerEvent in StormReplay.Replay.TrackerEvents.Where(e => e.TimeSpan == GameTimer))
+            foreach (TrackerEvent trackerEvent in StormReplay.Replay.TrackerEvents.Where(e => e.TimeSpan == GameTimer))
             {
                 string data = trackerEvent.TrackerEventType switch
                 {
@@ -305,7 +241,7 @@ namespace HeroesReplay.Spectator
                     GameEventType.CStartGameEvent => $"[{gameEvent.eventType}][{gameEvent.player.Character}][{gameEvent.data}]",
                     GameEventType.CTriggerPingEvent => $"[{gameEvent.eventType}][{gameEvent.player.Character}][{gameEvent.data}]",
                     GameEventType.CUnitClickEvent => $"[{gameEvent.eventType}][{gameEvent.player.Character}][{gameEvent.data}]",
-                    GameEventType.CCmdEvent =>  $"[{gameEvent.eventType}][{gameEvent.player.Character}][{gameEvent.data}]",
+                    GameEventType.CCmdEvent => $"[{gameEvent.eventType}][{gameEvent.player.Character}][{gameEvent.data}]",
                     _ => string.Empty,
                 };
 

@@ -1,5 +1,6 @@
 ﻿using HeroesReplay.Analyzer;
 using HeroesReplay.Shared;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Spectator
 {
@@ -10,6 +11,13 @@ namespace HeroesReplay.Spectator
 
     public class StormReplayHeroSelector
     {
+        private readonly ILogger<StormReplayHeroSelector> logger;
+
+        public StormReplayHeroSelector(ILogger<StormReplayHeroSelector> logger)
+        {
+            this.logger = logger;
+        }
+
         public List<StormPlayer> Select(AnalyzerResult result, GameCriteria gameCriteria)
         {
             List<StormPlayer> players = new List<StormPlayer>();
@@ -22,7 +30,7 @@ namespace HeroesReplay.Spectator
                 GameCriteria.MapObjective => HandleMapObjectives(result),
                 GameCriteria.TeamObjective => HandleTeamObjectives(result),
                 GameCriteria.CampObjective => HandleCampObjectives(result),
-                GameCriteria.Death => HandleDeaths(result),
+                // GameCriteria.Death => HandleDeaths(result),
                 GameCriteria.Kill => HandleKills(result, 1),
                 GameCriteria.MultiKill => HandleKills(result, 2),
                 GameCriteria.TripleKill => HandleKills(result, 3),
@@ -36,32 +44,47 @@ namespace HeroesReplay.Spectator
             return players;
         }
 
-        private IEnumerable<StormPlayer> HandleKills(AnalyzerResult result, int count)
+        private IEnumerable<StormPlayer> HandleKills(AnalyzerResult result, int killCount)
         {
-            IEnumerable<IGrouping<Player, Unit>> playerKills = result.PlayerDeaths.GroupBy(unit => unit.PlayerKilledBy).Where(kills => kills.Count() == count);
+            IEnumerable<IGrouping<Player, Unit>> playerKills = result.PlayerDeaths.GroupBy(unit => unit.PlayerKilledBy).Where(kills => kills.Count() == killCount);
 
             foreach (IGrouping<Player, Unit> players in playerKills)
             {
-                Player player = players.Key;
-                int kills = players.Count();
+                Player killer = players.Key;
                 TimeSpan maxTime = players.Max(unit => unit.TimeSpanDied.Value);
+                Hero? hero = killer.TryGetHero();
 
-                yield return new StormPlayer(player, maxTime, count switch { 1 => GameCriteria.Kill, 2 => GameCriteria.MultiKill, 3 => GameCriteria.TripleKill, 4 => GameCriteria.QuadKill, 5 => GameCriteria.PentaKill });
-
-                //Hero? hero = player.TryGetHero();
-                //if (hero != null)
-                //{
-                // 
-                //}
-                //else
-                //{
-                //}
+                if (hero != null)
+                {
+                    if (hero.IsMelee)
+                    {
+                        if (hero == Constants.Heroes.Abathur)
+                        {
+                            foreach (var death in players)
+                            {
+                                yield return new StormPlayer(death.PlayerControlledBy, result.Start, maxTime, killCount.ToCriteria());
+                            }
+                        }
+                        else
+                        {
+                            yield return new StormPlayer(killer, result.Start, maxTime, killCount.ToCriteria());
+                        }
+                    }
+                    else if (hero.IsRanged)
+                    {
+                        yield return new StormPlayer(killer, result.Start, maxTime, killCount.ToCriteria());
+                    }
+                }
+                else
+                {
+                    yield return new StormPlayer(killer, result.Start, maxTime, killCount.ToCriteria());
+                }
             }
         }
 
         private IEnumerable<StormPlayer> HandleAny(AnalyzerResult result)
         {
-            return result.PlayerDeaths.Any() ? HandleDeaths(result) :
+            return result.PlayerDeaths.Any() ? HandleKills(result, 1) :
                 result.MapObjectives.Any() ? HandleMapObjectives(result) :
                 result.TeamObjectives.Any() ? HandleTeamObjectives(result) :
                 result.Structures.Any() ? HandleStructures(result) :
@@ -74,7 +97,7 @@ namespace HeroesReplay.Spectator
         {
             foreach (GameEvent ping in result.PingSources)
             {
-                yield return new StormPlayer(ping.player, ping.TimeSpan, GameCriteria.Ping);
+                yield return new StormPlayer(ping.player, result.Start, ping.TimeSpan, GameCriteria.Ping);
             }
         }
 
@@ -82,26 +105,7 @@ namespace HeroesReplay.Spectator
         {
             foreach (Unit unit in result.MapObjectives)
             {
-                yield return new StormPlayer(unit.PlayerKilledBy ?? unit.PlayerControlledBy, unit.TimeSpanDied.Value, GameCriteria.MapObjective);
-            }
-        }
-
-        private IEnumerable<StormPlayer> HandleDeaths(AnalyzerResult result)
-        {
-            foreach (Unit unit in result.PlayerDeaths.OrderByDeath())
-            {
-                Hero hero = unit.PlayerKilledBy.TryGetHero();
-
-                if (hero != null)
-                {
-                    Player player = hero.IsMelee ? unit.PlayerKilledBy : unit.PlayerControlledBy;
-
-                    yield return new StormPlayer(player, unit.TimeSpanDied.Value, GameCriteria.Death);
-                }
-                else
-                {
-                    yield return new StormPlayer(unit.PlayerControlledBy, unit.TimeSpanDied.Value, GameCriteria.Death);
-                }
+                yield return new StormPlayer(unit.PlayerKilledBy ?? unit.PlayerControlledBy, result.Start, unit.TimeSpanDied.Value, GameCriteria.MapObjective);
             }
         }
 
@@ -109,19 +113,15 @@ namespace HeroesReplay.Spectator
         {
             foreach (Unit unit in result.Structures)
             {
-                yield return new StormPlayer(unit.PlayerKilledBy, unit.TimeSpanDied.Value, GameCriteria.Structure);
+                yield return new StormPlayer(unit.PlayerKilledBy, result.Start, unit.TimeSpanDied.Value, GameCriteria.Structure);
             }
         }
 
         private IEnumerable<StormPlayer> HandleAlive(AnalyzerResult result)
         {
-            //IEnumerable<IGrouping<int, Player>> teams = result.PlayersAlive.Shuffle().GroupBy(p => p.Team).ToList();
-            //IEnumerable<Player> equalDistribution = teams.First().Interleave(teams.Last()).ToList();
-
-            // Interleave between team 1 and team 2 players 
             foreach (Player player in result.PlayersAlive)
             {
-                yield return new StormPlayer(player, result.Duration, GameCriteria.Alive);
+                yield return new StormPlayer(player, result.Start, result.Duration, GameCriteria.Alive);
             }
         }
 
@@ -129,7 +129,7 @@ namespace HeroesReplay.Spectator
         {
             foreach (TeamObjective objective in result.TeamObjectives)
             {
-                yield return new StormPlayer(objective.Player, objective.TimeSpan, GameCriteria.TeamObjective);
+                yield return new StormPlayer(objective.Player, result.Start, objective.TimeSpan, GameCriteria.TeamObjective);
             }
         }
 
@@ -143,7 +143,7 @@ namespace HeroesReplay.Spectator
         {
             foreach ((Player player, TimeSpan capture) in result.Camps)
             {
-                yield return new StormPlayer(player, capture, GameCriteria.CampObjective);
+                yield return new StormPlayer(player, result.Start, capture, GameCriteria.CampObjective);
             }
         }
     }
