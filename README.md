@@ -40,6 +40,7 @@ It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser)
 - [HotsApi](http://hotsapi.net/) an open Heroes of the Storm replay database where everyone can download replays.
 - [NSwag.MSBuild](https://github.com/RicoSuter/NSwag/wiki/NSwag.MSBuild) to generate the api client for accessing HotsApi.
 - [AWSSDK.S3](https://aws.amazon.com/sdk-for-net/) to download the `.StormReplay` files hosted in the HotsApi AWS S3 storage.
+- [Ali Obs Interface](https://github.com/Ahli/Galaxy-Observer-UI) a custom `.StormInterface` for Heroes of the Storm.
 
 ## Building the application
 
