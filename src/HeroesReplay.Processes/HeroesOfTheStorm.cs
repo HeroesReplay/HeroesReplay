@@ -8,10 +8,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media.Ocr;
+using Heroes.ReplayParser;
 using HeroesReplay.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
+using Point = System.Drawing.Point;
 
 namespace HeroesReplay.Processes
 {
@@ -25,26 +27,39 @@ namespace HeroesReplay.Processes
 
         }
 
-        public async Task SetVariablesAsync()
+        public async Task ConfigureClientAsync()
         {
-            string variablesPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm", "Variables.txt");
+            string[] files = Directory.GetFiles(Constants.USER_GAME_FOLDER, Constants.VARIABLES_WILDCARD, SearchOption.AllDirectories).Where(p => p.Contains("Variables", StringComparison.OrdinalIgnoreCase)).ToArray();
 
-            string[] lines = await File.ReadAllLinesAsync(variablesPath);
-            Dictionary<string, string> values = lines.ToDictionary(keySelector => keySelector.Split('=')[0], elementSelector => elementSelector.Split('=')[1]);
+            if (!File.Exists(Constants.USER_STORM_INTERFACE_PATH))
+            {
+                File.Copy(Path.Combine(Directory.GetCurrentDirectory(), "Assets", Constants.STORM_INTERFACE_NAME), destFileName: Constants.USER_STORM_INTERFACE_PATH, true);
 
-            values["observerinterface"] = Constants.STORM_INTERFACE_NAME;
-            values["replayinterface"] = Constants.STORM_INTERFACE_NAME;
-            values["displayreplaytime"] = "false";
-            values["camerafollow"] = "true";
-            values["camerasmartpan"] = "true";
+                Logger.LogInformation($"[INTERFACE SET][{Constants.USER_STORM_INTERFACE_PATH}]");
+            }
+            
 
-            //values["width"] = "1920";
-            //values["height"] = "1080";
-            //values["windowx"] = "0";
-            //values["windowy"] = "0";
-            //values["windowstate"] = "1";
+            foreach (string file in files)
+            {
+                string[] lines = await File.ReadAllLinesAsync(file);
+                Dictionary<string, string> values = lines.ToDictionary(keySelector => keySelector.Split('=')[0], elementSelector => elementSelector.Split('=')[1]);
 
-            await File.WriteAllLinesAsync(variablesPath, values.OrderBy(kv => kv.Key).Select(pair => $"{pair.Key}={pair.Value}"));
+                values["observerinterface"] = Constants.STORM_INTERFACE_NAME;
+                values["replayinterface"] = Constants.STORM_INTERFACE_NAME;
+                values["displayreplaytime"] = "false";
+                values["camerafollow"] = "true";
+                values["camerasmartpan"] = "true";
+
+                //values["width"] = "1920";
+                //values["height"] = "1080";
+                //values["windowx"] = "0";
+                //values["windowy"] = "0";
+                //values["windowstate"] = "1";
+
+                Logger.LogInformation($"[VARIABLES SET][{file}]");
+
+                await File.WriteAllLinesAsync(file, values.OrderBy(kv => kv.Key).Select(pair => $"{pair.Key}={pair.Value}"));
+            }
         }
 
         private Rectangle TimerRegion => new Rectangle(new Point(Dimensions.Value.Width / 2 - 50, 10), new Size(100, 50));
@@ -86,6 +101,9 @@ namespace HeroesReplay.Processes
             return null;
         }
 
+        public async Task<bool> TryGetMatchAwardsAsync(IEnumerable<MatchAwardType> awards) => await GetWindowContainsAsync(CaptureMethod.BitBlt, awards.ToText().ToArray());
+
+
         private TimeSpan? TryParseTimeSpan(OcrResult ocrResult)
         {
             try
@@ -118,10 +136,10 @@ namespace HeroesReplay.Processes
         private static char[] SanitizeOcrResult(OcrResult ocrResult)
         {
             return ocrResult.Lines[0].Text
-                .Replace('O', '0')
+                .Replace("O", "0", StringComparison.OrdinalIgnoreCase)
+                .Replace("S", "5", StringComparison.OrdinalIgnoreCase)
                 .Replace("'", string.Empty, StringComparison.OrdinalIgnoreCase)
                 .Replace("\"", string.Empty, StringComparison.OrdinalIgnoreCase)
-                .Replace('o', '0')
                 .Where(c => char.IsDigit(c) || c.Equals(':'))
                 .ToArray();
         }
@@ -162,7 +180,7 @@ namespace HeroesReplay.Processes
         }
 
         private FileInfo GetSwitcherPath()
-        {   
+        {
             return Policy
                 .Handle<Exception>()
                 .WaitAndRetry(retryCount: 5, retry => TimeSpan.FromSeconds(10))

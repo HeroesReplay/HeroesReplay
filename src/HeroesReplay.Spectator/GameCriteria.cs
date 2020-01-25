@@ -12,6 +12,7 @@
         CampObjective, // Standard Camps
         MapObjective, // Tributes, Gems, Coins, Alters
         Structure,
+        PreviousAliveKiller,
         Alive,
         Ping,
         Any

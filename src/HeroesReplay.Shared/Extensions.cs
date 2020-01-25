@@ -2,13 +2,14 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Heroes.ReplayParser;
 
 namespace HeroesReplay.Shared
 {
     public static class Extensions
     {
         public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> items) => items.OrderBy(i => Guid.NewGuid());
-        
+
 
         /// <summary>
         /// The in-game timer at the top has a NEGATIVE offset of 610.
@@ -36,6 +37,14 @@ namespace HeroesReplay.Shared
 
             return new TimeSpan(days: 0, hours: 0, minutes: int.Parse(segments[0]), seconds: int.Parse(segments[1]));
         }
+
+        public static List<string> MatchAwards(this Player p) => p.ScoreResult.MatchAwards.SelectMany(key => Constants.MatchAwards[key]).ToList();
+
+        public static List<MatchAwardType> GetMatchAwards(this Replay replay) => replay.Players.SelectMany(p => p.ScoreResult.MatchAwards).Distinct().ToList();
+
+        public static IEnumerable<string> GetText(this MatchAwardType matchAwardType) => Constants.MatchAwards[matchAwardType];
+
+        public static IEnumerable<string> ToText(this IEnumerable<MatchAwardType> matchAwardTypes) => matchAwardTypes.SelectMany(mat => mat.GetText()).Distinct();
 
         public static IEnumerable<TSource> Interleave<TSource>(this IEnumerable<TSource> source1, IEnumerable<TSource> source2)
         {

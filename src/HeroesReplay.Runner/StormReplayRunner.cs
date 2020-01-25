@@ -48,7 +48,8 @@ namespace HeroesReplay.Runner
             try
             {
                 heroesOfTheStorm.KillGame();
-                await heroesOfTheStorm.SetVariablesAsync();
+
+                await heroesOfTheStorm.ConfigureClientAsync(); 
 
                 var started = await battleNet.WaitForBattleNetAsync();
 

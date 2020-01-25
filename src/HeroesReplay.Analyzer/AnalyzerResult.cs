@@ -13,8 +13,12 @@ namespace HeroesReplay.Analyzer
         public List<Player> PlayersAlive { get; }
         public List<(int Team, TimeSpan TalentTime)> Talents { get; }
         public List<TeamObjective> TeamObjectives { get; }
+
+        /// <summary>
+        /// Ping events are only from the team which the replay file originates from
+        /// </summary>
         public List<GameEvent> PingSources { get; }
-        public List<Player> Killers { get;  }
+        public List<Player> PreviousKillers { get;  }
         public List<(Player, TimeSpan)> Camps { get; }
         public TimeSpan Start { get; }
         public TimeSpan End { get; }
@@ -41,7 +45,7 @@ namespace HeroesReplay.Analyzer
             Duration = duration;
 
             StormReplay = stormReplay ?? throw new ArgumentNullException(nameof(stormReplay));
-            Killers = killers ?? throw new ArgumentNullException(nameof(killers));
+            PreviousKillers = killers ?? throw new ArgumentNullException(nameof(killers));
             Camps = camps ?? throw new ArgumentNullException(nameof(camps));
             PingSources = pingSources ?? throw new ArgumentNullException(nameof(pingSources));
             PlayerDeaths = playerDeaths ?? throw new ArgumentNullException(nameof(playerDeaths));

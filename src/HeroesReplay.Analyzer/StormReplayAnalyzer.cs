@@ -21,7 +21,7 @@ namespace HeroesReplay.Analyzer
             List<(int Team, TimeSpan TalentTime)> talents = CalculateTalents(start, end, replay);
             List<TeamObjective> teamObjectives = CalculateTeamObjectives(start, end, replay);
             List<GameEvent> pingSources = CalculatePingSources(stormReplay, start, end, alive);
-            List<Player> killers = CalculateKillers(playerDeaths);
+            List<Player> previousKillers = CalculateKillers(CalculatePlayerDeaths(CalculateDeadUnits(start - (start - end), start, replay))).Where(p => alive.Contains(p)).ToList();
             List<(Player, TimeSpan)> camps = CalculateCampCaptures(stormReplay, start, end);
 
             return new AnalyzerResult(
@@ -36,10 +36,49 @@ namespace HeroesReplay.Analyzer
                 pingSources: pingSources,
                 talents: talents,
                 teamObjectives: teamObjectives,
-                killers: killers,
+                killers: previousKillers,
                 camps: camps
             );
         }
+
+        private static List<Player> CalculateKillers(List<Unit> playerDeaths) => playerDeaths.Select(unit => unit.PlayerKilledBy).Distinct().ToList();
+
+        private static List<Unit> CalculateStructures(List<Unit> dead) => dead.Where(unit => unit.IsStructure()).ToList();
+
+        private static List<Unit> CalculateMapObjectives(List<Unit> dead) => dead.Where(unit => unit.IsMapObjective()).ToList();
+
+        private static List<Unit> CalculatePlayerDeaths(List<Unit> dead) => dead.Where(unit => unit.IsHero()).ToList();
+
+        private static List<Player> CalculateAlivePlayers(TimeSpan start, TimeSpan end, Replay replay) =>
+            replay.Players.Where(player => player.HeroUnits.Any(unit => unit.TimeSpanBorn <= start && unit.TimeSpanDied > end)).ToList();
+
+        private static List<Unit> CalculateDeadUnits(TimeSpan start, TimeSpan end, Replay replay) =>
+            replay.Units
+                .Where(unit => unit.IsDeadWithin(start, end) && unit.IsPlayerReferenced() && (unit.IsMapObjective() || unit.IsStructure() || unit.IsCamp() || unit.IsHero()))
+                .OrderBy(unit => unit.TimeSpanDied)
+                .ToList();
+
+        /// <summary>
+        /// Ping events are only from the team which the replay file originates from
+        /// </summary>
+        private static List<GameEvent> CalculatePingSources(StormReplay stormReplay, TimeSpan start, TimeSpan end, List<Player> alive) =>
+            stormReplay.Replay.GameEvents
+                .Where(e => e.eventType == GameEventType.CTriggerPingEvent && e.TimeSpan.IsWithin(start, end) && alive.Contains(e.player))
+                .ToList();
+
+        private static List<TeamObjective> CalculateTeamObjectives(TimeSpan start, TimeSpan end, Replay replay) =>
+            replay.TeamObjectives
+                .SelectMany(teamObjectives => teamObjectives)
+                .Where(teamObjective => teamObjective.Player != null && teamObjective.TimeSpan.IsWithin(start, end))
+                .OrderBy(objective => objective.TimeSpan)
+                .ToList();
+
+        private static List<(int Team, TimeSpan TalentTime)> CalculateTalents(TimeSpan start, TimeSpan end, Replay replay) =>
+            replay.TeamLevels
+                .SelectMany(teamLevels => teamLevels)
+                .Where(teamLevel => Constants.Heroes.TALENT_LEVELS.Contains(teamLevel.Key))
+                .Where(teamLevel => teamLevel.Value.IsWithin(start, end))
+                .Select(x => (Team: x.Key, TalentTime: x.Value)).OrderBy(team => team.TalentTime).ToList();
 
         private static List<(Player, TimeSpan)> CalculateCampCaptures(StormReplay stormReplay, TimeSpan start, TimeSpan end)
         {
@@ -66,41 +105,5 @@ namespace HeroesReplay.Analyzer
 
             return captures;
         }
-
-        private static List<Player> CalculateKillers(List<Unit> playerDeaths) => playerDeaths.Select(unit => unit.PlayerKilledBy).Distinct().ToList();
-
-        private static List<Unit> CalculateStructures(List<Unit> dead) => dead.Where(unit => unit.IsStructure()).ToList();
-
-        private static List<Unit> CalculateMapObjectives(List<Unit> dead) => dead.Where(unit => unit.IsMapObjective()).ToList();
-
-        private static List<Unit> CalculatePlayerDeaths(List<Unit> dead) => dead.Where(unit => unit.IsHero()).ToList();
-
-        private static List<Player> CalculateAlivePlayers(TimeSpan start, TimeSpan end, Replay replay) => 
-            replay.Players.Where(player => player.HeroUnits.Any(unit => unit.TimeSpanBorn <= start && unit.TimeSpanDied > end)).ToList();
-
-        private static List<Unit> CalculateDeadUnits(TimeSpan start, TimeSpan end, Replay replay) => 
-            replay.Units
-                .Where(unit => unit.IsDeadWithin(start, end) && unit.IsPlayerReferenced() && (unit.IsMapObjective() || unit.IsStructure() || unit.IsCamp() || unit.IsHero()))
-                .OrderBy(unit => unit.TimeSpanDied)
-                .ToList();
-
-        private static List<GameEvent> CalculatePingSources(StormReplay stormReplay, TimeSpan start, TimeSpan end, List<Player> alive) =>
-            stormReplay.Replay.GameEvents
-                .Where(e => e.eventType == GameEventType.CTriggerPingEvent && e.TimeSpan.IsWithin(start, end) && alive.Contains(e.player))
-                .ToList();
-
-        private static List<TeamObjective> CalculateTeamObjectives(TimeSpan start, TimeSpan end, Replay replay) => 
-            replay.TeamObjectives
-                .SelectMany(teamObjectives => teamObjectives)
-                .Where(teamObjective => teamObjective.Player != null && teamObjective.TimeSpan.IsWithin(start, end))
-                .OrderBy(objective => objective.TimeSpan)
-                .ToList();
-
-        private static List<(int Team, TimeSpan TalentTime)> CalculateTalents(TimeSpan start, TimeSpan end, Replay replay) =>
-            replay.TeamLevels
-                .SelectMany(teamLevels => teamLevels)
-                .Where(teamLevel => Constants.Heroes.TALENT_LEVELS.Contains(teamLevel.Key))
-                .Where(teamLevel => teamLevel.Value.IsWithin(start, end))
-                .Select(x => (Team: x.Key, TalentTime: x.Value)).OrderBy(team => team.TalentTime).ToList();
     }
 }

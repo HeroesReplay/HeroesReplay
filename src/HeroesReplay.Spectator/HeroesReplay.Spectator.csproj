@@ -29,4 +29,10 @@
       <ProjectReference Include="..\HeroesReplay.Analyzer\HeroesReplay.Analyzer.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <None Update="Assets\AhliObs 0.66.StormInterface">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
 </Project>

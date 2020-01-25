@@ -16,7 +16,7 @@ namespace HeroesReplay.Spectator
             _ => throw new Exception("Unhandled kill count")
         };
 
-        public static List<StormPlayer> Or(this List<StormPlayer> selection, List<StormPlayer> next)
+        public static IEnumerable<StormPlayer> Or(this IEnumerable<StormPlayer> selection, IEnumerable<StormPlayer> next)
         {
             return selection.Any() ? selection : next;
         }

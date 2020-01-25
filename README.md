@@ -18,14 +18,50 @@ It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser)
 
 ## Features
 
-- Loads replay files and attemps to launch and spectate each replay.
-- Focuses on heroes that will die or kill an enemy hero
-- Focuses on heroes doing team or map objectives (gem and doubloon collecting for example)
-- Focuses on heroes destroying structures
-- Selects the talent tree panel when a team has just recieved new talents
-- Selects the objective panel when an objective has been won
-- Selects the Kill Death Assists panel when a hero dies
-- Cycles through all panels throughout the game
+### Command line
+
+An easy to use cli with built in help and information on how to use `heroesreplay.exe`.
+
+![cli](https://github.com/HeroesReplay/HeroesReplay/raw/master/docs/terminal-one.png)
+
+### Loading
+
+- Load an individual replay file or provide a directory to many replay files.
+- Download replay files from the HotsApi database by providing AWS credentials (S3 downloads are paid per request)
+- Launches the game from Battlenet and waits for the map loading screen to determine when the game load was successful.
+
+### State
+
+- Ensures the game is launched and validates the required game version matches the launched process version before moving onto the next step
+- Waits for the loading screen before determining the next step
+- Uses native Windows calls to get a screenshot of the game (timer & end screen) to determine current state: start, running, paused, end.
+- Detects the end of the game by checking for the MVP and awards screen and matching any awards given to players from the replay file exist on the end screen.
+
+### Spectating
+
+There is currently a priority order to who is focused by the spectator, the list below is the current order of priority.
+
+1. Focuses on heroes that perform penta, quad, triple & multi kills.
+2. Focuses on heroes that will die or kill an enemy hero.
+3. Focuses on heroes doing team or map objectives. (gems and doubloons for example)
+4. Focuses on heroes doing camps and bosses.
+5. Focuses on heroes destroying structures.
+6. Focuses on heroes that have recently killed other players
+
+### Information Panels
+
+- Selects the talent tree panel when a team has received new talents.
+- Selects the objective panel when an objective has been taken.
+- Selects the KDA panel when a hero dies.
+- Selects all panels by cycling from left to right panels throughout the game:
+  - Talents  
+  - DeathDamageRole
+  - ActionsPerMinute
+  - Experience
+  - TimeDeadDeathsSelfSustain
+  - CarriedObjectives
+  - KillsDeathsAssists
+  - CrowdControlEnemyHeroes
 
 ## Dependencies
 

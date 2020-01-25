@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Heroes.ReplayParser;
 using static System.Environment;
 
 namespace HeroesReplay.Shared
@@ -11,9 +12,59 @@ namespace HeroesReplay.Shared
     {
         public const string STORM_INTERFACE_NAME = "AhliObs 0.66.StormInterface";
         public const string STORM_REPLAY_EXTENSION = ".StormReplay";
+
         public const string STORM_REPLAY_WILDCARD = "*.StormReplay";
+        public const string VARIABLES_WILDCARD = "*Variables.txt";
+
+        public static readonly string USER_GAME_FOLDER = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm");
+        public static readonly string USER_REPLAYS_PATH = Path.Combine(USER_GAME_FOLDER, "Accounts");
+        public static readonly string USER_VARIABLES_PATH = Path.Combine(USER_GAME_FOLDER, "Variables.txt");
+        public static readonly string USER_STORM_INTERFACE_PATH = Path.Combine(USER_GAME_FOLDER, "Interfaces", STORM_INTERFACE_NAME);
+
 
         public const int ZEMILL_BASE_LINE_HOTS_API_REPLAY_ID = 23940740;
+
+        public static Dictionary<MatchAwardType, string[]> MatchAwards = new Dictionary<MatchAwardType, string[]>()
+        {
+            {MatchAwardType.ClutchHealer, new[] {"Clutch Healer"}},
+            {MatchAwardType.HatTrick, new[] {"Hat Trick"}},
+            {MatchAwardType.HighestKillStreak, new[] {"Dominator"}},
+            {MatchAwardType.MostAltarDamage, new[] {"Cannoneer"}},
+            {MatchAwardType.MostCoinsPaid, new[] {"Moneybags"}},
+            {MatchAwardType.MostCurseDamageDone, new[] {"Master of the Curse"}},
+            {MatchAwardType.MostDamageDoneToZerg, new[] {"Zerg Crusher"}},
+            {MatchAwardType.MostDamageTaken, new[] {"Bulwark"}},
+            {MatchAwardType.MostDamageToMinions, new[] {"Guardian Slayer"}},
+            {MatchAwardType.MostDaredevilEscapes, new[] {"Daredevil"}},
+            {MatchAwardType.MostDragonShrinesCaptured, new[] {"Shriner"}},
+            {MatchAwardType.MostEscapes, new[] {"Escape Artist"}},
+            {MatchAwardType.MostGemsTurnedIn, new[] {"Jeweler"}},
+            {MatchAwardType.MostHealing, new[] {"Main Healer"}},
+            {MatchAwardType.MostHeroDamageDone, new[] {"Painbringer"}},
+            {MatchAwardType.MostImmortalDamage, new[] {"Immortal Slayer"}},
+            {MatchAwardType.MostInterruptedCageUnlocks, new[] {"Loyal Defender"}},
+            {MatchAwardType.MostKills, new[] {"Finisher"}},
+            {MatchAwardType.MostMercCampsCaptured, new[] {"Headhunter"}},
+            {MatchAwardType.MostNukeDamageDone, new[] {"Da Bomb"}},
+            {MatchAwardType.MostProtection, new[] {"Protector"}},
+            {MatchAwardType.MostRoots, new[] {"Trapper"}},
+            {MatchAwardType.MostSeedsCollected, new[] {"Seed Collector"}},
+            {MatchAwardType.MostSiegeDamageDone, new[] {"Siege Master"}},
+            {MatchAwardType.MostSilences, new[] {"Silencer"}},
+            {MatchAwardType.MostSkullsCollected, new[] {"Skull Collector"}},
+            {MatchAwardType.MostStuns, new[] {"Stunner"}},
+            {MatchAwardType.MostTeamfightDamageTaken, new[] {"Guardian"}},
+            {MatchAwardType.MostTeamfightHealingDone, new[] {"Combat Medic"}},
+            {MatchAwardType.MostTeamfightHeroDamageDone, new[] {"Scrapper"}},
+            {MatchAwardType.MostTimeInTemple, new[] {"Temple Master"}},
+            {MatchAwardType.MostTimeOnPoint, new[] {"Point Guard"}},
+            {MatchAwardType.MostTimePushing, new[] {"Pusher"}},
+            {MatchAwardType.MostVengeancesPerformed, new[] {"Avenger"}},
+            {MatchAwardType.MostXPContribution, new[] {"Experienced"}},
+            {MatchAwardType.MVP, new[] {"MVP"}},
+            {MatchAwardType.ZeroDeaths, new[] {"Sole Survivor"}},
+            {MatchAwardType.ZeroOutnumberedDeaths, new[] {"Team Player"}},
+        };
 
         public static class Heroes
         {
@@ -112,9 +163,6 @@ namespace HeroesReplay.Shared
             public static Hero Zarya = new Hero("Zarya", HeroType.Ranged);
             public static Hero Zeratul = new Hero("Zeratul", HeroType.Melee);
             public static Hero Zuljin = new Hero("Zuljin", HeroType.Ranged);
-
-            public static readonly string DOCUMENTS_HEROES_REPLAYS_PATH = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm", "Accounts");
-            public static readonly string DOCUMENTS_HEROES_VARIABLES_PATH = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm", "Variables.txt");
 
             public const string HEROES_PROCESS_NAME = "HeroesOfTheStorm_x64";
             public const string HEROES_SWITCHER_PROCESS = "HeroesSwitcher_x64.exe";

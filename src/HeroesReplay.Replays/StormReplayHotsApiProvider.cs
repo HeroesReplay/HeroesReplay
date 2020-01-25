@@ -59,14 +59,17 @@ namespace HeroesReplay.Replays
 
                             string stormReplay = Path.Combine(Path.GetTempPath(), request.Key);
 
-                            using (GetObjectResponse response = await s3Client.GetObjectAsync(request, provider.Token))
+                            if (!File.Exists(stormReplay))
                             {
-                                await using (MemoryStream memoryStream = new MemoryStream()) 
+                                using (GetObjectResponse response = await s3Client.GetObjectAsync(request, provider.Token))
                                 {
-                                    await response.ResponseStream.CopyToAsync(memoryStream);
-                                    logger.LogInformation($"[HOTSAPI][SAVING][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{stormReplay}]");
-                                    await File.WriteAllBytesAsync(stormReplay, memoryStream.ToArray());
-                                    logger.LogInformation($"[HOTSAPI][SAVED][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{stormReplay}]");
+                                    await using (MemoryStream memoryStream = new MemoryStream())
+                                    {
+                                        await response.ResponseStream.CopyToAsync(memoryStream);
+                                        logger.LogInformation($"[HOTSAPI][SAVING][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{stormReplay}]");
+                                        await File.WriteAllBytesAsync(stormReplay, memoryStream.ToArray());
+                                        logger.LogInformation($"[HOTSAPI][SAVED][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{stormReplay}]");
+                                    }
                                 }
                             }
 
@@ -118,7 +121,7 @@ namespace HeroesReplay.Replays
                     {
                         // Why?
                     }
-                    
+
 
                     logger.LogInformation($"[REPLAY][ERROR][Could not find suitable replay]");
                 }

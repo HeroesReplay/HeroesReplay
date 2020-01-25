@@ -21,7 +21,7 @@ namespace HeroesReplay.Spectator
         public GamePanel GamePanel
         {
             get => gamePanel;
-            set
+            private set
             {
                 if (gamePanel != value) PanelChange?.Invoke(this, new GameEventArgs<GamePanel>(StormReplay, value, GameTimer.Duration(), value.ToString()));
                 gamePanel = value;
@@ -31,7 +31,7 @@ namespace HeroesReplay.Spectator
         public StormPlayer StormPlayer
         {
             get => stormPlayer;
-            set
+            private set
             {
                 if (value != null && value.Player != stormPlayer?.Player)
                 {
@@ -45,7 +45,7 @@ namespace HeroesReplay.Spectator
         public GameState GameState
         {
             get => gameState;
-            set
+            private set
             {
                 if (gameState != value)
                 {
@@ -56,44 +56,15 @@ namespace HeroesReplay.Spectator
             }
         }
 
+        public TimeSpan GameTimer { get; private set; }
+        public StormReplay StormReplay { get; private set; }
+
         private CancellationToken Token => tokenProvider.Token;
 
         private AnalyerResultBuilder Analyze => new AnalyerResultBuilder().WithSpectator(this).WithAnalyzer(analyzer);
-
         private GameState gameState;
         private GamePanel gamePanel;
-        private TimeSpan gameTimer;
         private StormPlayer stormPlayer;
-
-        public TimeSpan GameTimer
-        {
-            get => gameTimer;
-            set
-            {
-                if (value == TimeSpan.Zero)
-                {
-                    gameTimer = value;
-                    GameState = GameState.StartOfGame;
-                }
-                else if (value >= StormReplay.Replay.ReplayLength)
-                {
-                    gameTimer = value;
-                    GameState = GameState.EndOfGame;
-                }
-                else if (value > gameTimer)
-                {
-                    gameTimer = value;
-                    GameState = GameState.Running;
-                }
-                else if (value <= gameTimer)
-                {
-                    gameTimer = value;
-                    GameState = GameState.Paused;
-                }
-            }
-        }
-
-        public StormReplay StormReplay { get; set; }
 
         private readonly ILogger<StormReplaySpectator> logger;
         private readonly StormReplayHeroSelector selector;
@@ -118,53 +89,54 @@ namespace HeroesReplay.Spectator
             await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));
         }
 
-        public void Dispose()
-        {
-            HeroChange = null;
-            PanelChange = null;
-            StateChange = null;
-        }
-
         private async Task FocusLoopAsync()
         {
-            while (GameState != GameState.EndOfGame && !Token.IsCancellationRequested)
+            while (GameState != GameState.EndOfGame)
             {
-                while ((GameState == GameState.Running || Debugger.IsAttached) && !Token.IsCancellationRequested)
+                Token.ThrowIfCancellationRequested();
+
+                if (GameState != GameState.Running) continue;
+
+                try
                 {
-                    try
+                    IEnumerable<StormPlayer> selection = GetPlayersForFocus();
+
+                    if (selection.Any(p => p.Criteria == GameCriteria.Alive || p.Criteria == GameCriteria.PreviousAliveKiller))
                     {
-                        IEnumerable<StormPlayer> selection =
-                            selector.Select(Analyze.Check(Constants.Heroes.MAX_PENTA_KILL_STREAK_POTENTIAL), GameCriteria.PentaKill).Or(
-                                selector.Select(Analyze.Check(Constants.Heroes.MAX_QUAD_KILL_STREAK_POTENTIAL), GameCriteria.QuadKill).Or(
-                                    selector.Select(Analyze.Check(Constants.Heroes.MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameCriteria.TripleKill).Or(
-                                        selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.MultiKill).Or(
-                                            selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.Kill).Or(
-                                                selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.MapObjective).Or(
-                                                    selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.CampObjective).Or(
-                                                        selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.Structure).Or(
-                                                            selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.Alive)))))))));
-
-
-                        if (selection.Any(p => p.Criteria == GameCriteria.Alive))
-                        {
-                            StormPlayer player = selection.Shuffle().Take(1).First();
-                            if (StormPlayer?.Criteria == GameCriteria.Alive && StormPlayer.Player.Team == player.Player.Team) continue;
-                            await FocusPlayerAsync(player, TimeSpan.FromSeconds(5));
-                        }
-                        else
-                        {
-                            foreach (StormPlayer player in selection)
-                            {
-                                await FocusPlayerAsync(player, player.When - GameTimer);
-                            }
-                        }
+                        StormPlayer player = selection.Shuffle().Take(1).First();
+                        if (StormPlayer?.Criteria == GameCriteria.Alive && StormPlayer.Player.Team == player.Player.Team) continue;
+                        await FocusPlayerAsync(player, TimeSpan.FromSeconds(5));
                     }
-                    catch (Exception e)
+                    else
                     {
-                        logger.LogError(e, e.Message);
+                        foreach (StormPlayer player in selection)
+                        {
+                            await FocusPlayerAsync(player, (player.When - GameTimer).Add(TimeSpan.FromSeconds(2)));
+                        }
                     }
                 }
+                catch (Exception e)
+                {
+                    logger.LogError(e, e.Message);
+                }
             }
+        }
+
+        private List<StormPlayer> GetPlayersForFocus()
+        {
+            IEnumerable<StormPlayer> pentaKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_PENTA_KILL_STREAK_POTENTIAL), GameCriteria.PentaKill);
+            IEnumerable<StormPlayer> quadKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_QUAD_KILL_STREAK_POTENTIAL), GameCriteria.QuadKill);
+            IEnumerable<StormPlayer> tripleKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameCriteria.TripleKill);
+            IEnumerable<StormPlayer> multiKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.MultiKill);
+            IEnumerable<StormPlayer> singleKillers = selector.Select(Analyze.Check(Constants.Heroes.KILL_STREAK_TIMER), GameCriteria.Kill);
+            IEnumerable<StormPlayer> playerDeaths = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.Death);
+            IEnumerable<StormPlayer> mapObjectices = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.MapObjective);
+            IEnumerable<StormPlayer> campObjectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.CampObjective);
+            IEnumerable<StormPlayer> structures = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.Structure);
+            IEnumerable<StormPlayer> previousAliveKillers = selector.Select(Analyze.Check(Constants.Heroes.KILL_STREAK_TIMER), GameCriteria.PreviousAliveKiller);
+            IEnumerable<StormPlayer> alivePlayers = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.Alive);
+
+            return pentaKillers.Or(quadKillers).Or(tripleKillers).Or(multiKillers).Or(singleKillers).Or(playerDeaths).Or(mapObjectices).Or(campObjectives).Or(structures).Or(previousAliveKillers).Or(alivePlayers).ToList();
         }
 
         private async Task FocusPlayerAsync(StormPlayer stormPlayer, TimeSpan duration)
@@ -184,36 +156,83 @@ namespace HeroesReplay.Spectator
 
         private async Task PanelLoopAsync()
         {
-            while (GameState != GameState.EndOfGame && !Token.IsCancellationRequested)
+            while (GameState != GameState.EndOfGame)
             {
-                while (GameState == GameState.Running && !Token.IsCancellationRequested)
+                Token.ThrowIfCancellationRequested();
+
+                if (GameState != GameState.Running) continue;
+
+                try
                 {
-                    try
-                    {
-                        AnalyzerResult result = Analyze.Check(TimeSpan.FromSeconds(5));
+                    AnalyzerResult result = Analyze.Check(TimeSpan.FromSeconds(5));
 
-                        if (result.Talents.Any()) GamePanel = GamePanel.Talents;
-                        else if (result.TeamObjectives.Any()) GamePanel = GamePanel.CarriedObjectives;
-                        else if (result.MapObjectives.Any()) GamePanel = GamePanel.CarriedObjectives;
-                        else if (result.PlayerDeaths.Any()) GamePanel = GamePanel.KillsDeathsAssists;
-                        else if (result.PlayersAlive.Any())
-                        {
-                            GamePanel = panels.IndexOf(GamePanel) + 1 >= panels.Count ? panels.First() : panels[panels.IndexOf(GamePanel) + 1];
-                        }
-                        else
-                        {
-                            GamePanel = GamePanel.KillsDeathsAssists;
-                        }
-
-                        await result.WaitCheckTime(Token);
-                    }
-                    catch (Exception e)
+                    if (result.Talents.Any()) GamePanel = GamePanel.Talents;
+                    else if (result.TeamObjectives.Any()) GamePanel = GamePanel.CarriedObjectives;
+                    else if (result.MapObjectives.Any()) GamePanel = GamePanel.CarriedObjectives;
+                    else if (result.PlayerDeaths.Any()) GamePanel = GamePanel.KillsDeathsAssists;
+                    else if (result.PlayersAlive.Any())
                     {
-                        logger.LogError(e, e.Message);
+                        GamePanel = panels.IndexOf(GamePanel) + 1 >= panels.Count ? panels.First() : panels[panels.IndexOf(GamePanel) + 1];
                     }
+                    else
+                    {
+                        GamePanel = GamePanel.KillsDeathsAssists;
+                    }
+
+                    await result.WaitCheckTime(Token);
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, e.Message);
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(5), Token);
+            }
+        }
+
+        private async Task StateLoopAsync()
+        {
+            while (GameState != GameState.EndOfGame)
+            {
+                Token.ThrowIfCancellationRequested();
+
+                try
+                {
+                    TimeSpan? elapsed = await heroesOfTheStorm.TryGetTimerAsync();
+
+                    if (elapsed.HasValue)
+                    {
+                        TimeSpan next = elapsed.Value.RemoveNegativeOffset();
+
+                        if (next == TimeSpan.Zero) GameState = GameState.StartOfGame;
+                        else if (next > GameTimer) GameState = GameState.Running;
+                        else if (next <= GameTimer) GameState = GameState.Paused;
+
+                        GameTimer = next;
+                    }
+                    else
+                    {
+                        if (GameTimer.Add(TimeSpan.FromMinutes(1)) >= StormReplay.Replay.ReplayLength && await heroesOfTheStorm.TryGetMatchAwardsAsync(StormReplay.Replay.GetMatchAwards()))
+                        {
+                            GameState = GameState.EndOfGame;
+                        }
+                        else if (!heroesOfTheStorm.IsRunning)
+                        {
+                            GameState = GameState.EndOfGame;
+                        }
+                    }
+
+                    if (StormPlayer != null)
+                    {
+                        logger.LogInformation($"[{StormPlayer.Player.Character}][{StormPlayer.Criteria}][{StormPlayer.When}][{GameTimer}][{GameTimer.AddNegativeOffset()}]");
+                    }
+
+                    await Task.Delay(TimeSpan.FromSeconds(1), Token);
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, e.Message);
+                }
             }
         }
 
@@ -268,33 +287,11 @@ namespace HeroesReplay.Spectator
             }
         }
 
-        private async Task StateLoopAsync()
+        public void Dispose()
         {
-            while (GameState != GameState.EndOfGame && !Token.IsCancellationRequested)
-            {
-                try
-                {
-                    TimeSpan? elapsed = await heroesOfTheStorm.TryGetTimerAsync();
-
-                    if (elapsed.HasValue)
-                    {
-                        GameTimer = elapsed.Value.RemoveNegativeOffset();
-                    }
-
-                    if (StormPlayer != null)
-                    {
-                        logger.LogInformation($"[{StormPlayer.Player.Character}][{StormPlayer.Criteria}][{StormPlayer.When}][{GameTimer}][{GameTimer.AddNegativeOffset()}]");
-                    }
-
-                    // PrintDebugData();
-
-                    await Task.Delay(TimeSpan.FromSeconds(0.9), Token);
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, e.Message);
-                }
-            }
+            HeroChange = null;
+            PanelChange = null;
+            StateChange = null;
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -127,20 +128,21 @@ namespace HeroesReplay.Processes
 
         // DirectX/OpenGL render frame (but its not the latest painted frame either)
         // https://docs.microsoft.com/en-us/windows/win32/gdi/capturing-an-image
-        protected Bitmap? TryBitBlt()
+        protected Bitmap? TryBitBlt(Rectangle? region = null)
         {
             IntPtr bitmap = IntPtr.Zero;
             IntPtr oldBitmap = IntPtr.Zero;
+            Rectangle? dimensions = region ?? Dimensions;
 
             try
             {
-                if (Dimensions != null)
+                if (dimensions != null)
                 {
-                    bitmap = NativeMethods.CreateCompatibleBitmap(DeviceContext, Dimensions.Value.Width, Dimensions.Value.Height);
+                    bitmap = NativeMethods.CreateCompatibleBitmap(DeviceContext, dimensions.Value.Width, dimensions.Value.Height);
                     oldBitmap = NativeMethods.SelectObject(CompatibleDeviceContext, bitmap);
 
                     // To speed this up, don't copy the entire width/height of the application
-                    if (NativeMethods.BitBlt(CompatibleDeviceContext, 0, 0, Dimensions.Value.Width, Dimensions.Value.Height, DeviceContext, Dimensions.Value.Left, Dimensions.Value.Top, Constants.SRCCOPY))
+                    if (NativeMethods.BitBlt(CompatibleDeviceContext, 0, 0, dimensions.Value.Width, dimensions.Value.Height, DeviceContext, dimensions.Value.Left, dimensions.Value.Top, Constants.SRCCOPY))
                     {
                         return Image.FromHbitmap(bitmap);
                     }
@@ -158,45 +160,7 @@ namespace HeroesReplay.Processes
             }
             finally
             {
-                NativeMethods.SelectObject(CompatibleDeviceContext, oldBitmap);
-                NativeMethods.DeleteObject(bitmap);
-            }
-
-            return null;
-        }
-
-
-        protected Bitmap? TryBitBlt(Rectangle region)
-        {
-            IntPtr bitmap = IntPtr.Zero;
-            IntPtr oldBitmap = IntPtr.Zero;
-
-            try
-            {
-                if (Dimensions != null)
-                {
-                    bitmap = NativeMethods.CreateCompatibleBitmap(DeviceContext, region.Width, region.Height);
-                    oldBitmap = NativeMethods.SelectObject(CompatibleDeviceContext, bitmap);
-
-                    if (NativeMethods.BitBlt(CompatibleDeviceContext, 0, 0, region.Width, region.Height, DeviceContext, region.X, region.Y, Constants.SRCCOPY))
-                    {
-                        return Image.FromHbitmap(bitmap);
-                    }
-                    else
-                    {
-                        NativeMethods.DeleteDC(compatibleDeviceContext);
-                        NativeMethods.ReleaseDC(WindowHandle, deviceContext);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Logger.LogError(e, $"Failed to capture bitmap of {WrappedProcess.ProcessName}");
-                throw;
-            }
-            finally
-            {
-                NativeMethods.SelectObject(CompatibleDeviceContext, oldBitmap);
+                NativeMethods.SelectObject(compatibleDeviceContext, oldBitmap);
                 NativeMethods.DeleteObject(bitmap);
             }
 
@@ -213,7 +177,7 @@ namespace HeroesReplay.Processes
 
                 using (EncoderParameters encoderParameters = new EncoderParameters(1))
                 {
-                    EncoderParameter encoderParameter = new EncoderParameter(Encoder.Quality, 50L);
+                    EncoderParameter encoderParameter = new EncoderParameter(Encoder.Quality, 0L);
                     encoderParameters.Param[0] = encoderParameter;
                     bitmap.Save(stream.AsStream(), imageCodecInfo, encoderParameters);
                     BitmapDecoder decoder = await BitmapDecoder.CreateAsync(BitmapDecoder.BmpDecoderId, stream);
@@ -222,7 +186,7 @@ namespace HeroesReplay.Processes
             }
         }
 
-        protected async Task<bool> GetWindowContainsAsync(CaptureMethod captureMethod, params string[] lines)
+        protected async Task<bool> GetWindowContainsAsync(CaptureMethod captureMethod, params string[] any)
         {
             Bitmap? bitmap = captureMethod switch
             {
@@ -239,11 +203,21 @@ namespace HeroesReplay.Processes
                 {
                     OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
 
-                    bool found = result != null && lines.All(line => result.Lines.Any(ocrLine => ocrLine.Text.Equals(line, StringComparison.OrdinalIgnoreCase)));
+                    var found = any.Where(line => result.Text.Contains(line, StringComparison.OrdinalIgnoreCase)).ToArray();
+                    var notFound = any.Except(found).ToArray();
 
-                    Logger.LogInformation("{0}: {1}", found ? "found" : "not found", string.Join(", ", lines));
 
-                    return found;
+                    if (found.Any())
+                    {
+                        Logger.LogInformation($"FOUND: {string.Join(", ", found)}");
+                    }
+
+                    if (notFound.Any())
+                    {
+                        Logger.LogInformation($"NOT FOUND: {string.Join(", ", notFound)}");
+                    }
+
+                    return found.Any();
                 }
             }
             finally
@@ -252,7 +226,7 @@ namespace HeroesReplay.Processes
             }
         }
 
-        protected async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, params string[] lines)
+        protected async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, IEnumerable<string> lines)
         {
             if (bitmap == null) return null;
 
@@ -260,7 +234,7 @@ namespace HeroesReplay.Processes
             {
                 OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
 
-                if (result != null && lines.All(line => result.Lines.Any(ocrLine => ocrLine.Text.Contains(line, StringComparison.OrdinalIgnoreCase))))
+                if (result != null && lines.Any(line => result.Lines.Any(ocrLine => ocrLine.Text.Contains(line, StringComparison.OrdinalIgnoreCase))))
                 {
                     return result;
                 }
@@ -271,10 +245,37 @@ namespace HeroesReplay.Processes
             }
         }
 
+        protected async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, params string[] lines) => await TryGetOcrResult(bitmap, (IEnumerable<string>)lines);
+
         private ImageCodecInfo? GetEncoder(ImageFormat format)
         {
             ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
             return codecs.FirstOrDefault(codec => codec.FormatID == format.Guid);
+        }
+
+        private Bitmap ConvertBitmapToGrayscale(Bitmap bm)
+        {
+            // Make a Bitmap24 object.
+            return (Bitmap)bm.Clone(new Rectangle(0, 0, bm.Width, bm.Height), PixelFormat.Format16bppGrayScale);
+
+            //// Lock the bitmap.
+            //bm32.LockBitmap();
+
+            //// Process the pixels.
+            //for (int x = 0; x < bm.Width; x++)
+            //{
+            //    for (int y = 0; y < bm.Height; y++)
+            //    {
+            //        byte r = bm32.GetRed(x, y);
+            //        byte g = bm32.GetGreen(x, y);
+            //        byte b = bm32.GetBlue(x, y);
+            //        byte gray = (use_average ? (byte)((r + g + b) / 3) : (byte)(0.3 * r + 0.5 * g + 0.2 * b));
+            //        bm32.SetPixel(x, y, gray, gray, gray, 255);
+            //    }
+            //}
+
+            //// Unlock the bitmap.
+            //bm32.UnlockBitmap();
         }
 
         public void Dispose()
