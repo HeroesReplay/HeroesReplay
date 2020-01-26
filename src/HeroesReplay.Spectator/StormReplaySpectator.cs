@@ -14,7 +14,7 @@ namespace HeroesReplay.Spectator
 {
     public sealed class StormReplaySpectator : IDisposable
     {
-        public event EventHandler<GameEventArgs<Player>>? HeroChange;
+        public event EventHandler<GameEventArgs<StormPlayerDelta>>? HeroChange;
         public event EventHandler<GameEventArgs<GamePanel>>? PanelChange;
         public event EventHandler<GameEventArgs<GameStateDelta>>? StateChange;
 
@@ -28,16 +28,12 @@ namespace HeroesReplay.Spectator
             }
         }
 
-        public StormPlayer StormPlayer
+        public StormPlayer? StormPlayer
         {
             get => stormPlayer;
             private set
             {
-                if (value != null && value.Player != stormPlayer?.Player)
-                {
-                    HeroChange?.Invoke(this, new GameEventArgs<Player>(StormReplay, value.Player, GameTimer.Duration(), value.Criteria.ToString()));
-                }
-
+                if (value != stormPlayer && value != null) HeroChange?.Invoke(this, new GameEventArgs<StormPlayerDelta>(StormReplay, new StormPlayerDelta(stormPlayer, value), GameTimer.Duration(), value.Criteria.ToString()));
                 stormPlayer = value;
             }
         }
@@ -47,24 +43,38 @@ namespace HeroesReplay.Spectator
             get => gameState;
             private set
             {
-                if (gameState != value)
-                {
-                    StateChange?.Invoke(this, new GameEventArgs<GameStateDelta>(StormReplay, new GameStateDelta(gameState, value), GameTimer.Duration(), gameState.ToString()));
-
-                    gameState = value;
-                }
+                if (gameState != value) StateChange?.Invoke(this, new GameEventArgs<GameStateDelta>(StormReplay, new GameStateDelta(gameState, value), GameTimer.Duration(), gameState.ToString()));
+                gameState = value;
             }
         }
 
         public TimeSpan GameTimer { get; private set; }
-        public StormReplay StormReplay { get; private set; }
+
+        public StormReplay StormReplay
+        {
+            get => stormReplay;
+            private set
+            {
+                if (stormReplay != value)
+                {
+                    GameState = GameState.StartOfGame;
+                    GameTimer = TimeSpan.Zero;
+                    GamePanel = GamePanel.Talents;
+                    StormPlayer = null;
+                }
+
+                stormReplay = value;
+            }
+        }
 
         private CancellationToken Token => tokenProvider.Token;
 
         private AnalyerResultBuilder Analyze => new AnalyerResultBuilder().WithSpectator(this).WithAnalyzer(analyzer);
+
         private GameState gameState;
         private GamePanel gamePanel;
         private StormPlayer stormPlayer;
+        private StormReplay stormReplay;
 
         private readonly ILogger<StormReplaySpectator> logger;
         private readonly StormReplayHeroSelector selector;
@@ -85,7 +95,10 @@ namespace HeroesReplay.Spectator
         public async Task SpectateAsync(StormReplay stormReplay)
         {
             StormReplay = stormReplay;
+
             GameState = GameState.StartOfGame;
+            GamePanel = GamePanel.Talents;
+
             await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));
         }
 
@@ -124,17 +137,17 @@ namespace HeroesReplay.Spectator
 
         private IEnumerable<StormPlayer> GetPlayersForFocus()
         {
-            IEnumerable<StormPlayer> pentaKillers    = selector.Select(Analyze.Check(Constants.Heroes.MAX_PENTA_KILL_STREAK_POTENTIAL), GameCriteria.PentaKill);
-            IEnumerable<StormPlayer> quadKillers     = selector.Select(Analyze.Check(Constants.Heroes.MAX_QUAD_KILL_STREAK_POTENTIAL), GameCriteria.QuadKill);
-            IEnumerable<StormPlayer> tripleKillers   = selector.Select(Analyze.Check(Constants.Heroes.MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameCriteria.TripleKill);
-            IEnumerable<StormPlayer> multiKillers    = selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.MultiKill);
-            IEnumerable<StormPlayer> singleKillers   = selector.Select(Analyze.Check(Constants.Heroes.KILL_STREAK_TIMER), GameCriteria.Kill);
-            IEnumerable<StormPlayer> playerDeaths    = selector.Select(Analyze.Check(TimeSpan.FromSeconds(11)), GameCriteria.Death);
-            IEnumerable<StormPlayer> mapObjectices   = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.MapObjective);
-            IEnumerable<StormPlayer> campObjectives  = selector.Select(Analyze.Check(TimeSpan.FromSeconds(9)), GameCriteria.CampObjective);
-            IEnumerable<StormPlayer> structures      = selector.Select(Analyze.Check(TimeSpan.FromSeconds(8)), GameCriteria.Structure);
+            IEnumerable<StormPlayer> pentaKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_PENTA_KILL_STREAK_POTENTIAL), GameCriteria.PentaKill);
+            IEnumerable<StormPlayer> quadKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_QUAD_KILL_STREAK_POTENTIAL), GameCriteria.QuadKill);
+            IEnumerable<StormPlayer> tripleKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameCriteria.TripleKill);
+            IEnumerable<StormPlayer> multiKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.MultiKill);
+            IEnumerable<StormPlayer> singleKillers = selector.Select(Analyze.Check(Constants.Heroes.KILL_STREAK_TIMER), GameCriteria.Kill);
+            IEnumerable<StormPlayer> playerDeaths = selector.Select(Analyze.Check(TimeSpan.FromSeconds(11)), GameCriteria.Death);
+            IEnumerable<StormPlayer> mapObjectices = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.MapObjective);
+            IEnumerable<StormPlayer> campObjectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(9)), GameCriteria.CampObjective);
+            IEnumerable<StormPlayer> structures = selector.Select(Analyze.Check(TimeSpan.FromSeconds(8)), GameCriteria.Structure);
             IEnumerable<StormPlayer> previousKillers = selector.Select(Analyze.Check(TimeSpan.FromSeconds(7)), GameCriteria.PreviousAliveKiller);
-            IEnumerable<StormPlayer> alivePlayers    = selector.Select(Analyze.Check(TimeSpan.FromSeconds(6)), GameCriteria.Alive);
+            IEnumerable<StormPlayer> alivePlayers = selector.Select(Analyze.Check(TimeSpan.FromSeconds(6)), GameCriteria.Alive);
 
             return pentaKillers.Or(quadKillers.Or(tripleKillers.Or(multiKillers.Or(singleKillers.Or(playerDeaths.Or(mapObjectices.Or(campObjectives.Or(structures.Or(previousKillers.Or(alivePlayers)))))))))).ToList();
         }

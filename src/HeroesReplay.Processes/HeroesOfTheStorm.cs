@@ -13,7 +13,6 @@ using HeroesReplay.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
-using Point = System.Drawing.Point;
 
 namespace HeroesReplay.Processes
 {
@@ -29,7 +28,7 @@ namespace HeroesReplay.Processes
 
         public async Task ConfigureClientAsync()
         {
-            string[] files = Directory.GetFiles(Constants.USER_GAME_FOLDER, Constants.VARIABLES_WILDCARD, SearchOption.AllDirectories).Where(p => p.Contains("Variables", StringComparison.OrdinalIgnoreCase)).ToArray();
+            string[] files = Directory.GetFiles(Constants.USER_GAME_FOLDER, Constants.VARIABLES_WILDCARD, SearchOption.AllDirectories).Where(p => Path.GetFileName(p).Equals("Variables.txt", StringComparison.OrdinalIgnoreCase)).ToArray();
 
             if (!File.Exists(Constants.USER_STORM_INTERFACE_PATH))
             {
@@ -37,7 +36,7 @@ namespace HeroesReplay.Processes
 
                 Logger.LogInformation($"[INTERFACE SET][{Constants.USER_STORM_INTERFACE_PATH}]");
             }
-            
+
 
             foreach (string file in files)
             {
@@ -47,7 +46,7 @@ namespace HeroesReplay.Processes
                 values["observerinterface"] = Constants.STORM_INTERFACE_NAME;
                 values["replayinterface"] = Constants.STORM_INTERFACE_NAME;
                 values["displayreplaytime"] = "false";
-                values["camerafollow"] = "true";
+                values["camerafollow"] = "false";
                 values["camerasmartpan"] = "true";
 
                 //values["width"] = "1920";
@@ -62,18 +61,16 @@ namespace HeroesReplay.Processes
             }
         }
 
-        private Rectangle TimerRegion => new Rectangle(new Point(Dimensions.Value.Width / 2 - 50, 10), new Size(100, 50));
+        private Rectangle TimerRegion => new Rectangle(new System.Drawing.Point(Dimensions.Value.Width / 2 - 50, 10), new Size(100, 50));
 
         public async Task<TimeSpan?> TryGetTimerAsync()
         {
             Bitmap? centerTimer = TryBitBlt(TimerRegion);
 
+            if (centerTimer == null) return null;
+
             try
             {
-                if (centerTimer == null) return null;
-
-                // now we don't copy the entire screen with BitBlt, we only copy the TimerRegion region
-                //  = GetTimer(centerTimer)
                 using (centerTimer)
                 {
                     OcrResult? result = await TryGetOcrResult(centerTimer, Constants.Ocr.TIMER_COLON);
@@ -101,55 +98,18 @@ namespace HeroesReplay.Processes
             return null;
         }
 
-        public async Task<bool> TryGetMatchAwardsAsync(IEnumerable<MatchAwardType> awards) => await GetWindowContainsAsync(CaptureMethod.BitBlt, awards.ToText().ToArray());
-
-
-        private TimeSpan? TryParseTimeSpan(OcrResult ocrResult)
+        public async Task<bool> TryGetMatchAwardsAsync(IEnumerable<MatchAwardType> awards)
         {
-            try
-            {
-                // sometimes OCR adds quotemarks, or mixes up 0's with O's
-                char[] sanitze = SanitizeOcrResult(ocrResult);
-
-                string time = new string(sanitze);
-
-                string[] segments = time.Split(':');
-
-                TimeSpan timeSpan = segments.Length switch
-                {
-                    Constants.Ocr.TIMER_HOURS => time.ParseTimerHours(),
-                    Constants.Ocr.TIMER_MINUTES when segments[0].StartsWith('-') => time.ParseNegativeTimer(),
-                    Constants.Ocr.TIMER_MINUTES => time.ParseTimerMinutes(),
-                    _ => throw new Exception($"Unhandled segments: {segments.Length}")
-                };
-
-                return timeSpan;
-            }
-            catch (Exception e)
-            {
-                Logger.LogError(e, $"Could not parse '{ocrResult.Text}' in Ocr result");
-            }
-
-            return null;
+            return await GetWindowContainsAnyAsync(CaptureMethod.BitBlt, awards.ToText().ToArray());
         }
 
-        private static char[] SanitizeOcrResult(OcrResult ocrResult)
-        {
-            return ocrResult.Lines[0].Text
-                .Replace("O", "0", StringComparison.OrdinalIgnoreCase)
-                .Replace("S", "5", StringComparison.OrdinalIgnoreCase)
-                .Replace("'", string.Empty, StringComparison.OrdinalIgnoreCase)
-                .Replace("\"", string.Empty, StringComparison.OrdinalIgnoreCase)
-                .Where(c => char.IsDigit(c) || c.Equals(':'))
-                .ToArray();
-        }
-
-        public bool TryKillGame()
+        public async Task<bool> TryKillGameAsync()
         {
             try
             {
                 WrappedProcess.Kill();
-                Logger.LogInformation($"Killed {ProcessName} process at " + DateTime.Now);
+                Logger.LogInformation($"[KILLED][{ProcessName}][{DateTime.Now}]");
+                await Task.Delay(TimeSpan.FromSeconds(5), Token);
                 return true;
             }
             catch (Exception)
@@ -175,28 +135,8 @@ namespace HeroesReplay.Processes
                         .Or<NullReferenceException>()
                         .OrResult<bool>(result => result == false)
                     .WaitAndRetryAsync(retryCount: 15, retry => TimeSpan.FromSeconds(2))
-                    .ExecuteAsync(async (t) => Process.GetProcessesByName(ProcessName).Any(p => p.MainModule.FileVersionInfo.FileVersion == stormReplay.Replay.ReplayVersion), token);
+                    .ExecuteAsync(async (t) => Process.GetProcessesByName(ProcessName).Any(p => IsMatchingClientVersion(stormReplay, p)), token);
             }
-        }
-
-        private FileInfo GetSwitcherPath()
-        {
-            return Policy
-                .Handle<Exception>()
-                .WaitAndRetry(retryCount: 5, retry => TimeSpan.FromSeconds(10))
-                .Execute(() =>
-                {
-                    DirectoryInfo current = new DirectoryInfo(Path.GetDirectoryName(WrappedProcess.MainModule.FileName));
-                    FileInfo? switcher = null;
-
-                    while (switcher == null)
-                    {
-                        switcher = current.GetFiles(Constants.Heroes.HEROES_SWITCHER_PROCESS, SearchOption.AllDirectories).FirstOrDefault();
-                        current = current.Parent;
-                    }
-
-                    return switcher;
-                });
         }
 
         public async Task<bool> WaitForMapLoadingAsync(StormReplay stormReplay, CancellationToken token = default)
@@ -205,7 +145,12 @@ namespace HeroesReplay.Processes
                 .Handle<Exception>() // Issue getting Process information (terminated?)
                 .OrResult<bool>(loaded => loaded == false) // it's not the game version that supports the replay
                 .WaitAndRetryAsync(retryCount: 60, retry => TimeSpan.FromSeconds(1)) // this can time some time, especially if the game is downloading assets.
-                .ExecuteAsync(async (t) => await GetWindowContainsAsync(CaptureMethod.BitBlt, Constants.Ocr.LOADING_SCREEN_TEXT), token);
+                .ExecuteAsync(async (t) =>
+                {
+                    string[] names = stormReplay.Replay.Players.Select(p => p.Name).ToArray();
+                    return await GetWindowContainsAnyAsync(CaptureMethod.BitBlt, new[] { Constants.Ocr.LOADING_SCREEN_TEXT, stormReplay.Replay.Map }.Concat(names).ToArray());
+
+                }, token);
         }
 
         public void SendFocusHero(int index)
@@ -233,6 +178,9 @@ namespace HeroesReplay.Processes
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
+        /// <summary>
+        /// The 'Player Camera Follow' mode does NOT work with the Observer maximum zoom mode.
+        /// </summary>
         public void SendToggleZoom()
         {
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
@@ -240,6 +188,13 @@ namespace HeroesReplay.Processes
             NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.Z, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.Z, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
+        }
+
+        public void SendFollow()
+        {
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.L, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.L, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.L, IntPtr.Zero);
         }
 
         public void SendToggleTime()
@@ -286,6 +241,69 @@ namespace HeroesReplay.Processes
             NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.C, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.C, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
+        }
+
+        private bool IsMatchingClientVersion(StormReplay stormReplay, Process p)
+        {
+            bool match = p.MainModule.FileVersionInfo.FileVersion == stormReplay.Replay.ReplayVersion;
+
+            Logger.LogInformation($"[CURRENT][{p.MainModule.FileVersionInfo.FileVersion}][REQUIRED][{stormReplay.Replay.ReplayVersion}]");
+
+            return match;
+        }
+
+        private FileInfo GetSwitcherPath()
+        {
+            return Policy
+                .Handle<Exception>()
+                .WaitAndRetry(retryCount: 5, retry => TimeSpan.FromSeconds(10))
+                .Execute(() =>
+                {
+                    DirectoryInfo current = new DirectoryInfo(Path.GetDirectoryName(WrappedProcess.MainModule.FileName));
+                    FileInfo? switcher = null;
+
+                    while (switcher == null)
+                    {
+                        switcher = current.GetFiles(Constants.Heroes.HEROES_SWITCHER_PROCESS, SearchOption.AllDirectories).FirstOrDefault();
+                        current = current.Parent;
+                    }
+
+                    return switcher;
+                });
+        }
+
+        private TimeSpan? TryParseTimeSpan(OcrResult ocrResult)
+        {
+            try
+            {
+                string time = new string(SanitizeOcrTimer(ocrResult));
+                string[] segments = time.Split(':');
+
+                return segments.Length switch
+                {
+                    Constants.Ocr.TIMER_HOURS => time.ParseTimerHours(),
+                    Constants.Ocr.TIMER_MINUTES when segments[0].StartsWith('-') => time.ParseNegativeTimer(),
+                    Constants.Ocr.TIMER_MINUTES => time.ParseTimerMinutes(),
+                    _ => throw new Exception($"Unhandled segments: {segments.Length}")
+                };
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e, $"Could not parse '{ocrResult.Text}' in Ocr result");
+            }
+
+            return null;
+        }
+
+        private static char[] SanitizeOcrTimer(OcrResult ocrResult)
+        {
+            return ocrResult.Lines[0].Text
+                .Replace("O", "0", StringComparison.OrdinalIgnoreCase)
+                .Replace("S", "5", StringComparison.OrdinalIgnoreCase)
+                .Replace("'", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace("\"", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Where(c => char.IsDigit(c) || c.Equals(':') || c.Equals('-'))
+                .ToArray();
         }
     }
 }

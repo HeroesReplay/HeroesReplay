@@ -48,9 +48,8 @@ namespace HeroesReplay.Processes
                 .ExecuteAsync(async (t) =>
                 {
                     await WaitForGameSelectedAsync();
-
+                    await IsPlayButtonEnabledAsync();
                     ActivatePlayNowButton();
-
                     return await WaitForGameRunningAsync();
 
                 }, Token);
@@ -61,7 +60,7 @@ namespace HeroesReplay.Processes
             return await Policy
                 .HandleResult<bool>(enabled => enabled == false)
                 .WaitAndRetryAsync(5, count => TimeSpan.FromSeconds(5))
-                .ExecuteAsync(async t => await GetWindowContainsAsync(CaptureMethod.PrintScreen, Constants.Ocr.PLAY_BUTTON_TEXT), Token);
+                .ExecuteAsync(async t => await GetWindowContainsAnyAsync(CaptureMethod.PrintScreen, Constants.Ocr.PLAY_BUTTON_TEXT), Token);
         }
 
         private async Task<bool> WaitForGameRunningAsync()
@@ -69,7 +68,7 @@ namespace HeroesReplay.Processes
             return await Policy
                 .HandleResult<bool>(running => running == false)
                 .WaitAndRetryAsync(10, count => TimeSpan.FromSeconds(5))
-                .ExecuteAsync(async t => await GetWindowContainsAsync(CaptureMethod.PrintScreen, Constants.Ocr.GAME_RUNNING_TEXT, Constants.Ocr.SHOP_HEROES_TEXT), Token);
+                .ExecuteAsync(async t => await GetWindowContainsAnyAsync(CaptureMethod.PrintScreen, Constants.Ocr.GAME_RUNNING_TEXT, Constants.Ocr.SHOP_HEROES_TEXT), Token);
         }
 
         private async Task<bool> WaitForGameSelectedAsync()
@@ -79,7 +78,7 @@ namespace HeroesReplay.Processes
                 using (var control = Process.Start(ProcessPath, arguments: Constants.Bnet.BATTLE_NET_SELECT_HEROES_ARG))
                 {
                     control.WaitForExit();
-                    return await GetWindowContainsAsync(CaptureMethod.PrintScreen, Constants.Ocr.SHOP_HEROES_TEXT);
+                    return await GetWindowContainsAnyAsync(CaptureMethod.PrintScreen, Constants.Ocr.SHOP_HEROES_TEXT);
                 }
             }
 

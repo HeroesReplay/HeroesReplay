@@ -83,21 +83,14 @@ namespace HeroesReplay.Analyzer
 
             foreach (TrackerEvent capture in camps)
             {
-                int teamId = (int)capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.Value - 1;
-                
-                // IEnumerable<Unit> misc = stormReplay.Replay.Units.Where(unit => unit.OwnerChangeEvents.Any(ce => ce.Team == teamId && ce.TimeSpanOwnerChanged == capture.TimeSpan));
-                // IEnumerable<Point> points = misc.Select(x => x.PointBorn).Distinct();
-                // IEnumerable<Unit> units = stormReplay.Replay.Players.SelectMany(p => p.HeroUnits.Where(hu => hu.Positions.Any(p => !p.IsEstimated && p.TimeSpan >= capture.TimeSpan)));
-                
-                // IEnumerable<Unit> beacons = stormReplay.Replay.Units.Where(unit => unit.Group == Unit.UnitGroup.Miscellaneous);
+                int teamId = (int) capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.Value - 1;
+
                 IEnumerable<Unit> mercenaries = stormReplay.Replay.Units.Where(unit => unit.Group == Unit.UnitGroup.MercenaryCamp || unit.Group == Unit.UnitGroup.Unknown && 
-                                                                                       unit.IsDeadWithin(capture.TimeSpan.Subtract(TimeSpan.FromSeconds(30)), capture.TimeSpan) && 
+                                                                                       unit.TimeSpanDied.HasValue && 
+                                                                                       unit.TimeSpanDied.Value > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(30)) && 
+                                                                                       unit.TimeSpanDied.Value <= capture.TimeSpan && 
                                                                                        unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId);
-                // IEnumerable<Unit> locations = beacons.Where(b => b.OwnerChangeEvents.Any(ce => ce.TimeSpanOwnerChanged == capture.TimeSpan));
-                // locations.Where(unit => unit.PointBorn.DistanceTo())
-                
-                // IEnumerable<Unit> dead = units.Where(unit => unit.TimeSpanDied.HasValue && unit.TimeSpanDied.Value <= capture.TimeSpan && unit.TimeSpanDied.Value > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(30)));
-                
+             
                 foreach (Player player in mercenaries.Select(unit => unit.PlayerKilledBy).Distinct())
                 {
                     yield return (player, capture.TimeSpan);

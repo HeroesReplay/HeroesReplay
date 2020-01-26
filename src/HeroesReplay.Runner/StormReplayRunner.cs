@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
@@ -42,43 +43,26 @@ namespace HeroesReplay.Runner
         {
             try
             {
-                if (launch)
+                switch (launch)
                 {
-                    heroesOfTheStorm.TryKillGame();
-                }
-
-                if (!heroesOfTheStorm.IsRunning)
-                {
-                    await heroesOfTheStorm.ConfigureClientAsync();
-
-                    if (await battleNet.WaitForBattleNetAsync())
+                    case false when heroesOfTheStorm.IsRunning:
                     {
-                        if (await battleNet.WaitForGameLaunchedAsync())
-                        {
-                            if (await heroesOfTheStorm.WaitForSelectedReplayAsync(stormReplay))
-                            {
-                                if (await heroesOfTheStorm.WaitForMapLoadingAsync(stormReplay))
-                                {
-                                    await stormReplaySpectator.SpectateAsync(stormReplay);
-                                }
-                                else
-                                {
-                                    throw new Exception("Game process not found in loading gameState.");
-                                }
-                            }
-                            else
-                            {
-                                throw new Exception("Game process version not found matching replay version: " + stormReplay.Replay.ReplayVersion);
-                            }
-                        }
-                        else
-                        {
-                            throw new Exception("Game process was not found launched.");
-                        }
+                        await stormReplaySpectator.SpectateAsync(stormReplay);
+                        break;
                     }
-                    else
+                    case false when !heroesOfTheStorm.IsRunning:
                     {
-                        throw new Exception("BattleNet process was not found, so cannot attempt to start the game.");
+                        await LaunchGame(stormReplay);
+                        await stormReplaySpectator.SpectateAsync(stormReplay);
+                        break;
+                    }
+                    case true when heroesOfTheStorm.IsRunning:
+                    {
+                        await heroesOfTheStorm.TryKillGameAsync();
+                        await heroesOfTheStorm.ConfigureClientAsync();
+                        await LaunchGame(stormReplay);
+                        await stormReplaySpectator.SpectateAsync(stormReplay);
+                        break;
                     }
                 }
             }
@@ -88,7 +72,31 @@ namespace HeroesReplay.Runner
             }
             finally
             {
-                heroesOfTheStorm.TryKillGame();
+                await heroesOfTheStorm.TryKillGameAsync();
+            }
+        }
+
+        private async Task LaunchGame(StormReplay stormReplay)
+        {
+            if (!await battleNet.WaitForBattleNetAsync())
+            {
+                throw new Exception("BattleNet process was not found, so cannot attempt to start the game.");
+            }
+
+            if (!await battleNet.WaitForGameLaunchedAsync())
+            {
+                throw new Exception("Game process was not found after attempting to launch the game.");
+            }
+
+            if (!await heroesOfTheStorm.WaitForSelectedReplayAsync(stormReplay))
+            {
+                throw new Exception("Game process version not found matching replay version: " +
+                                    stormReplay.Replay.ReplayVersion);
+            }
+
+            if (!await heroesOfTheStorm.WaitForMapLoadingAsync(stormReplay))
+            {
+                throw new Exception("Map loading state was not detected after selecting: " + stormReplay.Path);
             }
         }
 
@@ -126,27 +134,34 @@ namespace HeroesReplay.Runner
 
         private void OnStateChange(object sender, GameEventArgs<GameStateDelta> e)
         {
-            if (e.Data.Previous == GameState.StartOfGame && e.Data.Current == GameState.Running && e.Timer <  TimeSpan.FromSeconds(35))
-            {   
+            if (e.Data.Previous == GameState.StartOfGame && e.Data.Current == GameState.Running)
+            {
                 heroesOfTheStorm.SendToggleChat();
-                Thread.Sleep(TimeSpan.FromSeconds(5));
-
+                Thread.Sleep(TimeSpan.FromSeconds(2));
+                
                 heroesOfTheStorm.SendToggleControls();
-                Thread.Sleep(TimeSpan.FromSeconds(5));
-
-                heroesOfTheStorm.SendToggleZoom();
-                Thread.Sleep(TimeSpan.FromSeconds(5));
+                Thread.Sleep(TimeSpan.FromSeconds(2));
             }
         }
 
-        private void OnHeroChange(object sender, GameEventArgs<Player> e)
-        {
-            for (int index = 0; index < e.StormReplay.Replay.Players.Length; index++)
+        private void OnHeroChange(object sender, GameEventArgs<StormPlayerDelta> e)
+        {   
+            if (e.Data.Previous == null && e.Timer < TimeSpan.FromSeconds(30))
             {
-                if (e.StormReplay.Replay.Players[index] == e.Data)
-                {
-                    heroesOfTheStorm.SendFocusHero(index);
-                }
+                // This is the first hero of the game being selected, lets configure and adjust camera
+
+                heroesOfTheStorm.SendFocusHero(Array.IndexOf(e.StormReplay.Replay.Players, e.Data.Current.Player));
+                Thread.Sleep(TimeSpan.FromSeconds(2));
+
+                // heroesOfTheStorm.SendFollow();
+                // Thread.Sleep(TimeSpan.FromSeconds(2));
+
+                heroesOfTheStorm.SendToggleZoom();
+                Thread.Sleep(TimeSpan.FromSeconds(2));
+            }
+            else
+            {
+                heroesOfTheStorm.SendFocusHero(Array.IndexOf(e.StormReplay.Replay.Players, e.Data.Current.Player));
             }
         }
 

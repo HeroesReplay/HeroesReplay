@@ -20,24 +20,19 @@ namespace HeroesReplay.Processes
     {
         private IntPtr deviceContext = IntPtr.Zero;
         private IntPtr compatibleDeviceContext = IntPtr.Zero;
-        private RECT? windowDimensions;
+        private Rectangle? windowDimensions;
 
         protected Rectangle? Dimensions
         {
             get
             {
-                if (windowDimensions == null)
+                if (windowDimensions == null && NativeMethods.GetWindowRect(WindowHandle, out RECT value))
                 {
-                    if (NativeMethods.GetWindowRect(WindowHandle, out RECT value))
-                    {
-                        Logger.LogInformation("Getting Window Size");
-                        windowDimensions = value;
-                    }
+                    Logger.LogInformation("Getting Window Size");
+                    windowDimensions = Rectangle.FromLTRB(value.Left, value.Top, value.Right, value.Bottom);
                 }
 
-                if (windowDimensions == null) return null;
-
-                return Rectangle.FromLTRB(windowDimensions.Value.Left, windowDimensions.Value.Top, windowDimensions.Value.Right, windowDimensions.Value.Bottom);
+                return windowDimensions;
             }
         }
 
@@ -190,7 +185,7 @@ namespace HeroesReplay.Processes
             }
         }
 
-        protected async Task<bool> GetWindowContainsAsync(CaptureMethod captureMethod, params string[] any)
+        protected async Task<bool> GetWindowContainsAnyAsync(CaptureMethod captureMethod, params string[] lines)
         {
             Bitmap? bitmap = captureMethod switch
             {
@@ -201,28 +196,9 @@ namespace HeroesReplay.Processes
 
             try
             {
-                if (bitmap == null) return false;
+                OcrResult? result = await TryGetOcrResult(bitmap, lines);
 
-                using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(bitmap))
-                {
-                    OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-
-                    var found = any.Where(line => result.Text.Contains(line, StringComparison.OrdinalIgnoreCase)).ToArray();
-                    var notFound = any.Except(found).ToArray();
-
-
-                    if (found.Any())
-                    {
-                        Logger.LogInformation($"FOUND: {string.Join(", ", found)}");
-                    }
-
-                    if (notFound.Any())
-                    {
-                        Logger.LogInformation($"NOT FOUND: {string.Join(", ", notFound)}");
-                    }
-
-                    return found.Any();
-                }
+                return result != null;
             }
             finally
             {
@@ -230,7 +206,7 @@ namespace HeroesReplay.Processes
             }
         }
 
-        protected async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, IEnumerable<string> lines)
+        protected async Task<OcrResult?> TryGetOcrResult(Bitmap? bitmap, IEnumerable<string> lines)
         {
             if (bitmap == null) return null;
 
@@ -238,23 +214,32 @@ namespace HeroesReplay.Processes
             {
                 OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
 
-                if (result != null && lines.Any(line => result.Lines.Any(ocrLine => ocrLine.Text.Contains(line, StringComparison.OrdinalIgnoreCase))))
+                if (result != null && lines.Any(line => result.Lines.Any(ocrLine => Contains(ocrLine, line))))
                 {
                     return result;
                 }
-
-                Logger.LogDebug("Could not extract Ocr result for: " + string.Join(", ", lines));
 
                 return null;
             }
         }
 
-        protected async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, params string[] lines) => await TryGetOcrResult(bitmap, (IEnumerable<string>)lines);
+        protected async Task<OcrResult?> TryGetOcrResult(Bitmap? bitmap, params string[] lines) => await TryGetOcrResult(bitmap, (IEnumerable<string>)lines);
 
         private ImageCodecInfo? GetEncoder(ImageFormat format)
         {
             ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
             return codecs.FirstOrDefault(codec => codec.FormatID == format.Guid);
+        }
+
+        protected bool Contains(OcrLine ocrLine, string text)
+        {
+            if (ocrLine.Text.Contains(text, StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.LogInformation($"[FOUND][{text}]");
+                return true;
+            }
+
+            return false;
         }
 
         public void Dispose()
