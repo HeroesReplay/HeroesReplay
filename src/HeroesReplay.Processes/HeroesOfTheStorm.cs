@@ -144,7 +144,7 @@ namespace HeroesReplay.Processes
                 .ToArray();
         }
 
-        public bool KillGame()
+        public bool TryKillGame()
         {
             try
             {
@@ -211,6 +211,7 @@ namespace HeroesReplay.Processes
         public void SendFocusHero(int index)
         {
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Constants.Heroes.KEYS_HEROES[index], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Constants.Heroes.KEYS_HEROES[index], IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Constants.Heroes.KEYS_HEROES[index], IntPtr.Zero);
         }
 

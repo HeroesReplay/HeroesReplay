@@ -47,15 +47,11 @@ namespace HeroesReplay.Processes
                 .WaitAndRetryAsync(5, count => TimeSpan.FromSeconds(10))
                 .ExecuteAsync(async (t) =>
                 {
-                    var selected = await WaitForGameSelectedAsync();
+                    await WaitForGameSelectedAsync();
 
-                    if (selected)
-                    {
-                        ActivatePlayNowButton();
-                        return await WaitForGameRunningAsync();
-                    }
+                    ActivatePlayNowButton();
 
-                    return false;
+                    return await WaitForGameRunningAsync();
 
                 }, Token);
         }
@@ -83,7 +79,6 @@ namespace HeroesReplay.Processes
                 using (var control = Process.Start(ProcessPath, arguments: Constants.Bnet.BATTLE_NET_SELECT_HEROES_ARG))
                 {
                     control.WaitForExit();
-
                     return await GetWindowContainsAsync(CaptureMethod.PrintScreen, Constants.Ocr.SHOP_HEROES_TEXT);
                 }
             }

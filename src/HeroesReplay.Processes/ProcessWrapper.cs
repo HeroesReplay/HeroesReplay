@@ -100,7 +100,7 @@ namespace HeroesReplay.Processes
         {
             if (Dimensions == null) return null;
 
-            var bmp = new Bitmap(Dimensions.Value.Width, Dimensions.Value.Height, PixelFormat.Format32bppArgb);
+            Bitmap bmp = new Bitmap(Dimensions.Value.Width, Dimensions.Value.Height, PixelFormat.Format32bppArgb);
 
             using (Graphics graphics = Graphics.FromImage(bmp))
             {
@@ -116,6 +116,7 @@ namespace HeroesReplay.Processes
                 catch (Exception e)
                 {
                     Logger.LogError(e, $"Failed to capture bitmap of {WrappedProcess.ProcessName}");
+                    bmp.Dispose();
                 }
                 finally
                 {
@@ -150,6 +151,9 @@ namespace HeroesReplay.Processes
                     {
                         NativeMethods.DeleteDC(compatibleDeviceContext);
                         NativeMethods.ReleaseDC(WindowHandle, deviceContext);
+
+                        deviceContext = IntPtr.Zero;
+                        compatibleDeviceContext = IntPtr.Zero;
                     }
                 }
             }
@@ -251,31 +255,6 @@ namespace HeroesReplay.Processes
         {
             ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
             return codecs.FirstOrDefault(codec => codec.FormatID == format.Guid);
-        }
-
-        private Bitmap ConvertBitmapToGrayscale(Bitmap bm)
-        {
-            // Make a Bitmap24 object.
-            return (Bitmap)bm.Clone(new Rectangle(0, 0, bm.Width, bm.Height), PixelFormat.Format16bppGrayScale);
-
-            //// Lock the bitmap.
-            //bm32.LockBitmap();
-
-            //// Process the pixels.
-            //for (int x = 0; x < bm.Width; x++)
-            //{
-            //    for (int y = 0; y < bm.Height; y++)
-            //    {
-            //        byte r = bm32.GetRed(x, y);
-            //        byte g = bm32.GetGreen(x, y);
-            //        byte b = bm32.GetBlue(x, y);
-            //        byte gray = (use_average ? (byte)((r + g + b) / 3) : (byte)(0.3 * r + 0.5 * g + 0.2 * b));
-            //        bm32.SetPixel(x, y, gray, gray, gray, 255);
-            //    }
-            //}
-
-            //// Unlock the bitmap.
-            //bm32.UnlockBitmap();
         }
 
         public void Dispose()

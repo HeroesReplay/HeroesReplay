@@ -95,7 +95,7 @@ namespace HeroesReplay.Spectator
             {
                 Token.ThrowIfCancellationRequested();
 
-                if (GameState != GameState.Running) continue;
+                if (GameState != GameState.Running && !Debugger.IsAttached) continue;
 
                 try
                 {
@@ -122,21 +122,21 @@ namespace HeroesReplay.Spectator
             }
         }
 
-        private List<StormPlayer> GetPlayersForFocus()
+        private IEnumerable<StormPlayer> GetPlayersForFocus()
         {
-            IEnumerable<StormPlayer> pentaKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_PENTA_KILL_STREAK_POTENTIAL), GameCriteria.PentaKill);
-            IEnumerable<StormPlayer> quadKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_QUAD_KILL_STREAK_POTENTIAL), GameCriteria.QuadKill);
-            IEnumerable<StormPlayer> tripleKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameCriteria.TripleKill);
-            IEnumerable<StormPlayer> multiKillers = selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.MultiKill);
-            IEnumerable<StormPlayer> singleKillers = selector.Select(Analyze.Check(Constants.Heroes.KILL_STREAK_TIMER), GameCriteria.Kill);
-            IEnumerable<StormPlayer> playerDeaths = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.Death);
-            IEnumerable<StormPlayer> mapObjectices = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.MapObjective);
-            IEnumerable<StormPlayer> campObjectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.CampObjective);
-            IEnumerable<StormPlayer> structures = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.Structure);
-            IEnumerable<StormPlayer> previousAliveKillers = selector.Select(Analyze.Check(Constants.Heroes.KILL_STREAK_TIMER), GameCriteria.PreviousAliveKiller);
-            IEnumerable<StormPlayer> alivePlayers = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameCriteria.Alive);
+            IEnumerable<StormPlayer> pentaKillers    = selector.Select(Analyze.Check(Constants.Heroes.MAX_PENTA_KILL_STREAK_POTENTIAL), GameCriteria.PentaKill);
+            IEnumerable<StormPlayer> quadKillers     = selector.Select(Analyze.Check(Constants.Heroes.MAX_QUAD_KILL_STREAK_POTENTIAL), GameCriteria.QuadKill);
+            IEnumerable<StormPlayer> tripleKillers   = selector.Select(Analyze.Check(Constants.Heroes.MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameCriteria.TripleKill);
+            IEnumerable<StormPlayer> multiKillers    = selector.Select(Analyze.Check(Constants.Heroes.MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.MultiKill);
+            IEnumerable<StormPlayer> singleKillers   = selector.Select(Analyze.Check(Constants.Heroes.KILL_STREAK_TIMER), GameCriteria.Kill);
+            IEnumerable<StormPlayer> playerDeaths    = selector.Select(Analyze.Check(TimeSpan.FromSeconds(11)), GameCriteria.Death);
+            IEnumerable<StormPlayer> mapObjectices   = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.MapObjective);
+            IEnumerable<StormPlayer> campObjectives  = selector.Select(Analyze.Check(TimeSpan.FromSeconds(9)), GameCriteria.CampObjective);
+            IEnumerable<StormPlayer> structures      = selector.Select(Analyze.Check(TimeSpan.FromSeconds(8)), GameCriteria.Structure);
+            IEnumerable<StormPlayer> previousKillers = selector.Select(Analyze.Check(TimeSpan.FromSeconds(7)), GameCriteria.PreviousAliveKiller);
+            IEnumerable<StormPlayer> alivePlayers    = selector.Select(Analyze.Check(TimeSpan.FromSeconds(6)), GameCriteria.Alive);
 
-            return pentaKillers.Or(quadKillers).Or(tripleKillers).Or(multiKillers).Or(singleKillers).Or(playerDeaths).Or(mapObjectices).Or(campObjectives).Or(structures).Or(previousAliveKillers).Or(alivePlayers).ToList();
+            return pentaKillers.Or(quadKillers.Or(tripleKillers.Or(multiKillers.Or(singleKillers.Or(playerDeaths.Or(mapObjectices.Or(campObjectives.Or(structures.Or(previousKillers.Or(alivePlayers)))))))))).ToList();
         }
 
         private async Task FocusPlayerAsync(StormPlayer stormPlayer, TimeSpan duration)
@@ -224,7 +224,7 @@ namespace HeroesReplay.Spectator
 
                     if (StormPlayer != null)
                     {
-                        logger.LogInformation($"[{StormPlayer.Player.Character}][{StormPlayer.Criteria}][{StormPlayer.When}][{GameTimer}][{GameTimer.AddNegativeOffset()}]");
+                        logger.LogInformation($"[{StormPlayer.Player.HeroId}][{StormPlayer.Criteria}][{StormPlayer.When}][{GameTimer}][{GameTimer.AddNegativeOffset()}]");
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(1), Token);
@@ -234,6 +234,8 @@ namespace HeroesReplay.Spectator
                     logger.LogError(e, e.Message);
                 }
             }
+
+            await Task.Delay(TimeSpan.FromSeconds(10), Token); // End of game
         }
 
         private void PrintDebugData()

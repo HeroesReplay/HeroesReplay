@@ -7,19 +7,19 @@ namespace HeroesReplay.Analyzer
 {
     public sealed class AnalyzerResult
     {
-        public List<Unit> PlayerDeaths { get; }
-        public List<Unit> MapObjectives { get; }
-        public List<Unit> Structures { get; }
-        public List<Player> PlayersAlive { get; }
-        public List<(int Team, TimeSpan TalentTime)> Talents { get; }
-        public List<TeamObjective> TeamObjectives { get; }
+        public IEnumerable<Unit> PlayerDeaths { get; }
+        public IEnumerable<Unit> MapObjectives { get; }
+        public IEnumerable<Unit> Structures { get; }
+        public IEnumerable<Player> PlayersAlive { get; }
+        public IEnumerable<(int Team, TimeSpan TalentTime)> Talents { get; }
+        public IEnumerable<TeamObjective> TeamObjectives { get; }
 
         /// <summary>
         /// Ping events are only from the team which the replay file originates from
         /// </summary>
-        public List<GameEvent> PingSources { get; }
-        public List<Player> PreviousKillers { get;  }
-        public List<(Player, TimeSpan)> Camps { get; }
+        public IEnumerable<GameEvent> PingSources { get; }
+        public IEnumerable<Player> PreviousKillers { get;  }
+        public IEnumerable<(Player, TimeSpan)> Camps { get; }
         public TimeSpan Start { get; }
         public TimeSpan End { get; }
         public TimeSpan Duration { get; }
@@ -30,15 +30,15 @@ namespace HeroesReplay.Analyzer
             TimeSpan start,
             TimeSpan end,
             TimeSpan duration,
-            List<Unit> playerDeaths, 
-            List<Unit> mapObjectives,
-            List<Unit> structures,
-            List<Player> playersAlive,
-            List<Player> killers,
-            List<GameEvent> pingSources,
-            List<(int Team, TimeSpan TalentTime)> talents, 
-            List<TeamObjective> teamObjectives,
-            List<(Player, TimeSpan)> camps)
+            IEnumerable<Unit> playerDeaths,
+            IEnumerable<Unit> mapObjectives,
+            IEnumerable<Unit> structures,
+            IEnumerable<Player> playersAlive,
+            IEnumerable<Player> killers,
+            IEnumerable<GameEvent> pingSources,
+            IEnumerable<(int Team, TimeSpan TalentTime)> talents,
+            IEnumerable<TeamObjective> teamObjectives,
+            IEnumerable<(Player, TimeSpan)> camps)
         {
             Start = start;
             End = end;

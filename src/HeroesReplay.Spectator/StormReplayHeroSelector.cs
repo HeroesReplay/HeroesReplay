@@ -28,13 +28,13 @@ namespace HeroesReplay.Spectator
             GameCriteria.TeamObjective => HandleTeamObjectives(result),
             GameCriteria.CampObjective => HandleCampObjectives(result),
             GameCriteria.Death => HandleDeaths(result),
-            GameCriteria.Kill => HandleKills(result, 1),
-            GameCriteria.MultiKill => HandleKills(result, 2),
-            GameCriteria.TripleKill => HandleKills(result, 3),
-            GameCriteria.QuadKill => HandleKills(result, 4),
-            GameCriteria.PentaKill => HandleKills(result, 5)
+            GameCriteria.Kill => HandleKills(result, GameCriteria.Kill),
+            GameCriteria.MultiKill => HandleKills(result, GameCriteria.MultiKill),
+            GameCriteria.TripleKill => HandleKills(result, GameCriteria.TripleKill),
+            GameCriteria.QuadKill => HandleKills(result, GameCriteria.QuadKill),
+            GameCriteria.PentaKill => HandleKills(result, GameCriteria.PentaKill)
         })
-            .OrderBy(x => x.When);
+        .OrderBy(player => player.When);
 
         private IEnumerable<StormPlayer> HandlePreviousKillers(AnalyzerResult result) => result.PreviousKillers.Select(killer => new StormPlayer(killer, result.Start, result.Duration, GameCriteria.PreviousAliveKiller));
 
@@ -64,9 +64,9 @@ namespace HeroesReplay.Spectator
             }
         }
 
-        private IEnumerable<StormPlayer> HandleKills(AnalyzerResult result, int killCount)
+        private IEnumerable<StormPlayer> HandleKills(AnalyzerResult result, GameCriteria criteria)
         {
-            IEnumerable<IGrouping<Player, Unit>> playerKills = result.PlayerDeaths.GroupBy(unit => unit.PlayerKilledBy).Where(kills => kills.Count() == killCount);
+            IEnumerable<IGrouping<Player, Unit>> playerKills = result.PlayerDeaths.GroupBy(unit => unit.PlayerKilledBy).Where(kills => kills.Count() == criteria.ToKills());
 
             foreach (IGrouping<Player, Unit> players in playerKills)
             {
@@ -80,24 +80,27 @@ namespace HeroesReplay.Spectator
                     {
                         if (hero == Constants.Heroes.Abathur)
                         {
-                            foreach (var death in players)
+                            foreach (Unit death in players)
                             {
-                                yield return new StormPlayer(death.PlayerControlledBy, result.Start, maxTime, killCount.ToCriteria());
+                                yield return new StormPlayer(death.PlayerControlledBy, result.Start, death.TimeSpanDied.Value, criteria);
                             }
                         }
                         else
                         {
-                            yield return new StormPlayer(killer, result.Start, maxTime, killCount.ToCriteria());
+                            yield return new StormPlayer(killer, result.Start, maxTime, criteria);
                         }
                     }
                     else if (hero.IsRanged)
                     {
-                        yield return new StormPlayer(killer, result.Start, maxTime, killCount.ToCriteria());
+                        foreach (Unit death in players)
+                        {
+                            yield return new StormPlayer(death.PlayerControlledBy, result.Start, death.TimeSpanDied.Value, criteria);
+                        }
                     }
                 }
                 else
                 {
-                    yield return new StormPlayer(killer, result.Start, maxTime, killCount.ToCriteria());
+                    yield return new StormPlayer(killer, result.Start, maxTime, criteria);
                 }
             }
         }

@@ -18,6 +18,6 @@
         public static bool IsDeadWithin(this Unit unit, TimeSpan start, TimeSpan end) => unit?.TimeSpanDied != null && unit.TimeSpanDied.Value.IsWithin(start, end);
         public static IOrderedEnumerable<Unit> OrderByDeath(this IEnumerable<Unit> units) => units.OrderBy(unit => unit?.TimeSpanDied.Value);
         public static bool IsUnitGroup(this Unit unit, params Unit.UnitGroup[] unitGroups) => unitGroups.Any(group => unit.Group == group);
-        public static Hero? TryGetHero(this Player player) => Constants.Heroes.All.Find(hero => hero.Name.Equals(player.Character, StringComparison.InvariantCultureIgnoreCase));
+        public static Hero? TryGetHero(this Player player) => Constants.Heroes.All.Find(hero => hero.Name.Equals(player.HeroId, StringComparison.InvariantCultureIgnoreCase));
     }
 }

@@ -54,6 +54,7 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton<StormReplayAnalyzer>()
                 .AddSingleton<StormReplayHeroSelector>()
                 .AddSingleton<StormReplaySpectator>()
+                .AddSingleton<PlayerBlackListChecker>()
                 .AddSingleton<IStormReplayProvider, StormReplayHotsApiProvider>()
                 .AddSingleton<StormReplayConsumer>()
                 .AddSingleton<StormReplayRunner>()

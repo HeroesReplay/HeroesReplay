@@ -13,16 +13,16 @@ namespace HeroesReplay.Analyzer
         {
             Replay replay = stormReplay.Replay;
 
-            List<Unit> dead = CalculateDeadUnits(start, end, replay);
-            List<Player> alive = CalculateAlivePlayers(start, end, replay);
-            List<Unit> playerDeaths = CalculatePlayerDeaths(dead);
-            List<Unit> mapObjectives = CalculateMapObjectives(dead);
-            List<Unit> structures = CalculateStructures(dead);
-            List<(int Team, TimeSpan TalentTime)> talents = CalculateTalents(start, end, replay);
-            List<TeamObjective> teamObjectives = CalculateTeamObjectives(start, end, replay);
-            List<GameEvent> pingSources = CalculatePingSources(stormReplay, start, end, alive);
-            List<Player> previousKillers = CalculateKillers(CalculatePlayerDeaths(CalculateDeadUnits(start - (start - end), start, replay))).Where(p => alive.Contains(p)).ToList();
-            List<(Player, TimeSpan)> camps = CalculateCampCaptures(stormReplay, start, end);
+            IEnumerable<Unit> dead = CalculateDeadUnits(start, end, replay);
+            IEnumerable<Player> alive = CalculateAlivePlayers(start, end, replay);
+            IEnumerable<Unit> playerDeaths = CalculatePlayerDeaths(dead);
+            IEnumerable<Unit> mapObjectives = CalculateMapObjectives(dead);
+            IEnumerable<Unit> structures = CalculateStructures(dead);
+            IEnumerable<(int Team, TimeSpan TalentTime)> talents = CalculateTalents(start, end, replay);
+            IEnumerable<TeamObjective> teamObjectives = CalculateTeamObjectives(start, end, replay);
+            IEnumerable<GameEvent> pingSources = CalculatePingSources(stormReplay, start, end, alive);
+            IEnumerable<Player> previousKillers = CalculateKillers(CalculatePlayerDeaths(CalculateDeadUnits(start - (start - end), start, replay))).Where(p => alive.Contains(p));
+            IEnumerable<(Player, TimeSpan)> camps = CalculateCampCaptures(stormReplay, start, end);
 
             return new AnalyzerResult(
                 stormReplay: stormReplay,
@@ -41,69 +41,68 @@ namespace HeroesReplay.Analyzer
             );
         }
 
-        private static List<Player> CalculateKillers(List<Unit> playerDeaths) => playerDeaths.Select(unit => unit.PlayerKilledBy).Distinct().ToList();
+        private static IEnumerable<Player> CalculateKillers(IEnumerable<Unit> playerDeaths) => playerDeaths.Select(unit => unit.PlayerKilledBy).Distinct();
 
-        private static List<Unit> CalculateStructures(List<Unit> dead) => dead.Where(unit => unit.IsStructure()).ToList();
+        private static IEnumerable<Unit> CalculateStructures(IEnumerable<Unit> dead) => dead.Where(unit => unit.IsStructure());
 
-        private static List<Unit> CalculateMapObjectives(List<Unit> dead) => dead.Where(unit => unit.IsMapObjective()).ToList();
+        private static IEnumerable<Unit> CalculateMapObjectives(IEnumerable<Unit> dead) => dead.Where(unit => unit.IsMapObjective());
 
-        private static List<Unit> CalculatePlayerDeaths(List<Unit> dead) => dead.Where(unit => unit.IsHero()).ToList();
+        private static IEnumerable<Unit> CalculatePlayerDeaths(IEnumerable<Unit> dead) => dead.Where(unit => unit.IsHero());
 
-        private static List<Player> CalculateAlivePlayers(TimeSpan start, TimeSpan end, Replay replay) =>
-            replay.Players.Where(player => player.HeroUnits.Any(unit => unit.TimeSpanBorn <= start && unit.TimeSpanDied > end)).ToList();
+        private static IEnumerable<Player> CalculateAlivePlayers(TimeSpan start, TimeSpan end, Replay replay) =>
+            replay.Players.Where(player => player.HeroUnits.Any(unit => unit.TimeSpanBorn <= start && unit.TimeSpanDied > end));
 
-        private static List<Unit> CalculateDeadUnits(TimeSpan start, TimeSpan end, Replay replay) =>
+        private static IEnumerable<Unit> CalculateDeadUnits(TimeSpan start, TimeSpan end, Replay replay) =>
             replay.Units
                 .Where(unit => unit.IsDeadWithin(start, end) && unit.IsPlayerReferenced() && (unit.IsMapObjective() || unit.IsStructure() || unit.IsCamp() || unit.IsHero()))
-                .OrderBy(unit => unit.TimeSpanDied)
-                .ToList();
+                .OrderBy(unit => unit.TimeSpanDied);
 
         /// <summary>
         /// Ping events are only from the team which the replay file originates from
         /// </summary>
-        private static List<GameEvent> CalculatePingSources(StormReplay stormReplay, TimeSpan start, TimeSpan end, List<Player> alive) =>
-            stormReplay.Replay.GameEvents
-                .Where(e => e.eventType == GameEventType.CTriggerPingEvent && e.TimeSpan.IsWithin(start, end) && alive.Contains(e.player))
-                .ToList();
+        private static IEnumerable<GameEvent> CalculatePingSources(StormReplay stormReplay, TimeSpan start, TimeSpan end, IEnumerable<Player> alive) =>
+            stormReplay.Replay.GameEvents.Where(e => e.eventType == GameEventType.CTriggerPingEvent && e.TimeSpan.IsWithin(start, end) && alive.Contains(e.player));
 
-        private static List<TeamObjective> CalculateTeamObjectives(TimeSpan start, TimeSpan end, Replay replay) =>
+        private static IEnumerable<TeamObjective> CalculateTeamObjectives(TimeSpan start, TimeSpan end, Replay replay) =>
             replay.TeamObjectives
                 .SelectMany(teamObjectives => teamObjectives)
                 .Where(teamObjective => teamObjective.Player != null && teamObjective.TimeSpan.IsWithin(start, end))
-                .OrderBy(objective => objective.TimeSpan)
-                .ToList();
+                .OrderBy(objective => objective.TimeSpan);
 
-        private static List<(int Team, TimeSpan TalentTime)> CalculateTalents(TimeSpan start, TimeSpan end, Replay replay) =>
+        private static IEnumerable<(int Team, TimeSpan TalentTime)> CalculateTalents(TimeSpan start, TimeSpan end, Replay replay) =>
             replay.TeamLevels
                 .SelectMany(teamLevels => teamLevels)
                 .Where(teamLevel => Constants.Heroes.TALENT_LEVELS.Contains(teamLevel.Key))
                 .Where(teamLevel => teamLevel.Value.IsWithin(start, end))
-                .Select(x => (Team: x.Key, TalentTime: x.Value)).OrderBy(team => team.TalentTime).ToList();
+                .Select(x => (Team: x.Key, TalentTime: x.Value)).OrderBy(team => team.TalentTime);
 
-        private static List<(Player, TimeSpan)> CalculateCampCaptures(StormReplay stormReplay, TimeSpan start, TimeSpan end)
+        private static IEnumerable<(Player, TimeSpan)> CalculateCampCaptures(StormReplay stormReplay, TimeSpan start, TimeSpan end)
         {
-            List<(Player, TimeSpan)> captures = new List<(Player, TimeSpan)>();
-
             IEnumerable<TrackerEvent> now = stormReplay.Replay.TrackerEvents.Where(trackerEvent => trackerEvent.TimeSpan.IsWithin(start, end));
             IEnumerable<TrackerEvent> camps = now.Where(trackerEvent => trackerEvent.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent && trackerEvent.Data.dictionary[0].blobText == "JungleCampCapture");
 
-            foreach (var capture in camps)
+            foreach (TrackerEvent capture in camps)
             {
-                long teamId = capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.Value - 1;
-
-                IEnumerable<Unit> units = stormReplay.Replay.Units
-                    .Where(unit => unit.Group == Unit.UnitGroup.MercenaryCamp &&
-                                   unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId &&
-                                   unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10)) &&
-                                   unit.TimeSpanDied < capture.TimeSpan.Add(TimeSpan.FromSeconds(10)));
-
-                foreach (Player player in units.Select(unit => unit.PlayerKilledBy).Distinct())
+                int teamId = (int)capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.Value - 1;
+                
+                // IEnumerable<Unit> misc = stormReplay.Replay.Units.Where(unit => unit.OwnerChangeEvents.Any(ce => ce.Team == teamId && ce.TimeSpanOwnerChanged == capture.TimeSpan));
+                // IEnumerable<Point> points = misc.Select(x => x.PointBorn).Distinct();
+                // IEnumerable<Unit> units = stormReplay.Replay.Players.SelectMany(p => p.HeroUnits.Where(hu => hu.Positions.Any(p => !p.IsEstimated && p.TimeSpan >= capture.TimeSpan)));
+                
+                // IEnumerable<Unit> beacons = stormReplay.Replay.Units.Where(unit => unit.Group == Unit.UnitGroup.Miscellaneous);
+                IEnumerable<Unit> mercenaries = stormReplay.Replay.Units.Where(unit => unit.Group == Unit.UnitGroup.MercenaryCamp || unit.Group == Unit.UnitGroup.Unknown && 
+                                                                                       unit.IsDeadWithin(capture.TimeSpan.Subtract(TimeSpan.FromSeconds(30)), capture.TimeSpan) && 
+                                                                                       unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId);
+                // IEnumerable<Unit> locations = beacons.Where(b => b.OwnerChangeEvents.Any(ce => ce.TimeSpanOwnerChanged == capture.TimeSpan));
+                // locations.Where(unit => unit.PointBorn.DistanceTo())
+                
+                // IEnumerable<Unit> dead = units.Where(unit => unit.TimeSpanDied.HasValue && unit.TimeSpanDied.Value <= capture.TimeSpan && unit.TimeSpanDied.Value > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(30)));
+                
+                foreach (Player player in mercenaries.Select(unit => unit.PlayerKilledBy).Distinct())
                 {
-                    captures.Add((player, capture.TimeSpan));
+                    yield return (player, capture.TimeSpan);
                 }
             }
-
-            return captures;
         }
     }
 }

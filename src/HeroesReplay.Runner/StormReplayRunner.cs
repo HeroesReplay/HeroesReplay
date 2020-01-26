@@ -38,48 +38,49 @@ namespace HeroesReplay.Runner
             stormReplaySpectator.StateChange -= OnStateChange;
         }
 
-        private async Task RunAsync(StormReplay stormReplay)
-        {
-            await stormReplaySpectator.SpectateAsync(stormReplay);
-        }
-
-        private async Task LaunchAndRunAsync(StormReplay stormReplay)
+        private async Task RunAsync(StormReplay stormReplay, bool launch)
         {
             try
             {
-                heroesOfTheStorm.KillGame();
-
-                await heroesOfTheStorm.ConfigureClientAsync(); 
-
-                var started = await battleNet.WaitForBattleNetAsync();
-
-                if (!started)
+                if (launch)
                 {
-                    throw new Exception("BattleNet process was not found, so cannot attempt to start the game.");
+                    heroesOfTheStorm.TryKillGame();
                 }
 
-                var launched = await battleNet.WaitForGameLaunchedAsync();
-
-                if (!launched)
+                if (!heroesOfTheStorm.IsRunning)
                 {
-                    throw new Exception("Game process was not found launched.");
+                    await heroesOfTheStorm.ConfigureClientAsync();
+
+                    if (await battleNet.WaitForBattleNetAsync())
+                    {
+                        if (await battleNet.WaitForGameLaunchedAsync())
+                        {
+                            if (await heroesOfTheStorm.WaitForSelectedReplayAsync(stormReplay))
+                            {
+                                if (await heroesOfTheStorm.WaitForMapLoadingAsync(stormReplay))
+                                {
+                                    await stormReplaySpectator.SpectateAsync(stormReplay);
+                                }
+                                else
+                                {
+                                    throw new Exception("Game process not found in loading gameState.");
+                                }
+                            }
+                            else
+                            {
+                                throw new Exception("Game process version not found matching replay version: " + stormReplay.Replay.ReplayVersion);
+                            }
+                        }
+                        else
+                        {
+                            throw new Exception("Game process was not found launched.");
+                        }
+                    }
+                    else
+                    {
+                        throw new Exception("BattleNet process was not found, so cannot attempt to start the game.");
+                    }
                 }
-
-                var selected = await heroesOfTheStorm.WaitForSelectedReplayAsync(stormReplay);
-
-                if (!selected)
-                {
-                    throw new Exception("Game process version not found matching replay version: " + stormReplay.Replay.ReplayVersion);
-                }
-
-                var loading = await heroesOfTheStorm.WaitForMapLoadingAsync(stormReplay);
-
-                if (!loading)
-                {
-                    throw new Exception("Game process not found in loading gameState.");
-                }
-
-                await stormReplaySpectator.SpectateAsync(stormReplay);
             }
             catch (Exception e)
             {
@@ -87,7 +88,7 @@ namespace HeroesReplay.Runner
             }
             finally
             {
-                heroesOfTheStorm.KillGame();
+                heroesOfTheStorm.TryKillGame();
             }
         }
 
@@ -103,14 +104,7 @@ namespace HeroesReplay.Runner
             {
                 RegisterEvents();
 
-                if (launch)
-                {
-                    await LaunchAndRunAsync(stormReplay);
-                }
-                else
-                {
-                    await RunAsync(stormReplay);
-                }
+                await RunAsync(stormReplay, launch);
             }
             finally
             {
@@ -132,7 +126,7 @@ namespace HeroesReplay.Runner
 
         private void OnStateChange(object sender, GameEventArgs<GameStateDelta> e)
         {
-            if (e.Data.Previous == GameState.StartOfGame && e.Data.Current == GameState.Running && e.Timer < TimeSpan.FromSeconds(10))
+            if (e.Data.Previous == GameState.StartOfGame && e.Data.Current == GameState.Running && e.Timer <  TimeSpan.FromSeconds(35))
             {   
                 heroesOfTheStorm.SendToggleChat();
                 Thread.Sleep(TimeSpan.FromSeconds(5));

@@ -19,73 +19,85 @@ namespace HeroesReplay.Replays
 {
     public class StormReplayHotsApiProvider : IStormReplayProvider
     {
-        private int MinId { get; set; }
+        private int MinReplayId
+        {
+            get
+            {
+                try
+                {
+                    int minReplayId;
+
+                    FileInfo? latest = TempReplaysDirectory.GetFiles("*.StormReplay").OrderByDescending(f => f.CreationTime).FirstOrDefault();
+
+                    if (latest != null)
+                    {
+                        minReplayId = int.Parse(latest.Name.Split("_")[0]);
+                    }
+                    else if (configuration.GetValue<int>("minReplayId") != -1)
+                    {
+                        minReplayId = configuration.GetValue<int>("minReplayId");
+                    }
+                    else
+                    {
+                        minReplayId = Constants.ZEMILL_BASE_LINE_HOTS_API_REPLAY_ID;
+                    }
+
+                    logger.LogInformation($"[MIN REPLAY ID][{minReplayId}]");
+
+                    return minReplayId;
+                }
+                catch (Exception e)
+                {
+                    logger.LogError("Could not calculate starting replay id. Falling back to Zemill.");
+
+                    return Constants.ZEMILL_BASE_LINE_HOTS_API_REPLAY_ID;
+                }
+            }
+        }
+
+        private DirectoryInfo TempReplaysDirectory
+        {
+            get
+            {
+                DirectoryInfo cache = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "HeroesReplay"));
+                if (!cache.Exists) cache.Create();
+                return cache;
+            }
+        }
 
         private string AwsAccessKey => configuration.GetValue<string>("awsAccessKey");
 
         private string AwsSecretKey => configuration.GetValue<string>("awsSecretKey");
 
         private readonly CancellationTokenProvider provider;
+        private readonly PlayerBlackListChecker blackListChecker;
         private readonly IConfiguration configuration;
         private readonly ILogger<StormReplayHotsApiProvider> logger;
 
-        public StormReplayHotsApiProvider(CancellationTokenProvider provider, IConfiguration configuration, ILogger<StormReplayHotsApiProvider> logger)
+        public StormReplayHotsApiProvider(CancellationTokenProvider provider, PlayerBlackListChecker blackListChecker,  IConfiguration configuration, ILogger<StormReplayHotsApiProvider> logger)
         {
             this.provider = provider;
+            this.blackListChecker = blackListChecker;
             this.configuration = configuration;
             this.logger = logger;
-
-            MinId = configuration.GetValue<int>("minReplayId");
         }
 
         public async Task<StormReplay?> TryLoadReplayAsync()
         {
             try
             {
-                HotsApiReplay? hotsApiReplay = await GetNextReplayAsync(MinId);
+                HotsApiReplay? hotsApiReplay = await GetNextReplayAsync();
 
-                if (hotsApiReplay != null)
+                if (hotsApiReplay != null && blackListChecker.IsUsable(hotsApiReplay))
                 {
-                    using (AmazonS3Client s3Client = new AmazonS3Client(new BasicAWSCredentials(AwsAccessKey, AwsSecretKey), RegionEndpoint.EUWest1))
+                    FileInfo cacheStormReplay = CreateFile(hotsApiReplay);
+
+                    if (!cacheStormReplay.Exists)
                     {
-                        if (Uri.TryCreate(hotsApiReplay.Url, UriKind.Absolute, out Uri? uri))
-                        {
-                            GetObjectRequest request = new GetObjectRequest
-                            {
-                                RequestPayer = RequestPayer.Requester,
-                                BucketName = uri.Host.Split('.')[0],
-                                Key = uri.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped)
-                            };
-
-                            string stormReplay = Path.Combine(Path.GetTempPath(), request.Key);
-
-                            if (!File.Exists(stormReplay))
-                            {
-                                using (GetObjectResponse response = await s3Client.GetObjectAsync(request, provider.Token))
-                                {
-                                    await using (MemoryStream memoryStream = new MemoryStream())
-                                    {
-                                        await response.ResponseStream.CopyToAsync(memoryStream);
-                                        logger.LogInformation($"[HOTSAPI][SAVING][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{stormReplay}]");
-                                        await File.WriteAllBytesAsync(stormReplay, memoryStream.ToArray());
-                                        logger.LogInformation($"[HOTSAPI][SAVED][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{stormReplay}]");
-                                    }
-                                }
-                            }
-
-                            logger.LogInformation($"[HOTSAPI][PARSING][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{stormReplay}]");
-
-                            (ReplayParseResult result, Heroes.ReplayParser.Replay replay) = ParseReplay(await File.ReadAllBytesAsync(stormReplay), ignoreErrors: true, allowPTRRegion: false);
-
-                            logger.LogInformation($"[HOTSAPI][PARSED][{result}][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{stormReplay}]");
-
-                            if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
-                            {
-                                MinId = Convert.ToInt32(hotsApiReplay.Id);
-                                return new StormReplay(stormReplay, replay);
-                            }
-                        }
+                        await DownloadStormReplay(hotsApiReplay, cacheStormReplay);
                     }
+
+                    return await TryLoadReplay(hotsApiReplay, cacheStormReplay);
                 }
             }
             catch (Exception e)
@@ -96,7 +108,58 @@ namespace HeroesReplay.Replays
             return null;
         }
 
-        private async Task<HotsApiReplay?> GetNextReplayAsync(int previous)
+        private async Task<StormReplay?> TryLoadReplay(HotsApiReplay hotsApiReplay, FileInfo cacheStormReplay)
+        {
+            logger.LogInformation($"[HOTSAPI][PARSING][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{cacheStormReplay.FullName}]");
+
+            (ReplayParseResult result, Heroes.ReplayParser.Replay replay) = ParseReplay(await File.ReadAllBytesAsync(cacheStormReplay.FullName), true);
+
+            if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
+            {
+                logger.LogInformation("Parse Success: " + cacheStormReplay.FullName);
+                return new StormReplay(cacheStormReplay.FullName, replay);
+            }
+
+            return null;
+        }
+
+        private async Task DownloadStormReplay(HotsApiReplay hotsApiReplay, FileInfo cacheStormReplay)
+        {
+            using (AmazonS3Client s3Client = new AmazonS3Client(new BasicAWSCredentials(AwsAccessKey, AwsSecretKey), RegionEndpoint.EUWest1))
+            {
+                if (Uri.TryCreate(hotsApiReplay.Url, UriKind.Absolute, out Uri? uri))
+                {
+                    GetObjectRequest request = new GetObjectRequest
+                    {
+                        RequestPayer = RequestPayer.Requester,
+                        BucketName = uri.Host.Split('.')[0],
+                        Key = uri.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped)
+                    };
+
+                    using (GetObjectResponse response = await s3Client.GetObjectAsync(request, provider.Token))
+                    {
+                        await using (MemoryStream memoryStream = new MemoryStream())
+                        {
+                            await response.ResponseStream.CopyToAsync(memoryStream);
+
+                            logger.LogInformation($"[HOTSAPI][SAVING][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{cacheStormReplay.FullName}]");
+
+                            await using (var stream = cacheStormReplay.OpenWrite())
+                            {
+                                await stream.WriteAsync(memoryStream.ToArray());
+                                await stream.FlushAsync();
+                            }
+
+                            logger.LogInformation($"[HOTSAPI][SAVED][{hotsApiReplay.Id}][{hotsApiReplay.Url}][{cacheStormReplay.FullName}]");
+                        }
+                    }
+                }
+            }
+        }
+
+        private FileInfo CreateFile(HotsApiReplay replay) => new FileInfo(Path.Combine(TempReplaysDirectory.FullName, $"{replay.Id}_{replay.Filename}.StormReplay"));
+
+        private async Task<HotsApiReplay?> GetNextReplayAsync()
         {
             try
             {
@@ -104,11 +167,11 @@ namespace HeroesReplay.Replays
                 {
                     HotsApiClient hotsApiClient = new HotsApiClient(client);
 
-                    HotsApiResponse<ICollection<HotsApiReplay>> response = await hotsApiClient.ListReplaysAllAsync(min_id: previous, existing: true, with_players: false);
+                    HotsApiResponse<ICollection<HotsApiReplay>> response = await hotsApiClient.ListReplaysAllAsync(min_id: MinReplayId, existing: true, with_players: false);
 
                     if (response.StatusCode == 200)
                     {
-                        HotsApiReplay? replay = response.Result.FirstOrDefault(replay => replay.Id > previous && replay.Deleted != true && replay.Game_type == "StormLeague" || replay.Game_type == "QuickMatch");
+                        HotsApiReplay? replay = response.Result.Where(replay => replay.Id > MinReplayId).FirstOrDefault(replay => replay.Deleted != true && replay.Game_type == "StormLeague" || replay.Game_type == "QuickMatch");
 
                         if (replay != null)
                         {
