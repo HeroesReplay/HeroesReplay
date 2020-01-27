@@ -8,6 +8,7 @@
         <IsPackable>false</IsPackable>
         <LangVersion>8.0</LangVersion>
         <Nullable>enable</Nullable>
+        <ApplicationIcon>heroesreplay.ico</ApplicationIcon>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

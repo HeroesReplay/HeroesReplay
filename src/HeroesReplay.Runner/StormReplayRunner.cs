@@ -64,6 +64,13 @@ namespace HeroesReplay.Runner
                         await stormReplaySpectator.SpectateAsync(stormReplay);
                         break;
                     }
+                    case true when !heroesOfTheStorm.IsRunning:
+                    {
+                        await heroesOfTheStorm.ConfigureClientAsync();
+                        await LaunchGame(stormReplay);
+                        await stormReplaySpectator.SpectateAsync(stormReplay);
+                        break;
+                    }
                 }
             }
             catch (Exception e)
@@ -137,10 +144,10 @@ namespace HeroesReplay.Runner
             if (e.Data.Previous == GameState.StartOfGame && e.Data.Current == GameState.Running)
             {
                 heroesOfTheStorm.SendToggleChat();
-                Thread.Sleep(TimeSpan.FromSeconds(2));
+                Thread.Sleep(TimeSpan.FromSeconds(1));
                 
                 heroesOfTheStorm.SendToggleControls();
-                Thread.Sleep(TimeSpan.FromSeconds(2));
+                Thread.Sleep(TimeSpan.FromSeconds(1));
             }
         }
 
