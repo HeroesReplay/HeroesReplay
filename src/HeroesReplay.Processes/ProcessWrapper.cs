@@ -18,52 +18,6 @@ namespace HeroesReplay.Processes
 {
     public class ProcessWrapper : IDisposable
     {
-        private IntPtr deviceContext = IntPtr.Zero;
-        private IntPtr compatibleDeviceContext = IntPtr.Zero;
-        private Rectangle? windowDimensions;
-
-        protected Rectangle? Dimensions
-        {
-            get
-            {
-                if (windowDimensions == null && NativeMethods.GetWindowRect(WindowHandle, out RECT value))
-                {
-                    Logger.LogInformation("Getting Window Size");
-                    windowDimensions = Rectangle.FromLTRB(value.Left, value.Top, value.Right, value.Bottom);
-                }
-
-                return windowDimensions;
-            }
-        }
-
-
-        private IntPtr CompatibleDeviceContext
-        {
-            get
-            {
-                if (compatibleDeviceContext == IntPtr.Zero)
-                {
-                    Logger.LogInformation("Caching CompatibleDeviceContext");
-                    compatibleDeviceContext = NativeMethods.CreateCompatibleDC(deviceContext);
-                }
-
-                return compatibleDeviceContext;
-            }
-        }
-
-        private IntPtr DeviceContext
-        {
-            get
-            {
-                if (deviceContext == IntPtr.Zero)
-                {
-                    Logger.LogInformation("Caching DeviceContext");
-                    deviceContext = NativeMethods.GetWindowDC(WindowHandle);
-                }
-                return deviceContext;
-            }
-        }
-
         public bool IsRunning => Process.GetProcessesByName(ProcessName).Any();
 
         protected string ProcessName { get; }
@@ -72,98 +26,30 @@ namespace HeroesReplay.Processes
 
         protected IConfiguration Configuration { get; }
 
-        protected Process WrappedProcess => Process.GetProcessesByName(ProcessName)[0];
+        protected Process ActualProcess => Process.GetProcessesByName(ProcessName)[0];
 
-        protected IntPtr WindowHandle => WrappedProcess.MainWindowHandle;
+        protected IntPtr WindowHandle => ActualProcess.MainWindowHandle;
 
         private readonly OcrEngine ocrEngine = OcrEngine.TryCreateFromUserProfileLanguages();
 
-        private readonly CancellationTokenProvider provider;
+        private readonly CancellationTokenProvider tokenProvider;
 
-        protected CancellationToken Token => provider.Token;
+        protected DeviceContextHolder DeviceContextHolder { get; }
 
-        public ProcessWrapper(CancellationTokenProvider provider, ILogger<ProcessWrapper> logger, IConfiguration configuration, string processName)
+        protected CancellationToken Token => tokenProvider.Token;
+
+        public ProcessWrapper(CancellationTokenProvider tokenProvider, DeviceContextHolder contextHolder, ILogger<ProcessWrapper> logger, IConfiguration configuration, string processName)
         {
             this.Logger = logger;
             this.Configuration = configuration;
-            this.provider = provider;
+            this.tokenProvider = tokenProvider;
+            this.DeviceContextHolder = contextHolder;
             this.ProcessName = processName;
         }
 
-        // Windows desktop applications
-        protected Bitmap? TryPrintWindow()
+        public DeviceContextHolder AquireDeviceContext()
         {
-            if (Dimensions == null) return null;
-
-            Bitmap bmp = new Bitmap(Dimensions.Value.Width, Dimensions.Value.Height, PixelFormat.Format32bppArgb);
-
-            using (Graphics graphics = Graphics.FromImage(bmp))
-            {
-                IntPtr hdlDeviceContext = graphics.GetHdc();
-
-                try
-                {
-                    if (NativeMethods.PrintWindow(WindowHandle, hdlDeviceContext, 0))
-                    {
-                        return bmp;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Logger.LogError(e, $"Failed to capture bitmap of {WrappedProcess.ProcessName}");
-                    bmp.Dispose();
-                }
-                finally
-                {
-                    graphics.ReleaseHdc(hdlDeviceContext);
-                }
-            }
-
-            return null;
-        }
-
-        // DirectX/OpenGL render frame (but its not the latest painted frame either)
-        // https://docs.microsoft.com/en-us/windows/win32/gdi/capturing-an-image
-        protected Bitmap? TryBitBlt(Rectangle? region = null)
-        {
-            IntPtr bitmap = IntPtr.Zero;
-            IntPtr oldBitmap = IntPtr.Zero;
-            Rectangle? dimensions = region ?? Dimensions;
-
-            try
-            {
-                if (dimensions != null)
-                {
-                    bitmap = NativeMethods.CreateCompatibleBitmap(DeviceContext, dimensions.Value.Width, dimensions.Value.Height);
-                    oldBitmap = NativeMethods.SelectObject(CompatibleDeviceContext, bitmap);
-
-                    // To speed this up, don't copy the entire width/height of the application
-                    if (NativeMethods.BitBlt(CompatibleDeviceContext, 0, 0, dimensions.Value.Width, dimensions.Value.Height, DeviceContext, dimensions.Value.Left, dimensions.Value.Top, Constants.SRCCOPY))
-                    {
-                        return Image.FromHbitmap(bitmap);
-                    }
-                    else
-                    {
-                        NativeMethods.DeleteDC(compatibleDeviceContext);
-                        NativeMethods.ReleaseDC(WindowHandle, deviceContext);
-
-                        deviceContext = IntPtr.Zero;
-                        compatibleDeviceContext = IntPtr.Zero;
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Logger.LogError(e, $"Failed to capture bitmap of {WrappedProcess.ProcessName}");
-                throw;
-            }
-            finally
-            {
-                NativeMethods.SelectObject(compatibleDeviceContext, oldBitmap);
-                NativeMethods.DeleteObject(bitmap);
-            }
-
-            return null;
+            return this.DeviceContextHolder.AquireDeviceContext(this.ActualProcess);
         }
 
         // https://docs.microsoft.com/en-us/dotnet/framework/winforms/advanced/how-to-set-jpeg-compression-level
@@ -187,22 +73,24 @@ namespace HeroesReplay.Processes
 
         protected async Task<bool> GetWindowContainsAnyAsync(CaptureMethod captureMethod, params string[] lines)
         {
-            Bitmap? bitmap = captureMethod switch
+            using (DeviceContextHolder deviceContext = DeviceContextHolder.AquireDeviceContext(this.ActualProcess))
             {
-                CaptureMethod.PrintScreen => TryPrintWindow(),
-                CaptureMethod.BitBlt => TryBitBlt(),
-                _ => throw new ArgumentOutOfRangeException(nameof(captureMethod), captureMethod, "Unhandled Capture method.")
-            };
+                Bitmap? bitmap = captureMethod switch
+                {
+                    CaptureMethod.PrintScreen => deviceContext.TryPrintWindow(),
+                    CaptureMethod.BitBlt => deviceContext.TryBitBlt()
+                };
 
-            try
-            {
-                OcrResult? result = await TryGetOcrResult(bitmap, lines);
+                try
+                {
+                    OcrResult? result = await TryGetOcrResult(bitmap, lines);
 
-                return result != null;
-            }
-            finally
-            {
-                bitmap?.Dispose();
+                    return result != null;
+                }
+                finally
+                {
+                    bitmap?.Dispose();
+                }
             }
         }
 
@@ -223,7 +111,10 @@ namespace HeroesReplay.Processes
             }
         }
 
-        protected async Task<OcrResult?> TryGetOcrResult(Bitmap? bitmap, params string[] lines) => await TryGetOcrResult(bitmap, (IEnumerable<string>)lines);
+        protected async Task<OcrResult?> TryGetOcrResult(Bitmap? bitmap, params string[] lines)
+        {
+            return await TryGetOcrResult(bitmap, (IEnumerable<string>)lines);
+        }
 
         private ImageCodecInfo? GetEncoder(ImageFormat format)
         {
@@ -244,8 +135,7 @@ namespace HeroesReplay.Processes
 
         public void Dispose()
         {
-            NativeMethods.DeleteDC(compatibleDeviceContext);
-            NativeMethods.ReleaseDC(WindowHandle, deviceContext);
+
         }
     }
 }

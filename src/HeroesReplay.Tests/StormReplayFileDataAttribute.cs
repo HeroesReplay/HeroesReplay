@@ -20,7 +20,7 @@ namespace HeroesReplay.Tests
 
         public override IEnumerable<object[]> GetData(MethodInfo testMethod)
         {
-            (DataParser.ReplayParseResult replayParseResult, Replay replay) = DataParser.ParseReplay(File.ReadAllBytes(Path.Combine(Directory.GetCurrentDirectory(), "replays", path)), ignoreErrors: true, allowPTRRegion: false);
+            (DataParser.ReplayParseResult replayParseResult, Replay replay) = DataParser.ParseReplay(File.ReadAllBytes(Path.Combine(Directory.GetCurrentDirectory(), "replays", path)), Constants.REPLAY_PARSE_OPTIONS);
 
             yield return new object[] { new StormReplay(path, replay) };
         }

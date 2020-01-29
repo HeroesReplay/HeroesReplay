@@ -24,15 +24,14 @@ namespace HeroesReplay.Processes
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern bool MoveWindow(IntPtr hWnd, int x, int y, int nWidth, int nHeight, bool bRepaint);
 
-
         [DllImport("user32.dll")]
-        internal static extern bool SendMessage(IntPtr hWnd, int Msg, Key wParam, IntPtr lParam);
+        internal static extern bool SendMessage(IntPtr hWnd, WindowsMessage Msg, Key wParam, IntPtr lParam);
 
         [DllImport("user32.dll", SetLastError = true)]
-        internal static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+        internal static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
 
         [DllImport("gdi32.dll")]
-        internal static extern bool BitBlt(IntPtr hdcDest, int nxDest, int nyDest, int nWidth, int nHeight, IntPtr hdcSrc, int nXSrc, int nYSrc, int dwRop);
+        internal static extern bool BitBlt(IntPtr hdcDest, int nxDest, int nyDest, int nWidth, int nHeight, IntPtr hdcSrc, int nXSrc, int nYSrc, TernaryRasterOperations dwRop);
 
         [DllImport("gdi32.dll")]
         internal static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int width, int nHeight);

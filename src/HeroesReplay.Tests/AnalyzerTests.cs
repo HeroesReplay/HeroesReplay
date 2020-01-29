@@ -22,7 +22,7 @@ namespace HeroesReplay.Tests
         {
             AnalyzerResult analyzerResult = analyzer.Analyze(fixture.StormReplay, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1));
 
-            Assert.Equal(10, analyzerResult.PlayersAlive.Count());
+            Assert.Equal(10, analyzerResult.Alive.Count());
         }
     }
 }

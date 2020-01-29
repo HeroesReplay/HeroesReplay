@@ -2,6 +2,8 @@
 using System.CommandLine;
 using System.CommandLine.Builder;
 using System.CommandLine.Invocation;
+using System.CommandLine.IO;
+using System.CommandLine.Parsing;
 using System.CommandLine.Rendering;
 using System.IO;
 using System.Linq;
@@ -39,9 +41,9 @@ namespace HeroesReplay.CLI
 
         private async Task CheckBattleNetAsync(InvocationContext context, Func<InvocationContext, Task> next)
         {
-            if (context.ParseResult.HasOption("bnet"))
+            if (context.ParseResult.HasOption(Constants.ConfigKeys.BattleNetPath))
             {
-                if (context.ParseResult.ValueForOption<DirectoryInfo>("bnet").EnumerateFiles("*.exe").All(e => e.Name != Constants.Bnet.BATTLE_NET_EXE))
+                if (context.ParseResult.ValueForOption<DirectoryInfo>(Constants.ConfigKeys.BattleNetPath).EnumerateFiles("*.exe").All(e => e.Name != Constants.Bnet.BATTLE_NET_EXE))
                 {
                     context.Console.Out.WriteLine($"Directory provided does not contain {Constants.Bnet.BATTLE_NET_EXE}.");
                 }

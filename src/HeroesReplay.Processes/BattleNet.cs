@@ -20,9 +20,9 @@ namespace HeroesReplay.Processes
 
         private string ProcessPath => Path.Combine(BattleNetPath, Constants.Bnet.BATTLE_NET_EXE);
 
-        public BattleNet(CancellationTokenProvider tokenProvider, IConfiguration configuration, ILogger<BattleNet> logger) : base(tokenProvider, logger, configuration, Constants.Bnet.BATTLE_NET_PROCESS_NAME)
+        public BattleNet(CancellationTokenProvider tokenProvider, DeviceContextHolder deviceContextHolder, IConfiguration configuration, ILogger<BattleNet> logger) : base(tokenProvider, deviceContextHolder, logger, configuration, Constants.Bnet.BATTLE_NET_PROCESS_NAME)
         {
-            
+
         }
 
         public async Task<bool> WaitForBattleNetAsync()
@@ -87,8 +87,8 @@ namespace HeroesReplay.Processes
 
         private void ActivatePlayNowButton()
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.Return, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.Return, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.Return, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.Return, IntPtr.Zero);
         }
     }
 }

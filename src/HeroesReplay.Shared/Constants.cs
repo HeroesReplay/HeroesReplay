@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using Heroes.ReplayParser;
 using static System.Environment;
 
@@ -12,17 +10,78 @@ namespace HeroesReplay.Shared
     {
         public const string STORM_INTERFACE_NAME = "AhliObs 0.66.StormInterface";
         public const string STORM_REPLAY_EXTENSION = ".StormReplay";
-
+        public const string STORM_REPLAY_CACHED_FILE_NAME_SPLITTER = "_";
         public const string STORM_REPLAY_WILDCARD = "*.StormReplay";
+        public const string STORM_REPLAY_INFO_FILE = "CurrentReplay.txt";
         public const string VARIABLES_WILDCARD = "*Variables.txt";
+        public const string HEROES_PROCESS_NAME = "HeroesOfTheStorm_x64";
+        public const string HEROES_SWITCHER_PROCESS = "HeroesSwitcher_x64.exe";
 
+        public static class ConfigKeys
+        {
+            public const string BattleNetPath = "bnet";
+            public const string MinReplayId = "minReplayId";
+            public const string ReplayProviderPath = "path";
+            public const string Launch = "launch";
+            public const string AwsAccessKey = "awsAccessKey";
+            public const string AwsSecretKey = "awsSecretKey";
+        }
+        
+        public const string HEROES_REPLAY_AWS_ACCESS_KEY = nameof(HEROES_REPLAY_AWS_ACCESS_KEY);
+        public const string HEROES_REPLAY_AWS_SECRET_KEY = nameof(HEROES_REPLAY_AWS_SECRET_KEY);
+
+        public const int REPLAY_ID_UNSET = -1;
+        public const int REPLAY_ID_ZEMILL_BASE_LINE = 23940740;
+
+        public static readonly string ASSETS_PATH = Path.Combine(Directory.GetCurrentDirectory(), "Assets");
+        public static readonly string ASSETS_STORM_INTERFACE_PATH = Path.Combine(ASSETS_PATH, Constants.STORM_INTERFACE_NAME);
+        public static readonly string ASSETS_MAP_JSON_PATH = Path.Combine(ASSETS_PATH, "Maps.json");
+        public static readonly string ASSETS_HEROES_JSON_PATH = Path.Combine(ASSETS_PATH, "Heroes.json");
+
+        public static readonly string CURRENT_REPLAY_INFORMATION_FILE_PATH = Path.Combine(Directory.GetCurrentDirectory(), STORM_REPLAY_INFO_FILE);
         public static readonly string USER_GAME_FOLDER = Path.Combine(GetFolderPath(SpecialFolder.MyDocuments), "Heroes of the Storm");
-        public static readonly string USER_REPLAYS_PATH = Path.Combine(USER_GAME_FOLDER, "Accounts");
+        public static readonly string STORM_REPLAYS_USER_PATH = Path.Combine(USER_GAME_FOLDER, "Accounts");
         public static readonly string USER_VARIABLES_PATH = Path.Combine(USER_GAME_FOLDER, "Variables.txt");
-        public static readonly string USER_STORM_INTERFACE_PATH = Path.Combine(USER_GAME_FOLDER, "Interfaces", STORM_INTERFACE_NAME);
+        public static readonly string STORM_INTERFACE_USER_PATH = Path.Combine(USER_GAME_FOLDER, "Interfaces", STORM_INTERFACE_NAME);
+        public static readonly string STORM_REPLAY_CACHE_PATH = Path.Combine(Path.GetTempPath(), "HeroesReplay");
 
 
-        public const int ZEMILL_BASE_LINE_HOTS_API_REPLAY_ID = 23940740;
+        public static ParseOptions REPLAY_PARSE_OPTIONS = new ParseOptions()
+        {
+            AllowPTR = false,
+            IgnoreErrors = true,
+            ShouldParseDetailedBattleLobby = false,
+            ShouldParseEvents = true,
+            ShouldParseMessageEvents = true,
+            ShouldParseMouseEvents = true,
+            ShouldParseStatistics = true,
+            ShouldParseUnits = true
+        };
+        
+        public static class Ocr
+        {
+            public const string LOADING_SCREEN_TEXT = "WELCOME TO";
+            public const string GAME_RUNNING_TEXT = "Game is running.";
+            public const string PLAY_BUTTON_TEXT = "PLAY";
+            public const string SHOP_HEROES_TEXT = "Shop Heroes of the Storm";
+
+            public const string TIMER_COLON = ":";
+            public const int TIMER_HOURS = 3;
+            public const int TIMER_MINUTES = 2;
+
+            public const string TIMESPAN_FORMAT_HOURS = "hh\\:mm\\:ss";
+            public const string TIMESPAN_MATCH_START_FORMAT = "\\-mm\\:ss";
+            public const string TIMESPAN_FORMAT_MINUTES = "mm\\:ss";
+        }
+
+        public static class Bnet
+        {
+            public const string BATTLE_NET_LAUNCHER_EXE = "Battle.net Launcher.exe";
+            public const string BATTLE_NET_EXE = "Battle.net.exe";
+            public const string BATTLE_NET_PROCESS_NAME = "Battle.net";
+            public const string BATTLE_NET_SELECT_HEROES_ARG = "--game heroes";
+            public const string BATTLE_NET_DEFAULT_INSTALL_PATH = "C:\\Program Files (x86)\\Battle.net";
+        }
 
         public static Dictionary<MatchAwardType, string[]> MatchAwards = new Dictionary<MatchAwardType, string[]>()
         {
@@ -68,13 +127,6 @@ namespace HeroesReplay.Shared
 
         public static class Heroes
         {
-            public static readonly Key[] KEYS_HEROES = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Key.D0 };
-            public static readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
-
-            public static readonly int[] TALENT_LEVELS = { 1, 4, 7, 10, 13, 16, 20 };
-
-            public static List<Hero> All = typeof(Heroes).GetProperties(BindingFlags.Public).Where(p => p.PropertyType == typeof(Hero)).Select(p => (Hero)p.GetValue(null)).ToList();
-
             public static Hero Abathur = new Hero("Abathur", HeroType.Melee);
             public static Hero Alarak = new Hero("Alarak", HeroType.Melee);
             public static Hero Alexstrasza = new Hero("Alexstrasza", HeroType.Ranged);
@@ -164,53 +216,12 @@ namespace HeroesReplay.Shared
             public static Hero Zeratul = new Hero("Zeratul", HeroType.Melee);
             public static Hero Zuljin = new Hero("Zuljin", HeroType.Ranged);
 
-            public const string HEROES_PROCESS_NAME = "HeroesOfTheStorm_x64";
-            public const string HEROES_SWITCHER_PROCESS = "HeroesSwitcher_x64.exe";
-
-            public static TimeSpan KILL_STREAK_TIMER = TimeSpan.FromSeconds(12);
-
-            public static TimeSpan MAX_PENTA_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 4;
-            public static TimeSpan MAX_QUAD_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 3;
-            public static TimeSpan MAX_TRIPLE_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 2;
-            public static TimeSpan MAX_MULTI_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 1;
+            // This must come last, or the other static fields are not yet defined, resulting in a list of nulls. 
+            public static List<Hero> All = typeof(Heroes).GetFields().Where(f => f.FieldType == typeof(Hero)).Select(f => (Hero)f.GetValue(null)).ToList();
         }
 
-        public const int WM_KEYDOWN = 0x100;
-        public const int WM_KEYUP = 0x101;
-        public const int WM_CHAR = 0x102;
-        public const int SRCCOPY = 0x00CC0020;
+        
 
-        public static class Cmd
-        {
-            public const string ARG_REPLAY = "replay";
-            public const string ARG_LAUNCH = "launch";
-            public const string ARG_BNET_INSTALL = "bnet";
-            public const string ARG_REPLAYS_DIR = "replays";
-        }
-
-        public static class Ocr
-        {
-            public const string LOADING_SCREEN_TEXT = "WELCOME TO";
-            public const string GAME_RUNNING_TEXT = "Game is running.";
-            public const string PLAY_BUTTON_TEXT = "PLAY";
-            public const string SHOP_HEROES_TEXT = "Shop Heroes of the Storm";
-
-            public const string TIMER_COLON = ":";
-            public const int TIMER_HOURS = 3;
-            public const int TIMER_MINUTES = 2;
-
-            public const string TIMESPAN_FORMAT_HOURS = "hh\\:mm\\:ss";
-            public const string TIMESPAN_MATCH_START_FORMAT = "\\-mm\\:ss";
-            public const string TIMESPAN_FORMAT_MINUTES = "mm\\:ss";
-        }
-
-        public static class Bnet
-        {
-            public const string BATTLE_NET_LAUNCHER_EXE = "Battle.net Launcher.exe";
-            public const string BATTLE_NET_EXE = "Battle.net.exe";
-            public const string BATTLE_NET_PROCESS_NAME = "Battle.net";
-            public const string BATTLE_NET_SELECT_HEROES_ARG = "--game heroes";
-            public const string BATTLE_NET_DEFAULT_INSTALL_PATH = "C:\\Program Files (x86)\\Battle.net";
-        }
+        
     }
 }

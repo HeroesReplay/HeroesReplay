@@ -1,5 +1,4 @@
-﻿using System.CommandLine;
-using System.CommandLine.Invocation;
+﻿using System.CommandLine.Parsing;
 using System.Threading.Tasks;
 using HeroesReplay.Shared;
 using Microsoft.Extensions.DependencyInjection;

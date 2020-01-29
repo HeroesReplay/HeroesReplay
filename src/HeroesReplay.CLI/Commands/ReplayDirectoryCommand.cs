@@ -33,7 +33,12 @@ namespace HeroesReplay.CLI.Commands
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json")
-                .AddInMemoryCollection(new[] { new KeyValuePair<string, string>("bnet", bnet.FullName), new KeyValuePair<string, string>("path", path.FullName), new KeyValuePair<string, string>("launch", launch.ToString()),  })
+                .AddInMemoryCollection(new[]
+                {
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.BattleNetPath, bnet.FullName), 
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.ReplayProviderPath, path.FullName),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString()),
+                })
                 .Build();
 
 
@@ -43,8 +48,10 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton((provider) => new CancellationTokenProvider(cancellationToken))
                 .AddSingleton<HeroesOfTheStorm>()
                 .AddSingleton<BattleNet>()
+                .AddSingleton<DeviceContextHolder>()
                 .AddSingleton<StormReplayAnalyzer>()
                 .AddSingleton<StormReplayHeroSelector>()
+                .AddSingleton<StormReplayDetailsWriter>()
                 .AddSingleton<StormReplaySpectator>()
                 .AddSingleton<IStormReplayProvider, StormReplayDirectoryProvider>()
                 .AddSingleton<StormReplayConsumer>()

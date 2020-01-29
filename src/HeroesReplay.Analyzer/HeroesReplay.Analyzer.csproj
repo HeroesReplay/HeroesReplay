@@ -10,7 +10,7 @@
 
     <ItemGroup>
         <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
-        <PackageReference Include="Heroes.ReplayParser" Version="1.2.1" />
+        <PackageReference Include="Heroes.ReplayParser" Version="1.2.7" />
     </ItemGroup>
 
     <ItemGroup>

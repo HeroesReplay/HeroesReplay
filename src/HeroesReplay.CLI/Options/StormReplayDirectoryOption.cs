@@ -10,8 +10,8 @@ namespace HeroesReplay.CLI.Options
     {
         public StormReplayDirectoryOption() : base("--path", "The path to a directory of .StormReplay files.")
         {
-            Required = !new DirectoryInfo(Constants.USER_REPLAYS_PATH).GetFiles(Constants.STORM_REPLAY_WILDCARD, SearchOption.AllDirectories).Any();
-            Argument = new Argument<DirectoryInfo>(() => new DirectoryInfo(Constants.USER_REPLAYS_PATH)) { Arity = ArgumentArity.ZeroOrOne }.LegalFilePathsOnly();
+            Required = !new DirectoryInfo(Constants.STORM_REPLAYS_USER_PATH).GetFiles(Constants.STORM_REPLAY_WILDCARD, SearchOption.AllDirectories).Any();
+            Argument = new Argument<DirectoryInfo>(() => new DirectoryInfo(Constants.STORM_REPLAYS_USER_PATH)) { Arity = ArgumentArity.ZeroOrOne }.LegalFilePathsOnly();
         }
     }
 }

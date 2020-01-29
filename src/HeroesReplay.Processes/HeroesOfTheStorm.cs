@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -21,7 +21,10 @@ namespace HeroesReplay.Processes
     /// </summary>
     public class HeroesOfTheStorm : ProcessWrapper
     {
-        public HeroesOfTheStorm(CancellationTokenProvider tokenProvider, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration) : base(tokenProvider, logger, configuration, Constants.Heroes.HEROES_PROCESS_NAME)
+        public static readonly Key[] KEYS_HEROES = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Key.D0 };
+        public static readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
+
+        public HeroesOfTheStorm(CancellationTokenProvider tokenProvider, DeviceContextHolder deviceContextHolder, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration) : base(tokenProvider, deviceContextHolder, logger, configuration, Constants.HEROES_PROCESS_NAME)
         {
 
         }
@@ -30,30 +33,39 @@ namespace HeroesReplay.Processes
         {
             string[] files = Directory.GetFiles(Constants.USER_GAME_FOLDER, Constants.VARIABLES_WILDCARD, SearchOption.AllDirectories).Where(p => Path.GetFileName(p).Equals("Variables.txt", StringComparison.OrdinalIgnoreCase)).ToArray();
 
-            if (!File.Exists(Constants.USER_STORM_INTERFACE_PATH))
+            if (!File.Exists(Constants.STORM_INTERFACE_USER_PATH))
             {
-                File.Copy(Path.Combine(Directory.GetCurrentDirectory(), "Assets", Constants.STORM_INTERFACE_NAME), destFileName: Constants.USER_STORM_INTERFACE_PATH, true);
+                File.Copy(Constants.ASSETS_STORM_INTERFACE_PATH, destFileName: Constants.STORM_INTERFACE_USER_PATH, true);
 
-                Logger.LogInformation($"[INTERFACE SET][{Constants.USER_STORM_INTERFACE_PATH}]");
+                Logger.LogInformation($"[INTERFACE SET][{Constants.STORM_INTERFACE_USER_PATH}]");
             }
 
 
             foreach (string file in files)
             {
+                if (!File.Exists(file + ".bak")) File.Copy(file, file + ".bak");
+
                 string[] lines = await File.ReadAllLinesAsync(file);
                 Dictionary<string, string> values = lines.ToDictionary(keySelector => keySelector.Split('=')[0], elementSelector => elementSelector.Split('=')[1]);
 
                 values["observerinterface"] = Constants.STORM_INTERFACE_NAME;
                 values["replayinterface"] = Constants.STORM_INTERFACE_NAME;
-                values["displayreplaytime"] = "false";
-                values["camerafollow"] = "false";
-                values["camerasmartpan"] = "true";
-
+                //values["camerafollow"] = "false";
+                //values["camerasmartpan"] = "false";
+                //values["soundglobal"] = "true";
+                //values["sound"] = "true";
+                //values["soundui"] = "false";
+                //values["MusicHeard"] = "1";
                 //values["width"] = "1920";
                 //values["height"] = "1080";
-                //values["windowx"] = "0";
-                //values["windowy"] = "0";
+                //values["windowx"] = "55";
+                //values["windowy"] = "55";
                 //values["windowstate"] = "1";
+                //values["cursorconfinemode"] = "2";
+                //values["mousescrollenabled"] = "false";
+                //values["mousewheelzoomenabled"] = "false";
+                //values["displayreplaytime"] = "false";
+                //values["enableAlliedChat"] = "false";
 
                 Logger.LogInformation($"[VARIABLES SET][{file}]");
 
@@ -61,11 +73,9 @@ namespace HeroesReplay.Processes
             }
         }
 
-        private Rectangle TimerRegion => new Rectangle(new System.Drawing.Point(Dimensions.Value.Width / 2 - 50, 10), new Size(100, 50));
-
-        public async Task<TimeSpan?> TryGetTimerAsync()
+        public async Task<TimeSpan?> TryGetTimerAsync(DeviceContextHolder contextHolder)
         {
-            Bitmap? centerTimer = TryBitBlt(TimerRegion);
+            Bitmap? centerTimer = contextHolder.TryBitBlt(new Rectangle(new System.Drawing.Point(contextHolder.Dimensions.Width / 2 - 50, 0), new Size(100, 40)));
 
             if (centerTimer == null) return null;
 
@@ -73,15 +83,19 @@ namespace HeroesReplay.Processes
             {
                 using (centerTimer)
                 {
-                    OcrResult? result = await TryGetOcrResult(centerTimer, Constants.Ocr.TIMER_COLON);
-
-                    if (result != null)
+                    // OCR results are more accurate with a larger image (even if quality is reduced)
+                    using (Bitmap enlargedTimer = centerTimer.GetResized(centerTimer.Width * 2, centerTimer.Height * 2))
                     {
-                        TimeSpan? timer = TryParseTimeSpan(result);
+                        OcrResult? result = await TryGetOcrResult(enlargedTimer, Constants.Ocr.TIMER_COLON);
 
-                        if (timer != null)
+                        if (result != null)
                         {
-                            return timer.Value;
+                            return TryParseTimeSpan(result);
+                        }
+                        else
+                        {
+                            Logger.LogInformation("[TIMER][Could not parse]");
+                            // enlargedTimer.Save("C:\\temp\\" + Guid.NewGuid() + ".bmp", ImageFormat.MemoryBmp);
                         }
                     }
                 }
@@ -107,7 +121,7 @@ namespace HeroesReplay.Processes
         {
             try
             {
-                WrappedProcess.Kill();
+                ActualProcess.Kill();
                 Logger.LogInformation($"[KILLED][{ProcessName}][{DateTime.Now}]");
                 await Task.Delay(TimeSpan.FromSeconds(5), Token);
                 return true;
@@ -130,10 +144,8 @@ namespace HeroesReplay.Processes
                 switcher.WaitForExit();
 
                 return await Policy
-                    .Handle<InvalidOperationException>()
-                        .Or<Win32Exception>()
-                        .Or<NullReferenceException>()
-                        .OrResult<bool>(result => result == false)
+                    .Handle<Exception>()
+                    .OrResult<bool>(result => result == false)
                     .WaitAndRetryAsync(retryCount: 15, retry => TimeSpan.FromSeconds(2))
                     .ExecuteAsync(async (t) => Process.GetProcessesByName(ProcessName).Any(p => IsMatchingClientVersion(stormReplay, p)), token);
             }
@@ -155,27 +167,27 @@ namespace HeroesReplay.Processes
 
         public void SendFocusHero(int index)
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Constants.Heroes.KEYS_HEROES[index], IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Constants.Heroes.KEYS_HEROES[index], IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Constants.Heroes.KEYS_HEROES[index], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, KEYS_HEROES[index], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, KEYS_HEROES[index], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, KEYS_HEROES[index], IntPtr.Zero);
         }
 
         public void SendTogglePause()
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.P, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.P, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.P, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.P, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.P, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.P, IntPtr.Zero);
         }
 
         public void SendToggleChat()
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.C, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.C, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.C, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.C, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.C, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.C, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
         /// <summary>
@@ -183,64 +195,64 @@ namespace HeroesReplay.Processes
         /// </summary>
         public void SendToggleZoom()
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.Z, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.Z, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.Z, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.Z, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.Z, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.Z, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
         }
 
         public void SendFollow()
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.L, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.L, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.L, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.L, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.L, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.L, IntPtr.Zero);
         }
 
         public void SendToggleTime()
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.T, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.T, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.T, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.T, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.T, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.T, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
         public void SendToggleControls()
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.O, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.O, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.O, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.O, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.O, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.O, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
         public void SendPanelChange(int index)
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Constants.Heroes.KEYS_CONSOLE_PANEL[index], IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Constants.Heroes.KEYS_CONSOLE_PANEL[index], IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, KEYS_CONSOLE_PANEL[index], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, KEYS_CONSOLE_PANEL[index], IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
         public void SendToggleBottomConsole()
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.W, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.W, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.W, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.W, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.W, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.W, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
         public void SendToggleInfoPanel()
         {
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYDOWN, Key.C, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_CHAR, Key.C, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.C, IntPtr.Zero);
-            NativeMethods.SendMessage(WindowHandle, Constants.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.C, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.C, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.C, IntPtr.Zero);
+            NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
         private bool IsMatchingClientVersion(StormReplay stormReplay, Process p)
@@ -259,12 +271,12 @@ namespace HeroesReplay.Processes
                 .WaitAndRetry(retryCount: 5, retry => TimeSpan.FromSeconds(10))
                 .Execute(() =>
                 {
-                    DirectoryInfo current = new DirectoryInfo(Path.GetDirectoryName(WrappedProcess.MainModule.FileName));
+                    DirectoryInfo current = new DirectoryInfo(Path.GetDirectoryName(ActualProcess.MainModule.FileName));
                     FileInfo? switcher = null;
 
                     while (switcher == null)
                     {
-                        switcher = current.GetFiles(Constants.Heroes.HEROES_SWITCHER_PROCESS, SearchOption.AllDirectories).FirstOrDefault();
+                        switcher = current.GetFiles(Constants.HEROES_SWITCHER_PROCESS, SearchOption.AllDirectories).FirstOrDefault();
                         current = current.Parent;
                     }
 
@@ -289,7 +301,7 @@ namespace HeroesReplay.Processes
             }
             catch (Exception e)
             {
-                Logger.LogError(e, $"Could not parse '{ocrResult.Text}' in Ocr result");
+                Logger.LogError($"Could not parse '{ocrResult.Text}' in Ocr result");
             }
 
             return null;

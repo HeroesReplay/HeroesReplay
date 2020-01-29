@@ -7,33 +7,36 @@ namespace HeroesReplay.Runner
 {
     public class StormReplayConsumer
     {
+        private readonly CancellationTokenProvider tokenProvider;
         private readonly ILogger<StormReplayConsumer> logger;
         private readonly IStormReplayProvider provider;
         private readonly StormReplayRunner runner;
+        private readonly StormReplayDetailsWriter stormReplayDetailsWriter;
 
-        public StormReplayConsumer(ILogger<StormReplayConsumer> logger, IStormReplayProvider provider, StormReplayRunner runner)
+        public StormReplayConsumer(CancellationTokenProvider tokenProvider, ILogger<StormReplayConsumer> logger, IStormReplayProvider provider, StormReplayRunner runner, StormReplayDetailsWriter stormReplayDetailsWriter)
         {
+            this.tokenProvider = tokenProvider;
             this.logger = logger;
             this.provider = provider;
             this.runner = runner;
+            this.stormReplayDetailsWriter = stormReplayDetailsWriter;
         }
 
         public async Task ReplayAsync(bool launch)
         {
-            StormReplay? stormReplay;
-
-            do
+            while (!tokenProvider.Token.IsCancellationRequested)
             {
-                stormReplay = await provider.TryLoadReplayAsync();
+                StormReplay? stormReplay = await provider.TryLoadReplayAsync();
 
                 if (stormReplay != null)
                 {
                     logger.LogInformation("Loaded: " + stormReplay.Path);
 
+                    await stormReplayDetailsWriter.WriteDetailsAsync(stormReplay);
+
                     await runner.ReplayAsync(stormReplay, launch);
                 }
             }
-            while (stormReplay != null);
         }
     }
 }

@@ -25,7 +25,7 @@ namespace HeroesReplay.Replays
         {
             while (queue.TryDequeue(out var path))
             {
-                (DataParser.ReplayParseResult result, Replay replay) = DataParser.ParseReplay(await File.ReadAllBytesAsync(path), true);
+                (DataParser.ReplayParseResult result, Replay replay) = DataParser.ParseReplay(await File.ReadAllBytesAsync(path), Constants.REPLAY_PARSE_OPTIONS);
 
                 if (result != DataParser.ReplayParseResult.Exception && result != DataParser.ReplayParseResult.PreAlphaWipe && result != DataParser.ReplayParseResult.Incomplete)
                 {

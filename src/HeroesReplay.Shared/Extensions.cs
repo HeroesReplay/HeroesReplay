@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using Heroes.ReplayParser;
@@ -9,7 +10,6 @@ namespace HeroesReplay.Shared
     public static class Extensions
     {
         public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> items) => items.OrderBy(i => Guid.NewGuid());
-
 
         /// <summary>
         /// The in-game timer at the top has a NEGATIVE offset of 610.
@@ -36,6 +36,18 @@ namespace HeroesReplay.Shared
             string[] segments = time.Split(':');
 
             return new TimeSpan(days: 0, hours: 0, minutes: int.Parse(segments[0]), seconds: int.Parse(segments[1]));
+        }
+
+        public static Bitmap GetResized(this Bitmap bmp, int width, int height)
+        {
+            Bitmap result = new Bitmap(width, height);
+
+            using (Graphics g = Graphics.FromImage(result))
+            {
+                g.DrawImage(bmp, 0, 0, width, height);
+            }
+
+            return result;
         }
 
         public static List<string> MatchAwards(this Player p) => p.ScoreResult.MatchAwards.SelectMany(key => Constants.MatchAwards[key]).ToList();

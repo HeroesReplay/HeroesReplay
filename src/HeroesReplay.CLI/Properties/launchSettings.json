@@ -6,11 +6,7 @@
     },
     "HeroesReplay.CLI [API]": {
       "commandName": "Project",
-      "commandLineArgs": "hotsapi --launch=true",
-      "environmentVariables": {
-        //"HEROES_REPLAY_AWS_ACCESS_KEY": "UNSET",
-        //"HEROES_REPLAY_AWS_SECRET_KEY": "UNSET"
-      }
+      "commandLineArgs": "hotsapi --launch=true --min-replay-id=23940741"
     }
   }
 }

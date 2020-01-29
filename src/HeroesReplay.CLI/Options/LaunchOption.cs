@@ -10,7 +10,7 @@ namespace HeroesReplay.CLI.Options
         public LaunchOption() : base(new[] { "--launch" }, "Launch the game or use the existing game process. Setting this to false can help during development.")
         {
             Required = false;
-            Argument = new Argument<bool>(() => !Process.GetProcessesByName(Constants.Heroes.HEROES_PROCESS_NAME).Any());
+            Argument = new Argument<bool>(() => !Process.GetProcessesByName(Constants.HEROES_PROCESS_NAME).Any());
         }
     }
 }

@@ -14,7 +14,7 @@ namespace HeroesReplay.Tests
         {
             var path = Path.Combine(Directory.GetCurrentDirectory(), "replays", filePath);
 
-            (DataParser.ReplayParseResult replayParseResult, Replay replay) = DataParser.ParseReplay(File.ReadAllBytes(path), ignoreErrors: true, allowPTRRegion: false);
+            (DataParser.ReplayParseResult replayParseResult, Replay replay) = DataParser.ParseReplay(File.ReadAllBytes(path), Constants.REPLAY_PARSE_OPTIONS);
 
             StormReplay = new StormReplay(path, replay);
         }

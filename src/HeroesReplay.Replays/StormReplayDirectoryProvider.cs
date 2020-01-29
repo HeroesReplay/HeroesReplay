@@ -28,7 +28,7 @@ namespace HeroesReplay.Replays
             {
                 logger.LogInformation("Dequeued: " + path);
 
-                (ReplayParseResult result, Heroes.ReplayParser.Replay replay) = ParseReplay(await ReadAllBytesAsync(path), true);
+                (ReplayParseResult result, Heroes.ReplayParser.Replay replay) = ParseReplay(await ReadAllBytesAsync(path), Constants.REPLAY_PARSE_OPTIONS);
 
                 if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
                 {

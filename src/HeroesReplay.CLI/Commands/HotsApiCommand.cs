@@ -37,11 +37,11 @@ namespace HeroesReplay.CLI.Commands
                 .AddJsonFile("appsettings.json")
                 .AddInMemoryCollection(new[]
                 {
-                    new KeyValuePair<string, string>("bnet", bnet.FullName),
-                    new KeyValuePair<string, string>("minReplayId", minReplayId.ToString()),
-                    new KeyValuePair<string, string>("launch", launch.ToString()),
-                    new KeyValuePair<string, string>("awsAccessKey", awsAccessKey),
-                    new KeyValuePair<string, string>("awsSecretKey", awsSecretKey),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.BattleNetPath, bnet.FullName),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.MinReplayId, minReplayId.ToString()),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString()),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.AwsAccessKey, awsAccessKey),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.AwsSecretKey, awsSecretKey),
                 })
                 .Build();
 
@@ -51,9 +51,11 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton((provider) => new CancellationTokenProvider(cancellationToken))
                 .AddSingleton<HeroesOfTheStorm>()
                 .AddSingleton<BattleNet>()
+                .AddSingleton<DeviceContextHolder>()
                 .AddSingleton<StormReplayAnalyzer>()
                 .AddSingleton<StormReplayHeroSelector>()
                 .AddSingleton<StormReplaySpectator>()
+                .AddSingleton<StormReplayDetailsWriter>()
                 .AddSingleton<PlayerBlackListChecker>()
                 .AddSingleton<IStormReplayProvider, StormReplayHotsApiProvider>()
                 .AddSingleton<StormReplayConsumer>()

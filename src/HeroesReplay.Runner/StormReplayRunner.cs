@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Heroes.ReplayParser;
 using HeroesReplay.Processes;
 using HeroesReplay.Shared;
 using HeroesReplay.Spectator;
@@ -43,39 +41,33 @@ namespace HeroesReplay.Runner
         {
             try
             {
-                switch (launch)
+                if (launch == false && heroesOfTheStorm.IsRunning)
                 {
-                    case false when heroesOfTheStorm.IsRunning:
-                    {
-                        await stormReplaySpectator.SpectateAsync(stormReplay);
-                        break;
-                    }
-                    case false when !heroesOfTheStorm.IsRunning:
-                    {
-                        await LaunchGame(stormReplay);
-                        await stormReplaySpectator.SpectateAsync(stormReplay);
-                        break;
-                    }
-                    case true when heroesOfTheStorm.IsRunning:
-                    {
-                        await heroesOfTheStorm.TryKillGameAsync();
-                        await heroesOfTheStorm.ConfigureClientAsync();
-                        await LaunchGame(stormReplay);
-                        await stormReplaySpectator.SpectateAsync(stormReplay);
-                        break;
-                    }
-                    case true when !heroesOfTheStorm.IsRunning:
-                    {
-                        await heroesOfTheStorm.ConfigureClientAsync();
-                        await LaunchGame(stormReplay);
-                        await stormReplaySpectator.SpectateAsync(stormReplay);
-                        break;
-                    }
+                    await stormReplaySpectator.SpectateAsync(stormReplay);
+                }
+                else if (launch == false && !heroesOfTheStorm.IsRunning)
+                {
+                    await heroesOfTheStorm.ConfigureClientAsync();
+                    await LaunchGame(stormReplay);
+                    await stormReplaySpectator.SpectateAsync(stormReplay);
+                }
+                else if (launch == true && heroesOfTheStorm.IsRunning)
+                {
+                    await heroesOfTheStorm.TryKillGameAsync();
+                    await heroesOfTheStorm.ConfigureClientAsync();
+                    await LaunchGame(stormReplay);
+                    await stormReplaySpectator.SpectateAsync(stormReplay);
+                }
+                else if (launch == true && !heroesOfTheStorm.IsRunning)
+                {
+                    await heroesOfTheStorm.ConfigureClientAsync();
+                    await LaunchGame(stormReplay);
+                    await stormReplaySpectator.SpectateAsync(stormReplay);
                 }
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Error in running replay: " + stormReplay.Path);
+                logger.LogError(e, $"Error in running replay: {stormReplay.Path}");
             }
             finally
             {
@@ -97,13 +89,12 @@ namespace HeroesReplay.Runner
 
             if (!await heroesOfTheStorm.WaitForSelectedReplayAsync(stormReplay))
             {
-                throw new Exception("Game process version not found matching replay version: " +
-                                    stormReplay.Replay.ReplayVersion);
+                throw new Exception($"Game process version not found matching replay version: {stormReplay.Replay.ReplayVersion}");
             }
 
             if (!await heroesOfTheStorm.WaitForMapLoadingAsync(stormReplay))
             {
-                throw new Exception("Map loading state was not detected after selecting: " + stormReplay.Path);
+                throw new Exception($"Map loading state was not detected after selecting: {stormReplay.Path}");
             }
         }
 
@@ -141,39 +132,35 @@ namespace HeroesReplay.Runner
 
         private void OnStateChange(object sender, GameEventArgs<GameStateDelta> e)
         {
-            if (e.Data.Previous == GameState.StartOfGame && e.Data.Current == GameState.Running)
+            if (e.Data.Previous == GameState.StartOfGame && e.Data.Current == GameState.Running && e.Timer < TimeSpan.FromSeconds(30))
             {
+                logger.LogInformation("[REMOVE CHAT]");
                 heroesOfTheStorm.SendToggleChat();
-                Thread.Sleep(TimeSpan.FromSeconds(1));
-                
+                Thread.Sleep(TimeSpan.FromSeconds(0.5));
+
+                logger.LogInformation("[REMOVE CONTROLS]");
                 heroesOfTheStorm.SendToggleControls();
-                Thread.Sleep(TimeSpan.FromSeconds(1));
+                Thread.Sleep(TimeSpan.FromSeconds(0.5));
             }
         }
 
         private void OnHeroChange(object sender, GameEventArgs<StormPlayerDelta> e)
-        {   
-            if (e.Data.Previous == null && e.Timer < TimeSpan.FromSeconds(30))
+        {
+            heroesOfTheStorm.SendFocusHero(Array.IndexOf(e.StormReplay.Replay.Players, e.Data.Current.Player));
+
+            bool firstHeroSelected = e.Data.Previous == null;
+
+            if (firstHeroSelected)
             {
-                // This is the first hero of the game being selected, lets configure and adjust camera
-
-                heroesOfTheStorm.SendFocusHero(Array.IndexOf(e.StormReplay.Replay.Players, e.Data.Current.Player));
-                Thread.Sleep(TimeSpan.FromSeconds(2));
-
-                // heroesOfTheStorm.SendFollow();
-                // Thread.Sleep(TimeSpan.FromSeconds(2));
-
+                logger.LogInformation("[ZOOM OUT]");
+                Thread.Sleep(TimeSpan.FromSeconds(0.5));
                 heroesOfTheStorm.SendToggleZoom();
-                Thread.Sleep(TimeSpan.FromSeconds(2));
-            }
-            else
-            {
-                heroesOfTheStorm.SendFocusHero(Array.IndexOf(e.StormReplay.Replay.Players, e.Data.Current.Player));
             }
         }
 
         private void OnPanelChange(object sender, GameEventArgs<GamePanel> e)
         {
+            logger.LogInformation($"[PANEL][{Enum.GetName(typeof(GamePanel), e.Data)}]");
             heroesOfTheStorm.SendPanelChange((int)e.Data);
         }
     }
