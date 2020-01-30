@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -24,7 +23,7 @@ namespace HeroesReplay.Processes
         public static readonly Key[] KEYS_HEROES = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Key.D0 };
         public static readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
 
-        public HeroesOfTheStorm(CancellationTokenProvider tokenProvider, DeviceContextHolder deviceContextHolder, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration) : base(tokenProvider, deviceContextHolder, logger, configuration, Constants.HEROES_PROCESS_NAME)
+        public HeroesOfTheStorm(CancellationTokenProvider tokenProvider, ScreenCapture screenCapture, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration) : base(tokenProvider, screenCapture, logger, configuration, Constants.HEROES_PROCESS_NAME)
         {
 
         }
@@ -73,9 +72,11 @@ namespace HeroesReplay.Processes
             }
         }
 
-        public async Task<TimeSpan?> TryGetTimerAsync(DeviceContextHolder contextHolder)
+        public async Task<TimeSpan?> TryGetTimerAsync()
         {
-            Bitmap? centerTimer = contextHolder.TryBitBlt(new Rectangle(new System.Drawing.Point(contextHolder.Dimensions.Width / 2 - 50, 0), new Size(100, 40)));
+            Rectangle dimensions = ScreenCapture.GetDimensions(WindowHandle);
+            Rectangle timer = new Rectangle(dimensions.Width / 2 - 50, 0, 100, 50);
+            Bitmap? centerTimer = ScreenCapture.Capture(WindowHandle, timer);
 
             if (centerTimer == null) return null;
 
@@ -114,7 +115,7 @@ namespace HeroesReplay.Processes
 
         public async Task<bool> TryGetMatchAwardsAsync(IEnumerable<MatchAwardType> awards)
         {
-            return await GetWindowContainsAnyAsync(CaptureMethod.BitBlt, awards.ToText().ToArray());
+            return await GetWindowContainsAnyAsync(awards.ToText().ToArray());
         }
 
         public async Task<bool> TryKillGameAsync()
@@ -160,7 +161,7 @@ namespace HeroesReplay.Processes
                 .ExecuteAsync(async (t) =>
                 {
                     string[] names = stormReplay.Replay.Players.Select(p => p.Name).ToArray();
-                    return await GetWindowContainsAnyAsync(CaptureMethod.BitBlt, new[] { Constants.Ocr.LOADING_SCREEN_TEXT, stormReplay.Replay.Map }.Concat(names).ToArray());
+                    return await GetWindowContainsAnyAsync(new[] { Constants.Ocr.LOADING_SCREEN_TEXT, stormReplay.Replay.Map }.Concat(names).ToArray());
 
                 }, token);
         }

@@ -34,22 +34,17 @@ namespace HeroesReplay.Processes
 
         private readonly CancellationTokenProvider tokenProvider;
 
-        protected DeviceContextHolder DeviceContextHolder { get; }
+        protected ScreenCapture ScreenCapture { get; }
 
         protected CancellationToken Token => tokenProvider.Token;
 
-        public ProcessWrapper(CancellationTokenProvider tokenProvider, DeviceContextHolder contextHolder, ILogger<ProcessWrapper> logger, IConfiguration configuration, string processName)
+        public ProcessWrapper(CancellationTokenProvider tokenProvider, ScreenCapture screenCapture, ILogger<ProcessWrapper> logger, IConfiguration configuration, string processName)
         {
             this.Logger = logger;
             this.Configuration = configuration;
             this.tokenProvider = tokenProvider;
-            this.DeviceContextHolder = contextHolder;
+            this.ScreenCapture = screenCapture;
             this.ProcessName = processName;
-        }
-
-        public DeviceContextHolder AquireDeviceContext()
-        {
-            return this.DeviceContextHolder.AquireDeviceContext(this.ActualProcess);
         }
 
         // https://docs.microsoft.com/en-us/dotnet/framework/winforms/advanced/how-to-set-jpeg-compression-level
@@ -71,66 +66,53 @@ namespace HeroesReplay.Processes
             }
         }
 
-        protected async Task<bool> GetWindowContainsAnyAsync(CaptureMethod captureMethod, params string[] lines)
+        protected async Task<bool> GetWindowContainsAnyAsync(params string[] lines)
         {
-            using (DeviceContextHolder deviceContext = DeviceContextHolder.AquireDeviceContext(this.ActualProcess))
+            using (Bitmap bitmap = ScreenCapture.Capture(WindowHandle))
             {
-                Bitmap? bitmap = captureMethod switch
-                {
-                    CaptureMethod.PrintScreen => deviceContext.TryPrintWindow(),
-                    CaptureMethod.BitBlt => deviceContext.TryBitBlt()
-                };
-
                 try
                 {
-                    OcrResult? result = await TryGetOcrResult(bitmap, lines);
-
-                    return result != null;
+                    return null != await TryGetOcrResult(bitmap, lines);
                 }
                 finally
                 {
+                    bitmap?.Save($@"C:\temp\{Guid.NewGuid()}.bmp");
                     bitmap?.Dispose();
                 }
             }
         }
 
-        protected async Task<OcrResult?> TryGetOcrResult(Bitmap? bitmap, IEnumerable<string> lines)
+        protected async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, IEnumerable<string> lines)
         {
-            if (bitmap == null) return null;
-
             using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(bitmap))
             {
                 OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
 
-                if (result != null && lines.Any(line => result.Lines.Any(ocrLine => Contains(ocrLine, line))))
+                foreach (OcrLine ocrLine in (result?.Lines ?? Enumerable.Empty<OcrLine>()))
                 {
-                    return result;
+                    foreach (var line in lines)
+                    {
+                        if (ocrLine.Text.Contains(line, StringComparison.OrdinalIgnoreCase))
+                        {
+                            Logger.LogInformation($"[FOUND][{line}]");
+                            return result;
+                        }
+                    }
                 }
-
-                return null;
             }
+
+            return null;
         }
 
-        protected async Task<OcrResult?> TryGetOcrResult(Bitmap? bitmap, params string[] lines)
+        protected async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, params string[] lines)
         {
-            return await TryGetOcrResult(bitmap, (IEnumerable<string>)lines);
+            return await TryGetOcrResult(bitmap, lines.AsEnumerable());
         }
 
         private ImageCodecInfo? GetEncoder(ImageFormat format)
         {
             ImageCodecInfo[] codecs = ImageCodecInfo.GetImageDecoders();
             return codecs.FirstOrDefault(codec => codec.FormatID == format.Guid);
-        }
-
-        protected bool Contains(OcrLine ocrLine, string text)
-        {
-            if (ocrLine.Text.Contains(text, StringComparison.OrdinalIgnoreCase))
-            {
-                Logger.LogInformation($"[FOUND][{text}]");
-                return true;
-            }
-
-            return false;
         }
 
         public void Dispose()

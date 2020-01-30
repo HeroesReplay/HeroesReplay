@@ -82,7 +82,7 @@ namespace HeroesReplay.Spectator
         private GamePanel gamePanel = GamePanel.CrowdControlEnemyHeroes;
         private StormPlayer? currentPlayer;
         private StormReplay stormReplay;
-        private DeviceContextHolder deviceContextHolder;
+        private ScreenCapture screenCapture;
 
         private readonly ILogger<StormReplaySpectator> logger;
         private readonly StormReplayHeroSelector selector;
@@ -102,18 +102,9 @@ namespace HeroesReplay.Spectator
 
         public async Task SpectateAsync(StormReplay stormReplay)
         {
-            try
-            {
-                StormReplay = stormReplay;
+            StormReplay = stormReplay;
 
-                deviceContextHolder = heroesOfTheStorm.AquireDeviceContext();
-
-                await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));
-            }
-            finally
-            {
-                deviceContextHolder.Dispose();
-            }
+            await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));
         }
 
         private async Task FocusLoopAsync()
@@ -241,7 +232,7 @@ namespace HeroesReplay.Spectator
 
                 try
                 {
-                    TimeSpan? elapsed = await heroesOfTheStorm.TryGetTimerAsync(deviceContextHolder);
+                    TimeSpan? elapsed = await heroesOfTheStorm.TryGetTimerAsync();
 
                     // The timer is visible as 00:00 before the replay loads properly.
                     if (elapsed != null && elapsed < TimeSpan.Zero || elapsed > TimeSpan.Zero)

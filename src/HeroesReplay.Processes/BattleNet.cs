@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Polly;
 
@@ -20,7 +21,7 @@ namespace HeroesReplay.Processes
 
         private string ProcessPath => Path.Combine(BattleNetPath, Constants.Bnet.BATTLE_NET_EXE);
 
-        public BattleNet(CancellationTokenProvider tokenProvider, DeviceContextHolder deviceContextHolder, IConfiguration configuration, ILogger<BattleNet> logger) : base(tokenProvider, deviceContextHolder, logger, configuration, Constants.Bnet.BATTLE_NET_PROCESS_NAME)
+        public BattleNet(CancellationTokenProvider tokenProvider, ScreenCapture screenCapture, IConfiguration configuration, ILogger<BattleNet> logger) : base(tokenProvider, screenCapture, logger, configuration, Constants.Bnet.BATTLE_NET_PROCESS_NAME)
         {
 
         }
@@ -60,15 +61,19 @@ namespace HeroesReplay.Processes
             return await Policy
                 .HandleResult<bool>(enabled => enabled == false)
                 .WaitAndRetryAsync(5, count => TimeSpan.FromSeconds(5))
-                .ExecuteAsync(async t => await GetWindowContainsAnyAsync(CaptureMethod.PrintScreen, Constants.Ocr.PLAY_BUTTON_TEXT), Token);
+                .ExecuteAsync(async t => await GetWindowContainsAnyAsync(Constants.Ocr.PLAY_BUTTON_TEXT), Token);
         }
 
         private async Task<bool> WaitForGameRunningAsync()
         {
-            return await Policy
-                .HandleResult<bool>(running => running == false)
-                .WaitAndRetryAsync(10, count => TimeSpan.FromSeconds(5))
-                .ExecuteAsync(async t => await GetWindowContainsAnyAsync(CaptureMethod.PrintScreen, Constants.Ocr.GAME_RUNNING_TEXT, Constants.Ocr.SHOP_HEROES_TEXT), Token);
+            return Policy.HandleResult<bool>(running => running == false)
+                .WaitAndRetry(10, count => TimeSpan.FromSeconds(5))
+                .Execute(() => Process.GetProcessesByName(Constants.HEROES_PROCESS_NAME).Any());
+
+            //return await Policy
+            //    .HandleResult<bool>(running => running == false)
+            //    .WaitAndRetryAsync(10, count => TimeSpan.FromSeconds(5))
+            //    .ExecuteAsync(async t => await GetWindowContainsAnyAsync(Constants.Ocr.GAME_RUNNING_TEXT, Constants.Ocr.SHOP_HEROES_TEXT), Token);
         }
 
         private async Task<bool> WaitForGameSelectedAsync()
@@ -78,7 +83,7 @@ namespace HeroesReplay.Processes
                 using (var control = Process.Start(ProcessPath, arguments: Constants.Bnet.BATTLE_NET_SELECT_HEROES_ARG))
                 {
                     control.WaitForExit();
-                    return await GetWindowContainsAnyAsync(CaptureMethod.PrintScreen, Constants.Ocr.SHOP_HEROES_TEXT);
+                    return await GetWindowContainsAnyAsync(Constants.Ocr.SHOP_HEROES_TEXT);
                 }
             }
 

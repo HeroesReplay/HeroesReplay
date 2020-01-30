@@ -3,13 +3,19 @@
     public enum CaptureMethod
     {
         /// <summary>
-        /// PrintScreen for CPU rendering windows (Battle.net)
+        /// This best method without needing to hook. 
         /// </summary>
-        PrintScreen,
-
+        BitBlt = 1,
+        
         /// <summary>
-        /// BitBlt for GPU rendering windows (HeroesOfTheStorm_x64)
+        /// Copy directly from screen. The least friendly method.
+        /// Will cause problems if there are other windows on top.
         /// </summary>
-        BitBlt
+        CopyFromScreen = 2,
+        
+        /// <summary>
+        /// An unreliable method that may not show the contents of the Window at all.
+        /// </summary>
+        PrintWindow = 3,
     }
 }

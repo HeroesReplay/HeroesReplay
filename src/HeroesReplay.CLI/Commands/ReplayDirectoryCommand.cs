@@ -24,11 +24,12 @@ namespace HeroesReplay.CLI.Commands
             AddOption(new StormReplayDirectoryOption());
             AddOption(new LaunchOption());
             AddOption(new BattlenetOption());
+            AddOption(new CaptureMethodOption());
 
-            Handler = CommandHandler.Create<DirectoryInfo, bool, DirectoryInfo, CancellationToken>(ActionAsync);
+            Handler = CommandHandler.Create<DirectoryInfo, bool, DirectoryInfo, CaptureMethod, CancellationToken>(ActionAsync);
         }
 
-        private async Task ActionAsync(DirectoryInfo path, bool launch, DirectoryInfo bnet, CancellationToken cancellationToken)
+        private async Task ActionAsync(DirectoryInfo path, bool launch, DirectoryInfo bnet, CaptureMethod captureMethod, CancellationToken cancellationToken)
         {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
@@ -48,7 +49,7 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton((provider) => new CancellationTokenProvider(cancellationToken))
                 .AddSingleton<HeroesOfTheStorm>()
                 .AddSingleton<BattleNet>()
-                .AddSingleton<DeviceContextHolder>()
+                .AddSingleton<ScreenCapture>((provider => new ScreenCapture(captureMethod)))
                 .AddSingleton<StormReplayAnalyzer>()
                 .AddSingleton<StormReplayHeroSelector>()
                 .AddSingleton<StormReplayDetailsWriter>()
