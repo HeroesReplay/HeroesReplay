@@ -82,10 +82,10 @@ namespace HeroesReplay.Runner
                 throw new Exception("BattleNet process was not found, so cannot attempt to start the game.");
             }
 
-            if (!await battleNet.WaitForGameLaunchedAsync())
-            {
-                throw new Exception("Game process was not found after attempting to launch the game.");
-            }
+            //if (!await battleNet.WaitForGameLaunchedAsync())
+            //{
+            //    throw new Exception("Game process was not found after attempting to launch the game.");
+            //}
 
             if (!await heroesOfTheStorm.WaitForSelectedReplayAsync(stormReplay))
             {

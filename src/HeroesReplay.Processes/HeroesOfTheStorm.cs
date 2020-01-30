@@ -138,18 +138,26 @@ namespace HeroesReplay.Processes
         public async Task<bool> WaitForSelectedReplayAsync(StormReplay stormReplay, CancellationToken token = default)
         {
             // Execute the switcher program
-            FileInfo switcherFileInfo = GetSwitcherPath();
+            // FileInfo switcherFileInfo = GetSwitcherPath();
 
-            using (var switcher = Process.Start(switcherFileInfo.FullName, $"\"{stormReplay.Path}\""))
-            {
-                switcher.WaitForExit();
+            Process.Start("explorer.exe", stormReplay.Path);
 
-                return await Policy
-                    .Handle<Exception>()
-                    .OrResult<bool>(result => result == false)
-                    .WaitAndRetryAsync(retryCount: 15, retry => TimeSpan.FromSeconds(2))
-                    .ExecuteAsync(async (t) => Process.GetProcessesByName(ProcessName).Any(p => IsMatchingClientVersion(stormReplay, p)), token);
-            }
+            return await Policy
+                .Handle<Exception>()
+                .OrResult<bool>(result => result == false)
+                .WaitAndRetryAsync(retryCount: 15, retry => TimeSpan.FromSeconds(2))
+                .ExecuteAsync(async (t) => Process.GetProcessesByName(ProcessName).Any(p => IsMatchingClientVersion(stormReplay, p)), token);
+
+            //using (var switcher = Process.Start(switcherFileInfo.FullName, $"\"{stormReplay.Path}\""))
+            //{
+            //    switcher.WaitForExit();
+
+            //    return await Policy
+            //        .Handle<Exception>()
+            //        .OrResult<bool>(result => result == false)
+            //        .WaitAndRetryAsync(retryCount: 15, retry => TimeSpan.FromSeconds(2))
+            //        .ExecuteAsync(async (t) => Process.GetProcessesByName(ProcessName).Any(p => IsMatchingClientVersion(stormReplay, p)), token);
+            //}
         }
 
         public async Task<bool> WaitForMapLoadingAsync(StormReplay stormReplay, CancellationToken token = default)
