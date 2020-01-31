@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Heroes.ReplayParser;
@@ -8,6 +9,12 @@ namespace HeroesReplay.Shared
 {
     public static class Constants
     {
+        public static TimeSpan KILL_STREAK_TIMER = TimeSpan.FromSeconds(12);
+        public static TimeSpan MAX_PENTA_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 4;
+        public static TimeSpan MAX_QUAD_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 3;
+        public static TimeSpan MAX_TRIPLE_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 2;
+        public static TimeSpan MAX_MULTI_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 1;
+
         public const string STORM_INTERFACE_NAME = "AhliObs 0.66.StormInterface";
         public const string STORM_REPLAY_EXTENSION = ".StormReplay";
         public const string STORM_REPLAY_CACHED_FILE_NAME_SPLITTER = "_";
@@ -219,9 +226,5 @@ namespace HeroesReplay.Shared
             // This must come last, or the other static fields are not yet defined, resulting in a list of nulls. 
             public static List<Hero> All = typeof(Heroes).GetFields().Where(f => f.FieldType == typeof(Hero)).Select(f => (Hero)f.GetValue(null)).ToList();
         }
-
-        
-
-        
     }
 }

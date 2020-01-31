@@ -1,19 +1,20 @@
 ﻿namespace HeroesReplay.Spectator
 {
-    public enum GameCriteria
+    public enum GameEvent
     {
         PentaKill,
-        MultiKill,
-        TripleKill,
         QuadKill,
+        TripleKill,
+        MultiKill,
         Kill,
         Death,
         TeamObjective,
-        CampCapture,
+        MercenaryCamp,
         MercenaryKill,
         MapObjective,
         Structure,
-        PreviousAliveKiller,
+        KilledEnemy,
+        DangerZone,
         Alive,
         Ping
     }

@@ -1,14 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
-using HeroesReplay.Shared;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-
-namespace HeroesReplay.Replays
+﻿namespace HeroesReplay.Replays
 {
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Threading.Tasks;
+    using HeroesReplay.Shared;
+    using Microsoft.Extensions.Configuration;
+    using Microsoft.Extensions.Logging;
     using Heroes.ReplayParser;
+
 
     public sealed class StormReplayFileProvider : IStormReplayProvider
     {

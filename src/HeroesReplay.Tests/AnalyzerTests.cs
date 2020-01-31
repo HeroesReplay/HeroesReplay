@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using HeroesReplay.Analyzer;
-using HeroesReplay.Spectator;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace HeroesReplay.Tests
@@ -14,7 +14,7 @@ namespace HeroesReplay.Tests
         public AnalyzerTests(StormReplayFixture fixture)
         {
             this.fixture = fixture;
-            this.analyzer = new StormReplayAnalyzer();
+            this.analyzer = new StormReplayAnalyzer(new NullLogger<StormReplayAnalyzer>());
         }
 
         [Fact]

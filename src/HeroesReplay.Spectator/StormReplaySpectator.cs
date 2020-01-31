@@ -15,12 +15,6 @@ namespace HeroesReplay.Spectator
 {
     public sealed class StormReplaySpectator : IDisposable
     {
-        public static TimeSpan KILL_STREAK_TIMER = TimeSpan.FromSeconds(12);
-        public static TimeSpan MAX_PENTA_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 4;
-        public static TimeSpan MAX_QUAD_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 3;
-        public static TimeSpan MAX_TRIPLE_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 2;
-        public static TimeSpan MAX_MULTI_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 1;
-
         public event EventHandler<GameEventArgs<StormPlayerDelta>>? HeroChange;
         public event EventHandler<GameEventArgs<GamePanel>>? PanelChange;
         public event EventHandler<GameEventArgs<GameStateDelta>>? StateChange;
@@ -30,7 +24,12 @@ namespace HeroesReplay.Spectator
             get => gamePanel;
             private set
             {
-                if (gamePanel != value) PanelChange?.Invoke(this, new GameEventArgs<GamePanel>(StormReplay, value, GameTimer.Duration(), value.ToString()));
+                if (gamePanel != value)
+                {
+                    logger.LogDebug($"[PanelChange][{gamePanel}]");
+                    PanelChange?.Invoke(this, new GameEventArgs<GamePanel>(StormReplay, value, GameTimer.Duration(), value.ToString()));
+                }
+
                 gamePanel = value;
             }
         }
@@ -42,7 +41,8 @@ namespace HeroesReplay.Spectator
             {
                 if (value != currentPlayer && value != null)
                 {
-                    HeroChange?.Invoke(this, new GameEventArgs<StormPlayerDelta>(StormReplay, new StormPlayerDelta(currentPlayer, value), GameTimer.Duration(), value.Criteria.ToString()));
+                    logger.LogDebug($"[HeroChange][{value.Player.HeroId}]");
+                    HeroChange?.Invoke(this, new GameEventArgs<StormPlayerDelta>(StormReplay, new StormPlayerDelta(currentPlayer, value), GameTimer.Duration(), value.Event.ToString()));
                 }
 
                 currentPlayer = value;
@@ -54,7 +54,11 @@ namespace HeroesReplay.Spectator
             get => gameState;
             private set
             {
-                if (gameState != value) StateChange?.Invoke(this, new GameEventArgs<GameStateDelta>(StormReplay, new GameStateDelta(gameState, value), GameTimer.Duration(), gameState.ToString()));
+                if (gameState != value)
+                {
+                    logger.LogDebug($"[StateChange][{gameState}]");
+                    StateChange?.Invoke(this, new GameEventArgs<GameStateDelta>(StormReplay, new GameStateDelta(gameState, value), GameTimer.Duration(), gameState.ToString()));
+                }
                 gameState = value;
             }
         }
@@ -82,14 +86,12 @@ namespace HeroesReplay.Spectator
         private GamePanel gamePanel = GamePanel.CrowdControlEnemyHeroes;
         private StormPlayer? currentPlayer;
         private StormReplay stormReplay;
-        private ScreenCapture screenCapture;
 
         private readonly ILogger<StormReplaySpectator> logger;
         private readonly StormReplayHeroSelector selector;
         private readonly HeroesOfTheStorm heroesOfTheStorm;
         private readonly CancellationTokenProvider tokenProvider;
         private readonly StormReplayAnalyzer analyzer;
-
 
         public StormReplaySpectator(ILogger<StormReplaySpectator> logger, StormReplayHeroSelector selector, HeroesOfTheStorm heroesOfTheStorm, CancellationTokenProvider tokenProvider, StormReplayAnalyzer analyzer)
         {
@@ -102,32 +104,31 @@ namespace HeroesReplay.Spectator
 
         public async Task SpectateAsync(StormReplay stormReplay)
         {
-            StormReplay = stormReplay;
+            StormReplay = stormReplay ?? throw new ArgumentNullException(nameof(stormReplay));
 
             await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));
         }
 
         private async Task FocusLoopAsync()
         {
-            while (GameState != GameState.EndOfGame)
+            while (!GameState.IsEnd())
             {
                 Token.ThrowIfCancellationRequested();
 
-                // Timer detection will cause this to change
-                if (GameState != GameState.Running) continue;
-
-                // Let the heroes load in before making the initial selection
-                if (GameTimer < TimeSpan.FromSeconds(10)) continue;
+                if (!GameState.IsRunning() || GameState.IsEnd() || GameTimer.IsNearStart()) continue;
 
                 try
                 {
                     List<StormPlayer> selection = GetPlayersForFocus();
 
-                    if (selection.Any(p => p.Criteria == GameCriteria.Alive || p.Criteria == GameCriteria.PreviousAliveKiller))
+                    if (selection.Any(p => p.IsEventIn(GameEvent.Alive, GameEvent.KilledEnemy, GameEvent.DangerZone)))
                     {
-                        StormPlayer player = selection.Shuffle().Take(1).First();
-                        if (CurrentPlayer?.Criteria == GameCriteria.Alive && CurrentPlayer.Player.Team == player.Player.Team) continue;
-                        await FocusPlayerAsync(player, TimeSpan.FromSeconds(5));
+                        foreach (StormPlayer player in selection.Shuffle())
+                        {
+                            if (CurrentPlayer?.Player?.Team == player.Player.Team) continue;
+                            await FocusPlayerAsync(player, TimeSpan.FromSeconds(5));
+                            break;
+                        }
                     }
                     else
                     {
@@ -146,21 +147,34 @@ namespace HeroesReplay.Spectator
 
         private List<StormPlayer> GetPlayersForFocus()
         {
-            IEnumerable<StormPlayer> pentaKillers = selector.Select(Analyze.Check(MAX_PENTA_KILL_STREAK_POTENTIAL), GameCriteria.PentaKill);
-            IEnumerable<StormPlayer> quadKillers = selector.Select(Analyze.Check(MAX_QUAD_KILL_STREAK_POTENTIAL), GameCriteria.QuadKill);
-            IEnumerable<StormPlayer> tripleKillers = selector.Select(Analyze.Check(MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameCriteria.TripleKill);
-            IEnumerable<StormPlayer> multiKillers = selector.Select(Analyze.Check(MAX_MULTI_KILL_STREAK_POTENTIAL), GameCriteria.MultiKill);
-            IEnumerable<StormPlayer> singleKillers = selector.Select(Analyze.Check(KILL_STREAK_TIMER), GameCriteria.Kill);
-            IEnumerable<StormPlayer> playerDeaths = selector.Select(Analyze.Check(KILL_STREAK_TIMER), GameCriteria.Death);
+            IEnumerable<StormPlayer> pentaKillers = selector.Select(Analyze.Check(Constants.MAX_PENTA_KILL_STREAK_POTENTIAL), GameEvent.PentaKill);
+            IEnumerable<StormPlayer> quadKillers = selector.Select(Analyze.Check(Constants.MAX_QUAD_KILL_STREAK_POTENTIAL), GameEvent.QuadKill);
+            IEnumerable<StormPlayer> tripleKillers = selector.Select(Analyze.Check(Constants.MAX_TRIPLE_KILL_STREAK_POTENTIAL), GameEvent.TripleKill);
+            IEnumerable<StormPlayer> multiKillers = selector.Select(Analyze.Check(Constants.MAX_MULTI_KILL_STREAK_POTENTIAL), GameEvent.MultiKill);
+            IEnumerable<StormPlayer> singleKillers = selector.Select(Analyze.Check(Constants.KILL_STREAK_TIMER), GameEvent.Kill);
+            IEnumerable<StormPlayer> playerDeaths = selector.Select(Analyze.Check(Constants.KILL_STREAK_TIMER), GameEvent.Death);
+            IEnumerable<StormPlayer> previousKillers = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameEvent.KilledEnemy);
+            IEnumerable<StormPlayer> mapObjectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameEvent.MapObjective);
+            IEnumerable<StormPlayer> campCaptures = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameEvent.MercenaryCamp);
+            IEnumerable<StormPlayer> mercenaryKills = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameEvent.MercenaryKill);
+            IEnumerable<StormPlayer> dangerZone = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameEvent.DangerZone);
+            IEnumerable<StormPlayer> structures = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameEvent.Structure);
+            IEnumerable<StormPlayer> alivePlayers = selector.Select(Analyze.Check(TimeSpan.FromSeconds(5)), GameEvent.Alive);
 
-            IEnumerable<StormPlayer> mapObjectives = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.MapObjective);
-            IEnumerable<StormPlayer> campCaptures = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.CampCapture);
-            IEnumerable<StormPlayer> mercenaryKills = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.MercenaryKill);
-            IEnumerable<StormPlayer> structures = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.Structure);
-            IEnumerable<StormPlayer> previousKillers = selector.Select(Analyze.Check(TimeSpan.FromSeconds(10)), GameCriteria.PreviousAliveKiller);
-            IEnumerable<StormPlayer> alivePlayers = selector.Select(Analyze.Check(TimeSpan.FromSeconds(6)), GameCriteria.Alive);
-
-            return pentaKillers.Or(quadKillers.Or(tripleKillers.Or(multiKillers.Or(singleKillers.Or(playerDeaths.Or(mapObjectives.Or(campCaptures.Or(mercenaryKills.Or(structures.Or(previousKillers.Or(alivePlayers))))))))))).ToList();
+            return
+                pentaKillers.Or(
+                    quadKillers.Or(
+                        tripleKillers.Or(
+                            multiKillers.Or(
+                                singleKillers.Or(
+                                    playerDeaths.Or(
+                                        mapObjectives.Or(
+                                            campCaptures.Or(
+                                                mercenaryKills.Or(
+                                                    structures.Or(
+                                                        dangerZone.Or(
+                                                            previousKillers.Or(
+                                                                alivePlayers)))))))))))).ToList();
         }
 
         private async Task FocusPlayerAsync(StormPlayer stormPlayer, TimeSpan duration)
@@ -168,7 +182,7 @@ namespace HeroesReplay.Spectator
             // If the duration is negative, or the current timer + duration is still greater than when the timer it was calculated with or if the game timer is less than the timer it was taken again, we have an error
             if (duration <= TimeSpan.Zero || stormPlayer.Timer > GameTimer)
             {
-                logger.LogInformation($"INVALID FOCUS: {stormPlayer.Player.Character}. REASON: {stormPlayer.Criteria}. DURATION: {duration}.");
+                logger.LogDebug($"INVALID FOCUS: {stormPlayer.Player.Character}. REASON: {stormPlayer.Event}. DURATION: {duration}.");
             }
             else
             {
@@ -180,21 +194,21 @@ namespace HeroesReplay.Spectator
 
         private async Task PanelLoopAsync()
         {
-            while (GameState != GameState.EndOfGame)
+            while (!GameState.IsEnd())
             {
                 Token.ThrowIfCancellationRequested();
 
-                if (GameState != GameState.Running) continue;
+                if (!GameState.IsRunning()) continue;
 
                 try
                 {
-                    if (GameTimer < TimeSpan.FromSeconds(60))
+                    if (GameTimer < TimeSpan.FromMinutes(1))
                     {
                         GamePanel = GamePanel.Talents;
                         continue;
                     }
 
-                    AnalyzerResult result = Analyze.Check(TimeSpan.FromSeconds(10));
+                    AnalyzerResult result = Analyze.Check(TimeSpan.FromSeconds(5));
 
                     if (result.Talents.Any()) GamePanel = GamePanel.Talents;
                     else if (result.TeamObjectives.Any()) GamePanel = GamePanel.CarriedObjectives;
@@ -211,11 +225,12 @@ namespace HeroesReplay.Spectator
                             GamePanel.DeathDamageRole => GamePanel.Experience,
                             GamePanel.Experience => GamePanel.Talents,
                             GamePanel.Talents => GamePanel.TimeDeadDeathsSelfSustain,
-                            GamePanel.TimeDeadDeathsSelfSustain => GamePanel.KillsDeathsAssists
+                            GamePanel.TimeDeadDeathsSelfSustain => GamePanel.KillsDeathsAssists,
+                            _ => GamePanel.DeathDamageRole
                         };
                     }
 
-                    await result.WaitCheckTime(Token);
+                    await Task.Delay(TimeSpan.FromSeconds(10), Token);
                 }
                 catch (Exception e)
                 {
@@ -226,7 +241,7 @@ namespace HeroesReplay.Spectator
 
         private async Task StateLoopAsync()
         {
-            while (GameState != GameState.EndOfGame)
+            while (!GameState.IsEnd())
             {
                 Token.ThrowIfCancellationRequested();
 
@@ -235,7 +250,7 @@ namespace HeroesReplay.Spectator
                     TimeSpan? elapsed = await heroesOfTheStorm.TryGetTimerAsync();
 
                     // The timer is visible as 00:00 before the replay loads properly.
-                    if (elapsed != null && elapsed < TimeSpan.Zero || elapsed > TimeSpan.Zero)
+                    if (elapsed != null && elapsed != TimeSpan.Zero)
                     {
                         TimeSpan next = elapsed.Value.RemoveNegativeOffset();
 
@@ -247,7 +262,7 @@ namespace HeroesReplay.Spectator
                     }
                     else
                     {
-                        if (GameTimer.Add(TimeSpan.FromMinutes(1)) >= StormReplay.Replay.ReplayLength && await heroesOfTheStorm.TryGetMatchAwardsAsync(StormReplay.Replay.GetMatchAwards()))
+                        if (GameTimer.IsNearEnd(stormReplay.Replay.ReplayLength) && await heroesOfTheStorm.TryGetMatchAwardsAsync(StormReplay.Replay.GetMatchAwards()))
                         {
                             GameState = GameState.EndOfGame;
                         }
@@ -257,10 +272,12 @@ namespace HeroesReplay.Spectator
                         }
                     }
 
-                    if (CurrentPlayer != null)
+                    if (CurrentPlayer != null && GameTimer > TimeSpan.Zero)
                     {
-                        logger.LogInformation($"[{CurrentPlayer.Player.HeroId}][{CurrentPlayer.Criteria}][{CurrentPlayer.When}][{GameTimer}][{GameTimer.AddNegativeOffset()}]");
+                        logger.LogInformation($"[{CurrentPlayer.Player.HeroId}][{CurrentPlayer.Event}][{CurrentPlayer.When}][{GameTimer}][{GameTimer.AddNegativeOffset()}]");
                     }
+
+                    // PrintDebugData();
 
                     await Task.Delay(TimeSpan.FromSeconds(1), Token);
                 }
@@ -286,11 +303,11 @@ namespace HeroesReplay.Spectator
 
                 if (!string.IsNullOrEmpty(data))
                 {
-                    logger.LogInformation($"[TrackerEvent]{data}");
+                    logger.LogDebug($"[TrackerEvent]{data}");
                 }
             }
 
-            foreach (GameEvent gameEvent in StormReplay.Replay.GameEvents.Where(e => e.TimeSpan == GameTimer))
+            foreach (Heroes.ReplayParser.MPQFiles.GameEvent gameEvent in StormReplay.Replay.GameEvents.Where(e => e.TimeSpan == GameTimer))
             {
                 string data = gameEvent.eventType switch
                 {
@@ -303,7 +320,7 @@ namespace HeroesReplay.Spectator
 
                 if (!string.IsNullOrEmpty(data))
                 {
-                    logger.LogInformation($"[GameEvent]{data}");
+                    logger.LogDebug($"[GameEvent]{data}");
                 }
             }
 
@@ -319,7 +336,7 @@ namespace HeroesReplay.Spectator
 
                 if (!string.IsNullOrEmpty(data))
                 {
-                    logger.LogInformation($"[Unit]{data}");
+                    logger.LogDebug($"[Unit]{data}");
                 }
             }
         }

@@ -17,13 +17,13 @@ namespace HeroesReplay.Shared
         /// </summary>
         public static TimeSpan RemoveNegativeOffset(this TimeSpan timer)
         {
-            var bottomTimer = timer.Add(TimeSpan.FromSeconds(timer.Seconds + 610) / 16).Duration();
+            var bottomTimer = timer.Add(TimeSpan.FromSeconds(timer.Seconds + 610) / 16);
             return new TimeSpan(bottomTimer.Days, bottomTimer.Hours, bottomTimer.Minutes, bottomTimer.Seconds, milliseconds: 0);
         }
 
         public static TimeSpan AddNegativeOffset(this TimeSpan timer)
         {
-            var topTimer = timer.Subtract(TimeSpan.FromSeconds(timer.Seconds + 610) / 16).Duration();
+            var topTimer = timer.Subtract(TimeSpan.FromSeconds(timer.Seconds + 610) / 16);
             return new TimeSpan(topTimer.Days, topTimer.Hours, topTimer.Minutes, topTimer.Seconds, milliseconds: 0);
         }
 

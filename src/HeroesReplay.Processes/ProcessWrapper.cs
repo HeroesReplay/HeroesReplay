@@ -18,7 +18,7 @@ namespace HeroesReplay.Processes
 {
     public class ProcessWrapper : IDisposable
     {
-        public bool IsRunning => Process.GetProcessesByName(ProcessName).Any();
+        public virtual bool IsRunning => Process.GetProcessesByName(ProcessName).Any();
 
         protected string ProcessName { get; }
 
@@ -66,23 +66,15 @@ namespace HeroesReplay.Processes
             }
         }
 
-        protected async Task<bool> GetWindowContainsAnyAsync(params string[] lines)
+        protected virtual async Task<bool> GetWindowContainsAnyAsync(params string[] lines)
         {
             using (Bitmap bitmap = ScreenCapture.Capture(WindowHandle))
             {
-                try
-                {
-                    return null != await TryGetOcrResult(bitmap, lines);
-                }
-                finally
-                {
-                    bitmap?.Save($@"C:\temp\{Guid.NewGuid()}.bmp");
-                    bitmap?.Dispose();
-                }
+                return null != await TryGetOcrResult(bitmap, lines);
             }
         }
 
-        protected async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, IEnumerable<string> lines)
+        protected virtual async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, IEnumerable<string> lines)
         {
             using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(bitmap))
             {
@@ -94,9 +86,11 @@ namespace HeroesReplay.Processes
                     {
                         if (ocrLine.Text.Contains(line, StringComparison.OrdinalIgnoreCase))
                         {
-                            Logger.LogInformation($"[FOUND][{line}]");
+                            Logger.LogDebug($"[FOUND][{line}]");
                             return result;
                         }
+
+                        Logger.LogDebug($"[NOT FOUND][{line}]");
                     }
                 }
             }
@@ -104,7 +98,7 @@ namespace HeroesReplay.Processes
             return null;
         }
 
-        protected async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, params string[] lines)
+        protected virtual async Task<OcrResult?> TryGetOcrResult(Bitmap bitmap, params string[] lines)
         {
             return await TryGetOcrResult(bitmap, lines.AsEnumerable());
         }
@@ -117,7 +111,7 @@ namespace HeroesReplay.Processes
 
         public void Dispose()
         {
-
+            ActualProcess?.Dispose();
         }
     }
 }

@@ -28,7 +28,7 @@ namespace HeroesReplay.Processes
 
         }
 
-        public async Task ConfigureClientAsync()
+        public virtual async Task ConfigureClientAsync()
         {
             string[] files = Directory.GetFiles(Constants.USER_GAME_FOLDER, Constants.VARIABLES_WILDCARD, SearchOption.AllDirectories).Where(p => Path.GetFileName(p).Equals("Variables.txt", StringComparison.OrdinalIgnoreCase)).ToArray();
 
@@ -72,7 +72,7 @@ namespace HeroesReplay.Processes
             }
         }
 
-        public async Task<TimeSpan?> TryGetTimerAsync()
+        public virtual async Task<TimeSpan?> TryGetTimerAsync()
         {
             Rectangle dimensions = ScreenCapture.GetDimensions(WindowHandle);
             Rectangle timer = new Rectangle(dimensions.Width / 2 - 50, 0, 100, 50);
@@ -95,7 +95,7 @@ namespace HeroesReplay.Processes
                         }
                         else
                         {
-                            Logger.LogInformation("[TIMER][Could not parse]");
+                            Logger.LogInformation("[TIMER][NOT FOUND]");
                             // enlargedTimer.Save("C:\\temp\\" + Guid.NewGuid() + ".bmp", ImageFormat.MemoryBmp);
                         }
                     }
@@ -118,7 +118,7 @@ namespace HeroesReplay.Processes
             return await GetWindowContainsAnyAsync(awards.ToText().ToArray());
         }
 
-        public async Task<bool> TryKillGameAsync()
+        public virtual async Task<bool> TryKillGameAsync()
         {
             try
             {
@@ -135,18 +135,18 @@ namespace HeroesReplay.Processes
             return false;
         }
 
-        public async Task<bool> WaitForSelectedReplayAsync(StormReplay stormReplay, CancellationToken token = default)
+        public virtual async Task<bool> WaitForSelectedReplayAsync(StormReplay stormReplay, CancellationToken token = default)
         {
             // Execute the switcher program
             // FileInfo switcherFileInfo = GetSwitcherPath();
 
             Process.Start("explorer.exe", stormReplay.Path);
 
-            return await Policy
+            return Policy
                 .Handle<Exception>()
                 .OrResult<bool>(result => result == false)
-                .WaitAndRetryAsync(retryCount: 15, retry => TimeSpan.FromSeconds(2))
-                .ExecuteAsync(async (t) => Process.GetProcessesByName(ProcessName).Any(p => IsMatchingClientVersion(stormReplay, p)), token);
+                .WaitAndRetry(retryCount: 15, retry => TimeSpan.FromSeconds(2))
+                .Execute((t) => Process.GetProcessesByName(ProcessName).Any(p => IsMatchingClientVersion(stormReplay, p)), token);
 
             //using (var switcher = Process.Start(switcherFileInfo.FullName, $"\"{stormReplay.Path}\""))
             //{
@@ -160,7 +160,7 @@ namespace HeroesReplay.Processes
             //}
         }
 
-        public async Task<bool> WaitForMapLoadingAsync(StormReplay stormReplay, CancellationToken token = default)
+        public virtual async Task<bool> WaitForMapLoadingAsync(StormReplay stormReplay, CancellationToken token = default)
         {
             return await Policy
                 .Handle<Exception>() // Issue getting Process information (terminated?)
@@ -174,21 +174,21 @@ namespace HeroesReplay.Processes
                 }, token);
         }
 
-        public void SendFocusHero(int index)
+        public virtual void SendFocusHero(int index)
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, KEYS_HEROES[index], IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, KEYS_HEROES[index], IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, KEYS_HEROES[index], IntPtr.Zero);
         }
 
-        public void SendTogglePause()
+        public virtual void SendTogglePause()
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.P, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.P, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.P, IntPtr.Zero);
         }
 
-        public void SendToggleChat()
+        public virtual void SendToggleChat()
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
@@ -202,7 +202,7 @@ namespace HeroesReplay.Processes
         /// <summary>
         /// The 'Player Camera Follow' mode does NOT work with the Observer maximum zoom mode.
         /// </summary>
-        public void SendToggleZoom()
+        public virtual void SendToggleZoom()
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.Z, IntPtr.Zero);
@@ -211,14 +211,14 @@ namespace HeroesReplay.Processes
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ShiftKey, IntPtr.Zero);
         }
 
-        public void SendFollow()
+        public virtual void SendFollow()
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.L, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_CHAR, Key.L, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.L, IntPtr.Zero);
         }
 
-        public void SendToggleTime()
+        public virtual void SendToggleTime()
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.T, IntPtr.Zero);
@@ -227,7 +227,7 @@ namespace HeroesReplay.Processes
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
-        public void SendToggleControls()
+        public virtual void SendToggleControls()
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ShiftKey, IntPtr.Zero);
@@ -238,7 +238,7 @@ namespace HeroesReplay.Processes
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
-        public void SendPanelChange(int index)
+        public virtual void SendPanelChange(int index)
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, KEYS_CONSOLE_PANEL[index], IntPtr.Zero);
@@ -246,7 +246,7 @@ namespace HeroesReplay.Processes
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
-        public void SendToggleBottomConsole()
+        public virtual void SendToggleBottomConsole()
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.W, IntPtr.Zero);
@@ -255,7 +255,7 @@ namespace HeroesReplay.Processes
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYUP, Key.ControlKey, IntPtr.Zero);
         }
 
-        public void SendToggleInfoPanel()
+        public virtual void SendToggleInfoPanel()
         {
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.ControlKey, IntPtr.Zero);
             NativeMethods.SendMessage(WindowHandle, WindowsMessage.WM_KEYDOWN, Key.C, IntPtr.Zero);
@@ -268,7 +268,7 @@ namespace HeroesReplay.Processes
         {
             bool match = p.MainModule.FileVersionInfo.FileVersion == stormReplay.Replay.ReplayVersion;
 
-            Logger.LogInformation($"[CURRENT][{p.MainModule.FileVersionInfo.FileVersion}][REQUIRED][{stormReplay.Replay.ReplayVersion}]");
+            Logger.LogDebug($"[CURRENT][{p.MainModule.FileVersionInfo.FileVersion}][REQUIRED][{stormReplay.Replay.ReplayVersion}]");
 
             return match;
         }
@@ -310,7 +310,7 @@ namespace HeroesReplay.Processes
             }
             catch (Exception e)
             {
-                Logger.LogError($"Could not parse '{ocrResult.Text}' in Ocr result");
+                Logger.LogError(e, $"Could not parse '{ocrResult.Text}' in Ocr result");
             }
 
             return null;

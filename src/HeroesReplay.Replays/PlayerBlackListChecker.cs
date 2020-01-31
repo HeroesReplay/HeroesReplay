@@ -23,13 +23,18 @@ namespace HeroesReplay.Replays
             this.configuration = configuration;
         }
 
+
         public bool IsUsable(Replay replay)
         {
-            return true; 
+            return true;
+
+            #pragma warning disable CS0162 // Unreachable code detected
 
             var blackList = configuration.GetValue<long[]>("blacklist");
             var blizzardIds = replay.Players.Select(p => p.Blizz_id).ToArray();
             return !blizzardIds.Any(id => blizzardIds.Contains(id));
+
+            #pragma warning restore CS0162 // Unreachable code detected
         }
     }
 }

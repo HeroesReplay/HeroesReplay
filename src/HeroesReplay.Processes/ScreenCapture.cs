@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Imaging;
 
 namespace HeroesReplay.Processes
 {
@@ -19,8 +17,8 @@ namespace HeroesReplay.Processes
             return captureMethod switch
             {
                 CaptureMethod.BitBlt => BitBlt(region, handle),
-                CaptureMethod.PrintWindow => PrintWindow(region, handle),
-                CaptureMethod.CopyFromScreen => CopyFromScreen(region, handle)
+                CaptureMethod.CopyFromScreen => CopyFromScreen(region, handle),
+                _ => throw new ArgumentOutOfRangeException(nameof(captureMethod))
             };
         }
 
@@ -30,7 +28,7 @@ namespace HeroesReplay.Processes
             return new Rectangle(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
         }
 
-        public Bitmap BitBlt(Rectangle? region, IntPtr handle)
+        private Bitmap BitBlt(Rectangle? region, IntPtr handle)
         {
             Rectangle bounds = region ?? GetDimensions(handle);
 
@@ -53,29 +51,7 @@ namespace HeroesReplay.Processes
             }
         }
 
-        public Bitmap PrintWindow(Rectangle? region, IntPtr handle)
-        {
-            NativeMethods.GetWindowRect(handle, out RECT rect);
-            Rectangle bounds = new Rectangle(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
-
-            Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
-
-            using (Graphics graphics = Graphics.FromImage(bitmap))
-            {
-                IntPtr deviceContext = graphics.GetHdc();
-                NativeMethods.PrintWindow(handle, deviceContext, 0);
-                graphics.ReleaseHdc(deviceContext);
-
-                if (region == null) return bitmap;
-
-                using (bitmap)
-                {
-                    return bitmap.Clone(region.Value, bitmap.PixelFormat);
-                }
-            }
-        }
-
-        public Bitmap CopyFromScreen(Rectangle? region, IntPtr handle)
+        private Bitmap CopyFromScreen(Rectangle? region, IntPtr handle)
         {
             Rectangle bounds = region ?? GetDimensions(handle);
 

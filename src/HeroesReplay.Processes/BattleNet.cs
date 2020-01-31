@@ -44,7 +44,8 @@ namespace HeroesReplay.Processes
         public async Task<bool> WaitForGameLaunchedAsync()
         {
             return await Policy
-                .HandleResult<bool>(result => result == false)
+                .Handle<Exception>()
+                .OrResult<bool>(result => result == false)
                 .WaitAndRetryAsync(5, count => TimeSpan.FromSeconds(10))
                 .ExecuteAsync(async (t) =>
                 {
@@ -66,14 +67,10 @@ namespace HeroesReplay.Processes
 
         private async Task<bool> WaitForGameRunningAsync()
         {
-            return Policy.HandleResult<bool>(running => running == false)
+            return Policy
+                .HandleResult<bool>(running => running == false)
                 .WaitAndRetry(10, count => TimeSpan.FromSeconds(5))
                 .Execute(() => Process.GetProcessesByName(Constants.HEROES_PROCESS_NAME).Any());
-
-            //return await Policy
-            //    .HandleResult<bool>(running => running == false)
-            //    .WaitAndRetryAsync(10, count => TimeSpan.FromSeconds(5))
-            //    .ExecuteAsync(async t => await GetWindowContainsAnyAsync(Constants.Ocr.GAME_RUNNING_TEXT, Constants.Ocr.SHOP_HEROES_TEXT), Token);
         }
 
         private async Task<bool> WaitForGameSelectedAsync()

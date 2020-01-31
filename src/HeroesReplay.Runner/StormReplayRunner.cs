@@ -81,12 +81,7 @@ namespace HeroesReplay.Runner
             {
                 throw new Exception("BattleNet process was not found, so cannot attempt to start the game.");
             }
-
-            //if (!await battleNet.WaitForGameLaunchedAsync())
-            //{
-            //    throw new Exception("Game process was not found after attempting to launch the game.");
-            //}
-
+            
             if (!await heroesOfTheStorm.WaitForSelectedReplayAsync(stormReplay))
             {
                 throw new Exception($"Game process version not found matching replay version: {stormReplay.Replay.ReplayVersion}");
@@ -98,12 +93,6 @@ namespace HeroesReplay.Runner
             }
         }
 
-        /// <summary>
-        /// Starts Battle.net if it is not running.
-        /// Launches the game via Battle.net
-        /// Waits until the main HeroesOfTheStorm_x64.exe is finished
-        /// Calls the HeroSwitcher_x64.exe which detects which game client needs to launch that supports the replay file.
-        /// </summary>
         public async Task ReplayAsync(StormReplay stormReplay, bool launch)
         {
             try

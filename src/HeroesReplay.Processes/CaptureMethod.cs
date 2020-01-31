@@ -12,10 +12,10 @@
         /// Will cause problems if there are other windows on top.
         /// </summary>
         CopyFromScreen = 2,
-        
+
         /// <summary>
-        /// An unreliable method that may not show the contents of the Window at all.
+        /// Stub the entire process.
         /// </summary>
-        PrintWindow = 3,
+        Stub = 3
     }
 }

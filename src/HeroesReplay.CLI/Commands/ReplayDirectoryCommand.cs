@@ -14,6 +14,7 @@ using HeroesReplay.Spectator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Configuration;
 
 namespace HeroesReplay.CLI.Commands
 {
@@ -44,10 +45,10 @@ namespace HeroesReplay.CLI.Commands
 
 
             ServiceProvider serviceProvider = new ServiceCollection()
-                .AddLogging(loggingBuilder => loggingBuilder.AddConsole())
+                .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole())
                 .AddSingleton<IConfiguration>(provider => configuration)
                 .AddSingleton((provider) => new CancellationTokenProvider(cancellationToken))
-                .AddSingleton<HeroesOfTheStorm>()
+                .AddSingleton(captureMethod == CaptureMethod.Stub ? typeof(StubOfTheStorm) : typeof(HeroesOfTheStorm))
                 .AddSingleton<BattleNet>()
                 .AddSingleton<ScreenCapture>((provider => new ScreenCapture(captureMethod)))
                 .AddSingleton<StormReplayAnalyzer>()
@@ -59,7 +60,7 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton<StormReplayRunner>()
                 .BuildServiceProvider();
 
-            using (var scope = serviceProvider.CreateScope())
+            using (IServiceScope scope = serviceProvider.CreateScope())
             {
                 StormReplayConsumer stormReplayConsumer = scope.ServiceProvider.GetRequiredService<StormReplayConsumer>();
 

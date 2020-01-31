@@ -13,16 +13,25 @@ namespace HeroesReplay.Analyzer
         public IEnumerable<Unit> Structures { get; }
         public IEnumerable<Player> Alive { get; }
         public IEnumerable<Player> NearSpawn { get; }
-        public IEnumerable<(int Team, TimeSpan TalentTime)> Talents { get; }
+        public IEnumerable<Player> DangerZone { get; }
+
+        public IEnumerable<(int, TimeSpan)> Talents { get; }
         public IEnumerable<TeamObjective> TeamObjectives { get; }
 
         /// <summary>
         /// Ping events are only from the team which the replay file originates from
         /// </summary>
         public IEnumerable<GameEvent> Pings { get; }
-        public IEnumerable<Player> Killers { get;  }
-        public IEnumerable<(Player Player, TimeSpan CaptureTime)> CampCaptures { get; }
-        public IEnumerable<(Player Player, TimeSpan TimeDied)> Mercenaries { get; }
+        public IEnumerable<Player> Killers { get; }
+
+        /// <summary>
+        /// Standard camps are not captured in TeamObjectives
+        /// </summary>
+        /// <remarks>
+        /// https://github.com/barrett777/Heroes.ReplayParser/blob/2d29bf2f66bfd44c471a4214698e6b517d38ecd3/Heroes.ReplayParser/Statistics.cs#L343
+        /// </remarks>
+        public IEnumerable<(Player, TimeSpan)> CampCaptures { get; }
+        public IEnumerable<(Player, TimeSpan)> Mercenaries { get; }
 
         public TimeSpan Start { get; }
         public TimeSpan End { get; }
@@ -30,7 +39,7 @@ namespace HeroesReplay.Analyzer
         public StormReplay StormReplay { get; }
 
         public AnalyzerResult(
-            StormReplay stormReplay, 
+            StormReplay stormReplay,
             TimeSpan start,
             TimeSpan end,
             TimeSpan duration,
@@ -39,9 +48,10 @@ namespace HeroesReplay.Analyzer
             IEnumerable<Unit> structures,
             IEnumerable<Player> alive,
             IEnumerable<Player> nearSpawn,
+            IEnumerable<Player> dangerZone,
             IEnumerable<Player> killers,
             IEnumerable<GameEvent> pings,
-            IEnumerable<(int Team, TimeSpan TalentTime)> talents,
+            IEnumerable<(int, TimeSpan)> talents,
             IEnumerable<TeamObjective> teamObjectives,
             IEnumerable<(Player, TimeSpan)> campCaptures,
             IEnumerable<(Player, TimeSpan)> mercenaries)
@@ -59,7 +69,8 @@ namespace HeroesReplay.Analyzer
             MapObjectives = mapObjectives ?? throw new ArgumentNullException(nameof(mapObjectives));
             Structures = structures ?? throw new ArgumentNullException(nameof(structures));
             Alive = alive ?? throw new ArgumentNullException(nameof(alive));
-            NearSpawn = nearSpawn ?? throw new NullReferenceException(nameof(nearSpawn));
+            NearSpawn = nearSpawn ?? throw new ArgumentNullException(nameof(nearSpawn));
+            DangerZone = dangerZone ?? throw new ArgumentNullException(nameof(dangerZone));
             Talents = talents ?? throw new ArgumentNullException(nameof(talents));
             TeamObjectives = teamObjectives ?? throw new ArgumentNullException(nameof(teamObjectives));
         }

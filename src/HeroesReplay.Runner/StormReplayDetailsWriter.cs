@@ -6,11 +6,19 @@ using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Shared;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Runner
 {
     public class StormReplayDetailsWriter
     {
+        private readonly ILogger<StormReplayDetailsWriter> logger;
+
+        public StormReplayDetailsWriter(ILogger<StormReplayDetailsWriter> logger)
+        {
+            this.logger = logger;
+        }
+
         public async Task WriteDetailsAsync(StormReplay replay)
         {
             using (FileStream mapStream = File.OpenRead(Constants.ASSETS_MAP_JSON_PATH))
@@ -35,12 +43,15 @@ namespace HeroesReplay.Runner
 
                             string[] details =
                             {
+                                replay.Id.HasValue ? $"Id: {replay.Id.Value}" : string.Empty,
                                 $"Map: {map ?? replay.Replay.MapAlternativeName}",
                                 $"Mode: {replay.Replay.GameMode switch { GameMode.StormLeague => "Storm League", GameMode.QuickMatch => "Quick Match", _ => replay.Replay.GameMode }}",
                                 $"Date: {replay.Replay.Timestamp.Date.ToShortDateString()}"
                             };
 
-                            await File.WriteAllLinesAsync(Constants.CURRENT_REPLAY_INFORMATION_FILE_PATH, details.Concat(bans), CancellationToken.None);
+                            logger.LogInformation($"[UPDATE][{Constants.CURRENT_REPLAY_INFORMATION_FILE_PATH}]");
+
+                            await File.WriteAllLinesAsync(Constants.CURRENT_REPLAY_INFORMATION_FILE_PATH, details.Concat(bans).Where(line => !string.IsNullOrWhiteSpace(line)), CancellationToken.None);
                         }
                     }
                 }
