@@ -4,11 +4,14 @@ using System.IO;
 using System.Linq;
 using Heroes.ReplayParser;
 using static System.Environment;
+using Version = System.Version;
 
 namespace HeroesReplay.Shared
 {
     public static class Constants
     {
+        public static Version MIN_VERSION_SUPPORTED = Version.Parse("2.48.4.77406");
+
         public static TimeSpan KILL_STREAK_TIMER = TimeSpan.FromSeconds(12);
         public static TimeSpan MAX_PENTA_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 4;
         public static TimeSpan MAX_QUAD_KILL_STREAK_POTENTIAL = KILL_STREAK_TIMER * 3;

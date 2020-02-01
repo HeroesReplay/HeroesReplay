@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Amazon;
+using Amazon.Auth.AccessControlPolicy;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -14,6 +15,7 @@ using HeroesReplay.Replays.HotsApi;
 using HeroesReplay.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Polly;
 using static Heroes.ReplayParser.DataParser;
 using HotsApiReplay = HeroesReplay.Replays.HotsApi.Replay;
 
@@ -30,7 +32,7 @@ namespace HeroesReplay.Replays
             {
                 if (minReplayId == default)
                 {
-                    if (configuration.GetValue<int>(Constants.ConfigKeys.MinReplayId) != -1)
+                    if (configuration.GetValue<int>(Constants.ConfigKeys.MinReplayId) != Constants.REPLAY_ID_UNSET)
                     {
                         MinReplayId = configuration.GetValue<int>(Constants.ConfigKeys.MinReplayId);
                     }
@@ -174,28 +176,35 @@ namespace HeroesReplay.Replays
                 {
                     HotsApiClient hotsApiClient = new HotsApiClient(client);
 
-                    HotsApiResponse<ICollection<HotsApiReplay>> response = await hotsApiClient.ListReplaysAllAsync(min_id: MinReplayId, existing: true, with_players: false);
-
-                    if (response.StatusCode == (int)HttpStatusCode.OK)
-                    {
-                        HotsApiReplay? replay = response.Result
-                            .Where(replay => replay.Id > MinReplayId)
-                            .FirstOrDefault(replay => replay.Deleted == false && replay.Game_type == GAME_TYPE_STORM_LEAGUE || replay.Game_type == GAME_TYPE_QUICK_MATCH);
-
-                        if (replay != null)
+                    return await Polly.Policy
+                        .Handle<Exception>()
+                        .OrResult<HotsApiReplay?>(replay => replay == null)
+                        .WaitAndRetryAsync(30, (retry) => TimeSpan.FromSeconds(10))
+                        .ExecuteAsync(async (token) =>
                         {
-                            logger.LogInformation($"[REPLAY][FOUND][{replay.Id}][{replay.Url}]");
-                            return replay;
-                        }
-                    }
+                            HotsApiResponse<ICollection<HotsApiReplay>> response = await hotsApiClient.ListReplaysAllAsync(min_id: MinReplayId, existing: true, with_players: false, token);
 
-                    if (response.StatusCode != (int)HttpStatusCode.OK)
-                    {
-                        logger.LogInformation($"[HOTSAPI][HTTP_STATUS][{response.StatusCode}]");
-                    }
+                            if (response.StatusCode == (int)HttpStatusCode.OK)
+                            {
+                                HotsApiReplay replay = response.Result.FirstOrDefault(r => r.Id > MinReplayId &&
+                                                                                           r.Deleted == false &&
+                                                                                           Version.Parse(r.Game_version) >= Constants.MIN_VERSION_SUPPORTED &&
+                                                                                           (r.Game_type == GAME_TYPE_STORM_LEAGUE || r.Game_type == GAME_TYPE_QUICK_MATCH));
 
+                                if (replay != null)
+                                {
+                                    logger.LogInformation($"[REPLAY][FOUND][{replay.Id}][{replay.Url}]");
+                                    return replay;
+                                }
 
-                    logger.LogInformation($"[REPLAY][ERROR][Could not find suitable replay]");
+                                logger.LogInformation($"[REPLAY][ERROR][Could not find suitable replay]");
+                                return null;
+                            }
+
+                            logger.LogInformation($"[HOTSAPI][HTTP_STATUS][{response.StatusCode}]");
+                            return null;
+
+                        }, provider.Token);
                 }
             }
             catch (Exception e)
