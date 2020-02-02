@@ -93,6 +93,14 @@ namespace HeroesReplay.Processes
                         Logger.LogDebug($"[NOT FOUND][{line}]");
                     }
                 }
+
+                if (result == null)
+                {
+                    if (Configuration.GetValue<bool>("Capture:SaveFailure", false))
+                    {
+                        bitmap.Save(@"C:\\temp\\" + Guid.NewGuid() + ".bmp");
+                    }
+                }
             }
 
             return null;

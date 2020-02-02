@@ -45,7 +45,7 @@ namespace HeroesReplay.Runner
                             {
                                 replay.Id.HasValue ? $"Id: {replay.Id.Value}" : string.Empty,
                                 $"Map: {map ?? replay.Replay.MapAlternativeName}",
-                                $"Mode: {replay.Replay.GameMode switch { GameMode.StormLeague => "Storm League", GameMode.QuickMatch => "Quick Match", _ => replay.Replay.GameMode }}",
+                                $"Mode: {replay.Replay.GameMode switch { GameMode.StormLeague => "Storm League", GameMode.UnrankedDraft => "Unranked", GameMode.QuickMatch => "Quick Match", _ => replay.Replay.GameMode }}",
                                 $"Date: {replay.Replay.Timestamp.Date.ToShortDateString()}"
                             };
 

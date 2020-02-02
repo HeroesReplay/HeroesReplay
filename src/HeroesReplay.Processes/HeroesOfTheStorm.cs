@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -96,7 +97,11 @@ namespace HeroesReplay.Processes
                         else
                         {
                             Logger.LogInformation("[TIMER][NOT FOUND]");
-                            // enlargedTimer.Save("C:\\temp\\" + Guid.NewGuid() + ".bmp", ImageFormat.MemoryBmp);
+
+                            if (Configuration.GetValue<bool>("Capture:SaveFailure", false))
+                            {
+                                enlargedTimer.Save("C:\\temp\\" + Guid.NewGuid() + ".bmp", ImageFormat.MemoryBmp);
+                            }
                         }
                     }
                 }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
-using Heroes.ReplayParser;
 
 namespace HeroesReplay.Shared
 {
@@ -49,14 +48,6 @@ namespace HeroesReplay.Shared
 
             return result;
         }
-
-        public static List<string> MatchAwards(this Player p) => p.ScoreResult.MatchAwards.SelectMany(key => Constants.MatchAwards[key]).ToList();
-
-        public static List<MatchAwardType> GetMatchAwards(this Replay replay) => replay.Players.SelectMany(p => p.ScoreResult.MatchAwards).Distinct().ToList();
-
-        public static IEnumerable<string> GetText(this MatchAwardType matchAwardType) => Constants.MatchAwards[matchAwardType];
-
-        public static IEnumerable<string> ToText(this IEnumerable<MatchAwardType> matchAwardTypes) => matchAwardTypes.SelectMany(mat => mat.GetText()).Distinct();
 
         public static IEnumerable<TSource> Interleave<TSource>(this IEnumerable<TSource> source1, IEnumerable<TSource> source2)
         {

@@ -25,6 +25,7 @@ namespace HeroesReplay.Replays
     {
         private const string GAME_TYPE_STORM_LEAGUE = "StormLeague";
         private const string GAME_TYPE_QUICK_MATCH = "QuickMatch";
+        private const string GAME_TYPE_UNRANKED = "UnrankedDraft";
 
         private int MinReplayId
         {
@@ -186,10 +187,12 @@ namespace HeroesReplay.Replays
 
                             if (response.StatusCode == (int)HttpStatusCode.OK)
                             {
-                                HotsApiReplay replay = response.Result.FirstOrDefault(r => r.Id > MinReplayId &&
-                                                                                           r.Deleted == false &&
-                                                                                           Version.Parse(r.Game_version) >= Constants.MIN_VERSION_SUPPORTED &&
-                                                                                           (r.Game_type == GAME_TYPE_STORM_LEAGUE || r.Game_type == GAME_TYPE_QUICK_MATCH));
+                                HotsApiReplay replay = response.Result
+                                    .FirstOrDefault(r =>
+                                        r.Id > MinReplayId &&
+                                        r.Deleted == false &&
+                                        Version.Parse(r.Game_version) >= Constants.MIN_VERSION_SUPPORTED &&
+                                        (r.Game_type == GAME_TYPE_STORM_LEAGUE || r.Game_type == GAME_TYPE_UNRANKED || r.Game_type == GAME_TYPE_QUICK_MATCH));
 
                                 if (replay != null)
                                 {

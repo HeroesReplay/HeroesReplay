@@ -13,7 +13,7 @@ namespace HeroesReplay.Analyzer
         public IEnumerable<Unit> Structures { get; }
         public IEnumerable<Player> Alive { get; }
         public IEnumerable<Player> NearSpawn { get; }
-        public IEnumerable<Player> DangerZone { get; }
+        public IEnumerable<Player> Proximity { get; }
 
         public IEnumerable<(int, TimeSpan)> Talents { get; }
         public IEnumerable<TeamObjective> TeamObjectives { get; }
@@ -48,7 +48,7 @@ namespace HeroesReplay.Analyzer
             IEnumerable<Unit> structures,
             IEnumerable<Player> alive,
             IEnumerable<Player> nearSpawn,
-            IEnumerable<Player> dangerZone,
+            IEnumerable<Player> proximity,
             IEnumerable<Player> killers,
             IEnumerable<GameEvent> pings,
             IEnumerable<(int, TimeSpan)> talents,
@@ -70,7 +70,7 @@ namespace HeroesReplay.Analyzer
             Structures = structures ?? throw new ArgumentNullException(nameof(structures));
             Alive = alive ?? throw new ArgumentNullException(nameof(alive));
             NearSpawn = nearSpawn ?? throw new ArgumentNullException(nameof(nearSpawn));
-            DangerZone = dangerZone ?? throw new ArgumentNullException(nameof(dangerZone));
+            Proximity = proximity ?? throw new ArgumentNullException(nameof(proximity));
             Talents = talents ?? throw new ArgumentNullException(nameof(talents));
             TeamObjectives = teamObjectives ?? throw new ArgumentNullException(nameof(teamObjectives));
         }

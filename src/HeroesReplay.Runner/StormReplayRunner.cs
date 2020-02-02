@@ -137,7 +137,7 @@ namespace HeroesReplay.Runner
         {
             heroesOfTheStorm.SendFocusHero(Array.IndexOf(e.StormReplay.Replay.Players, e.Data.Current.Player));
 
-            bool firstHeroSelected = e.Data.Previous == null;
+            bool firstHeroSelected = e.Data.Previous == null && e.Timer < TimeSpan.FromMinutes(1);
 
             if (firstHeroSelected)
             {

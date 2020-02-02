@@ -14,7 +14,7 @@
         MapObjective,
         Structure,
         KilledEnemy,
-        DangerZone,
+        EnemyProximity,
         Alive,
         Ping
     }

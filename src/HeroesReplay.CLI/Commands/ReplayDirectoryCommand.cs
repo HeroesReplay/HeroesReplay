@@ -14,7 +14,6 @@ using HeroesReplay.Spectator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Configuration;
 
 namespace HeroesReplay.CLI.Commands
 {
@@ -37,7 +36,7 @@ namespace HeroesReplay.CLI.Commands
                 .AddJsonFile("appsettings.json")
                 .AddInMemoryCollection(new[]
                 {
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.BattleNetPath, bnet.FullName), 
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.BattleNetPath, bnet.FullName),
                     new KeyValuePair<string, string>(Constants.ConfigKeys.ReplayProviderPath, path.FullName),
                     new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString()),
                 })
@@ -47,12 +46,15 @@ namespace HeroesReplay.CLI.Commands
             ServiceProvider serviceProvider = new ServiceCollection()
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole())
                 .AddSingleton<IConfiguration>(provider => configuration)
-                .AddSingleton((provider) => new CancellationTokenProvider(cancellationToken))
+                .AddSingleton(provider => new CancellationTokenProvider(cancellationToken))
                 .AddSingleton(captureMethod == CaptureMethod.Stub ? typeof(StubOfTheStorm) : typeof(HeroesOfTheStorm))
+                .AddSingleton(provider => new ScreenCapture(captureMethod))
                 .AddSingleton<BattleNet>()
-                .AddSingleton<ScreenCapture>((provider => new ScreenCapture(captureMethod)))
                 .AddSingleton<StormReplayAnalyzer>()
-                .AddSingleton<StormReplayHeroSelector>()
+                .AddSingleton<StormPlayerTool>()
+                .AddSingleton<GamePanelTool>()
+                .AddSingleton<GameStateTool>()
+                .AddSingleton<SpectateTool>()
                 .AddSingleton<StormReplayDetailsWriter>()
                 .AddSingleton<StormReplaySpectator>()
                 .AddSingleton<IStormReplayProvider, StormReplayDirectoryProvider>()

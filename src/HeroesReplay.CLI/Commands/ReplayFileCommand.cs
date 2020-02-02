@@ -14,7 +14,6 @@ using HeroesReplay.Spectator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Configuration;
 
 namespace HeroesReplay.CLI.Commands
 {
@@ -53,7 +52,10 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton<ScreenCapture>((provider => new ScreenCapture(captureMethod)))
                 .AddSingleton<StormReplayAnalyzer>()
                 .AddSingleton<StormReplayDetailsWriter>()
-                .AddSingleton<StormReplayHeroSelector>()
+                .AddSingleton<StormPlayerTool>()
+                .AddSingleton<GamePanelTool>()
+                .AddSingleton<GameStateTool>()
+                .AddSingleton<SpectateTool>()
                 .AddSingleton<StormReplaySpectator>()
                 .AddSingleton<IStormReplayProvider, StormReplayFileProvider>()
                 .AddSingleton<StormReplayConsumer>()
