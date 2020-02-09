@@ -1,7 +1,7 @@
 ﻿using System.CommandLine;
 using System.Diagnostics;
 using System.Linq;
-using HeroesReplay.Shared;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Options
 {

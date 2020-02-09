@@ -1,6 +1,6 @@
 ﻿using System.CommandLine.Parsing;
 using System.Threading.Tasks;
-using HeroesReplay.Shared;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI

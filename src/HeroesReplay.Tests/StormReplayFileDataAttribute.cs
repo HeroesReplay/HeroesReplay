@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using Heroes.ReplayParser;
-using HeroesReplay.Shared;
-using HeroesReplay.Spectator;
+using HeroesReplay.Core.Shared;
 using Xunit.Sdk;
 
 namespace HeroesReplay.Tests

@@ -1,6 +1,6 @@
 ﻿using System;
 using System.CommandLine;
-using HeroesReplay.Shared;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Options
 {

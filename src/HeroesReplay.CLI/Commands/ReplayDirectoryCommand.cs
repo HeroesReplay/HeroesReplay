@@ -4,13 +4,13 @@ using System.CommandLine.Invocation;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Analyzer;
 using HeroesReplay.CLI.Options;
-using HeroesReplay.Processes;
-using HeroesReplay.Replays;
-using HeroesReplay.Runner;
-using HeroesReplay.Shared;
-using HeroesReplay.Spectator;
+using HeroesReplay.Core.Analyzer;
+using HeroesReplay.Core.Processes;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Runner;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Spectator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -23,22 +23,20 @@ namespace HeroesReplay.CLI.Commands
         {
             AddOption(new StormReplayDirectoryOption());
             AddOption(new LaunchOption());
-            AddOption(new BattlenetOption());
             AddOption(new CaptureMethodOption());
 
-            Handler = CommandHandler.Create<DirectoryInfo, bool, DirectoryInfo, CaptureMethod, CancellationToken>(ActionAsync);
+            Handler = CommandHandler.Create<DirectoryInfo, bool, CaptureMethod, CancellationToken>(ActionAsync);
         }
 
-        private async Task ActionAsync(DirectoryInfo path, bool launch, DirectoryInfo bnet, CaptureMethod captureMethod, CancellationToken cancellationToken)
+        private async Task ActionAsync(DirectoryInfo path, bool launch, CaptureMethod captureMethod, CancellationToken cancellationToken)
         {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json")
                 .AddInMemoryCollection(new[]
                 {
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.BattleNetPath, bnet.FullName),
                     new KeyValuePair<string, string>(Constants.ConfigKeys.ReplayProviderPath, path.FullName),
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString()),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString())
                 })
                 .Build();
 
@@ -47,13 +45,13 @@ namespace HeroesReplay.CLI.Commands
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole())
                 .AddSingleton<IConfiguration>(provider => configuration)
                 .AddSingleton(provider => new CancellationTokenProvider(cancellationToken))
-                .AddSingleton(captureMethod == CaptureMethod.Stub ? typeof(StubOfTheStorm) : typeof(HeroesOfTheStorm))
-                .AddSingleton(provider => new ScreenCapture(captureMethod))
-                .AddSingleton<BattleNet>()
+                .AddSingleton(typeof(HeroesOfTheStorm), captureMethod switch { CaptureMethod.None => typeof(StubOfTheStorm), _ => typeof(HeroesOfTheStorm) })
+                .AddSingleton(typeof(CaptureStrategy), captureMethod switch { CaptureMethod.None => typeof(StubCapture), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen) })
                 .AddSingleton<StormReplayAnalyzer>()
                 .AddSingleton<StormPlayerTool>()
                 .AddSingleton<GamePanelTool>()
                 .AddSingleton<GameStateTool>()
+                .AddSingleton<DebugTool>()
                 .AddSingleton<SpectateTool>()
                 .AddSingleton<StormReplayDetailsWriter>()
                 .AddSingleton<StormReplaySpectator>()
@@ -66,7 +64,7 @@ namespace HeroesReplay.CLI.Commands
             {
                 StormReplayConsumer stormReplayConsumer = scope.ServiceProvider.GetRequiredService<StormReplayConsumer>();
 
-                await stormReplayConsumer.ReplayAsync(launch);
+                await stormReplayConsumer.RunAsync(launch);
             }
         }
     }

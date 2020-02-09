@@ -23,14 +23,13 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\HeroesReplay.Analyzer\HeroesReplay.Analyzer.csproj" />
-        <ProjectReference Include="..\HeroesReplay.Spectator\HeroesReplay.Spectator.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
         <Content Include="*\*.StormReplay">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\HeroesReplay.Core\HeroesReplay.Core.csproj" />
     </ItemGroup>
 
 

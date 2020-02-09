@@ -1,5 +1,5 @@
 ﻿using System.CommandLine;
-using HeroesReplay.Processes;
+using HeroesReplay.Core.Processes;
 
 namespace HeroesReplay.CLI.Options
 {

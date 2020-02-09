@@ -2,11 +2,11 @@
     "profiles": {
         "HeroesReplay.CLI [Directory]": {
             "commandName": "Project",
-            "commandLineArgs": "directory --launch=true --path=\"[PATH TO REPLAYS]\" --capture-method=BitBlt"
+            "commandLineArgs": "directory --launch=true --path=\"G:\\replays\" --capture-method=BitBlt"
         },
         "HeroesReplay.CLI [API]": {
             "commandName": "Project",
-            "commandLineArgs": "hotsapi --launch=true --min-replay-id=23940742 --capture-method=BitBlt"
+            "commandLineArgs": "hotsapi --launch=true --min-replay-id=-1 --capture-method=BitBlt"
         },
         "HeroesReplay.CLI [FILE]": {
             "commandName": "Project",
