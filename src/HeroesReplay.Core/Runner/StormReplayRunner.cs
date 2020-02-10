@@ -129,7 +129,7 @@ namespace HeroesReplay.Core.Runner
 
         private void OnHeroChange(object sender, GameEventArgs<Delta<StormPlayer>> e)
         {
-            process.SendFocusHero(e.StormReplay.GetPlayerIndex(e.Data.Current.Player));
+            process.SendFocusHero(e.StormReplay.Replay.GetPlayerIndex(e.Data.Current.Player));
 
             bool firstHeroSelected = e.Data.Previous == null && e.Timer < TimeSpan.FromMinutes(1);
 

@@ -15,7 +15,8 @@
         Unit,
         Structure,
         Killer,
-        Enemy,
+        Taunt,
+        Proximity,
         Alive,
         Ping,
         None

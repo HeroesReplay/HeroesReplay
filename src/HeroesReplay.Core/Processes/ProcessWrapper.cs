@@ -95,7 +95,7 @@ namespace HeroesReplay.Core.Processes
 
             if (Configuration.GetValue("Capture:SaveFailure", false))
             {
-                string path = @"C:\\temp\\" + Guid.NewGuid() + ".bmp";
+                string path = Path.Combine(Configuration.GetValue<string>("Capture:SavePath", Guid.NewGuid() + ".bmp"));
                 Logger.LogDebug("saving failed ocr result to: " + path);
                 bitmap.Save(path);
             }

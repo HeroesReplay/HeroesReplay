@@ -20,7 +20,7 @@ namespace HeroesReplay.Tests
         [Fact]
         public void ShouldHave10AliveHeroes()
         {
-            AnalyzerResult analyzerResult = analyzer.Analyze(fixture.StormReplay, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1));
+            AnalyzerResult analyzerResult = analyzer.Analyze(fixture.StormReplay.Replay, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1));
 
             Assert.Equal(10, analyzerResult.Alive.Count());
         }

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
-using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Analyzer
 {
@@ -12,12 +11,11 @@ namespace HeroesReplay.Core.Analyzer
         /// Players that will die in this time frame.
         /// </summary>
         public IEnumerable<Unit> Deaths { get; }
-        
+
         /// <summary>
         /// Objectives can range from owner change events, to units dying
         /// </summary>
         public IEnumerable<(Player, TimeSpan)> MapObjectives { get; }
-
 
         /// <summary>
         /// Structures that are destoryed in this time frame.
@@ -42,7 +40,12 @@ namespace HeroesReplay.Core.Analyzer
         /// <summary>
         /// Players that are close to enemy players in this time frame.
         /// </summary>
-        public IEnumerable<Player> CloseProximity { get; }
+        public IEnumerable<Player> Proximity { get; }
+
+        /// <summary>
+        /// Players that bstep, taunt or use dance
+        /// </summary>
+        public IEnumerable<(Player, TimeSpan)> Taunts { get; }
 
         /// <summary>
         /// Team talents that are aquired in this time frame.
@@ -87,10 +90,10 @@ namespace HeroesReplay.Core.Analyzer
         public TimeSpan Start { get; }
         public TimeSpan End { get; }
         public TimeSpan Duration { get; }
-        public StormReplay StormReplay { get; }
+        public Replay Replay { get; }
 
         public AnalyzerResult(
-            StormReplay stormReplay,
+            Replay replay,
             TimeSpan start,
             TimeSpan end,
             TimeSpan duration,
@@ -101,6 +104,7 @@ namespace HeroesReplay.Core.Analyzer
             IEnumerable<Player> allyCore,
             IEnumerable<Player> enemyCore,
             IEnumerable<Player> proximity,
+            IEnumerable<(Player, TimeSpan)> taunts,
             IEnumerable<(Player, TimeSpan)> killers,
             IEnumerable<GameEvent> pings,
             IEnumerable<(int, TimeSpan)> teamTalents,
@@ -113,7 +117,7 @@ namespace HeroesReplay.Core.Analyzer
             End = end;
             Duration = duration;
 
-            StormReplay = stormReplay ?? throw new ArgumentNullException(nameof(stormReplay));
+            Replay = replay ?? throw new ArgumentNullException(nameof(replay));
             BossCaptures = bossCaptures ?? throw new ArgumentNullException(nameof(bossCaptures));
             CampCaptures = campCaptures ?? throw new ArgumentNullException(nameof(campCaptures));
             EnemyUnits = enemyUnits ?? throw new ArgumentNullException(nameof(enemyUnits));
@@ -123,7 +127,8 @@ namespace HeroesReplay.Core.Analyzer
             Structures = structures ?? throw new ArgumentNullException(nameof(structures));
             AllyCore = allyCore ?? throw new ArgumentNullException(nameof(allyCore));
             EnemyCore = enemyCore ?? throw new ArgumentNullException(nameof(enemyCore));
-            CloseProximity = proximity ?? throw new ArgumentNullException(nameof(proximity));
+            Taunts = taunts ?? throw new ArgumentNullException(nameof(taunts));
+            Proximity = proximity ?? throw new ArgumentNullException(nameof(proximity));
             TeamTalents = teamTalents ?? throw new ArgumentNullException(nameof(teamTalents));
             TeamObjectives = teamObjectives ?? throw new ArgumentNullException(nameof(teamObjectives));
             Killers = killers ?? throw new ArgumentNullException(nameof(killers));

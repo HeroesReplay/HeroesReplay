@@ -23,14 +23,14 @@ namespace HeroesReplay.Core.Spectator
 
         public GamePanel? GetPanel(StormReplay stormReplay, GamePanel? current, TimeSpan timer)
         {
-            return panelTool.GetPanel(stormReplay, current, timer);
+            return panelTool.GetPanel(stormReplay.Replay, current, timer);
         }
 
         public StormPlayer? GetStormPlayer(StormPlayer? currentPlayer, StormReplay stormReplay, TimeSpan timer)
         {
-            IEnumerable<StormPlayer> stormPlayers = heroTool.GetPlayers(stormReplay, timer);
+            IEnumerable<StormPlayer> stormPlayers = heroTool.GetPlayers(stormReplay.Replay, timer);
 
-            if (stormPlayers.Any(p => p.SpectateEvent.IsAny(SpectateEvent.Enemy, SpectateEvent.Alive)))
+            if (stormPlayers.Any(p => p.SpectateEvent.IsAny(SpectateEvent.Proximity, SpectateEvent.Alive)))
             {
                 if (currentPlayer == null) return stormPlayers.Shuffle().FirstOrDefault();
                 return stormPlayers.Where(stormPlayer => stormPlayer.Player != currentPlayer?.Player && stormPlayer.Player.Team != currentPlayer?.Player.Team).Shuffle().FirstOrDefault();
@@ -41,12 +41,12 @@ namespace HeroesReplay.Core.Spectator
 
         public async Task<StormState> GetStateAsync(StormReplay stormReplay, StormState currentState)
         {
-            return await stateTool.GetStateAsync(stormReplay, currentState);
+            return await stateTool.GetStateAsync(stormReplay.Replay, currentState);
         }
 
         public void Debug(StormReplay stormReplay, TimeSpan timer)
         {
-            debugTool.Debug(stormReplay, timer);
+            debugTool.Debug(stormReplay.Replay, timer);
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Heroes.ReplayParser;
 using HeroesReplay.Core.Processes;
 using HeroesReplay.Core.Shared;
 
@@ -14,7 +15,7 @@ namespace HeroesReplay.Core.Spectator
             this.heroesOfTheStorm = heroesOfTheStorm;
         }
 
-        public async Task<StormState> GetStateAsync(StormReplay stormReplay, StormState currentState)
+        public async Task<StormState> GetStateAsync(Replay replay, StormState currentState)
         {
             TimeSpan? elapsed = await heroesOfTheStorm.TryGetTimerAsync();
 
@@ -28,7 +29,7 @@ namespace HeroesReplay.Core.Spectator
                 return new StormState(next, currentState.State);
             }
 
-            if (currentState.IsNearEnd(stormReplay.Replay.ReplayLength) && await heroesOfTheStorm.TryGetMatchAwardsAsync(stormReplay.Replay.GetMatchAwards()))
+            if (currentState.IsNearEnd(replay.ReplayLength) && await heroesOfTheStorm.TryGetMatchAwardsAsync(replay.GetMatchAwards()))
             {
                 return new StormState(currentState.Timer, GameState.EndOfGame);
             }

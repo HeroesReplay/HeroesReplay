@@ -31,7 +31,7 @@ namespace HeroesReplay.Core.Spectator
             get => currentPlayer;
             private set
             {
-                if (value != currentPlayer && value?.Player != currentPlayer?.Player)
+                if (value != null && value != currentPlayer && value?.Player != currentPlayer?.Player)
                 {
                     HeroChange?.Invoke(this, new GameEventArgs<Delta<StormPlayer>>(StormReplay, new Delta<StormPlayer>(CurrentPlayer, value), CurrentState.Timer, value.SpectateEvent.ToString()));
                 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using Heroes.ReplayParser;
 using HeroesReplay.Core.Analyzer;
 using HeroesReplay.Core.Shared;
 
@@ -14,7 +15,7 @@ namespace HeroesReplay.Core.Spectator
             this.analyzer = analyzer;
         }
 
-        public GamePanel? GetPanel(StormReplay replay, GamePanel? current, TimeSpan timer)
+        public GamePanel? GetPanel(Replay replay, GamePanel? current, TimeSpan timer)
         {
             if (timer < TimeSpan.FromMinutes(1)) return GamePanel.Talents;
 
@@ -32,7 +33,7 @@ namespace HeroesReplay.Core.Spectator
             return current switch
             {
                 GamePanel.KillsDeathsAssists => GamePanel.ActionsPerMinute,
-                GamePanel.ActionsPerMinute => result.StormReplay.SupportsCarriedObjectives() ? GamePanel.CarriedObjectives : GamePanel.CrowdControlEnemyHeroes,
+                GamePanel.ActionsPerMinute => result.Replay.SupportsCarriedObjectives() ? GamePanel.CarriedObjectives : GamePanel.CrowdControlEnemyHeroes,
                 GamePanel.CarriedObjectives => GamePanel.CrowdControlEnemyHeroes,
                 GamePanel.CrowdControlEnemyHeroes => GamePanel.DeathDamageRole,
                 GamePanel.DeathDamageRole => GamePanel.Experience,

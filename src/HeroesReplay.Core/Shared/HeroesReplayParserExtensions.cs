@@ -8,8 +8,15 @@ namespace HeroesReplay.Core.Shared
 {
     public static class HeroesReplayParserExtensions
     {
-        public static int GetAbilityLink(this TrackerEventStructure structure) => (int)structure.array[1].array[0].unsignedInt; // m_abilLink
-        public static int GetAbilityCmdIndex(this TrackerEventStructure trackerEvent) => (int)trackerEvent.array[1].array[1].unsignedInt; // m_abilCmdIndex
+        public static int GetAbilityLink(this TrackerEventStructure structure)
+        {            
+            return Convert.ToInt32(structure?.array[1]?.array[0]?.unsignedInt ?? 0); // m_abilLink
+        }
+
+        public static int GetAbilityCmdIndex(this TrackerEventStructure trackerEvent)
+        {
+            return Convert.ToInt32(trackerEvent.array[1]?.array[1]?.unsignedInt ?? 0); // m_abilCmdIndex
+        }
 
         public static bool IsTaunt(this Replay replay, GameEvent gameEvent)
         {
@@ -40,7 +47,15 @@ namespace HeroesReplay.Core.Shared
                  replay.ReplayBuild >= 77525 && gameEvent.data.GetAbilityLink() == 114);
         }
 
-        public static int GetPlayerIndex(this StormReplay stormReplay, Player player) => Array.IndexOf(stormReplay.Replay.Players, player);
+        public static bool SupportsCarriedObjectives(this Replay replay) => replay.MapAlternativeName switch
+        {
+            Constants.CarriedObjectiveMaps.BlackheartsBay => true,
+            Constants.CarriedObjectiveMaps.TombOfTheSpiderQueen => true,
+            Constants.CarriedObjectiveMaps.WarheadJunction => true,
+            _ => false
+        };
+
+        public static int GetPlayerIndex(this Replay replay, Player player) => Array.IndexOf(replay.Players, player);
 
         public static bool IsPlayerReferenced(this Unit unit) => unit?.PlayerKilledBy != null || unit?.PlayerControlledBy != null;
 

@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Heroes.ReplayParser;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Spectator
@@ -20,15 +21,7 @@ namespace HeroesReplay.Core.Spectator
         {
             if (player == null) await Task.CompletedTask;
             await Task.Delay(player.Duration <= TimeSpan.Zero ? TimeSpan.Zero : player.Duration, token);
-        }
-
-        public static bool SupportsCarriedObjectives(this StormReplay replay) => replay.Replay.MapAlternativeName switch
-        {
-            Constants.CarriedObjectiveMaps.BlackheartsBay => true,
-            Constants.CarriedObjectiveMaps.TombOfTheSpiderQueen => true,
-            Constants.CarriedObjectiveMaps.WarheadJunction => true,
-            _ => false
-        };
+        }        
 
         public static int ToKills(this SpectateEvent @event) => @event switch
         {

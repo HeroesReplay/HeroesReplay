@@ -17,10 +17,8 @@ namespace HeroesReplay.Core.Analyzer
             this.logger = logger;
         }
 
-        public AnalyzerResult Analyze(StormReplay stormReplay, TimeSpan start, TimeSpan end)
+        public AnalyzerResult Analyze(Replay replay, TimeSpan start, TimeSpan end)
         {
-            Replay replay = stormReplay.Replay;
-
             IEnumerable<Player> alive = GetAlivePlayers(start, end, replay);
             IEnumerable<Unit> deaths = GetDeadPlayerUnits(start, end, replay);
             IEnumerable<(Player, TimeSpan)> mapObjectives = GetMapObjectives(start, end, replay, alive);
@@ -34,10 +32,11 @@ namespace HeroesReplay.Core.Analyzer
             IEnumerable<Player> allyCore = GetNearAllyCore(start, end, replay);
             IEnumerable<Player> enemyCore = GetNearEnemyCore(start, end, replay);
             IEnumerable<(Player, TimeSpan)> enemyUnits = GetEnemyUnits(start, end, replay);
+            IEnumerable<(Player, TimeSpan)> taunts = GetTaunts(start, end, alive, replay);
             IEnumerable<Player> proximity = GetProximity(start, end, alive, replay);
 
             return new AnalyzerResult(
-                stormReplay: stormReplay,
+                replay: replay,
                 start: start,
                 end: end,
                 duration: (end - start),
@@ -47,6 +46,7 @@ namespace HeroesReplay.Core.Analyzer
                 alive: alive,
                 allyCore: allyCore,
                 enemyCore: enemyCore,
+                taunts: taunts,
                 proximity: proximity,
                 killers: killers,
                 pings: pings,
@@ -56,6 +56,36 @@ namespace HeroesReplay.Core.Analyzer
                 campCaptures: campCaptures,
                 enemyUnits: enemyUnits
             );
+        }
+
+        private IEnumerable<(Player, TimeSpan)> GetTaunts(TimeSpan start, TimeSpan end, IEnumerable<Player> alive, Replay replay)
+        {
+            foreach (IGrouping<Player, GameEvent> events in replay.GameEvents.Where(e => replay.IsHearthStone(e) && e.TimeSpan.IsWithin(start, end)).GroupBy(e => e.player))
+            {
+                // May need to also find click events within the same time frame to confirm legitimate bstepping
+                var bsteps = events.GroupBy(cmd => cmd.TimeSpan).Where(g => g.Count() > 3);
+
+                if (bsteps.Any() && alive.Contains(events.Key))
+                {
+                    yield return (events.Key, bsteps.Max(x => x.Key));
+                }
+            }
+
+            foreach (IGrouping<Player, GameEvent> events in replay.GameEvents.Where(e => replay.IsTaunt(e) && e.TimeSpan.IsWithin(start, end)).GroupBy(e => e.player))
+            {
+                if (alive.Contains(events.Key))
+                {
+                    yield return (events.Key, events.Max(t => t.TimeSpan));
+                }
+            }
+
+            foreach (IGrouping<Player, GameEvent> events in replay.GameEvents.Where(e => replay.IsDance(e) && e.TimeSpan.IsWithin(start, end)).GroupBy(e => e.player))
+            {
+                if (alive.Contains(events.Key))
+                {
+                    yield return (events.Key, events.Max(t => t.TimeSpan));
+                }
+            }
         }
 
         private IEnumerable<(Player, TimeSpan)> GetKillers(IEnumerable<Unit> deaths, IEnumerable<Player> alive)
@@ -70,7 +100,7 @@ namespace HeroesReplay.Core.Analyzer
         {
             IEnumerable<Unit> teamOne = alive.SelectMany(p => p.HeroUnits.Where(unit => unit.IsHero() && unit.PlayerControlledBy.Team == 1 && unit.IsAlive(start, end)));
             IEnumerable<Unit> teamTwo = alive.SelectMany(p => p.HeroUnits.Where(unit => unit.IsHero() && unit.PlayerControlledBy.Team == 0 && unit.IsAlive(start, end)));
-            
+
             foreach (Unit teamOneUnit in teamOne)
             {
                 foreach (Unit teamTwoUnit in teamTwo)
@@ -80,7 +110,7 @@ namespace HeroesReplay.Core.Analyzer
                         foreach (Position teamTwoPosition in teamTwoUnit.Positions.Where(p => p.TimeSpan.IsWithin(start, end)))
                         {
                             double distance = teamOnePosition.Point.DistanceTo(teamTwoPosition.Point);
-                            
+
                             if (distance <= Constants.MAX_DISTANCE_TO_ENEMY)
                             {
                                 logger.LogDebug($"distance: {distance}, heroes: {teamOneUnit.PlayerControlledBy.HeroId}, {teamTwoUnit.PlayerControlledBy.HeroId}");
@@ -96,7 +126,7 @@ namespace HeroesReplay.Core.Analyzer
                                     {
                                         yield return teamOneUnit.PlayerControlledBy;
                                     }
-                                    
+
                                     if (unit.PointBorn.DistanceTo(teamTwoPosition.Point) <= Constants.MAX_DISTANCE_TO_OBJECTIVE)
                                     {
                                         yield return teamTwoUnit.PlayerControlledBy;
