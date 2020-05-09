@@ -197,16 +197,15 @@ namespace HeroesReplay.Core.Replays
                             if (response.StatusCode == (int)HttpStatusCode.OK)
                             {
                                 replay = response.Result
-                                    .FirstOrDefault(r =>
-                                        r.Id > MinReplayId &&
-                                        r.Deleted == false &&
-                                        Version.Parse(r.Game_version) >= Constants.MIN_VERSION_SUPPORTED &&
-                                        (r.Game_type == GAME_TYPE_STORM_LEAGUE || r.Game_type == GAME_TYPE_UNRANKED || r.Game_type == GAME_TYPE_QUICK_MATCH));
+                                    .FirstOrDefault(r => 
+                                    r.Id > MinReplayId && 
+                                    r.Deleted == false && 
+                                    Version.Parse(r.Game_version) >= Constants.MIN_VERSION_SUPPORTED && 
+                                    r.Game_type == GAME_TYPE_STORM_LEAGUE);
 
                                 if (replay != null)
                                 {
                                     logger.LogInformation($"replay id: {replay.Id}, url: {replay.Url}]");
-                                    
                                 }
 
                                 logger.LogInformation("could not find suitable replay in response.");
