@@ -60,7 +60,9 @@ namespace HeroesReplay.Core.Analyzer
 
         private IEnumerable<(Player, TimeSpan)> GetTaunts(TimeSpan start, TimeSpan end, IEnumerable<Player> alive, Replay replay)
         {
-            foreach (IGrouping<Player, GameEvent> events in replay.GameEvents.Where(e => replay.IsHearthStone(e) && e.TimeSpan.IsWithin(start, end)).GroupBy(e => e.player))
+            IEnumerable<GameEvent> gameEvents = replay.GameEvents.Where(e => e.TimeSpan.IsWithin(start, end));
+
+            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => replay.IsHearthStone(e)).GroupBy(e => e.player))
             {
                 // May need to also find click events within the same time frame to confirm legitimate bstepping
                 var bsteps = events.GroupBy(cmd => cmd.TimeSpan).Where(g => g.Count() > 3);
@@ -71,7 +73,7 @@ namespace HeroesReplay.Core.Analyzer
                 }
             }
 
-            foreach (IGrouping<Player, GameEvent> events in replay.GameEvents.Where(e => replay.IsTaunt(e) && e.TimeSpan.IsWithin(start, end)).GroupBy(e => e.player))
+            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => replay.IsTaunt(e)).GroupBy(e => e.player))
             {
                 if (alive.Contains(events.Key))
                 {
@@ -79,7 +81,7 @@ namespace HeroesReplay.Core.Analyzer
                 }
             }
 
-            foreach (IGrouping<Player, GameEvent> events in replay.GameEvents.Where(e => replay.IsDance(e) && e.TimeSpan.IsWithin(start, end)).GroupBy(e => e.player))
+            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => replay.IsDance(e)).GroupBy(e => e.player))
             {
                 if (alive.Contains(events.Key))
                 {
@@ -143,7 +145,7 @@ namespace HeroesReplay.Core.Analyzer
         {
             foreach (Unit unit in replay.Units.Where(unit => unit.IsDead(start, end) && unit.IsCamp() && unit.PlayerKilledBy != null))
             {
-                logger.LogInformation($"enemy unit: {unit.Name}, killed by: {unit.PlayerKilledBy.HeroId}");
+                logger.LogDebug($"enemy unit: {unit.Name}, killed by: {unit.PlayerKilledBy.HeroId}");
                 yield return (unit.PlayerKilledBy, unit.TimeSpanDied.Value);
             }
         }
