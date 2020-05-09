@@ -28,7 +28,18 @@ namespace HeroesReplay.Core.Processes
 
         protected Process ActualProcess => Process.GetProcessesByName(ProcessName)[0];
 
-        protected IntPtr WindowHandle => ActualProcess.MainWindowHandle;
+        protected IntPtr WindowHandle
+        {
+            get
+            {
+                var handle = ActualProcess.MainWindowHandle;
+
+                if(handle == IntPtr.Zero)
+                    throw new InvalidOperationException("Handle not set");
+
+                return handle;
+            }
+        }
 
         protected CaptureStrategy CaptureStrategy { get; }
 
@@ -67,16 +78,27 @@ namespace HeroesReplay.Core.Processes
         protected virtual async Task<bool> GetWindowContainsAnyAsync(params string[] lines)
         {
             using (Bitmap bitmap = CaptureStrategy.Capture(WindowHandle))
-            {
+            {                
                 return await ContainsAnyAsync(bitmap, lines) != null;
             }
         }
 
         protected virtual async Task<OcrResult?> ContainsAnyAsync(Bitmap bitmap, IEnumerable<string> lines)
         {
+            this.Logger.LogDebug("checking bitmap for any of the following lines.");
+            this.Logger.LogDebug(string.Join(Environment.NewLine, lines));
+
             using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(bitmap))
             {
                 OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
+
+                var found = (result?.Lines ?? Enumerable.Empty<OcrLine>()).Select(x => x.Text).ToList();
+
+                if (found.Any())
+                {
+                    Logger.LogDebug("OCR found");
+                    Logger.LogDebug(string.Join(Environment.NewLine, found));
+                }
 
                 foreach (var line in lines)
                 {
@@ -95,7 +117,7 @@ namespace HeroesReplay.Core.Processes
 
             if (Configuration.GetValue("Capture:SaveFailure", false))
             {
-                string path = Path.Combine(Configuration.GetValue<string>("Capture:SavePath", Guid.NewGuid() + ".bmp"));
+                string path = Path.Combine(Configuration.GetValue("Capture:SavePath", Guid.NewGuid().ToString() + ".bmp"));
                 Logger.LogDebug("saving failed ocr result to: " + path);
                 bitmap.Save(path);
             }

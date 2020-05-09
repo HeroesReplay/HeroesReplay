@@ -18,7 +18,12 @@ namespace HeroesReplay.Core.Processes
         public virtual Rectangle GetDimensions(IntPtr handle)
         {
             NativeMethods.GetClientRect(handle, out RECT rect);
-            return new Rectangle(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
+            
+            var rectangle = new Rectangle(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
+
+            Logger.LogDebug("window dimensions: " +  rectangle.Width + "x" + rectangle.Height);
+
+            return rectangle;
         }
     }
 }

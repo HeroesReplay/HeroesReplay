@@ -39,14 +39,18 @@ namespace HeroesReplay.Core.Runner
                                 let shortName = hero.Value.GetProperty("short_name").GetString()
                                 let altName = hero.Value.GetProperty("alt_name").GetString()
                                 where ban.Hero.Equals(shortName, StringComparison.OrdinalIgnoreCase) || ban.Hero.Equals(altName, StringComparison.OrdinalIgnoreCase)
-                                select $"Ban {ban.Index}: {hero.Value.GetProperty("name").GetString()}";
+                                select $"{hero.Value.GetProperty("name").GetString()}";
+                            // select $"Ban {ban.Index}: {hero.Value.GetProperty("name").GetString()}";
+
+                            if (bans.Any()) bans = bans.Prepend("Bans:");
 
                             string[] details =
                             {
-                                replay.Id.HasValue ? $"Id: {replay.Id.Value}" : string.Empty,
-                                $"Map: {map ?? replay.Replay.MapAlternativeName}",
-                                $"Mode: {replay.Replay.GameMode switch { GameMode.StormLeague => "Storm League", GameMode.UnrankedDraft => "Unranked", GameMode.QuickMatch => "Quick Match", _ => replay.Replay.GameMode }}",
-                                $"Date: {replay.Replay.Timestamp.Date.ToShortDateString()}"
+                                // replay.Id.HasValue ? $"Id: {replay.Id.Value}" : string.Empty,
+                                // $"Map: {map ?? replay.Replay.MapAlternativeName}",
+                                $"{replay.Replay.GameMode switch { GameMode.StormLeague => "Storm League", GameMode.UnrankedDraft => "Unranked", GameMode.QuickMatch => "Quick Match", _ => replay.Replay.GameMode }}",
+                                // $"Date: {replay.Replay.Timestamp.Date.ToShortDateString()}"
+                                $"{replay.Replay.ReplayVersion}"
                             };
 
                             logger.LogInformation($"[UPDATE][{Constants.CURRENT_REPLAY_INFORMATION_FILE_PATH}]");
