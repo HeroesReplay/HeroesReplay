@@ -26,7 +26,7 @@ namespace HeroesReplay.Core.Replays
             {
                 (DataParser.ReplayParseResult result, Replay replay) = DataParser.ParseReplay(await File.ReadAllBytesAsync(path), Constants.REPLAY_PARSE_OPTIONS);
 
-                logger.LogInformation("result: {0}, path: {1}", result, path);
+                logger.LogDebug("result: {0}, path: {1}", result, path);
 
                 if (result != DataParser.ReplayParseResult.Exception && result != DataParser.ReplayParseResult.PreAlphaWipe && result != DataParser.ReplayParseResult.Incomplete)
                 {

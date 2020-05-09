@@ -77,6 +77,7 @@ namespace HeroesReplay.Core.Processes
         public virtual async Task<TimeSpan?> TryGetTimerAsync()
         {
             Rectangle dimensions = CaptureStrategy.GetDimensions(WindowHandle);
+
             Bitmap? timer = CaptureStrategy.Capture(WindowHandle, new Rectangle(dimensions.Width / 2 - 50, 0, 100, 50));
 
             if (timer == null) return null;
@@ -85,6 +86,8 @@ namespace HeroesReplay.Core.Processes
             {
                 using (Bitmap resized = timer.GetResized(zoom: 2))
                 {
+                    Logger.LogDebug("timer zoomed for OCR");
+
                     OcrResult? result = await TryGetOcrResult(resized, Constants.Ocr.TIMER_HRS_MINS_SECONDS_SEPERATOR.ToString());
                     if (result != null) return TryParseTimeSpan(result);
                 }
@@ -132,11 +135,13 @@ namespace HeroesReplay.Core.Processes
             {
                 defaultLaunch.WaitForExit();
 
-                return Policy
+                return await Task.FromResult(Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetry(retryCount: 15, retry => TimeSpan.FromSeconds(2))
-                    .Execute(t => Process.GetProcessesByName(ProcessName).Any(p => IsMatchingClientVersion(stormReplay, p)), token);
+                    .WaitAndRetry(retryCount: 120, retry => TimeSpan.FromSeconds(1))
+                    .Execute(t => Process
+                        .GetProcessesByName(ProcessName)
+                        .Any(p => IsMatchingClientVersion(stormReplay, p)), token));
             }
         }
 
@@ -145,9 +150,11 @@ namespace HeroesReplay.Core.Processes
             return await Policy
                 .Handle<Exception>() // Issue getting Process information (terminated?)
                 .OrResult<bool>(loaded => loaded == false) // it's not the game version that supports the replay
-                .WaitAndRetryAsync(retryCount: 60, retry => TimeSpan.FromSeconds(1)) // this can time some time, especially if the game is downloading assets.
-                .ExecuteAsync(async t =>
+                .WaitAndRetryAsync(retryCount: 120, retry => TimeSpan.FromSeconds(1)) // this can time some time, especially if the game is downloading assets.
+                .ExecuteAsync(async (t) =>
                 {
+                    Logger.LogDebug("waiting for map loading screen...");
+
                     string[] names = stormReplay.Replay.Players.Select(p => p.Name).ToArray();
                     return await GetWindowContainsAnyAsync(new[] { Constants.Ocr.LOADING_SCREEN_TEXT, stormReplay.Replay.Map }.Concat(names).ToArray());
 
@@ -248,7 +255,7 @@ namespace HeroesReplay.Core.Processes
         {
             bool match = p.MainModule.FileVersionInfo.FileVersion == stormReplay.Replay.ReplayVersion;
 
-            Logger.LogDebug($"current: {p.MainModule.FileVersionInfo.FileVersion}, required: {stormReplay.Replay.ReplayVersion}");
+            Logger.LogDebug($"current version: {p.MainModule.FileVersionInfo.FileVersion}, required version: {stormReplay.Replay.ReplayVersion}");
 
             return match;
         }
