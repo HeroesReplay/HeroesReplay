@@ -2,12 +2,25 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 
 namespace HeroesReplay.Core.Shared
 {
     public static class Extensions
     {
+        public static string TryGetReplayId(this StormReplay stormReplay)
+        {
+            try
+            {
+                return int.Parse(Path.GetFileName(stormReplay.Path).Split(Constants.STORM_REPLAY_CACHED_FILE_NAME_SPLITTER)[0]).ToString();
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+        }
+
         public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> items) => items.OrderBy(i => Guid.NewGuid());
 
         /// <summary>

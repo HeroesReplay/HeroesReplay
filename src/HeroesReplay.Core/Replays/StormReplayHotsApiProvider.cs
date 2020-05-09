@@ -129,7 +129,7 @@ namespace HeroesReplay.Core.Replays
 
             logger.LogInformation("result: {0}, path: {1}", result, cacheStormReplay.FullName);
 
-            if (result != DataParser.ReplayParseResult.Exception && result != DataParser.ReplayParseResult.PreAlphaWipe && result != DataParser.ReplayParseResult.Incomplete)
+            if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
             {
                 return new StormReplay(cacheStormReplay.FullName, replay);
             }

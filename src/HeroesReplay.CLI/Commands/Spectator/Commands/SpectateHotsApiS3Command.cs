@@ -17,29 +17,32 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.CLI.Commands
 {
-    public class ReplayDirectoryCommand : Command
+    public class SpectateHotsApiS3Command : Command
     {
-        public ReplayDirectoryCommand() : base("directory", "The directory that contains .StormReplay files to spectate.")
+        public SpectateHotsApiS3Command() : base("hotsapi", "Access the HotsApi database to download uploaded replays and spectate them.")
         {
-            AddOption(new StormReplayDirectoryOption());
             AddOption(new LaunchOption());
+            AddOption(new MinimumReplayIdOption(Constants.REPLAY_ID_UNSET));
+            AddOption(new AwsAccessKeyOption(Constants.HEROES_REPLAY_AWS_ACCESS_KEY));
+            AddOption(new AwsSecretKeyOption(Constants.HEROES_REPLAY_AWS_SECRET_KEY));
             AddOption(new CaptureMethodOption());
 
-            Handler = CommandHandler.Create<DirectoryInfo, bool, CaptureMethod, CancellationToken>(ActionAsync);
+            Handler = CommandHandler.Create<int, string, string, bool, CaptureMethod, CancellationToken>(CommandAsync);
         }
 
-        private async Task ActionAsync(DirectoryInfo path, bool launch, CaptureMethod captureMethod, CancellationToken cancellationToken)
+        protected virtual async Task CommandAsync(int minReplayId, string awsAccessKey, string awsSecretKey, bool launch, CaptureMethod captureMethod, CancellationToken cancellationToken)
         {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json")
                 .AddInMemoryCollection(new[]
                 {
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.ReplayProviderPath, path.FullName),
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString())
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.MinReplayId, minReplayId.ToString()),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString()),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.AwsAccessKey, awsAccessKey),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.AwsSecretKey, awsSecretKey)
                 })
                 .Build();
-
 
             ServiceProvider serviceProvider = new ServiceCollection()
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole())
@@ -53,9 +56,10 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton<GameStateTool>()
                 .AddSingleton<DebugTool>()
                 .AddSingleton<SpectateTool>()
-                .AddSingleton<StormReplayDetailsWriter>()
                 .AddSingleton<StormReplaySpectator>()
-                .AddSingleton<IStormReplayProvider, StormReplayDirectoryProvider>()
+                .AddSingleton<StormReplayDetailsWriter>()
+                .AddSingleton<PlayerBlackListChecker>()
+                .AddSingleton<IStormReplayProvider, StormReplayHotsApiProvider>()
                 .AddSingleton<StormReplayConsumer>()
                 .AddSingleton<StormReplayRunner>()
                 .BuildServiceProvider();

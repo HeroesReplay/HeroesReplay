@@ -19,7 +19,7 @@ namespace HeroesReplay.Core.Replays
         public StormReplayDirectoryProvider(IConfiguration configuration, ILogger<StormReplayDirectoryProvider> logger)
         {
             this.logger = logger;
-            queue = new Queue<string>(Directory.GetFiles(configuration.GetValue<string>(Constants.ConfigKeys.ReplayProviderPath), Constants.STORM_REPLAY_WILDCARD, SearchOption.AllDirectories).OrderBy(GetCreationTime));
+            queue = new Queue<string>(Directory.GetFiles(configuration.GetValue<string>(Constants.ConfigKeys.ReplaySource), Constants.STORM_REPLAY_WILDCARD, SearchOption.AllDirectories).OrderBy(GetCreationTime));
         }
 
         public async Task<StormReplay?> TryLoadReplayAsync()

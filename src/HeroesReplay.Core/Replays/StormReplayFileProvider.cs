@@ -17,7 +17,7 @@ namespace HeroesReplay.Core.Replays
         public StormReplayFileProvider(ILogger<StormReplayDirectoryProvider> logger, IConfiguration configuration)
         {
             this.logger = logger;
-            queue = new Queue<string>(new[] { configuration.GetValue<string>(Constants.ConfigKeys.ReplayProviderPath) });
+            queue = new Queue<string>(new[] { configuration.GetValue<string>(Constants.ConfigKeys.ReplaySource) });
         }
 
         public async Task<StormReplay?> TryLoadReplayAsync()

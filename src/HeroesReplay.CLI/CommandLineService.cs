@@ -21,7 +21,7 @@ namespace HeroesReplay.CLI
 
         public Parser GetParser()
         {
-            return new CommandLineBuilder(new HeroesReplayCommand())
+            return new CommandLineBuilder(new HeroesReplayRootCommand())
                 .UseMiddleware(CheckAdminMiddlewareAsync)
                 .UseMiddleware(CheckOsRequirementAsync)
                 .UseParseErrorReporting()

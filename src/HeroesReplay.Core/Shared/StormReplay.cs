@@ -7,21 +7,6 @@ namespace HeroesReplay.Core.Shared
     /// </summary>
     public class StormReplay
     {
-        public int? Id
-        {
-            get
-            {
-                try
-                {
-                    return int.Parse(System.IO.Path.GetFileName(Path).Split(Constants.STORM_REPLAY_CACHED_FILE_NAME_SPLITTER)[0]);
-                }
-                catch
-                {
-                    return null;
-                }
-            }
-        }
-
         public string Path { get; }
 
         public Replay Replay { get; }

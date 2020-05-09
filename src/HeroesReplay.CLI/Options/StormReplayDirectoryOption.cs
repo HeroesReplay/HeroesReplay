@@ -7,15 +7,17 @@ namespace HeroesReplay.CLI.Options
 {
     public class StormReplayDirectoryOption : Option
     {
-        public StormReplayDirectoryOption() : base("--path", "The path to a directory of .StormReplay files.")
+        public StormReplayDirectoryOption(string? defaultPath = null) : base("--source-path", description: $"The path to a directory for {Constants.STORM_REPLAY_EXTENSION} files.")
         {
-            Required = GetRequired();
-            Argument = new Argument<DirectoryInfo>(() => new DirectoryInfo(Constants.STORM_REPLAYS_USER_PATH)) { Arity = ArgumentArity.ZeroOrOne }.LegalFilePathsOnly();
+            Required = GetRequired(defaultPath);
+            Argument = new Argument<DirectoryInfo>(getDefaultValue: () => new DirectoryInfo(defaultPath)) { Arity = ArgumentArity.ZeroOrOne }.LegalFilePathsOnly();
         }
 
-        private static bool GetRequired()
+        private static bool GetRequired(string? path)
         {
-            DirectoryInfo directoryInfo = new DirectoryInfo(Constants.STORM_REPLAYS_USER_PATH);
+            if (string.IsNullOrWhiteSpace(path)) return true;
+
+            DirectoryInfo directoryInfo = new DirectoryInfo(path);
 
             if (directoryInfo.Exists)
             {

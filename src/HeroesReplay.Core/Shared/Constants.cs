@@ -59,8 +59,12 @@ namespace HeroesReplay.Core.Shared
         public static class ConfigKeys
         {
             public const string MinReplayId = "minReplayId";
-            public const string ReplayProviderPath = "path";
+
+            public const string ReplaySource = "source";
+            public const string ReplayDestination = "destination";
+
             public const string Launch = "launch";
+
             public const string AwsAccessKey = "awsAccessKey";
             public const string AwsSecretKey = "awsSecretKey";
         }

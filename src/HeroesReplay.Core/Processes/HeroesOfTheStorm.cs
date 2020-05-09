@@ -135,7 +135,7 @@ namespace HeroesReplay.Core.Processes
                 return Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetry(retryCount: 15, retry => TimeSpan.FromSeconds(2))
+                    .WaitAndRetry(retryCount: 300, retry => TimeSpan.FromSeconds(1))
                     .Execute(t => Process.GetProcessesByName(ProcessName).Any(p => IsMatchingClientVersion(stormReplay, p)), token);
             }
         }

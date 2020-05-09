@@ -5,10 +5,10 @@ namespace HeroesReplay.CLI.Options
 {
     public class CaptureMethodOption : Option
     {
-        public CaptureMethodOption() : base(new[] { "--capture-method" }, description: "The window capture method.")
+        public CaptureMethodOption() : base(new[] { "--capture-method" }, description: "The game capture method.")
         {
             Required = false;
-            Argument = new Argument<CaptureMethod>(() => CaptureMethod.BitBlt);
+            Argument = new Argument<CaptureMethod>(getDefaultValue: () => CaptureMethod.BitBlt);
         }
     }
 }

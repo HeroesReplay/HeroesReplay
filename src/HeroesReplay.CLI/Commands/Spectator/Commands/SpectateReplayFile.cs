@@ -17,30 +17,27 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.CLI.Commands
 {
-    public class HotsApiCommand : Command
+    public class SpectateReplayFile : Command
     {
-        public HotsApiCommand() : base("hotsapi", "Access the HotsApi database to download uploaded replays and spectate them.")
+        public SpectateReplayFile() : base("file", "The individual .StormReplay file to spectate.")
         {
+            AddOption(new StormReplayFileOption());
             AddOption(new LaunchOption());
-            AddOption(new MinimumReplayIdOption());
-            AddOption(new AwsAccessKeyOption());
-            AddOption(new AwsSecretKeyOption());
             AddOption(new CaptureMethodOption());
 
-            Handler = CommandHandler.Create<int, string, string, bool, CaptureMethod, CancellationToken>(CommandAsync);
+            Handler = CommandHandler.Create<FileInfo, bool, CaptureMethod, CancellationToken>(CommandAsync);
         }
 
-        private async Task CommandAsync(int minReplayId, string awsAccessKey, string awsSecretKey, bool launch, CaptureMethod captureMethod, CancellationToken cancellationToken)
+        protected async Task CommandAsync(FileInfo path, bool launch,CaptureMethod captureMethod, CancellationToken cancellationToken)
         {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
+                .AddEnvironmentVariables()
                 .AddJsonFile("appsettings.json")
                 .AddInMemoryCollection(new[]
                 {
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.MinReplayId, minReplayId.ToString()),
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString()),
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.AwsAccessKey, awsAccessKey),
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.AwsSecretKey, awsSecretKey)
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.ReplaySource, path.FullName), 
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString())
                 })
                 .Build();
 
@@ -51,18 +48,16 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton(typeof(HeroesOfTheStorm), captureMethod switch { CaptureMethod.None => typeof(StubOfTheStorm), _ => typeof(HeroesOfTheStorm) })
                 .AddSingleton(typeof(CaptureStrategy), captureMethod switch { CaptureMethod.None => typeof(StubCapture), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen) })
                 .AddSingleton<StormReplayAnalyzer>()
+                .AddSingleton<StormReplayDetailsWriter>()
                 .AddSingleton<StormPlayerTool>()
                 .AddSingleton<GamePanelTool>()
                 .AddSingleton<GameStateTool>()
                 .AddSingleton<DebugTool>()
                 .AddSingleton<SpectateTool>()
                 .AddSingleton<StormReplaySpectator>()
-                .AddSingleton<StormReplayDetailsWriter>()
-                .AddSingleton<PlayerBlackListChecker>()
-                .AddSingleton<IStormReplayProvider, StormReplayHotsApiProvider>()
+                .AddSingleton<IStormReplayProvider, StormReplayFileProvider>()
                 .AddSingleton<StormReplayConsumer>()
                 .AddSingleton<StormReplayRunner>()
-                .AddSingleton<AdminChecker>()
                 .BuildServiceProvider();
 
             using (IServiceScope scope = serviceProvider.CreateScope())

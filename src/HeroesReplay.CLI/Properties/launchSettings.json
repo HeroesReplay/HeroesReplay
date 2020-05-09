@@ -1,16 +1,20 @@
 {
     "profiles": {
-        "HeroesReplay.CLI [Directory]": {
+        "HeroesReplay.CLI [Spectate][DIR]": {
             "commandName": "Project",
-            "commandLineArgs": "directory --launch=true --path=\"G:\\replays\" --capture-method=BitBlt"
+            "commandLineArgs": "spectate directory --launch=true --path=\"G:\\replays\" --capture-method=BitBlt"
         },
-        "HeroesReplay.CLI [API]": {
+        "HeroesReplay.CLI [Spectate][API]": {
             "commandName": "Project",
-            "commandLineArgs": "hotsapi --launch=true --min-replay-id=-1 --capture-method=BitBlt"
+            "commandLineArgs": "spectate hotsapi --launch=false --min-replay-id=-1 --capture-method=BitBlt"
         },
-        "HeroesReplay.CLI [FILE]": {
+        "HeroesReplay.CLI [Spectate][FILE]": {
             "commandName": "Project",
-            "commandLineArgs": "file --launch=false --path=\"[PATH TO REPLAY]\" --capture-method=BitBlt"
+            "commandLineArgs": "spectate file --launch=false --path=\"G:\\replays\\2019-12-24 03.40.56 Battlefield of Eternity.StormReplay\" --capture-method=BitBlt"
+        },
+        "HeroesReplay.CLI [Analyze][DIR]": {
+            "commandName": "Project",
+            "commandLineArgs": "analyze --provider directory path=\"G:\\replays\" --destination directory path=\"G:\\output\" "
         }
     }
 }
