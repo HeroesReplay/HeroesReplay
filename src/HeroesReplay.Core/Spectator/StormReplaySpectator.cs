@@ -150,6 +150,8 @@ namespace HeroesReplay.Core.Spectator
                     logger.LogError(e, e.Message);
                 }
             }
+
+            await Task.Delay(TimeSpan.FromSeconds(5));
         }
     }
 }

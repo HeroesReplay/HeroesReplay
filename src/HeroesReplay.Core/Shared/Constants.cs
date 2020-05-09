@@ -67,10 +67,13 @@ namespace HeroesReplay.Core.Shared
 
             public const string AwsAccessKey = "awsAccessKey";
             public const string AwsSecretKey = "awsSecretKey";
+
+            public const string HeroesProfileApiKey = "heroesProfileApiKey";
         }
         
         public const string HEROES_REPLAY_AWS_ACCESS_KEY = nameof(HEROES_REPLAY_AWS_ACCESS_KEY);
         public const string HEROES_REPLAY_AWS_SECRET_KEY = nameof(HEROES_REPLAY_AWS_SECRET_KEY);
+        public const string HEROES_PROFILE_API_KEY = nameof(HEROES_PROFILE_API_KEY);
 
         public const int GAME_LOOPS_OFFSET = 610;
         public const int GAME_LOOPS_PER_SECOND = 16;

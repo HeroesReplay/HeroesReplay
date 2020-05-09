@@ -26,11 +26,12 @@ namespace HeroesReplay.CLI.Commands
             AddOption(new AwsAccessKeyOption(Constants.HEROES_REPLAY_AWS_ACCESS_KEY));
             AddOption(new AwsSecretKeyOption(Constants.HEROES_REPLAY_AWS_SECRET_KEY));
             AddOption(new CaptureMethodOption());
+            AddOption(new HeroesProfileApiKey(Constants.HEROES_PROFILE_API_KEY));
 
-            Handler = CommandHandler.Create<int, string, string, bool, CaptureMethod, CancellationToken>(CommandAsync);
+            Handler = CommandHandler.Create<int, string, string, string, bool, CaptureMethod, CancellationToken>(CommandAsync);
         }
 
-        protected virtual async Task CommandAsync(int minReplayId, string awsAccessKey, string awsSecretKey, bool launch, CaptureMethod captureMethod, CancellationToken cancellationToken)
+        protected virtual async Task CommandAsync(int minReplayId, string awsAccessKey, string awsSecretKey, string heroesProfileApiKey, bool launch, CaptureMethod captureMethod, CancellationToken cancellationToken)
         {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
@@ -40,7 +41,8 @@ namespace HeroesReplay.CLI.Commands
                     new KeyValuePair<string, string>(Constants.ConfigKeys.MinReplayId, minReplayId.ToString()),
                     new KeyValuePair<string, string>(Constants.ConfigKeys.Launch, launch.ToString()),
                     new KeyValuePair<string, string>(Constants.ConfigKeys.AwsAccessKey, awsAccessKey),
-                    new KeyValuePair<string, string>(Constants.ConfigKeys.AwsSecretKey, awsSecretKey)
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.AwsSecretKey, awsSecretKey),
+                    new KeyValuePair<string, string>(Constants.ConfigKeys.HeroesProfileApiKey, heroesProfileApiKey)
                 })
                 .Build();
 
@@ -49,7 +51,7 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton<IConfiguration>(provider => configuration)
                 .AddSingleton(provider => new CancellationTokenProvider(cancellationToken))
                 .AddSingleton(typeof(HeroesOfTheStorm), captureMethod switch { CaptureMethod.None => typeof(StubOfTheStorm), _ => typeof(HeroesOfTheStorm) })
-                .AddSingleton(typeof(CaptureStrategy), captureMethod switch { CaptureMethod.None => typeof(StubCapture), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen) })
+                .AddSingleton(typeof(CaptureStrategy), captureMethod switch { CaptureMethod.None => typeof(StubCapture), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen), _ => typeof(CaptureBitBlt) })
                 .AddSingleton<StormReplayAnalyzer>()
                 .AddSingleton<StormPlayerTool>()
                 .AddSingleton<GamePanelTool>()

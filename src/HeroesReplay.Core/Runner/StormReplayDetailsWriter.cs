@@ -55,6 +55,11 @@ namespace HeroesReplay.Core.Runner
 
                             logger.LogInformation($"[UPDATE][{Constants.CURRENT_REPLAY_INFORMATION_FILE_PATH}]");
 
+                            // Storm League
+                            // MMR
+                            // Patch
+                            // Bans
+
                             await File.WriteAllLinesAsync(Constants.CURRENT_REPLAY_INFORMATION_FILE_PATH, details.Concat(bans).Where(line => !string.IsNullOrWhiteSpace(line)), CancellationToken.None);
                         }
                     }

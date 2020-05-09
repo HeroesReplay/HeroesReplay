@@ -6,10 +6,10 @@ namespace HeroesReplay.CLI.Options
 {
     public class AwsSecretKeyOption : Option
     {
-        public AwsSecretKeyOption(string name) : base("--aws-secret-key", description: $"The AWS Secret key of the account. You can also set the environment variable: {name}")
+        public AwsSecretKeyOption(string variable) : base("--aws-secret-key", description: $"The AWS Secret key of the account. You can also set the environment variable: {variable}")
         {
-            Required = string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(Constants.HEROES_REPLAY_AWS_SECRET_KEY));
-            Argument = new Argument<string?>(getDefaultValue: () => Environment.GetEnvironmentVariable(Constants.HEROES_REPLAY_AWS_SECRET_KEY, EnvironmentVariableTarget.Process));
+            Required = string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(variable));
+            Argument = new Argument<string?>(getDefaultValue: () => Environment.GetEnvironmentVariable(variable, EnvironmentVariableTarget.Process));
         }
     }
 }
