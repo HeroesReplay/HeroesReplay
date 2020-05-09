@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Processes;
@@ -29,9 +30,19 @@ namespace HeroesReplay.Core.Spectator
                 return new StormState(next, currentState.State);
             }
 
-            if (currentState.IsNearEnd(replay.ReplayLength) && await heroesOfTheStorm.TryGetMatchAwardsAsync(replay.GetMatchAwards()))
+            if (currentState.IsNearEnd(replay.ReplayLength))
             {
-                return new StormState(currentState.Timer, GameState.EndOfGame);
+                // first we try to see if MVP screen or awards screen is there
+                if (await heroesOfTheStorm.TryGetMatchAwardsAsync(replay.GetMatchAwards()))
+                {
+                    return new StormState(currentState.Timer, GameState.EndOfGame);
+                }
+
+                // fall back to the last known timer and the time one of the cores died.
+                if (replay.Units.Any(unit => unit.IsCore() && unit.TimeSpanDied.GetValueOrDefault(TimeSpan.MaxValue) <= currentState.Timer))
+                {
+                    return new StormState(currentState.Timer, GameState.EndOfGame);
+                }
             }
 
             return currentState;
