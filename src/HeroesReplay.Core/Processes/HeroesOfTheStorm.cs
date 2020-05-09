@@ -135,10 +135,11 @@ namespace HeroesReplay.Core.Processes
             {
                 defaultLaunch.WaitForExit();
 
+                // new patch or old patch can be upto 50Mb, give this some time
                 return await Task.FromResult(Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetry(retryCount: 120, retry => TimeSpan.FromSeconds(1))
+                    .WaitAndRetry(retryCount: 300, retry => TimeSpan.FromSeconds(1)) 
                     .Execute(t => Process
                         .GetProcessesByName(ProcessName)
                         .Any(p => IsMatchingClientVersion(stormReplay, p)), token));
