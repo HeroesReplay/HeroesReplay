@@ -1,0 +1,2884 @@
+openapi: 3.0.1
+info: null
+servers:
+  -
+    url: /api/
+paths:
+  /Patches:
+    get:
+      summary: 'get patch data for use with hero stat data'
+      tags:
+        - General
+      responses:
+        200:
+          description: 'JSON with patches'
+        5XX:
+          description: 'Unexpected error.'
+  /Heroes:
+    get:
+      summary: 'List all heroes'
+      tags:
+        - General
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          description: 'Use "json" for API requests. "csv" will download a file in CSV format'
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: false
+          description: 'Hero Name'
+          schema:
+            type: string
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+            minimum: 1
+        -
+          name: role
+          in: query
+          required: false
+          description: 'Hero Role'
+          schema:
+            type: string
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with heroes'
+        5XX:
+          description: 'Unexpected error.'
+  /Heroes/Talents:
+    get:
+      summary: 'Returns all of the heroes talent data'
+      tags:
+        - General
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: false
+          description: 'Hero Name'
+          schema:
+            type: string
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with hero talents'
+        5XX:
+          description: 'Unexpected error.'
+  /Maps:
+    get:
+      summary: 'List all maps'
+      tags:
+        - General
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          description: 'Use "json" for API requests. "csv" will download a file in CSV format'
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: map
+          in: query
+          required: false
+          description: 'Map Name'
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - 'Alterac Pass'
+              - 'Battlefield of Eternity'
+              - 'Blackheart''s Bay'
+              - 'Braxis Holdout'
+              - 'Braxis Outpost'
+              - 'Checkpoint: Hanamura'
+              - 'Cursed Hollow'
+              - 'Dragon Shire'
+              - 'Escape From Braxis'
+              - 'Garden of Terror'
+              - 'Hanamura Temple'
+              - 'Haunted Mines'
+              - 'Industrial District'
+              - 'Infernal Shrines'
+              - 'Lost Cavern'
+              - 'Pull Party'
+              - 'Silver City'
+              - 'Sky Temple'
+              - 'Tomb of the Spider Queen'
+              - 'Towers of Doom'
+              - 'Volskaya Foundry'
+              - 'Warhead Junction'
+      responses:
+        200:
+          description: 'JSON with maps'
+        5XX:
+          description: 'Unexpected error.'
+
+  /Replay/Max:
+    get:
+      summary: 'get max replay ID'
+      tags:
+        - Replays General
+      responses:
+        200:
+          description: 'JSON with max replayID'
+        5XX:
+          description: 'Unexpected error.'
+  /HotsAPI/ReplayID:
+    get:
+      summary: 'Get matching game HotsAPI replayID from Heroes Profile replayID'
+      tags:
+        - Replays General
+      parameters:
+        -
+          name: heroesprofile_replayID
+          in: query
+          required: true
+          description: Input Heroes Profile replayID
+          example: 25002668
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with HotsAPI replayID that matches the given Heroes Profile replayID'
+        5XX:
+          description: 'Unexpected error.'
+  /Heroesprofile/ReplayID:
+    get:
+      summary: 'Get matching game Heroes Profile replayID from HotsApi replayID'
+      tags:
+        - Replays General
+      parameters:
+        -
+          name: hotsapi_replayID
+          in: query
+          required: true
+          description: Input HotsApi replayID
+          example: 25002668
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with Heroes Profile replayID that matches the given HotsApi replayID'
+        5XX:
+          description: 'Unexpected error.'
+  /Replay/Min_id:
+    get:
+      summary: 'get replayID, hotsApi replayID, S3 URL, and parsed data for replays'
+      tags:
+        - Replays General
+      parameters:
+        -
+          name: min_id
+          in: query
+          required: true
+          description: Input Heroes Profile replayID
+          example: 25001668
+          schema:
+            type: integer
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: false
+          example:
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Hero League'
+              - 'Team League'
+              - 'Storm League'
+      responses:
+        200:
+          description: 'JSON with up to 1000 replays beyond min_id input'
+        5XX:
+          description: 'Unexpected error.'
+
+  /Replay/Data:
+    get:
+      summary: 'get replay data for a specific replayID'
+      tags:
+        - Replays Advanced
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          description: 'Use "json" for API requests. "csv" will download a file in CSV format'
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: replayID
+          in: query
+          required: true
+          description: replayID
+          example: 18283505
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with replay data'
+        5XX:
+          description: 'Unexpected error.'
+  /Replay/Ban:
+    get:
+      summary: 'get ban data for a specific replayID'
+      tags:
+        - Replays Advanced
+      parameters:
+        -
+          name: replayID
+          in: query
+          required: true
+          description: replayID
+          example: 18283505
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with ban data'
+        5XX:
+          description: 'Unexpected error.'
+
+  /Heroes/Stats:
+    get:
+      summary: 'Hero win rate, ban rate, popluarity, and wins and losses'
+      tags:
+        - 'Hero Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: timeframe_type
+          in: query
+          required: true
+          example: major
+          schema:
+            type: string
+            enum:
+              - major
+              - minor
+            minimum: 1
+        -
+          name: timeframe
+          in: query
+          required: true
+          description: 'patch (e.g.  2.47, 2.46 for major) or (minor the full patch version 2.47.1.75792)'
+          example: 2.48
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: true
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Storm League'
+              - 'Brawl'
+        -
+          name: group_by_map
+          in: query
+          required: true
+          example: false
+          schema:
+            type: string
+            enum:
+              - 'false'
+              - 'true'
+      responses:
+        200:
+          description: 'JSON with hero win rate, ban rate, popluarity, and wins and losses'
+        5XX:
+          description: 'Unexpected error.'
+  /Heroes/Matchups:
+    get:
+      summary: 'Hero matchup data'
+      tags:
+        - 'Hero Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: timeframe_type
+          in: query
+          required: true
+          example: major
+          schema:
+            type: string
+            enum:
+              - major
+              - minor
+            minimum: 1
+        -
+          name: timeframe
+          in: query
+          required: true
+          description: 'patch (e.g.  2.47, 2.46 for major) or (minor the full patch version 2.47.1.75792)'
+          example: 2.48
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: true
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Storm League'
+              - 'Brawl'
+        -
+          name: hero
+          in: query
+          required: true
+          description: Hero
+          example: Abathur
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+      responses:
+        200:
+          description: 'JSON with hero win rate, ban rate, popluarity, and wins and losses'
+        5XX:
+          description: 'Unexpected error.'
+  /Heroes/Talents/Details:
+    get:
+      summary: 'Returns all of the heroes talent win rate data'
+      tags:
+        - 'Hero Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: timeframe_type
+          in: query
+          required: true
+          example: major
+          schema:
+            type: string
+            enum:
+              - major
+              - minor
+            minimum: 1
+        -
+          name: timeframe
+          in: query
+          required: true
+          description: 'patch (e.g.  2.47, 2.46 for major) or (minor the full patch version 2.47.1.75792)'
+          example: 2.48
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: true
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Storm League'
+              - Brawl
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: false
+          description: Hero
+          example: Abathur
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+      responses:
+        200:
+          description: 'JSON with heroes talent details'
+        5XX:
+          description: 'Unexpected error.'
+  /Heroes/Talents/Builds:
+    get:
+      summary: 'Returns all of the heroes build win rate data'
+      tags:
+        - 'Hero Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: timeframe_type
+          in: query
+          required: false
+          example: major
+          schema:
+            type: string
+            enum:
+              - major
+              - minor
+            minimum: 1
+        -
+          name: timeframe
+          in: query
+          required: false
+          description: 'patch (e.g.  2.47, 2.46 for major) or (minor with the full patch version 2.47.1.75792)'
+          example: 2.48
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: true
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Storm League'
+              - Brawl
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: false
+          description: Hero
+          example: Abathur
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+      responses:
+        200:
+          description: 'JSON with heroes talent builds'
+        5XX:
+          description: 'Unexpected error.'
+
+  /Player:
+    get:
+      summary: 'Returns player profile data'
+      tags:
+        - 'Player Data'
+      parameters:
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with player profile information'
+        5XX:
+          description: 'Unexpected error.'
+  /Player/Replays:
+    get:
+      summary: 'Returns all of the player replay data'
+      tags:
+        - 'Player Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: false
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Hero League'
+              - 'Team League'
+              - 'Storm League'
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: false
+          example: Qhira
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+      responses:
+        200:
+          description: 'JSON with player replay data'
+        5XX:
+          description: 'Unexpected error.'
+  /Player/Hero/All:
+    get:
+      summary: 'Returns player data for all heros'
+      tags:
+        - 'Player Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: false
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Hero League'
+              - 'Team League'
+              - 'Storm League'
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with player data for a single hero'
+        5XX:
+          description: 'Unexpected error.'
+  /Player/Hero/Single:
+    get:
+      summary: 'Returns player data for a specific hero'
+      tags:
+        - 'Player Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: false
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Hero League'
+              - 'Team League'
+              - 'Storm League'
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: true
+          example: Qhira
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+      responses:
+        200:
+          description: 'JSON with player data for a single hero'
+        5XX:
+          description: 'Unexpected error.'
+  /Player/Talents/Build:
+    get:
+      summary: 'Returns the most played build for a hero for a player'
+      tags:
+        - 'Player Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: true
+          example: Abathur
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+        -
+          name: min_date
+          in: query
+          required: false
+          description: 'mm-dd-yyyy'
+          example: '09-02-2002'
+          schema:
+            type: date
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with player talent data for a specific hero'
+        5XX:
+          description: 'Unexpected error.'
+
+  /Player/MMR:
+    get:
+      summary: 'Returns player mmr data'
+      tags:
+        - 'Player MMR Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: false
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Hero League'
+              - 'Team League'
+              - 'Storm League'
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with player MMR data'
+        5XX:
+          description: 'Unexpected error.'
+  /Player/MMR/Hero:
+    get:
+      summary: 'Returns player hero mmr data'
+      tags:
+        - 'Player MMR Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: false
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Hero League'
+              - 'Team League'
+              - 'Storm League'
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: true
+          example: Anduin
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+      responses:
+        200:
+          description: 'JSON with player hero MMR'
+  /Player/MMR/Role:
+    get:
+      summary: 'Returns player role mmr data'
+      tags:
+        - 'Player MMR Data'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: false
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Hero League'
+              - 'Team League'
+              - 'Storm League'
+            minimum: 1
+        -
+          name: role
+          in: query
+          required: true
+          example: 'Ranged Assassin'
+          schema:
+            type: string
+            enum:
+              - Bruiser
+              - Healer
+              - 'Melee Assassin'
+              - 'Ranged Assassin'
+              - Support
+              - Tank
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with player role MMR'
+
+  /Player/PreMatch/:
+    post:
+      summary: 'Returns player score data for a particular hero and map.'
+      description: 'For use with tools that display player data before matches.'
+      tags:
+        - 'Player Miscellaneous'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: true
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Hero League'
+              - 'Team League'
+              - 'Storm League'
+            minimum: 1
+        -
+          name: game_map
+          in: query
+          required: false
+          example:
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: true
+          description: 'Hero Name'
+          example: Qhira
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+      responses:
+        200:
+          description: 'JSON with pre-match data'
+    get:
+      summary: 'Returns player score data for a particular hero and map.'
+      description: 'For use with tools that display player data before matches.'
+      tags:
+        - 'Player Miscellaneous'
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          example: json
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+            minimum: 1
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+        -
+          name: game_type
+          in: query
+          required: true
+          example: 'Storm League'
+          schema:
+            type: string
+            enum:
+              - 'Quick Match'
+              - 'Unranked Draft'
+              - 'Hero League'
+              - 'Team League'
+              - 'Storm League'
+            minimum: 1
+        -
+          name: game_map
+          in: query
+          required: false
+          example:
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: hero
+          in: query
+          required: true
+          description: 'Hero Name'
+          example: Qhira
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Deathwing
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+      responses:
+        200:
+          description: 'JSON with pre-match data'
+
+  /NGS/Leaderboard/Highest/Average/Stat:
+    get:
+      summary: 'get an NGS leaderboard of players ranked on stats averaged'
+      tags:
+        - NGS
+      parameters:
+        -
+          name: stat
+          in: query
+          required: true
+          description: stat
+          example: kills
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - kills
+              - assists
+              - takedowns
+              - deaths
+              - highest_kill_streak
+              - hero_damage
+              - siege_damage
+              - structure_damage
+              - minion_damage
+              - creep_damage
+              - summon_damage
+              - healing
+              - self_healing
+              - damage_taken
+              - experience_contribution
+              - town_kills
+              - time_spent_dead
+              - merc_camp_captures
+              - watch_tower_captures
+              - meta_experience
+              - protection_allies
+              - silencing_enemies
+              - rooting_enemies
+              - stunning_enemies
+              - clutch_heals
+              - escapes
+              - vengeance
+              - outnumbered_deaths
+              - teamfight_escapes
+              - teamfight_healing
+              - teamfight_damage_taken
+              - teamfight_hero_damage
+              - multikill
+              - physical_damage
+              - spell_damage
+              - regen_globes
+        -
+          name: season
+          in: query
+          required: false
+          example: 7
+          schema:
+            type: string
+            enum:
+              - 6
+              - 7
+              - 8
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with NGS leaderboard data based on average stats'
+        5XX:
+          description: 'Unexpected error.'
+  /NGS/Leaderboard/Highest/Total/Stat:
+    get:
+      summary: 'get an NGS leaderboard of players ranked on stats totaled'
+      description: description
+      tags:
+        - NGS
+      parameters:
+        -
+          name: stat
+          in: query
+          required: true
+          description: stat
+          example: kills
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - kills
+              - assists
+              - takedowns
+              - deaths
+              - highest_kill_streak
+              - hero_damage
+              - siege_damage
+              - structure_damage
+              - minion_damage
+              - creep_damage
+              - summon_damage
+              - healing
+              - self_healing
+              - damage_taken
+              - experience_contribution
+              - town_kills
+              - time_spent_dead
+              - merc_camp_captures
+              - watch_tower_captures
+              - meta_experience
+              - protection_allies
+              - silencing_enemies
+              - rooting_enemies
+              - stunning_enemies
+              - clutch_heals
+              - escapes
+              - vengeance
+              - outnumbered_deaths
+              - teamfight_escapes
+              - teamfight_healing
+              - teamfight_damage_taken
+              - teamfight_hero_damage
+              - multikill
+              - physical_damage
+              - spell_damage
+              - regen_globes
+        -
+          name: season
+          in: query
+          required: false
+          example: 7
+          schema:
+            type: string
+            enum:
+              - 6
+              - 7
+              - 8
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with NGS leaderboard data based on total stats'
+        5XX:
+          description: 'Unexpected error.'
+  /NGS/Hero/Stat:
+    get:
+      summary: 'get NGS data for a hero'
+      tags:
+        - NGS
+      parameters:
+        -
+          name: battletag
+          in: query
+          required: false
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: false
+          description: 'region'
+          example: 1
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - 1
+        -
+          name: hero
+          in: query
+          required: true
+          description: Hero
+          example: Kerrigan
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - Abathur
+              - Alarak
+              - Alexstrasza
+              - Ana
+              - Anduin
+              - 'Anub''arak'
+              - Artanis
+              - Arthas
+              - Auriel
+              - Azmodan
+              - Blaze
+              - Brightwing
+              - Cassia
+              - Chen
+              - Cho
+              - Chromie
+              - D.Va
+              - Deathwing
+              - Deckard
+              - Dehaka
+              - Diablo
+              - E.T.C.
+              - Falstad
+              - Fenix
+              - Gall
+              - Garrosh
+              - Gazlowe
+              - Genji
+              - Greymane
+              - 'Gul''dan'
+              - Hanzo
+              - Illidan
+              - Imperius
+              - Jaina
+              - Johanna
+              - Junkrat
+              - 'Kael''thas'
+              - 'Kel''Thuzad'
+              - Kerrigan
+              - Kharazim
+              - Leoric
+              - 'Li Li'
+              - Li-Ming
+              - 'Lt. Morales'
+              - Lúcio
+              - Lunara
+              - Maiev
+              - 'Mal''Ganis'
+              - Malfurion
+              - Malthael
+              - Medivh
+              - Mephisto
+              - Muradin
+              - Murky
+              - Nazeebo
+              - Nova
+              - Orphea
+              - Probius
+              - Qhira
+              - Ragnaros
+              - Raynor
+              - Rehgar
+              - Rexxar
+              - Samuro
+              - 'Sgt. Hammer'
+              - Sonya
+              - Stitches
+              - Stukov
+              - Sylvanas
+              - Tassadar
+              - 'The Butcher'
+              - 'The Lost Vikings'
+              - Thrall
+              - Tracer
+              - Tychus
+              - Tyrael
+              - Tyrande
+              - Uther
+              - Valeera
+              - Valla
+              - Varian
+              - Whitemane
+              - Xul
+              - Yrel
+              - Zagara
+              - Zarya
+              - Zeratul
+              - 'Zul''jin'
+        -
+          name: season
+          in: query
+          required: true
+          example: 7
+          schema:
+            type: string
+            enum:
+              - 6
+              - 7
+              - 8
+            minimum: 1
+        -
+          name: division
+          in: query
+          required: true
+          example:
+          schema:
+            type: string
+            enum:
+              - A
+              - B East
+              - B West
+              - C East
+              - C West
+              - D East
+              - D West
+              - Heroic
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with NGS player data on specific heros'
+        5XX:
+          description: 'Unexpected error.'
+  /NGS/Player/Profile:
+    get:
+      summary: 'get NGS summary data for a player'
+      tags:
+        - NGS
+      parameters:
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region'
+          example: 1
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - 1
+        -
+          name: season
+          in: query
+          required: false
+          example:
+          schema:
+            type: string
+            enum:
+              - 6
+              - 7
+              - 8
+            minimum: 1
+        -
+          name: division
+          in: query
+          required: false
+          example:
+          schema:
+            type: string
+            enum:
+              - A
+              - B East
+              - B West
+              - C East
+              - C West
+              - D East
+              - D West
+              - Heroic
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with NGS player profile data'
+        5XX:
+          description: 'Unexpected error.'
+  /NGS/Player/MMR:
+    get:
+      summary: 'Returns NGS player mmr data'
+      tags:
+        - 'NGS'
+      parameters:
+
+        -
+          name: battletag
+          in: query
+          required: true
+          description: 'Full battletag'
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: region
+          in: query
+          required: true
+          description: 'region (1 = NA, 2 = EU, 3 = KR, 5 = CN)'
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+              - 5
+            minimum: 1
+      responses:
+        200:
+          description: 'JSON with player MMR data'
+        5XX:
+          description: 'Unexpected error.'
+  /NGS/Games/Upload/:
+    post:
+      summary: 'upload NGS replay data. Only approved accounts can use this endpoint'
+      tags:
+        - NGS Replay Upload
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          description: 'development or production'
+          example: dev
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - dev
+              - prod
+        -
+          name: season
+          in: query
+          required: true
+          example: 7
+          schema:
+            type: string
+            enum:
+              - 6
+              - 7
+              - 8
+            minimum: 1
+        -
+          name: division
+          in: query
+          required: true
+          example:
+          schema:
+            type: string
+            enum:
+              - A
+              - B East
+              - B West
+              - C East
+              - C West
+              - D East
+              - D West
+              - Heroic
+            minimum: 1
+        -
+          name: replay_url
+          in: query
+          required: true
+          example: 'https://s3.amazonaws.com/ngs-replay-storage/ngs_7-10-2019_Team_Training_Wheels_vs_RewinD_Towers_of_Doom.stormReplay'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: round
+          in: query
+          required: true
+          example: 1
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: game
+          in: query
+          required: true
+          example: 1
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_name
+          in: query
+          required: true
+          example: 'Team Training Wheels'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_player
+          in: query
+          required: true
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_map_ban_1
+          in: query
+          required: true
+          example: 'Tomb of the Spider Queen'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_map_ban_2
+          in: query
+          required: true
+          example: 'Infernal Shrines'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_image_url
+          in: query
+          required: true
+          example: 'https://s3.amazonaws.com/ngs-image-storage/Team Training Wheels1532_logo.png'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_name
+          in: query
+          required: true
+          example: 'RewinD'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_player
+          in: query
+          required: true
+          example: 'chaoticorder#1455'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_map_ban_1
+          in: query
+          required: true
+          example: 'Battlefield of Eternity'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_map_ban_2
+          in: query
+          required: true
+          example: 'Braxis Holdout'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_image_url
+          in: query
+          required: true
+          example: 'https://s3.amazonaws.com/ngs-image-storage/RewinD0106_logo.png'
+          schema:
+            type: string
+            minimum: 1
+      responses:
+        200:
+          description: 'json data with player profile pages for players in game'
+        5XX:
+          description: 'Unexpected error.'
+    get:
+      summary: 'upload NGS replay data. Only approved accounts can use this endpoint'
+      tags:
+        - NGS Replay Upload
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          description: 'development or production'
+          example: dev
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - dev
+              - prod
+        -
+          name: season
+          in: query
+          required: true
+          example: 7
+          schema:
+            type: string
+            enum:
+              - 6
+              - 7
+              - 8
+            minimum: 1
+        -
+          name: division
+          in: query
+          required: true
+          example:
+          schema:
+            type: string
+            enum:
+              - A
+              - B East
+              - B West
+              - C East
+              - C West
+              - D East
+              - D West
+              - Heroic
+            minimum: 1
+        -
+          name: replay_url
+          in: query
+          required: true
+          example: 'https://s3.amazonaws.com/ngs-replay-storage/ngs_7-10-2019_Team_Training_Wheels_vs_RewinD_Towers_of_Doom.stormReplay'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: round
+          in: query
+          required: true
+          example: 1
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: game
+          in: query
+          required: true
+          example: 1
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_name
+          in: query
+          required: true
+          example: 'Team Training Wheels'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_player
+          in: query
+          required: true
+          example: 'Zemill#1940'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_map_ban_1
+          in: query
+          required: true
+          example: 'Tomb of the Spider Queen'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_map_ban_2
+          in: query
+          required: true
+          example: 'Infernal Shrines'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_one_image_url
+          in: query
+          required: true
+          example: 'https://s3.amazonaws.com/ngs-image-storage/Team Training Wheels1532_logo.png'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_name
+          in: query
+          required: true
+          example: 'RewinD'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_player
+          in: query
+          required: true
+          example: 'chaoticorder#1455'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_map_ban_1
+          in: query
+          required: true
+          example: 'Battlefield of Eternity'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_map_ban_2
+          in: query
+          required: true
+          example: 'Braxis Holdout'
+          schema:
+            type: string
+            minimum: 1
+        -
+          name: team_two_image_url
+          in: query
+          required: true
+          example: 'https://s3.amazonaws.com/ngs-image-storage/RewinD0106_logo.png'
+          schema:
+            type: string
+            minimum: 1
+      responses:
+        200:
+          description: 'json data with player profile pages for players in game'
+        5XX:
+          description: 'Unexpected error.'
+  /NGS/Games/Delete/:
+    get:
+      summary: 'Delete specific NGS replayIDs. Only approved accounts can use this endpoint'
+      tags:
+        - NGS Replay Delete
+      parameters:
+        -
+          name: mode
+          in: query
+          required: true
+          description: 'development or production'
+          example: dev
+          schema:
+            type: string
+            minimum: 1
+            enum:
+              - dev
+              - prod
+        -
+          name: replayID
+          in: query
+          required: true
+          description: 'relayID #'
+          example:
+          schema:
+            type: string
+            minimum: 1
+      responses:
+        200:
+          description: 'json data with player profile pages for players in game'
+        5XX:
+          description: 'Unexpected error.'
+
+components:
+  securitySchemes:
+    ApiTokenAuth:
+      type: apiKey
+      in: query
+      name: api_token
+security:
+  -
+    ApiTokenAuth:
+      - api_token

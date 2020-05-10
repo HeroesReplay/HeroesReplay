@@ -120,7 +120,7 @@ namespace HeroesReplay.Core.Spectator
                 {
                     CurrentPanel = spectateTool.GetPanel(StormReplay, CurrentPanel, CurrentState.Timer);
 
-                    await Task.Delay(TimeSpan.FromSeconds(10), Token);
+                    await Task.Delay(TimeSpan.FromSeconds(CurrentPanel switch { GamePanel.Talents => 20, _ => 10 }), Token);
                 }
                 catch (Exception e)
                 {

@@ -48,6 +48,7 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton(typeof(HeroesOfTheStorm), captureMethod switch { CaptureMethod.None => typeof(StubOfTheStorm), _ => typeof(HeroesOfTheStorm) })
                 .AddSingleton(typeof(CaptureStrategy), captureMethod switch { CaptureMethod.None => typeof(StubCapture), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen) })
                 .AddSingleton<StormReplayAnalyzer>()
+                .AddSingleton<StormReplayMMRCalculator>()
                 .AddSingleton<StormReplayDetailsWriter>()
                 .AddSingleton<StormPlayerTool>()
                 .AddSingleton<GamePanelTool>()

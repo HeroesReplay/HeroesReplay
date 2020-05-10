@@ -53,6 +53,7 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton<GameStateTool>()
                 .AddSingleton<DebugTool>()
                 .AddSingleton<SpectateTool>()
+                .AddSingleton<StormReplayMMRCalculator>()
                 .AddSingleton<StormReplayDetailsWriter>()
                 .AddSingleton<StormReplaySpectator>()
                 .AddSingleton<IStormReplayProvider, StormReplayDirectoryProvider>()

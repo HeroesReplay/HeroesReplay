@@ -13,10 +13,12 @@ namespace HeroesReplay.Core.Runner
     public class StormReplayDetailsWriter
     {
         private readonly ILogger<StormReplayDetailsWriter> logger;
+        private readonly StormReplayMMRCalculator stormReplayMMRCalculator;
 
-        public StormReplayDetailsWriter(ILogger<StormReplayDetailsWriter> logger)
+        public StormReplayDetailsWriter(ILogger<StormReplayDetailsWriter> logger, StormReplayMMRCalculator stormReplayMMRCalculator)
         {
             this.logger = logger;
+            this.stormReplayMMRCalculator = stormReplayMMRCalculator;
         }
 
         public async Task WriteDetailsAsync(StormReplay replay)
@@ -49,6 +51,7 @@ namespace HeroesReplay.Core.Runner
                                 // replay.Id.HasValue ? $"Id: {replay.Id.Value}" : string.Empty,
                                 // $"Map: {map ?? replay.Replay.MapAlternativeName}",
                                 $"{replay.Replay.GameMode switch { GameMode.StormLeague => "Storm League", GameMode.UnrankedDraft => "Unranked", GameMode.QuickMatch => "Quick Match", _ => replay.Replay.GameMode }}",
+                                $"MMR: {await stormReplayMMRCalculator.CalculateMMRAsync(replay)}",
                                 // $"Date: {replay.Replay.Timestamp.Date.ToShortDateString()}"
                                 $"{replay.Replay.ReplayVersion}"
                             };
