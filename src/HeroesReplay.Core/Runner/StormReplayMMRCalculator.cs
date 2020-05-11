@@ -20,31 +20,40 @@ namespace HeroesReplay.Core.Runner
             this.configuration = configuration;
         }
 
-        public async Task<int> CalculateMMRAsync(StormReplay stormReplay)
+        public async Task<string> CalculateMMRAsync(StormReplay stormReplay)
         {
-            var apiKey = configuration.GetValue<string>(Constants.ConfigKeys.HeroesProfileApiKey);
-            var hotsApiReplayId = stormReplay.TryGetReplayId();
-
-            using (var client = new HttpClient() { BaseAddress = new Uri("https://api.heroesprofile.com/api/") })
+            try
             {
-                string heroesProfileReplayId = await client.GetStringAsync($"Heroesprofile/ReplayID?hotsapi_replayID={hotsApiReplayId}&api_token={apiKey}").ConfigureAwait(false);
+                var apiKey = configuration.GetValue<string>(Constants.ConfigKeys.HeroesProfileApiKey);
+                var hotsApiReplayId = stormReplay.TryGetReplayId();
 
-                logger.LogDebug($"HotsAPI Replay ID: {hotsApiReplayId}. HeroesProfile Replay ID: {heroesProfileReplayId}");
-
-                string dataResponse = await client.GetStringAsync($"Replay/Data?mode=json&replayID={heroesProfileReplayId}&api_token={apiKey}").ConfigureAwait(false);
-
-                using (JsonDocument dataJson = JsonDocument.Parse(dataResponse))
+                using (var client = new HttpClient() { BaseAddress = new Uri("https://api.heroesprofile.com/api/") })
                 {
-                    double average = (from replay in dataJson.RootElement.EnumerateObject()
-                                      from element in replay.Value.EnumerateObject()
-                                      where element.Value.ValueKind == JsonValueKind.Object
-                                      let player = element.Value
-                                      from p in player.EnumerateObject()
-                                      where p.Name.Equals("player_mmr")
-                                      select p.Value.GetDouble()).Average();
+                    string heroesProfileReplayId = await client.GetStringAsync($"Heroesprofile/ReplayID?hotsapi_replayID={hotsApiReplayId}&api_token={apiKey}").ConfigureAwait(false);
 
-                    return Convert.ToInt32(average);
+                    logger.LogDebug($"HotsAPI Replay ID: {hotsApiReplayId}. HeroesProfile Replay ID: {heroesProfileReplayId}");
+
+                    string dataResponse = await client.GetStringAsync($"Replay/Data?mode=json&replayID={heroesProfileReplayId}&api_token={apiKey}").ConfigureAwait(false);
+
+                    using (JsonDocument dataJson = JsonDocument.Parse(dataResponse))
+                    {
+                        double average = (from replay in dataJson.RootElement.EnumerateObject()
+                                          from element in replay.Value.EnumerateObject()
+                                          where element.Value.ValueKind == JsonValueKind.Object
+                                          let player = element.Value
+                                          from p in player.EnumerateObject()
+                                          where p.Name.Equals("player_mmr")
+                                          select p.Value.GetDouble()).Average();
+
+                        return Convert.ToInt32(average).ToString();
+                    }
                 }
+            }
+            catch (Exception e)
+            {
+                logger.LogError("Could not calculate average mmr", e);
+
+                return "Unknown";
             }
         }
     }
