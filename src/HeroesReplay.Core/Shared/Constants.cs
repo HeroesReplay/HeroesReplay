@@ -58,17 +58,15 @@ namespace HeroesReplay.Core.Shared
 
         public static class ConfigKeys
         {
-            public const string MinReplayId = "minReplayId";
+            public const string MinReplayId = nameof(MinReplayId);
+            public const string ReplaySource = nameof(ReplaySource);
+            public const string ReplayDestination = nameof(ReplayDestination);
+            public const string Launch = nameof(Launch);
 
-            public const string ReplaySource = "source";
-            public const string ReplayDestination = "destination";
-
-            public const string Launch = "launch";
-
-            public const string AwsAccessKey = "awsAccessKey";
-            public const string AwsSecretKey = "awsSecretKey";
-
-            public const string HeroesProfileApiKey = "heroesProfileApiKey";
+            public const string AwsAccessKey = nameof(AwsAccessKey);
+            public const string AwsSecretKey = nameof(AwsSecretKey);
+            public const string EndScreenSeconds = nameof(EndScreenSeconds);
+            public const string HeroesProfileApiKey = nameof(HeroesProfileApiKey);
         }
         
         public const string HEROES_REPLAY_AWS_ACCESS_KEY = nameof(HEROES_REPLAY_AWS_ACCESS_KEY);

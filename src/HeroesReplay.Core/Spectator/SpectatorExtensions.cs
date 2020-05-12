@@ -20,8 +20,8 @@ namespace HeroesReplay.Core.Spectator
         public static async Task SpectateAsync(this StormPlayer player, CancellationToken token = default)
         {
             if (player == null) await Task.CompletedTask;
-            await Task.Delay(player.Duration <= TimeSpan.Zero ? TimeSpan.Zero : player.Duration, token);
-        }        
+            await Task.Delay(player.Duration <= TimeSpan.Zero ? TimeSpan.Zero : player.Duration, token).ConfigureAwait(false);
+        }
 
         public static int ToKills(this SpectateEvent @event) => @event switch
         {

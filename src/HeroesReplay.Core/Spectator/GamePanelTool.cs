@@ -22,8 +22,6 @@ namespace HeroesReplay.Core.Spectator
             AnalyzerResult result = analyzer.Analyze(replay, timer.Subtract(TimeSpan.FromSeconds(5)), timer);
 
             if (result.TeamTalents.Any()) return GamePanel.Talents;
-            if (result.TeamObjectives.Any()) return GamePanel.Experience;
-            if (result.MapObjectives.Any()) return GamePanel.Experience;
             if (result.Deaths.Any()) return GamePanel.KillsDeathsAssists;
             return result.Alive.Any() ? GetNextGamePanel(current, result) : current;
         }

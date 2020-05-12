@@ -2,7 +2,9 @@
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Shared;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using static HeroesReplay.Core.Shared.Constants;
 
 namespace HeroesReplay.Core.Spectator
 {
@@ -75,18 +77,21 @@ namespace HeroesReplay.Core.Spectator
         private readonly ILogger<StormReplaySpectator> logger;
         private readonly SpectateTool spectateTool;
         private readonly CancellationTokenProvider tokenProvider;
+        private readonly IConfiguration configuration;
 
-        public StormReplaySpectator(ILogger<StormReplaySpectator> logger, SpectateTool spectateTool, CancellationTokenProvider tokenProvider)
+        public StormReplaySpectator(ILogger<StormReplaySpectator> logger, SpectateTool spectateTool, CancellationTokenProvider tokenProvider, IConfiguration configuration)
         {
             this.logger = logger;
             this.spectateTool = spectateTool;
             this.tokenProvider = tokenProvider;
+            this.configuration = configuration;
         }
 
         public async Task SpectateAsync(StormReplay stormReplay)
         {
             StormReplay = stormReplay ?? throw new ArgumentNullException(nameof(stormReplay));
-            await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));
+            await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));            
+            await Task.Delay(TimeSpan.FromSeconds(configuration.GetValue<int>(ConfigKeys.EndScreenSeconds)));
         }
 
         private async Task FocusLoopAsync()
@@ -100,7 +105,7 @@ namespace HeroesReplay.Core.Spectator
                     if (CurrentState.IsRunning())
                     {
                         CurrentPlayer = spectateTool.GetStormPlayer(CurrentPlayer, StormReplay, CurrentState.Timer);
-                        await CurrentPlayer.SpectateAsync(Token);
+                        await CurrentPlayer.SpectateAsync(Token).ConfigureAwait(false);
                     }
                 }
                 catch (Exception e)
@@ -150,8 +155,6 @@ namespace HeroesReplay.Core.Spectator
                     logger.LogError(e, e.Message);
                 }
             }
-
-            await Task.Delay(TimeSpan.FromSeconds(5));
         }
     }
 }

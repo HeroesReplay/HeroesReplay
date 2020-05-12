@@ -38,7 +38,7 @@ namespace HeroesReplay.Core.Runner
 
                         if (picker.IsInteresting(stormReplay))
                         {
-                            await saver.SaveReplayAsync(stormReplay);
+                            await saver.SaveReplayAsync(stormReplay).ConfigureAwait(false);
                         }
                     }
                 }
