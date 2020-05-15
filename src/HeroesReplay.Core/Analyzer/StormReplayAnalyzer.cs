@@ -5,16 +5,21 @@ using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Analyzer
 {
     public class StormReplayAnalyzer
     {
         private readonly ILogger<StormReplayAnalyzer> logger;
+        private readonly ReplayHelper replayHelper;
+        private readonly Settings settings;
 
-        public StormReplayAnalyzer(ILogger<StormReplayAnalyzer> logger)
+        public StormReplayAnalyzer(ILogger<StormReplayAnalyzer> logger, IOptions<Settings> settings, ReplayHelper replayHelper)
         {
             this.logger = logger;
+            this.replayHelper = replayHelper;
+            this.settings = settings.Value;
         }
 
         public AnalyzerResult Analyze(Replay replay, TimeSpan start, TimeSpan end)
@@ -60,9 +65,9 @@ namespace HeroesReplay.Core.Analyzer
 
         private IEnumerable<(Player, TimeSpan)> GetTaunts(TimeSpan start, TimeSpan end, IEnumerable<Player> alive, Replay replay)
         {
-            IEnumerable<GameEvent> gameEvents = replay.GameEvents.Where(e => e.TimeSpan.IsWithin(start, end));
+            IEnumerable<GameEvent> gameEvents = replay.GameEvents.Where(e => replayHelper.IsWithin(e.TimeSpan, start, end));
 
-            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => replay.IsHearthStone(e)).GroupBy(e => e.player))
+            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => replayHelper.IsHearthStone(replay, e)).GroupBy(e => e.player))
             {
                 // May need to also find click events within the same time frame to confirm legitimate bstepping
                 var bsteps = events.GroupBy(cmd => cmd.TimeSpan).Where(g => g.Count() > 3);
@@ -73,7 +78,7 @@ namespace HeroesReplay.Core.Analyzer
                 }
             }
 
-            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => replay.IsTaunt(e)).GroupBy(e => e.player))
+            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => replayHelper.IsTaunt(replay, e)).GroupBy(e => e.player))
             {
                 if (alive.Contains(events.Key))
                 {
@@ -81,7 +86,7 @@ namespace HeroesReplay.Core.Analyzer
                 }
             }
 
-            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => replay.IsDance(e)).GroupBy(e => e.player))
+            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => replayHelper.IsDance(replay, e)).GroupBy(e => e.player))
             {
                 if (alive.Contains(events.Key))
                 {
@@ -92,7 +97,7 @@ namespace HeroesReplay.Core.Analyzer
 
         private IEnumerable<(Player, TimeSpan)> GetKillers(IEnumerable<Unit> deaths, IEnumerable<Player> alive)
         {
-            foreach (var death in deaths.Where(death => alive.Contains(death.PlayerKilledBy)))
+            foreach (var death in deaths.Where(death => death.PlayerKilledBy != null && alive.Contains(death.PlayerKilledBy)))
             {
                 yield return (death.PlayerKilledBy, death.TimeSpanDied.Value);
             }
@@ -100,36 +105,38 @@ namespace HeroesReplay.Core.Analyzer
 
         private IEnumerable<Player> GetProximity(TimeSpan start, TimeSpan end, IEnumerable<Player> alive, Replay replay)
         {
-            IEnumerable<Unit> teamOne = alive.SelectMany(p => p.HeroUnits.Where(unit => unit.IsHero() && unit.PlayerControlledBy.Team == 1 && unit.IsAlive(start, end)));
-            IEnumerable<Unit> teamTwo = alive.SelectMany(p => p.HeroUnits.Where(unit => unit.IsHero() && unit.PlayerControlledBy.Team == 0 && unit.IsAlive(start, end)));
+            IEnumerable<Unit> teamOne = alive.SelectMany(p => p.HeroUnits.Where(unit => replayHelper.IsHero(unit) && unit.PlayerControlledBy.Team == 1 && replayHelper.IsAlive(unit, start, end)));
+            IEnumerable<Unit> teamTwo = alive.SelectMany(p => p.HeroUnits.Where(unit => replayHelper.IsHero(unit) && unit.PlayerControlledBy.Team == 0 && replayHelper.IsAlive(unit, start, end)));
 
             foreach (Unit teamOneUnit in teamOne)
             {
                 foreach (Unit teamTwoUnit in teamTwo)
                 {
-                    foreach (Position teamOnePosition in teamOneUnit.Positions.Where(p => p.TimeSpan.IsWithin(start, end)))
+                    foreach (Position teamOnePosition in teamOneUnit.Positions.Where(p => replayHelper.IsWithin(p.TimeSpan, start, end)))
                     {
-                        foreach (Position teamTwoPosition in teamTwoUnit.Positions.Where(p => p.TimeSpan.IsWithin(start, end)))
+                        foreach (Position teamTwoPosition in teamTwoUnit.Positions.Where(p => replayHelper.IsWithin(p.TimeSpan, start, end)))
                         {
                             double distance = teamOnePosition.Point.DistanceTo(teamTwoPosition.Point);
 
-                            if (distance <= Constants.MAX_DISTANCE_TO_ENEMY)
+                            // proximity to other players
+                            if (distance <= settings.MaxDistanceToEnemy)
                             {
-                                logger.LogDebug($"distance: {distance}, heroes: {teamOneUnit.PlayerControlledBy.HeroId}, {teamTwoUnit.PlayerControlledBy.HeroId}");
+                                logger.LogDebug($"GetProximity: {distance}, heroes: {teamOneUnit.PlayerControlledBy.HeroId}, {teamTwoUnit.PlayerControlledBy.HeroId}");
 
                                 yield return teamOneUnit.PlayerControlledBy;
                                 yield return teamTwoUnit.PlayerControlledBy;
                             }
                             else
                             {
-                                foreach (Unit unit in replay.Units.Where(u => u.IsCapturePoint() || u.IsMapObjective()))
+                                // beacons, map regen globes etc
+                                foreach (Unit unit in replay.Units.Where(u => replayHelper.IsCapturePoint(u) || replayHelper.IsMapObjective(u)))
                                 {
-                                    if (unit.PointBorn.DistanceTo(teamOnePosition.Point) <= Constants.MAX_DISTANCE_TO_OBJECTIVE)
+                                    if (unit.PointBorn.DistanceTo(teamOnePosition.Point) <= settings.MaxDistanceToObjective)
                                     {
                                         yield return teamOneUnit.PlayerControlledBy;
                                     }
 
-                                    if (unit.PointBorn.DistanceTo(teamTwoPosition.Point) <= Constants.MAX_DISTANCE_TO_OBJECTIVE)
+                                    if (unit.PointBorn.DistanceTo(teamTwoPosition.Point) <= settings.MaxDistanceToObjective)
                                     {
                                         yield return teamTwoUnit.PlayerControlledBy;
                                     }
@@ -143,20 +150,23 @@ namespace HeroesReplay.Core.Analyzer
 
         private IEnumerable<(Player, TimeSpan)> GetEnemyUnits(TimeSpan start, TimeSpan end, Replay replay)
         {
-            foreach (Unit unit in replay.Units.Where(unit => unit.IsDead(start, end) && unit.IsCamp() && unit.PlayerKilledBy != null))
+            foreach (Unit unit in replay.Units.Where(unit => replayHelper.IsDead(unit, start, end) && replayHelper.IsCamp(unit) && unit.PlayerKilledBy != null))
             {
-                logger.LogDebug($"enemy unit: {unit.Name}, killed by: {unit.PlayerKilledBy.HeroId}");
+                logger.LogDebug($"GetEnemyUnits: {unit.Name}, killed by: {unit.PlayerKilledBy.HeroId}");
                 yield return (unit.PlayerKilledBy, unit.TimeSpanDied.Value);
             }
         }
 
         private IEnumerable<Player> GetNearAllyCore(TimeSpan start, TimeSpan end, Replay replay)
         {
-            foreach (Unit unit in replay.Players.SelectMany(p => p.HeroUnits.Where(unit => unit.IsAlive(start, end))))
+            foreach (Unit unit in replay.Players.SelectMany(p => p.HeroUnits.Where(unit => replayHelper.IsAlive(unit, start, end))))
             {
-                if (unit.Positions.Where(position => position.TimeSpan.IsWithin(start, end)).Any(position => position.Point.DistanceTo(unit.GetSpawn()) < Constants.MAX_DISTANCE_TO_CORE))
+                IEnumerable<Position> positions = unit.Positions.Where(position => replayHelper.IsWithin(position.TimeSpan, start, end));
+                bool nearOwnCore = positions.Any(position => position.Point.DistanceTo(replayHelper.GetSpawn(unit)) <= settings.MaxDistanceToCore);
+
+                if (nearOwnCore)
                 {
-                    logger.LogDebug($"near ally core: {unit.PlayerControlledBy.HeroId}");
+                    logger.LogDebug($"GetNearAllyCore: {unit.PlayerControlledBy.HeroId}");
                     yield return unit.PlayerControlledBy;
                 }
             }
@@ -164,11 +174,14 @@ namespace HeroesReplay.Core.Analyzer
 
         private IEnumerable<Player> GetNearEnemyCore(TimeSpan start, TimeSpan end, Replay replay)
         {
-            foreach (Unit unit in replay.Players.SelectMany(p => p.HeroUnits.Where(unit => unit.IsAlive(start, end))))
+            foreach (Unit unit in replay.Players.SelectMany(p => p.HeroUnits.Where(unit => replayHelper.IsAlive(unit, start, end))))
             {
-                if (unit.Positions.Where(position => position.TimeSpan.IsWithin(start, end)).Any(position => position.Point.DistanceTo(unit.GetEnemySpawn(replay)) < Constants.MAX_DISTANCE_TO_CORE))
+                IEnumerable<Position> positions = unit.Positions.Where(position => replayHelper.IsWithin(position.TimeSpan, start, end));
+                var nearEnemyCore = positions.Any(position => position.Point.DistanceTo(replayHelper.GetEnemySpawn(unit, replay)) <= settings.MaxDistanceToCore);
+
+                if (nearEnemyCore)
                 {
-                    logger.LogDebug($"near enemy core: {unit.PlayerControlledBy.HeroId}");
+                    logger.LogDebug($"GetNearEnemyCore: {unit.PlayerControlledBy.HeroId}");
                     yield return unit.PlayerControlledBy;
                 }
             }
@@ -176,32 +189,36 @@ namespace HeroesReplay.Core.Analyzer
 
         private IEnumerable<Unit> GetDestroyedStructures(TimeSpan start, TimeSpan end, Replay replay)
         {
-            return replay.Units.Where(unit => unit.IsDead(start, end) && unit.IsStructure());
+            return replay.Units.Where(unit => replayHelper.IsDead(unit, start, end) && replayHelper.IsStructure(unit));
         }
 
         private IEnumerable<(Player, TimeSpan)> GetMapObjectives(TimeSpan start, TimeSpan end, Replay replay, IEnumerable<Player> alive)
         {
-            foreach (Unit unit in replay.Units.Where(unit => unit.IsMapObjective()))
+            foreach (Unit mapObjective in replay.Units.Where(unit => replayHelper.IsMapObjective(unit)))
             {
-                if (unit.IsDead(start, end) && unit.PlayerKilledBy != null && unit.TimeSpanDied.HasValue)
+                var isDead = replayHelper.IsDead(mapObjective, start, end);
+
+                if (isDead && mapObjective.PlayerKilledBy != null && mapObjective.TimeSpanDied.HasValue)
                 {
-                    yield return (unit.PlayerKilledBy, unit.TimeSpanDied.Value);
+                    yield return (mapObjective.PlayerKilledBy, mapObjective.TimeSpanDied.Value);
                 }
-                else if (unit.IsDead(start, end) && unit.PlayerKilledBy == null || unit.IsCapturePoint() && unit.OwnerChangeEvents.Any(e => e.TimeSpanOwnerChanged.IsWithin(start, end)))
+                else if (isDead && mapObjective.PlayerKilledBy == null || replayHelper.IsCapturePoint(mapObjective) && mapObjective.OwnerChangeEvents.Any(e => replayHelper.IsWithin(e.TimeSpanOwnerChanged, start, end)))
                 {
                     IEnumerable<(Player player, TimeSpan time)> results =
-                        from heroUnit in alive.SelectMany(alive => alive.HeroUnits.Where(heroUnit => heroUnit.IsAlive(start, end)))
+                        from heroUnit in alive.SelectMany(alive => alive.HeroUnits.Where(heroUnit => replayHelper.IsAlive(heroUnit, start, end)))
                         from position in heroUnit.Positions
-                        from time in unit.TimeSpanDied.HasValue ? new[] { unit.TimeSpanDied.Value } : unit.OwnerChangeEvents.Select(e => e.TimeSpanOwnerChanged)
-                        where time.IsWithin(start, end)
-                        where position.TimeSpan.IsWithin(start, time)
-                        let distance = position.Point.DistanceTo(unit.PointDied ?? unit.PointBorn)
-                        where distance < Constants.MAX_DISTANCE_TO_OWNER_CHANGE
+                        from time in mapObjective.TimeSpanDied.HasValue ? new[] { mapObjective.TimeSpanDied.Value } : mapObjective.OwnerChangeEvents.Select(e => e.TimeSpanOwnerChanged)
+                        where replayHelper.IsWithin(time, start, end)
+                        where replayHelper.IsWithin(position.TimeSpan, start, time)
+                        let distance = position.Point.DistanceTo(mapObjective.PointDied ?? mapObjective.PointBorn)
+                        where distance < settings.MaxDistanceToOwnerChange
                         orderby distance
                         select (player: heroUnit.PlayerControlledBy, time);
 
                     foreach ((Player player, TimeSpan time) in results)
                     {
+                        logger.LogDebug($"GetMapObjectives: {player.HeroId}");
+
                         yield return (player, time);
                     }
                 }
@@ -210,30 +227,32 @@ namespace HeroesReplay.Core.Analyzer
 
         private IEnumerable<Unit> GetDeadPlayerUnits(TimeSpan start, TimeSpan end, Replay replay)
         {
-            return replay.Players.SelectMany(unit => unit.HeroUnits.Where(heroUnit => heroUnit.IsDead(start, end)));
+            return replay.Players.SelectMany(unit => unit.HeroUnits.Where(heroUnit => replayHelper.IsDead(heroUnit, start, end)));
         }
 
         private IEnumerable<Player> GetAlivePlayers(TimeSpan start, TimeSpan end, Replay replay)
         {
-            return replay.Players.Where(player => player.HeroUnits.Any(unit => unit.IsAlive(start, end)));
+            return replay.Players.Where(player => player.HeroUnits.Any(heroUnit => replayHelper.IsAlive(heroUnit, start, end)));
         }
 
         private IEnumerable<GameEvent> GetPings(TimeSpan start, TimeSpan end, IEnumerable<Player> alive, Replay replay)
         {
-            foreach (GameEvent gameEvent in replay.GameEvents)
+            IEnumerable<GameEvent> pings = replay.GameEvents.Where(ge => ge.eventType == GameEventType.CTriggerPingEvent);
+
+            foreach (GameEvent ping in pings)
             {
-                if (gameEvent.eventType == GameEventType.CTriggerPingEvent && gameEvent.TimeSpan.IsWithin(start, end) && alive.Contains(gameEvent.player))
+                if (replayHelper.IsWithin(ping.TimeSpan, start, end) && alive.Contains(ping.player))
                 {
-                    yield return gameEvent;
+                    yield return ping;
                 }
             }
         }
 
         private IEnumerable<TeamObjective> GetTeamObjectives(TimeSpan start, TimeSpan end, Replay replay)
         {
-            foreach (var item in replay.TeamObjectives.SelectMany(teamObjectives => teamObjectives).Where(teamObjective => teamObjective.Player != null && teamObjective.TimeSpan.IsWithin(start, end)))
+            foreach (var item in replay.TeamObjectives.SelectMany(teamObjectives => teamObjectives).Where(teamObjective => teamObjective.Player != null && replayHelper.IsWithin(teamObjective.TimeSpan, start, end)))
             {
-                logger.LogDebug($"objective: {item.TeamObjectiveType}, player: {item.Player.HeroId}");
+                logger.LogDebug($"GetTeamObjectives: {item.Player.HeroId}:{item.TeamObjectiveType}");
                 yield return item;
             }
         }
@@ -241,17 +260,17 @@ namespace HeroesReplay.Core.Analyzer
         private IEnumerable<(int, TimeSpan)> GetTeamTalents(TimeSpan start, TimeSpan end, Replay replay)
         {
             return replay.TeamLevels.SelectMany(teamLevels => teamLevels)
-                .Where(teamLevel => Constants.TALENT_LEVELS.Contains(teamLevel.Key) && teamLevel.Value.IsWithin(start, end))
+                .Where(teamLevel => settings.TalentLevels.Contains(teamLevel.Key) && replayHelper.IsWithin(teamLevel.Value, start, end))
                 .Select(x => (Team: x.Key, TalentTime: x.Value));
         }
 
         private IEnumerable<(Player, TimeSpan)> GetCampCaptures(TimeSpan start, TimeSpan end, Replay replay, bool bossCamp = false)
         {
-            foreach (TrackerEvent capture in replay.TrackerEvents.GetCampCaptureEvents(start, end))
+            foreach (TrackerEvent capture in replayHelper.GetCampCaptureEvents(replay.TrackerEvents, start, end))
             {
                 int teamId = (int)capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.Value - 1;
 
-                IEnumerable<Unit> campUnit = replay.Units.Where(unit => bossCamp ? unit.IsBossCamp() : unit.IsCamp())
+                IEnumerable<Unit> campUnit = replay.Units.Where(unit => bossCamp ? replayHelper.IsBossCamp(unit) : replayHelper.IsCamp(unit))
                     .Where(unit => unit.TimeSpanDied.HasValue &&
                                    unit.TimeSpanDied.Value < capture.TimeSpan &&
                                    unit.TimeSpanDied.Value > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10)) &&
@@ -259,7 +278,8 @@ namespace HeroesReplay.Core.Analyzer
 
                 foreach ((Player player, string name) in campUnit.Select(unit => (unit.PlayerKilledBy, unit.Name)).Distinct())
                 {
-                    logger.LogDebug($"capture camp: {name}, player: {player.HeroId}");
+                    logger.LogDebug($"GetCampCaptures: {player.HeroId}:{name}");
+
                     yield return (player, capture.TimeSpan);
                 }
             }

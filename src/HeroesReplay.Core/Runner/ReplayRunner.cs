@@ -7,17 +7,21 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Runner
 {
-    public sealed class StormReplayRunner
+    public sealed class ReplayRunner
     {
-        private readonly ILogger<StormReplayRunner> logger;
+        private readonly ILogger<ReplayRunner> logger;
         private readonly HeroesOfTheStorm process;
         private readonly StormReplaySpectator spectator;
+        private readonly ReplayHelper replayHelper;
 
-        public StormReplayRunner(ILogger<StormReplayRunner> logger, HeroesOfTheStorm process, StormReplaySpectator spectator)
+        private bool zoomout = false;
+
+        public ReplayRunner(ILogger<ReplayRunner> logger, HeroesOfTheStorm process, StormReplaySpectator spectator, ReplayHelper replayHelper)
         {
             this.logger = logger;
             this.process = process;
             this.spectator = spectator;
+            this.replayHelper = replayHelper;
         }
 
         private void RegisterEvents()
@@ -90,11 +94,11 @@ namespace HeroesReplay.Core.Runner
             try
             {
                 RegisterEvents();
-
                 await RunAsync(stormReplay, launch);
             }
             finally
             {
+                zoomout = false;
                 DeregisterEvents();
             }
         }
@@ -129,13 +133,13 @@ namespace HeroesReplay.Core.Runner
 
         private void OnHeroChange(object sender, GameEventArgs<Delta<StormPlayer>> e)
         {
-            process.SendFocusHero(e.StormReplay.Replay.GetPlayerIndex(e.Data.Current.Player));
+            process.SendFocusHero(replayHelper.GetPlayerIndex(e.StormReplay.Replay, e.Data.Current.Player));
 
-            bool firstHeroSelected = e.Data.Previous == null && e.Timer < TimeSpan.FromMinutes(1);
-
-            if (firstHeroSelected)
+            // A hero must first be selected before doing maximum zoom (weird client behaviour that requires this)
+            if (zoomout == false)
             {
                 process.SendToggleZoom();
+                zoomout = true;
             }
         }
 

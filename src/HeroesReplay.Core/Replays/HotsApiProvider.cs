@@ -19,10 +19,11 @@ using Polly;
 using HotsApiReplay = HeroesReplay.Core.Replays.HotsApi.Replay;
 using ParserReplay = Heroes.ReplayParser.Replay;
 using static Heroes.ReplayParser.DataParser;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Replays
 {
-    public class StormReplayHotsApiProvider : IStormReplayProvider
+    public class HotsApiProvider : IReplayProvider
     {
         private const string GAME_TYPE_STORM_LEAGUE = "StormLeague";
         private const string GAME_TYPE_QUICK_MATCH = "QuickMatch";
@@ -34,7 +35,7 @@ namespace HeroesReplay.Core.Replays
             {
                 if (minReplayId == default)
                 {
-                    if (configuration.GetValue<int>(Constants.ConfigKeys.MinReplayId) != Constants.REPLAY_ID_UNSET)
+                    if (configuration.GetValue<int>(Constants.ConfigKeys.MinReplayId) != settings.ReplayIdUnset)
                     {
                         MinReplayId = configuration.GetValue<int>(Constants.ConfigKeys.MinReplayId);
                     }
@@ -46,7 +47,7 @@ namespace HeroesReplay.Core.Replays
                     }
                     else
                     {
-                        MinReplayId = Constants.REPLAY_ID_ZEMILL_BASE_LINE;
+                        MinReplayId = settings.ReplayIdBaseline;
                     }
                 }
 
@@ -59,7 +60,7 @@ namespace HeroesReplay.Core.Replays
         {
             get
             {
-                DirectoryInfo cache = new DirectoryInfo(Constants.STORM_REPLAY_CACHE_PATH);
+                DirectoryInfo cache = new DirectoryInfo(replayHelper.StormReplayCachePath);
                 if (!cache.Exists) cache.Create();
                 return cache;
             }
@@ -71,20 +72,26 @@ namespace HeroesReplay.Core.Replays
 
         private readonly CancellationTokenProvider provider;
         private readonly PlayerBlackListChecker blackListChecker;
+        private readonly ReplayHelper replayHelper;
         private readonly IConfiguration configuration;
-        private readonly ILogger<StormReplayHotsApiProvider> logger;
+        private readonly Settings settings;
+        private readonly ILogger<HotsApiProvider> logger;
 
         private int minReplayId;
 
-        public StormReplayHotsApiProvider(
-            CancellationTokenProvider provider, 
-            PlayerBlackListChecker blackListChecker, 
-            IConfiguration configuration, 
-            ILogger<StormReplayHotsApiProvider> logger)
+        public HotsApiProvider(
+            CancellationTokenProvider provider,
+            PlayerBlackListChecker blackListChecker,
+            ReplayHelper replayHelper,
+            IConfiguration configuration,
+            IOptions<Settings> settings,
+            ILogger<HotsApiProvider> logger)
         {
             this.provider = provider;
             this.blackListChecker = blackListChecker;
+            this.replayHelper = replayHelper;
             this.configuration = configuration;
+            this.settings = settings.Value;
             this.logger = logger;
         }
 
@@ -123,11 +130,11 @@ namespace HeroesReplay.Core.Replays
 
         private async Task<StormReplay?> TryLoadReplay(HotsApiReplay hotsApiReplay, FileInfo cacheStormReplay)
         {
-            logger.LogInformation("id: {0}, url: {1}, path: {2}", hotsApiReplay.Id, hotsApiReplay.Url, cacheStormReplay.FullName);
+            logger.LogDebug("id: {0}, url: {1}, path: {2}", hotsApiReplay.Id, hotsApiReplay.Url, cacheStormReplay.FullName);
 
             (ReplayParseResult result, ParserReplay replay) = ParseReplay(await File.ReadAllBytesAsync(cacheStormReplay.FullName), ParseOptions.FullParsing);
 
-            logger.LogInformation("result: {0}, path: {1}", result, cacheStormReplay.FullName);
+            logger.LogDebug("result: {0}, path: {1}", result, cacheStormReplay.FullName);
 
             if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
             {
@@ -163,9 +170,9 @@ namespace HeroesReplay.Core.Replays
                             }
 
                             logger.LogInformation($"downloaded hotsapi replay.");
-                            logger.LogInformation($"id: {hotsApiReplay.Id}");
-                            logger.LogInformation($"s3: {hotsApiReplay.Url}");
-                            logger.LogInformation($"path: {cacheStormReplay.FullName}");
+                            logger.LogDebug($"id: {hotsApiReplay.Id}");
+                            logger.LogDebug($"s3: {hotsApiReplay.Url}");
+                            logger.LogDebug($"path: {cacheStormReplay.FullName}");
                         }
                     }
                 }
@@ -178,7 +185,7 @@ namespace HeroesReplay.Core.Replays
         {
             try
             {
-                logger.LogInformation($"min replay id: {MinReplayId}");
+                logger.LogInformation($"MinReplayId: {MinReplayId}");
 
                 using (HttpClient client = new HttpClient())
                 {
@@ -196,24 +203,13 @@ namespace HeroesReplay.Core.Replays
 
                             if (response.StatusCode == (int)HttpStatusCode.OK)
                             {
-                                replay = response.Result
-                                    .FirstOrDefault(r => 
-                                    r.Id > MinReplayId && 
-                                    r.Deleted == false && 
-                                    Version.Parse(r.Game_version) >= Constants.MIN_VERSION_SUPPORTED && 
-                                    r.Game_type == GAME_TYPE_STORM_LEAGUE);
+                                replay = response.Result.FirstOrDefault(r => r.Id > MinReplayId && r.Deleted == false && Version.Parse(r.Game_version) >= settings.MinVersionSupported && r.Game_type == GAME_TYPE_STORM_LEAGUE);
 
-                                if (replay != null)
-                                {
-                                    logger.LogInformation($"replay id: {replay.Id}, url: {replay.Url}]");
-                                }
-
-                                logger.LogInformation("could not find suitable replay in response.");
                                 MinReplayId = (int)response.Result.Max(x => x.Id);
-                                logger.LogInformation($"setting min replay id: {MinReplayId}");
+                                logger.LogInformation($"MinReplayId: {MinReplayId}");
                             }
 
-                            logger.LogInformation($"hotsapi response code: {response.StatusCode}");
+                            logger.LogDebug($"hotsapi response code: {response.StatusCode}");
 
                             return replay;
 

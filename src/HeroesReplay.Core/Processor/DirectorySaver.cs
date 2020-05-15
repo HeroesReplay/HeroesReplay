@@ -6,11 +6,11 @@ using Microsoft.Extensions.Configuration;
 namespace HeroesReplay.Core.Replays
 {
 
-    public class StormReplayDirectorySaver : IStormReplaySaver
+    public class DirectorySaver : IReplaySaver
     {
         private readonly IConfiguration configuration;
 
-        public StormReplayDirectorySaver(IConfiguration configuration)
+        public DirectorySaver(IConfiguration configuration)
         {
             this.configuration = configuration;
         }

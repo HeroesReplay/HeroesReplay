@@ -11,10 +11,12 @@ namespace HeroesReplay.Core.Spectator
     public class DebugTool
     {
         private readonly ILogger<DebugTool> logger;
+        private readonly ReplayHelper replayHelper;
 
-        public DebugTool(ILogger<DebugTool> logger)
+        public DebugTool(ILogger<DebugTool> logger, ReplayHelper replayHelper)
         {
             this.logger = logger;
+            this.replayHelper = replayHelper;
         }
 
         public void Debug(Replay replay, TimeSpan timer)
@@ -34,9 +36,13 @@ namespace HeroesReplay.Core.Spectator
 
         private void PrintGatesOpen(Replay replay, TimeSpan timer)
         {
-            foreach (TrackerEvent gatesOpen in replay.TrackerEvents.Where(e => e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent && 
-                                                                               e.TimeSpan.IsWithin(timer, timer.Add(TimeSpan.FromSeconds(2))) && e.Data?.dictionary?.ContainsKey(0) == true && 
-                                                                               e.Data.dictionary[0].blobText == "GatesOpen"))
+            var gatesOpening = replay.TrackerEvents
+                    .Any(e => e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent &&
+                              replayHelper.IsWithin(e.TimeSpan, timer, timer.Add(TimeSpan.FromSeconds(2))) && 
+                              e.Data?.dictionary?.ContainsKey(0) == true &&
+                              e.Data.dictionary[0].blobText == "GatesOpen");
+
+            if (gatesOpening)
             {
                 logger.LogDebug("Gates Opening");
             }
@@ -45,24 +51,24 @@ namespace HeroesReplay.Core.Spectator
         private void PrintDancing(Replay replay, TimeSpan timer)
         {
             IEnumerable<IGrouping<Player, GameEvent>> playerCommands = replay.GameEvents
-                .Where(e => e.TimeSpan.IsWithin(timer, timer.Add(TimeSpan.FromSeconds(2))) && replay.IsDance(e))
-                .GroupBy(ge => ge.player);
+                .Where(gameEvent => replayHelper.IsWithin(gameEvent.TimeSpan, timer, timer.Add(TimeSpan.FromSeconds(2))) && replayHelper.IsDance(replay, gameEvent))
+                .GroupBy(gameEvent => gameEvent.player);
 
             foreach (var commands in playerCommands)
             {
-                logger.LogInformation("{0} dancing: {1}", commands.Key.HeroId, commands.Count());
+                logger.LogDebug($"PrDancing: {commands.Key.HeroId}:{commands.Count()}");
             }
         }
 
         private void PrintTaunting(Replay replay, TimeSpan timer)
         {
             IEnumerable<IGrouping<Player, GameEvent>> playerCommands = replay.GameEvents
-                .Where(e => replay.IsTaunt(e) && e.TimeSpan.IsWithin(timer, timer.Add(TimeSpan.FromSeconds(2))))
+                .Where(gameEvent => replayHelper.IsTaunt(replay, gameEvent) && replayHelper.IsWithin(gameEvent.TimeSpan, timer, timer.Add(TimeSpan.FromSeconds(2))))
                 .GroupBy(e => e.player);
 
             foreach (var commands in playerCommands)
             {
-                logger.LogInformation("{0} taunting: {1}", commands.Key.HeroId, commands.Count());
+                logger.LogDebug($"Taunting: {commands.Key.HeroId}:{commands.Count()}");
             }
         }
 
@@ -70,13 +76,14 @@ namespace HeroesReplay.Core.Spectator
         private void PrintBStepping(Replay replay, TimeSpan timer)
         {
             IEnumerable<IGrouping<Player, GameEvent>> bStepping = replay.GameEvents
-                .Where(e => replay.IsHearthStone(e) && e.TimeSpan.IsWithin(timer, timer.Add(TimeSpan.FromSeconds(1))))
-                .GroupBy(e => e.player);
+                .Where(gameEvent => replayHelper.IsHearthStone(replay, gameEvent) && replayHelper.IsWithin(gameEvent.TimeSpan, timer, timer.Add(TimeSpan.FromSeconds(1))))
+                .GroupBy(gameEvent => gameEvent.player);
 
             // This could actually be wrong, because we dont check sequence for right click, which is what cancels a hearth back, to produce the b-stepping effect
-            foreach (IGrouping<Player, GameEvent> commands in bStepping.Where(cmds => cmds.Count() > 1))
+            // more than 3+ within a second is probably b-stepping behaviour
+            foreach (IGrouping<Player, GameEvent> commands in bStepping.Where(cmds => cmds.Count() >= 3))
             {
-                logger.LogInformation("{0} bstepping: {1}", commands.Key.HeroId, commands.Count());
+                logger.LogDebug($"BStepping: {commands.Key.HeroId}:{commands.Count()}");
             }
         }
     }

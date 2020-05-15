@@ -34,7 +34,7 @@ namespace HeroesReplay.Core.Processes
             {
                 var handle = ActualProcess.MainWindowHandle;
 
-                if(handle == IntPtr.Zero)
+                if (handle == IntPtr.Zero)
                     throw new InvalidOperationException("Handle not set");
 
                 return handle;
@@ -75,18 +75,17 @@ namespace HeroesReplay.Core.Processes
             }
         }
 
-        protected virtual async Task<bool> GetWindowContainsAnyAsync(params string[] lines)
+        protected virtual async Task<bool> GetWindowContainsAnyAsync(IEnumerable<string> lines)
         {
             using (Bitmap bitmap = CaptureStrategy.Capture(WindowHandle))
-            {                
+            {
                 return await ContainsAnyAsync(bitmap, lines) != null;
             }
         }
 
         protected virtual async Task<OcrResult?> ContainsAnyAsync(Bitmap bitmap, IEnumerable<string> lines)
         {
-            this.Logger.LogDebug("checking bitmap for any of the following lines.");
-            this.Logger.LogDebug(string.Join(Environment.NewLine, lines));
+            this.Logger.LogInformation("Searching: " + string.Join(", ", lines));
 
             using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(bitmap))
             {
@@ -96,8 +95,7 @@ namespace HeroesReplay.Core.Processes
 
                 if (found.Any())
                 {
-                    Logger.LogDebug("OCR found");
-                    Logger.LogDebug(string.Join(Environment.NewLine, found));
+                    Logger.LogInformation("Detected: " + string.Join(", ", found));
                 }
 
                 foreach (var line in lines)
@@ -106,12 +104,13 @@ namespace HeroesReplay.Core.Processes
                     {
                         if (ocrLine.Text.Contains(line, StringComparison.OrdinalIgnoreCase))
                         {
-                            Logger.LogDebug($"found: {line}");
+                            Logger.LogInformation($"Success because '{line}' was found.");
+
                             return result;
                         }
                     }
 
-                    Logger.LogDebug($"not found: {line}");
+
                 }
             }
 

@@ -9,15 +9,17 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Runner
 {
-    public class StormReplayMMRCalculator
+    public class HeroesProfileService
     {
-        private readonly ILogger<StormReplayMMRCalculator> logger;
+        private readonly ILogger<HeroesProfileService> logger;
         private readonly IConfiguration configuration;
+        private readonly ReplayHelper replayHelper;
 
-        public StormReplayMMRCalculator(ILogger<StormReplayMMRCalculator> logger, IConfiguration configuration)
+        public HeroesProfileService(ILogger<HeroesProfileService> logger, IConfiguration configuration, ReplayHelper replayHelper)
         {
             this.logger = logger;
             this.configuration = configuration;
+            this.replayHelper = replayHelper;
         }
 
         public async Task<string> CalculateMMRAsync(StormReplay stormReplay)
@@ -25,13 +27,13 @@ namespace HeroesReplay.Core.Runner
             try
             {
                 var apiKey = configuration.GetValue<string>(Constants.ConfigKeys.HeroesProfileApiKey);
-                var hotsApiReplayId = stormReplay.TryGetReplayId();
+                var hotsApiReplayId = replayHelper.TryGetReplayId(stormReplay);
 
                 using (var client = new HttpClient() { BaseAddress = new Uri("https://api.heroesprofile.com/api/") })
                 {
                     string heroesProfileReplayId = await client.GetStringAsync($"Heroesprofile/ReplayID?hotsapi_replayID={hotsApiReplayId}&api_token={apiKey}").ConfigureAwait(false);
 
-                    logger.LogDebug($"HotsAPI Replay ID: {hotsApiReplayId}. HeroesProfile Replay ID: {heroesProfileReplayId}");
+                    logger.LogDebug($"HotsAPI ID: {hotsApiReplayId}. HeroesProfile ID: {heroesProfileReplayId}");
 
                     string dataResponse = await client.GetStringAsync($"Replay/Data?mode=json&replayID={heroesProfileReplayId}&api_token={apiKey}").ConfigureAwait(false);
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Shared;
@@ -11,14 +12,14 @@ namespace HeroesReplay.Core.Processes
     {
         private readonly TimeSpan timer;
 
-        public StubOfTheStorm(CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration) : base(tokenProvider, captureStrategy, logger, configuration)
+        public StubOfTheStorm(CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration, ReplayHelper replayHelper) : base(logger, configuration, tokenProvider, captureStrategy, replayHelper)
         {
             timer = TimeSpan.Zero;
         }
 
         public override bool IsRunning => true;
-        protected override Task<bool> GetWindowContainsAnyAsync(params string[] lines) => Task.FromResult(true);
-        public override Task<TimeSpan?> TryGetTimerAsync() => Task.FromResult(new TimeSpan?(timer.Add(TimeSpan.FromSeconds(1)).AddNegativeOffset()));
+        protected override Task<bool> GetWindowContainsAnyAsync(IEnumerable<string> lines) => Task.FromResult(true);
+        public override Task<TimeSpan?> TryGetTimerAsync() => Task.FromResult(new TimeSpan?(replayHelper.AddNegativeOffset(timer.Add(TimeSpan.FromSeconds(1)))));
         public override Task<bool> LaunchSelectedReplayAsync(StormReplay stormReplay, CancellationToken token = default) => Task.FromResult(true);
         public override Task<bool> WaitForMapLoadingAsync(StormReplay stormReplay, CancellationToken token = default) => Task.FromResult(true);
         public override Task ConfigureClientAsync() => Task.CompletedTask;

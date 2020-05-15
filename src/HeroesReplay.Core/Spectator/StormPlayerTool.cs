@@ -6,6 +6,7 @@ using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Analyzer;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Spectator
 {
@@ -13,11 +14,15 @@ namespace HeroesReplay.Core.Spectator
     {
         private readonly ILogger<StormPlayerTool> logger;
         private readonly StormReplayAnalyzer analyzer;
+        private readonly ReplayHelper replayHelper;
+        private readonly Settings settings;
 
-        public StormPlayerTool(ILogger<StormPlayerTool> logger, StormReplayAnalyzer analyzer)
+        public StormPlayerTool(ILogger<StormPlayerTool> logger, StormReplayAnalyzer analyzer, IOptions<Settings> settings, ReplayHelper replayHelper)
         {
             this.logger = logger;
             this.analyzer = analyzer;
+            this.replayHelper = replayHelper;
+            this.settings = settings.Value;
         }
 
         public IEnumerable<StormPlayer> GetPlayers(Replay replay, TimeSpan timer)
@@ -26,11 +31,11 @@ namespace HeroesReplay.Core.Spectator
 
             List<IEnumerable<StormPlayer>> priority = new List<IEnumerable<StormPlayer>>
             {
-                Select(analyzer.Analyze(replay, timer, timer.Add(Constants.MAX_PENTA_KILL_STREAK_POTENTIAL)), SpectateEvent.PentaKill),
-                Select(analyzer.Analyze(replay, timer, timer.Add(Constants.MAX_QUAD_KILL_STREAK_POTENTIAL)), SpectateEvent.QuadKill),
-                Select(analyzer.Analyze(replay, timer, timer.Add(Constants.MAX_TRIPLE_KILL_STREAK_POTENTIAL)), SpectateEvent.TripleKill),
-                Select(analyzer.Analyze(replay, timer, timer.Add(Constants.MAX_MULTI_KILL_STREAK_POTENTIAL)), SpectateEvent.MultiKill),
-                Select(analyzer.Analyze(replay, timer, timer.Add(Constants.KILL_STREAK_TIMER)), SpectateEvent.Kill),
+                Select(analyzer.Analyze(replay, timer, timer.Add(settings.MaxQuintupleTime)), SpectateEvent.QuintupleKill),
+                Select(analyzer.Analyze(replay, timer, timer.Add(settings.MaxQuadTime)), SpectateEvent.QuadKill),
+                Select(analyzer.Analyze(replay, timer, timer.Add(settings.MaxTripleTime)), SpectateEvent.TripleKill),
+                Select(analyzer.Analyze(replay, timer, timer.Add(settings.MaxMultiTime)), SpectateEvent.MultiKill),
+                Select(analyzer.Analyze(replay, timer, timer.Add(settings.KillTime)), SpectateEvent.Kill),
                 Select(analyzer.Analyze(replay, timer, timer.Add(TimeSpan.FromSeconds(10))), SpectateEvent.Death),
                 Select(analyzer.Analyze(replay, timer, timer.Add(TimeSpan.FromSeconds(10))), SpectateEvent.Boss),
                 Select(analyzer.Analyze(replay, timer, timer.Add(TimeSpan.FromSeconds(10))), SpectateEvent.Camp),
@@ -63,7 +68,7 @@ namespace HeroesReplay.Core.Spectator
         {
             return spectateEvent switch
             {
-                SpectateEvent.PentaKill => HandleKills(result, SpectateEvent.PentaKill),
+                SpectateEvent.QuintupleKill => HandleKills(result, SpectateEvent.QuintupleKill),
                 SpectateEvent.QuadKill => HandleKills(result, SpectateEvent.QuadKill),
                 SpectateEvent.TripleKill => HandleKills(result, SpectateEvent.TripleKill),
                 SpectateEvent.MultiKill => HandleKills(result, SpectateEvent.MultiKill),
@@ -200,19 +205,19 @@ namespace HeroesReplay.Core.Spectator
             }
         }
 
-        private IEnumerable<StormPlayer> HandleKills(AnalyzerResult result, SpectateEvent @event)
+        private IEnumerable<StormPlayer> HandleKills(AnalyzerResult result, SpectateEvent spectateEvent)
         {
-            IEnumerable<IGrouping<Player, Unit>> playerKills = result.Deaths.GroupBy(unit => unit.PlayerKilledBy).Where(kills => kills.Count() == @event.ToKills());
+            IEnumerable<IGrouping<Player, Unit>> playerKills = result.Deaths.Where(u => u.PlayerKilledBy != null).GroupBy(unit => unit.PlayerKilledBy).Where(kills => kills.Count() == spectateEvent.ToKills());
 
             foreach (IGrouping<Player, Unit> players in playerKills)
             {
-                Player killer = players.Key;
+                Player player = players.Key;
                 TimeSpan maxTime = players.Max(unit => unit.TimeSpanDied.Value);
-                Hero? hero = killer.TryGetHero();
+                Hero? hero = replayHelper.TryGetHero(player);
 
                 if (hero != null)
                 {
-                    if (hero == Constants.Heroes.Abathur)
+                    if (hero.Name.Equals("abathur", StringComparison.OrdinalIgnoreCase))
                     {
                         foreach (Unit death in players)
                         {
@@ -221,10 +226,12 @@ namespace HeroesReplay.Core.Spectator
                     }
                     else if (hero.IsMelee)
                     {
-                        yield return new StormPlayer(killer, result.Start, maxTime.Add(TimeSpan.FromSeconds(1)), @event);
+                        yield return new StormPlayer(player, result.Start, maxTime.Add(TimeSpan.FromSeconds(1)), spectateEvent);
                     }
                     else if (hero.IsRanged)
                     {
+                        // TODO: calculate how FAR from the death you are. If you are too far, focus the enemy who died, otherwise focus yourself?
+
                         foreach (Unit death in players)
                         {
                             yield return new StormPlayer(death.PlayerControlledBy, result.Start, death.TimeSpanDied.Value.Add(TimeSpan.FromSeconds(1)), SpectateEvent.Death);
@@ -233,7 +240,7 @@ namespace HeroesReplay.Core.Spectator
                 }
                 else
                 {
-                    yield return new StormPlayer(killer, result.Start, maxTime.Add(TimeSpan.FromSeconds(2)), @event);
+                    yield return new StormPlayer(player, result.Start, maxTime.Add(TimeSpan.FromSeconds(2)), spectateEvent);
                 }
             }
         }

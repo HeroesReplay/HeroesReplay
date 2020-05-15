@@ -35,7 +35,7 @@ namespace HeroesReplay.Core.Processes
                     destination.ReleaseHdc(deviceContextDestination);
                 }
 
-                Logger.LogInformation("capture time: " + (DateTime.Now - start));
+                Logger.LogDebug("capture time: " + (DateTime.Now - start));
 
                 return bitmap;
             }
