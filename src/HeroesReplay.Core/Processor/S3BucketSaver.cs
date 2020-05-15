@@ -11,9 +11,9 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Replays
 {
-    public class StormReplayS3Saver : IStormReplaySaver
+    public class S3BucketSaver : IReplaySaver
     {
-        private readonly ILogger<StormReplayS3Saver> logger;
+        private readonly ILogger<S3BucketSaver> logger;
         private readonly IConfiguration configuration;
         private readonly CancellationTokenProvider tokenProvider;
 
@@ -24,7 +24,7 @@ namespace HeroesReplay.Core.Replays
         private string Bucket => configuration.GetValue<string>(Constants.ConfigKeys.ReplayDestination);
 
 
-        public StormReplayS3Saver(ILogger<StormReplayS3Saver> logger, IConfiguration configuration, CancellationTokenProvider tokenProvider)
+        public S3BucketSaver(ILogger<S3BucketSaver> logger, IConfiguration configuration, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger;
             this.configuration = configuration;

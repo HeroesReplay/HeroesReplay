@@ -23,22 +23,27 @@ namespace HeroesReplay.Core.Processes
         public static readonly Key[] KEYS_HEROES = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Key.D0 };
         public static readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
 
-        public HeroesOfTheStorm(CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration) : base(tokenProvider, captureStrategy, logger, configuration, Constants.HEROES_PROCESS_NAME)
-        {
+        protected readonly ReplayHelper replayHelper;
 
+        public HeroesOfTheStorm(ILogger<HeroesOfTheStorm> logger, IConfiguration configuration, CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, ReplayHelper replayHelper) : base(tokenProvider, captureStrategy, logger, configuration, Constants.HEROES_PROCESS_NAME)
+        {
+            this.replayHelper = replayHelper;
         }
 
         public virtual async Task ConfigureClientAsync()
         {
-            string[] files = Directory.GetFiles(Constants.USER_GAME_FOLDER, Constants.VARIABLES_WILDCARD, SearchOption.AllDirectories).Where(p => Path.GetFileName(p).Equals("Variables.txt", StringComparison.OrdinalIgnoreCase)).ToArray();
+            string[] files = Directory
+                .GetFiles(replayHelper.UserGameFolderPath, Constants.VARIABLES_WILDCARD, SearchOption.AllDirectories)
+                .Where(p => Path.GetFileName(p).Equals("Variables.txt", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
 
-            if (!File.Exists(Constants.STORM_INTERFACE_USER_PATH))
+            if (!File.Exists(replayHelper.UserStormInterfacePath))
             {
-                Logger.LogInformation($"interface not found in: {Constants.STORM_INTERFACE_USER_PATH}");
+                Logger.LogDebug($"interface not found in: {replayHelper.UserStormInterfacePath}");
 
-                File.Copy(Constants.ASSETS_STORM_INTERFACE_PATH, destFileName: Constants.STORM_INTERFACE_USER_PATH, true);
+                File.Copy(replayHelper.StormInterfacePath, destFileName: replayHelper.UserStormInterfacePath, true);
 
-                Logger.LogInformation($"copied interface to: {Constants.STORM_INTERFACE_USER_PATH}");
+                Logger.LogDebug($"copied interface to: {replayHelper.UserStormInterfacePath}");
             }
 
 
@@ -49,8 +54,9 @@ namespace HeroesReplay.Core.Processes
                 string[] lines = await File.ReadAllLinesAsync(file);
                 Dictionary<string, string> values = lines.ToDictionary(keySelector => keySelector.Split('=')[0], elementSelector => elementSelector.Split('=')[1]);
 
-                values["observerinterface"] = Constants.STORM_INTERFACE_NAME;
-                values["replayinterface"] = Constants.STORM_INTERFACE_NAME;
+                values["observerinterface"] = replayHelper.Settings.StormInterface;
+                values["replayinterface"] = replayHelper.Settings.StormInterface;
+                values["displayreplaytime"] = "false";
                 //values["camerafollow"] = "false";
                 //values["camerasmartpan"] = "false";
                 //values["soundglobal"] = "true";
@@ -65,12 +71,12 @@ namespace HeroesReplay.Core.Processes
                 //values["cursorconfinemode"] = "2";
                 //values["mousescrollenabled"] = "false";
                 //values["mousewheelzoomenabled"] = "false";
-                //values["displayreplaytime"] = "false";
-                //values["enableAlliedChat"] = "false";
+
+                // values["enableAlliedChat"] = "false";
 
                 await File.WriteAllLinesAsync(file, values.OrderBy(kv => kv.Key).Select(pair => $"{pair.Key}={pair.Value}"));
 
-                Logger.LogInformation($"settings in {file} have been updated.");
+                Logger.LogDebug($"settings in {file} have been updated.");
             }
         }
 
@@ -86,8 +92,6 @@ namespace HeroesReplay.Core.Processes
             {
                 using (Bitmap resized = timer.GetResized(zoom: 2))
                 {
-                    Logger.LogDebug("timer zoomed for OCR");
-
                     OcrResult? result = await TryGetOcrResult(resized, Constants.Ocr.TIMER_HRS_MINS_SECONDS_SEPERATOR.ToString());
                     if (result != null) return TryParseTimeSpan(result);
                 }
@@ -104,18 +108,13 @@ namespace HeroesReplay.Core.Processes
             return null;
         }
 
-        public async Task<bool> TryGetMatchAwardsAsync(IEnumerable<MatchAwardType> awards)
-        {
-            return await GetWindowContainsAnyAsync(awards.ToText().ToArray());
-        }
-
         public virtual async Task<bool> TryKillGameAsync()
         {
             try
             {
                 if (IsRunning)
                 {
-                    Logger.LogWarning($"killing: {ActualProcess.MainModule.FileName}");
+                    Logger.LogInformation($"Process Terminating: {ActualProcess.MainModule.FileName}");
                     ActualProcess.Kill();
                     await Task.Delay(TimeSpan.FromSeconds(1), Token);
                     return true;
@@ -129,6 +128,11 @@ namespace HeroesReplay.Core.Processes
             return false;
         }
 
+        public async Task<bool> TryGetMatchAwardsAsync(IEnumerable<MatchAwardType> awards)
+        {
+            return await GetWindowContainsAnyAsync(replayHelper.GetTextForMatchAwards(awards));
+        }
+
         public virtual async Task<bool> LaunchSelectedReplayAsync(StormReplay stormReplay, CancellationToken token = default)
         {
             using (var defaultLaunch = Process.Start("explorer.exe", stormReplay.Path))
@@ -139,7 +143,7 @@ namespace HeroesReplay.Core.Processes
                 return await Task.FromResult(Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetry(retryCount: 300, retry => TimeSpan.FromSeconds(1)) 
+                    .WaitAndRetry(retryCount: 300, retry => TimeSpan.FromSeconds(1))
                     .Execute(t => Process
                         .GetProcessesByName(ProcessName)
                         .Any(p => IsMatchingClientVersion(stormReplay, p)), token));
@@ -154,10 +158,8 @@ namespace HeroesReplay.Core.Processes
                 .WaitAndRetryAsync(retryCount: 120, retry => TimeSpan.FromSeconds(1)) // this can time some time, especially if the game is downloading assets.
                 .ExecuteAsync(async (t) =>
                 {
-                    Logger.LogDebug("waiting for map loading screen...");
-
                     string[] names = stormReplay.Replay.Players.Select(p => p.Name).ToArray();
-                    return await GetWindowContainsAnyAsync(new[] { Constants.Ocr.LOADING_SCREEN_TEXT, stormReplay.Replay.Map }.Concat(names).ToArray());
+                    return await GetWindowContainsAnyAsync(new[] { Constants.Ocr.LOADING_SCREEN_TEXT, stormReplay.Replay.Map }.Concat(names));
 
                 }, token);
         }
@@ -256,7 +258,8 @@ namespace HeroesReplay.Core.Processes
         {
             bool match = p.MainModule.FileVersionInfo.FileVersion == stormReplay.Replay.ReplayVersion;
 
-            Logger.LogDebug($"current version: {p.MainModule.FileVersionInfo.FileVersion}, required version: {stormReplay.Replay.ReplayVersion}");
+            Logger.LogInformation($"Current: {p.MainModule.FileVersionInfo.FileVersion}");
+            Logger.LogInformation($"Required: {stormReplay.Replay.ReplayVersion}");
 
             return match;
         }

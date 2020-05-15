@@ -9,10 +9,12 @@ namespace HeroesReplay.Core.Spectator
     public class GamePanelTool
     {
         private readonly StormReplayAnalyzer analyzer;
+        private readonly ReplayHelper replayHelper;
 
-        public GamePanelTool(StormReplayAnalyzer analyzer)
+        public GamePanelTool(StormReplayAnalyzer analyzer, ReplayHelper replayHelper)
         {
             this.analyzer = analyzer;
+            this.replayHelper = replayHelper;
         }
 
         public GamePanel? GetPanel(Replay replay, GamePanel? current, TimeSpan timer)
@@ -21,9 +23,8 @@ namespace HeroesReplay.Core.Spectator
 
             AnalyzerResult result = analyzer.Analyze(replay, timer.Subtract(TimeSpan.FromSeconds(5)), timer);
 
-            if (result.TeamTalents.Any()) return GamePanel.Talents;
-            if (result.Deaths.Any()) return GamePanel.KillsDeathsAssists;
-            return result.Alive.Any() ? GetNextGamePanel(current, result) : current;
+            if (result.TeamTalents.Any() && current != GamePanel.Talents) return GamePanel.Talents;
+            return GetNextGamePanel(current, result);
         }
 
         private GamePanel? GetNextGamePanel(GamePanel? current, AnalyzerResult result)
@@ -31,7 +32,7 @@ namespace HeroesReplay.Core.Spectator
             return current switch
             {
                 GamePanel.KillsDeathsAssists => GamePanel.ActionsPerMinute,
-                GamePanel.ActionsPerMinute => result.Replay.SupportsCarriedObjectives() ? GamePanel.CarriedObjectives : GamePanel.CrowdControlEnemyHeroes,
+                GamePanel.ActionsPerMinute => replayHelper.IsCarriedObjectiveMap(result.Replay) ? GamePanel.CarriedObjectives : GamePanel.CrowdControlEnemyHeroes,
                 GamePanel.CarriedObjectives => GamePanel.CrowdControlEnemyHeroes,
                 GamePanel.CrowdControlEnemyHeroes => GamePanel.DeathDamageRole,
                 GamePanel.DeathDamageRole => GamePanel.Experience,

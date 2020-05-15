@@ -1,8 +1,9 @@
 ﻿using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace HeroesReplay.Core.Spectator
 {
-    public class StormState
+    public class StormState : IEquatable<StormState>
     {
         public TimeSpan Timer { get; }
         public GameState State { get; }
@@ -16,5 +17,10 @@ namespace HeroesReplay.Core.Spectator
         }
 
         public override string ToString() => $"timer: {Timer}, state: {State}";
+
+        public bool Equals(StormState other)
+        {
+            return State.Equals(other.State);
+        }
     }
 }

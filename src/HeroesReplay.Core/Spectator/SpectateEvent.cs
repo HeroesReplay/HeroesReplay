@@ -2,7 +2,7 @@
 {
     public enum SpectateEvent
     {
-        PentaKill,
+        QuintupleKill,
         QuadKill,
         TripleKill,
         MultiKill,

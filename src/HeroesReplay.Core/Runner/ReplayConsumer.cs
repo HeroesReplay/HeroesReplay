@@ -1,30 +1,34 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Picker;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Runner
 {
-    public sealed class StormReplayProcessor
+    public class ReplayConsumer
     {
         private readonly CancellationTokenProvider tokenProvider;
-        private readonly ILogger<StormReplayConsumer> logger;
-        private readonly IStormReplayProvider provider;
-        private readonly IStormReplaySaver saver;
-        private readonly StormReplayPicker picker;
+        private readonly ILogger<ReplayConsumer> logger;
+        private readonly IReplayProvider provider;
+        private readonly ReplayRunner runner;
+        private readonly ReplayDetailsWriter writer;
 
-        public StormReplayProcessor(ILogger<StormReplayConsumer> logger, IStormReplayProvider provider, IStormReplaySaver saver, StormReplayPicker picker, CancellationTokenProvider tokenProvider)
+        public ReplayConsumer(
+            ILogger<ReplayConsumer> logger,
+            CancellationTokenProvider tokenProvider,
+            IReplayProvider provider,
+            ReplayRunner runner,
+            ReplayDetailsWriter writer)
         {
+            this.tokenProvider = tokenProvider;
             this.logger = logger;
             this.provider = provider;
-            this.saver = saver;
-            this.picker = picker;
-            this.tokenProvider = tokenProvider;
+            this.runner = runner;
+            this.writer = writer;
         }
 
-        public async Task RunAsync()
+        public async Task RunAsync(bool launch)
         {
             try
             {
@@ -36,10 +40,9 @@ namespace HeroesReplay.Core.Runner
                     {
                         logger.LogInformation("Loaded: " + stormReplay.Path);
 
-                        if (picker.IsInteresting(stormReplay))
-                        {
-                            await saver.SaveReplayAsync(stormReplay).ConfigureAwait(false);
-                        }
+                        await writer.WriteDetailsAsync(stormReplay);
+
+                        await runner.ReplayAsync(stormReplay, launch);
                     }
                 }
             }

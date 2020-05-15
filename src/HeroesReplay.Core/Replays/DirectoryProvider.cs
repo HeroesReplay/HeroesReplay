@@ -11,14 +11,16 @@ using static System.IO.File;
 
 namespace HeroesReplay.Core.Replays
 {
-    public sealed class StormReplayDirectoryProvider : IStormReplayProvider
+    public sealed class DirectoryProvider : IReplayProvider
     {
-        private readonly ILogger<StormReplayDirectoryProvider> logger;
+        private readonly ILogger<DirectoryProvider> logger;
+        private readonly ReplayHelper replayHelper;
         private readonly Queue<string> queue;
 
-        public StormReplayDirectoryProvider(IConfiguration configuration, ILogger<StormReplayDirectoryProvider> logger)
+        public DirectoryProvider(ILogger<DirectoryProvider> logger, IConfiguration configuration, ReplayHelper replayHelper)
         {
             this.logger = logger;
+            this.replayHelper = replayHelper;
             queue = new Queue<string>(Directory.GetFiles(configuration.GetValue<string>(Constants.ConfigKeys.ReplaySource), Constants.STORM_REPLAY_WILDCARD, SearchOption.AllDirectories).OrderBy(GetCreationTime));
         }
 
@@ -26,11 +28,9 @@ namespace HeroesReplay.Core.Replays
         {
             if (queue.TryDequeue(out string? path))
             {
-                logger.LogInformation("file dequeued: " + path);
+                (DataParser.ReplayParseResult result, Replay replay) = DataParser.ParseReplay(await ReadAllBytesAsync(path), replayHelper.ReplayParseOptions);
 
-                (DataParser.ReplayParseResult result, Replay replay) = DataParser.ParseReplay(await ReadAllBytesAsync(path), Constants.REPLAY_PARSE_OPTIONS);
-
-                logger.LogInformation("result: {0}, path: {1}", result, path);
+                logger.LogInformation($"{path}:{result}");
 
                 if (result != DataParser.ReplayParseResult.Exception && result != DataParser.ReplayParseResult.PreAlphaWipe && result != DataParser.ReplayParseResult.Incomplete)
                 {

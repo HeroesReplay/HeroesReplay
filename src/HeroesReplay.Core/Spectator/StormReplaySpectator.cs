@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using static HeroesReplay.Core.Shared.Constants;
 
 namespace HeroesReplay.Core.Spectator
@@ -13,6 +14,7 @@ namespace HeroesReplay.Core.Spectator
         public event EventHandler<GameEventArgs<Delta<StormPlayer>>> HeroChange;
         public event EventHandler<GameEventArgs<Delta<GamePanel?>>> PanelChange;
         public event EventHandler<GameEventArgs<Delta<StormState>>> StateChange;
+        public event EventHandler<EventArgs> GatesOpened;
 
         public GamePanel? CurrentPanel
         {
@@ -44,10 +46,10 @@ namespace HeroesReplay.Core.Spectator
 
         public StormState CurrentState
         {
-            get => currentState ?? StormState.Start;
+            get => currentState;
             private set
             {
-                if (value != currentState)
+                if (value.State != currentState.State)
                 {
                     StateChange?.Invoke(this, new GameEventArgs<Delta<StormState>>(StormReplay, new Delta<StormState>(currentState, value), value.Timer, value.State.ToString()));
                 }
@@ -77,21 +79,21 @@ namespace HeroesReplay.Core.Spectator
         private readonly ILogger<StormReplaySpectator> logger;
         private readonly SpectateTool spectateTool;
         private readonly CancellationTokenProvider tokenProvider;
-        private readonly IConfiguration configuration;
+        private readonly Settings settings;
 
-        public StormReplaySpectator(ILogger<StormReplaySpectator> logger, SpectateTool spectateTool, CancellationTokenProvider tokenProvider, IConfiguration configuration)
+        public StormReplaySpectator(ILogger<StormReplaySpectator> logger, SpectateTool spectateTool, CancellationTokenProvider tokenProvider, IOptions<Settings> settings)
         {
             this.logger = logger;
             this.spectateTool = spectateTool;
             this.tokenProvider = tokenProvider;
-            this.configuration = configuration;
+            this.settings = settings.Value;
         }
 
         public async Task SpectateAsync(StormReplay stormReplay)
         {
             StormReplay = stormReplay ?? throw new ArgumentNullException(nameof(stormReplay));
-            await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));            
-            await Task.Delay(TimeSpan.FromSeconds(configuration.GetValue<int>(ConfigKeys.EndScreenSeconds)));
+            await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));
+            await Task.Delay(settings.EndScreenTime);
         }
 
         private async Task FocusLoopAsync()

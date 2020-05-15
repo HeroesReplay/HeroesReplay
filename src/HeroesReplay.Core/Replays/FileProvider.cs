@@ -9,14 +9,16 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Replays
 {
-    public sealed class StormReplayFileProvider : IStormReplayProvider
+    public sealed class FileProvider : IReplayProvider
     {
-        private readonly ILogger<StormReplayDirectoryProvider> logger;
+        private readonly ILogger<DirectoryProvider> logger;
+        private readonly ReplayHelper replayHelper;
         private readonly Queue<string> queue;
 
-        public StormReplayFileProvider(ILogger<StormReplayDirectoryProvider> logger, IConfiguration configuration)
+        public FileProvider(ILogger<DirectoryProvider> logger, IConfiguration configuration, ReplayHelper replayHelper)
         {
             this.logger = logger;
+            this.replayHelper = replayHelper;
             queue = new Queue<string>(new[] { configuration.GetValue<string>(Constants.ConfigKeys.ReplaySource) });
         }
 
@@ -24,7 +26,7 @@ namespace HeroesReplay.Core.Replays
         {
             while (queue.TryDequeue(out var path))
             {
-                (DataParser.ReplayParseResult result, Replay replay) = DataParser.ParseReplay(await File.ReadAllBytesAsync(path), Constants.REPLAY_PARSE_OPTIONS);
+                (DataParser.ReplayParseResult result, Replay replay) = DataParser.ParseReplay(await File.ReadAllBytesAsync(path), replayHelper.ReplayParseOptions);
 
                 logger.LogDebug("result: {0}, path: {1}", result, path);
 

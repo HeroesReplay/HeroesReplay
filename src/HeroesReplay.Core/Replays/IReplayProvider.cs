@@ -3,8 +3,8 @@ using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Replays
 {
-    public interface IStormReplaySaver
+    public interface IReplayProvider
     {
-        Task<StormReplay> SaveReplayAsync(StormReplay stormReplay);
+        Task<StormReplay> TryLoadReplayAsync();
     }
 }

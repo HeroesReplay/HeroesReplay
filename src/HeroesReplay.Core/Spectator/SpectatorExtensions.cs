@@ -9,13 +9,11 @@ namespace HeroesReplay.Core.Spectator
 {
     public static class SpectatorExtensions
     {
-        public static bool IsAny(this SpectateEvent @event, params SpectateEvent[] events) => events.Contains(@event);
+        public static bool IsAny(this SpectateEvent spectateEvent, params SpectateEvent[] events) => events.Contains(spectateEvent);
         public static bool IsEnd(this StormState stormState) => stormState.State == GameState.EndOfGame;
         public static bool IsRunning(this StormState stormState) => stormState.State == GameState.Running;
         public static bool IsPaused(this StormState stormState) => stormState.State == GameState.Paused;
         public static bool IsStart(this StormState stormState) => stormState.State == GameState.StartOfGame;
-        public static bool IsNearEnd(this StormState stormState, TimeSpan end) => stormState.Timer.Add(TimeSpan.FromMinutes(2)) >= end;
-        public static bool IsNearStart(this StormState stormState) => stormState.Timer.IsWithin(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(8));
 
         public static async Task SpectateAsync(this StormPlayer player, CancellationToken token = default)
         {
@@ -23,13 +21,13 @@ namespace HeroesReplay.Core.Spectator
             await Task.Delay(player.Duration <= TimeSpan.Zero ? TimeSpan.Zero : player.Duration, token).ConfigureAwait(false);
         }
 
-        public static int ToKills(this SpectateEvent @event) => @event switch
+        public static int ToKills(this SpectateEvent spectateEvent) => spectateEvent switch
         {
             SpectateEvent.Kill => 1,
             SpectateEvent.MultiKill => 2,
             SpectateEvent.TripleKill => 3,
             SpectateEvent.QuadKill => 4,
-            SpectateEvent.PentaKill => 5,
+            SpectateEvent.QuintupleKill => 5,
             _ => throw new Exception($"Unhandled {nameof(SpectateEvent)}")
         };
     }

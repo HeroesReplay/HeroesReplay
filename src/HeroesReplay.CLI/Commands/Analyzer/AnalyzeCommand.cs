@@ -18,13 +18,13 @@ using System.Threading.Tasks;
 
 namespace HeroesReplay.CLI.Commands
 {
-    public class AnalyzerCommand : Command
+    public class AnalyzeCommand : Command
     {
-        public AnalyzerCommand() : base("analyze", "Analyze .StormReplay files to be used for spectating")
+        public AnalyzeCommand() : base("analyze", "Analyze .StormReplay files to be used for spectating")
         {
-            AddOption(new AwsAccessKeyOption(Constants.HEROES_REPLAY_AWS_ACCESS_KEY));
-            AddOption(new AwsSecretKeyOption(Constants.HEROES_REPLAY_AWS_SECRET_KEY));
-            AddOption(new MinimumReplayIdOption(Constants.REPLAY_ID_UNSET));
+            AddOption(new AwsAccessKeyOption(Constants.EnvironmentVariables.HEROES_REPLAY_AWS_ACCESS_KEY));
+            AddOption(new AwsSecretKeyOption(Constants.EnvironmentVariables.HEROES_REPLAY_AWS_SECRET_KEY));
+            AddOption(new MinimumReplayIdOption(-1));
 
             AddOption(new Option("--source", description: "The source for the .StormReplay files") { Argument = new Argument<Uri>() });
             AddOption(new Option("--destination", description: "The destination for the processed .StormReplay files") { Argument = new Argument<Uri>() });
@@ -52,16 +52,16 @@ namespace HeroesReplay.CLI.Commands
                 .AddSingleton<IConfiguration>(provider => configuration)
                 .AddSingleton(provider => new CancellationTokenProvider(cancellationToken))
                 .AddSingleton<StormReplayAnalyzer>()
-                .AddSingleton<StormReplayProcessor>()
-                .AddSingleton<StormReplayPicker>()
+                .AddSingleton<ReplayProcessor>()
+                .AddSingleton<ReplayPicker>()
                 .AddSingleton<StormPlayerTool>()
-                .AddSingleton(typeof(IStormReplayProvider), source.IsFile ? typeof(StormReplayDirectoryProvider) : typeof(StormReplayHotsApiProvider))
-                .AddSingleton(typeof(IStormReplaySaver), destination.IsFile ? typeof(StormReplayDirectorySaver) : typeof(StormReplayDirectorySaver))
+                .AddSingleton(typeof(IReplayProvider), source.IsFile ? typeof(DirectoryProvider) : typeof(HotsApiProvider))
+                .AddSingleton(typeof(IReplaySaver), destination.IsFile ? typeof(DirectorySaver) : typeof(DirectorySaver))
                 .BuildServiceProvider();
 
             using (IServiceScope scope = serviceProvider.CreateScope())
             {
-                StormReplayProcessor processor = scope.ServiceProvider.GetRequiredService<StormReplayProcessor>();
+                ReplayProcessor processor = scope.ServiceProvider.GetRequiredService<ReplayProcessor>();
 
                 await processor.RunAsync();
             }

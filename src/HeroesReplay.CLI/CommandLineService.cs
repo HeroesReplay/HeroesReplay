@@ -7,6 +7,7 @@ using System.CommandLine.Rendering;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands;
 using HeroesReplay.Core.Shared;
+using Microsoft.Extensions.Configuration;
 
 namespace HeroesReplay.CLI
 {
@@ -21,7 +22,7 @@ namespace HeroesReplay.CLI
 
         public Parser GetParser()
         {
-            return new CommandLineBuilder(new HeroesReplayRootCommand())
+            return new CommandLineBuilder(new HeroesReplayCommand())
                 .UseMiddleware(CheckAdminMiddlewareAsync)
                 .UseMiddleware(CheckOsRequirementAsync)
                 .UseParseErrorReporting()

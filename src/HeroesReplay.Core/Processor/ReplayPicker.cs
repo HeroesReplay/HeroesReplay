@@ -6,11 +6,11 @@ using System.Linq;
 
 namespace HeroesReplay.Core.Picker
 {
-    public class StormReplayPicker
+    public class ReplayPicker
     {
         private readonly StormPlayerTool stormPlayertool;
 
-        public StormReplayPicker(StormPlayerTool stormPlayertool)
+        public ReplayPicker(StormPlayerTool stormPlayertool)
         {
             this.stormPlayertool = stormPlayertool;
         }
@@ -38,7 +38,7 @@ namespace HeroesReplay.Core.Picker
 
         private bool TimeSliceContains(StormPlayer result)
         {
-            return result.SpectateEvent == SpectateEvent.PentaKill ||
+            return result.SpectateEvent == SpectateEvent.QuintupleKill ||
                    result.SpectateEvent == SpectateEvent.QuadKill ||
                    result.SpectateEvent == SpectateEvent.TripleKill ||
                    result.SpectateEvent == SpectateEvent.Taunt;

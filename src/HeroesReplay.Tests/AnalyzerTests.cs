@@ -1,26 +1,29 @@
 using System;
 using System.Linq;
 using HeroesReplay.Core.Analyzer;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace HeroesReplay.Tests
 {
-    public class AnalyzerTests : IClassFixture<StormReplayFixture>
+    public class AnalyzerTests
     {
         private readonly StormReplayAnalyzer analyzer;
-        private readonly StormReplayFixture fixture;
 
-        public AnalyzerTests(StormReplayFixture fixture)
+        public AnalyzerTests()
         {
-            this.fixture = fixture;
-            analyzer = new StormReplayAnalyzer(new NullLogger<StormReplayAnalyzer>());
+            IOptions<Settings> options = new OptionsWrapper<Settings>(new Settings { });
+            ReplayHelper helper = new ReplayHelper(new NullLogger<ReplayHelper>(), options, new GameDataService());
+            this.analyzer = new StormReplayAnalyzer(new NullLogger<StormReplayAnalyzer>(), options, helper);
         }
 
-        [Fact]
-        public void ShouldHave10AliveHeroes()
+        [Theory]
+        [StormReplayFileData("hour-long-replay-provided-by-mgatner.StormReplay")]
+        public void ShouldHave10AliveHeroes(StormReplay stormReplay)
         {
-            AnalyzerResult analyzerResult = analyzer.Analyze(fixture.StormReplay.Replay, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1));
+            AnalyzerResult analyzerResult = analyzer.Analyze(stormReplay.Replay, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30));
 
             Assert.Equal(10, analyzerResult.Alive.Count());
         }
