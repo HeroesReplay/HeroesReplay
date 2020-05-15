@@ -71,7 +71,6 @@ namespace HeroesReplay.Core.Replays
         private string AwsSecretKey => configuration.GetValue<string>(Constants.ConfigKeys.AwsSecretKey);
 
         private readonly CancellationTokenProvider provider;
-        private readonly PlayerBlackListChecker blackListChecker;
         private readonly ReplayHelper replayHelper;
         private readonly IConfiguration configuration;
         private readonly Settings settings;
@@ -81,14 +80,12 @@ namespace HeroesReplay.Core.Replays
 
         public HotsApiProvider(
             CancellationTokenProvider provider,
-            PlayerBlackListChecker blackListChecker,
             ReplayHelper replayHelper,
             IConfiguration configuration,
             IOptions<Settings> settings,
             ILogger<HotsApiProvider> logger)
         {
             this.provider = provider;
-            this.blackListChecker = blackListChecker;
             this.replayHelper = replayHelper;
             this.configuration = configuration;
             this.settings = settings.Value;
@@ -101,7 +98,7 @@ namespace HeroesReplay.Core.Replays
             {
                 HotsApiReplay? hotsApiReplay = await GetNextReplayAsync();
 
-                if (hotsApiReplay != null && blackListChecker.IsUsable(hotsApiReplay))
+                if (hotsApiReplay != null)
                 {
                     FileInfo cacheStormReplay = CreateFile(hotsApiReplay);
 
