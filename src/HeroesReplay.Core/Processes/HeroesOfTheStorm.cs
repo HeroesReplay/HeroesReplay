@@ -12,6 +12,7 @@ using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Processes
 {
@@ -25,7 +26,12 @@ namespace HeroesReplay.Core.Processes
 
         protected readonly ReplayHelper replayHelper;
 
-        public HeroesOfTheStorm(ILogger<HeroesOfTheStorm> logger, IConfiguration configuration, CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, ReplayHelper replayHelper) : base(tokenProvider, captureStrategy, logger, configuration, Constants.HEROES_PROCESS_NAME)
+        public HeroesOfTheStorm(
+            ILogger<HeroesOfTheStorm> logger, 
+            CancellationTokenProvider tokenProvider, 
+            CaptureStrategy captureStrategy,
+            IOptions<Settings> settings,
+            ReplayHelper replayHelper) : base(tokenProvider, captureStrategy, settings, logger, Constants.HEROES_PROCESS_NAME)
         {
             this.replayHelper = replayHelper;
         }

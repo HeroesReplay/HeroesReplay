@@ -13,6 +13,7 @@ using Windows.Storage.Streams;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Processes
 {
@@ -23,8 +24,6 @@ namespace HeroesReplay.Core.Processes
         protected string ProcessName { get; }
 
         protected ILogger<ProcessWrapper> Logger { get; }
-
-        protected IConfiguration Configuration { get; }
 
         protected Process ActualProcess => Process.GetProcessesByName(ProcessName)[0];
 
@@ -49,13 +48,15 @@ namespace HeroesReplay.Core.Processes
 
         private readonly CancellationTokenProvider tokenProvider;
 
+        protected Settings Settings { get; }
+
         protected static ImageCodecInfo BmpCodec = GetEncoder(ImageFormat.Bmp);
 
-        public ProcessWrapper(CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, ILogger<ProcessWrapper> logger, IConfiguration configuration, string processName)
+        public ProcessWrapper(CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, IOptions<Settings> settings, ILogger<ProcessWrapper> logger, string processName)
         {
             Logger = logger;
-            Configuration = configuration;
             this.tokenProvider = tokenProvider;
+            Settings = settings.Value;
             CaptureStrategy = captureStrategy;
             ProcessName = processName;
         }
@@ -114,9 +115,9 @@ namespace HeroesReplay.Core.Processes
                 }
             }
 
-            if (Configuration.GetValue("Capture:SaveFailure", false))
+            if (Settings.CaptureSaveFailure)
             {
-                string path = Path.Combine(Configuration.GetValue("Capture:SavePath", Guid.NewGuid().ToString() + ".bmp"));
+                string path = Path.Combine(Settings.CaptureSavePath, Guid.NewGuid().ToString() + ".bmp");
                 Logger.LogDebug("saving failed ocr result to: " + path);
                 bitmap.Save(path);
             }

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Processes
 {
@@ -12,7 +13,12 @@ namespace HeroesReplay.Core.Processes
     {
         private readonly TimeSpan timer;
 
-        public StubOfTheStorm(CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration, ReplayHelper replayHelper) : base(logger, configuration, tokenProvider, captureStrategy, replayHelper)
+        public StubOfTheStorm(
+            CancellationTokenProvider tokenProvider, 
+            CaptureStrategy captureStrategy, 
+            ILogger<HeroesOfTheStorm> logger,
+            IOptions<Settings> settings,
+            ReplayHelper replayHelper) : base(logger, tokenProvider, captureStrategy, settings, replayHelper)
         {
             timer = TimeSpan.Zero;
         }
