@@ -92,8 +92,8 @@ namespace HeroesReplay.Core.Spectator
         public async Task SpectateAsync(StormReplay stormReplay)
         {
             StormReplay = stormReplay ?? throw new ArgumentNullException(nameof(stormReplay));
-            await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token));
-            await Task.Delay(settings.EndScreenTime);
+            await Task.WhenAll(Task.Run(PanelLoopAsync, Token), Task.Run(FocusLoopAsync, Token), Task.Run(StateLoopAsync, Token)).ConfigureAwait(false);
+            await Task.Delay(settings.EndScreenTime).ConfigureAwait(false);
         }
 
         private async Task FocusLoopAsync()
@@ -107,7 +107,11 @@ namespace HeroesReplay.Core.Spectator
                     if (CurrentState.IsRunning())
                     {
                         CurrentPlayer = spectateTool.GetStormPlayer(CurrentPlayer, StormReplay, CurrentState.Timer);
-                        await CurrentPlayer.SpectateAsync(Token).ConfigureAwait(false);
+                        
+                        if (CurrentPlayer != null)
+                        {   
+                            await Task.Delay(CurrentPlayer.Duration <= TimeSpan.Zero ? TimeSpan.Zero : CurrentPlayer.Duration, Token).ConfigureAwait(false);
+                        }
                     }
                 }
                 catch (Exception e)
