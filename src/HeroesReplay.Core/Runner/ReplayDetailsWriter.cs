@@ -6,29 +6,38 @@ using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Runner
 {
     public class ReplayDetailsWriter
     {
         private readonly ILogger<ReplayDetailsWriter> logger;
-        private readonly ReplayHelper replayHelper;
         private readonly HeroesProfileService heroesProfileService;
         private readonly GameDataService gameDataService;
+        private readonly Settings settings;
 
-        public ReplayDetailsWriter(ILogger<ReplayDetailsWriter> logger, ReplayHelper replayHelper, HeroesProfileService heroesProfileService, GameDataService gameDataService)
+        public ReplayDetailsWriter(ILogger<ReplayDetailsWriter> logger, IOptions<Settings> settings, ReplayHelper replayHelper, HeroesProfileService heroesProfileService, GameDataService gameDataService)
         {
             this.logger = logger;
-            this.replayHelper = replayHelper;
             this.heroesProfileService = heroesProfileService;
             this.gameDataService = gameDataService;
+            this.settings = settings.Value;
         }
 
         public async Task WriteDetailsAsync(StormReplay replay)
         {
-            var mmr = await heroesProfileService.CalculateMMRAsync(replay);
+            var mmr = settings.EnableMMR ? $"MMR: " + await heroesProfileService.CalculateMMRAsync(replay) : string.Empty;
             var map = gameDataService.Maps.Find(map => map.AltName.Equals(replay.Replay.MapAlternativeName) || replay.Replay.Map.Equals(map.Name));
-            var mode = replay.Replay.GameMode switch { GameMode.StormLeague => "Storm League", GameMode.UnrankedDraft => "Unranked", GameMode.QuickMatch => "Quick Match", _ => replay.Replay.GameMode.ToString() };
+            
+            var mode = replay.Replay.GameMode switch
+            {
+                //GameMode.StormLeague => "Storm League",
+                //GameMode.UnrankedDraft => "Unranked",
+                //GameMode.QuickMatch => "Quick Match",
+                //_ => replay.Replay.GameMode.ToString()
+                _ => string.Empty
+            };
 
             var bans = from ban in replay.Replay.DraftOrder.Where(pick => pick.PickType == DraftPickType.Banned).Select((pick, index) => new { Hero = pick.HeroSelected, Index = index + 1 })
                        from hero in gameDataService.Heroes
@@ -37,11 +46,11 @@ namespace HeroesReplay.Core.Runner
 
             if (bans.Any()) bans = bans.Prepend("Bans:");
 
-            string[] details = { mode, $"MMR: {mmr}", replay.Replay.ReplayVersion };
+            string[] details = new[] { mode, mmr, replay.Replay.ReplayVersion }.Where(line => !string.IsNullOrEmpty(line)).ToArray();
 
-            logger.LogInformation($"WriteDetailsAsync: {replayHelper.CurrentReplayPath}");
+            logger.LogInformation($"WriteDetailsAsync: {settings.CurrentReplayPath}");
 
-            await File.WriteAllLinesAsync(replayHelper.CurrentReplayPath, details.Concat(bans).Where(line => !string.IsNullOrWhiteSpace(line)), CancellationToken.None);
+            await File.WriteAllLinesAsync(settings.CurrentReplayPath, details.Concat(bans).Where(line => !string.IsNullOrWhiteSpace(line)), CancellationToken.None);
         }
     }
 }

@@ -7,7 +7,6 @@ using System.CommandLine.Rendering;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands;
 using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Configuration;
 
 namespace HeroesReplay.CLI
 {

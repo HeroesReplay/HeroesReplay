@@ -25,15 +25,7 @@ namespace HeroesReplay.Core.Shared
             this.settings = settings.Value;
         }
 
-        public Settings Settings => settings;
-
-        public string AssetsPath => Path.Combine(directory, "Assets");
-        public string StormInterfacePath => Path.Combine(AssetsPath, settings.StormInterface);
-        public string CurrentReplayPath => Path.Combine(directory, Constants.STORM_REPLAY_INFO_FILE);
-        public string StormReplaysAccountPath => Path.Combine(UserGameFolderPath, "Accounts");
-        public string UserGameFolderPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm");
-        public string UserStormInterfacePath => Path.Combine(UserGameFolderPath, "Interfaces", settings.StormInterface);
-        public string StormReplayCachePath => Path.Combine(tempPath, "HeroesReplay");
+        
 
         public IEnumerable<string> GetTextForMatchAwards(IEnumerable<MatchAwardType> matchAwardTypes) => matchAwardTypes.SelectMany(mat => MatchAwards[mat]).Distinct();
 
@@ -178,7 +170,6 @@ namespace HeroesReplay.Core.Shared
                                                              settings.MapObjectiveUnitNames.Contains(unit.Name) ||
                                                              unit.Name.EndsWith("CaptureCage") ||
                                                              IsCapturePoint(unit);
-
 
         // Turrets, Camps, Bosses, Vision, Pirates
         public bool IsCapturePoint(Unit unit)

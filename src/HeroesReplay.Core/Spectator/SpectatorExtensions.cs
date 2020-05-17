@@ -2,8 +2,6 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Heroes.ReplayParser;
-using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Spectator
 {

@@ -4,24 +4,33 @@ using HeroesReplay.Core.Processes;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectator;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Runner
 {
+
     public sealed class ReplayRunner
     {
         private readonly ILogger<ReplayRunner> logger;
         private readonly HeroesOfTheStorm process;
         private readonly StormReplaySpectator spectator;
         private readonly ReplayHelper replayHelper;
+        private readonly Settings settings;
 
         private bool zoomout = false;
 
-        public ReplayRunner(ILogger<ReplayRunner> logger, HeroesOfTheStorm process, StormReplaySpectator spectator, ReplayHelper replayHelper)
+        public ReplayRunner(
+            ILogger<ReplayRunner> logger,
+            HeroesOfTheStorm process,
+            StormReplaySpectator spectator,
+            IOptions<Settings> settings,
+            ReplayHelper replayHelper)
         {
             this.logger = logger;
             this.process = process;
             this.spectator = spectator;
             this.replayHelper = replayHelper;
+            this.settings = settings.Value;
         }
 
         private void RegisterEvents()
@@ -38,28 +47,28 @@ namespace HeroesReplay.Core.Runner
             spectator.StateChange -= OnStateChange;
         }
 
-        private async Task RunAsync(StormReplay stormReplay, bool launch)
+        private async Task RunAsync(StormReplay stormReplay)
         {
             try
             {
-                if (launch == false && process.IsRunning)
+                if (settings.Launch == false && process.IsRunning)
                 {
                     await spectator.SpectateAsync(stormReplay);
                 }
-                else if (launch == false && !process.IsRunning)
+                else if (settings.Launch == false && !process.IsRunning)
                 {
                     await process.ConfigureClientAsync();
                     await LaunchGame(stormReplay);
                     await spectator.SpectateAsync(stormReplay);
                 }
-                else if (launch && process.IsRunning)
+                else if (settings.Launch && process.IsRunning)
                 {
                     await process.TryKillGameAsync();
                     await process.ConfigureClientAsync();
                     await LaunchGame(stormReplay);
                     await spectator.SpectateAsync(stormReplay);
                 }
-                else if (launch && !process.IsRunning)
+                else if (settings.Launch && !process.IsRunning)
                 {
                     await process.ConfigureClientAsync();
                     await LaunchGame(stormReplay);
@@ -89,12 +98,12 @@ namespace HeroesReplay.Core.Runner
             }
         }
 
-        public async Task ReplayAsync(StormReplay stormReplay, bool launch)
+        public async Task ReplayAsync(StormReplay stormReplay)
         {
             try
             {
                 RegisterEvents();
-                await RunAsync(stormReplay, launch);
+                await RunAsync(stormReplay);
             }
             finally
             {

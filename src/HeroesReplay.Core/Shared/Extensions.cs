@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
 using System.Linq;
 
 namespace HeroesReplay.Core.Shared
@@ -10,7 +9,6 @@ namespace HeroesReplay.Core.Shared
     public static class Extensions
     {
         public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> items) => items.OrderBy(i => Guid.NewGuid());
-                
 
         public static Bitmap GetResized(this Bitmap bmp, int zoom)
         {

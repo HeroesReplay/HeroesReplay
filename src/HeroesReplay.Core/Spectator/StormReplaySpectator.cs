@@ -2,10 +2,8 @@
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using static HeroesReplay.Core.Shared.Constants;
 
 namespace HeroesReplay.Core.Spectator
 {
@@ -14,7 +12,6 @@ namespace HeroesReplay.Core.Spectator
         public event EventHandler<GameEventArgs<Delta<StormPlayer>>> HeroChange;
         public event EventHandler<GameEventArgs<Delta<GamePanel?>>> PanelChange;
         public event EventHandler<GameEventArgs<Delta<StormState>>> StateChange;
-        public event EventHandler<EventArgs> GatesOpened;
 
         public GamePanel? CurrentPanel
         {
@@ -107,6 +104,7 @@ namespace HeroesReplay.Core.Spectator
                     if (CurrentState.IsRunning())
                     {
                         CurrentPlayer = spectateTool.GetStormPlayer(CurrentPlayer, StormReplay, CurrentState.Timer);
+
                         await CurrentPlayer.SpectateAsync(Token).ConfigureAwait(false);
                     }
                 }

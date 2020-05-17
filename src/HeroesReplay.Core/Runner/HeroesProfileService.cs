@@ -4,21 +4,21 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Runner
 {
     public class HeroesProfileService
     {
         private readonly ILogger<HeroesProfileService> logger;
-        private readonly IConfiguration configuration;
+        private readonly Settings settings;
         private readonly ReplayHelper replayHelper;
 
-        public HeroesProfileService(ILogger<HeroesProfileService> logger, IConfiguration configuration, ReplayHelper replayHelper)
+        public HeroesProfileService(ILogger<HeroesProfileService> logger, IOptions<Settings> settings, ReplayHelper replayHelper)
         {
             this.logger = logger;
-            this.configuration = configuration;
+            this.settings = settings.Value;
             this.replayHelper = replayHelper;
         }
 
@@ -26,7 +26,7 @@ namespace HeroesReplay.Core.Runner
         {
             try
             {
-                var apiKey = configuration.GetValue<string>(Constants.ConfigKeys.HeroesProfileApiKey);
+                var apiKey = settings.HeroesProfileApiKey;
                 var hotsApiReplayId = replayHelper.TryGetReplayId(stormReplay);
 
                 using (var client = new HttpClient() { BaseAddress = new Uri("https://api.heroesprofile.com/api/") })

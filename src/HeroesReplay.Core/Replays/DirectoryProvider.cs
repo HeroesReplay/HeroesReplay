@@ -5,8 +5,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using static System.IO.File;
 
 namespace HeroesReplay.Core.Replays
@@ -17,11 +17,11 @@ namespace HeroesReplay.Core.Replays
         private readonly ReplayHelper replayHelper;
         private readonly Queue<string> queue;
 
-        public DirectoryProvider(ILogger<DirectoryProvider> logger, IConfiguration configuration, ReplayHelper replayHelper)
+        public DirectoryProvider(ILogger<DirectoryProvider> logger, IOptions<Settings> settings, ReplayHelper replayHelper)
         {
             this.logger = logger;
             this.replayHelper = replayHelper;
-            queue = new Queue<string>(Directory.GetFiles(configuration.GetValue<string>(Constants.ConfigKeys.ReplaySource), Constants.STORM_REPLAY_WILDCARD, SearchOption.AllDirectories).OrderBy(GetCreationTime));
+            queue = new Queue<string>(Directory.GetFiles(settings.Value.ReplaySource, Constants.STORM_REPLAY_WILDCARD, SearchOption.AllDirectories).OrderBy(GetCreationTime));
         }
 
         public async Task<StormReplay?> TryLoadReplayAsync()

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Threading;
 using HeroesReplay.Core.Analyzer;
 using HeroesReplay.Core.Processes;
@@ -14,8 +15,15 @@ namespace HeroesReplay.CLI
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection AddCoreServices(this IServiceCollection services, IConfigurationRoot configuration, CancellationToken token, CaptureMethod captureMethod, Type stormReplayProvider)
+        public static IServiceCollection AddCoreServices(this IServiceCollection services, CancellationToken token, Type stormReplayProvider)
         {
+            var configuration = new ConfigurationBuilder()
+                    .SetBasePath(Directory.GetCurrentDirectory())
+                    .AddJsonFile("appsettings.json")
+                    .AddEnvironmentVariables("HEROES_REPLAY_")
+                    .Build();
+
+            CaptureMethod captureMethod = configuration.GetValue<CaptureMethod>("Settings:CaptureMethod");
             Type captureStrategy = captureMethod switch
             {
                 CaptureMethod.None => typeof(StubCapture),

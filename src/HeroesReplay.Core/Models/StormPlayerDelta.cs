@@ -9,7 +9,7 @@
         public Delta(T previous, T current)
         {
             Previous = previous;
-            Current = current;  
+            Current = current;
         }
     }
 }

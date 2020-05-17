@@ -3,18 +3,25 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Processes
 {
     public class StubOfTheStorm : HeroesOfTheStorm
     {
         private readonly TimeSpan timer;
+        private readonly ReplayHelper replayHelper;
 
-        public StubOfTheStorm(CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, ILogger<HeroesOfTheStorm> logger, IConfiguration configuration, ReplayHelper replayHelper) : base(logger, configuration, tokenProvider, captureStrategy, replayHelper)
+        public StubOfTheStorm(
+            ILogger<HeroesOfTheStorm> logger,
+            IOptions<Settings> settings,
+            CancellationTokenProvider tokenProvider,
+            CaptureStrategy captureStrategy,
+            ReplayHelper replayHelper) : base(logger, settings, tokenProvider, captureStrategy, replayHelper)
         {
-            timer = TimeSpan.Zero;
+            this.replayHelper = replayHelper;
+            this.timer = TimeSpan.Zero;
         }
 
         public override bool IsRunning => true;

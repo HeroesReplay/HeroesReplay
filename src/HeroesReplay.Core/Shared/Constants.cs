@@ -20,24 +20,5 @@
             public const int TIMER_HOURS = 3;
             public const int TIMER_MINUTES = 2;
         }
-
-        public static class ConfigKeys
-        {
-            public const string MinReplayId = nameof(MinReplayId);
-            public const string ReplaySource = nameof(ReplaySource);
-            public const string ReplayDestination = nameof(ReplayDestination);
-            public const string Launch = nameof(Launch);
-            public const string AwsAccessKey = nameof(AwsAccessKey);
-            public const string AwsSecretKey = nameof(AwsSecretKey);
-            public const string EndScreenSeconds = nameof(EndScreenSeconds);
-            public const string HeroesProfileApiKey = nameof(HeroesProfileApiKey);
-        }
-
-        public static class EnvironmentVariables
-        {
-            public const string HEROES_REPLAY_AWS_ACCESS_KEY = nameof(HEROES_REPLAY_AWS_ACCESS_KEY);
-            public const string HEROES_REPLAY_AWS_SECRET_KEY = nameof(HEROES_REPLAY_AWS_SECRET_KEY);
-            public const string HEROES_PROFILE_API_KEY = nameof(HEROES_PROFILE_API_KEY);
-        }
     }
 }

@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 using Windows.Media.Ocr;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Processes
 {
@@ -23,27 +23,33 @@ namespace HeroesReplay.Core.Processes
         public static readonly Key[] KEYS_HEROES = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Key.D0 };
         public static readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
 
-        protected readonly ReplayHelper replayHelper;
 
-        public HeroesOfTheStorm(ILogger<HeroesOfTheStorm> logger, IConfiguration configuration, CancellationTokenProvider tokenProvider, CaptureStrategy captureStrategy, ReplayHelper replayHelper) : base(tokenProvider, captureStrategy, logger, configuration, Constants.HEROES_PROCESS_NAME)
+        private readonly ReplayHelper ReplayHelper;
+
+        public HeroesOfTheStorm(
+            ILogger<HeroesOfTheStorm> logger, 
+            IOptions<Settings> settings, 
+            CancellationTokenProvider tokenProvider, 
+            CaptureStrategy captureStrategy, 
+            ReplayHelper replayHelper) : base(tokenProvider, captureStrategy, logger, settings, Constants.HEROES_PROCESS_NAME)
         {
-            this.replayHelper = replayHelper;
+            this.ReplayHelper = replayHelper;
         }
 
         public virtual async Task ConfigureClientAsync()
         {
             string[] files = Directory
-                .GetFiles(replayHelper.UserGameFolderPath, Constants.VARIABLES_WILDCARD, SearchOption.AllDirectories)
+                .GetFiles(Settings.UserGameFolderPath, Constants.VARIABLES_WILDCARD, SearchOption.AllDirectories)
                 .Where(p => Path.GetFileName(p).Equals("Variables.txt", StringComparison.OrdinalIgnoreCase))
                 .ToArray();
 
-            if (!File.Exists(replayHelper.UserStormInterfacePath))
+            if (!File.Exists(Settings.UserStormInterfacePath))
             {
-                Logger.LogDebug($"interface not found in: {replayHelper.UserStormInterfacePath}");
+                Logger.LogDebug($"interface not found in: {Settings.UserStormInterfacePath}");
 
-                File.Copy(replayHelper.StormInterfacePath, destFileName: replayHelper.UserStormInterfacePath, true);
+                File.Copy(Settings.StormInterfacePath, destFileName: Settings.UserStormInterfacePath, true);
 
-                Logger.LogDebug($"copied interface to: {replayHelper.UserStormInterfacePath}");
+                Logger.LogDebug($"copied interface to: {Settings.UserStormInterfacePath}");
             }
 
 
@@ -54,9 +60,10 @@ namespace HeroesReplay.Core.Processes
                 string[] lines = await File.ReadAllLinesAsync(file);
                 Dictionary<string, string> values = lines.ToDictionary(keySelector => keySelector.Split('=')[0], elementSelector => elementSelector.Split('=')[1]);
 
-                values["observerinterface"] = replayHelper.Settings.StormInterface;
-                values["replayinterface"] = replayHelper.Settings.StormInterface;
+                values["observerinterface"] = Settings.StormInterface;
+                values["replayinterface"] = Settings.StormInterface;
                 values["displayreplaytime"] = "false";
+
                 //values["camerafollow"] = "false";
                 //values["camerasmartpan"] = "false";
                 //values["soundglobal"] = "true";
@@ -71,7 +78,6 @@ namespace HeroesReplay.Core.Processes
                 //values["cursorconfinemode"] = "2";
                 //values["mousescrollenabled"] = "false";
                 //values["mousewheelzoomenabled"] = "false";
-
                 // values["enableAlliedChat"] = "false";
 
                 await File.WriteAllLinesAsync(file, values.OrderBy(kv => kv.Key).Select(pair => $"{pair.Key}={pair.Value}"));
@@ -130,7 +136,7 @@ namespace HeroesReplay.Core.Processes
 
         public async Task<bool> TryGetMatchAwardsAsync(IEnumerable<MatchAwardType> awards)
         {
-            return await GetWindowContainsAnyAsync(replayHelper.GetTextForMatchAwards(awards));
+            return await GetWindowContainsAnyAsync(ReplayHelper.GetTextForMatchAwards(awards));
         }
 
         public virtual async Task<bool> LaunchSelectedReplayAsync(StormReplay stormReplay, CancellationToken token = default)

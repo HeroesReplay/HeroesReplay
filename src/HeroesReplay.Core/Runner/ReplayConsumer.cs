@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Runner
 {
@@ -13,10 +14,12 @@ namespace HeroesReplay.Core.Runner
         private readonly IReplayProvider provider;
         private readonly ReplayRunner runner;
         private readonly ReplayDetailsWriter writer;
+        private readonly Settings settings;
 
         public ReplayConsumer(
             ILogger<ReplayConsumer> logger,
             CancellationTokenProvider tokenProvider,
+            IOptions<Settings> settings,
             IReplayProvider provider,
             ReplayRunner runner,
             ReplayDetailsWriter writer)
@@ -26,9 +29,10 @@ namespace HeroesReplay.Core.Runner
             this.provider = provider;
             this.runner = runner;
             this.writer = writer;
+            this.settings = settings.Value;
         }
 
-        public async Task RunAsync(bool launch)
+        public async Task RunAsync()
         {
             try
             {
@@ -42,7 +46,7 @@ namespace HeroesReplay.Core.Runner
 
                         await writer.WriteDetailsAsync(stormReplay);
 
-                        await runner.ReplayAsync(stormReplay, launch);
+                        await runner.ReplayAsync(stormReplay);
                     }
                 }
             }

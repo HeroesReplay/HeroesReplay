@@ -4,8 +4,8 @@ using System.IO;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Replays
 {
@@ -14,12 +14,14 @@ namespace HeroesReplay.Core.Replays
         private readonly ILogger<DirectoryProvider> logger;
         private readonly ReplayHelper replayHelper;
         private readonly Queue<string> queue;
+        private readonly Settings settings;
 
-        public FileProvider(ILogger<DirectoryProvider> logger, IConfiguration configuration, ReplayHelper replayHelper)
+        public FileProvider(ILogger<DirectoryProvider> logger, IOptions<Settings> settings, ReplayHelper replayHelper)
         {
             this.logger = logger;
+            this.settings = settings.Value;
             this.replayHelper = replayHelper;
-            queue = new Queue<string>(new[] { configuration.GetValue<string>(Constants.ConfigKeys.ReplaySource) });
+            queue = new Queue<string>(new[] { settings.Value.ReplaySource });
         }
 
         public async Task<StormReplay?> TryLoadReplayAsync()

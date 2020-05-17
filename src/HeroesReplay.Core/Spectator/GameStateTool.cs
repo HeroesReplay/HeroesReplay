@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
@@ -38,18 +37,25 @@ namespace HeroesReplay.Core.Spectator
 
             if (replayHelper.IsNearEnd(currentState, replay.ReplayLength))
             {
-                if (await heroesOfTheStorm.TryGetMatchAwardsAsync(replay.Players.SelectMany(p => p.ScoreResult.MatchAwards).Distinct()))
-                {
-                    logger.LogInformation("END OF GAME. Match award found at: " + currentState.Timer);
-                    return new StormState(currentState.Timer, GameState.EndOfGame);
-                }
+                // Timer from top of the screen is gone because now we transitioned to the MVP/Awards screen
 
-                // Did the core die at this time?
-                if (replay.Units.Any(unit => replayHelper.IsCore(unit) && unit.TimeSpanDied.GetValueOrDefault(TimeSpan.MaxValue) <= currentState.Timer))
+                if(elapsed == null && replay.Units.Any(unit => replayHelper.IsCore(unit) && unit.TimeSpanDied.GetValueOrDefault(TimeSpan.MaxValue) <= currentState.Timer))
                 {
                     logger.LogInformation("END OF GAME. Core unit found dead at: " + currentState.Timer);
                     return new StormState(currentState.Timer, GameState.EndOfGame);
                 }
+
+                //if (await heroesOfTheStorm.TryGetMatchAwardsAsync(replay.Players.SelectMany(p => p.ScoreResult.MatchAwards).Distinct()))
+                //{
+                //    logger.LogInformation("END OF GAME. Match award found at: " + currentState.Timer);
+                //    return new StormState(currentState.Timer, GameState.EndOfGame);
+                //}
+
+                //if (replay.Units.Any(unit => replayHelper.IsCore(unit) && unit.TimeSpanDied.GetValueOrDefault(TimeSpan.MaxValue) <= currentState.Timer))
+                //{
+                //    logger.LogInformation("END OF GAME. Core unit found dead at: " + currentState.Timer);
+                //    return new StormState(currentState.Timer, GameState.EndOfGame);
+                //}
             }
 
             return currentState;

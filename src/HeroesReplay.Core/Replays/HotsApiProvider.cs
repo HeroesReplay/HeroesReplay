@@ -12,7 +12,6 @@ using Amazon.S3.Model;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Replays.HotsApi;
 using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 
@@ -26,8 +25,8 @@ namespace HeroesReplay.Core.Replays
     public class HotsApiProvider : IReplayProvider
     {
         private const string GAME_TYPE_STORM_LEAGUE = "StormLeague";
-        private const string GAME_TYPE_QUICK_MATCH = "QuickMatch";
-        private const string GAME_TYPE_UNRANKED = "UnrankedDraft";
+        // private const string GAME_TYPE_QUICK_MATCH = "QuickMatch";
+        // private const string GAME_TYPE_UNRANKED = "UnrankedDraft";
 
         private int MinReplayId
         {
@@ -35,9 +34,9 @@ namespace HeroesReplay.Core.Replays
             {
                 if (minReplayId == default)
                 {
-                    if (configuration.GetValue<int>(Constants.ConfigKeys.MinReplayId) != settings.ReplayIdUnset)
+                    if (settings.MinReplayId != settings.ReplayIdUnset)
                     {
-                        MinReplayId = configuration.GetValue<int>(Constants.ConfigKeys.MinReplayId);
+                        MinReplayId = settings.MinReplayId;
                     }
                     else if (TempReplaysDirectory.GetFiles(Constants.STORM_REPLAY_WILDCARD).Any())
                     {
@@ -60,19 +59,15 @@ namespace HeroesReplay.Core.Replays
         {
             get
             {
-                DirectoryInfo cache = new DirectoryInfo(replayHelper.StormReplayCachePath);
+                DirectoryInfo cache = new DirectoryInfo(settings.StormReplayCachePath);
                 if (!cache.Exists) cache.Create();
                 return cache;
             }
         }
 
-        private string AwsAccessKey => configuration.GetValue<string>(Constants.ConfigKeys.AwsAccessKey);
-
-        private string AwsSecretKey => configuration.GetValue<string>(Constants.ConfigKeys.AwsSecretKey);
 
         private readonly CancellationTokenProvider provider;
         private readonly ReplayHelper replayHelper;
-        private readonly IConfiguration configuration;
         private readonly Settings settings;
         private readonly ILogger<HotsApiProvider> logger;
 
@@ -81,13 +76,11 @@ namespace HeroesReplay.Core.Replays
         public HotsApiProvider(
             CancellationTokenProvider provider,
             ReplayHelper replayHelper,
-            IConfiguration configuration,
             IOptions<Settings> settings,
             ILogger<HotsApiProvider> logger)
         {
             this.provider = provider;
             this.replayHelper = replayHelper;
-            this.configuration = configuration;
             this.settings = settings.Value;
             this.logger = logger;
         }
@@ -143,7 +136,7 @@ namespace HeroesReplay.Core.Replays
 
         private async Task DownloadStormReplay(HotsApiReplay hotsApiReplay, FileInfo cacheStormReplay)
         {
-            using (AmazonS3Client s3Client = new AmazonS3Client(new BasicAWSCredentials(AwsAccessKey, AwsSecretKey), RegionEndpoint.EUWest1))
+            using (AmazonS3Client s3Client = new AmazonS3Client(new BasicAWSCredentials(settings.AwsAccessKey, settings.AwsSecretKey), RegionEndpoint.EUWest1))
             {
                 if (Uri.TryCreate(hotsApiReplay.Url, UriKind.Absolute, out Uri? uri))
                 {

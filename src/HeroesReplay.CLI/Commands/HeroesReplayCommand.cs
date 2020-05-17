@@ -7,7 +7,6 @@ namespace HeroesReplay.CLI.Commands
         public HeroesReplayCommand() : base("HeroesReplay: The Heroes of the Storm automated spectator.")
         {
             AddCommand(new SpectateCommand());
-            AddCommand(new AnalyzeCommand());
         }
     }
 }
