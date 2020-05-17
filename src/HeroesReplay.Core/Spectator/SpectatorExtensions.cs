@@ -13,12 +13,6 @@ namespace HeroesReplay.Core.Spectator
         public static bool IsPaused(this StormState stormState) => stormState.State == GameState.Paused;
         public static bool IsStart(this StormState stormState) => stormState.State == GameState.StartOfGame;
 
-        public static async Task SpectateAsync(this StormPlayer player, CancellationToken token = default)
-        {
-            if (player == null) await Task.CompletedTask;
-            await Task.Delay(player.Duration <= TimeSpan.Zero ? TimeSpan.Zero : player.Duration, token).ConfigureAwait(false);
-        }
-
         public static int ToKills(this SpectateEvent spectateEvent) => spectateEvent switch
         {
             SpectateEvent.Kill => 1,

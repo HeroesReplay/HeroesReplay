@@ -150,7 +150,13 @@ namespace HeroesReplay.Core.Shared
                 );
         }
 
-        public bool IsNearEnd(StormState stormState, TimeSpan end) => stormState.Timer.Add(TimeSpan.FromMinutes(1)) >= end;
+        public bool IsNearEnd(Replay replay, TimeSpan timer)
+        {
+            return replay.Units
+                .Any(unit => IsCore(unit) && unit.TimeSpanDied.HasValue &&
+                                             unit.TimeSpanDied.Value.Add(TimeSpan.FromSeconds(5)) >= timer &&
+                                             unit.TimeSpanDied.Value.Add(TimeSpan.FromSeconds(-5)) <= timer);
+        }
 
         public bool IsCarriedObjectiveMap(Replay replay) => settings.CarriedObjectiveMaps.Contains(replay.MapAlternativeName);
 
