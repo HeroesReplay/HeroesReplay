@@ -18,7 +18,7 @@ namespace HeroesReplay.Core.Processes
             IOptions<Settings> settings,
             CancellationTokenProvider tokenProvider,
             CaptureStrategy captureStrategy,
-            ReplayHelper replayHelper) : base(logger, settings, tokenProvider, captureStrategy, replayHelper)
+            ReplayHelper replayHelper) : base(logger, settings, tokenProvider, captureStrategy)
         {
             this.replayHelper = replayHelper;
             this.timer = TimeSpan.Zero;

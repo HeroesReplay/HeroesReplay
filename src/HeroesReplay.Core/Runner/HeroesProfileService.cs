@@ -22,6 +22,19 @@ namespace HeroesReplay.Core.Runner
             this.replayHelper = replayHelper;
         }
 
+        public async Task<Uri> GetMatchLink(StormReplay stormReplay)
+        {
+            var apiKey = settings.HeroesProfileApiKey;
+            var hotsApiReplayId = replayHelper.TryGetReplayId(stormReplay);
+
+            using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileBaseUri })
+            {
+                string replayId = await client.GetStringAsync($"Heroesprofile/ReplayID?hotsapi_replayID={hotsApiReplayId}&api_token={apiKey}").ConfigureAwait(false);
+
+                return new Uri($"https://www.heroesprofile.com/Match/Single/?replayID={replayId}");
+            }
+        }
+
         public async Task<string> CalculateMMRAsync(StormReplay stormReplay)
         {
             try
@@ -47,7 +60,9 @@ namespace HeroesReplay.Core.Runner
                                           where p.Name.Equals("player_mmr")
                                           select p.Value.GetDouble()).Average();
 
-                        return Convert.ToInt32(average).ToString();
+                        var mmr = Convert.ToInt32(average);
+
+                        return await client.GetStringAsync($"MMR/Tier?mmr={mmr}&game_type={"Storm League"}&api_token={apiKey}").ConfigureAwait(false);
                     }
                 }
             }

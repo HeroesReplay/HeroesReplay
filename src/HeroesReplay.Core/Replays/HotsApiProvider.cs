@@ -65,22 +65,17 @@ namespace HeroesReplay.Core.Replays
             }
         }
 
-
         private readonly CancellationTokenProvider provider;
-        private readonly ReplayHelper replayHelper;
         private readonly Settings settings;
         private readonly ILogger<HotsApiProvider> logger;
-
         private int minReplayId;
 
         public HotsApiProvider(
             CancellationTokenProvider provider,
-            ReplayHelper replayHelper,
             IOptions<Settings> settings,
             ILogger<HotsApiProvider> logger)
         {
             this.provider = provider;
-            this.replayHelper = replayHelper;
             this.settings = settings.Value;
             this.logger = logger;
         }
@@ -184,7 +179,7 @@ namespace HeroesReplay.Core.Replays
                     return await Policy
                         .Handle<Exception>()
                         .OrResult<HotsApiReplay?>(replay => replay == null)
-                        .WaitAndRetryAsync(30, retry => TimeSpan.FromSeconds(10))
+                        .WaitAndRetryAsync(60, retry => TimeSpan.FromSeconds(5))
                         .ExecuteAsync(async token =>
                         {
                             HotsApiResponse<ICollection<HotsApiReplay>> response = await hotsApiClient.ListReplaysAllAsync(min_id: MinReplayId, existing: true, with_players: null, token);

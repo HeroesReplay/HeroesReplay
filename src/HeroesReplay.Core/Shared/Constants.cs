@@ -8,6 +8,7 @@
         public const string STORM_REPLAY_INFO_FILE = "CurrentReplay.txt";
         public const string VARIABLES_WILDCARD = "*Variables.txt";
         public const string HEROES_PROCESS_NAME = "HeroesOfTheStorm_x64";
+        public const string ENV_PREFIX = "HEROES_REPLAY_";
 
         public static class Ocr
         {

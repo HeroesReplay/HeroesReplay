@@ -8,9 +8,10 @@ namespace HeroesReplay.Core.Shared
     {
         public string AwsAccessKey { get; set; }
         public string AwsSecretKey { get; set; }
-
+        public string HeroesProfileApiKey { get; set; }
         public string TwitchBroadcasterId { get; set; }
         public string TwitchAccessToken { get; set; }
+        public bool EnableTwitchClips { get; set; }
         public string TwitchClientId { get; set; }
 
         public int MaxDistanceToCore { get; set; }
@@ -37,12 +38,7 @@ namespace HeroesReplay.Core.Shared
         public int MinReplayId { get; set; }
         public int ReplayIdBaseline { get; set; }
         public int ReplayIdUnset { get; set; }
-
-        /// <summary>
-        /// Directory, File, S3 Bucket?
-        /// </summary>
         public string ReplaySource { get; set; }
-
         public string[] CoreUnitNames { get; set; }
         public string[] BossUnitNames { get; set; }
         public string[] CampUnitNames { get; set; }
@@ -50,7 +46,6 @@ namespace HeroesReplay.Core.Shared
         public string[] MapObjectiveUnitNames { get; set; }
         public string[] CaptureUnitNames { get; set; }
         public bool Launch { get; set; }
-        public string HeroesProfileApiKey { get; set; }
 
         public TimeSpan MaxQuintupleTime => KillTime * 4;
         public TimeSpan MaxQuadTime => KillTime * 3;

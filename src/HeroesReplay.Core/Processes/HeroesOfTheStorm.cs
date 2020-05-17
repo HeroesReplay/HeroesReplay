@@ -7,7 +7,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Media.Ocr;
-using Heroes.ReplayParser;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 using Polly;
@@ -22,18 +21,14 @@ namespace HeroesReplay.Core.Processes
     {
         public static readonly Key[] KEYS_HEROES = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8, Key.D9, Key.D0 };
         public static readonly Key[] KEYS_CONSOLE_PANEL = { Key.D1, Key.D2, Key.D3, Key.D4, Key.D5, Key.D6, Key.D7, Key.D8 };
-
-
-        private readonly ReplayHelper ReplayHelper;
-
+        
         public HeroesOfTheStorm(
             ILogger<HeroesOfTheStorm> logger, 
             IOptions<Settings> settings, 
             CancellationTokenProvider tokenProvider, 
-            CaptureStrategy captureStrategy, 
-            ReplayHelper replayHelper) : base(tokenProvider, captureStrategy, logger, settings, Constants.HEROES_PROCESS_NAME)
+            CaptureStrategy captureStrategy) : base(tokenProvider, captureStrategy, logger, settings, Constants.HEROES_PROCESS_NAME)
         {
-            this.ReplayHelper = replayHelper;
+
         }
 
         public virtual async Task ConfigureClientAsync()
@@ -132,11 +127,6 @@ namespace HeroesReplay.Core.Processes
             }
 
             return false;
-        }
-
-        public async Task<bool> TryGetMatchAwardsAsync(IEnumerable<MatchAwardType> awards)
-        {
-            return await GetWindowContainsAnyAsync(ReplayHelper.GetTextForMatchAwards(awards));
         }
 
         public virtual async Task<bool> LaunchSelectedReplayAsync(StormReplay stormReplay, CancellationToken token = default)

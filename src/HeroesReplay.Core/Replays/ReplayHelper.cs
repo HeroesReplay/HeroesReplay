@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
-using HeroesReplay.Core.Spectator;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -15,8 +14,6 @@ namespace HeroesReplay.Core.Shared
         private readonly ILogger<ReplayHelper> logger;
         private readonly GameDataService gameDataService;
         private readonly Settings settings;
-        private readonly string directory = Directory.GetCurrentDirectory();
-        private readonly string tempPath = Path.GetTempPath();
 
         public ReplayHelper(ILogger<ReplayHelper> logger, IOptions<Settings> settings, GameDataService gameDataService)
         {
@@ -24,53 +21,49 @@ namespace HeroesReplay.Core.Shared
             this.gameDataService = gameDataService;
             this.settings = settings.Value;
         }
-
         
-
-        public IEnumerable<string> GetTextForMatchAwards(IEnumerable<MatchAwardType> matchAwardTypes) => matchAwardTypes.SelectMany(mat => MatchAwards[mat]).Distinct();
-
-        // TODO: get these from config
-        public Dictionary<MatchAwardType, string[]> MatchAwards = new Dictionary<MatchAwardType, string[]>
-        {
-            {MatchAwardType.ClutchHealer, new[] {"Clutch Healer"} },
-            {MatchAwardType.HatTrick, new[] {"Hat Trick"}},
-            {MatchAwardType.HighestKillStreak, new[] {"Dominator"}},
-            {MatchAwardType.MostAltarDamage, new[] {"Cannoneer"}},
-            {MatchAwardType.MostCoinsPaid, new[] {"Moneybags"}},
-            {MatchAwardType.MostCurseDamageDone, new[] {"Master of the Curse"}},
-            {MatchAwardType.MostDamageDoneToZerg, new[] {"Zerg Crusher"}},
-            {MatchAwardType.MostDamageTaken, new[] {"Bulwark"}},
-            {MatchAwardType.MostDamageToMinions, new[] {"Guardian Slayer"}},
-            {MatchAwardType.MostDaredevilEscapes, new[] {"Daredevil"}},
-            {MatchAwardType.MostDragonShrinesCaptured, new[] {"Shriner"}},
-            {MatchAwardType.MostEscapes, new[] {"Escape Artist"}},
-            {MatchAwardType.MostGemsTurnedIn, new[] {"Jeweler"}},
-            {MatchAwardType.MostHealing, new[] {"Main Healer"}},
-            {MatchAwardType.MostHeroDamageDone, new[] {"Painbringer"}},
-            {MatchAwardType.MostImmortalDamage, new[] {"Immortal Slayer"}},
-            {MatchAwardType.MostInterruptedCageUnlocks, new[] {"Loyal Defender"}},
-            {MatchAwardType.MostKills, new[] {"Finisher"}},
-            {MatchAwardType.MostMercCampsCaptured, new[] {"Headhunter"}},
-            {MatchAwardType.MostNukeDamageDone, new[] {"Da Bomb"}},
-            {MatchAwardType.MostProtection, new[] {"Protector"}},
-            {MatchAwardType.MostRoots, new[] {"Trapper"}},
-            {MatchAwardType.MostSeedsCollected, new[] {"Seed Collector"}},
-            {MatchAwardType.MostSiegeDamageDone, new[] {"Siege Master"}},
-            {MatchAwardType.MostSilences, new[] {"Silencer"}},
-            {MatchAwardType.MostSkullsCollected, new[] {"Skull Collector"}},
-            {MatchAwardType.MostStuns, new[] {"Stunner"}},
-            {MatchAwardType.MostTeamfightDamageTaken, new[] {"Guardian"}},
-            {MatchAwardType.MostTeamfightHealingDone, new[] {"Combat Medic"}},
-            {MatchAwardType.MostTeamfightHeroDamageDone, new[] {"Scrapper"}},
-            {MatchAwardType.MostTimeInTemple, new[] {"Temple Master"}},
-            {MatchAwardType.MostTimeOnPoint, new[] {"Point Guard"}},
-            {MatchAwardType.MostTimePushing, new[] {"Pusher"}},
-            {MatchAwardType.MostVengeancesPerformed, new[] {"Avenger"}},
-            {MatchAwardType.MostXPContribution, new[] {"Experienced"}},
-            {MatchAwardType.MVP, new[] {"MVP"}},
-            {MatchAwardType.ZeroDeaths, new[] {"Sole Survivor"}},
-            {MatchAwardType.ZeroOutnumberedDeaths, new[] {"Team Player"}}
-        };
+        // public IEnumerable<string> GetTextForMatchAwards(IEnumerable<MatchAwardType> matchAwardTypes) => matchAwardTypes.SelectMany(mat => MatchAwards[mat]).Distinct();
+        //public Dictionary<MatchAwardType, string[]> MatchAwards = new Dictionary<MatchAwardType, string[]>
+        //{
+        //    {MatchAwardType.ClutchHealer, new[] {"Clutch Healer"} },
+        //    {MatchAwardType.HatTrick, new[] {"Hat Trick"}},
+        //    {MatchAwardType.HighestKillStreak, new[] {"Dominator"}},
+        //    {MatchAwardType.MostAltarDamage, new[] {"Cannoneer"}},
+        //    {MatchAwardType.MostCoinsPaid, new[] {"Moneybags"}},
+        //    {MatchAwardType.MostCurseDamageDone, new[] {"Master of the Curse"}},
+        //    {MatchAwardType.MostDamageDoneToZerg, new[] {"Zerg Crusher"}},
+        //    {MatchAwardType.MostDamageTaken, new[] {"Bulwark"}},
+        //    {MatchAwardType.MostDamageToMinions, new[] {"Guardian Slayer"}},
+        //    {MatchAwardType.MostDaredevilEscapes, new[] {"Daredevil"}},
+        //    {MatchAwardType.MostDragonShrinesCaptured, new[] {"Shriner"}},
+        //    {MatchAwardType.MostEscapes, new[] {"Escape Artist"}},
+        //    {MatchAwardType.MostGemsTurnedIn, new[] {"Jeweler"}},
+        //    {MatchAwardType.MostHealing, new[] {"Main Healer"}},
+        //    {MatchAwardType.MostHeroDamageDone, new[] {"Painbringer"}},
+        //    {MatchAwardType.MostImmortalDamage, new[] {"Immortal Slayer"}},
+        //    {MatchAwardType.MostInterruptedCageUnlocks, new[] {"Loyal Defender"}},
+        //    {MatchAwardType.MostKills, new[] {"Finisher"}},
+        //    {MatchAwardType.MostMercCampsCaptured, new[] {"Headhunter"}},
+        //    {MatchAwardType.MostNukeDamageDone, new[] {"Da Bomb"}},
+        //    {MatchAwardType.MostProtection, new[] {"Protector"}},
+        //    {MatchAwardType.MostRoots, new[] {"Trapper"}},
+        //    {MatchAwardType.MostSeedsCollected, new[] {"Seed Collector"}},
+        //    {MatchAwardType.MostSiegeDamageDone, new[] {"Siege Master"}},
+        //    {MatchAwardType.MostSilences, new[] {"Silencer"}},
+        //    {MatchAwardType.MostSkullsCollected, new[] {"Skull Collector"}},
+        //    {MatchAwardType.MostStuns, new[] {"Stunner"}},
+        //    {MatchAwardType.MostTeamfightDamageTaken, new[] {"Guardian"}},
+        //    {MatchAwardType.MostTeamfightHealingDone, new[] {"Combat Medic"}},
+        //    {MatchAwardType.MostTeamfightHeroDamageDone, new[] {"Scrapper"}},
+        //    {MatchAwardType.MostTimeInTemple, new[] {"Temple Master"}},
+        //    {MatchAwardType.MostTimeOnPoint, new[] {"Point Guard"}},
+        //    {MatchAwardType.MostTimePushing, new[] {"Pusher"}},
+        //    {MatchAwardType.MostVengeancesPerformed, new[] {"Avenger"}},
+        //    {MatchAwardType.MostXPContribution, new[] {"Experienced"}},
+        //    {MatchAwardType.MVP, new[] {"MVP"}},
+        //    {MatchAwardType.ZeroDeaths, new[] {"Sole Survivor"}},
+        //    {MatchAwardType.ZeroOutnumberedDeaths, new[] {"Team Player"}}
+        //};
 
         public ParseOptions ReplayParseOptions = new ParseOptions
         {
