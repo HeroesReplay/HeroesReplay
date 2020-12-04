@@ -11,7 +11,7 @@ namespace HeroesReplay.CLI
         {
             ServiceProvider provider = new ServiceCollection()
                 .AddSingleton<CommandLineService>()
-                .AddSingleton<AdminChecker>()
+                .AddSingleton<IAdminChecker, AdminChecker>()
                 .BuildServiceProvider();
 
             using (IServiceScope scope = provider.CreateScope())

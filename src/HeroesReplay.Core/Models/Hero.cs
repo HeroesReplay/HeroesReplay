@@ -3,7 +3,6 @@
     public class Hero
     {
         public string Name { get; }
-
         public string AltName { get; }
         public HeroType HeroType { get; }
 

@@ -12,9 +12,9 @@ namespace HeroesReplay.CLI
 {
     public class CommandLineService
     {
-        private readonly AdminChecker adminChecker;
+        private readonly IAdminChecker adminChecker;
 
-        public CommandLineService(AdminChecker adminChecker)
+        public CommandLineService(IAdminChecker adminChecker)
         {
             this.adminChecker = adminChecker;
         }
@@ -37,7 +37,7 @@ namespace HeroesReplay.CLI
 
         private void OnException(Exception exception, InvocationContext context)
         {
-
+            context.Console.Error.WriteLine(exception.Message);
         }
 
         private async Task CheckOsRequirementAsync(InvocationContext context, Func<InvocationContext, Task> next)

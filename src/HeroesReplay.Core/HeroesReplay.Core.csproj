@@ -1,65 +1,71 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>netcoreapp3.1</TargetFramework>
-        <Nullable>enable</Nullable>
-    </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
 
-    <!-- Hots API -->
-    <PropertyGroup>
-        <HotsApiClientNameSpace>HeroesReplay.Core.Replays.HotsApi</HotsApiClientNameSpace>
-        <HotsApiClientClassName>HotsApiClient</HotsApiClientClassName>
-        <HotsApiClientFileName>Replays/$(HotsApiClientClassName).g.cs</HotsApiClientFileName>
-        <HotsApiResponseClassName>HotsApiResponse</HotsApiResponseClassName>
-        <HotsApiWrapResponse>true</HotsApiWrapResponse>
-        <HotsApiDocumentUrl>http://hotsapi.net/spec/hotsapi-1.0.yaml</HotsApiDocumentUrl>
-    </PropertyGroup>
+  <!-- Hots API -->
+  <PropertyGroup>
+    <HotsApiClientNameSpace>HeroesReplay.Core.Replays.HotsApi</HotsApiClientNameSpace>
+    <HotsApiClientClassName>HotsApiClient</HotsApiClientClassName>
+    <HotsApiClientFileName>Replays/$(HotsApiClientClassName).g.cs</HotsApiClientFileName>
+    <HotsApiResponseClassName>HotsApiResponse</HotsApiResponseClassName>
+    <HotsApiWrapResponse>true</HotsApiWrapResponse>
+    <HotsApiDocumentUrl>http://hotsapi.net/spec/hotsapi-1.0.yaml</HotsApiDocumentUrl>
+  </PropertyGroup>
 
-    <!-- Heroes Profile API -->
-    <PropertyGroup>
-        <HeroesProfileApiClientNameSpace>HeroesReplay.Core.Replays.HeroesProfileApi</HeroesProfileApiClientNameSpace>
-        <HeroesProfileApiClientClassName>HeroesProfileApi</HeroesProfileApiClientClassName>
-        <HeroesProfileApiClientFileName>Replays/$(HeroesProfileApiClientClassName).g.cs</HeroesProfileApiClientFileName>
-        <HeroesProfileApiResponseClassName>HeroesProfileApiResponse</HeroesProfileApiResponseClassName>
-        <HeroesProfileApiWrapResponse>false</HeroesProfileApiWrapResponse>
-        <HeroesProfileApiDocumentUrl>https://api.heroesprofile.com/openAPI/spec/hotsapi-1.0.yaml</HeroesProfileApiDocumentUrl>
-    </PropertyGroup>
+  <!-- Heroes Profile API -->
+  <PropertyGroup>
+    <HeroesProfileApiClientNameSpace>HeroesReplay.Core.Replays.HeroesProfileApi</HeroesProfileApiClientNameSpace>
+    <HeroesProfileApiClientClassName>HeroesProfileApi</HeroesProfileApiClientClassName>
+    <HeroesProfileApiClientFileName>Replays/$(HeroesProfileApiClientClassName).g.cs</HeroesProfileApiClientFileName>
+    <HeroesProfileApiResponseClassName>HeroesProfileApiResponse</HeroesProfileApiResponseClassName>
+    <HeroesProfileApiWrapResponse>false</HeroesProfileApiWrapResponse>
+    <HeroesProfileApiDocumentUrl>https://api.heroesprofile.com/openAPI/spec/hotsapi-1.0.yaml</HeroesProfileApiDocumentUrl>
+  </PropertyGroup>
 
-    <ItemGroup>
-        <PackageReference Include="AWSSDK.Core" Version="3.5.0-beta" />
-        <PackageReference Include="AWSSDK.S3" Version="3.5.0-beta" />
-        <PackageReference Include="Heroes.ReplayParser" Version="1.2.10" />
-        <PackageReference Include="Microsoft.CodeQuality.Analyzers" Version="3.0.0">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="3.1.1" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="3.1.1" />
-        <PackageReference Include="Microsoft.Extensions.Options" Version="3.1.4" />
-        <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.19041.1-preview.vb-release" />
-        <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
-        <PackageReference Include="Polly" Version="7.2.0" />
-        <PackageReference Include="System.Drawing.Common" Version="4.7.0" />
-        <PackageReference Include="System.Security.Principal.Windows" Version="4.7.0" />
-        <PackageReference Include="NSwag.MSBuild" Version="13.2.2">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-        </PackageReference>
-        <PackageReference Include="TwitchLib" Version="3.1.1" />
-    </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.Core" Version="3.5.1.40" />
+    <PackageReference Include="AWSSDK.S3" Version="3.5.5" />
+    <PackageReference Include="Heroes.ReplayParser" Version="1.2.13" />
+    <PackageReference Include="Microsoft.CodeQuality.Analyzers" Version="3.3.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.DotNet.PlatformAbstractions" Version="3.1.6" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.19041.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="PInvoke.Gdi32" Version="0.7.78" />
+    <PackageReference Include="PInvoke.User32" Version="0.7.78" />
+    <PackageReference Include="Polly" Version="7.2.1" />
+    <PackageReference Include="System.Drawing.Common" Version="5.0.0" />
+    <PackageReference Include="System.Security.Principal.Windows" Version="5.0.0" />
+    <PackageReference Include="NSwag.MSBuild" Version="13.9.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="TwitchLib" Version="3.1.1" />
+  </ItemGroup>
 
-    <Target Name="Download" BeforeTargets="BeforeBuild">
-        <DownloadFile DestinationFileName="hotsapi-1.0.yaml" DestinationFolder="$(MSBuildProjectDirectory)" Retries="3" SourceUrl="$(HotsApiDocumentUrl)" />
-    </Target>
+  <Target Name="Download" BeforeTargets="BeforeBuild">
+    <DownloadFile DestinationFileName="hotsapi-1.0.yaml" DestinationFolder="$(MSBuildProjectDirectory)" Retries="3" SourceUrl="$(HotsApiDocumentUrl)" />
+  </Target>
 
-    <Target Name="Generate" BeforeTargets="BeforeBuild" DependsOnTargets="Download">
-        <Exec Command="$(NSwagExe_Core31) openapi2csclient /input:$(MSBuildProjectDirectory)\hotsapi-1.0.yaml /wrapresponses:$(HotsApiWrapResponse) /responseclass:$(HotsApiResponseClassName) /classname:$(HotsApiClientClassName) /namespace:$(HotsApiClientNameSpace) /usebaseurl:true /output:$(HotsApiClientFileName)" />
-        <!--<Delete Files="$(MSBuildProjectDirectory)\hotsapi-1.0.yaml" />-->
-    </Target>
+  <Target Name="Generate" BeforeTargets="BeforeBuild" DependsOnTargets="Download">
+    <Exec Command="$(NSwagExe_Core31) openapi2csclient /input:$(MSBuildProjectDirectory)\hotsapi-1.0.yaml /wrapresponses:$(HotsApiWrapResponse) /responseclass:$(HotsApiResponseClassName) /classname:$(HotsApiClientClassName) /namespace:$(HotsApiClientNameSpace) /usebaseurl:true /output:$(HotsApiClientFileName)" />
+    <!--<Delete Files="$(MSBuildProjectDirectory)\hotsapi-1.0.yaml" />-->
+  </Target>
 
-    <!--<Target Name="Generate" BeforeTargets="BeforeBuild" DependsOnTargets="Download">
+  <!--<Target Name="Generate" BeforeTargets="BeforeBuild" DependsOnTargets="Download">
         <Exec Command="$(NSwagExe_Core31) openapi2csclient /input:$(MSBuildProjectDirectory)\heroesprofile-1.0.yaml /wrapresponses:$(HeroesProfileApiWrapResponse) /responseclass:$(HeroesProfileApiResponseClassName) /classname:$(HeroesProfileApiClientClassName) /namespace:$(HeroesProfileApiClientNameSpace) /usebaseurl:true /output:$(HeroesProfileApiClientFileName)" />
-        --><!--<Delete Files="$(MSBuildProjectDirectory)\heroesprofile-1.0.yaml" />--><!--
+        -->
+  <!--<Delete Files="$(MSBuildProjectDirectory)\heroesprofile-1.0.yaml" />-->
+  <!--
     </Target>-->
 
 

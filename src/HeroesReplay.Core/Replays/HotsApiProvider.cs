@@ -25,8 +25,6 @@ namespace HeroesReplay.Core.Replays
     public class HotsApiProvider : IReplayProvider
     {
         private const string GAME_TYPE_STORM_LEAGUE = "StormLeague";
-        // private const string GAME_TYPE_QUICK_MATCH = "QuickMatch";
-        // private const string GAME_TYPE_UNRANKED = "UnrankedDraft";
 
         private int MinReplayId
         {

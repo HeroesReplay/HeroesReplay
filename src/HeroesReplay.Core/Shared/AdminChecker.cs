@@ -2,7 +2,7 @@ using System.Security.Principal;
 
 namespace HeroesReplay.Core.Shared
 {
-    public class AdminChecker
+    public class AdminChecker : IAdminChecker
     {
         public bool IsAdministrator()
         {

@@ -1,25 +1,34 @@
 {
-    "profiles": {
-        "HeroesReplay.CLI [Spectate][DIR]": {
-            "commandName": "Project",
-            "commandLineArgs": "spectate directory",
-            "environmentVariables": {
-                "HEROES_REPLAY_Settings__": ""
-            }
-        },
-        "HeroesReplay.CLI [Spectate][API]": {
-            "commandName": "Project",
-            "commandLineArgs": "spectate hotsapi",
-            "environmentVariables": {
-                "HEROES_REPLAY_Settings__": ""
-            }
-        },
-        "HeroesReplay.CLI [Spectate][FILE]": {
-            "commandName": "Project",
-            "commandLineArgs": "spectate file",
-            "environmentVariables": {
-                "HEROES_REPLAY_Settings__": ""
-            }
-        }
+  "profiles": {
+    "HeroesReplay.CLI [Spectate][DIR]": {
+      "commandName": "Project",
+      "commandLineArgs": "spectate directory",
+      "environmentVariables": {
+        //"HEROES_REPLAY_Settings__HeroesProfileApiKey": "",
+        //"HEROES_REPLAY_Settings__TwitchAccessToken": "",
+        //"HEROES_REPLAY_Settings__TwitchClientId": "",
+        "HEROES_REPLAY_Settings__ReplaySource": "D:\\replays"
+      }
+    },
+    "HeroesReplay.CLI [Spectate][API]": {
+      "commandName": "Project",
+      "commandLineArgs": "spectate hotsapi",
+      "environmentVariables": {
+        "HEROES_REPLAY_Settings__AwsAccessKey": "",
+        "HEROES_REPLAY_Settings__AwsSecretKey": "",
+        "HEROES_REPLAY_Settings__HeroesProfileApiKey": "",
+        "HEROES_REPLAY_Settings__TwitchAccessToken": "",
+        "HEROES_REPLAY_Settings__TwitchClientId": ""
+      }
+    },
+    "HeroesReplay.CLI [Spectate][FILE]": {
+      "commandName": "Project",
+      "commandLineArgs": "spectate file",
+      "environmentVariables": {
+        "HEROES_REPLAY_Settings__HeroesProfileApiKey": "",
+        "HEROES_REPLAY_Settings__TwitchAccessToken": "",
+        "HEROES_REPLAY_Settings__TwitchClientId": ""
+      }
     }
+  }
 }
