@@ -8,26 +8,21 @@ namespace HeroesReplay.Core.Shared
 {
     public class GameDataService
     {
-        private readonly string directory;
+        private readonly Settings settings;
 
         public List<Hero> Heroes { get; } = new List<Hero>();
         public List<Map> Maps { get; } = new List<Map>();
 
-        private GameDataService(string directory)
+        public GameDataService(Settings settings)
         {
-            this.directory = directory;
+            this.settings = settings;
             this.Heroes = LoadHeroes();
-            this.Maps = LoadMaps();
-        }
-
-        public GameDataService() : this(Directory.GetCurrentDirectory())
-        {
-
+            this.Maps = LoadMaps();         
         }
 
         private List<Map> LoadMaps()
         {
-            using (FileStream mapStream = File.OpenRead(Path.Combine(directory, "Assets", "Maps.json")))
+            using (FileStream mapStream = File.OpenRead(Path.Combine(settings.CurrentDirectory, "Assets", "Maps.json")))
             {
                 using (JsonDocument mapJson = JsonDocument.Parse(mapStream))
                 {
@@ -43,7 +38,7 @@ namespace HeroesReplay.Core.Shared
 
         private List<Hero> LoadHeroes()
         {
-            using (FileStream heroStream = File.OpenRead(Path.Combine(directory, "Assets", "Heroes.json")))
+            using (FileStream heroStream = File.OpenRead(Path.Combine(settings.CurrentDirectory, "Assets", "Heroes.json")))
             {
                 using (JsonDocument heroJson = JsonDocument.Parse(heroStream))
                 {

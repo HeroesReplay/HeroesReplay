@@ -10,11 +10,11 @@ namespace HeroesReplay.Core
 {
     public class PlayerKilledWeightings : IGameWeightings
     {
-        private readonly GameDataService gameDataService;
+        private readonly Settings settings;
 
-        public PlayerKilledWeightings(GameDataService gameDataService)
+        public PlayerKilledWeightings(Settings settings)
         {
-            this.gameDataService = gameDataService;
+            this.settings = settings;
         }
 
         public IEnumerable<(Unit Unit, Player Player, double Points, string Description)> GetPlayers(TimeSpan now, Replay replay)
@@ -25,9 +25,8 @@ namespace HeroesReplay.Core
             {
                 foreach (var unit in killer)
                 {
-                    yield return (unit, unit.PlayerKilledBy, Constants.Weights.PlayerKill + killer.Count(), $"{killer.Key.HeroId} kills: {unit.PlayerControlledBy.Character}");
+                    yield return (unit, unit.PlayerKilledBy, settings.SpectateWeightSettings.PlayerKill + killer.Count(), $"{killer.Key.HeroId} kills: {unit.PlayerControlledBy.Character}");
                 }
-
             }
         }
     }

@@ -7,10 +7,12 @@ namespace HeroesReplay.Core.Shared
     public class ReplayHelper
     {
         private readonly ILogger<ReplayHelper> logger;
+        private readonly Settings settings;
 
-        public ReplayHelper(ILogger<ReplayHelper> logger)
+        public ReplayHelper(ILogger<ReplayHelper> logger, Settings settings)
         {
             this.logger = logger;
+            this.settings = settings;
         }
 
         public bool TryGetReplayId(StormReplay stormReplay, out int replayId)
@@ -19,7 +21,7 @@ namespace HeroesReplay.Core.Shared
 
             try
             {
-                replayId = int.Parse(Path.GetFileName(stormReplay.Path).Split(Constants.STORM_REPLAY_CACHED_FILE_NAME_SPLITTER)[0]);
+                replayId = int.Parse(Path.GetFileName(stormReplay.Path).Split(settings.HotsApiSettings.CachedFileNameSplitter)[0]);
                 return true;
             }
             catch (Exception e)

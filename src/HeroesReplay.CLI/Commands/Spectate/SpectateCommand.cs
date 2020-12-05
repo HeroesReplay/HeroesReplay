@@ -1,11 +1,10 @@
-﻿using HeroesReplay.Core.Shared;
-using System.CommandLine;
+﻿using System.CommandLine;
 
 namespace HeroesReplay.CLI.Commands
 {
     public class SpectateCommand : Command
     {
-        public SpectateCommand() : base("spectate", $"Spectate {Constants.STORM_REPLAY_EXTENSION} files using OCR detection, real-time replay analysis and game automation.")
+        public SpectateCommand() : base("spectate", $"Auto Spectate .StormReplay files using built-in replay analysis which auto focuses on heroes based on events that happen.")
         {
             AddCommand(new FileCommand());
             AddCommand(new DirectoryCommand());

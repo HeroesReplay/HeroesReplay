@@ -1,8 +1,5 @@
 ﻿using Heroes.ReplayParser;
-
 using HeroesReplay.Core.Shared;
-
-using Microsoft.Extensions.Configuration;
 
 using System;
 using System.Collections.Concurrent;
@@ -14,12 +11,12 @@ namespace HeroesReplay.Core
     public class ReplayAnalyzer : IReplayAnalzer
     {
         private readonly IEnumerable<IGameWeightings> playerWeightings;
-        private readonly IConfiguration configuration;
+        private readonly Settings settings;
 
-        public ReplayAnalyzer(IConfiguration configuration, IEnumerable<IGameWeightings> playerWeightings)
+        public ReplayAnalyzer(Settings settings, IEnumerable<IGameWeightings> playerWeightings)
         {
             this.playerWeightings = playerWeightings;
-            this.configuration = configuration;
+            this.settings = settings;
         }
 
         public IDictionary<TimeSpan, Panel> GetPanels(Replay replay)
@@ -31,9 +28,7 @@ namespace HeroesReplay.Core
                 panels[deathTime.Key] = Panel.KillsDeathsAssists;
             }
 
-            var talentLevels = configuration.GetSection("Settings:TalentLevels").Get<List<int>>();
-
-            foreach (var talentTime in replay.TeamLevels.SelectMany(x => x).Where(x => talentLevels.Contains(x.Key)).Select(x => x.Value))
+            foreach (var talentTime in replay.TeamLevels.SelectMany(x => x).Where(x => settings.SpectateSettings.TalentLevels.Contains(x.Key)).Select(x => x.Value))
             {
                 panels[talentTime] = Panel.Talents;
             }
@@ -63,7 +58,7 @@ namespace HeroesReplay.Core
 
             var processed = new List<Unit>();
 
-            foreach (var entry in focus.Where(x => x.Value.Points >= Constants.Weights.PlayerKill).ToList())
+            foreach (var entry in focus.Where(x => x.Value.Points >= settings.SpectateWeightSettings.PlayerKill).ToList())
             {
                 var currentTime = entry.Key;
 

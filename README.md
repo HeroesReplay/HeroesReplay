@@ -2,27 +2,34 @@
 
 The Heroes of the Storm Automated Spectator
 
-## Goals of the project
+## Future goals of the project
 
-- Develop robust state detection for `loading`, `playing`, `paused`, `ended` states.
+- Develop better state detection for `loading`, `playing`, `paused`, `ended` states.
 - Improve the existing spectate logic
 - Add ping events to focus hero criteria, e.g select heroes who are pinged of danger or ping for assistance.
-- Add Twitch chat integration for several features (voting, game controls)
-- Intigration of [HotsApi](http://hotsapi.net/) for limitless replays
+- Add Twitch chat integration for team win betting
 - Host a 24/7 stream similar to [SaltyTeemo](https://www.twitch.tv/saltyteemo)
 
 ## About
 
-Heroes Replay is a project that automates spectating `.StormReplay` files.  
-It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) to parse the replay file and then using that information, it can decide which heroes and panels to select.
+Heroes Replay is a project that automates spectating `.StormReplay` files. It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) to parse the replay file and then using that information, it can decide which heroes and panels to select. By sending input commands
+to the game.
 
 ## Features
 
-### Command line
+### Settings
+
+Various settings can be found in `appsettings.json`.
+
+### Commands
 
 An easy to use cli with built in help and information on how to use `heroesreplay.exe`.
 
-![cli](https://github.com/HeroesReplay/HeroesReplay/raw/master/docs/terminal-one.png)
+```ps
+heroesreplay.exe spectate hotsapi
+heroesreplay.exe spectate directory
+heroesreplay.exe spectate file
+```
 
 ### Loading
 
@@ -44,9 +51,10 @@ There is currently a priority order to who is focused by the spectator, the list
 1. Focuses on heroes that perform penta, quad, triple & multi kills.
 2. Focuses on heroes that will die or kill an enemy hero.
 3. Focuses on heroes doing team or map objectives. (gems and doubloons for example)
-4. Focuses on heroes doing camps and bosses.
-5. Focuses on heroes destroying structures.
-6. Focuses on heroes that have recently killed other players
+4. Focuses on heroes that are close to enemies.
+5. Focuses on heroes doing camps and bosses.
+6. Focuses on heroes destroying structures.
+7. Focuses on heroes that are roaming.
 
 ### Information Panels
 
@@ -77,6 +85,7 @@ There is currently a priority order to who is focused by the spectator, the list
 - [NSwag.MSBuild](https://github.com/RicoSuter/NSwag/wiki/NSwag.MSBuild) to generate the api client for accessing HotsApi.
 - [AWSSDK.S3](https://aws.amazon.com/sdk-for-net/) to download the `.StormReplay` files hosted in the HotsApi AWS S3 storage.
 - [Ali Obs Interface](https://github.com/Ahli/Galaxy-Observer-UI) a custom `.StormInterface` for Heroes of the Storm.
+- [PInvoke.NET](https://github.com/dotnet/pinvoke/) for Windows native calls (BitBlt for game window capture) & sending input to the game window.
 
 ## Building the application
 
@@ -87,11 +96,6 @@ git clone http://github.com/HeroesReplay/HeroesReplay.git
 cd ./HeroesReplay/src/HeroesReplay/
 dotnet build HeroesReplay.sln
 ```
-
-### From Visual Studio 2019 or Visual Studio Code
-
-`Ctrl+Shift+B` can be used to build the project.
-
 ## Running the application
 
 There are a few ways to run the application explained below. You can use the `--help` option to find out more for each command.

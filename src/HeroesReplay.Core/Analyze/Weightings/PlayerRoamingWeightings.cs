@@ -10,6 +10,13 @@ namespace HeroesReplay.Core
 {
     public class PlayerRoamingWeightings : IGameWeightings
     {
+        private readonly Settings settings;
+
+        public PlayerRoamingWeightings(Settings settings)
+        {
+            this.settings = settings;
+        }
+
         public IEnumerable<(Unit Unit, Player Player, double Points, string Description)> GetPlayers(TimeSpan now, Replay replay)
         {
             foreach (Unit heroUnit in replay.Players.SelectMany(p => p.HeroUnits.Where(unit => unit.TimeSpanBorn < now && (unit.TimeSpanDied == null || unit.TimeSpanDied > now))))
@@ -18,7 +25,7 @@ namespace HeroesReplay.Core
 
                 foreach (var position in heroUnit.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(spawn) > 20))
                 {
-                    yield return (heroUnit, heroUnit.PlayerControlledBy, Constants.Weights.Roaming, $"{heroUnit.PlayerControlledBy.HeroId} is roaming");
+                    yield return (heroUnit, heroUnit.PlayerControlledBy, settings.SpectateWeightSettings.Roaming, $"{heroUnit.PlayerControlledBy.HeroId} is roaming");
                 }
             }
         }

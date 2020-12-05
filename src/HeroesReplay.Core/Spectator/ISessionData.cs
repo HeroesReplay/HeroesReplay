@@ -8,16 +8,21 @@ namespace HeroesReplay.Core
         StormReplay StormReplay { get; }
     }
 
-    public class SessionHolder : ISessionHolder, ISessionWriter
+    public class SessionHolder : ISessionHolder, ISessionSetter
     {
-        public SessionData SessionData { get; set; }
-        public StormReplay StormReplay { get; set; }
+        public SessionData SessionData { get; private set; }
+        public StormReplay StormReplay { get; private set; }
+
+        public void Set(SessionData data, StormReplay replay)
+        {
+            this.SessionData = data;
+            this.StormReplay = replay;
+        }
     }
 
-    public interface ISessionWriter
+    public interface ISessionSetter
     {
-        SessionData SessionData { set; }
-        StormReplay StormReplay { set; }
+        void Set(SessionData data, StormReplay replay);
     }
 
 

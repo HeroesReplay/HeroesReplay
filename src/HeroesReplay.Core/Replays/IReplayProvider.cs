@@ -5,6 +5,6 @@ namespace HeroesReplay.Core.Replays
 {
     public interface IReplayProvider
     {
-        Task<StormReplay> TryLoadReplayAsync();
+        Task<StormReplay?> TryLoadReplayAsync();
     }
 }

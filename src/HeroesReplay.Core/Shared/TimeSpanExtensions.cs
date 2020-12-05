@@ -5,13 +5,13 @@ namespace HeroesReplay.Core.Shared
 {
     public static class TimeSpanExtensions
     {
-        public static TimeSpan ParseTimerHours(this string time) => TimeSpan.ParseExact(time, Constants.Ocr.TIMESPAN_FORMAT_HOURS, CultureInfo.CurrentCulture);
+        public static TimeSpan ParseTimerHours(this string time, string format) => TimeSpan.ParseExact(time, format, CultureInfo.CurrentCulture);
 
-        public static TimeSpan ParseNegativeTimerMinutes(this string time) => TimeSpan.ParseExact(time, Constants.Ocr.TIMESPAN_MATCH_START_FORMAT, CultureInfo.CurrentCulture, TimeSpanStyles.AssumeNegative);
+        public static TimeSpan ParseNegativeTimerMinutes(this string time, string format) => TimeSpan.ParseExact(time, format, CultureInfo.CurrentCulture, TimeSpanStyles.AssumeNegative);
 
-        public static TimeSpan ParsePositiveTimerMinutes(this string time)
+        public static TimeSpan ParsePositiveTimerMinutes(this string time, string seperator)
         {
-            string[] segments = time.Split(Constants.Ocr.TIMER_HRS_MINS_SECONDS_SEPERATOR);
+            string[] segments = time.Split(seperator);
             return new TimeSpan(days: 0, hours: 0, minutes: int.Parse(segments[0]), seconds: int.Parse(segments[1]));
         }
 

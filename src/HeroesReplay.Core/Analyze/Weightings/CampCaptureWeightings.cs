@@ -11,6 +11,13 @@ namespace HeroesReplay.Core
 {
     public class CampCaptureWeightings : IGameWeightings
     {
+        private readonly Settings settings;
+
+        public CampCaptureWeightings(Settings settings)
+        {
+            this.settings = settings;
+        }
+
         public IEnumerable<(Unit Unit, Player Player, double Points, string Description)> GetPlayers(TimeSpan now, Replay replay)
         {
             yield break;
@@ -21,9 +28,9 @@ namespace HeroesReplay.Core
             {
                 int teamId = (int)capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.Value - 1;
 
-                foreach (Unit unit in replay.Units.Where(unit => unit.TimeSpanBorn < capture.TimeSpan && unit.TimeSpanDied < capture.TimeSpan && unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId && Constants.OtherCamps.Any(oc => unit.Name.Contains(oc))))
+                foreach (Unit unit in replay.Units.Where(unit => unit.TimeSpanBorn < capture.TimeSpan && unit.TimeSpanDied < capture.TimeSpan && unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId && settings.UnitSettings.CampNames.Any(oc => unit.Name.Contains(oc))))
                 {
-                    yield return (unit, unit.PlayerKilledBy, Constants.Weights.CampCapture, $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
+                    yield return (unit, unit.PlayerKilledBy, settings.SpectateWeightSettings.CampCapture, $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
                 }
             }
         }

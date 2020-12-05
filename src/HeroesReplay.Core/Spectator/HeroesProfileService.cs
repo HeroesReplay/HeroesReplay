@@ -5,22 +5,20 @@ using System.Text.Json;
 using System.Threading.Tasks;
 
 using HeroesReplay.Core.Shared;
-
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Runner
 {
     public class HeroesProfileService
     {
-        private readonly ILogger<HeroesProfileService> logger;
-        private readonly Settings settings;
+        private readonly ILogger<HeroesProfileService> logger;        
         private readonly ReplayHelper replayHelper;
+        private readonly HeroesProfileApiSettings settings;
 
-        public HeroesProfileService(ILogger<HeroesProfileService> logger, IOptions<Settings> settings, ReplayHelper replayHelper)
+        public HeroesProfileService(ILogger<HeroesProfileService> logger, Settings settings, ReplayHelper replayHelper)
         {
             this.logger = logger;
-            this.settings = settings.Value;
+            this.settings = settings.HeroesProfileApiSettings;
             this.replayHelper = replayHelper;
         }
 

@@ -1,16 +1,11 @@
-﻿using Heroes.ReplayParser;
-
-using HeroesReplay.Core.Shared;
-
+﻿using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
-
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core
 {
-
     public class GameSession : IGameSession
     {
         private readonly IGameController controller;

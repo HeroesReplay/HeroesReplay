@@ -10,6 +10,13 @@ namespace HeroesReplay.Core
 {
     public class NearEnemyHeroWeightings : IGameWeightings
 	{
+        private readonly Settings settings;
+
+        public NearEnemyHeroWeightings(Settings settings)
+        {
+            this.settings = settings;
+        }
+
 		public IEnumerable<(Unit Unit, Player Player, double Points, string Description)> GetPlayers(TimeSpan now, Replay replay)
 		{
 			foreach (var heroUnit0 in replay.Units.Where(heroUnit0 => heroUnit0.Name.StartsWith("Hero") && heroUnit0.Team == 0 && heroUnit0.TimeSpanBorn < now && heroUnit0.TimeSpanDied > now))
@@ -24,7 +31,7 @@ namespace HeroesReplay.Core
 
 							if (distance <= 10)
 							{
-								yield return (heroUnit0, heroUnit0.PlayerControlledBy, Constants.Weights.NearEnemyHero, $"{heroUnit0.PlayerControlledBy.HeroId} is in proximity of {heroUnit1.PlayerControlledBy.HeroId}");
+								yield return (heroUnit0, heroUnit0.PlayerControlledBy, settings.SpectateWeightSettings.NearEnemyHero, $"{heroUnit0.PlayerControlledBy.HeroId} is in proximity of {heroUnit1.PlayerControlledBy.HeroId}");
 							}
 						}
 					}

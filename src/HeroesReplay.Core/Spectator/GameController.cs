@@ -3,7 +3,6 @@ using HeroesReplay.Core.Processes;
 using HeroesReplay.Core.Shared;
 
 using Polly;
-using Microsoft.Extensions.Configuration;
 
 using System;
 using System.Collections.Generic;
@@ -19,6 +18,7 @@ using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
 using Microsoft.Extensions.Logging;
+using static PInvoke.User32;
 
 namespace HeroesReplay.Core
 {
@@ -26,32 +26,50 @@ namespace HeroesReplay.Core
     {
         private readonly OcrEngine engine;
         private readonly ILogger<GameController> logger;
+        private readonly Settings settings;
         private readonly CaptureStrategy captureStrategy;
-        private readonly int gameLoopsOffset;
-        private readonly int gameLoopsPerSecond;
-        private readonly string battleNetPath;
-        private readonly string heroesInstallPath;
-        private readonly bool isDefaultInterface;
 
-        private bool IsLaunched => Process.GetProcessesByName(Constants.HEROES_PROCESS_NAME).Any();
-        private Process Game => Process.GetProcessesByName(Constants.HEROES_PROCESS_NAME).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
+        public static readonly VirtualKey[] KeysHeroes =
+        {
+            VirtualKey.VK_KEY_1,
+            VirtualKey.VK_KEY_2,
+            VirtualKey.VK_KEY_3,
+            VirtualKey.VK_KEY_4,
+            VirtualKey.VK_KEY_5,
+            VirtualKey.VK_KEY_6,
+            VirtualKey.VK_KEY_7,
+            VirtualKey.VK_KEY_8,
+            VirtualKey.VK_KEY_9,
+            VirtualKey.VK_KEY_0
+        };
+
+        public static readonly VirtualKey[] KeysPanels =
+        {
+            VirtualKey.VK_KEY_1,
+            VirtualKey.VK_KEY_2,
+            VirtualKey.VK_KEY_3,
+            VirtualKey.VK_KEY_4,
+            VirtualKey.VK_KEY_5,
+            VirtualKey.VK_KEY_6,
+            VirtualKey.VK_KEY_7,
+            VirtualKey.VK_KEY_8
+        };
+
+        private bool IsLaunched => Process.GetProcessesByName(settings.ProcessSettings.HeroesOfTheStormProcessName).Any();
+        private Process? Game => Process.GetProcessesByName(settings.ProcessSettings.HeroesOfTheStormProcessName).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
         private IntPtr Handle => Game?.MainWindowHandle ?? IntPtr.Zero;
 
-        public GameController(ILogger<GameController> logger, IConfiguration configuration, CaptureStrategy captureStrategy, OcrEngine engine)
+        public GameController(ILogger<GameController> logger, Settings settings, CaptureStrategy captureStrategy, OcrEngine engine)
         {
             this.logger = logger;
+            this.settings = settings;
             this.captureStrategy = captureStrategy;
-            this.gameLoopsOffset = configuration.GetValue<int>("Settings:GameLoopsOffset");
-            this.gameLoopsPerSecond = configuration.GetValue<int>("Settings:GameLoopsPerSecond");
-            this.battleNetPath = configuration.GetValue<string>("Settings:BattlenetPath");
-            this.heroesInstallPath = configuration.GetValue<string>("Settings:GameInstallPath");
-            this.isDefaultInterface = configuration.GetValue<bool>("Settings:DefaultInterface");
             this.engine = engine;
         }
 
         public async Task<StormReplay> LaunchAsync(StormReplay stormReplay)
         {
-            int latestBuild = Directory.EnumerateDirectories(Path.Combine(heroesInstallPath, "Versions")).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
+            int latestBuild = Directory.EnumerateDirectories(Path.Combine(settings.LocationSettings.GameInstallPath, "Versions")).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
             var requiresAuth = stormReplay.Replay.ReplayBuild == latestBuild;
 
             if (IsLaunched && await IsReplay())
@@ -64,7 +82,7 @@ namespace HeroesReplay.Core
             }
             else if (requiresAuth)
             {
-                await LaunchGameFromBattlenet(stormReplay);
+                await LaunchGameFromBattlenet();
                 await LaunchAndWait(stormReplay);
             }
             else
@@ -75,15 +93,15 @@ namespace HeroesReplay.Core
             return stormReplay;
         }
 
-        private async Task LaunchGameFromBattlenet(StormReplay stormReplay)
+        private async Task LaunchGameFromBattlenet()
         {
             logger.LogInformation("Launching battlenet because replay requires auth.");
 
-            using (var process = Process.Start(new ProcessStartInfo(battleNetPath, $"--game=heroes --gamepath=\"{heroesInstallPath}\" --sso=1 -launch -uid heroes")))
+            using (var process = Process.Start(new ProcessStartInfo(settings.LocationSettings.BattlenetPath, $"--game=heroes --gamepath=\"{settings.LocationSettings.GameInstallPath}\" --sso=1 -launch -uid heroes")))
             {
                 process.WaitForExit();
 
-                var window = Process.GetProcessesByName(Constants.BATTLENET_PROCESS_NAME).Single(x => !string.IsNullOrWhiteSpace(x.MainWindowTitle)).MainWindowHandle;
+                var window = Process.GetProcessesByName(settings.ProcessSettings.BattlenetProcessName).Single(x => !string.IsNullOrWhiteSpace(x.MainWindowTitle)).MainWindowHandle;
                 PInvoke.User32.SendMessage(window, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_RETURN, (IntPtr)IntPtr.Zero);
                 PInvoke.User32.SendMessage(window, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_RETURN, (IntPtr)IntPtr.Zero);
 
@@ -111,7 +129,7 @@ namespace HeroesReplay.Core
                     .Execute(() => IsMatchingClientVersion(stormReplay.Replay));
             }
 
-            var searchTerms = stormReplay.Replay.Players.Select(x => x.Name).Concat(stormReplay.Replay.Players.Select(x => x.Character)).Concat(new[] { Constants.Ocr.LOADING_SCREEN_TEXT, stormReplay.Replay.Map });
+            var searchTerms = stormReplay.Replay.Players.Select(x => x.Name).Concat(stormReplay.Replay.Players.Select(x => x.Character)).Concat(settings.OCRSettings.LoadingScreenText).Concat(new[] { stormReplay.Replay.Map });
 
             await Policy
                     .Handle<Exception>()
@@ -125,7 +143,9 @@ namespace HeroesReplay.Core
             if (Handle == IntPtr.Zero) return null;
 
             Rectangle dimensions = captureStrategy.GetDimensions(Handle);
-            Bitmap timerBitmap = isDefaultInterface ? GetTopTimerDefaultInterface(dimensions) : GetTopTimerAhliObsInterface(dimensions);
+
+            Bitmap timerBitmap = settings.FeatureToggleSettings.DefaultInterface ? GetTopTimerDefaultInterface(dimensions) : GetTopTimerAhliObsInterface(dimensions);
+
             if (timerBitmap == null) return null;
 
             try
@@ -146,7 +166,17 @@ namespace HeroesReplay.Core
                 {
                     OcrResult ocrResult = await engine.RecognizeAsync(softwareBitmap);
                     TimeSpan? timer = TryParseTimeSpan(ocrResult.Text);
-                    return timer.RemoveNegativeOffset(gameLoopsOffset, gameLoopsPerSecond);
+
+                    if (timer.HasValue)
+                    {
+                        return timer.RemoveNegativeOffset(settings.SpectateSettings.GameLoopsOffset, settings.SpectateSettings.GameLoopsPerSecond);
+                    }
+                    else if (settings.FeatureToggleSettings.SaveCaptureFailureCondition)
+                    {
+                        resized.Save(Path.Combine(settings.CaptureSettings.CaptureConditionFailurePath, DateTime.Now.ToString()));
+                    }
+
+                    return null;
                 }
             }
         }
@@ -167,7 +197,7 @@ namespace HeroesReplay.Core
 
         private bool IsMatchingClientVersion(Replay replay)
         {
-            bool match = Game.MainModule.FileVersionInfo.FileVersion == replay.ReplayVersion;
+            bool match = Game?.MainModule.FileVersionInfo.FileVersion == replay.ReplayVersion;
             Console.WriteLine($"Current: {Game.MainModule.FileVersionInfo.FileVersion}");
             Console.WriteLine($"Required: {replay.ReplayVersion}");
             return match;
@@ -188,15 +218,13 @@ namespace HeroesReplay.Core
             try
             {
                 string time = new string(SanitizeOcrTimer(text));
-                string[] segments = time.Split(Constants.Ocr.TIMER_HRS_MINS_SECONDS_SEPERATOR);
+                string[] segments = time.Split(settings.OCRSettings.TimerSeperator);
 
-                return segments.Length switch
-                {
-                    Constants.Ocr.TIMER_HOURS => time.ParseTimerHours(),
-                    Constants.Ocr.TIMER_MINUTES when segments[0].StartsWith(Constants.Ocr.TIMER_NEGATIVE_PREFIX) => time.ParseNegativeTimerMinutes(),
-                    Constants.Ocr.TIMER_MINUTES => time.ParsePositiveTimerMinutes(),
-                    _ => throw new Exception($"Unhandled segments: {segments.Length}")
-                };
+                if (segments.Length == settings.OCRSettings.TimerHours) return time.ParseTimerHours(settings.OCRSettings.TimeSpanFormatHours);
+                else if (segments.Length == settings.OCRSettings.TimerMinutes && segments[0].StartsWith(settings.OCRSettings.TimerNegativePrefix)) return time.ParseNegativeTimerMinutes(settings.OCRSettings.TimeSpanFormatMatchStart);
+                else if (segments.Length == settings.OCRSettings.TimerMinutes) return time.ParsePositiveTimerMinutes(settings.OCRSettings.TimerSeperator);
+
+                throw new Exception($"Unhandled segments: {segments.Length}");                
             }
             catch (Exception)
             {
@@ -224,7 +252,14 @@ namespace HeroesReplay.Core
                     using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(capture))
                     {
                         OcrResult result = await engine.RecognizeAsync(softwareBitmap);
-                        return words.All(word => result.Text.Contains(word));
+                        var containsAll = words.All(word => result.Text.Contains(word));
+
+                        if (containsAll) return true;
+
+                        if (settings.FeatureToggleSettings.SaveCaptureFailureCondition)
+                        {
+                            capture.Save(Path.Combine(settings.CaptureSettings.CaptureConditionFailurePath, DateTime.Now.ToString()));
+                        }
                     }
                 }
             }
@@ -236,7 +271,7 @@ namespace HeroesReplay.Core
             return false;
         }
 
-        private async Task<bool> IsHomeScreen() => await ContainsAllAsync(Constants.Ocr.HOME_SCREEN_TEXT);
+        private async Task<bool> IsHomeScreen() => await ContainsAllAsync(settings.OCRSettings.HomeScreenText);
 
         private async Task<bool> IsReplay() => (await TryGetTimerAsync()) != null;
 
@@ -247,14 +282,23 @@ namespace HeroesReplay.Core
                 using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(capture))
                 {
                     OcrResult result = await engine.RecognizeAsync(softwareBitmap);
-                    return words.Any(word => result.Text.Contains(word));
+                    var containsAny = words.Any(word => result.Text.Contains(word));
+
+                    if (containsAny) return true;
+
+                    if (settings.FeatureToggleSettings.SaveCaptureFailureCondition)
+                    {
+                        capture.Save(Path.Combine(settings.CaptureSettings.CaptureConditionFailurePath, DateTime.Now.ToString()));
+                    }
                 }
             }
+
+            return false;
         }
 
         public void SendFocus(int index)
         {
-            PInvoke.User32.VirtualKey key = Constants.KeysHeroes[index];
+            PInvoke.User32.VirtualKey key = KeysHeroes[index];
             PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)key, IntPtr.Zero);
             PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_CHAR, (IntPtr)key, IntPtr.Zero);
             PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)key, IntPtr.Zero);
@@ -309,7 +353,7 @@ namespace HeroesReplay.Core
 
         public void SendPanel(int index)
         {
-            PInvoke.User32.VirtualKey Key = Constants.KeysPanels[index];
+            PInvoke.User32.VirtualKey Key = KeysPanels[index];
             PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_CONTROL, IntPtr.Zero);
             PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)Key, IntPtr.Zero);
             PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)Key, IntPtr.Zero);

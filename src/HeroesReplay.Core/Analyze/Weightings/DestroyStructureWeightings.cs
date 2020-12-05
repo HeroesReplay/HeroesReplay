@@ -10,6 +10,12 @@ namespace HeroesReplay.Core
 {
     public class DestroyStructureWeightings : IGameWeightings
     {
+        private readonly Settings settings;
+
+        public DestroyStructureWeightings(Settings settings)
+        {
+            this.settings = settings;
+        }
         public IEnumerable<(Unit Unit, Player Player, double Points, string Description)> GetPlayers(TimeSpan now, Replay replay)
         {
             foreach (var unit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero && unit.TimeSpanDied == now && unit.Name.StartsWith("Town") && unit.PlayerKilledBy != null))
@@ -23,7 +29,7 @@ namespace HeroesReplay.Core
                     string name when name.StartsWith("TownTownHall") => 1000,
                 };
 
-                yield return (unit, unit.PlayerKilledBy, Constants.Weights.DestroyStructure + points, $"{unit.PlayerKilledBy.HeroId} destroyed {unit.Name}");
+                yield return (unit, unit.PlayerKilledBy, settings.SpectateWeightSettings.DestroyStructure + points, $"{unit.PlayerKilledBy.HeroId} destroyed {unit.Name}");
             }
         }
     }

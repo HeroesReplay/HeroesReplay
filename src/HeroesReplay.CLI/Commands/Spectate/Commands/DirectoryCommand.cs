@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 
 using HeroesReplay.Core;
 using HeroesReplay.Core.Replays;
-using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,7 +12,7 @@ namespace HeroesReplay.CLI.Commands
 {
     public class DirectoryCommand : Command
     {
-        public DirectoryCommand() : base("directory", $"The directory that contains {Constants.STORM_REPLAY_EXTENSION} files.")
+        public DirectoryCommand() : base("directory", $"The directory that contains .StormReplay files.")
         {
             Handler = CommandHandler.Create<CancellationToken>(CommandAsync);
         }

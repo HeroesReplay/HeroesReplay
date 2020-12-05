@@ -18,13 +18,15 @@ using Polly;
 using HotsApiReplay = HeroesReplay.Core.Replays.HotsApi.Replay;
 using ParserReplay = Heroes.ReplayParser.Replay;
 using static Heroes.ReplayParser.DataParser;
-using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Replays
 {
     public class HotsApiProvider : IReplayProvider
-    {
-        private const string GAME_TYPE_STORM_LEAGUE = "StormLeague";
+    {       
+        private readonly Settings settings;
+        private readonly CancellationTokenProvider provider;
+        private readonly ILogger<HotsApiProvider> logger;
+        private int minReplayId;
 
         private int MinReplayId
         {
@@ -32,19 +34,19 @@ namespace HeroesReplay.Core.Replays
             {
                 if (minReplayId == default)
                 {
-                    if (settings.MinReplayId != settings.ReplayIdUnset)
+                    if (settings.HotsApiSettings.MinReplayId != settings.HotsApiSettings.ReplayIdUnset)
                     {
-                        MinReplayId = settings.MinReplayId;
+                        MinReplayId = settings.HotsApiSettings.MinReplayId;
                     }
-                    else if (TempReplaysDirectory.GetFiles(Constants.STORM_REPLAY_WILDCARD).Any())
+                    else if (TempReplaysDirectory.GetFiles(settings.StormReplaySettings.StormReplayFileWildCard).Any())
                     {
-                        FileInfo? latest = TempReplaysDirectory.GetFiles(Constants.STORM_REPLAY_WILDCARD).OrderByDescending(f => f.CreationTime).FirstOrDefault();
+                        FileInfo? latest = TempReplaysDirectory.GetFiles(settings.StormReplaySettings.StormReplayFileWildCard).OrderByDescending(f => f.CreationTime).FirstOrDefault();
 
-                        MinReplayId = int.Parse(latest.Name.Split(Constants.STORM_REPLAY_CACHED_FILE_NAME_SPLITTER)[0]);
+                        MinReplayId = int.Parse(latest.Name.Split(settings.HotsApiSettings.CachedFileNameSplitter)[0]);
                     }
                     else
                     {
-                        MinReplayId = settings.ReplayIdBaseline;
+                        MinReplayId = settings.HotsApiSettings.ReplayIdBaseline;
                     }
                 }
 
@@ -57,24 +59,18 @@ namespace HeroesReplay.Core.Replays
         {
             get
             {
-                DirectoryInfo cache = new DirectoryInfo(settings.StormReplayCachePath);
+                DirectoryInfo cache = new DirectoryInfo(settings.StormReplayHotsApiCache);
                 if (!cache.Exists) cache.Create();
                 return cache;
             }
         }
 
-        private readonly CancellationTokenProvider provider;
-        private readonly Settings settings;
-        private readonly ILogger<HotsApiProvider> logger;
-        private int minReplayId;
+        
 
-        public HotsApiProvider(
-            CancellationTokenProvider provider,
-            IOptions<Settings> settings,
-            ILogger<HotsApiProvider> logger)
+        public HotsApiProvider(CancellationTokenProvider provider, Settings settings, ILogger<HotsApiProvider> logger)
         {
             this.provider = provider;
-            this.settings = settings.Value;
+            this.settings = settings;
             this.logger = logger;
         }
 
@@ -129,7 +125,7 @@ namespace HeroesReplay.Core.Replays
 
         private async Task DownloadStormReplay(HotsApiReplay hotsApiReplay, FileInfo cacheStormReplay)
         {
-            using (AmazonS3Client s3Client = new AmazonS3Client(new BasicAWSCredentials(settings.AwsAccessKey, settings.AwsSecretKey), RegionEndpoint.EUWest1))
+            using (AmazonS3Client s3Client = new AmazonS3Client(new BasicAWSCredentials(settings.HotsApiSettings.AwsAccessKey, settings.HotsApiSettings.AwsSecretKey), RegionEndpoint.EUWest1))
             {
                 if (Uri.TryCreate(hotsApiReplay.Url, UriKind.Absolute, out Uri? uri))
                 {
@@ -162,7 +158,10 @@ namespace HeroesReplay.Core.Replays
             }
         }
 
-        private FileInfo CreateFile(HotsApiReplay replay) => new FileInfo(Path.Combine(TempReplaysDirectory.FullName, $"{replay.Id}{Constants.STORM_REPLAY_CACHED_FILE_NAME_SPLITTER}{replay.Filename}{Constants.STORM_REPLAY_EXTENSION}"));
+        private FileInfo CreateFile(HotsApiReplay replay)
+        {
+            return new FileInfo(Path.Combine(TempReplaysDirectory.FullName, $"{replay.Id}{settings.HotsApiSettings.CachedFileNameSplitter}{replay.Filename}{settings.StormReplaySettings.StormReplayFileExtension}"));
+        }
 
         private async Task<HotsApiReplay?> GetNextReplayAsync()
         {
@@ -186,7 +185,10 @@ namespace HeroesReplay.Core.Replays
 
                             if (response.StatusCode == (int)HttpStatusCode.OK)
                             {
-                                replay = response.Result.FirstOrDefault(r => r.Id > MinReplayId && r.Deleted == false && Version.Parse(r.Game_version) >= settings.MinVersionSupported && r.Game_type == GAME_TYPE_STORM_LEAGUE);
+                                replay = response.Result.FirstOrDefault(r => r.Id > MinReplayId && 
+                                                                             r.Deleted == false && 
+                                                                             Version.Parse(r.Game_version) >= settings.SpectateSettings.MinVersionSupported && 
+                                                                             settings.HotsApiSettings.HotsApiGameTypes.Contains(r.Game_type, StringComparer.CurrentCultureIgnoreCase));
 
                                 MinReplayId = (int)response.Result.Max(x => x.Id);
                                 logger.LogInformation($"MinReplayId: {MinReplayId}");

@@ -6,7 +6,7 @@
     <StartupObject />
     <AssemblyName>heroesreplay</AssemblyName>
     <IsPackable>false</IsPackable>
-    <LangVersion>9.0</LangVersion>
+    <LangVersion>preview</LangVersion>
     <Nullable>enable</Nullable>
     <ApplicationIcon>heroesreplay.ico</ApplicationIcon>
   </PropertyGroup>
@@ -29,9 +29,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="appsettings.secret.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
