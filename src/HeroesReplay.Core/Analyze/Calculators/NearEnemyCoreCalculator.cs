@@ -8,24 +8,24 @@ using System.Linq;
 
 namespace HeroesReplay.Core
 {
-    public class NearEnemyCoreWeightings : IGameWeightings
+    public class NearEnemyCoreCalculator : IFocusCalculator
     {
         private readonly Settings settings;
 
-        public NearEnemyCoreWeightings(Settings settings)
+        public NearEnemyCoreCalculator(Settings settings)
         {
             this.settings = settings;
         }
 
-        public IEnumerable<(Unit Unit, Player Player, double Points, string Description)> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
             foreach (Unit heroUnit in replay.Players.SelectMany(p => p.HeroUnits.Where(unit => unit.TimeSpanDied > now && unit.TimeSpanBorn < now)))
             {
-                foreach (Unit enemyUnit in replay.Units.Where(u => u.TimeSpanBorn < now && u.Team != heroUnit.Team && settings.UnitSettings.CoreNames.Any(core => u.Name.Equals(core))))
+                foreach (Unit enemyUnit in replay.Units.Where(u => u.TimeSpanBorn < now && u.Team != heroUnit.Team && settings.Units.CoreNames.Any(core => u.Name.Equals(core))))
                 {
                     foreach (Position heroPosition in heroUnit.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(enemyUnit.PointBorn) < 20))
                     {
-                        yield return (heroUnit, heroUnit.PlayerControlledBy, settings.SpectateWeightSettings.NearEnemyCore, $"{heroUnit.PlayerControlledBy.HeroId} near enemy core: {enemyUnit.Name}");
+                        yield return new Focus(this, heroUnit, heroUnit.PlayerControlledBy, settings.Weights.NearEnemyCore, $"{heroUnit.PlayerControlledBy.HeroId} near enemy core: {enemyUnit.Name}");
                     }
                 }
             }

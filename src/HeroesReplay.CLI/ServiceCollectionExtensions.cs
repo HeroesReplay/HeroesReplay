@@ -32,12 +32,12 @@ namespace HeroesReplay.CLI
                     .AddEnvironmentVariables("HEROES_REPLAY_")
                     .Build();
 
-            var weightingsType = typeof(IGameWeightings);
-            var weightings = weightingsType.Assembly.GetTypes().Where(type => type.IsClass && weightingsType.IsAssignableFrom(type));
+            var focusCalculator = typeof(IFocusCalculator);
+            var calculators = focusCalculator.Assembly.GetTypes().Where(type => type.IsClass && focusCalculator.IsAssignableFrom(type));
 
-            foreach (var type in weightings)
+            foreach (var calculatorType in calculators)
             {
-                services.AddSingleton(typeof(IGameWeightings), type);
+                services.AddSingleton(focusCalculator, calculatorType);
             }
 
             var settings = configuration.Get<Settings>();
@@ -48,8 +48,8 @@ namespace HeroesReplay.CLI
                 .AddSingleton(settings)
                 .AddSingleton(new CancellationTokenProvider(token))
                 .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
-                .AddSingleton(typeof(CaptureStrategy), settings.CaptureSettings.CaptureMethod switch { CaptureMethod.None => typeof(StubCapture), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen), _ => typeof(CaptureBitBlt)})
-                .AddSingleton(typeof(IGameController), settings.CaptureSettings.CaptureMethod switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
+                .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(StubCapture), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen), _ => typeof(CaptureBitBlt)})
+                .AddSingleton(typeof(IGameController), settings.Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
                 .AddSingleton<GameDataService>()
                 .AddSingleton<ReplayHelper>()                
                 .AddSingleton<SessionHolder>()
@@ -65,7 +65,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
                 {
                     Settings settings = serviceProvider.GetRequiredService<Settings>();
-                    return new ApiSettings { AccessToken = settings.TwitchApiSettings.TwitchAccessToken, ClientId = settings.TwitchApiSettings.TwitchClientId };
+                    return new ApiSettings { AccessToken = settings.TwitchApi.AccessToken, ClientId = settings.TwitchApi.ClientId };
                 })
                 .AddSingleton<HeroesProfileService>()
                 .AddSingleton<HeroesProfileMatchDetailsWriter>()              

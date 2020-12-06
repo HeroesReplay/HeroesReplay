@@ -8,15 +8,15 @@ using System.Linq;
 
 namespace HeroesReplay.Core
 {
-    public class DestroyStructureWeightings : IGameWeightings
+    public class DestroyingStructureCalculator : IFocusCalculator
     {
         private readonly Settings settings;
 
-        public DestroyStructureWeightings(Settings settings)
+        public DestroyingStructureCalculator(Settings settings)
         {
             this.settings = settings;
         }
-        public IEnumerable<(Unit Unit, Player Player, double Points, string Description)> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
             foreach (var unit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero && unit.TimeSpanDied == now && unit.Name.StartsWith("Town") && unit.PlayerKilledBy != null))
             {
@@ -29,7 +29,7 @@ namespace HeroesReplay.Core
                     string name when name.StartsWith("TownTownHall") => 1000,
                 };
 
-                yield return (unit, unit.PlayerKilledBy, settings.SpectateWeightSettings.DestroyStructure + points, $"{unit.PlayerKilledBy.HeroId} destroyed {unit.Name}");
+                yield return new Focus(this, unit, unit.PlayerKilledBy, settings.Weights.DestroyStructure + points, $"{unit.PlayerKilledBy.HeroId} destroyed {unit.Name}");
             }
         }
     }

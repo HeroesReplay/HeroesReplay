@@ -1,6 +1,9 @@
 ﻿using Heroes.ReplayParser;
+
 using HeroesReplay.Core.Processes;
 using HeroesReplay.Core.Shared;
+
+using Microsoft.Extensions.Logging;
 
 using Polly;
 
@@ -17,7 +20,7 @@ using System.Threading.Tasks;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
-using Microsoft.Extensions.Logging;
+
 using static PInvoke.User32;
 
 namespace HeroesReplay.Core
@@ -29,7 +32,7 @@ namespace HeroesReplay.Core
         private readonly Settings settings;
         private readonly CaptureStrategy captureStrategy;
 
-        public static readonly VirtualKey[] KeysHeroes =
+        public static readonly VirtualKey[] Keys =
         {
             VirtualKey.VK_KEY_1,
             VirtualKey.VK_KEY_2,
@@ -43,20 +46,8 @@ namespace HeroesReplay.Core
             VirtualKey.VK_KEY_0
         };
 
-        public static readonly VirtualKey[] KeysPanels =
-        {
-            VirtualKey.VK_KEY_1,
-            VirtualKey.VK_KEY_2,
-            VirtualKey.VK_KEY_3,
-            VirtualKey.VK_KEY_4,
-            VirtualKey.VK_KEY_5,
-            VirtualKey.VK_KEY_6,
-            VirtualKey.VK_KEY_7,
-            VirtualKey.VK_KEY_8
-        };
-
-        private bool IsLaunched => Process.GetProcessesByName(settings.ProcessSettings.HeroesOfTheStormProcessName).Any();
-        private Process? Game => Process.GetProcessesByName(settings.ProcessSettings.HeroesOfTheStormProcessName).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
+        private bool IsLaunched => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).Any();
+        private Process? Game => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
         private IntPtr Handle => Game?.MainWindowHandle ?? IntPtr.Zero;
 
         public GameController(ILogger<GameController> logger, Settings settings, CaptureStrategy captureStrategy, OcrEngine engine)
@@ -69,7 +60,7 @@ namespace HeroesReplay.Core
 
         public async Task<StormReplay> LaunchAsync(StormReplay stormReplay)
         {
-            int latestBuild = Directory.EnumerateDirectories(Path.Combine(settings.LocationSettings.GameInstallPath, "Versions")).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
+            int latestBuild = Directory.EnumerateDirectories(Path.Combine(settings.Location.GameInstallPath, "Versions")).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
             var requiresAuth = stormReplay.Replay.ReplayBuild == latestBuild;
 
             if (IsLaunched && await IsReplay())
@@ -97,13 +88,13 @@ namespace HeroesReplay.Core
         {
             logger.LogInformation("Launching battlenet because replay requires auth.");
 
-            using (var process = Process.Start(new ProcessStartInfo(settings.LocationSettings.BattlenetPath, $"--game=heroes --gamepath=\"{settings.LocationSettings.GameInstallPath}\" --sso=1 -launch -uid heroes")))
+            using (var process = Process.Start(new ProcessStartInfo(settings.Location.BattlenetPath, $"--game=heroes --gamepath=\"{settings.Location.GameInstallPath}\" --sso=1 -launch -uid heroes")))
             {
                 process.WaitForExit();
 
-                var window = Process.GetProcessesByName(settings.ProcessSettings.BattlenetProcessName).Single(x => !string.IsNullOrWhiteSpace(x.MainWindowTitle)).MainWindowHandle;
-                PInvoke.User32.SendMessage(window, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_RETURN, (IntPtr)IntPtr.Zero);
-                PInvoke.User32.SendMessage(window, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_RETURN, (IntPtr)IntPtr.Zero);
+                var window = Process.GetProcessesByName(settings.Process.Battlenet).Single(x => !string.IsNullOrWhiteSpace(x.MainWindowTitle)).MainWindowHandle;
+                SendMessage(window, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_RETURN, (IntPtr)IntPtr.Zero);
+                SendMessage(window, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_RETURN, (IntPtr)IntPtr.Zero);
 
                 logger.LogInformation("Heroes of the Storm launched from Battlenet.");
             }
@@ -129,7 +120,7 @@ namespace HeroesReplay.Core
                     .Execute(() => IsMatchingClientVersion(stormReplay.Replay));
             }
 
-            var searchTerms = stormReplay.Replay.Players.Select(x => x.Name).Concat(stormReplay.Replay.Players.Select(x => x.Character)).Concat(settings.OCRSettings.LoadingScreenText).Concat(new[] { stormReplay.Replay.Map });
+            var searchTerms = stormReplay.Replay.Players.Select(x => x.Name).Concat(stormReplay.Replay.Players.Select(x => x.Character)).Concat(settings.OCR.LoadingScreenText).Concat(new[] { stormReplay.Replay.Map });
 
             await Policy
                     .Handle<Exception>()
@@ -144,7 +135,7 @@ namespace HeroesReplay.Core
 
             Rectangle dimensions = captureStrategy.GetDimensions(Handle);
 
-            Bitmap timerBitmap = settings.FeatureToggleSettings.DefaultInterface ? GetTopTimerDefaultInterface(dimensions) : GetTopTimerAhliObsInterface(dimensions);
+            Bitmap timerBitmap = settings.Toggles.DefaultInterface ? GetTopTimerDefaultInterface(dimensions) : GetTopTimerAhliObsInterface(dimensions);
 
             if (timerBitmap == null) return null;
 
@@ -169,11 +160,11 @@ namespace HeroesReplay.Core
 
                     if (timer.HasValue)
                     {
-                        return timer.RemoveNegativeOffset(settings.SpectateSettings.GameLoopsOffset, settings.SpectateSettings.GameLoopsPerSecond);
+                        return timer.RemoveNegativeOffset(settings.Spectate.GameLoopsOffset, settings.Spectate.GameLoopsPerSecond);
                     }
-                    else if (settings.FeatureToggleSettings.SaveCaptureFailureCondition)
+                    else if (settings.Toggles.SaveCaptureFailureCondition)
                     {
-                        resized.Save(Path.Combine(settings.CaptureSettings.CaptureConditionFailurePath, DateTime.Now.ToString()));
+                        resized.Save(Path.Combine(settings.Capture.ConditionFailurePath, DateTime.Now.ToString()));
                     }
 
                     return null;
@@ -218,13 +209,13 @@ namespace HeroesReplay.Core
             try
             {
                 string time = new string(SanitizeOcrTimer(text));
-                string[] segments = time.Split(settings.OCRSettings.TimerSeperator);
+                string[] segments = time.Split(settings.OCR.TimerSeperator);
 
-                if (segments.Length == settings.OCRSettings.TimerHours) return time.ParseTimerHours(settings.OCRSettings.TimeSpanFormatHours);
-                else if (segments.Length == settings.OCRSettings.TimerMinutes && segments[0].StartsWith(settings.OCRSettings.TimerNegativePrefix)) return time.ParseNegativeTimerMinutes(settings.OCRSettings.TimeSpanFormatMatchStart);
-                else if (segments.Length == settings.OCRSettings.TimerMinutes) return time.ParsePositiveTimerMinutes(settings.OCRSettings.TimerSeperator);
+                if (segments.Length == settings.OCR.TimerHours) return time.ParseTimerHours(settings.OCR.TimeSpanFormatHours);
+                else if (segments.Length == settings.OCR.TimerMinutes && segments[0].StartsWith(settings.OCR.TimerNegativePrefix)) return time.ParseNegativeTimerMinutes(settings.OCR.TimeSpanFormatMatchStart);
+                else if (segments.Length == settings.OCR.TimerMinutes) return time.ParsePositiveTimerMinutes(settings.OCR.TimerSeperator);
 
-                throw new Exception($"Unhandled segments: {segments.Length}");                
+                throw new Exception($"Unhandled segments: {segments.Length}");
             }
             catch (Exception)
             {
@@ -256,9 +247,9 @@ namespace HeroesReplay.Core
 
                         if (containsAll) return true;
 
-                        if (settings.FeatureToggleSettings.SaveCaptureFailureCondition)
+                        if (settings.Toggles.SaveCaptureFailureCondition)
                         {
-                            capture.Save(Path.Combine(settings.CaptureSettings.CaptureConditionFailurePath, DateTime.Now.ToString()));
+                            capture.Save(Path.Combine(settings.Capture.ConditionFailurePath, DateTime.Now.ToString()));
                         }
                     }
                 }
@@ -271,7 +262,7 @@ namespace HeroesReplay.Core
             return false;
         }
 
-        private async Task<bool> IsHomeScreen() => await ContainsAllAsync(settings.OCRSettings.HomeScreenText);
+        private async Task<bool> IsHomeScreen() => await ContainsAllAsync(settings.OCR.HomeScreenText);
 
         private async Task<bool> IsReplay() => (await TryGetTimerAsync()) != null;
 
@@ -286,9 +277,9 @@ namespace HeroesReplay.Core
 
                     if (containsAny) return true;
 
-                    if (settings.FeatureToggleSettings.SaveCaptureFailureCondition)
+                    if (settings.Toggles.SaveCaptureFailureCondition)
                     {
-                        capture.Save(Path.Combine(settings.CaptureSettings.CaptureConditionFailurePath, DateTime.Now.ToString()));
+                        capture.Save(Path.Combine(settings.Capture.ConditionFailurePath, DateTime.Now.ToString()));
                     }
                 }
             }
@@ -298,68 +289,67 @@ namespace HeroesReplay.Core
 
         public void SendFocus(int index)
         {
-            PInvoke.User32.VirtualKey key = KeysHeroes[index];
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)key, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_CHAR, (IntPtr)key, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)key, IntPtr.Zero);
+            IntPtr key = (IntPtr)Keys[index];
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, key, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_CHAR, key, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, key, IntPtr.Zero);
         }
 
         public void ToggleChatWindow()
         {
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_CONTROL, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_SHIFT, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_C, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_CHAR, (IntPtr)PInvoke.User32.VirtualKey.VK_C, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_C, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_SHIFT, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_CONTROL, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_C, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_C, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_C, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
         }
 
         public void CameraFollow()
         {
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_L, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_CHAR, (IntPtr)PInvoke.User32.VirtualKey.VK_L, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_L, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
         }
 
         public void ToggleTimer()
         {
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_CONTROL, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_T, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_CHAR, (IntPtr)PInvoke.User32.VirtualKey.VK_T, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_T, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_CONTROL, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
         }
 
         public void ToggleControls()
         {
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_CONTROL, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_SHIFT, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_O, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_CHAR, (IntPtr)PInvoke.User32.VirtualKey.VK_O, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_O, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_SHIFT, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_CONTROL, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_O, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_O, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_O, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
         }
 
         public void SendToggleZoom()
         {
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_SHIFT, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_Z, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_CHAR, (IntPtr)PInvoke.User32.VirtualKey.VK_Z, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_Z, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_SHIFT, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
         }
 
         public void SendPanel(int index)
         {
-            PInvoke.User32.VirtualKey Key = KeysPanels[index];
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)PInvoke.User32.VirtualKey.VK_CONTROL, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYDOWN, (IntPtr)Key, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)Key, IntPtr.Zero);
-            PInvoke.User32.SendMessage(Handle, PInvoke.User32.WindowMessage.WM_KEYUP, (IntPtr)PInvoke.User32.VirtualKey.VK_CONTROL, IntPtr.Zero);
+            IntPtr Key = (IntPtr)Keys[index];
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, Key, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, Key, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
         }
-
 
         public void KillGame()
         {

@@ -1,4 +1,5 @@
 ﻿using Heroes.ReplayParser;
+
 using HeroesReplay.Core.Shared;
 
 using System;
@@ -10,12 +11,12 @@ namespace HeroesReplay.Core
 {
     public class ReplayAnalyzer : IReplayAnalzer
     {
-        private readonly IEnumerable<IGameWeightings> playerWeightings;
+        private readonly IEnumerable<IFocusCalculator> calculators;
         private readonly Settings settings;
 
-        public ReplayAnalyzer(Settings settings, IEnumerable<IGameWeightings> playerWeightings)
+        public ReplayAnalyzer(Settings settings, IEnumerable<IFocusCalculator> calculators)
         {
-            this.playerWeightings = playerWeightings;
+            this.calculators = calculators;
             this.settings = settings;
         }
 
@@ -28,7 +29,7 @@ namespace HeroesReplay.Core
                 panels[deathTime.Key] = Panel.KillsDeathsAssists;
             }
 
-            foreach (var talentTime in replay.TeamLevels.SelectMany(x => x).Where(x => settings.SpectateSettings.TalentLevels.Contains(x.Key)).Select(x => x.Value))
+            foreach (var talentTime in replay.TeamLevels.SelectMany(x => x).Where(x => settings.Spectate.TalentLevels.Contains(x.Key)).Select(x => x.Value))
             {
                 panels[talentTime] = Panel.Talents;
             }
@@ -36,29 +37,29 @@ namespace HeroesReplay.Core
             return panels;
         }
 
-        public IDictionary<TimeSpan, (Player Player, double Points, string Description, int Index)> GetPlayers(Replay replay)
+        public IDictionary<TimeSpan, Focus> GetPlayers(Replay replay)
         {
-            var focus = new ConcurrentDictionary<TimeSpan, (Unit Unit, Player Player, double Points, string Desc)>();
+            var focusDictionary = new ConcurrentDictionary<TimeSpan, Focus>();
             var timeSpans = Enumerable.Range(0, (int)replay.ReplayLength.TotalSeconds).Select(x => TimeSpan.FromSeconds(x)).ToList();
 
             timeSpans.AsParallel().ForAll(timeSpan =>
             {
-                foreach (var weighting in playerWeightings.SelectMany(weighter => weighter.GetPlayers(timeSpan, replay)))
+                foreach (Focus focus in calculators.SelectMany(calculator => calculator.GetPlayers(timeSpan, replay)))
                 {
-                    if (focus.TryGetValue(timeSpan, out var previous) && weighting.Points > previous.Points)
+                    if (focusDictionary.TryGetValue(timeSpan, out var previous) && focus.Points > previous.Points)
                     {
-                        focus[timeSpan] = weighting;
+                        focusDictionary[timeSpan] = focus;
                     }
                     else
                     {
-                        focus[timeSpan] = weighting;
+                        focusDictionary[timeSpan] = focus;
                     }
                 }
             });
 
             var processed = new List<Unit>();
 
-            foreach (var entry in focus.Where(x => x.Value.Points >= settings.SpectateWeightSettings.PlayerKill).ToList())
+            foreach (var entry in focusDictionary.Where(x => x.Value.Points >= settings.Weights.PlayerKill).ToList())
             {
                 var currentTime = entry.Key;
 
@@ -70,36 +71,42 @@ namespace HeroesReplay.Core
                     var pastTime = currentTime.Subtract(TimeSpan.FromSeconds(second));
                     var futureTime = currentTime.Add(TimeSpan.FromSeconds(second));
 
-                    if (focus.TryGetValue(pastTime, out var pastWeighting))
+                    if (focusDictionary.TryGetValue(pastTime, out var pastWeighting))
                     {
                         if (pastWeighting.Points < entry.Value.Points)
                         {
-                            focus[pastTime] = entry.Value;
+                            focusDictionary[pastTime] = entry.Value;
                         }
                     }
                     else
                     {
-                        focus.TryAdd(pastTime, entry.Value);
+                        focusDictionary.TryAdd(pastTime, entry.Value);
                     }
 
-                    if (focus.TryGetValue(futureTime, out var futureWeighting))
+                    if (focusDictionary.TryGetValue(futureTime, out var futureWeighting))
                     {
                         if (entry.Value.Points > futureWeighting.Points)
                         {
-                            focus[pastTime] = entry.Value;
+                            focusDictionary[pastTime] = entry.Value;
                         }
                     }
                     else
                     {
-                        focus.TryAdd(futureTime, entry.Value);
+                        focusDictionary.TryAdd(futureTime, entry.Value);
                     }
                 }
 
                 processed.Add(entry.Value.Unit);
             }
 
-            var events = focus.ToDictionary(x => x.Key, x => (x.Value.Player, x.Value.Points, x.Value.Desc, Array.IndexOf(replay.Players, x.Value.Player)));
-            return new SortedDictionary<TimeSpan, (Player Player, double Points, string Desc, int Index)>(events);
+            return new SortedDictionary<TimeSpan, Focus>(
+                focusDictionary.ToDictionary(x => x.Key, x => new Focus(
+                    x.Value.Calculator,
+                    x.Value.Unit,
+                    x.Value.Player,
+                    x.Value.Points,
+                    x.Value.Description,
+                    Array.IndexOf(replay.Players, x.Value.Player))));
         }
     }
 }

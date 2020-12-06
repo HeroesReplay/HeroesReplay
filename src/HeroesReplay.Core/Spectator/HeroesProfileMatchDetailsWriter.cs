@@ -1,15 +1,14 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-
 using Heroes.ReplayParser;
 
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Runner
 {
@@ -30,7 +29,7 @@ namespace HeroesReplay.Core.Runner
 
         public async Task WriteDetailsAsync(StormReplay replay)
         {
-            var mmr = settings.FeatureToggleSettings.EnableMMR ? $"MMR: " + await heroesProfileService.CalculateMMRAsync(replay) : string.Empty;
+            var mmr = settings.Toggles.EnableMMR ? $"MMR: " + await heroesProfileService.CalculateMMRAsync(replay) : string.Empty;
             var map = gameDataService.Maps.Find(map => map.AltName.Equals(replay.Replay.MapAlternativeName) || replay.Replay.Map.Equals(map.Name));
 
             var bans = from ban in replay.Replay.DraftOrder.Where(pick => pick.PickType == DraftPickType.Banned).Select((pick, index) => new { Hero = pick.HeroSelected, Index = index + 1 })

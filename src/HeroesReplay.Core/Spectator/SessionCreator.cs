@@ -29,8 +29,8 @@ namespace HeroesReplay.Core
 
             var players = replayAnalyzer.GetPlayers(stormReplay.Replay);
             var panels = replayAnalyzer.GetPanels(stormReplay.Replay);
-            var end = stormReplay.Replay.Units.Where(unit => settings.UnitSettings.CoreNames.Contains(unit.Name) && unit.TimeSpanDied.HasValue).Min(core => core.TimeSpanDied.Value).Add(settings.SpectateSettings.EndScreenTime);
-            var isCarriedObjectiveMap = settings.MapSettings.CarriedObjectives.Contains(stormReplay.Replay.Map);
+            var end = stormReplay.Replay.Units.Where(unit => settings.Units.CoreNames.Contains(unit.Name) && unit.TimeSpanDied.HasValue).Min(core => core.TimeSpanDied.Value).Add(settings.Spectate.EndScreenTime);
+            var isCarriedObjectiveMap = settings.Maps.CarriedObjectives.Contains(stormReplay.Replay.Map);
             var sessionData = new SessionData(players, panels, end, isCarriedObjectiveMap);
 
             sessionWriter.Set(sessionData, stormReplay);

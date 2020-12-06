@@ -1,9 +1,9 @@
-﻿using System;
-using System.Drawing;
-
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 
 using PInvoke;
+
+using System;
+using System.Drawing;
 
 namespace HeroesReplay.Core.Processes
 {
@@ -34,7 +34,7 @@ namespace HeroesReplay.Core.Processes
                         Gdi32.BitBlt(
                             deviceContextDestination, 0, 0, bounds.Width, bounds.Height,
                             deviceContextSource, bounds.Left, bounds.Top,
-                            (int) TernaryRasterOperations.SRCCOPY);
+                            (int)TernaryRasterOperations.SRCCOPY);
 
                         source.ReleaseHdc(deviceContextSource);
                         destination.ReleaseHdc(deviceContextDestination);

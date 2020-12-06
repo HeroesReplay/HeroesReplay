@@ -8,20 +8,20 @@ using System.Linq;
 
 namespace HeroesReplay.Core
 {
-    public class PlayerDiedWeightings : IGameWeightings
+    public class PlayerDiesFocus : IFocusCalculator
     {
         private readonly Settings settings;
 
-        public PlayerDiedWeightings(Settings settings)
+        public PlayerDiesFocus(Settings settings)
         {
             this.settings = settings;
         }
 
-        public IEnumerable<(Unit Unit, Player Player, double Points, string Description)> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
             foreach (var unit in replay.Units.Where(u => u.Name.StartsWith("Hero") && u.TimeSpanDied == now && (u.PlayerKilledBy == null || u.PlayerKilledBy == u.PlayerControlledBy) && u.PlayerControlledBy != null))
             {
-                yield return (unit, unit.PlayerControlledBy, settings.SpectateWeightSettings.PlayerDeath, $"{unit.PlayerControlledBy.HeroId} killed by {unit.UnitKilledBy?.Name} in {unit.TimeSpanDied.Value.Subtract(now).TotalSeconds} (death)");
+                yield return new Focus(this, unit, unit.PlayerControlledBy, settings.Weights.PlayerDeath, $"{unit.PlayerControlledBy.HeroId} killed by {unit.UnitKilledBy?.Name} in {unit.TimeSpanDied.Value.Subtract(now).TotalSeconds} (death)");
             }
         }
     }

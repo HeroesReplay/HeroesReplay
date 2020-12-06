@@ -1,8 +1,9 @@
-﻿using System;
-using System.Drawing;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 
 using PInvoke;
+
+using System;
+using System.Drawing;
 
 namespace HeroesReplay.Core.Processes
 {
@@ -20,10 +21,10 @@ namespace HeroesReplay.Core.Processes
         public virtual Rectangle GetDimensions(IntPtr handle)
         {
             User32.GetClientRect(handle, out RECT rect);
-            
+
             var rectangle = new Rectangle(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
 
-            Logger.LogDebug("window dimensions: " +  rectangle.Width + "x" + rectangle.Height);
+            Logger.LogDebug("window dimensions: " + rectangle.Width + "x" + rectangle.Height);
 
             return rectangle;
         }

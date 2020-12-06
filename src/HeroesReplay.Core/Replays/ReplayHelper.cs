@@ -1,6 +1,7 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+
+using System;
 using System.IO;
-using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Shared
 {
@@ -21,7 +22,7 @@ namespace HeroesReplay.Core.Shared
 
             try
             {
-                replayId = int.Parse(Path.GetFileName(stormReplay.Path).Split(settings.HotsApiSettings.CachedFileNameSplitter)[0]);
+                replayId = int.Parse(Path.GetFileName(stormReplay.Path).Split(settings.HotsApi.CachedFileNameSplitter)[0]);
                 return true;
             }
             catch (Exception e)
@@ -30,6 +31,6 @@ namespace HeroesReplay.Core.Shared
             }
 
             return false;
-        }               
+        }
     }
 }

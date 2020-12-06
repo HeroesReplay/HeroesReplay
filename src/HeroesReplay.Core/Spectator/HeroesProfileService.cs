@@ -1,34 +1,35 @@
-﻿using System;
+﻿using HeroesReplay.Core.Shared;
+
+using Microsoft.Extensions.Logging;
+
+using System;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Logging;
-
 namespace HeroesReplay.Core.Runner
 {
     public class HeroesProfileService
     {
-        private readonly ILogger<HeroesProfileService> logger;        
+        private readonly ILogger<HeroesProfileService> logger;
         private readonly ReplayHelper replayHelper;
         private readonly HeroesProfileApiSettings settings;
 
         public HeroesProfileService(ILogger<HeroesProfileService> logger, Settings settings, ReplayHelper replayHelper)
         {
             this.logger = logger;
-            this.settings = settings.HeroesProfileApiSettings;
+            this.settings = settings.HeroesProfileApi;
             this.replayHelper = replayHelper;
         }
 
         public async Task<Uri> GetMatchLink(StormReplay stormReplay)
         {
-            var apiKey = settings.HeroesProfileApiKey;
+            var apiKey = settings.ApiKey;
 
             if (replayHelper.TryGetReplayId(stormReplay, out var hotsApiReplayId))
             {
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileBaseUri })
+                using (var client = new HttpClient() { BaseAddress = settings.BaseUri })
                 {
                     string replayId = await client.GetStringAsync(new Uri($"Heroesprofile/ReplayID?hotsapi_replayID={hotsApiReplayId}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
 
@@ -45,7 +46,7 @@ namespace HeroesReplay.Core.Runner
             {
                 if (replayHelper.TryGetReplayId(stormReplay, out var hotsApiReplayId))
                 {
-                    var apiKey = settings.HeroesProfileApiKey;
+                    var apiKey = settings.ApiKey;
 
                     using (var client = new HttpClient() { BaseAddress = new Uri("https://api.heroesprofile.com/api/") })
                     {

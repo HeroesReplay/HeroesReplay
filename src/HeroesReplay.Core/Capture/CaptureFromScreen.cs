@@ -1,8 +1,9 @@
-﻿using System;
-using System.Drawing;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 
 using PInvoke;
+
+using System;
+using System.Drawing;
 
 namespace HeroesReplay.Core.Processes
 {

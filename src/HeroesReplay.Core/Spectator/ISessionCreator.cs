@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace HeroesReplay.Core
 {
     public interface ISessionCreator
-	{
-		Task SetSessionAsync(StormReplay stormReplay);
-	}
+    {
+        Task SetSessionAsync(StormReplay stormReplay);
+    }
 }

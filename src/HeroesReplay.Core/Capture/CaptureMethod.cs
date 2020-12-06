@@ -6,7 +6,7 @@
         /// This best method without needing to hook. 
         /// </summary>
         BitBlt = 1,
-        
+
         /// <summary>
         /// Copy directly from screen. The least friendly method.
         /// Will cause problems if there are other windows on top.

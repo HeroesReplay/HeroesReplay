@@ -25,21 +25,21 @@ namespace HeroesReplay.Core.Shared
 
     public record ProcessSettings
     {
-        public string BattlenetProcessName { get; init; }
-        public string HeroesOfTheStormProcessName { get; init; }
+        public string Battlenet { get; init; }
+        public string HeroesOfTheStorm { get; init; }
     }
 
     public record StormReplaySettings
     {
         public string InfoFileName { get; init; }
-        public string StormReplayFileWildCard { get; init; }
-        public string StormReplayFileExtension { get; init; }
+        public string WildCard { get; init; }
+        public string FileExtension { get; init; }
     }
 
     public record HeroesProfileApiSettings
     {
-        public Uri HeroesProfileBaseUri { get; init; }
-        public string HeroesProfileApiKey { get; init; }
+        public Uri BaseUri { get; init; }
+        public string ApiKey { get; init; }
     }
 
     public record HotsApiSettings
@@ -49,15 +49,15 @@ namespace HeroesReplay.Core.Shared
         public int ReplayIdUnset { get; init; }
         public int MinReplayId { get; init; }
         public int ReplayIdBaseline { get; init; }
-        public Uri HotsApiBaseUri { get; init; }
+        public Uri BaseUri { get; init; }
         public string CachedFileNameSplitter { get; init; }
-        public IEnumerable<string> HotsApiGameTypes { get; init; }
+        public IEnumerable<string> GameTypes { get; init; }
     }
 
     public record TwitchApiSettings
     {
-        public string TwitchAccessToken { get; init; }
-        public string TwitchClientId { get; init; }
+        public string AccessToken { get; init; }
+        public string ClientId { get; init; }
     }
 
     public record SpectateWeightSettings
@@ -127,8 +127,8 @@ namespace HeroesReplay.Core.Shared
 
     public record CaptureSettings
     {
-        public CaptureMethod CaptureMethod { get; init; }
-        public string CaptureConditionFailurePath { get; init; }
+        public CaptureMethod Method { get; init; }
+        public string ConditionFailurePath { get; init; }
     }
 
     public record SpectateSettings
@@ -167,39 +167,27 @@ namespace HeroesReplay.Core.Shared
 
     public class Settings
     {
-        public ProcessSettings ProcessSettings { get; init; }
-        public StormReplaySettings StormReplaySettings { get; init; }
-        public FeatureToggleSettings FeatureToggleSettings { get; init; }
-        public HeroesProfileApiSettings HeroesProfileApiSettings { get; init; }
-        public SpectateWeightSettings SpectateWeightSettings { get; init; }
-        public HotsApiSettings HotsApiSettings { get; init; }
-        public TwitchApiSettings TwitchApiSettings { get; init; }
-        public SpectateSettings SpectateSettings { get; init; }
-        public CaptureSettings CaptureSettings { get; init; }
-        public LocationSettings LocationSettings { get; init; }
-        public OCRSettings OCRSettings { get; init; }
-        public UnitSettings UnitSettings { get; init; }
-        public MapSettings MapSettings { get; init; }
-        public ParseOptionsSettings ParseOptionsSettings { get; init; }
-        public AbilityDetectionSettings AbilityDetectionSettings { get; init; }
-
-        public ParseOptions ParseOptions => new ParseOptions()
-        {
-            AllowPTR = false,
-            IgnoreErrors = false,
-            ShouldParseEvents = ParseOptionsSettings.ShouldParseEvents,
-            ShouldParseMessageEvents = ParseOptionsSettings.ShouldParseMessageEvents,
-            ShouldParseMouseEvents = ParseOptionsSettings.ShouldParseMouseEvents,
-            ShouldParseDetailedBattleLobby = ParseOptionsSettings.ShouldParseDetailedBattleLobby,
-            ShouldParseUnits = ParseOptionsSettings.ShouldParseUnits,
-            ShouldParseStatistics = ParseOptionsSettings.ShouldParseStatistics
-        };
+        public ProcessSettings Process { get; init; }
+        public StormReplaySettings StormReplay { get; init; }
+        public FeatureToggleSettings Toggles { get; init; }
+        public HeroesProfileApiSettings HeroesProfileApi { get; init; }
+        public SpectateWeightSettings Weights { get; init; }
+        public HotsApiSettings HotsApi { get; init; }
+        public TwitchApiSettings TwitchApi { get; init; }
+        public SpectateSettings Spectate { get; init; }
+        public CaptureSettings Capture { get; init; }
+        public LocationSettings Location { get; init; }
+        public OCRSettings OCR { get; init; }
+        public UnitSettings Units { get; init; }
+        public MapSettings Maps { get; init; }
+        public ParseOptionsSettings ParseOptions { get; init; }
+        public AbilityDetectionSettings AbilityDetection { get; init; }       
 
         public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
         public string TempPath { get; } = Path.GetTempPath();
         public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
-        public string StormInterfacePath => Path.Combine(AssetsPath, SpectateSettings.StormInterface);
-        public string CurrentReplayInfoFilePath => Path.Combine(CurrentDirectory, StormReplaySettings.InfoFileName);
+        public string StormInterfacePath => Path.Combine(AssetsPath, Spectate.StormInterface);
+        public string CurrentReplayInfoFilePath => Path.Combine(CurrentDirectory, StormReplay.InfoFileName);
         public string StormReplaysAccountPath => Path.Combine(UserGameFolderPath, "Accounts");
         public string UserStormInterfacePath => Path.Combine(UserGameFolderPath, "Interfaces");
         public string StormReplayHotsApiCache => Path.Combine(TempPath, "HeroesReplay");

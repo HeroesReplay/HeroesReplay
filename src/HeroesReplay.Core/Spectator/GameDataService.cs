@@ -17,7 +17,7 @@ namespace HeroesReplay.Core.Shared
         {
             this.settings = settings;
             this.Heroes = LoadHeroes();
-            this.Maps = LoadMaps();         
+            this.Maps = LoadMaps();
         }
 
         private List<Map> LoadMaps()
