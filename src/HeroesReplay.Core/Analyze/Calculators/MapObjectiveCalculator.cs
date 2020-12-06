@@ -21,12 +21,12 @@ namespace HeroesReplay.Core
         {
             foreach (var unit in replay.TeamObjectives.SelectMany(to => to).Where(to => to.Player != null && to.TimeSpan == now))
             {
-                yield return new Focus(this, unit.Player.HeroUnits.FirstOrDefault(hu => hu.Positions.Any(p => p.TimeSpan == now)), unit.Player, settings.Weights.MapObjective, $"{unit.Player.HeroId} did {unit.TeamObjectiveType} (TeamObjective)");
+                yield return new Focus(GetType(), unit.Player.HeroUnits.FirstOrDefault(hu => hu.Positions.Any(p => p.TimeSpan == now)), unit.Player, settings.Weights.MapObjective, $"{unit.Player.HeroId} did {unit.TeamObjectiveType} (TeamObjective)");
             }
 
             foreach (Unit mapUnit in replay.Units.Where(unit => (unit.Group == Unit.UnitGroup.MapObjective || unit.Name.StartsWith("BossDuel") || unit.Name.Contains("Vehicle") || settings.Units.MapObjectiveNames.Contains(unit.Name) || unit.Name.EndsWith("CaptureCage")) && unit.TimeSpanDied == now && unit.PlayerKilledBy != null))
             {
-                yield return new Focus(this, mapUnit, mapUnit.PlayerKilledBy, settings.Weights.MapObjective, $"{mapUnit.PlayerKilledBy.HeroId} died {mapUnit.Name} (MapObjective)");
+                yield return new Focus(GetType(), mapUnit, mapUnit.PlayerKilledBy, settings.Weights.MapObjective, $"{mapUnit.PlayerKilledBy.HeroId} died {mapUnit.Name} (MapObjective)");
             }
         }
     }

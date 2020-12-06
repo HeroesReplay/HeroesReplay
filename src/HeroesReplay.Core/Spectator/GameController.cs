@@ -188,10 +188,25 @@ namespace HeroesReplay.Core
 
         private bool IsMatchingClientVersion(Replay replay)
         {
-            bool match = Game?.MainModule.FileVersionInfo.FileVersion == replay.ReplayVersion;
-            Console.WriteLine($"Current: {Game.MainModule.FileVersionInfo.FileVersion}");
-            Console.WriteLine($"Required: {replay.ReplayVersion}");
-            return match;
+            try
+            {
+                if (Game != null)
+                {
+                    logger.LogInformation($"Current: {Game?.MainModule.FileVersionInfo.FileVersion}");
+                    logger.LogInformation($"Required: {replay.ReplayVersion}");
+                    return Game.MainModule.FileVersionInfo.FileVersion == replay.ReplayVersion;
+                }
+                else
+                {
+                    logger.LogInformation($"Game not launched.");
+                }
+            }
+            catch(Exception e)
+            {
+                logger.LogError(e, "Could not retrieve process version information.");
+            }
+
+            return false;
         }
 
         private async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)

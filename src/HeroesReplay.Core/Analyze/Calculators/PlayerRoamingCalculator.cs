@@ -23,9 +23,9 @@ namespace HeroesReplay.Core
             {
                 var spawn = heroUnit.PlayerControlledBy.HeroUnits[0].PointBorn;
 
-                foreach (var position in heroUnit.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(spawn) > 20))
+                foreach (var position in heroUnit.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(spawn) > 30))
                 {
-                    yield return new Focus(this, heroUnit, heroUnit.PlayerControlledBy, settings.Weights.Roaming, $"{heroUnit.PlayerControlledBy.HeroId} is roaming");
+                    yield return new Focus(GetType(), heroUnit, heroUnit.PlayerControlledBy, settings.Weights.Roaming, $"{heroUnit.PlayerControlledBy.HeroId} is roaming");
                 }
             }
         }

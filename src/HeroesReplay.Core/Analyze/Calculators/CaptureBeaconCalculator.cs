@@ -25,7 +25,7 @@ namespace HeroesReplay.Core
                 {
                     foreach (var position in heroUnit.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(captureUnit.PointBorn) <= 5))
                     {
-                        yield return new Focus(this, heroUnit, heroUnit.PlayerControlledBy, settings.Weights.NearCaptureBeacon, $"{heroUnit.PlayerControlledBy.HeroId} near {captureUnit.Name} (CaptureBeacons)");
+                        yield return new Focus(GetType(), heroUnit, heroUnit.PlayerControlledBy, settings.Weights.NearCaptureBeacon, $"{heroUnit.PlayerControlledBy.HeroId} near {captureUnit.Name} (CaptureBeacons)");
                     }
                 }
             }

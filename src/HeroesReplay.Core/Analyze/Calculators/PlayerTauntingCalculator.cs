@@ -32,18 +32,18 @@ namespace HeroesReplay.Core
                 if (bsteps.Any())
                 {
                     var bstepCount = bsteps.Max(x => x.Key);
-                    yield return new Focus(this, events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)), events.Key, settings.Weights.TauntingBStep, $"{events.Key.HeroId} bstepping");
+                    yield return new Focus(GetType(), events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)), events.Key, settings.Weights.TauntingBStep, $"{events.Key.HeroId} bstepping");
                 }
             }
 
             foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => abilityDetector.IsAbility(replay, e, settings.AbilityDetection.Taunt)).GroupBy(e => e.player))
             {
-                yield return new Focus(this, events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)), events.Key, settings.Weights.TauntingEmote, $"{events.Key.HeroId} taunting");
+                yield return new Focus(GetType(), events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)), events.Key, settings.Weights.TauntingEmote, $"{events.Key.HeroId} taunting");
             }
 
             foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => abilityDetector.IsAbility(replay, e, settings.AbilityDetection.Dance)).GroupBy(e => e.player))
             {
-                yield return new Focus(this, events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)), events.Key, settings.Weights.TauntingEmote, $"{events.Key.HeroId} dancing");
+                yield return new Focus(GetType(), events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)), events.Key, settings.Weights.TauntingEmote, $"{events.Key.HeroId} dancing");
             }
         }
 

@@ -30,7 +30,7 @@ namespace HeroesReplay.Core
 
                 foreach (Unit unit in replay.Units.Where(unit => unit.TimeSpanBorn < capture.TimeSpan && unit.TimeSpanDied < capture.TimeSpan && unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId && settings.Units.CampNames.Any(oc => unit.Name.Contains(oc))))
                 {
-                    yield return new Focus(this, unit, unit.PlayerKilledBy, settings.Weights.CampCapture, $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
+                    yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.CampCapture, $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
                 }
             }
         }

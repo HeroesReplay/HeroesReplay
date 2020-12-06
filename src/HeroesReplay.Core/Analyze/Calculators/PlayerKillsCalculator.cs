@@ -8,11 +8,11 @@ using System.Linq;
 
 namespace HeroesReplay.Core
 {
-    public class PlayerKillsFocus : IFocusCalculator
+    public class PlayerKillsCalculator : IFocusCalculator
     {
         private readonly Settings settings;
 
-        public PlayerKillsFocus(Settings settings)
+        public PlayerKillsCalculator(Settings settings)
         {
             this.settings = settings;
         }
@@ -25,7 +25,7 @@ namespace HeroesReplay.Core
             {
                 foreach (var unit in killer)
                 {
-                    yield return new Focus(this, unit, unit.PlayerKilledBy, settings.Weights.PlayerKill + killer.Count(), $"{killer.Key.HeroId} kills: {unit.PlayerControlledBy.Character}");
+                    yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.PlayerKill + killer.Count(), $"{killer.Key.HeroId} kills: {unit.PlayerControlledBy.Character}");
                 }
             }
         }

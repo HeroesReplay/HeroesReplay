@@ -29,7 +29,7 @@ namespace HeroesReplay.Core
                     string name when name.StartsWith("TownTownHall") => 1000,
                 };
 
-                yield return new Focus(this, unit, unit.PlayerKilledBy, settings.Weights.DestroyStructure + points, $"{unit.PlayerKilledBy.HeroId} destroyed {unit.Name}");
+                yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.DestroyStructure + points, $"{unit.PlayerKilledBy.HeroId} destroyed {unit.Name}");
             }
         }
     }

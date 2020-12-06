@@ -7,10 +7,10 @@ namespace HeroesReplay.Core
 {
     public interface IReplayAnalzer
     {
-        IDictionary<TimeSpan, Focus> GetPlayers(Replay replay);
-        IDictionary<TimeSpan, Panel> GetPanels(Replay replay);
+        IReadOnlyDictionary<TimeSpan, Focus> GetPlayers(Replay replay);
+        IReadOnlyDictionary<TimeSpan, Panel> GetPanels(Replay replay);
     }
 
-    public record Focus(IFocusCalculator Calculator, Unit Unit, Player Player, float Points, string Description, int Index = 0);
+    public record Focus(Type Calculator, Unit Unit, Player Player, float Points, string Description, int Index = 0);
 
 }

@@ -8,11 +8,11 @@ using System.Linq;
 
 namespace HeroesReplay.Core
 {
-    public class PlayerDiesFocus : IFocusCalculator
+    public class PlayerDiesCalculator : IFocusCalculator
     {
         private readonly Settings settings;
 
-        public PlayerDiesFocus(Settings settings)
+        public PlayerDiesCalculator(Settings settings)
         {
             this.settings = settings;
         }
@@ -21,7 +21,7 @@ namespace HeroesReplay.Core
         {
             foreach (var unit in replay.Units.Where(u => u.Name.StartsWith("Hero") && u.TimeSpanDied == now && (u.PlayerKilledBy == null || u.PlayerKilledBy == u.PlayerControlledBy) && u.PlayerControlledBy != null))
             {
-                yield return new Focus(this, unit, unit.PlayerControlledBy, settings.Weights.PlayerDeath, $"{unit.PlayerControlledBy.HeroId} killed by {unit.UnitKilledBy?.Name} in {unit.TimeSpanDied.Value.Subtract(now).TotalSeconds} (death)");
+                yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.PlayerDeath, $"{unit.PlayerControlledBy.HeroId} killed by {unit.UnitKilledBy?.Name} in {unit.TimeSpanDied.Value.Subtract(now).TotalSeconds} (death)");
             }
         }
     }

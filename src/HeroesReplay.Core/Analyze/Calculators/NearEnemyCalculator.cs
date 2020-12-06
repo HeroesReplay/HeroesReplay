@@ -31,7 +31,7 @@ namespace HeroesReplay.Core
 
                             if (distance <= 10)
                             {
-                                yield return new Focus(this, heroUnit0, heroUnit0.PlayerControlledBy, settings.Weights.NearEnemyHero, $"{heroUnit0.PlayerControlledBy.HeroId} is in proximity of {heroUnit1.PlayerControlledBy.HeroId}");
+                                yield return new Focus(GetType(), heroUnit0, heroUnit0.PlayerControlledBy, settings.Weights.NearEnemyHero, $"{heroUnit0.PlayerControlledBy.HeroId} is in proximity of {heroUnit1.PlayerControlledBy.HeroId}");
                             }
                         }
                     }

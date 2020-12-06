@@ -56,7 +56,7 @@ namespace HeroesReplay.Core
                         else
                         {
                             if (timer.Value >= Data.End) State = State.End;
-                            else if (Timer == timer.Value) State = State.Paused;
+                            else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
                             else if (timer.Value > Timer) State = State.Running;
                             else State = State.Start;
                             Timer = timer.Value;
@@ -96,7 +96,7 @@ namespace HeroesReplay.Core
 
                 }
 
-                await Task.Delay(1000);
+                await Task.Delay(500);
             }
         }
 

@@ -27,7 +27,7 @@ namespace HeroesReplay.Core
 
                 foreach (Unit unit in replay.Units.Where(unit => unit.TimeSpanDied < capture.TimeSpan && unit.TimeSpanBorn < capture.TimeSpan && unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId && unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10))))
                 {
-                    yield return new Focus(this, unit, unit.PlayerKilledBy, settings.Weights.BossCapture, $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
+                    yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.BossCapture, $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
                 }
             }
         }
