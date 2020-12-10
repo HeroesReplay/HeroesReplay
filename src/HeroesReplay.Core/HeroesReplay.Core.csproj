@@ -8,9 +8,9 @@
 
   <!-- Hots API -->
   <PropertyGroup>
-    <HotsApiClientNameSpace>HeroesReplay.Core.Replays.HotsApi</HotsApiClientNameSpace>
+    <HotsApiClientNameSpace>HeroesReplay.Core.Providers.HotsApi</HotsApiClientNameSpace>
     <HotsApiClientClassName>HotsApiClient</HotsApiClientClassName>
-    <HotsApiClientFileName>Replays/$(HotsApiClientClassName).g.cs</HotsApiClientFileName>
+    <HotsApiClientFileName>Providers/$(HotsApiClientClassName).g.cs</HotsApiClientFileName>
     <HotsApiResponseClassName>HotsApiResponse</HotsApiResponseClassName>
     <HotsApiWrapResponse>true</HotsApiWrapResponse>
     <HotsApiDocumentUrl>http://hotsapi.net/spec/hotsapi-1.0.yaml</HotsApiDocumentUrl>
@@ -20,7 +20,7 @@
   <PropertyGroup>
     <HeroesProfileApiClientNameSpace>HeroesReplay.Core.Replays.HeroesProfileApi</HeroesProfileApiClientNameSpace>
     <HeroesProfileApiClientClassName>HeroesProfileApi</HeroesProfileApiClientClassName>
-    <HeroesProfileApiClientFileName>Replays/$(HeroesProfileApiClientClassName).g.cs</HeroesProfileApiClientFileName>
+    <HeroesProfileApiClientFileName>Data/$(HeroesProfileApiClientClassName).g.cs</HeroesProfileApiClientFileName>
     <HeroesProfileApiResponseClassName>HeroesProfileApiResponse</HeroesProfileApiResponseClassName>
     <HeroesProfileApiWrapResponse>false</HeroesProfileApiWrapResponse>
     <HeroesProfileApiDocumentUrl>https://api.heroesprofile.com/openAPI/spec/hotsapi-1.0.yaml</HeroesProfileApiDocumentUrl>

@@ -1,9 +1,11 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using HeroesReplay.Core.Shared;
+
+using Microsoft.Extensions.Logging;
 
 using System;
 using System.IO;
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Providers
 {
     public class ReplayHelper
     {

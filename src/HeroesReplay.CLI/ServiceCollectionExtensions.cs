@@ -5,7 +5,7 @@ using System.Threading;
 
 using HeroesReplay.Core;
 using HeroesReplay.Core.Processes;
-using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Providers;
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
 
@@ -19,6 +19,8 @@ using TwitchLib.Api.Core.Interfaces;
 using TwitchLib.Client;
 
 using Windows.Media.Ocr;
+
+using static Heroes.ReplayParser.Unit;
 
 namespace HeroesReplay.CLI
 {
@@ -62,6 +64,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<ISessionCreator, SessionCreator>()                
                 .AddSingleton<TwitchClient>()
                 .AddSingleton<TwitchAPI>()
+                .AddSingleton<IHeroesToolChestData, HeroesToolChestData>()                
                 .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
                 {
                     Settings settings = serviceProvider.GetRequiredService<Settings>();

@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Replays
+namespace HeroesReplay.Core.Providers
 {
     public sealed class ReplayFileProvider : IReplayProvider
     {

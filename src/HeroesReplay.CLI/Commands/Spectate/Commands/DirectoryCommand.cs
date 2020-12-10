@@ -4,7 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using HeroesReplay.Core;
-using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Providers;
+using HeroesReplay.Core.Runner;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +22,9 @@ namespace HeroesReplay.CLI.Commands
         {
             using (IServiceScope scope = new ServiceCollection().AddCoreServices(cancellationToken, typeof(ReplayDirectoryProvider)).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }).CreateScope())
             {
+                IHeroesToolChestData heroesDataLoader = scope.ServiceProvider.GetRequiredService<IHeroesToolChestData>();
+                await heroesDataLoader.LoadDataAsync();
+
                 SaltySadism saltySadism = scope.ServiceProvider.GetRequiredService<SaltySadism>();
 
                 await saltySadism.RunAsync();

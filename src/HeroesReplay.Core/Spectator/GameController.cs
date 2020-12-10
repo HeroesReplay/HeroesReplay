@@ -201,7 +201,7 @@ namespace HeroesReplay.Core
                     logger.LogInformation($"Game not launched.");
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 logger.LogError(e, "Could not retrieve process version information.");
             }

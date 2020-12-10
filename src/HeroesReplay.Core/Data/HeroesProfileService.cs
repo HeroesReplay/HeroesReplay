@@ -1,4 +1,5 @@
-﻿using HeroesReplay.Core.Shared;
+﻿using HeroesReplay.Core.Providers;
+using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
 

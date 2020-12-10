@@ -5,7 +5,7 @@ using Amazon.S3.Model;
 
 using Heroes.ReplayParser;
 
-using HeroesReplay.Core.Replays.HotsApi;
+using HeroesReplay.Core.Providers.HotsApi;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -22,10 +22,9 @@ using System.Threading.Tasks;
 
 using static Heroes.ReplayParser.DataParser;
 
-using HotsApiReplay = HeroesReplay.Core.Replays.HotsApi.Replay;
-using ParserReplay = Heroes.ReplayParser.Replay;
+using HotsApiReplay = HeroesReplay.Core.Providers.HotsApi.Replay;
 
-namespace HeroesReplay.Core.Replays
+namespace HeroesReplay.Core.Providers
 {
     public class HotsApiProvider : IReplayProvider
     {
@@ -117,7 +116,7 @@ namespace HeroesReplay.Core.Replays
         {
             logger.LogDebug("id: {0}, url: {1}, path: {2}", hotsApiReplay.Id, hotsApiReplay.Url, cacheStormReplay.FullName);
 
-            (ReplayParseResult result, ParserReplay replay) = ParseReplay(await File.ReadAllBytesAsync(cacheStormReplay.FullName), ParseOptions.FullParsing);
+            (ReplayParseResult result, Heroes.ReplayParser.Replay replay) = ParseReplay(await File.ReadAllBytesAsync(cacheStormReplay.FullName), ParseOptions.FullParsing);
 
             logger.LogDebug("result: {0}, path: {1}", result, cacheStormReplay.FullName);
 

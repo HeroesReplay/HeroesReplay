@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using HeroesReplay.Core;
-using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Providers;
 
 using Microsoft.Extensions.DependencyInjection;
 

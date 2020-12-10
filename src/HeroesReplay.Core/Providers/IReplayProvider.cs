@@ -2,7 +2,7 @@
 
 using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Replays
+namespace HeroesReplay.Core.Providers
 {
     public interface IReplayProvider
     {

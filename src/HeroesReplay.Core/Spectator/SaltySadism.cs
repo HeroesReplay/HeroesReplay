@@ -1,4 +1,4 @@
-﻿using HeroesReplay.Core.Replays;
+﻿using HeroesReplay.Core.Providers;
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
 

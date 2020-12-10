@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 using static Heroes.ReplayParser.DataParser;
 using static System.IO.File;
 
-namespace HeroesReplay.Core.Replays
+namespace HeroesReplay.Core.Providers
 {
     public sealed class ReplayDirectoryProvider : IReplayProvider
     {
