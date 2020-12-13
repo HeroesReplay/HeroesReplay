@@ -1,5 +1,6 @@
 ﻿using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
 
 using System;
@@ -11,15 +12,17 @@ namespace HeroesReplay.Core
     public class PlayerKillsCalculator : IFocusCalculator
     {
         private readonly Settings settings;
+        private readonly IGameData gameDataService;
 
-        public PlayerKillsCalculator(Settings settings)
+        public PlayerKillsCalculator(Settings settings, IGameData gameDataService)
         {
             this.settings = settings;
+            this.gameDataService = gameDataService;
         }
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
-            var killers = replay.Units.Where(u => u.Name.StartsWith("Hero") && u.TimeSpanDied == now && u.PlayerKilledBy != null).GroupBy(heroUnit => heroUnit.PlayerKilledBy);
+            var killers = replay.Units.Where(u => gameDataService.GetUnitGroup(u.Name) == Unit.UnitGroup.Hero && u.TimeSpanDied == now && u.PlayerKilledBy != null).GroupBy(heroUnit => heroUnit.PlayerKilledBy);
 
             foreach (var killer in killers)
             {

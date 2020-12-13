@@ -32,9 +32,6 @@
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="Assets\AhliObs 0.66.StormInterface">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Update="Assets\Heroes.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

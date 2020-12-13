@@ -25,18 +25,31 @@ namespace HeroesReplay.Core
             this.settings = settings;
         }
 
+        public TimeSpan GetEnd(Replay replay)
+        {
+            return replay.Units
+                .Where(unit => settings.Units.CoreNames.Contains(unit.Name) && unit.TimeSpanDied.HasValue)
+                .Min(core => core.TimeSpanDied.Value).Add(settings.Spectate.EndScreenTime);
+        }
+
         public IReadOnlyDictionary<TimeSpan, Panel> GetPanels(Replay replay)
         {
             IDictionary<TimeSpan, Panel> panels = new SortedDictionary<TimeSpan, Panel>();
 
-            foreach (var deathTime in replay.Units.AsParallel().Where(u => u.Group == Unit.UnitGroup.Hero && u.TimeSpanDied.HasValue).GroupBy(x => x.TimeSpanDied.Value))
+            if (settings.ParseOptions.ShouldParseUnits)
             {
-                panels[deathTime.Key] = Panel.KillsDeathsAssists;
+                foreach (var deathTime in replay.Units.AsParallel().Where(u => u.Group == Unit.UnitGroup.Hero && u.TimeSpanDied.HasValue).GroupBy(x => x.TimeSpanDied.Value))
+                {
+                    panels[deathTime.Key] = Panel.KillsDeathsAssists;
+                }
             }
 
-            foreach (var talentTime in replay.TeamLevels.SelectMany(x => x).Where(x => settings.Spectate.TalentLevels.Contains(x.Key)).Select(x => x.Value))
+            if (settings.ParseOptions.ShouldParseStatistics)
             {
-                panels[talentTime] = Panel.Talents;
+                foreach (var talentTime in replay.TeamLevels.SelectMany(x => x).Where(x => settings.Spectate.TalentLevels.Contains(x.Key)).Select(x => x.Value))
+                {
+                    panels[talentTime] = Panel.Talents;
+                }
             }
 
             return new ReadOnlyDictionary<TimeSpan, Panel>(panels);
@@ -122,5 +135,7 @@ namespace HeroesReplay.Core
                     ))
                 );
         }
+
+        public bool IsCarriedObjectiveMap(Replay replay) => settings.Maps.CarriedObjectives.Contains(replay.Map);
     }
 }

@@ -7,6 +7,7 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Processes;
 using HeroesReplay.Core.Providers;
 using HeroesReplay.Core.Runner;
+using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Configuration;
@@ -50,9 +51,9 @@ namespace HeroesReplay.CLI
                 .AddSingleton(settings)
                 .AddSingleton(new CancellationTokenProvider(token))
                 .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
-                .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(StubCapture), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen), _ => typeof(CaptureBitBlt)})
+                .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(CaptureStub), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen), _ => typeof(CaptureBitBlt)})
                 .AddSingleton(typeof(IGameController), settings.Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
-                .AddSingleton<GameDataService>()
+                .AddSingleton<IGameData, GameData>()
                 .AddSingleton<ReplayHelper>()                
                 .AddSingleton<SessionHolder>()
                 .AddSingleton<IAbilityDetector, AbilityDetector>()
@@ -63,15 +64,14 @@ namespace HeroesReplay.CLI
                 .AddSingleton(typeof(ISessionSetter), provider => provider.GetRequiredService<SessionHolder>())
                 .AddSingleton<ISessionCreator, SessionCreator>()                
                 .AddSingleton<TwitchClient>()
-                .AddSingleton<TwitchAPI>()
-                .AddSingleton<IHeroesToolChestData, HeroesToolChestData>()                
+                .AddSingleton<TwitchAPI>()          
                 .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
                 {
                     Settings settings = serviceProvider.GetRequiredService<Settings>();
                     return new ApiSettings { AccessToken = settings.TwitchApi.AccessToken, ClientId = settings.TwitchApi.ClientId };
                 })
                 .AddSingleton<HeroesProfileService>()
-                .AddSingleton<HeroesProfileMatchDetailsWriter>()              
+                .AddSingleton<MatchDetailsWriter>()              
                 .AddSingleton(typeof(IReplayProvider), stormReplayProvider)                
                 .AddSingleton<SaltySadism>();
         }

@@ -1,5 +1,6 @@
 ﻿using HeroesReplay.Core.Providers;
 using HeroesReplay.Core.Runner;
+using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -13,14 +14,16 @@ namespace HeroesReplay.Core
     {
         private readonly ILogger<SaltySadism> logger;
         private readonly IGameManager gameManager;
+        private readonly IGameData gameData;
         private readonly IReplayProvider replayProvider;
-        private readonly HeroesProfileMatchDetailsWriter matchDetailsWriter;
+        private readonly MatchDetailsWriter matchDetailsWriter;
         private readonly CancellationTokenProvider tokenProvider;
 
-        public SaltySadism(ILogger<SaltySadism> logger, IGameManager gameManager, IReplayProvider replayProvider, HeroesProfileMatchDetailsWriter matchDetailsWriter, CancellationTokenProvider tokenProvider)
+        public SaltySadism(ILogger<SaltySadism> logger, IGameManager gameManager, IGameData gameData, IReplayProvider replayProvider, MatchDetailsWriter matchDetailsWriter, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger;
             this.gameManager = gameManager;
+            this.gameData = gameData;
             this.replayProvider = replayProvider;
             this.matchDetailsWriter = matchDetailsWriter;
             this.tokenProvider = tokenProvider;
@@ -30,15 +33,17 @@ namespace HeroesReplay.Core
         {
             try
             {
+                await gameData.LoadDataAsync();
+
                 while (!tokenProvider.Token.IsCancellationRequested)
                 {
                     StormReplay? stormReplay = await replayProvider.TryLoadReplayAsync();
 
                     if (stormReplay != null)
                     {
-                        await gameManager.SetSessionAsync(stormReplay)
-                                         .ContinueWith(result => matchDetailsWriter.WriteDetailsAsync(stormReplay)).Unwrap()
-                                         .ContinueWith(result => gameManager.SpectateSessionAsync()).Unwrap();
+                        await gameManager.SetSessionAsync(stormReplay);
+                        await matchDetailsWriter.WriteDetailsAsync(stormReplay);
+                        await gameManager.SpectateSessionAsync();
                     }
                 }
             }

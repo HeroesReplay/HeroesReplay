@@ -1,5 +1,6 @@
 using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -10,30 +11,30 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Runner
+namespace HeroesReplay.Core.Services.HeroesProfile
 {
-    public class HeroesProfileMatchDetailsWriter
+    public class MatchDetailsWriter
     {
-        private readonly ILogger<HeroesProfileMatchDetailsWriter> logger;
+        private readonly ILogger<MatchDetailsWriter> logger;
         private readonly HeroesProfileService heroesProfileService;
-        private readonly GameDataService gameDataService;
+        private readonly IGameData gameData;
         private readonly Settings settings;
 
-        public HeroesProfileMatchDetailsWriter(ILogger<HeroesProfileMatchDetailsWriter> logger, Settings settings, HeroesProfileService heroesProfileService, GameDataService gameDataService)
+        public MatchDetailsWriter(ILogger<MatchDetailsWriter> logger, Settings settings, HeroesProfileService heroesProfileService, IGameData gameData)
         {
             this.logger = logger;
             this.heroesProfileService = heroesProfileService;
-            this.gameDataService = gameDataService;
+            this.gameData = gameData;
             this.settings = settings;
         }
 
         public async Task WriteDetailsAsync(StormReplay replay)
         {
             var mmr = settings.Toggles.EnableMMR ? $"MMR: " + await heroesProfileService.CalculateMMRAsync(replay) : string.Empty;
-            var map = gameDataService.Maps.Find(map => map.AltName.Equals(replay.Replay.MapAlternativeName) || replay.Replay.Map.Equals(map.Name));
+            var map = gameData.Maps.First(map => map.AltName.Equals(replay.Replay.MapAlternativeName) || replay.Replay.Map.Equals(map.Name));
 
             var bans = from ban in replay.Replay.DraftOrder.Where(pick => pick.PickType == DraftPickType.Banned).Select((pick, index) => new { Hero = pick.HeroSelected, Index = index + 1 })
-                       from hero in gameDataService.Heroes
+                       from hero in gameData.Heroes
                        where ban.Hero.Equals(hero.Name, StringComparison.OrdinalIgnoreCase) || ban.Hero.Equals(hero.AltName, StringComparison.OrdinalIgnoreCase)
                        select $"{hero.Name}";
 

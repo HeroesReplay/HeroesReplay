@@ -1,4 +1,4 @@
-﻿namespace HeroesReplay.Core.Shared
+﻿namespace HeroesReplay.Core.Services.HeroesProfile
 {
     public enum HeroType
     {
@@ -6,3 +6,4 @@
         Ranged
     }
 }
+

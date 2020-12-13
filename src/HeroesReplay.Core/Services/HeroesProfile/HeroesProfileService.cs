@@ -1,15 +1,17 @@
 ﻿using HeroesReplay.Core.Providers;
+using HeroesReplay.Core.Services.HotsApi;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Runner
+namespace HeroesReplay.Core.Services.HeroesProfile
 {
     public class HeroesProfileService
     {
@@ -49,7 +51,7 @@ namespace HeroesReplay.Core.Runner
                 {
                     var apiKey = settings.ApiKey;
 
-                    using (var client = new HttpClient() { BaseAddress = new Uri("https://api.heroesprofile.com/api/") })
+                    using (var client = new HttpClient() { BaseAddress = settings.BaseUri })
                     {
                         string heroesProfileReplayId = await client.GetStringAsync(new Uri($"Heroesprofile/ReplayID?hotsapi_replayID={hotsApiReplayId}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
 
@@ -80,6 +82,25 @@ namespace HeroesReplay.Core.Runner
             }
 
             return "Unknown";
+        }
+
+        public async Task<IEnumerable<HeroesProfileReplay>> ListReplaysAllAsync(int minId)
+        {
+            try
+            {
+                using (var client = new HttpClient() { BaseAddress = new Uri("https://api.heroesprofile.com/openApi") })
+                {
+                    var json = await client.GetStringAsync(new Uri($"/Replay/Min_id/min_id?={minId}"));
+
+                    return JsonSerializer.Deserialize<IEnumerable<HeroesProfileReplay>>(json).Where(x => x.Deleted == null || x.Deleted == 0);
+                }
+            }
+            catch (Exception e)
+            {
+
+            }
+            
+            return new HeroesProfileReplay[] { };
         }
     }
 }

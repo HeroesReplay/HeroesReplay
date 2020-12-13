@@ -1,4 +1,4 @@
-﻿namespace HeroesReplay.Core.Shared
+﻿namespace HeroesReplay.Core.Services.HeroesProfile
 {
     public class Hero
     {

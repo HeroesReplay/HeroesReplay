@@ -8,9 +8,9 @@
 
   <!-- Hots API -->
   <PropertyGroup>
-    <HotsApiClientNameSpace>HeroesReplay.Core.Providers.HotsApi</HotsApiClientNameSpace>
+    <HotsApiClientNameSpace>HeroesReplay.Core.Services.HotsApi</HotsApiClientNameSpace>
     <HotsApiClientClassName>HotsApiClient</HotsApiClientClassName>
-    <HotsApiClientFileName>Providers/$(HotsApiClientClassName).g.cs</HotsApiClientFileName>
+    <HotsApiClientFileName>Services/HotsApi/$(HotsApiClientClassName).g.cs</HotsApiClientFileName>
     <HotsApiResponseClassName>HotsApiResponse</HotsApiResponseClassName>
     <HotsApiWrapResponse>true</HotsApiWrapResponse>
     <HotsApiDocumentUrl>http://hotsapi.net/spec/hotsapi-1.0.yaml</HotsApiDocumentUrl>

@@ -24,22 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Assets\*.StormReplay">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\HeroesReplay.Core\HeroesReplay.Core.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="Assets\Heroes.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="Assets\Maps.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 
 

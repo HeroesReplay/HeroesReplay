@@ -5,9 +5,9 @@ using System.Drawing;
 
 namespace HeroesReplay.Core.Processes
 {
-    public class StubCapture : CaptureStrategy
+    public class CaptureStub : CaptureStrategy
     {
-        public StubCapture(ILogger<CaptureStrategy> logger) : base(logger)
+        public CaptureStub(ILogger<CaptureStrategy> logger) : base(logger)
         {
 
         }

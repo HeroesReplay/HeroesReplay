@@ -3,7 +3,6 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using System.Linq;
 
@@ -22,7 +21,7 @@ namespace HeroesReplay.Tests
         {
             this.fixture = fixture;
             var settings = new Settings { Weights = new SpectateWeightSettings() { } };
-            replayAnalzer = new ReplayAnalyzer(new NullLogger<ReplayAnalyzer>(), settings, new[] { new PlayerKillsCalculator(settings) });
+            replayAnalzer = new ReplayAnalyzer(new NullLogger<ReplayAnalyzer>(), settings, new[] { new PlayerKillsCalculator(settings, null) });
         }
 
         [Fact]

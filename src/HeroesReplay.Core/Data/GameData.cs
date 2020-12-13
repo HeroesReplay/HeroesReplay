@@ -1,11 +1,11 @@
-﻿using Heroes.ReplayParser;
-
+﻿using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -19,34 +19,70 @@ using static Heroes.ReplayParser.Unit;
 
 namespace HeroesReplay.Core.Runner
 {
-    public class HeroesToolChestData : IHeroesToolChestData
+    public class GameData : IGameData
     {
-        private readonly ILogger<HeroesToolChestData> logger;
+        private readonly ILogger<GameData> logger;
         private readonly Settings settings;
+        private readonly string heroesDataPath;
 
-        private IDictionary<string, UnitGroup> unitGroups;
+        public IReadOnlyDictionary<string, UnitGroup> UnitGroups { get; private set; }
 
-        public HeroesToolChestData(ILogger<HeroesToolChestData> logger, Settings settings)
+        public IReadOnlyList<Map> Maps { get; private set; }
+
+        public IReadOnlyList<Hero> Heroes { get; private set; }
+
+        public GameData(ILogger<GameData> logger, Settings settings)
         {
             this.logger = logger;
             this.settings = settings;
+            this.heroesDataPath = string.IsNullOrWhiteSpace(settings.HeroesToolChest.HeroesDataPath) ? Path.Combine(settings.AssetsPath, "HeroesData") : settings.HeroesToolChest.HeroesDataPath;
+        }
+
+        private async Task LoadHeroesAsync()
+        {
+            var json = await File.ReadAllTextAsync(Path.Combine(settings.AssetsPath, "Heroes.json"));
+
+            using (JsonDocument heroJson = JsonDocument.Parse(json))
+            {
+                var heroes = from hero in heroJson.RootElement.EnumerateObject()
+                             let name = hero.Value.GetProperty("name").GetString()
+                             let altName = hero.Value.GetProperty("alt_name").GetString()
+                             let type = (HeroType)Enum.Parse(typeof(HeroType), hero.Value.GetProperty("type").GetString())
+                             select new Hero(name, altName, type);
+
+                Heroes = new ReadOnlyCollection<Hero>(heroes.ToList());
+            }
+        }
+
+        private async Task LoadMapsAsync()
+        {
+            var json = await File.ReadAllTextAsync(Path.Combine(settings.AssetsPath, "Maps.json"));
+
+            using (var mapJson = JsonDocument.Parse(json))
+            {
+                Maps = new ReadOnlyCollection<Map>(
+                        (from map in mapJson.RootElement.EnumerateArray()
+                        let name = map.GetProperty("name").GetString()
+                        let altName = map.GetProperty("short_name").GetString()
+                        select new Map(name, altName)).ToList());
+            }
         }
 
         private async Task DownloadReleaseIfEmpty()
-        {
-            var downloadPath = settings.HeroesToolChest.HeroesDataPath;
-            var exists = Directory.Exists(downloadPath);
+        {           
+            var exists = Directory.Exists(heroesDataPath);
             var release = settings.HeroesToolChest.HeroesDataReleaseUri;
 
-            if (exists && Directory.EnumerateFiles(downloadPath, "*.json", SearchOption.AllDirectories).Any())
+            if (exists && Directory.EnumerateFiles(heroesDataPath, "*.json", SearchOption.AllDirectories).Any())
             {
                 logger.LogInformation("Heroes Data exists. No need to download HeroesToolChest hero-data.");
             }
             else
             {
-                logger.LogInformation($"heroes-data does not exists. Downloading files to: {downloadPath}");
+                logger.LogInformation($"heroes-data does not exists. Downloading files to: {heroesDataPath}");
 
-                Directory.CreateDirectory(downloadPath);
+                if(!exists) 
+                    Directory.CreateDirectory(heroesDataPath);
 
                 using (var client = new HttpClient())
                 {
@@ -67,17 +103,17 @@ namespace HeroesReplay.Core.Runner
 
                             using (var data = await client.GetStreamAsync(new Uri(uri)))
                             {
-                                using (var write = File.OpenWrite(Path.Combine(downloadPath, name)))
+                                using (var write = File.OpenWrite(Path.Combine(heroesDataPath, name)))
                                 {
                                     await data.CopyToAsync(write);
                                     await write.FlushAsync();
                                 }
                             }
 
-                            using (var reader = File.OpenRead(Path.Combine(downloadPath, name)))
+                            using (var reader = File.OpenRead(Path.Combine(heroesDataPath, name)))
                             {
                                 ZipArchive zip = new ZipArchive(reader);
-                                zip.ExtractToDirectory(downloadPath);
+                                zip.ExtractToDirectory(heroesDataPath);
                             }
                         }
                     }                    
@@ -85,7 +121,7 @@ namespace HeroesReplay.Core.Runner
             }
         }
 
-        public async Task LoadDataAsync()
+        private async Task LoadUnitGroupsAsync()
         {
             await DownloadReleaseIfEmpty();
 
@@ -93,7 +129,7 @@ namespace HeroesReplay.Core.Runner
             var ignore = settings.HeroesToolChest.IgnoreUnits.ToList();
 
             var files = Directory
-                .GetFiles(settings.HeroesToolChest.HeroesDataPath, "*.json", SearchOption.AllDirectories)
+                .GetFiles(heroesDataPath, "*.json", SearchOption.AllDirectories)
                 .Where(x => x.Contains("herodata_") || x.Contains("unitdata_"))
                 .OrderByDescending(x => x.Contains("herodata_"))
                 .ThenBy(x => x.Contains("unitdata_"));
@@ -158,7 +194,7 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            if (name.EndsWith("CaptureBeacon") || name.EndsWith("ControlBeacon"))
+                            if (name.EndsWith("CaptureBeacon") || name.EndsWith("ControlBeacon") || name.StartsWith("ItemSoulPickup") || name.StartsWith("SoulCage"))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
@@ -194,36 +230,41 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            if (attributes.Contains("ImmuneToAOE") && attributes.Contains("ImmuneToFriendlyAbilities") && attributes.Contains("ImmuneToSkillshots") && attributes.Contains("NoMinionAggro"))
+                            if (unitGroups.FirstOrDefault(c => o.Name.Contains(c.Key)).Key != null)
                             {
-                                var character = unitGroups.FirstOrDefault(c => o.Name.Contains(c.Key));
+                                unitGroups[name] = name.Contains("Talent") ? UnitGroup.HeroTalentSelection : UnitGroup.HeroAbilityUse;
+                                continue;
+                            }
 
-                                if (character.Key != null)
-                                {
-                                    unitGroups[name] = name.Contains("Talent") ? UnitGroup.HeroTalentSelection : UnitGroup.HeroAbilityUse;
-                                }
-                                else
-                                {
-                                    var found = unitGroups.ContainsKey(name);
-
-                                    if (!found)
-                                        unitGroups[name] = UnitGroup.Miscellaneous;
-                                }
+                            if (!unitGroups.ContainsKey(name))
+                            {
+                                unitGroups[name] = UnitGroup.Miscellaneous;
+                                continue;
                             }
                         }
                     }
                 }
             }
 
-            this.unitGroups = unitGroups;
+            this.UnitGroups = new ReadOnlyDictionary<string, UnitGroup>(unitGroups);
         }
 
-        public UnitGroup GetUnitGroup(Unit unit)
+        public UnitGroup GetUnitGroup(string name)
         {
-            if (unit == null)
-                throw new ArgumentNullException(nameof(unit));
+            if (UnitGroups == null)
+                throw new InvalidOperationException("The data must be loaded before getting a unit group.");
 
-            return unitGroups.ContainsKey(unit.Name) ? unitGroups[unit.Name] : UnitGroup.Unknown;
+            if (name == null)
+                throw new ArgumentNullException(nameof(name));
+
+            return UnitGroups.ContainsKey(name) ? UnitGroups[name] : UnitGroup.Unknown;
+        }
+
+        public async Task LoadDataAsync()
+        {
+            await LoadUnitGroupsAsync();
+            await LoadMapsAsync();
+            await LoadHeroesAsync();
         }
     }
 }

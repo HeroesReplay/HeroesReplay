@@ -29,7 +29,7 @@ namespace HeroesReplay.Core
                         {
                             var distance = position1.Point.DistanceTo(position0.Point);
 
-                            if (distance <= 10)
+                            if (distance < 20)
                             {
                                 yield return new Focus(GetType(), heroUnit0, heroUnit0.PlayerControlledBy, settings.Weights.NearEnemyHero, $"{heroUnit0.PlayerControlledBy.HeroId} is in proximity of {heroUnit1.PlayerControlledBy.HeroId}");
                             }

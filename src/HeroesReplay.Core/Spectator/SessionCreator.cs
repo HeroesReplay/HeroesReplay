@@ -13,14 +13,12 @@ namespace HeroesReplay.Core
         private IReplayAnalzer replayAnalyzer;
         private readonly ISessionSetter sessionWriter;
         private readonly ILogger<SessionCreator> logger;
-        private readonly Settings settings;
 
-        public SessionCreator(ILogger<SessionCreator> logger, Settings settings, IReplayAnalzer replayAnalyzer, ISessionSetter sessionSetter)
+        public SessionCreator(ILogger<SessionCreator> logger, IReplayAnalzer replayAnalyzer, ISessionSetter sessionSetter)
         {
             this.replayAnalyzer = replayAnalyzer;
             this.sessionWriter = sessionSetter;
             this.logger = logger;
-            this.settings = settings;
         }
 
         public async Task SetSessionAsync(StormReplay stormReplay)
@@ -29,11 +27,12 @@ namespace HeroesReplay.Core
 
             var players = replayAnalyzer.GetPlayers(stormReplay.Replay);
             var panels = replayAnalyzer.GetPanels(stormReplay.Replay);
-            var end = stormReplay.Replay.Units.Where(unit => settings.Units.CoreNames.Contains(unit.Name) && unit.TimeSpanDied.HasValue).Min(core => core.TimeSpanDied.Value).Add(settings.Spectate.EndScreenTime);
-            var isCarriedObjectiveMap = settings.Maps.CarriedObjectives.Contains(stormReplay.Replay.Map);
-            var sessionData = new SessionData(players, panels, end, isCarriedObjectiveMap);
+            var end = replayAnalyzer.GetEnd(stormReplay.Replay);
+            var isCarriedObjectiveMap = replayAnalyzer.IsCarriedObjectiveMap(stormReplay.Replay);
 
-            sessionWriter.Set(sessionData, stormReplay);
+            sessionWriter.Set(new SessionData(players, panels, end, isCarriedObjectiveMap), stormReplay);
+
+            logger.LogInformation($"Session set for: {stormReplay.Path}");
         }
     }
 }

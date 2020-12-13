@@ -12,7 +12,7 @@ namespace HeroesReplay.CLI.Commands
 {
     public class HotsApiCommand : Command
     {
-        public HotsApiCommand() : base("hotsapi", "Access the HotsApi database to download uploaded replays and spectate them.")
+        public HotsApiCommand() : base("hotsapi", "Access the HotsApi S3 bucket to download uploaded replays and spectate them.")
         {
             Handler = CommandHandler.Create<CancellationToken>(CommandAsync);
         }
