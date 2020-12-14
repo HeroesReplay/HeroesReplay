@@ -20,16 +20,23 @@ namespace HeroesReplay.Core.Providers
 
         public bool TryGetReplayId(StormReplay stormReplay, out int replayId)
         {
+            replayId = 0;
+
+            return TryGetReplayId(stormReplay.Path, out replayId);
+        }
+
+        public bool TryGetReplayId(string path, out int replayId)
+        {
             replayId = -1;
 
             try
             {
-                replayId = int.Parse(Path.GetFileName(stormReplay.Path).Split(settings.HotsApi.CachedFileNameSplitter)[0]);
+                replayId = int.Parse(Path.GetFileName(path).Split(settings.StormReplay.CachedFileNameSplitter)[0]);
                 return true;
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Could not parse the replay ID from {stormReplay.Path}. Is it a Hots API replay file?");
+                logger.LogError(e, $"Could not parse the replay ID from {path}. Is it a S3 replay file with an ID?");
             }
 
             return false;

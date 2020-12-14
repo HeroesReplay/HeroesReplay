@@ -30,6 +30,7 @@ namespace HeroesReplay.Core.Providers
     public class HotsApiProvider : IReplayProvider
     {
         private readonly Settings settings;
+        private readonly ReplayHelper replayHelper;
         private readonly CancellationTokenProvider provider;
         private readonly ILogger<HotsApiProvider> logger;
         private int minReplayId;
@@ -48,7 +49,10 @@ namespace HeroesReplay.Core.Providers
                     {
                         FileInfo? latest = TempReplaysDirectory.GetFiles(settings.StormReplay.WildCard).OrderByDescending(f => f.CreationTime).FirstOrDefault();
 
-                        MinReplayId = int.Parse(latest.Name.Split(settings.HotsApi.CachedFileNameSplitter)[0]);
+                        if (replayHelper.TryGetReplayId(latest.Name, out int replayId))
+                        {
+                            MinReplayId = replayId;
+                        }
                     }
                     else
                     {
@@ -65,17 +69,18 @@ namespace HeroesReplay.Core.Providers
         {
             get
             {
-                DirectoryInfo cache = new DirectoryInfo(settings.StormReplayHotsApiCache);
+                DirectoryInfo cache = new DirectoryInfo(settings.StormReplayCacheDirectory);
                 if (!cache.Exists) cache.Create();
                 return cache;
             }
         }
 
 
-        public HotsApiProvider(CancellationTokenProvider provider, Settings settings, ILogger<HotsApiProvider> logger)
+        public HotsApiProvider(CancellationTokenProvider provider, Settings settings, ReplayHelper replayHelper, ILogger<HotsApiProvider> logger)
         {
             this.provider = provider;
             this.settings = settings;
+            this.replayHelper = replayHelper;
             this.logger = logger;
         }
 
@@ -165,7 +170,7 @@ namespace HeroesReplay.Core.Providers
 
         private FileInfo CreateFile(HotsApiReplay replay)
         {
-            return new FileInfo(Path.Combine(TempReplaysDirectory.FullName, $"{replay.Id}{settings.HotsApi.CachedFileNameSplitter}{replay.Filename}{settings.StormReplay.FileExtension}"));
+            return new FileInfo(Path.Combine(TempReplaysDirectory.FullName, $"{replay.Id}{settings.StormReplay.CachedFileNameSplitter}{replay.Filename}{settings.StormReplay.FileExtension}"));
         }
 
         private async Task<HotsApiReplay?> GetNextReplayAsync()

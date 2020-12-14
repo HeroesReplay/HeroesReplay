@@ -90,7 +90,7 @@ namespace HeroesReplay.Core
                 if (processed.Contains(entry.Value.Unit))
                     continue;
 
-                for (int second = 1; second < 10; second++)
+                for (int second = 1; second < 6; second++)
                 {
                     var pastTime = currentTime.Subtract(TimeSpan.FromSeconds(second));
                     var futureTime = currentTime.Add(TimeSpan.FromSeconds(second));

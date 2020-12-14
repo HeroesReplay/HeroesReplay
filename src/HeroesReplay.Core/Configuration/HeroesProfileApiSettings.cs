@@ -8,6 +8,7 @@ namespace HeroesReplay.Core.Shared
     {
         // HeroesProfile API
         public Uri BaseUri { get; init; }
+        public Uri OpenApiBaseUri { get; init; }
         public string ApiKey { get; init; }
 
         // HeroesProfile Replays S3 Bucket Requestor Pays

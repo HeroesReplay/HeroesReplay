@@ -5,9 +5,7 @@ using Amazon.S3.Model;
 
 using Heroes.ReplayParser;
 
-using HeroesReplay.Core.Services;
 using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.HotsApi;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -19,6 +17,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+
 using static Heroes.ReplayParser.DataParser;
 
 namespace HeroesReplay.Core.Providers
@@ -27,6 +26,7 @@ namespace HeroesReplay.Core.Providers
     {
         private readonly Settings settings;
         private readonly CancellationTokenProvider provider;
+        private readonly ReplayHelper replayHelper;
         private readonly ILogger<HeroesProfileProvider> logger;
         private readonly HeroesProfileService heroesProfileService;
         private int minReplayId;
@@ -45,7 +45,10 @@ namespace HeroesReplay.Core.Providers
                     {
                         FileInfo? latest = TempReplaysDirectory.GetFiles(settings.StormReplay.WildCard).OrderByDescending(f => f.CreationTime).FirstOrDefault();
 
-                        MinReplayId = int.Parse(latest.Name.Split(settings.HotsApi.CachedFileNameSplitter)[0]);
+                        if (replayHelper.TryGetReplayId(latest.Name, out int replayId))
+                        {
+                            MinReplayId = replayId;
+                        }
                     }
                     else
                     {
@@ -62,16 +65,16 @@ namespace HeroesReplay.Core.Providers
         {
             get
             {
-                DirectoryInfo cache = new DirectoryInfo(settings.StormReplayHotsApiCache);
+                DirectoryInfo cache = new DirectoryInfo(settings.StormReplayCacheDirectory);
                 if (!cache.Exists) cache.Create();
                 return cache;
             }
         }
 
-
-        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, HeroesProfileService heroesProfileService, CancellationTokenProvider provider, Settings settings)
+        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, HeroesProfileService heroesProfileService, CancellationTokenProvider provider, ReplayHelper replayHelper, Settings settings)
         {
             this.provider = provider;
+            this.replayHelper = replayHelper;
             this.settings = settings;
             this.logger = logger;
             this.heroesProfileService = heroesProfileService;
@@ -126,11 +129,11 @@ namespace HeroesReplay.Core.Providers
             return null;
         }
 
-        private async Task DownloadStormReplay(HeroesProfileReplay heroesProfileReplay, FileInfo cacheStormReplay)
+        private async Task DownloadStormReplay(HeroesProfileReplay replay, FileInfo cachedReplay)
         {
-            using (AmazonS3Client s3Client = new AmazonS3Client(new BasicAWSCredentials(settings.HotsApi.AwsAccessKey, settings.HotsApi.AwsSecretKey), RegionEndpoint.EUWest1))
+            using (AmazonS3Client s3Client = new AmazonS3Client(new BasicAWSCredentials(settings.HeroesProfileApi.AwsAccessKey, settings.HeroesProfileApi.AwsSecretKey), RegionEndpoint.EUWest1))
             {
-                if (Uri.TryCreate(heroesProfileReplay.Url, UriKind.Absolute, out Uri? uri))
+                if (Uri.TryCreate(replay.Url, UriKind.Absolute, out Uri? uri))
                 {
                     GetObjectRequest request = new GetObjectRequest
                     {
@@ -145,16 +148,16 @@ namespace HeroesReplay.Core.Providers
                         {
                             await response.ResponseStream.CopyToAsync(memoryStream);
 
-                            await using (var stream = cacheStormReplay.OpenWrite())
+                            await using (var stream = cachedReplay.OpenWrite())
                             {
                                 await stream.WriteAsync(memoryStream.ToArray());
                                 await stream.FlushAsync();
                             }
 
-                            logger.LogInformation($"downloaded hotsapi replay.");
-                            logger.LogDebug($"id: {heroesProfileReplay.Id}");
-                            logger.LogDebug($"s3: {heroesProfileReplay.Url}");
-                            logger.LogDebug($"path: {cacheStormReplay.FullName}");
+                            logger.LogInformation($"downloaded heroesprofile replay.");
+                            logger.LogDebug($"id: {replay.Id}");
+                            logger.LogDebug($"s3: {replay.Url}");
+                            logger.LogDebug($"path: {cachedReplay.FullName}");
                         }
                     }
                 }
@@ -165,8 +168,8 @@ namespace HeroesReplay.Core.Providers
         {
             return new FileInfo(
                 Path.Combine(
-                    TempReplaysDirectory.FullName, 
-                    $"{replay.Id}{settings.HotsApi.CachedFileNameSplitter}{replay.Fingerprint}{settings.StormReplay.FileExtension}"));
+                    TempReplaysDirectory.FullName,
+                    $"{replay.Id}{settings.StormReplay.CachedFileNameSplitter}{replay.Fingerprint}{settings.StormReplay.FileExtension}"));
         }
 
         private async Task<HeroesProfileReplay?> GetNextReplayAsync()
@@ -188,11 +191,11 @@ namespace HeroesReplay.Core.Providers
                            if (response != null && response.Any())
                            {
                                replay = response.FirstOrDefault(r => r.Id > MinReplayId &&
-                                                                            (r.Deleted == null || r.Deleted == 0) &&
-                                                                            Version.Parse(r.GameVersion) >= settings.Spectate.MinVersionSupported &&
-                                                                            settings.HeroesProfileApi.GameTypes.Contains(r.GameType, StringComparer.CurrentCultureIgnoreCase));
+                                                                     (r.Deleted == null || r.Deleted == "0") &&
+                                                                     Version.Parse(r.GameVersion) >= settings.Spectate.MinVersionSupported &&
+                                                                     settings.HeroesProfileApi.GameTypes.Contains(r.GameType, StringComparer.CurrentCultureIgnoreCase));
 
-                               MinReplayId = (int)response.Max(x => x.Id);
+                               MinReplayId = response.Max(x => x.Id);
 
                                logger.LogInformation($"MinReplayId: {MinReplayId}");
                            }

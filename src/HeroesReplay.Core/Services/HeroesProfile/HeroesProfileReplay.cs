@@ -8,7 +8,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         public int Id { get; set; }
 
         [JsonPropertyName("hotsapi_replayID")]
-        public int HotsApiReplayId { get; set; }
+        public int? HotsApiReplayId { get; set; }
 
         [JsonPropertyName("region")]
         public string Region { get; set; }
@@ -29,7 +29,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         public int? Valid { get; set; }
 
         [JsonPropertyName("deleted")]
-        public int? Deleted { get; set; }
+        public string? Deleted { get; set; }
 
         [JsonPropertyName("game_type")]
         public string GameType { get; set; }

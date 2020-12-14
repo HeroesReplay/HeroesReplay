@@ -27,7 +27,7 @@ namespace HeroesReplay.CLI
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection AddCoreServices(this IServiceCollection services, CancellationToken token, Type stormReplayProvider)
+        public static IServiceCollection AddCoreServices(this IServiceCollection services, CancellationToken token, Type replayProvider)
         {
             var configuration = new ConfigurationBuilder()
                     .SetBasePath(Directory.GetCurrentDirectory())
@@ -72,7 +72,7 @@ namespace HeroesReplay.CLI
                 })
                 .AddSingleton<HeroesProfileService>()
                 .AddSingleton<MatchDetailsWriter>()              
-                .AddSingleton(typeof(IReplayProvider), stormReplayProvider)                
+                .AddSingleton(typeof(IReplayProvider), replayProvider)                
                 .AddSingleton<SaltySadism>();
         }
     }

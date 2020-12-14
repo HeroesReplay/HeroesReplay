@@ -4,30 +4,31 @@
       "commandName": "Project",
       "commandLineArgs": "spectate directory",
       "environmentVariables": {
-        //"HEROES_REPLAY_Settings__HeroesProfileApiKey": "",
-        //"HEROES_REPLAY_Settings__TwitchAccessToken": "",
-        //"HEROES_REPLAY_Settings__TwitchClientId": "",
-        "HEROES_REPLAY_Settings__ReplaySource": "D:\\replays"
+        "HEROES_REPLAY_Location__ReplaySourcePath": "D:\\HotsDevelopment\\replays",
+        "HEROES_REPLAY_Location__GameInstallPath": "M:\\Blizzard\\Heroes of the Storm",
+        "HEROES_REPLAY_Github__User": "",
+        "HEROES_REPLAY_Github__AccessToken": "",
+        "HEROES_REPLAY_Capture__Method": "None"
       }
     },
-    "HeroesReplay.CLI [Spectate][API]": {
+    "HeroesReplay.CLI [Spectate][Heroes Profile API]": {
       "commandName": "Project",
-      "commandLineArgs": "spectate hotsapi",
+      "commandLineArgs": "spectate heroesprofile",
       "environmentVariables": {
-        "HEROES_REPLAY_Settings__AwsAccessKey": "",
-        "HEROES_REPLAY_Settings__AwsSecretKey": "",
-        "HEROES_REPLAY_Settings__HeroesProfileApiKey": "",
-        "HEROES_REPLAY_Settings__TwitchAccessToken": "",
-        "HEROES_REPLAY_Settings__TwitchClientId": ""
+        "HEROES_REPLAY_Location__GameInstallPath": "M:\\Blizzard\\Heroes of the Storm",
+        "HEROES_REPLAY_Github__User": "",
+        "HEROES_REPLAY_Github__AccessToken": "",
+        "HEROES_REPLAY_Capture__Method": "BitBlt",
+        "HEROES_REPLAY_HeroesProfileApi__AwsAccessKey": "",
+        "HEROES_REPLAY_HeroesProfileApi__AwsSecretKey": "",
+        "HEROES_REPLAY_HeroesProfileApi__HeroesProfileApiKey": ""
       }
     },
     "HeroesReplay.CLI [Spectate][FILE]": {
       "commandName": "Project",
       "commandLineArgs": "spectate file",
       "environmentVariables": {
-        "HEROES_REPLAY_Settings__HeroesProfileApiKey": "",
-        "HEROES_REPLAY_Settings__TwitchAccessToken": "",
-        "HEROES_REPLAY_Settings__TwitchClientId": ""
+        
       }
     }
   }
