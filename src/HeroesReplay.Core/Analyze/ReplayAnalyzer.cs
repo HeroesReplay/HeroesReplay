@@ -1,5 +1,6 @@
 ﻿using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -15,21 +16,24 @@ namespace HeroesReplay.Core
     public class ReplayAnalyzer : IReplayAnalzer
     {
         private readonly IEnumerable<IFocusCalculator> calculators;
+        private readonly IGameData gameData;
         private readonly ILogger<ReplayAnalyzer> logger;
         private readonly Settings settings;
 
-        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, Settings settings, IEnumerable<IFocusCalculator> calculators)
+        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, Settings settings, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
         {
             this.calculators = calculators;
+            this.gameData = gameData;
             this.logger = logger;
             this.settings = settings;
         }
 
+
         public TimeSpan GetEnd(Replay replay)
         {
             return replay.Units
-                .Where(unit => settings.Units.CoreNames.Contains(unit.Name) && unit.TimeSpanDied.HasValue)
-                .Min(core => core.TimeSpanDied.Value).Add(settings.Spectate.EndScreenTime);
+                .Where(unit => gameData.CoreNames.Contains(unit.Name) && unit.TimeSpanDied.HasValue)
+                .Min(core => core.TimeSpanDied.Value);
         }
 
         public IReadOnlyDictionary<TimeSpan, Panel> GetPanels(Replay replay)
@@ -128,10 +132,10 @@ namespace HeroesReplay.Core
                     focusDictionary.ToDictionary(x => x.Key, x => new Focus(
                         x.Value.Calculator,
                         x.Value.Unit,
-                        x.Value.Player,
+                        x.Value.Target,
                         x.Value.Points,
                         x.Value.Description,
-                        Array.IndexOf(replay.Players, x.Value.Player))
+                        Array.IndexOf(replay.Players, x.Value.Target))
                     ))
                 );
         }

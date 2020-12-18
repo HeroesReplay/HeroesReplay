@@ -20,8 +20,8 @@ namespace HeroesReplay.Tests
         public AnalyzerTests(ReplayFixture fixture)
         {
             this.fixture = fixture;
-            var settings = new Settings { Weights = new SpectateWeightSettings() { } };
-            replayAnalzer = new ReplayAnalyzer(new NullLogger<ReplayAnalyzer>(), settings, new[] { new PlayerKillsCalculator(settings, null) });
+            var settings = new Settings { Weights = new WeightSettings() { } };
+            replayAnalzer = new ReplayAnalyzer(new NullLogger<ReplayAnalyzer>(), settings, new[] { new PlayerKillsCalculator(settings, null) }, null);
         }
 
         [Fact]
@@ -33,7 +33,7 @@ namespace HeroesReplay.Tests
             var results = replayAnalzer.GetPlayers(fixture.Replay);
 
             // assert
-            var playerKills = results.Values.Where(x => x.Calculator == typeof(PlayerKillsCalculator)).GroupBy(x => x.Player.Character).ToDictionary(x => x.Key, x => x);
+            var playerKills = results.Values.Where(x => x.Calculator == typeof(PlayerKillsCalculator)).GroupBy(x => x.Target.Character).ToDictionary(x => x.Key, x => x);
 
 
             Assert.True(playerKills["Valla"].Count() > 7);

@@ -1,6 +1,6 @@
 ﻿namespace HeroesReplay.Core.Shared
 {
-    public record SpectateWeightSettings
+    public record WeightSettings
     {
         public float Roaming { get; init; }
         public float KillingMinions { get; init; }

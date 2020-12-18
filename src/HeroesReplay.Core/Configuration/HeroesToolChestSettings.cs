@@ -17,7 +17,8 @@ namespace HeroesReplay.Core.Shared
 
         public IEnumerable<string> ObjectivesContains { get; init; }
 
+        public IEnumerable<string> CaptureNames { get; init; }
 
-        
+        public string ScalingLinkId { get; init; }
     }
 }

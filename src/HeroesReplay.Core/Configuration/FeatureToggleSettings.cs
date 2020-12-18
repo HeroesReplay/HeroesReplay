@@ -6,6 +6,7 @@
         public bool EnableMMR { get; init; }
         public bool ForceLaunch { get; init; }
         public bool SaveCaptureFailureCondition { get; init; }
-        public bool DefaultInterface { get; init; }
+        public bool UseAppDataCache { get; init; }
+        public bool HideChat { get; init; }
     }
 }

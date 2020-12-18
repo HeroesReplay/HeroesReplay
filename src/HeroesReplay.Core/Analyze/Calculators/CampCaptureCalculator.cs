@@ -35,7 +35,12 @@ namespace HeroesReplay.Core
 
                 foreach (Unit unit in captured)
                 {
-                    yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.CampCapture, $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
+                    yield return new Focus(
+                        GetType(), 
+                        unit, 
+                        unit.PlayerKilledBy, 
+                        settings.Weights.CampCapture, 
+                        $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
                 }
             }
         }

@@ -13,8 +13,8 @@ namespace HeroesReplay.Core.Shared
         public int MaxDistanceToEnemy { get; init; }
         public int MaxDistanceToObjective { get; init; }
         public int MaxDistanceToOwnerChange { get; init; }
-        public string StormInterface { get; init; }
         public TimeSpan EndScreenTime { get; init; }
+        public ZoomLevel ZoomLevel { get; init; }
         public IEnumerable<int> TalentLevels { get; init; }
     }
 }

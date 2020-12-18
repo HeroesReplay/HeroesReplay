@@ -19,19 +19,25 @@ namespace HeroesReplay.Core
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
-            foreach (var heroUnit0 in replay.Units.Where(heroUnit0 => heroUnit0.Name.StartsWith("Hero") && heroUnit0.Team == 0 && heroUnit0.TimeSpanBorn < now && heroUnit0.TimeSpanDied > now))
+            List<IGrouping<int, Unit>> teams = replay.Players.SelectMany(x => x.HeroUnits).Where(unit => unit.Team != null && unit.TimeSpanBorn < now && unit.TimeSpanDied > now).GroupBy(x => x.Team.Value).ToList();
+
+            if (teams.Count != 2) yield break;
+
+            foreach (var teamOneUnit in teams[0])
             {
-                foreach (var heroUnit1 in replay.Units.Where(heroUnit1 => heroUnit1.Name.StartsWith("Hero") && heroUnit1.Team == 1 && heroUnit1.TimeSpanBorn < now && heroUnit1.TimeSpanDied > now))
+                foreach (var teamTwoUnit in teams[1])
                 {
-                    foreach (var position1 in heroUnit1.Positions.Where(p => p.TimeSpan == now))
+                    foreach (var teamTwoPos in teamTwoUnit.Positions.Where(p => p.TimeSpan == now))
                     {
-                        foreach (var position0 in heroUnit0.Positions.Where(p => p.TimeSpan == now))
+                        foreach (var teamOnePos in teamOneUnit.Positions.Where(p => p.TimeSpan == now))
                         {
-                            var distance = position1.Point.DistanceTo(position0.Point);
+                            var distance = teamTwoPos.Point.DistanceTo(teamOnePos.Point);
 
                             if (distance < 20)
                             {
-                                yield return new Focus(GetType(), heroUnit0, heroUnit0.PlayerControlledBy, settings.Weights.NearEnemyHero, $"{heroUnit0.PlayerControlledBy.HeroId} is in proximity of {heroUnit1.PlayerControlledBy.HeroId}");
+                                var unit = new[] { teamOneUnit, teamTwoUnit }.OrderBy(x => Guid.NewGuid()).First();
+
+                                yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.NearEnemyHero, $"{teamOneUnit.PlayerControlledBy.HeroId} is in proximity of {teamTwoUnit.PlayerControlledBy.HeroId}");
                             }
                         }
                     }

@@ -12,6 +12,8 @@ namespace HeroesReplay.Core.Runner
 
         IReadOnlyList<Hero> Heroes { get; }
 
+        IReadOnlyCollection<string> CoreNames { get; }
+
         UnitGroup GetUnitGroup(string unitName);
 
         IReadOnlyList<Map> Maps { get; }

@@ -86,15 +86,15 @@ namespace HeroesReplay.Core
 
         private async Task LaunchGameFromBattlenet()
         {
-            logger.LogInformation("Launching battlenet because replay requires auth.");
+            logger.LogInformation("Launching battlenet because this replay is the latest build and requires auth.");
 
             using (var process = Process.Start(new ProcessStartInfo(settings.Location.BattlenetPath, $"--game=heroes --gamepath=\"{settings.Location.GameInstallPath}\" --sso=1 -launch -uid heroes")))
             {
                 process.WaitForExit();
 
                 var window = Process.GetProcessesByName(settings.Process.Battlenet).Single(x => !string.IsNullOrWhiteSpace(x.MainWindowTitle)).MainWindowHandle;
-                SendMessage(window, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_RETURN, (IntPtr)IntPtr.Zero);
-                SendMessage(window, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_RETURN, (IntPtr)IntPtr.Zero);
+                SendMessage(window, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_RETURN, IntPtr.Zero);
+                SendMessage(window, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_RETURN, IntPtr.Zero);
 
                 logger.LogInformation("Heroes of the Storm launched from Battlenet.");
             }
@@ -102,7 +102,7 @@ namespace HeroesReplay.Core
             // Wait for home screen before launching replay
             await Policy.Handle<Exception>()
                 .OrResult<bool>(loaded => loaded == false)
-                .WaitAndRetryAsync(retryCount: 20, retry => TimeSpan.FromSeconds(1))
+                .WaitAndRetryAsync(retryCount: 20, retry => TimeSpan.FromSeconds(2))
                 .ExecuteAsync(async (t) => await IsHomeScreen(), CancellationToken.None);
 
             logger.LogInformation("Heroes of the Storm Home Screen detected");
@@ -135,7 +135,7 @@ namespace HeroesReplay.Core
 
             Rectangle dimensions = captureStrategy.GetDimensions(Handle);
 
-            Bitmap timerBitmap = settings.Toggles.DefaultInterface ? GetTopTimerDefaultInterface(dimensions) : GetTopTimerAhliObsInterface(dimensions);
+            Bitmap timerBitmap = GetTopTimerAhliObsInterface(dimensions); // settings.Toggles.DefaultInterface ? GetTopTimerDefaultInterface(dimensions) : 
 
             if (timerBitmap == null) return null;
 
@@ -172,7 +172,15 @@ namespace HeroesReplay.Core
             }
         }
 
-        private Bitmap GetTopTimerAhliObsInterface(Rectangle dimensions) => captureStrategy.Capture(Handle, new Rectangle(dimensions.Width / 2 - 50, 0, 100, 50));
+        private Bitmap GetTopTimerAhliObsInterface(Rectangle dimensions)
+        {
+            var width = dimensions.Width;
+            var column = dimensions.Width / 50;
+            var start = width / 2 - column;
+            var end = column * 2;
+
+            return captureStrategy.Capture(Handle, new Rectangle(dimensions.Width / 2 - 50, 0, 100, 50));
+        }
 
         private Bitmap GetTopTimerDefaultInterface(Rectangle dimensions)
         {
@@ -348,13 +356,20 @@ namespace HeroesReplay.Core
             SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
         }
 
-        public void SendToggleZoom()
+        public void SendToggleMaximumZoom()
         {
             SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
             SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
             SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
             SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
             SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
+        }
+
+        public void SendToggleMediumZoom()
+        {
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
         }
 
         public void SendPanel(int index)
@@ -364,6 +379,17 @@ namespace HeroesReplay.Core
             SendMessage(Handle, WindowMessage.WM_KEYDOWN, Key, IntPtr.Zero);
             SendMessage(Handle, WindowMessage.WM_KEYUP, Key, IntPtr.Zero);
             SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+        }
+
+        public void ToggleUnitPanel()
+        {
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_MENU, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_K, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_K, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_K, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_MENU, IntPtr.Zero);
+            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
         }
 
         public void KillGame()

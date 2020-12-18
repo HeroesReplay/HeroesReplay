@@ -3,26 +3,43 @@
 using Microsoft.Extensions.Logging;
 
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core
 {
+
     public class GameSession : IGameSession
     {
         private readonly IGameController controller;
         private readonly ILogger<GameSession> logger;
+        private readonly Settings settings;
         private readonly ISessionHolder sessionReader;
         private readonly CancellationToken token;
 
-        private State State { get; set; } = State.Start;
+        private State State { get; set; }
+
+        private ZoomLevel ZoomLevel { get; set; }
+
+        private bool HiddenChat { get; set; }
+
+        private bool HiddenControls { get; set; }
+
+        private bool HiddenUnitPanel { get; set; }
+
+        private bool SetFollowMode { get; set; }
+
         private TimeSpan Timer { get; set; }
+
+        private Focus? Focus { get; set; }
 
         private SessionData Data => sessionReader.SessionData;
 
-        public GameSession(ILogger<GameSession> logger, ISessionHolder sessionReader, IGameController controller, CancellationTokenProvider tokenProvider)
+        public GameSession(ILogger<GameSession> logger, Settings settings, ISessionHolder sessionReader, IGameController controller, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger;
+            this.settings = settings;
             this.sessionReader = sessionReader;
             this.controller = controller;
             this.token = tokenProvider.Token;
@@ -32,8 +49,17 @@ namespace HeroesReplay.Core
         {
             State = State.Start;
             Timer = default(TimeSpan);
+            SetFollowMode = false;
+            HiddenUnitPanel = false;
+            HiddenChat = false;
+            HiddenControls = false;
+            ZoomLevel = default(ZoomLevel);
 
-            await Task.WhenAll(Task.Run(PanelLoopAsync, token), Task.Run(FocusLoopAsync, token), Task.Run(StateLoopAsync, token));
+            await Task.WhenAll(
+                Task.Run(PanelLoopAsync, token),
+                Task.Run(FocusLoopAsync, token),
+                Task.Run(StateLoopAsync, token),
+                Task.Run(ConfigureLoopAsync, token));
         }
 
         private async Task StateLoopAsync()
@@ -55,22 +81,75 @@ namespace HeroesReplay.Core
                         }
                         else
                         {
-                            if (timer.Value >= Data.End) State = State.End;
+                            // Dont rely on the unique second, incase it blips
+                            if (timer.Value.Add(TimeSpan.FromSeconds(5)) >= Data.End) State = State.End;
                             else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
                             else if (timer.Value > Timer) State = State.Running;
                             else State = State.Start;
                             Timer = timer.Value;
                         }
+
+                        logger.LogInformation($"{State}, {Timer}");
                     }
                 }
-                catch
+                catch (Exception e)
                 {
-
+                    logger.LogError(e, "Could not complete state loop");
                 }
 
-                logger.LogInformation($"{State}, {Timer}");
-
                 await Task.Delay(TimeSpan.FromSeconds(1), token);
+            }
+
+            if (State == State.End)
+            {
+                await Task.Delay(settings.Spectate.EndScreenTime);
+            }
+        }
+
+        private async Task ConfigureLoopAsync()
+        {
+            while (State != State.End)
+            {
+                try
+                {
+                    if (State == State.Running)
+                    {
+                        if (!ClientConfiguredChat()) HideChat();
+
+                        await Task.Delay(1000);
+
+                        if (!ClientConfiguredControls()) HideControls();
+
+                        await Task.Delay(1000);
+
+                        if (!ClientConfiguredZoom()) ConfigureZoom();
+
+                        await Task.Delay(1000);
+
+                        if (!ClientFollowModeSet()) ConfigureFollowMode();
+
+                        await Task.Delay(1000);
+
+                        if (!ClientConfiguredUnitPanel()) ConfigureUnitPanel();
+
+                        await Task.Delay(1000);
+
+                    }
+
+                    var configured = new[] { ClientConfiguredChat(), ClientConfiguredControls(), ClientConfiguredZoom(), ClientFollowModeSet(), ClientConfiguredUnitPanel() }.All(configured => configured == true);
+
+                    if (configured)
+                    {
+                        logger.LogInformation("Client configured.");
+                        return;
+                    }
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, "Could not complete configure loop");
+                }
+
+                await Task.Delay(1000);
             }
         }
 
@@ -84,19 +163,24 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    if (State == State.Running && Data.Players.TryGetValue(Timer, out var output) && output.Index != index)
+                    if (State == State.Running && Data.Players.TryGetValue(Timer, out Focus focus) && focus.Index != index)
                     {
-                        logger.LogInformation($"Selecting {output.Player.Character}. Description: {output.Description}");
-                        controller.SendFocus(output.Index);
-                        index = output.Index;
+                        /* We keep a track of the previous index so we dont send too many commands on the same hero, 
+                         * because double tapping a hero will then change the spectate behaviour
+                         */
+                        Focus = focus;
+                        index = focus.Index;
+
+                        logger.LogInformation($"Selecting {focus.Target.Character}. Description: {focus.Description}");
+                        controller.SendFocus(focus.Index);
                     }
                 }
                 catch (Exception e)
                 {
-
+                    logger.LogError(e, "Could not complete focus loop");
                 }
 
-                await Task.Delay(500);
+                await Task.Delay(950);
             }
         }
 
@@ -150,6 +234,69 @@ namespace HeroesReplay.Core
                 await Task.Delay(TimeSpan.FromSeconds(10), token);
             }
 
+        }
+
+        /// <summary>
+        /// If you configure the zoom level before selecting an indexed hero, the zoom will reset
+        /// You must make sure the game client has a selected hero before changing the default zoom
+        /// </summary>
+        private bool ClientConfiguredZoom() => settings.Spectate.ZoomLevel == ZoomLevel;
+        private bool ClientConfiguredChat() => settings.Toggles.HideChat == HiddenChat;
+        private bool ClientConfiguredControls() => HiddenControls;
+        private bool ClientFollowModeSet() => Focus != null && SetFollowMode;
+        private bool ClientConfiguredUnitPanel() => HiddenUnitPanel == true;
+
+        private void ConfigureFollowMode()
+        {
+            if (Focus != null)
+            {
+                logger.LogInformation("A player has been selected, can now set follow selected unit mode.");
+
+                controller.CameraFollow();
+                SetFollowMode = true;
+            }
+        }
+
+        private void ConfigureZoom()
+        {
+            if (Focus != null)
+            {
+                logger.LogInformation("A player has been selected, can now configure zoom.");
+
+                switch (settings.Spectate.ZoomLevel)
+                {
+                    case ZoomLevel.Far: controller.SendToggleMaximumZoom(); break;
+                    case ZoomLevel.Default: break;
+                    case ZoomLevel.Medium: controller.SendToggleMediumZoom(); break;
+                }
+
+                ZoomLevel = settings.Spectate.ZoomLevel;
+            }
+            else
+            {
+                logger.LogInformation("Could not set zoom because a player has not yet been selected.");
+            }
+        }
+
+        private void ConfigureUnitPanel()
+        {
+            if (!HiddenUnitPanel)
+            {
+                controller.ToggleUnitPanel();
+                this.HiddenUnitPanel = true;
+            }
+        }
+
+        private void HideControls()
+        {
+            controller.ToggleControls();
+            HiddenControls = true;
+        }
+
+        private void HideChat()
+        {
+            controller.ToggleChatWindow();
+            HiddenChat = true;
         }
     }
 }

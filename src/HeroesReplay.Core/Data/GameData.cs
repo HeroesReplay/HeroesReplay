@@ -26,10 +26,9 @@ namespace HeroesReplay.Core.Runner
         private readonly string heroesDataPath;
 
         public IReadOnlyDictionary<string, UnitGroup> UnitGroups { get; private set; }
-
         public IReadOnlyList<Map> Maps { get; private set; }
-
         public IReadOnlyList<Hero> Heroes { get; private set; }
+        public IReadOnlyCollection<string> CoreNames { get; private set; }
 
         public GameData(ILogger<GameData> logger, Settings settings)
         {
@@ -62,14 +61,14 @@ namespace HeroesReplay.Core.Runner
             {
                 Maps = new ReadOnlyCollection<Map>(
                         (from map in mapJson.RootElement.EnumerateArray()
-                        let name = map.GetProperty("name").GetString()
-                        let altName = map.GetProperty("short_name").GetString()
-                        select new Map(name, altName)).ToList());
+                         let name = map.GetProperty("name").GetString()
+                         let altName = map.GetProperty("short_name").GetString()
+                         select new Map(name, altName)).ToList());
             }
         }
 
         private async Task DownloadReleaseIfEmpty()
-        {           
+        {
             var exists = Directory.Exists(heroesDataPath);
             var release = settings.HeroesToolChest.HeroesDataReleaseUri;
 
@@ -81,7 +80,7 @@ namespace HeroesReplay.Core.Runner
             {
                 logger.LogInformation($"heroes-data does not exists. Downloading files to: {heroesDataPath}");
 
-                if(!exists) 
+                if (!exists)
                     Directory.CreateDirectory(heroesDataPath);
 
                 using (var client = new HttpClient())
@@ -116,15 +115,39 @@ namespace HeroesReplay.Core.Runner
                                 zip.ExtractToDirectory(heroesDataPath);
                             }
                         }
-                    }                    
+                    }
                 }
             }
         }
 
+        private async Task LoadCoreNamesAsync()
+        {
+            var names = new HashSet<string>();
+            var files = Directory
+                .GetFiles(heroesDataPath, "*.json", SearchOption.AllDirectories)
+                .Where(x => x.Contains("unitdata_"));
+
+            foreach (var file in files)
+            {
+                var json = await File.ReadAllTextAsync(file);
+
+                using (var document = JsonDocument.Parse(json, new JsonDocumentOptions() { AllowTrailingCommas = true }))
+                {
+                    foreach (var o in document.RootElement.EnumerateObject())
+                    {
+                        if (o.Value.TryGetProperty("scalingLinkId", out JsonElement value) && settings.HeroesToolChest.ScalingLinkId.Equals(value.GetString()))
+                        {
+                            names.Add(o.Name.Contains("-") ? o.Name.Split('-')[1] : o.Name);
+                        }
+                    }
+                }
+            }
+
+            this.CoreNames = new ReadOnlyCollection<string>(names.ToList());
+        }
+
         private async Task LoadUnitGroupsAsync()
         {
-            await DownloadReleaseIfEmpty();
-
             var unitGroups = new Dictionary<string, UnitGroup>();
             var ignore = settings.HeroesToolChest.IgnoreUnits.ToList();
 
@@ -194,7 +217,15 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            if (name.EndsWith("CaptureBeacon") || name.EndsWith("ControlBeacon") || name.StartsWith("ItemSoulPickup") || name.StartsWith("SoulCage"))
+                            // Beacons
+                            // Gems on Tomb
+                            if (name.EndsWith("CaptureBeacon") || 
+                                name.EndsWith("ControlBeacon") || 
+                                name.StartsWith("ItemSoulPickup") || 
+                                name.Equals("ItemCannonball") || // Doubloons
+                                name.StartsWith("SoulCage") || 
+                                name.Equals("DocksTreasureChest") || 
+                                name.Equals("DocksPirateCaptain"))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
@@ -262,9 +293,11 @@ namespace HeroesReplay.Core.Runner
 
         public async Task LoadDataAsync()
         {
+            await DownloadReleaseIfEmpty();
             await LoadUnitGroupsAsync();
             await LoadMapsAsync();
             await LoadHeroesAsync();
+            await LoadCoreNamesAsync();
         }
     }
 }

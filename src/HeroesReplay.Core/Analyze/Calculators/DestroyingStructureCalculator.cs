@@ -12,16 +12,16 @@ namespace HeroesReplay.Core
     public class DestroyingStructureCalculator : IFocusCalculator
     {
         private readonly Settings settings;
-        private readonly IGameData heroesData;
+        private readonly IGameData gameData;
 
-        public DestroyingStructureCalculator(Settings settings, IGameData heroesData)
+        public DestroyingStructureCalculator(Settings settings, IGameData gameData)
         {
             this.settings = settings;
-            this.heroesData = heroesData;
+            this.gameData = gameData;
         }
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
-            foreach (var unit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero && unit.TimeSpanDied == now && heroesData.GetUnitGroup(unit.Name) == Unit.UnitGroup.Structures && unit.PlayerKilledBy != null))
+            foreach (var unit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero && unit.TimeSpanDied == now && gameData.GetUnitGroup(unit.Name) == Unit.UnitGroup.Structures && unit.PlayerKilledBy != null))
             {
                 var points = unit.Name switch
                 {
@@ -30,7 +30,7 @@ namespace HeroesReplay.Core
                     string name when name.StartsWith("TownCannon") => 600,
                     string name when name.StartsWith("TownMoonwell") => 800,
                     string name when name.StartsWith("TownTownHall") => 1000,
-                    string name when settings.Units.CoreNames.Any(core => name.Equals(core)) => 10000
+                    string name when gameData.CoreNames.Any(core => name.Equals(core)) => 10000
                 };
 
                 yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.DestroyStructure + points, $"{unit.PlayerKilledBy.HeroId} destroyed {unit.Name}");

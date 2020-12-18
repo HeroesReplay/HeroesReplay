@@ -4,6 +4,6 @@ using System;
 
 namespace HeroesReplay.Core
 {
-    public record Focus(Type Calculator, Unit Unit, Player Player, float Points, string Description, int Index = 0);
+    public record Focus(Type Calculator, Unit Unit, Player Target, float Points, string Description, int Index = 0);
 
 }

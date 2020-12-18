@@ -32,5 +32,19 @@ namespace HeroesReplay.Core
             TimeSpan = TimeSpan.Add(TimeSpan.FromSeconds(1));
             return Task.FromResult(new TimeSpan?(next));
         }
+
+        public void SendToggleMaximumZoom() => logger.LogInformation($"SendToggleMaximumZoom");
+
+        public void ToggleControls() => logger.LogInformation($"ToggleControls");
+
+        public void ToggleTimer() => logger.LogInformation($"ToggleTimer");
+
+        public void CameraFollow() => logger.LogInformation($"CameraFollow");
+
+        public void ToggleChatWindow() => logger.LogInformation($"ToggleChatWindow");
+
+        public void SendToggleMediumZoom() => logger.LogInformation($"SendToggleMediumZoom");
+
+        public void ToggleUnitPanel() => logger.LogInformation($"SendToggleMediumZoom");
     }
 }
