@@ -28,9 +28,12 @@ namespace HeroesReplay.Core
             {
                 foreach (var unit in killer)
                 {
-                    // if killer distance is greater than screen space, focus 
+                    var killerFar = unit.PlayerKilledBy.HeroUnits
+                        .SelectMany(p => p.Positions)
+                        .Where(p => p.TimeSpan.Add(TimeSpan.FromSeconds(2)) >= now && p.TimeSpan.Subtract(TimeSpan.FromSeconds(2)) <= now)
+                        .Any(p => p.Point.DistanceTo(unit.PointDied) > 15);
 
-                    if (unit.PlayerKilledBy.HeroUnits.SelectMany(x => x.Positions).Any(p => p.TimeSpan == now && p.Point.DistanceTo(unit.PointDied) > 30))
+                    if (killerFar)
                     {
                         yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.PlayerKill + killer.Count(), $"{killer.Key.HeroId} kills: {unit.PlayerControlledBy.Character}");
                     }
