@@ -2,6 +2,8 @@
 
 using Microsoft.Extensions.Logging;
 
+using Polly;
+
 using System;
 using System.Linq;
 using System.Threading;
@@ -70,24 +72,30 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    var timer = await controller.TryGetTimerAsync();
+                    var timer = await Policy
+                         .Handle<Exception>()
+                         .OrResult<TimeSpan?>(timer =>
+                         {
+                             if(Timer != TimeSpan.Zero && (timer > Timer.Add(TimeSpan.FromSeconds(30)) || timer < Timer.Subtract(TimeSpan.FromSeconds(30))))
+                             {
+                                 logger.LogInformation($"OCR Timer is a bit fuzzy? Before: {Timer}, After: {timer}");
+                                 return false;
+                             }
+
+                             return true;
+
+                         })
+                         .WaitAndRetryAsync(retryCount: 5, retry => TimeSpan.FromSeconds(0.5))
+                         .ExecuteAsync(async (t) => await controller.TryGetTimerAsync(), token);
 
                     if (timer != null)
                     {
-                        // sometimes, OCR gets it wrong, shall we skip the current suggestion
-                        if (Timer != TimeSpan.Zero && (timer > Timer.Add(TimeSpan.FromSeconds(30)) || timer < Timer.Subtract(TimeSpan.FromSeconds(30))))
-                        {
-                            logger.LogInformation($"OCR Timer is a bit fuzzy? Before: {Timer}, After: {timer}");
-                        }
-                        else
-                        {
-                            // Dont rely on the unique second, incase it blips
-                            if (timer.Value.Add(TimeSpan.FromSeconds(5)) >= Data.End) State = State.End;
-                            else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
-                            else if (timer.Value > Timer) State = State.Running;
-                            else State = State.Start;
-                            Timer = timer.Value;
-                        }
+                        // Dont rely on the unique second, incase it blips
+                        if (timer.Value.Add(TimeSpan.FromSeconds(5)) >= Data.End) State = State.End;
+                        else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
+                        else if (timer.Value > Timer) State = State.Running;
+                        else State = State.Start;
+                        Timer = timer.Value;
 
                         logger.LogInformation($"{State}, {Timer}");
                     }
@@ -116,23 +124,23 @@ namespace HeroesReplay.Core
                     {
                         if (!ClientConfiguredChat()) HideChat();
 
-                        await Task.Delay(1000);
+                        await Task.Delay(500);
 
                         if (!ClientConfiguredControls()) HideControls();
 
-                        await Task.Delay(1000);
+                        await Task.Delay(500);
 
                         if (!ClientConfiguredZoom()) ConfigureZoom();
 
-                        await Task.Delay(1000);
+                        await Task.Delay(500);
 
                         if (!ClientFollowModeSet()) ConfigureFollowMode();
 
-                        await Task.Delay(1000);
+                        await Task.Delay(500);
 
                         if (!ClientConfiguredUnitPanel()) ConfigureUnitPanel();
 
-                        await Task.Delay(1000);
+                        await Task.Delay(500);
 
                     }
 
@@ -171,7 +179,7 @@ namespace HeroesReplay.Core
                         Focus = focus;
                         index = focus.Index;
 
-                        logger.LogInformation($"Selecting {focus.Target.Character}. Description: {focus.Description}");
+                        logger.LogInformation($"Selecting {focus.Target.HeroId}. Description: {focus.Description}");
                         controller.SendFocus(focus.Index);
                     }
                 }
@@ -241,9 +249,9 @@ namespace HeroesReplay.Core
         /// You must make sure the game client has a selected hero before changing the default zoom
         /// </summary>
         private bool ClientConfiguredZoom() => settings.Spectate.ZoomLevel == ZoomLevel;
-        private bool ClientConfiguredChat() => settings.Toggles.HideChat == HiddenChat;
+        private bool ClientConfiguredChat() => settings.Spectate.HideChat == HiddenChat;
         private bool ClientConfiguredControls() => HiddenControls;
-        private bool ClientFollowModeSet() => Focus != null && SetFollowMode;
+        private bool ClientFollowModeSet() => Focus != null && SetFollowMode == false && ClientConfiguredZoom();
         private bool ClientConfiguredUnitPanel() => HiddenUnitPanel == true;
 
         private void ConfigureFollowMode()

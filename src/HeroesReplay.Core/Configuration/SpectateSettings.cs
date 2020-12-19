@@ -16,5 +16,6 @@ namespace HeroesReplay.Core.Shared
         public TimeSpan EndScreenTime { get; init; }
         public ZoomLevel ZoomLevel { get; init; }
         public IEnumerable<int> TalentLevels { get; init; }
+        public bool HideChat { get; init; }
     }
 }

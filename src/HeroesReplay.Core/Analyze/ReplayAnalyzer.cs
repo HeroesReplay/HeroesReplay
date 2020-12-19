@@ -110,8 +110,8 @@ namespace HeroesReplay.Core
                     {
                         focusDictionary.TryAdd(pastTime, entry.Value);
                     }
-
-                    if (focusDictionary.TryGetValue(futureTime, out var future))
+                                        
+                    if (focusDictionary.TryGetValue(futureTime, out var future) && future.Unit.TimeSpanDied > futureTime)
                     {
                         if (entry.Value.Points > future.Points)
                         {
@@ -140,6 +140,6 @@ namespace HeroesReplay.Core
                 );
         }
 
-        public bool IsCarriedObjectiveMap(Replay replay) => settings.Maps.CarriedObjectives.Contains(replay.Map);
+        public bool IsCarriedObjectiveMap(Replay replay) => settings.Maps.CarriedObjectives.Contains(replay.Map) || settings.Maps.CarriedObjectives.Contains(replay.MapAlternativeName);
     }
 }

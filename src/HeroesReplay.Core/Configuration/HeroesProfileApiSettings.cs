@@ -15,5 +15,6 @@ namespace HeroesReplay.Core.Shared
         public int ReplayIdBaseline { get; init; }
         public int MinReplayId { get; init; }
         public int ReplayIdUnset { get; init; }
+        public bool EnableMMR { get; init; }
     }
 }

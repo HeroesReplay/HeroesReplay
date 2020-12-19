@@ -162,9 +162,9 @@ namespace HeroesReplay.Core
                     {
                         return timer.RemoveNegativeOffset(settings.Spectate.GameLoopsOffset, settings.Spectate.GameLoopsPerSecond);
                     }
-                    else if (settings.Toggles.SaveCaptureFailureCondition)
+                    else if (settings.Capture.SaveCaptureFailureCondition)
                     {
-                        resized.Save(Path.Combine(settings.Capture.ConditionFailurePath, DateTime.Now.ToString()));
+                        resized.Save(Path.Combine(settings.CapturesPath, DateTime.Now.ToString()));
                     }
 
                     return null;
@@ -270,9 +270,9 @@ namespace HeroesReplay.Core
 
                         if (containsAll) return true;
 
-                        if (settings.Toggles.SaveCaptureFailureCondition)
+                        if (settings.Capture.SaveCaptureFailureCondition)
                         {
-                            capture.Save(Path.Combine(settings.Capture.ConditionFailurePath, DateTime.Now.ToString()));
+                            capture.Save(Path.Combine(settings.CapturesPath, DateTime.Now.ToString()));
                         }
                     }
                 }
@@ -300,9 +300,9 @@ namespace HeroesReplay.Core
 
                     if (containsAny) return true;
 
-                    if (settings.Toggles.SaveCaptureFailureCondition)
+                    if (settings.Capture.SaveCaptureFailureCondition)
                     {
-                        capture.Save(Path.Combine(settings.Capture.ConditionFailurePath, DateTime.Now.ToString()));
+                        capture.Save(Path.Combine(settings.CapturesPath, DateTime.Now.ToString()));
                     }
                 }
             }

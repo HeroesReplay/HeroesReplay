@@ -14,7 +14,6 @@ namespace HeroesReplay.Core.Shared
         public HeroesToolChestSettings HeroesToolChest { get; init; }
         public GithubSettings Github { get; set; }
         public StormReplaySettings StormReplay { get; init; }
-        public FeatureToggleSettings Toggles { get; init; }
         public HeroesProfileApiSettings HeroesProfileApi { get; init; }
         public WeightSettings Weights { get; init; }
         public HotsApiSettings HotsApi { get; init; }
@@ -30,11 +29,15 @@ namespace HeroesReplay.Core.Shared
         public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
 
         public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
+
         public string HeroesDataPath => Path.Combine(AssetsPath, "HeroesData");
         public string ReplayCachePath => Path.Combine(AssetsPath, "Replays");
+        public string CapturesPath => Path.Combine(AssetsPath, "Captures");
+
         public string CurrentReplayInfoFilePath => Path.Combine(CurrentDirectory, StormReplay.InfoFileName);
         public string StormReplaysAccountPath => Path.Combine(UserGameFolderPath, "Accounts");
         public string UserStormInterfacePath => Path.Combine(UserGameFolderPath, "Interfaces");
         public string UserGameFolderPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm");
+        
     }
 }

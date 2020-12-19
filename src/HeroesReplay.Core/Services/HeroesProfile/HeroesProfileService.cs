@@ -47,17 +47,13 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         {
             try
             {
-                if (replayHelper.TryGetReplayId(stormReplay, out var hotsApiReplayId))
+                if (replayHelper.TryGetReplayId(stormReplay, out var replayId))
                 {
                     var apiKey = settings.ApiKey;
 
                     using (var client = new HttpClient() { BaseAddress = settings.BaseUri })
                     {
-                        string heroesProfileReplayId = await client.GetStringAsync(new Uri($"Heroesprofile/ReplayID?hotsapi_replayID={hotsApiReplayId}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
-
-                        logger.LogDebug($"HotsAPI ID: {hotsApiReplayId}. HeroesProfile ID: {heroesProfileReplayId}");
-
-                        string dataResponse = await client.GetStringAsync(new Uri($"Replay/Data?mode=json&replayID={heroesProfileReplayId}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
+                        string dataResponse = await client.GetStringAsync(new Uri($"Replay/Data?mode=json&replayID={replayId}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
 
                         using (JsonDocument dataJson = JsonDocument.Parse(dataResponse))
                         {
@@ -71,7 +67,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                             var mmr = Convert.ToInt32(average);
 
-                            return await client.GetStringAsync(new Uri($"MMR/Tier?mmr={mmr}&game_type={"Storm League"}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
+                            return await client.GetStringAsync(new Uri($"MMR/Tier?mmr={mmr}&game_type=Storm League&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
                         }
                     }
                 }

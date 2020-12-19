@@ -30,8 +30,10 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
         public async Task WriteDetailsAsync(StormReplay replay)
         {
-            var mmr = settings.Toggles.EnableMMR ? $"MMR: " + await heroesProfileService.CalculateMMRAsync(replay) : string.Empty;
-            var map = gameData.Maps.First(map => map.AltName.Equals(replay.Replay.MapAlternativeName) || replay.Replay.Map.Equals(map.Name));
+            var mmr = settings.HeroesProfileApi.EnableMMR ? $"Tier: " + await heroesProfileService.CalculateMMRAsync(replay) : string.Empty;
+
+            // Clutter
+            // var map = gameData.Maps.First(map => map.AltName.Equals(replay.Replay.MapAlternativeName) || replay.Replay.Map.Equals(map.Name));
 
             var bans = from ban in replay.Replay.DraftOrder.Where(pick => pick.PickType == DraftPickType.Banned).Select((pick, index) => new { Hero = pick.HeroSelected, Index = index + 1 })
                        from hero in gameData.Heroes
@@ -40,7 +42,12 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             if (bans.Any()) bans = bans.Prepend("Bans:");
 
-            string[] details = new[] { mmr, replay.Replay.ReplayVersion }.Where(line => !string.IsNullOrEmpty(line)).ToArray();
+            string[] details = new[] 
+            {
+                mmr, 
+                // replay.Replay.ReplayVersion // Clutter
+
+            }.Where(line => !string.IsNullOrWhiteSpace(line)).ToArray();
 
             logger.LogInformation($"writing replay details to: {settings.CurrentReplayInfoFilePath}");
 
