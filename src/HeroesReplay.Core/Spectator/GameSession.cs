@@ -209,7 +209,7 @@ namespace HeroesReplay.Core
                         controller.SendPanel(next);
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(10), token);
+                    await Task.Delay(settings.Spectate.PanelRotateTime, token);
                 }
                 catch (Exception e)
                 {
