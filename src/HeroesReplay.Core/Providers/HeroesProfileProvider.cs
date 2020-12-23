@@ -37,11 +37,7 @@ namespace HeroesReplay.Core.Providers
             {
                 if (minReplayId == default)
                 {
-                    if (settings.HeroesProfileApi.MinReplayId != settings.HeroesProfileApi.ReplayIdUnset)
-                    {
-                        MinReplayId = settings.HeroesProfileApi.MinReplayId;
-                    }
-                    else if (ReplaysDirectory.GetFiles(settings.StormReplay.WildCard).Any())
+                    if (ReplaysDirectory.GetFiles(settings.StormReplay.WildCard).Any())
                     {
                         FileInfo? latest = ReplaysDirectory.GetFiles(settings.StormReplay.WildCard).OrderByDescending(f => f.CreationTime).FirstOrDefault();
 
@@ -50,9 +46,9 @@ namespace HeroesReplay.Core.Providers
                             MinReplayId = replayId;
                         }
                     }
-                    else
+                    else 
                     {
-                        MinReplayId = settings.HeroesProfileApi.ReplayIdBaseline;
+                        MinReplayId = settings.HeroesProfileApi.MinReplayId;
                     }
                 }
 
@@ -99,7 +95,7 @@ namespace HeroesReplay.Core.Providers
 
                     if (stormReplay != null)
                     {
-                        MinReplayId = (int)replay.Id;
+                        MinReplayId = replay.Id;
                     }
 
                     return stormReplay;
@@ -194,16 +190,19 @@ namespace HeroesReplay.Core.Providers
                            {
                                replay = (from r in response
                                          where r.Url.Contains(settings.HeroesProfileApi.S3Bucket)
-                                         where r.Id >= minReplayId
+                                         where r.Id > MinReplayId
                                          let version = Version.Parse(r.GameVersion)
                                          where version.Major == minVersion.Major && 
                                                version.Minor == minVersion.Minor && 
                                                version.Build == minVersion.Build && 
                                                version.Revision == minVersion.Revision
                                          where settings.HeroesProfileApi.GameTypes.Contains(r.GameType, StringComparer.CurrentCultureIgnoreCase)
-                                         select r).FirstOrDefault();
+                                         select r).OrderBy(x => x.Id).FirstOrDefault();
 
-                               MinReplayId = response.Max(x => x.Id);
+                               if (replay == null)
+                               {
+                                   MinReplayId = response.Max(x => x.Id);
+                               }
 
                                logger.LogInformation($"MinReplayId: {MinReplayId}");
                            }

@@ -21,9 +21,9 @@ namespace HeroesReplay.Core
 
         private ZoomLevel ZoomLevel { get; set; }
 
-        private bool HiddenControls { get; set; }
+        private bool ControlsHiddenSet { get; set; }
 
-        private bool SetFollowMode { get; set; }
+        private bool FollowModeSet { get; set; }
 
         private TimeSpan Timer { get; set; }
 
@@ -44,8 +44,8 @@ namespace HeroesReplay.Core
         {
             State = State.Start;
             Timer = default(TimeSpan);
-            SetFollowMode = false;
-            HiddenControls = false;
+            FollowModeSet = false;
+            ControlsHiddenSet = false;
             ZoomLevel = default(ZoomLevel);
 
             await Task.WhenAll(
@@ -100,21 +100,27 @@ namespace HeroesReplay.Core
                 {
                     if (State == State.Running)
                     {
-                        if (!ClientConfiguredControls()) HideControls();
+                        if (!ControlsHiddenSet) 
+                            ConfigureControls();
+
                         await Task.Delay(500);
 
-                        if (!ClientConfiguredZoom()) ConfigureZoom();
+                        //if (settings.Spectate.ZoomLevel != ZoomLevel) 
+                        //    ConfigureZoom();
+
                         await Task.Delay(250);
 
-                        if (!ClientFollowModeSet()) ConfigureFollowMode();
+                        if (settings.Spectate.ZoomLevel == ZoomLevel && !FollowModeSet) 
+                            ConfigureFollowMode();
+
                         await Task.Delay(250);
                     }
 
                     var configured = new[]
                     {
-                        ClientConfiguredControls(), 
-                        ClientConfiguredZoom(), 
-                        ClientFollowModeSet()
+                        settings.Spectate.ZoomLevel == ZoomLevel,
+                        FollowModeSet,
+                        ControlsHiddenSet
 
                     }.All(configured => configured == true);
 
@@ -214,21 +220,13 @@ namespace HeroesReplay.Core
 
         }
 
-        /// <summary>
-        /// If you configure the zoom level before selecting an indexed hero, the zoom will reset
-        /// You must make sure the game client has a selected hero before changing the default zoom
-        /// </summary>
-        private bool ClientConfiguredZoom() => settings.Spectate.ZoomLevel == ZoomLevel;
-        private bool ClientConfiguredControls() => HiddenControls;
-        private bool ClientFollowModeSet() => ClientConfiguredZoom() && SetFollowMode == true;
-
         private void ConfigureFollowMode()
         {
             if (Focus != null)
             {
                 logger.LogInformation("A player has been selected, can now set follow selected unit mode.");
                 controller.CameraFollow();
-                SetFollowMode = true;
+                FollowModeSet = true;
             }
         }
 
@@ -253,12 +251,12 @@ namespace HeroesReplay.Core
             }
         }
 
-        private void HideControls()
+        private void ConfigureControls()
         {
-            if (!HiddenControls)
+            if (!ControlsHiddenSet)
             {
                 controller.ToggleControls();
-                HiddenControls = true;
+                ControlsHiddenSet = true;
             }
         }
 
