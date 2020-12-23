@@ -13,14 +13,14 @@ using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
 {
-    public class MatchDetailsWriter
+    public class ReplayFileWriter
     {
-        private readonly ILogger<MatchDetailsWriter> logger;
+        private readonly ILogger<ReplayFileWriter> logger;
         private readonly HeroesProfileService heroesProfileService;
         private readonly IGameData gameData;
         private readonly Settings settings;
 
-        public MatchDetailsWriter(ILogger<MatchDetailsWriter> logger, Settings settings, HeroesProfileService heroesProfileService, IGameData gameData)
+        public ReplayFileWriter(ILogger<ReplayFileWriter> logger, Settings settings, HeroesProfileService heroesProfileService, IGameData gameData)
         {
             this.logger = logger;
             this.heroesProfileService = heroesProfileService;

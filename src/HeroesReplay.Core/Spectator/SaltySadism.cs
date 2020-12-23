@@ -1,6 +1,5 @@
 ﻿using HeroesReplay.Core.Providers;
 using HeroesReplay.Core.Runner;
-using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -16,16 +15,14 @@ namespace HeroesReplay.Core
         private readonly IGameManager gameManager;
         private readonly IGameData gameData;
         private readonly IReplayProvider replayProvider;
-        private readonly MatchDetailsWriter matchDetailsWriter;
         private readonly CancellationTokenProvider tokenProvider;
 
-        public SaltySadism(ILogger<SaltySadism> logger, IGameManager gameManager, IGameData gameData, IReplayProvider replayProvider, MatchDetailsWriter matchDetailsWriter, CancellationTokenProvider tokenProvider)
+        public SaltySadism(ILogger<SaltySadism> logger, IGameManager gameManager, IGameData gameData, IReplayProvider replayProvider, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger;
             this.gameManager = gameManager;
             this.gameData = gameData;
             this.replayProvider = replayProvider;
-            this.matchDetailsWriter = matchDetailsWriter;
             this.tokenProvider = tokenProvider;
         }
 
@@ -42,7 +39,6 @@ namespace HeroesReplay.Core
                     if (stormReplay != null)
                     {
                         await gameManager.SetSessionAsync(stormReplay);
-                        await matchDetailsWriter.WriteDetailsAsync(stormReplay);
                         await gameManager.SpectateSessionAsync();
                     }
                 }

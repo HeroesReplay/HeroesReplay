@@ -193,6 +193,7 @@ namespace HeroesReplay.Core.Providers
                            if (response != null && response.Any())
                            {
                                replay = (from r in response
+                                         where r.Url.Contains(settings.HeroesProfileApi.S3Bucket)
                                          where r.Id >= minReplayId
                                          let version = Version.Parse(r.GameVersion)
                                          where version.Major == minVersion.Major && 

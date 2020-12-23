@@ -2,12 +2,6 @@
 
 namespace HeroesReplay.Core
 {
-    public interface ISessionHolder
-    {
-        SessionData SessionData { get; }
-        StormReplay StormReplay { get; }
-    }
-
     public class SessionHolder : ISessionHolder, ISessionSetter
     {
         public SessionData SessionData { get; private set; }
@@ -18,11 +12,6 @@ namespace HeroesReplay.Core
             this.SessionData = data;
             this.StormReplay = replay;
         }
-    }
-
-    public interface ISessionSetter
-    {
-        void Set(SessionData data, StormReplay replay);
     }
 
 

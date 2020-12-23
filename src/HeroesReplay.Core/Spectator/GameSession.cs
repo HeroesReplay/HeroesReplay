@@ -14,18 +14,14 @@ namespace HeroesReplay.Core
         private readonly IGameController controller;
         private readonly ILogger<GameSession> logger;
         private readonly Settings settings;
-        private readonly ISessionHolder sessionReader;
+        private readonly ISessionHolder sessionHolder;
         private readonly CancellationToken token;
 
         private State State { get; set; }
 
         private ZoomLevel ZoomLevel { get; set; }
 
-        private bool HiddenChat { get; set; }
-
         private bool HiddenControls { get; set; }
-
-        private bool HiddenUnitPanel { get; set; }
 
         private bool SetFollowMode { get; set; }
 
@@ -33,13 +29,13 @@ namespace HeroesReplay.Core
 
         private Focus? Focus { get; set; }
 
-        private SessionData Data => sessionReader.SessionData;
+        private SessionData Data => sessionHolder.SessionData;
 
-        public GameSession(ILogger<GameSession> logger, Settings settings, ISessionHolder sessionReader, IGameController controller, CancellationTokenProvider tokenProvider)
+        public GameSession(ILogger<GameSession> logger, Settings settings, ISessionHolder sessionHolder, IGameController controller, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger;
             this.settings = settings;
-            this.sessionReader = sessionReader;
+            this.sessionHolder = sessionHolder;
             this.controller = controller;
             this.token = tokenProvider.Token;
         }
@@ -49,8 +45,6 @@ namespace HeroesReplay.Core
             State = State.Start;
             Timer = default(TimeSpan);
             SetFollowMode = false;
-            HiddenUnitPanel = false;
-            HiddenChat = false;
             HiddenControls = false;
             ZoomLevel = default(ZoomLevel);
 
@@ -106,35 +100,21 @@ namespace HeroesReplay.Core
                 {
                     if (State == State.Running)
                     {
-                        //if (!ClientConfiguredChat()) HideChat();
-
-                        //await Task.Delay(500);
-
                         if (!ClientConfiguredControls()) HideControls();
-
                         await Task.Delay(500);
 
-                        //if (!ClientConfiguredUnitPanel()) ConfigureUnitPanel();
-
-                        //await Task.Delay(500);
-
                         if (!ClientConfiguredZoom()) ConfigureZoom();
-
                         await Task.Delay(250);
 
                         if (!ClientFollowModeSet()) ConfigureFollowMode();
-
                         await Task.Delay(250);
-
                     }
 
                     var configured = new[]
-                    { 
-                        //ClientConfiguredChat(),
+                    {
                         ClientConfiguredControls(), 
                         ClientConfiguredZoom(), 
-                        ClientFollowModeSet(), 
-                        //ClientConfiguredUnitPanel() 
+                        ClientFollowModeSet()
 
                     }.All(configured => configured == true);
 
@@ -239,10 +219,8 @@ namespace HeroesReplay.Core
         /// You must make sure the game client has a selected hero before changing the default zoom
         /// </summary>
         private bool ClientConfiguredZoom() => settings.Spectate.ZoomLevel == ZoomLevel;
-        private bool ClientConfiguredChat() => settings.Spectate.HideChat == HiddenChat;
         private bool ClientConfiguredControls() => HiddenControls;
-        private bool ClientFollowModeSet() => ClientConfiguredZoom() && SetFollowMode == false;
-        private bool ClientConfiguredUnitPanel() => HiddenUnitPanel == true;
+        private bool ClientFollowModeSet() => ClientConfiguredZoom() && SetFollowMode == true;
 
         private void ConfigureFollowMode()
         {
@@ -275,30 +253,12 @@ namespace HeroesReplay.Core
             }
         }
 
-        private void ConfigureUnitPanel()
-        {
-            if (!HiddenUnitPanel)
-            {
-                controller.ToggleUnitPanel();
-                this.HiddenUnitPanel = true;
-            }
-        }
-
         private void HideControls()
         {
             if (!HiddenControls)
             {
                 controller.ToggleControls();
                 HiddenControls = true;
-            }
-        }
-
-        private void HideChat()
-        {
-            if (!HiddenChat)
-            {
-                controller.ToggleChatWindow();
-                HiddenChat = true;
             }
         }
 
