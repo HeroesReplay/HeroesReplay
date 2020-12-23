@@ -50,11 +50,7 @@ namespace HeroesReplay.Core
             catch (Exception e)
             {
                 logger.LogError(e, "There was an error in the replay consumer.");
-            }
-            finally
-            {
-
-            }
+            }            
         }
     }
 }

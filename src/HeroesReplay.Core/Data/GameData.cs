@@ -34,7 +34,7 @@ namespace HeroesReplay.Core.Runner
         {
             this.logger = logger;
             this.settings = settings;
-            this.heroesDataPath = string.IsNullOrWhiteSpace(settings.HeroesToolChest.HeroesDataPath) ? Path.Combine(settings.AssetsPath, "HeroesData") : settings.HeroesToolChest.HeroesDataPath;
+            this.heroesDataPath = settings.HeroesDataPath;
         }
 
         private async Task LoadHeroesAsync()
@@ -67,7 +67,7 @@ namespace HeroesReplay.Core.Runner
             }
         }
 
-        private async Task DownloadReleaseIfEmpty()
+        private async Task DownloadIfEmptyAsync()
         {
             var exists = Directory.Exists(heroesDataPath);
             var release = settings.HeroesToolChest.HeroesDataReleaseUri;
@@ -222,7 +222,7 @@ namespace HeroesReplay.Core.Runner
                             if (name.EndsWith("CaptureBeacon") || 
                                 name.EndsWith("ControlBeacon") || 
                                 name.StartsWith("ItemSoulPickup") || 
-                                name.Equals("ItemCannonball") || // Doubloons
+                                name.Equals("ItemCannonball") ||
                                 name.StartsWith("SoulCage") || 
                                 name.Equals("DocksTreasureChest") || 
                                 name.Equals("DocksPirateCaptain"))
@@ -293,7 +293,7 @@ namespace HeroesReplay.Core.Runner
 
         public async Task LoadDataAsync()
         {
-            await DownloadReleaseIfEmpty();
+            await DownloadIfEmptyAsync();
             await LoadUnitGroupsAsync();
             await LoadMapsAsync();
             await LoadHeroesAsync();

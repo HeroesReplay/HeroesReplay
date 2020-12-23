@@ -133,20 +133,25 @@ namespace HeroesReplay.Core
         {
             if (Handle == IntPtr.Zero) return null;
 
-            Rectangle dimensions = captureStrategy.GetDimensions(Handle);
-
-            Bitmap timerBitmap = GetTopTimerAhliObsInterface(dimensions); // settings.Toggles.DefaultInterface ? GetTopTimerDefaultInterface(dimensions) : 
-
-            if (timerBitmap == null) return null;
+            Bitmap? timerBitmap = null;
 
             try
             {
+                Rectangle dimensions = captureStrategy.GetDimensions(Handle);
+                timerBitmap = GetTopTimerAhliObsInterface(dimensions); // settings.Toggles.DefaultInterface ? GetTopTimerDefaultInterface(dimensions) : 
+                if (timerBitmap == null) return null;
                 return await ConvertBitmapTimerToTimeSpan(timerBitmap);
+            }
+            catch(Exception e)
+            {
+                logger.LogError(e, "Could not get timer from bitmap");
             }
             finally
             {
-                timerBitmap.Dispose();
+                timerBitmap?.Dispose();
             }
+
+            return null;
         }
 
         private async Task<TimeSpan?> ConvertBitmapTimerToTimeSpan(Bitmap bitmap)

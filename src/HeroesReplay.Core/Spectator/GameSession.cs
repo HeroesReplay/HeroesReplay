@@ -1,7 +1,5 @@
 ﻿using HeroesReplay.Core.Shared;
-
 using Microsoft.Extensions.Logging;
-
 using Polly;
 
 using System;
@@ -11,7 +9,6 @@ using System.Threading.Tasks;
 
 namespace HeroesReplay.Core
 {
-
     public class GameSession : IGameSession
     {
         private readonly IGameController controller;
@@ -72,21 +69,7 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    var timer = await Policy
-                         .Handle<Exception>()
-                         .OrResult<TimeSpan?>(timer =>
-                         {
-                             if(Timer != TimeSpan.Zero && (timer > Timer.Add(TimeSpan.FromSeconds(30)) || timer < Timer.Subtract(TimeSpan.FromSeconds(30))))
-                             {
-                                 logger.LogInformation($"OCR Timer is a bit fuzzy? Before: {Timer}, After: {timer}");
-                                 return false;
-                             }
-
-                             return true;
-
-                         })
-                         .WaitAndRetryAsync(retryCount: 5, retry => TimeSpan.FromSeconds(0.5))
-                         .ExecuteAsync(async (t) => await controller.TryGetTimerAsync(), token);
+                    TimeSpan? timer = await GetOcrTimer();
 
                     if (timer != null)
                     {
@@ -114,6 +97,7 @@ namespace HeroesReplay.Core
             }
         }
 
+
         private async Task ConfigureLoopAsync()
         {
             while (State != State.End)
@@ -122,29 +106,37 @@ namespace HeroesReplay.Core
                 {
                     if (State == State.Running)
                     {
-                        if (!ClientConfiguredChat()) HideChat();
+                        //if (!ClientConfiguredChat()) HideChat();
 
-                        await Task.Delay(500);
+                        //await Task.Delay(500);
 
                         if (!ClientConfiguredControls()) HideControls();
 
                         await Task.Delay(500);
 
+                        //if (!ClientConfiguredUnitPanel()) ConfigureUnitPanel();
+
+                        //await Task.Delay(500);
+
                         if (!ClientConfiguredZoom()) ConfigureZoom();
 
-                        await Task.Delay(500);
+                        await Task.Delay(250);
 
                         if (!ClientFollowModeSet()) ConfigureFollowMode();
 
-                        await Task.Delay(500);
-
-                        if (!ClientConfiguredUnitPanel()) ConfigureUnitPanel();
-
-                        await Task.Delay(500);
+                        await Task.Delay(250);
 
                     }
 
-                    var configured = new[] { ClientConfiguredChat(), ClientConfiguredControls(), ClientConfiguredZoom(), ClientFollowModeSet(), ClientConfiguredUnitPanel() }.All(configured => configured == true);
+                    var configured = new[]
+                    { 
+                        //ClientConfiguredChat(),
+                        ClientConfiguredControls(), 
+                        ClientConfiguredZoom(), 
+                        ClientFollowModeSet(), 
+                        //ClientConfiguredUnitPanel() 
+
+                    }.All(configured => configured == true);
 
                     if (configured)
                     {
@@ -157,7 +149,7 @@ namespace HeroesReplay.Core
                     logger.LogError(e, "Could not complete configure loop");
                 }
 
-                await Task.Delay(1000);
+                await Task.Delay(250);
             }
         }
 
@@ -224,19 +216,17 @@ namespace HeroesReplay.Core
                         };
                     }
 
-                    if (next != panel)
+                    if (panel != next)
                     {
                         panel = next;
-
-                        var name = Enum.GetName(typeof(Panel), next);
+                        var name = Enum.GetName(typeof(Panel), panel);
                         logger.LogInformation($"Selecting panel: {name}");
-
                         controller.SendPanel((int)panel);
                     }
                 }
-                catch
+                catch (Exception e)
                 {
-
+                    logger.LogError(e, "Could not complete panel loop");
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(10), token);
@@ -251,7 +241,7 @@ namespace HeroesReplay.Core
         private bool ClientConfiguredZoom() => settings.Spectate.ZoomLevel == ZoomLevel;
         private bool ClientConfiguredChat() => settings.Spectate.HideChat == HiddenChat;
         private bool ClientConfiguredControls() => HiddenControls;
-        private bool ClientFollowModeSet() => Focus != null && SetFollowMode == false && ClientConfiguredZoom();
+        private bool ClientFollowModeSet() => ClientConfiguredZoom() && SetFollowMode == false;
         private bool ClientConfiguredUnitPanel() => HiddenUnitPanel == true;
 
         private void ConfigureFollowMode()
@@ -259,7 +249,6 @@ namespace HeroesReplay.Core
             if (Focus != null)
             {
                 logger.LogInformation("A player has been selected, can now set follow selected unit mode.");
-
                 controller.CameraFollow();
                 SetFollowMode = true;
             }
@@ -297,14 +286,40 @@ namespace HeroesReplay.Core
 
         private void HideControls()
         {
-            controller.ToggleControls();
-            HiddenControls = true;
+            if (!HiddenControls)
+            {
+                controller.ToggleControls();
+                HiddenControls = true;
+            }
         }
 
         private void HideChat()
         {
-            controller.ToggleChatWindow();
-            HiddenChat = true;
+            if (!HiddenChat)
+            {
+                controller.ToggleChatWindow();
+                HiddenChat = true;
+            }
         }
+
+        private async Task<TimeSpan?> GetOcrTimer()
+        {
+            return await Policy
+                 .HandleResult<TimeSpan?>(timer =>
+                 {
+                     if (timer == null) return false;
+
+                     if (Timer != TimeSpan.Zero && (timer > Timer.Add(TimeSpan.FromSeconds(10)) || timer < Timer.Subtract(TimeSpan.FromSeconds(10))))
+                     {
+                         logger.LogInformation($"OCR Timer is not an expected value? Before: {Timer}, After: {timer}");
+                         return false;
+                     }
+
+                     return true;
+                 })
+                 .WaitAndRetryAsync(retryCount: 5, retry => TimeSpan.FromSeconds(1))
+                 .ExecuteAsync(async (t) => await controller.TryGetTimerAsync(), token);
+        }
+
     }
 }

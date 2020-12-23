@@ -195,7 +195,10 @@ namespace HeroesReplay.Core.Providers
                                replay = (from r in response
                                          where r.Id >= minReplayId
                                          let version = Version.Parse(r.GameVersion)
-                                         where version.Major == minVersion.Major && version.Minor == minVersion.Minor && version.Build == minVersion.Build && version.Revision == minVersion.Revision
+                                         where version.Major == minVersion.Major && 
+                                               version.Minor == minVersion.Minor && 
+                                               version.Build == minVersion.Build && 
+                                               version.Revision == minVersion.Revision
                                          where settings.HeroesProfileApi.GameTypes.Contains(r.GameType, StringComparer.CurrentCultureIgnoreCase)
                                          select r).FirstOrDefault();
 
