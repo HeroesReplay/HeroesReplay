@@ -1,5 +1,7 @@
 ﻿using HeroesReplay.Core.Shared;
+
 using Microsoft.Extensions.Logging;
+
 using Polly;
 
 using System;
@@ -65,13 +67,14 @@ namespace HeroesReplay.Core
                 {
                     TimeSpan? timer = await GetOcrTimer();
 
-                    if (timer != null)
+                    if (timer.HasValue)
                     {
                         // Dont rely on the unique second, incase it blips
                         if (timer.Value.Add(TimeSpan.FromSeconds(5)) >= Data.End) State = State.End;
                         else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
                         else if (timer.Value > Timer) State = State.Running;
                         else State = State.Start;
+
                         Timer = timer.Value;
 
                         logger.LogInformation($"{State}, {Timer}");
@@ -85,12 +88,8 @@ namespace HeroesReplay.Core
                 await Task.Delay(TimeSpan.FromSeconds(1), token);
             }
 
-            if (State == State.End)
-            {
-                await Task.Delay(settings.Spectate.EndScreenTime);
-            }
+            await Task.Delay(settings.Spectate.EndScreenTime);
         }
-
 
         private async Task ConfigureLoopAsync()
         {
@@ -100,7 +99,7 @@ namespace HeroesReplay.Core
                 {
                     if (State == State.Running)
                     {
-                        if (!ControlsHiddenSet) 
+                        if (!ControlsHiddenSet)
                             ConfigureControls();
 
                         await Task.Delay(500);
@@ -110,7 +109,7 @@ namespace HeroesReplay.Core
 
                         await Task.Delay(250);
 
-                        if (settings.Spectate.ZoomLevel == ZoomLevel && !FollowModeSet) 
+                        if (settings.Spectate.ZoomLevel == ZoomLevel && !FollowModeSet)
                             ConfigureFollowMode();
 
                         await Task.Delay(250);
@@ -172,7 +171,8 @@ namespace HeroesReplay.Core
 
         private async Task PanelLoopAsync()
         {
-            Panel panel = Panel.Talents;
+            Panel previous = Panel.None;
+            Panel next = Panel.None;
 
             while (State != State.End)
             {
@@ -180,17 +180,17 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    Panel next;
-
-                    if (Timer < TimeSpan.FromMinutes(1)) next = Panel.Talents;
-                    else if (Data.Panels.TryGetValue(Timer, out next))
+                    if (Data.Panels.TryGetValue(Timer, out var panel) && panel != previous)
                     {
-
+                        var name = Enum.GetName(typeof(Panel), panel);
+                        logger.LogInformation($"Selecting panel: {name}");
+                        controller.SendPanel(panel);
                     }
                     else
                     {
-                        next = panel switch
+                        next = previous switch
                         {
+                            Panel.None => Panel.Talents,
                             Panel.KillsDeathsAssists => Panel.ActionsPerMinute,
                             Panel.ActionsPerMinute => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.CrowdControlEnemyHeroes,
                             Panel.CarriedObjectives => Panel.CrowdControlEnemyHeroes,
@@ -198,26 +198,24 @@ namespace HeroesReplay.Core
                             Panel.DeathDamageRole => Panel.Experience,
                             Panel.Experience => Panel.Talents,
                             Panel.Talents => Panel.TimeDeadDeathsSelfSustain,
-                            Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists
+                            Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists,
+                            _ => Panel.Talents
                         };
                     }
 
-                    if (panel != next)
+                    if (next != previous)
                     {
-                        panel = next;
-                        var name = Enum.GetName(typeof(Panel), panel);
-                        logger.LogInformation($"Selecting panel: {name}");
-                        controller.SendPanel((int)panel);
+                        previous = next;
+                        controller.SendPanel(next);
                     }
+
+                    await Task.Delay(TimeSpan.FromSeconds(10), token);
                 }
                 catch (Exception e)
                 {
                     logger.LogError(e, "Could not complete panel loop");
                 }
-
-                await Task.Delay(TimeSpan.FromSeconds(10), token);
             }
-
         }
 
         private void ConfigureFollowMode()
@@ -227,27 +225,6 @@ namespace HeroesReplay.Core
                 logger.LogInformation("A player has been selected, can now set follow selected unit mode.");
                 controller.CameraFollow();
                 FollowModeSet = true;
-            }
-        }
-
-        private void ConfigureZoom()
-        {
-            if (Focus != null)
-            {
-                logger.LogInformation("A player has been selected, can now configure zoom.");
-
-                switch (settings.Spectate.ZoomLevel)
-                {
-                    case ZoomLevel.Far: controller.SendToggleMaximumZoom(); break;
-                    case ZoomLevel.Default: break;
-                    case ZoomLevel.Medium: controller.SendToggleMediumZoom(); break;
-                }
-
-                ZoomLevel = settings.Spectate.ZoomLevel;
-            }
-            else
-            {
-                logger.LogInformation("Could not set zoom because a player has not yet been selected.");
             }
         }
 

@@ -24,7 +24,7 @@ namespace HeroesReplay.Core
 
         public void SendFocus(int player) => logger.LogInformation($"Selected player {player}");
 
-        public void SendPanel(int panel) => logger.LogInformation($"Selected panel {panel}");
+        public void SendPanel(Panel panel) => logger.LogInformation($"Selected panel {panel}");
 
         public Task<TimeSpan?> TryGetTimerAsync()
         {

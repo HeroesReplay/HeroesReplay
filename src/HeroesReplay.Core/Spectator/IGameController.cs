@@ -10,7 +10,7 @@ namespace HeroesReplay.Core
         Task<StormReplay> LaunchAsync(StormReplay stormReplay);
         Task<TimeSpan?> TryGetTimerAsync();
         void SendFocus(int player);
-        void SendPanel(int panel);
+        void SendPanel(Panel panel);
         void KillGame();
         void SendToggleMaximumZoom();
         void ToggleControls();

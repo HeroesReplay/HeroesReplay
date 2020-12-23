@@ -377,9 +377,9 @@ namespace HeroesReplay.Core
             SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
         }
 
-        public void SendPanel(int index)
+        public void SendPanel(Panel panel)
         {
-            IntPtr Key = (IntPtr)Keys[index];
+            IntPtr Key = (IntPtr)Keys[(int)panel];
             SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
             SendMessage(Handle, WindowMessage.WM_KEYDOWN, Key, IntPtr.Zero);
             SendMessage(Handle, WindowMessage.WM_KEYUP, Key, IntPtr.Zero);

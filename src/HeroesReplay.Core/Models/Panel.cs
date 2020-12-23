@@ -2,13 +2,14 @@
 {
     public enum Panel
     {
-        Talents = 1,
-        DeathDamageRole = 2,
-        ActionsPerMinute = 3,
-        Experience = 4,
-        TimeDeadDeathsSelfSustain = 5,
-        CarriedObjectives = 6,
-        KillsDeathsAssists = 7,
-        CrowdControlEnemyHeroes = 8
+        None = -1,
+        Talents = 0,
+        DeathDamageRole = 1,
+        ActionsPerMinute = 2,
+        Experience = 3,
+        TimeDeadDeathsSelfSustain = 4,
+        CarriedObjectives = 5,
+        KillsDeathsAssists = 6,
+        CrowdControlEnemyHeroes = 7
     }
 }
