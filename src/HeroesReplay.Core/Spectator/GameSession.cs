@@ -55,6 +55,8 @@ namespace HeroesReplay.Core
                 Task.Run(FocusLoopAsync, token),
                 Task.Run(StateLoopAsync, token),
                 Task.Run(ConfigureLoopAsync, token));
+
+            await Task.Delay(settings.Spectate.EndScreenTime);
         }
 
         private async Task StateLoopAsync()
@@ -87,8 +89,6 @@ namespace HeroesReplay.Core
 
                 await Task.Delay(TimeSpan.FromSeconds(1), token);
             }
-
-            await Task.Delay(settings.Spectate.EndScreenTime);
         }
 
         private async Task ConfigureLoopAsync()

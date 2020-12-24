@@ -100,10 +100,22 @@ namespace HeroesReplay.Core
             }
 
             // Wait for home screen before launching replay
-            await Policy.Handle<Exception>()
+            var loggedIn = await Policy.Handle<Exception>()
                 .OrResult<bool>(loaded => loaded == false)
-                .WaitAndRetryAsync(retryCount: 20, retry => TimeSpan.FromSeconds(2))
+                .WaitAndRetryAsync(retryCount: 10, retry => TimeSpan.FromSeconds(5))
                 .ExecuteAsync(async (t) => await IsHomeScreen(), CancellationToken.None);
+
+
+            if (IsLaunched && !loggedIn)
+            {
+                logger.LogInformation("The game was launched, but we did not end up on the home screen. Killing game.");
+                
+                KillGame();
+
+                await Task.Delay(5000);
+
+                await LaunchGameFromBattlenet();
+            }
 
             logger.LogInformation("Heroes of the Storm Home Screen detected");
         }
@@ -125,7 +137,7 @@ namespace HeroesReplay.Core
             await Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetryAsync(retryCount: 300, retry => TimeSpan.FromSeconds(2))
+                    .WaitAndRetryAsync(retryCount: 10, retry => TimeSpan.FromSeconds(5))
                     .ExecuteAsync(async (t) => await ContainsAnyAsync(searchTerms), CancellationToken.None);
         }
 
@@ -291,6 +303,8 @@ namespace HeroesReplay.Core
         }
 
         private async Task<bool> IsHomeScreen() => await ContainsAllAsync(settings.OCR.HomeScreenText);
+
+        private async Task<bool> IsLoginScreen() => await ContainsAnyAsync(settings.OCR.LoginScreenText);
 
         private async Task<bool> IsReplay() => (await TryGetTimerAsync()) != null;
 

@@ -6,6 +6,7 @@ namespace HeroesReplay.Core.Shared
     {
         public IEnumerable<string> HomeScreenText { get; init; }
         public IEnumerable<string> LoadingScreenText { get; init; }
+        public IEnumerable<string> LoginScreenText { get; init; }
         public string TimerSeperator { get; init; }
         public string TimerNegativePrefix { get; init; }
         public int TimerHours { get; init; }

@@ -1,6 +1,7 @@
 ﻿using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
 
+using System;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core
@@ -31,6 +32,7 @@ namespace HeroesReplay.Core
         {
             await session.SpectateAsync();
             gameController.KillGame();
+            await Task.Delay(TimeSpan.FromSeconds(10));
         }
     }
 }
