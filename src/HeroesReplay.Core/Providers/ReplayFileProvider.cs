@@ -46,7 +46,7 @@ namespace HeroesReplay.Core.Providers
 
                 if (result != DataParser.ReplayParseResult.Exception && result != DataParser.ReplayParseResult.PreAlphaWipe && result != DataParser.ReplayParseResult.Incomplete)
                 {
-                    return new StormReplay(path, replay);
+                    return new StormReplay(path, replay, null);
                 }
             }
 

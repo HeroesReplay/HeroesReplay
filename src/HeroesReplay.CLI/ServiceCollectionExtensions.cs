@@ -8,6 +8,7 @@ using HeroesReplay.Core.Processes;
 using HeroesReplay.Core.Providers;
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.Obs;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Configuration;
@@ -51,28 +52,29 @@ namespace HeroesReplay.CLI
                 .AddSingleton(settings)
                 .AddSingleton(new CancellationTokenProvider(token))
                 .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
-                .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(CaptureStub), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen), _ => typeof(CaptureBitBlt)})
+                .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(CaptureStub), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen), _ => typeof(CaptureBitBlt) })
                 .AddSingleton(typeof(IGameController), settings.Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
                 .AddSingleton<IGameData, GameData>()
-                .AddSingleton<ReplayHelper>()                
+                .AddSingleton<ReplayHelper>()
                 .AddSingleton<SessionHolder>()
                 .AddSingleton<IAbilityDetector, AbilityDetector>()
                 .AddSingleton<IGameManager, GameManager>()
                 .AddSingleton<IReplayAnalzer, ReplayAnalyzer>()
+                .AddSingleton<IObsController, ObsController>()
                 .AddSingleton<IGameSession, GameSession>()
                 .AddSingleton(typeof(ISessionHolder), provider => provider.GetRequiredService<SessionHolder>())
                 .AddSingleton(typeof(ISessionSetter), provider => provider.GetRequiredService<SessionHolder>())
-                .AddSingleton<ISessionCreator, SessionCreator>()                
+                .AddSingleton<ISessionCreator, SessionCreator>()
                 .AddSingleton<TwitchClient>()
-                .AddSingleton<TwitchAPI>()          
+                .AddSingleton<TwitchAPI>()
                 .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
                 {
                     Settings settings = serviceProvider.GetRequiredService<Settings>();
                     return new ApiSettings { AccessToken = settings.TwitchApi.AccessToken, ClientId = settings.TwitchApi.ClientId };
                 })
-                .AddSingleton<HeroesProfileService>()
-                .AddSingleton<ReplayFileWriter>()              
-                .AddSingleton(typeof(IReplayProvider), replayProvider)                
+                .AddSingleton<IHeroesProfileService, HeroesProfileService>()
+                .AddSingleton<ReplayFileWriter>()
+                .AddSingleton(typeof(IReplayProvider), replayProvider)
                 .AddSingleton<SaltySadism>();
         }
     }

@@ -28,7 +28,7 @@ namespace HeroesReplay.Core.Providers
         private readonly CancellationTokenProvider provider;
         private readonly ReplayHelper replayHelper;
         private readonly ILogger<HeroesProfileProvider> logger;
-        private readonly HeroesProfileService heroesProfileService;
+        private readonly IHeroesProfileService heroesProfileService;
         private int minReplayId;
 
         private int MinReplayId
@@ -41,9 +41,9 @@ namespace HeroesReplay.Core.Providers
                     {
                         FileInfo? latest = ReplaysDirectory.GetFiles(settings.StormReplay.WildCard).OrderByDescending(f => f.CreationTime).FirstOrDefault();
 
-                        if (replayHelper.TryGetReplayId(latest.Name, out int replayId))
+                        if (replayHelper.TryGetReplayId(latest.Name, out int? replayId))
                         {
-                            MinReplayId = replayId;
+                            MinReplayId = replayId.Value;
                         }
                     }
                     else 
@@ -67,7 +67,7 @@ namespace HeroesReplay.Core.Providers
             }
         }
 
-        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, HeroesProfileService heroesProfileService, CancellationTokenProvider provider, ReplayHelper replayHelper, Settings settings)
+        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, IHeroesProfileService heroesProfileService, CancellationTokenProvider provider, ReplayHelper replayHelper, Settings settings)
         {
             this.provider = provider;
             this.replayHelper = replayHelper;
@@ -119,7 +119,7 @@ namespace HeroesReplay.Core.Providers
 
             if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
             {
-                return new StormReplay(cacheStormReplay.FullName, replay);
+                return new StormReplay(cacheStormReplay.FullName, replay, heroesProfileReplay.Id);
             }
 
             return null;

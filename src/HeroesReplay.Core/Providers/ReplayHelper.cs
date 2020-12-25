@@ -1,5 +1,4 @@
 ﻿using HeroesReplay.Core.Shared;
-
 using Microsoft.Extensions.Logging;
 
 using System;
@@ -18,16 +17,11 @@ namespace HeroesReplay.Core.Providers
             this.settings = settings;
         }
 
-        public bool TryGetReplayId(StormReplay stormReplay, out int replayId)
-        {
-            replayId = 0;
+        public bool TryGetReplayId(StormReplay stormReplay, out int? replayId) => TryGetReplayId(stormReplay.Path, out replayId);
 
-            return TryGetReplayId(stormReplay.Path, out replayId);
-        }
-
-        public bool TryGetReplayId(string path, out int replayId)
+        public bool TryGetReplayId(string path, out int? replayId)
         {
-            replayId = -1;
+            replayId = null;
 
             try
             {

@@ -19,12 +19,14 @@ namespace HeroesReplay.Core.Providers
     {
         private readonly ILogger<ReplayDirectoryProvider> logger;
         private readonly Settings settings;
+        private readonly ReplayHelper replayHelper;
         private readonly Queue<string> queue;
 
-        public ReplayDirectoryProvider(ILogger<ReplayDirectoryProvider> logger, Settings settings)
+        public ReplayDirectoryProvider(ILogger<ReplayDirectoryProvider> logger, Settings settings, ReplayHelper replayHelper)
         {
             this.logger = logger;
             this.settings = settings;
+            this.replayHelper = replayHelper;
             queue = new Queue<string>(Directory.GetFiles(settings.Location.ReplaySourcePath, settings.StormReplay.WildCard, SearchOption.AllDirectories).OrderBy(GetCreationTime));
         }
 
@@ -50,7 +52,12 @@ namespace HeroesReplay.Core.Providers
 
                 if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
                 {
-                    return new StormReplay(path, replay);
+                    if (replayHelper.TryGetReplayId(path, out int? replayId))
+                    {
+                        logger.LogInformation($"Replay id found for file: {replayId}");
+                    }
+
+                    return new StormReplay(path, replay, replayId);
                 }
             }
 

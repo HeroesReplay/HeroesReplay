@@ -1,5 +1,4 @@
 ﻿using HeroesReplay.Core.Providers;
-using HeroesReplay.Core.Services.HotsApi;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -13,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
 {
-    public class HeroesProfileService
+    public class HeroesProfileService : IHeroesProfileService
     {
         private readonly ILogger<HeroesProfileService> logger;
         private readonly ReplayHelper replayHelper;

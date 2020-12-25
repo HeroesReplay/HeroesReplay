@@ -72,7 +72,7 @@ namespace HeroesReplay.Core
                     if (timer.HasValue)
                     {
                         // Dont rely on the unique second, incase it blips
-                        if (timer.Value.Add(TimeSpan.FromSeconds(5)) >= Data.End) State = State.End;
+                        if (timer.Value.Add(TimeSpan.FromSeconds(15)) >= Data.End) State = State.End;
                         else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
                         else if (timer.Value > Timer) State = State.Running;
                         else State = State.Start;
@@ -244,7 +244,7 @@ namespace HeroesReplay.Core
                  {
                      if (timer == null) return false;
 
-                     if (Timer != TimeSpan.Zero && (timer > Timer.Add(TimeSpan.FromSeconds(10)) || timer < Timer.Subtract(TimeSpan.FromSeconds(10))))
+                     if (Timer != TimeSpan.Zero && (timer > Timer.Add(TimeSpan.FromSeconds(15)) || timer < Timer.Subtract(TimeSpan.FromSeconds(15))))
                      {
                          logger.LogInformation($"OCR Timer is not an expected value? Before: {Timer}, After: {timer}");
                          return false;

@@ -41,6 +41,7 @@
     <PackageReference Include="Microsoft.Extensions.Options" Version="5.0.0" />
     <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.19041.1" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+    <PackageReference Include="obs-websocket-dotnet" Version="4.8.1" />
     <PackageReference Include="PInvoke.Gdi32" Version="0.7.78" />
     <PackageReference Include="PInvoke.User32" Version="0.7.78" />
     <PackageReference Include="Polly" Version="7.2.1" />

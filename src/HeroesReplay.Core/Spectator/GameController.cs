@@ -28,6 +28,7 @@ namespace HeroesReplay.Core
     public class GameController : IGameController
     {
         private readonly OcrEngine engine;
+        private readonly CancellationTokenProvider tokenProvider;
         private readonly ILogger<GameController> logger;
         private readonly Settings settings;
         private readonly CaptureStrategy captureStrategy;
@@ -50,12 +51,13 @@ namespace HeroesReplay.Core
         private Process? Game => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
         private IntPtr Handle => Game?.MainWindowHandle ?? IntPtr.Zero;
 
-        public GameController(ILogger<GameController> logger, Settings settings, CaptureStrategy captureStrategy, OcrEngine engine)
+        public GameController(ILogger<GameController> logger, Settings settings, CaptureStrategy captureStrategy, OcrEngine engine, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger;
             this.settings = settings;
             this.captureStrategy = captureStrategy;
             this.engine = engine;
+            this.tokenProvider = tokenProvider;
         }
 
         public async Task<StormReplay> LaunchAsync(StormReplay stormReplay)
@@ -100,13 +102,13 @@ namespace HeroesReplay.Core
             }
 
             // Wait for home screen before launching replay
-            var loggedIn = await Policy.Handle<Exception>()
+            var loggedIn = await Policy
+                .Handle<Exception>()
                 .OrResult<bool>(loaded => loaded == false)
                 .WaitAndRetryAsync(retryCount: 10, retry => TimeSpan.FromSeconds(5))
-                .ExecuteAsync(async (t) => await IsHomeScreen(), CancellationToken.None);
+                .ExecuteAsync(async (t) => await IsHomeScreen(), this.tokenProvider.Token);
 
-
-            if (IsLaunched && !loggedIn)
+            if (!loggedIn)
             {
                 logger.LogInformation("The game was launched, but we did not end up on the home screen. Killing game.");
                 
@@ -128,7 +130,7 @@ namespace HeroesReplay.Core
                 Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetry(retryCount: 300, retry => TimeSpan.FromSeconds(2))
+                    .WaitAndRetry(retryCount: 150, retry => TimeSpan.FromSeconds(5))
                     .Execute(() => IsMatchingClientVersion(stormReplay.Replay));
             }
 
@@ -138,7 +140,7 @@ namespace HeroesReplay.Core
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
                     .WaitAndRetryAsync(retryCount: 10, retry => TimeSpan.FromSeconds(5))
-                    .ExecuteAsync(async (t) => await ContainsAnyAsync(searchTerms), CancellationToken.None);
+                    .ExecuteAsync(async (t) => await ContainsAnyAsync(searchTerms), this.tokenProvider.Token);
         }
 
         public async Task<TimeSpan?> TryGetTimerAsync()

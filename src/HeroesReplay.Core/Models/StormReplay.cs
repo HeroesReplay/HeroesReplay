@@ -9,12 +9,15 @@ namespace HeroesReplay.Core.Shared
     {
         public string Path { get; }
 
+        public int? ReplayId { get; }
+
         public Replay Replay { get; }
 
-        public StormReplay(string path, Replay replay)
+        public StormReplay(string path, Replay replay, int? replayId)
         {
             Replay = replay;
             Path = path;
+            ReplayId = replayId;
         }
     }
 }
