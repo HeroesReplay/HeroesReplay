@@ -59,8 +59,8 @@
         "versioned_id": "wasapi_output_capture",
         "volume": 1.0
     },
-    "current_program_scene": "Heroes of the Storm",
-    "current_scene": "Heroes of the Storm",
+    "current_program_scene": "summary",
+    "current_scene": "summary",
     "current_transition": "Fade",
     "groups": [],
     "modules": {
@@ -131,19 +131,19 @@
             "name": "summary"
         },
         {
-            "name": "match scores"
+            "name": "match-scores"
         },
         {
             "name": "talents"
         },
         {
-            "name": "experience"
+            "name": "experience-over-time"
         },
         {
-            "name": "team 1 stats"
+            "name": "team-1-advanced-stats"
         },
         {
-            "name": "team 2 stats"
+            "name": "team-2-advanced-stats"
         }
     ],
     "sources": [
@@ -155,10 +155,10 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.Interlude music": [],
-                "libobs.hide_scene_item.match summary browser": [],
-                "libobs.show_scene_item.Interlude music": [],
-                "libobs.show_scene_item.match summary browser": []
+                "libobs.hide_scene_item.interlude-music": [],
+                "libobs.hide_scene_item.summary-browser": [],
+                "libobs.show_scene_item.interlude-music": [],
+                "libobs.show_scene_item.summary-browser": []
             },
             "id": "scene",
             "mixers": 0,
@@ -189,8 +189,8 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 4,
-                        "locked": true,
-                        "name": "Interlude music",
+                        "locked": false,
+                        "name": "interlude-music",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -218,8 +218,8 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 1,
-                        "locked": true,
-                        "name": "match summary browser",
+                        "locked": false,
+                        "name": "summary-browser",
                         "pos": {
                             "x": 1.0,
                             "y": 0.0
@@ -345,7 +345,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "match summary browser",
+            "name": "summary-browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -357,7 +357,7 @@
                 "height": 700,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33799917#summary",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#summary",
                 "width": 1920
             },
             "sync": 0,
@@ -372,16 +372,16 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.Interlude music": [],
-                "libobs.hide_scene_item.match scores browser": [],
-                "libobs.show_scene_item.Interlude music": [],
-                "libobs.show_scene_item.match scores browser": []
+                "libobs.hide_scene_item.interlude-music": [],
+                "libobs.hide_scene_item.match-scores-browser": [],
+                "libobs.show_scene_item.interlude-music": [],
+                "libobs.show_scene_item.match-scores-browser": []
             },
             "id": "scene",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "match scores",
+            "name": "match-scores",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -406,8 +406,8 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 3,
-                        "locked": true,
-                        "name": "Interlude music",
+                        "locked": false,
+                        "name": "interlude-music",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -435,8 +435,8 @@
                         "crop_top": 0,
                         "group_item_backup": false,
                         "id": 4,
-                        "locked": true,
-                        "name": "match scores browser",
+                        "locked": false,
+                        "name": "match-scores-browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -464,16 +464,16 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.Interlude music": [],
-                "libobs.hide_scene_item.team 1 stats browser": [],
-                "libobs.show_scene_item.Interlude music": [],
-                "libobs.show_scene_item.team 1 stats browser": []
+                "libobs.hide_scene_item.interlude-music": [],
+                "libobs.hide_scene_item.team-1-advanced-stats-browser": [],
+                "libobs.show_scene_item.interlude-music": [],
+                "libobs.show_scene_item.team-1-advanced-stats-browser": []
             },
             "id": "scene",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "team 1 stats",
+            "name": "team-1-advanced-stats",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -499,7 +499,7 @@
                         "group_item_backup": false,
                         "id": 2,
                         "locked": false,
-                        "name": "Interlude music",
+                        "name": "interlude-music",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -528,7 +528,7 @@
                         "group_item_backup": false,
                         "id": 3,
                         "locked": false,
-                        "name": "team 1 stats browser",
+                        "name": "team-1-advanced-stats-browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -556,10 +556,10 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.Interlude music": [],
-                "libobs.hide_scene_item.team talents browser": [],
-                "libobs.show_scene_item.Interlude music": [],
-                "libobs.show_scene_item.team talents browser": []
+                "libobs.hide_scene_item.interlude-music": [],
+                "libobs.hide_scene_item.talents browser": [],
+                "libobs.show_scene_item.interlude-music": [],
+                "libobs.show_scene_item.talents browser": []
             },
             "id": "scene",
             "mixers": 0,
@@ -591,7 +591,7 @@
                         "group_item_backup": false,
                         "id": 2,
                         "locked": false,
-                        "name": "Interlude music",
+                        "name": "interlude-music",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -620,7 +620,7 @@
                         "group_item_backup": false,
                         "id": 1,
                         "locked": false,
-                        "name": "team talents browser",
+                        "name": "talents browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -648,16 +648,16 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.Interlude music": [],
-                "libobs.hide_scene_item.team 2 stats browser": [],
-                "libobs.show_scene_item.Interlude music": [],
-                "libobs.show_scene_item.team 2 stats browser": []
+                "libobs.hide_scene_item.interlude-music": [],
+                "libobs.hide_scene_item.team-2-advanced-stats-browser": [],
+                "libobs.show_scene_item.interlude-music": [],
+                "libobs.show_scene_item.team-2-advanced-stats-browser": []
             },
             "id": "scene",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "team 2 stats",
+            "name": "team-2-advanced-stats",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -683,7 +683,7 @@
                         "group_item_backup": false,
                         "id": 2,
                         "locked": false,
-                        "name": "Interlude music",
+                        "name": "interlude-music",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -712,7 +712,7 @@
                         "group_item_backup": false,
                         "id": 1,
                         "locked": false,
-                        "name": "team 2 stats browser",
+                        "name": "team-2-advanced-stats-browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -780,7 +780,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "match scores browser",
+            "name": "match-scores-browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -792,7 +792,7 @@
                 "height": 1300,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33799917#match-scores",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#match-scores",
                 "width": 1920
             },
             "sync": 0,
@@ -846,7 +846,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "team 2 stats browser",
+            "name": "team-2-advanced-stats-browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -856,9 +856,10 @@
             "settings": {
                 "css": "div#hotsapi-alert {\n  display: none\n}",
                 "height": 1800,
+                "reroute_audio": false,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33799917#team-2-advanced-stats",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#team-2-advanced-stats",
                 "width": 1920
             },
             "sync": 0,
@@ -909,7 +910,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "team talents browser",
+            "name": "talents browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -918,10 +919,11 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "css": "div#hotsapi-alert {\n  display: none\n}",
+                "fps_custom": false,
                 "height": 1080,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33799917#talents",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#talents",
                 "width": 1920
             },
             "sync": 0,
@@ -948,7 +950,7 @@
             "mixers": 255,
             "monitoring_type": 1,
             "muted": false,
-            "name": "Interlude music",
+            "name": "interlude-music",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -960,7 +962,7 @@
                 "hw_decode": true,
                 "local_file": "D:\\HotsDevelopment\\HGC (2018) BREAK  MUSIC (1) (128 kbps).mp3",
                 "restart_on_activate": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33799917#team-1-advanced-stats"
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#team-1-advanced-stats"
             },
             "sync": 0,
             "versioned_id": "ffmpeg_source",
@@ -1012,7 +1014,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "team 1 stats browser",
+            "name": "team-1-advanced-stats-browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1039,16 +1041,16 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.Interlude music": [],
-                "libobs.hide_scene_item.experience over time browser": [],
-                "libobs.show_scene_item.Interlude music": [],
-                "libobs.show_scene_item.experience over time browser": []
+                "libobs.hide_scene_item.experience-over-time-browser": [],
+                "libobs.hide_scene_item.interlude-music": [],
+                "libobs.show_scene_item.experience-over-time-browser": [],
+                "libobs.show_scene_item.interlude-music": []
             },
             "id": "scene",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "experience",
+            "name": "experience-over-time",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1074,7 +1076,7 @@
                         "group_item_backup": false,
                         "id": 2,
                         "locked": false,
-                        "name": "Interlude music",
+                        "name": "interlude-music",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -1103,7 +1105,7 @@
                         "group_item_backup": false,
                         "id": 1,
                         "locked": false,
-                        "name": "experience over time browser",
+                        "name": "experience-over-time-browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -1166,7 +1168,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "experience over time browser",
+            "name": "experience-over-time-browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1186,6 +1188,17 @@
             "volume": 1.0
         }
     ],
-    "transition_duration": 1000,
-    "transitions": []
+    "transition_duration": 2000,
+    "transitions": [
+        {
+            "id": "obs_stinger_transition",
+            "name": "Stinger",
+            "settings": {}
+        },
+        {
+            "id": "slide_transition",
+            "name": "Slide",
+            "settings": {}
+        }
+    ]
 }
