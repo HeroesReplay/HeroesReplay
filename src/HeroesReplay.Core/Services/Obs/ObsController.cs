@@ -30,7 +30,7 @@ namespace HeroesReplay.Core.Services.Obs
 
             // Connect
             var waiter = new ManualResetEventSlim();
-            
+
             obs.Connected += (sender, e) =>
             {
                 waiter.Set();
@@ -45,24 +45,37 @@ namespace HeroesReplay.Core.Services.Obs
 
             // INTERLUDE MUSIC
             var interlude = sourceList.Find(x => x.TypeID == "ffmpeg_source");
-            var interludeSourceSettings = obs.GetSourceSettings(interlude.Name);
-            JObject interludeSettings = interludeSourceSettings.sourceSettings;
-            interludeSettings["local_file"] = settings.OBS.InterludeMusicPath;
-            obs.SetSourceSettings(interlude.Name, interludeSettings);
-            logger.LogInformation($"set interlude music to: {interludeSettings["local_file"].Value<string>()}");
+
+            if (interlude != null)
+            {
+                var interludeSourceSettings = obs.GetSourceSettings(interlude.Name);
+                JObject interludeSettings = interludeSourceSettings.sourceSettings;
+
+                var interludeTrack = interludeSettings["local_file"].Value<string>();
+
+                if (interludeTrack != settings.OBS.InterludeMusicPath)
+                {
+                    interludeSettings["local_file"] = settings.OBS.InterludeMusicPath;
+                    obs.SetSourceSettings(interlude.Name, interludeSettings);
+                    logger.LogInformation($"set interlude music to: {settings.OBS.InterludeMusicPath}");
+                }
+            }
 
             // SET THE BROWSER ENDPOINTS
             foreach (var segment in this.settings.OBS.BrowserSources)
-            { 
+            {
                 var url = segment.SourceUrl.Replace("[ID]", replayId.ToString());
-                var scene = sceneList.Scenes.Find(scene => scene.Name == segment.SceneName);
-                var source = sourceList.Find(source => scene.Items.Any(sceneItem => sceneItem.SourceName == source.Name));
+                var source = sourceList.Find(si => si.Name.Equals(segment.SourceName, System.StringComparison.OrdinalIgnoreCase));
 
-                SourceSettings sourceSettings = obs.GetSourceSettings(source.Name);
-                JObject browserSettings = sourceSettings.sourceSettings;
-                browserSettings["url"] = url;
-                obs.SetSourceSettings(source.Name, browserSettings);
-                logger.LogInformation($"set {segment.SceneName} URL to: {url}");
+                if (source != null)
+                {
+                    SourceSettings sourceSettings = obs.GetSourceSettings(source.Name);
+                    JObject browserSettings = sourceSettings.sourceSettings;
+                    browserSettings["url"] = url;
+                    obs.SetSourceSettings(source.Name, browserSettings);
+                    logger.LogInformation($"set {segment.SceneName} URL to: {url}");
+                    await Task.Delay(250);
+                }
             }
 
             // CYCLE THE SCENES

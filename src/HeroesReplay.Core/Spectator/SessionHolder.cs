@@ -13,6 +13,4 @@ namespace HeroesReplay.Core
             this.StormReplay = replay;
         }
     }
-
-
 }

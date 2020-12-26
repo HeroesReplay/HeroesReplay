@@ -59,17 +59,22 @@
         "versioned_id": "wasapi_output_capture",
         "volume": 1.0
     },
-    "current_program_scene": "summary",
-    "current_scene": "summary",
+    "current_program_scene": "please-wait",
+    "current_scene": "please-wait",
     "current_transition": "Fade",
     "groups": [],
     "modules": {
         "auto-scene-switcher": {
-            "active": false,
-            "interval": 300,
-            "non_matching_scene": "Heroes of the Storm",
+            "active": true,
+            "interval": 2000,
+            "non_matching_scene": "please-wait",
             "switch_if_not_matching": true,
-            "switches": []
+            "switches": [
+                {
+                    "scene": "Heroes of the Storm",
+                    "window_title": "Heroes of the Storm"
+                }
+            ]
         },
         "captions": {
             "enabled": false,
@@ -144,9 +149,372 @@
         },
         {
             "name": "team-2-advanced-stats"
+        },
+        {
+            "name": "please-wait"
         }
     ],
     "sources": [
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_gdiplus",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "loading-next-game",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "text": "The next replay will load soon."
+            },
+            "sync": 0,
+            "versioned_id": "text_gdiplus_v2",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "image_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "background-image-2",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "file": "D:/HotsDevelopment/alarak-heroes-of-the-storm-8y-1920x1080.jpg"
+            },
+            "sync": 0,
+            "versioned_id": "image_source",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "image_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "background-image",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "file": "C:/Users/patri/OneDrive/Pictures/full_deathwing.png"
+            },
+            "sync": 0,
+            "versioned_id": "image_source",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_gdiplus",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Affiliation",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "align": "center",
+                "font": {
+                    "face": "Arial",
+                    "flags": 0,
+                    "size": 24,
+                    "style": "Regular"
+                },
+                "text": "twitch.tv/saltysadism has no affiliation with Blizzard or Heroes of the Storm.",
+                "valign": "bottom"
+            },
+            "sync": 0,
+            "versioned_id": "text_gdiplus_v2",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_gdiplus",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "Upload to Heroes Profile",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "align": "center",
+                "bk_opacity": 10,
+                "chatlog": false,
+                "extents": false,
+                "font": {
+                    "face": "Arial",
+                    "flags": 0,
+                    "size": 28,
+                    "style": "Regular"
+                },
+                "text": "Upload your replays to Heroes Profile. Link in the description panel below.* ",
+                "valign": "top"
+            },
+            "sync": 0,
+            "versioned_id": "text_gdiplus_v2",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {
+                "OBSBasic.SelectScene": [],
+                "libobs.hide_scene_item.Affiliation": [],
+                "libobs.hide_scene_item.Upload to Heroes Profile": [],
+                "libobs.hide_scene_item.background-image": [],
+                "libobs.hide_scene_item.background-image-2": [],
+                "libobs.hide_scene_item.interlude-music": [],
+                "libobs.hide_scene_item.loading-next-game": [],
+                "libobs.show_scene_item.Affiliation": [],
+                "libobs.show_scene_item.Upload to Heroes Profile": [],
+                "libobs.show_scene_item.background-image": [],
+                "libobs.show_scene_item.background-image-2": [],
+                "libobs.show_scene_item.interlude-music": [],
+                "libobs.show_scene_item.loading-next-game": []
+            },
+            "id": "scene",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "please-wait",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "custom_size": false,
+                "id_counter": 11,
+                "items": [
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 10,
+                        "locked": false,
+                        "name": "background-image-2",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 9,
+                        "locked": false,
+                        "name": "background-image",
+                        "pos": {
+                            "x": 110.0,
+                            "y": 176.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.31308850646018982,
+                            "y": 0.31332358717918396
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 6,
+                        "locked": false,
+                        "name": "interlude-music",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 5,
+                        "locked": false,
+                        "name": "Affiliation",
+                        "pos": {
+                            "x": 12.0,
+                            "y": 1040.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.2042253017425537,
+                            "y": 1.2083333730697632
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 4,
+                        "locked": false,
+                        "name": "Upload to Heroes Profile",
+                        "pos": {
+                            "x": 12.0,
+                            "y": 14.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.9141716957092285,
+                            "y": 1.9137930870056152
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 11,
+                        "locked": false,
+                        "name": "loading-next-game",
+                        "pos": {
+                            "x": 107.0,
+                            "y": 524.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.2084680050611496,
+                            "y": 0.2083333283662796
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    }
+                ]
+            },
+            "sync": 0,
+            "versioned_id": "scene",
+            "volume": 1.0
+        },
         {
             "balance": 0.5,
             "deinterlace_field_order": 0,
@@ -263,7 +631,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 2,
+                "id_counter": 3,
                 "items": [
                     {
                         "align": 5,
@@ -357,7 +725,7 @@
                 "height": 700,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#summary",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#summary",
                 "width": 1920
             },
             "sync": 0,
@@ -761,7 +1129,7 @@
                         "cy": 1080,
                         "limit_cx": false,
                         "limit_cy": true,
-                        "loop": false,
+                        "loop": true,
                         "speed_y": 15.0
                     },
                     "sync": 0,
@@ -792,7 +1160,7 @@
                 "height": 1300,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#match-scores",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#match-scores",
                 "width": 1920
             },
             "sync": 0,
@@ -828,7 +1196,7 @@
                         "limit_cy": true,
                         "loop": false,
                         "speed_x": 0.0,
-                        "speed_y": 15.0
+                        "speed_y": 30.0
                     },
                     "sync": 0,
                     "versioned_id": "scroll_filter",
@@ -859,7 +1227,7 @@
                 "reroute_audio": false,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#team-2-advanced-stats",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#team-2-advanced-stats",
                 "width": 1920
             },
             "sync": 0,
@@ -923,7 +1291,7 @@
                 "height": 1080,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#talents",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#talents",
                 "width": 1920
             },
             "sync": 0,
@@ -962,7 +1330,7 @@
                 "hw_decode": true,
                 "local_file": "D:\\HotsDevelopment\\HGC (2018) BREAK  MUSIC (1) (128 kbps).mp3",
                 "restart_on_activate": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800036#team-1-advanced-stats"
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#team-1-advanced-stats"
             },
             "sync": 0,
             "versioned_id": "ffmpeg_source",
@@ -995,8 +1363,8 @@
                     "settings": {
                         "cy": 1080,
                         "limit_cy": true,
-                        "loop": false,
-                        "speed_y": 15.0
+                        "loop": true,
+                        "speed_y": 30.0
                     },
                     "sync": 0,
                     "versioned_id": "scroll_filter",
@@ -1150,10 +1518,36 @@
                     "push-to-talk": false,
                     "push-to-talk-delay": 0,
                     "settings": {
-                        "bottom": 600
+                        "bottom": 600,
+                        "relative": true
                     },
                     "sync": 0,
                     "versioned_id": "crop_filter",
+                    "volume": 1.0
+                },
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "gpu_delay",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Render Delay",
+                    "prev_ver": 436273152,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {
+                        "delay_ms": 500
+                    },
+                    "sync": 0,
+                    "versioned_id": "gpu_delay",
                     "volume": 1.0
                 }
             ],
@@ -1177,6 +1571,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "css": "div#hotsapi-alert {\n  display: none\n}",
+                "fps_custom": true,
                 "height": 1080,
                 "restart_when_active": true,
                 "shutdown": true,

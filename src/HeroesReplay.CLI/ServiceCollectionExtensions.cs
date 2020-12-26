@@ -47,7 +47,7 @@ namespace HeroesReplay.CLI
             var settings = configuration.Get<Settings>();
 
             return services
-                .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole())
+                .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
                 .AddSingleton<IConfiguration>(configuration)
                 .AddSingleton(settings)
                 .AddSingleton(new CancellationTokenProvider(token))
