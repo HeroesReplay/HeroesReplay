@@ -1,21 +1,25 @@
 # Heroes Replay
 
-The Heroes of the Storm Automated Spectator
+The Heroes of the Storm Automated Spectator. 
 
 ## Future goals of the project
 
-- Develop better state detection for `loading`, `playing`, `paused`, `ended` states.
-- Improve the existing spectate logic
-- Add ping events to focus hero criteria, e.g select heroes who are pinged of danger or ping for assistance.
-- Add Twitch chat integration for team win betting
-- Host a 24/7 stream similar to [SaltyTeemo](https://www.twitch.tv/saltyteemo)
+- Improve the existing spectate logic.
+- Twitch integration for team win betting.
+- YouTube uploading of replays.
 
 ## About
 
-Heroes Replay is a project that automates spectating `.StormReplay` files. It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) to parse the replay file and then using that information, it can decide which heroes and panels to select. By sending input commands
-to the game.
+Heroes Replay is a project that automates spectating `.StormReplay` files.  
+It uses [Heroes.ReplayParser](https://github.com/barrett777/Heroes.ReplayParser) to analyze replays for to know which heroes to focus during the game.  
+The software is running on a dedicated machine streaming on the [Twitch Platform](http://twitch.tv/saltysadism)
 
 ## Features
+
+- Running on [http://twitch.tv/saltysadism](http://twitch.tv/saltysadism).
+- Integrates with Heroes Profile Website to display an end of game report such as stats, graphs & talents.
+- Heroes Profile API integration for downloading replays & displaying MMR.
+- A customised UI Observer Interface by [Ahli](https://github.com/Ahli/Galaxy-Observer-UI).
 
 ### Settings
 
@@ -26,7 +30,7 @@ Various settings can be found in `appsettings.json`.
 An easy to use cli with built in help and information on how to use `heroesreplay.exe`.
 
 ```ps
-heroesreplay.exe spectate hotsapi
+heroesreplay.exe spectate heroesprofile
 heroesreplay.exe spectate directory
 heroesreplay.exe spectate file
 ```
@@ -34,40 +38,38 @@ heroesreplay.exe spectate file
 ### Loading
 
 - Load an individual replay file or provide a directory to many replay files.
-- Download replay files from the HotsApi database by providing AWS credentials (S3 downloads are paid per request)
-- Launches the game from Battlenet and waits for the map loading screen to determine when the game load was successful.
+- Download replay files from an S3 Bucket (HotsAPI or HeroesProfile) by providing AWS credentials (S3 downloads are paid per request)
+- Launches the game from Battlenet and waits for the map loading screen and Timer to determine when the game load was successful.
 
 ### State
 
-- Ensures the game is launched and validates the required game version matches the launched process version before moving onto the next step
-- Waits for the loading screen before determining the next step
+- Ensures the game is launched and validates the required game version matches the launched process version before moving onto the next step.
+- Waits for the home/loading screen before determining the next step.
 - Uses native Windows calls to get a screenshot of the game (timer & end screen) to determine current state: start, running, paused, end.
 - Detects the end of the game by checking for the MVP and awards screen and matching any awards given to players from the replay file exist on the end screen.
 
 ### Spectating
 
-There is currently a priority order to who is focused by the spectator, the list below is the current order of priority.
+The spectate focus target is determined by a weighted point system. Kills are worth the most and roaming is worth the least. The weightings can be found in the appsettings.
 
-1. Focuses on heroes that perform penta, quad, triple & multi kills.
-2. Focuses on heroes that will die or kill an enemy hero.
-3. Focuses on heroes doing team or map objectives. (gems and doubloons for example)
-4. Focuses on heroes that are close to enemies.
-5. Focuses on heroes doing camps and bosses.
-6. Focuses on heroes destroying structures.
-7. Focuses on heroes that are roaming.
+- Focuses on heroes that perform kills.
+- Focuses on heroes that will die or kill an enemy hero.
+- Focuses on heroes that are close to enemies.
+- Focuses on heroes doing team or map objectives. (gems and doubloons)
+- Focuses on heroes doing camps and bosses.
+- Focuses on heroes destroying structures.
+- Focuses on heroes that are roaming.
 
 ### Information Panels
 
 - Selects the talent tree panel when a team has received new talents.
-- Selects the objective panel when an objective has been taken.
-- Selects the KDA panel when a hero dies.
 - Selects all panels by cycling from left to right panels throughout the game:
   - Talents  
   - DeathDamageRole
   - ActionsPerMinute
   - Experience
   - TimeDeadDeathsSelfSustain
-  - CarriedObjectives
+  - CarriedObjectives (If the map supports it)
   - KillsDeathsAssists
   - CrowdControlEnemyHeroes
 
