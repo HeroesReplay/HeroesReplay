@@ -28,7 +28,8 @@ namespace HeroesReplay.Core.Runner
         public IReadOnlyDictionary<string, UnitGroup> UnitGroups { get; private set; }
         public IReadOnlyList<Map> Maps { get; private set; }
         public IReadOnlyList<Hero> Heroes { get; private set; }
-        public IReadOnlyCollection<string> CoreNames { get; private set; }
+        public IReadOnlyCollection<string> CoreUnits { get; private set; }
+        public IReadOnlyCollection<string> BossUnits { get; private set; }
 
         public GameData(ILogger<GameData> logger, Settings settings)
         {
@@ -120,36 +121,12 @@ namespace HeroesReplay.Core.Runner
             }
         }
 
-        private async Task LoadCoreNamesAsync()
-        {
-            var names = new HashSet<string>();
-            var files = Directory
-                .GetFiles(heroesDataPath, "*.json", SearchOption.AllDirectories)
-                .Where(x => x.Contains("unitdata_"));
-
-            foreach (var file in files)
-            {
-                var json = await File.ReadAllTextAsync(file);
-
-                using (var document = JsonDocument.Parse(json, new JsonDocumentOptions() { AllowTrailingCommas = true }))
-                {
-                    foreach (var o in document.RootElement.EnumerateObject())
-                    {
-                        if (o.Value.TryGetProperty("scalingLinkId", out JsonElement value) && settings.HeroesToolChest.ScalingLinkId.Equals(value.GetString()))
-                        {
-                            names.Add(o.Name.Contains("-") ? o.Name.Split('-')[1] : o.Name);
-                        }
-                    }
-                }
-            }
-
-            this.CoreNames = new ReadOnlyCollection<string>(names.ToList());
-        }
-
-        private async Task LoadUnitGroupsAsync()
+        private async Task LoadUnitsAsync()
         {
             var unitGroups = new Dictionary<string, UnitGroup>();
-            var ignore = settings.HeroesToolChest.IgnoreUnits.ToList();
+            var ignoreUnits = settings.HeroesToolChest.IgnoreUnits.ToList();
+            var bossUnits = new HashSet<string>();
+            var coreUnits = new HashSet<string>();
 
             var files = Directory
                 .GetFiles(heroesDataPath, "*.json", SearchOption.AllDirectories)
@@ -163,6 +140,11 @@ namespace HeroesReplay.Core.Runner
                 {
                     foreach (var o in document.RootElement.EnumerateObject())
                     {
+                        if (o.Value.TryGetProperty("scalingLinkId", out JsonElement value) && settings.HeroesToolChest.ScalingLinkId.Equals(value.GetString()))
+                        {
+                            coreUnits.Add(o.Name.Contains("-") ? o.Name.Split('-')[1] : o.Name);
+                        }
+
                         if (o.Value.TryGetProperty("unitId", out var unitId))
                         {
                             var descriptors = new List<string>();
@@ -199,19 +181,20 @@ namespace HeroesReplay.Core.Runner
                             if (o.Value.TryGetProperty("descriptors", out var descriptorsElement))
                                 descriptors.AddRange(descriptorsElement.EnumerateArray().Select(x => x.GetString()));
 
-                            if (attributes.Contains("MapBoss") && name.EndsWith("Defender") && !ignore.Any(i => name.Contains(i)))
+                            if (attributes.Contains("MapBoss") && name.EndsWith("Defender") && !ignoreUnits.Any(i => name.Contains(i)))
+                            {
+                                bossUnits.Add(name);
+                                unitGroups[name] = UnitGroup.MercenaryCamp;
+                                continue;
+                            }
+
+                            if (attributes.Contains("MapBoss") && name.EndsWith("Laner") && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MercenaryCamp;
                                 continue;
                             }
 
-                            if (attributes.Contains("MapBoss") && name.EndsWith("Laner") && !ignore.Any(i => name.Contains(i)))
-                            {
-                                unitGroups[name] = UnitGroup.MercenaryCamp;
-                                continue;
-                            }
-
-                            if (attributes.Count == 1 && attributes.Contains("Merc") && !ignore.Any(i => name.Contains(i)))
+                            if (attributes.Count == 1 && attributes.Contains("Merc") && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MercenaryCamp;
                                 continue;
@@ -219,43 +202,43 @@ namespace HeroesReplay.Core.Runner
 
                             // Beacons
                             // Gems on Tomb
-                            if (name.EndsWith("CaptureBeacon") || 
-                                name.EndsWith("ControlBeacon") || 
-                                name.StartsWith("ItemSoulPickup") || 
+                            if (name.EndsWith("CaptureBeacon") ||
+                                name.EndsWith("ControlBeacon") ||
+                                name.StartsWith("ItemSoulPickup") ||
                                 name.Equals("ItemCannonball") ||
-                                name.StartsWith("SoulCage") || 
-                                name.Equals("DocksTreasureChest") || 
+                                name.StartsWith("SoulCage") ||
+                                name.Equals("DocksTreasureChest") ||
                                 name.Equals("DocksPirateCaptain"))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
                             }
 
-                            if ((attributes.Contains("MapCreature") || attributes.Contains("MapBoss")) && !(name.EndsWith("Laner") || name.EndsWith("Defender")) && !ignore.Any(i => name.Contains(i)))
+                            if ((attributes.Contains("MapCreature") || attributes.Contains("MapBoss")) && !(name.EndsWith("Laner") || name.EndsWith("Defender")) && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
                             }
 
-                            if (name.Contains("Payload") && "hanamuradata".Contains(map) && !ignore.Any(i => name.Contains(i)))
+                            if (name.Contains("Payload") && "hanamuradata".Contains(map) && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
                             }
 
-                            if (attributes.Contains("Heroic") && descriptors.Contains("PowerfulLaner") && !ignore.Any(i => name.Contains(i)))
+                            if (attributes.Contains("Heroic") && descriptors.Contains("PowerfulLaner") && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
                             }
 
-                            if (attributes.Contains("AITargetableStructure") && !ignore.Any(i => name.Contains(i)))
+                            if (attributes.Contains("AITargetableStructure") && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.Structures;
                                 continue;
                             }
 
-                            if (attributes.Count == 1 && attributes.Contains("Minion") && name.EndsWith("Minion") && !ignore.Any(i => name.Contains(i)))
+                            if (attributes.Count == 1 && attributes.Contains("Minion") && name.EndsWith("Minion") && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.Minions;
                                 continue;
@@ -278,6 +261,8 @@ namespace HeroesReplay.Core.Runner
             }
 
             this.UnitGroups = new ReadOnlyDictionary<string, UnitGroup>(unitGroups);
+            this.BossUnits = new ReadOnlyCollection<string>(bossUnits.ToList());
+            this.CoreUnits = new ReadOnlyCollection<string>(coreUnits.ToList());
         }
 
         public UnitGroup GetUnitGroup(string name)
@@ -294,10 +279,9 @@ namespace HeroesReplay.Core.Runner
         public async Task LoadDataAsync()
         {
             await DownloadIfEmptyAsync();
-            await LoadUnitGroupsAsync();
+            await LoadUnitsAsync();
             await LoadMapsAsync();
             await LoadHeroesAsync();
-            await LoadCoreNamesAsync();
         }
     }
 }

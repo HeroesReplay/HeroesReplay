@@ -9,6 +9,7 @@ namespace HeroesReplay.Core
 {
     public class GameManager : IGameManager
     {
+        private readonly Settings settings;
         private readonly ISessionCreator sessionCreater;
         private readonly IGameSession session;
         private readonly IGameController gameController;
@@ -16,8 +17,9 @@ namespace HeroesReplay.Core
         private readonly IObsController obsController;
         private readonly ReplayFileWriter replayFileWriter;
 
-        public GameManager(ISessionCreator sessionCreator, IGameSession session, IGameController gameController, ISessionHolder sessionHolder, IObsController obsController, ReplayFileWriter replayFileWriter)
+        public GameManager(Settings settings, ISessionCreator sessionCreator, IGameSession session, IGameController gameController, ISessionHolder sessionHolder, IObsController obsController, ReplayFileWriter replayFileWriter)
         {
+            this.settings = settings;
             this.sessionCreater = sessionCreator;
             this.session = session;
             this.gameController = gameController;
@@ -29,8 +31,8 @@ namespace HeroesReplay.Core
         public async Task SetSessionAsync(StormReplay stormReplay)
         {
             await sessionCreater.CreateAsync(stormReplay);
-            await gameController.LaunchAsync(stormReplay);
             await replayFileWriter.WriteDetailsAsync(stormReplay);
+            await gameController.LaunchAsync(stormReplay);
         }
 
         public async Task SpectateSessionAsync()
@@ -38,6 +40,8 @@ namespace HeroesReplay.Core
             await session.SpectateAsync();
             
             gameController.KillGame();
+
+            await replayFileWriter.ClearDetailsAsync();
 
             if (sessionHolder.StormReplay.ReplayId.HasValue)
             {

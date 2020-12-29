@@ -6,7 +6,6 @@ namespace HeroesReplay.Core.Shared
     {
         public string WebSocketEndpoint { get; init; }
         public string GameSceneName { get; init; }
-        public string InterludeMusicPath { get; init; }
         public IEnumerable<BrowserSource> BrowserSources { get; init; }
     }
 }

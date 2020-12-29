@@ -111,7 +111,7 @@ namespace HeroesReplay.Core
             if (!loggedIn)
             {
                 logger.LogInformation("The game was launched, but we did not end up on the home screen. Killing game.");
-                
+
                 KillGame();
 
                 await Task.Delay(5000);
@@ -156,7 +156,7 @@ namespace HeroesReplay.Core
                 if (timerBitmap == null) return null;
                 return await ConvertBitmapTimerToTimeSpan(timerBitmap);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 logger.LogError(e, "Could not get timer from bitmap");
             }
@@ -418,10 +418,11 @@ namespace HeroesReplay.Core
             try
             {
                 Game?.Kill();
+                logger.LogInformation("Game process has been killed.");
             }
-            catch
+            catch(Exception e)
             {
-
+                logger.LogError(e, "Could not kill game process.");
             }
         }
     }

@@ -33,7 +33,7 @@ namespace HeroesReplay.Core
                         {
                             var distance = teamTwoPos.Point.DistanceTo(teamOnePos.Point);
 
-                            if (distance < 20)
+                            if (distance < settings.Spectate.MaxDistanceToEnemy)
                             {
                                 var unit = new[] { teamOneUnit, teamTwoUnit }.OrderBy(x => Guid.NewGuid()).First();
 

@@ -15,6 +15,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+using OBSWebsocketDotNet;
+
 using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
@@ -57,6 +59,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IGameData, GameData>()
                 .AddSingleton<ReplayHelper>()
                 .AddSingleton<SessionHolder>()
+                .AddSingleton<OBSWebsocket>()
                 .AddSingleton<IAbilityDetector, AbilityDetector>()
                 .AddSingleton<IGameManager, GameManager>()
                 .AddSingleton<IReplayAnalzer, ReplayAnalyzer>()

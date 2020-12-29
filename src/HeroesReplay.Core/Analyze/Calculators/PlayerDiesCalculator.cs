@@ -25,7 +25,12 @@ namespace HeroesReplay.Core
         {
             foreach (var unit in replay.Units.Where(u => gameData.GetUnitGroup(u.Name) == Unit.UnitGroup.Hero && u.TimeSpanDied == now && (u.PlayerKilledBy == null || u.PlayerKilledBy == u.PlayerControlledBy) && u.PlayerControlledBy != null))
             {
-                yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.PlayerDeath, $"{unit.PlayerControlledBy.HeroId} killed by {unit.UnitKilledBy?.Name} in {unit.TimeSpanDied.Value.Subtract(now).TotalSeconds} (death)");
+                yield return new Focus(
+                    GetType(),
+                    unit, 
+                    unit.PlayerControlledBy, 
+                    settings.Weights.PlayerDeath,
+                    $"{unit.PlayerControlledBy.HeroId} killed by {unit.UnitKilledBy?.Name} in {unit.TimeSpanDied.Value.Subtract(now).TotalSeconds} (death)");
             }
         }
     }

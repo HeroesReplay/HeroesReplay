@@ -26,13 +26,24 @@ namespace HeroesReplay.Core
             {
                 var heroUnit = teamObjective.Player.HeroUnits.FirstOrDefault(hu => hu.Positions.Any(p => p.TimeSpan == now));
 
-                if(heroUnit != null)
-                    yield return new Focus(GetType(), heroUnit, teamObjective.Player, settings.Weights.MapObjective, $"{teamObjective.Player.HeroId} did {teamObjective.TeamObjectiveType} (TeamObjective)");
+                if (heroUnit != null)
+                {
+                    yield return new Focus(
+                        GetType(), 
+                        heroUnit, 
+                        teamObjective.Player, 
+                        settings.Weights.MapObjective, 
+                        $"{teamObjective.Player.HeroId} did {teamObjective.TeamObjectiveType} (TeamObjective)");
+                }
             }
 
             foreach (Unit mapUnit in replay.Units.Where(unit => heroesData.GetUnitGroup(unit.Name) == Unit.UnitGroup.MapObjective && unit.TimeSpanDied == now && unit.PlayerKilledBy != null))
             {
-                yield return new Focus(GetType(), mapUnit, mapUnit.PlayerKilledBy, settings.Weights.MapObjective, $"{mapUnit.PlayerKilledBy.HeroId} destroyed {mapUnit.Name} (MapObjective)");
+                yield return new Focus(
+                    GetType(),                     
+                    mapUnit, 
+                    mapUnit.PlayerKilledBy,
+                    settings.Weights.MapObjective, $"{mapUnit.PlayerKilledBy.HeroId} destroyed {mapUnit.Name} (MapObjective)");
             }
         }
     }

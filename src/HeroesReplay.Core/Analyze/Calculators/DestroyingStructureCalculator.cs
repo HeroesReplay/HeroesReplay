@@ -30,7 +30,7 @@ namespace HeroesReplay.Core
                     string name when name.StartsWith("TownCannon") => 600,
                     string name when name.StartsWith("TownMoonwell") => 800,
                     string name when name.StartsWith("TownTownHall") => 1000,
-                    string name when gameData.CoreNames.Any(core => name.Equals(core)) => 10000
+                    string name when gameData.CoreUnits.Any(core => name.Equals(core)) => 10000
                 };
 
                 yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.DestroyStructure + points, $"{unit.PlayerKilledBy.HeroId} destroyed {unit.Name}");

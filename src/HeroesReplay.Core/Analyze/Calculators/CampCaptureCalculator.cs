@@ -13,12 +13,12 @@ namespace HeroesReplay.Core
     public class CampCaptureCalculator : IFocusCalculator
     {
         private readonly Settings settings;
-        private readonly IGameData heroesData;
+        private readonly IGameData gameData;
 
-        public CampCaptureCalculator(Settings settings, IGameData heroesData)
+        public CampCaptureCalculator(Settings settings, IGameData gameData)
         {
             this.settings = settings;
-            this.heroesData = heroesData;
+            this.gameData = gameData;
         }
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
@@ -30,17 +30,22 @@ namespace HeroesReplay.Core
             foreach (TrackerEvent capture in events)
             {
                 int teamId = (int)capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.Value - 1;
-                IEnumerable<Unit> mercenaries = replay.Units.Where(unit => heroesData.GetUnitGroup(unit.Name) == Unit.UnitGroup.MercenaryCamp);
+                IEnumerable<Unit> mercenaries = replay.Units.Where(unit => gameData.GetUnitGroup(unit.Name) == Unit.UnitGroup.MercenaryCamp);
                 IEnumerable<Unit> captured = mercenaries.Where(unit => unit.TimeSpanBorn < capture.TimeSpan && unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10)) && unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId);
 
                 foreach (Unit unit in captured)
                 {
-                    yield return new Focus(
-                        GetType(), 
-                        unit, 
-                        unit.PlayerKilledBy, 
-                        settings.Weights.CampCapture, 
+                    var standardCamp = !gameData.BossUnits.Contains(unit.Name);
+
+                    if (standardCamp)
+                    {
+                        yield return new Focus(
+                        GetType(),
+                        unit,
+                        unit.PlayerKilledBy,
+                        settings.Weights.CampCapture,
                         $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
+                    }
                 }
             }
         }

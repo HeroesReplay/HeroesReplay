@@ -1,10 +1,7 @@
 ﻿using Heroes.ReplayParser;
-
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
-
 using Microsoft.Extensions.Logging;
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -28,11 +25,10 @@ namespace HeroesReplay.Core
             this.settings = settings;
         }
 
-
         public TimeSpan GetEnd(Replay replay)
         {
             return replay.Units
-                .Where(unit => gameData.CoreNames.Contains(unit.Name) && unit.TimeSpanDied.HasValue)
+                .Where(unit => gameData.CoreUnits.Contains(unit.Name) && unit.TimeSpanDied.HasValue)
                 .Min(core => core.TimeSpanDied.Value);
         }
 
@@ -42,7 +38,7 @@ namespace HeroesReplay.Core
 
             if (settings.ParseOptions.ShouldParseUnits)
             {
-                foreach (var deathTime in replay.Units.AsParallel().Where(u => u.Group == Unit.UnitGroup.Hero && u.TimeSpanDied.HasValue).GroupBy(x => x.TimeSpanDied.Value))
+                foreach (var deathTime in replay.Units.AsParallel().Where(u => Unit.UnitGroup.Hero.Equals(gameData.GetUnitGroup(u.Name)) && u.TimeSpanDied.HasValue).GroupBy(x => x.TimeSpanDied.Value))
                 {
                     panels[deathTime.Key] = Panel.KillsDeathsAssists;
                 }
@@ -87,7 +83,7 @@ namespace HeroesReplay.Core
 
             var processed = new List<Unit>();
 
-            foreach (var entry in focusDictionary.Where(x => x.Value.Points >= settings.Weights.PlayerKill).ToList())
+            foreach (var entry in focusDictionary.Where(x => x.Value.Points >= settings.Weights.PlayerDeath).ToList())
             {
                 var currentTime = entry.Key;
 
@@ -97,8 +93,7 @@ namespace HeroesReplay.Core
                 for (int second = 1; second < 6; second++)
                 {
                     var pastTime = currentTime.Subtract(TimeSpan.FromSeconds(second));
-                    var futureTime = currentTime.Add(TimeSpan.FromSeconds(second));
-
+                    
                     if (focusDictionary.TryGetValue(pastTime, out var past))
                     {
                         if (past.Points < entry.Value.Points)
@@ -110,7 +105,9 @@ namespace HeroesReplay.Core
                     {
                         focusDictionary.TryAdd(pastTime, entry.Value);
                     }
-                                        
+
+                    var futureTime = currentTime.Add(TimeSpan.FromSeconds(second));
+
                     if (focusDictionary.TryGetValue(futureTime, out var future) && future.Unit.TimeSpanDied > futureTime)
                     {
                         if (entry.Value.Points > future.Points)
@@ -140,6 +137,7 @@ namespace HeroesReplay.Core
                 );
         }
 
-        public bool IsCarriedObjectiveMap(Replay replay) => settings.Maps.CarriedObjectives.Contains(replay.Map) || settings.Maps.CarriedObjectives.Contains(replay.MapAlternativeName);
+        public bool IsCarriedObjectiveMap(Replay replay) => settings.Maps.CarriedObjectives.Contains(replay.Map) || 
+                                                            settings.Maps.CarriedObjectives.Contains(replay.MapAlternativeName);
     }
 }

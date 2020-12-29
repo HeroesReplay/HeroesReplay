@@ -30,20 +30,39 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
         public async Task WriteDetailsAsync(StormReplay replay)
         {
-            var mmr = settings.HeroesProfileApi.EnableMMR ? $"Tier: " + await heroesProfileService.CalculateMMRAsync(replay) : string.Empty;
+            try
+            {
+                var mmr = settings.HeroesProfileApi.EnableMMR ? $"Tier: " + await heroesProfileService.CalculateMMRAsync(replay) : string.Empty;
 
-            var bans = from ban in replay.Replay.DraftOrder.Where(pick => pick.PickType == DraftPickType.Banned).Select((pick, index) => new { Hero = pick.HeroSelected, Index = index + 1 })
-                       from hero in gameData.Heroes
-                       where ban.Hero.Equals(hero.Name, StringComparison.OrdinalIgnoreCase) || ban.Hero.Equals(hero.AltName, StringComparison.OrdinalIgnoreCase)
-                       select $"{hero.Name}";
+                var bans = from ban in replay.Replay.DraftOrder.Where(pick => pick.PickType == DraftPickType.Banned).Select((pick, index) => new { Hero = pick.HeroSelected, Index = index + 1 })
+                           from hero in gameData.Heroes
+                           where ban.Hero.Equals(hero.Name, StringComparison.OrdinalIgnoreCase) || ban.Hero.Equals(hero.AltName, StringComparison.OrdinalIgnoreCase)
+                           select $"{hero.Name}";
 
-            if (bans.Any()) bans = bans.Prepend("Bans:");
+                if (bans.Any()) bans = bans.Prepend("Bans:");
 
-            string[] details = new[] { mmr }.Where(line => !string.IsNullOrWhiteSpace(line)).ToArray();
+                string[] details = new[] { mmr }.Where(line => !string.IsNullOrWhiteSpace(line)).ToArray();
 
-            logger.LogInformation($"writing replay details to: {settings.CurrentReplayInfoFilePath}");
+                logger.LogInformation($"writing replay details to: {settings.CurrentReplayInfoFilePath}");
 
-            await File.WriteAllLinesAsync(settings.CurrentReplayInfoFilePath, details.Concat(bans).Where(line => !string.IsNullOrWhiteSpace(line)), CancellationToken.None);
+                await File.WriteAllLinesAsync(settings.CurrentReplayInfoFilePath, details.Concat(bans).Where(line => !string.IsNullOrWhiteSpace(line)), CancellationToken.None);
+            }
+            catch(Exception e)
+            {
+                logger.LogError(e, $"Could not update the file: {settings.CurrentReplayInfoFilePath}");
+            }           
+        }
+
+        public async Task ClearDetailsAsync()
+        {
+            try
+            {
+                await File.WriteAllTextAsync(settings.CurrentReplayInfoFilePath, string.Empty, CancellationToken.None);
+            }
+            catch(Exception e)
+            {
+                logger.LogError(e, $"Could not clear the file: {settings.CurrentReplayInfoFilePath}");
+            }
         }
     }
 }

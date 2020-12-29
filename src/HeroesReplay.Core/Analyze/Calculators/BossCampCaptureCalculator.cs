@@ -1,6 +1,7 @@
 ﻿using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 
+using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
 
 using System;
@@ -12,10 +13,12 @@ namespace HeroesReplay.Core
     public class BossCampCaptureCalculator : IFocusCalculator
     {
         private readonly Settings settings;
+        private readonly IGameData gameData;
 
-        public BossCampCaptureCalculator(Settings settings)
+        public BossCampCaptureCalculator(Settings settings, IGameData gameData)
         {
             this.settings = settings;
+            this.gameData = gameData;
         }
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
@@ -27,12 +30,15 @@ namespace HeroesReplay.Core
 
                 foreach (Unit unit in replay.Units.Where(unit => unit.TimeSpanDied < capture.TimeSpan && unit.TimeSpanBorn < capture.TimeSpan && unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId && unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10))))
                 {
-                    yield return new Focus(
-                        GetType(), 
-                        unit, 
-                        unit.PlayerKilledBy, 
-                        settings.Weights.BossCapture, 
+                    if (gameData.BossUnits.Contains(unit.Name))
+                    {
+                        yield return new Focus(
+                        GetType(),
+                        unit,
+                        unit.PlayerKilledBy,
+                        settings.Weights.BossCapture,
                         $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
+                    }
                 }
             }
         }

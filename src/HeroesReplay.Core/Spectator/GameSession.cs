@@ -21,15 +21,9 @@ namespace HeroesReplay.Core
 
         private State State { get; set; }
 
-        private ZoomLevel ZoomLevel { get; set; }
-
         private bool ControlsHiddenSet { get; set; }
 
-        private bool FollowModeSet { get; set; }
-
         private TimeSpan Timer { get; set; }
-
-        private Focus? Focus { get; set; }
 
         private SessionData Data => sessionHolder.SessionData;
 
@@ -46,9 +40,7 @@ namespace HeroesReplay.Core
         {
             State = State.Start;
             Timer = default(TimeSpan);
-            FollowModeSet = false;
             ControlsHiddenSet = false;
-            ZoomLevel = default(ZoomLevel);
 
             await Task.WhenAll(
                 Task.Run(PanelLoopAsync, token),
@@ -71,15 +63,14 @@ namespace HeroesReplay.Core
 
                     if (timer.HasValue)
                     {
-                        // Dont rely on the unique second, incase it blips
-                        if (timer.Value.Add(TimeSpan.FromSeconds(15)) >= Data.End) State = State.End;
+                        if (timer.Value.Add(TimeSpan.FromSeconds(10)) >= Data.End) State = State.End;
                         else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
                         else if (timer.Value > Timer) State = State.Running;
                         else State = State.Start;
 
                         Timer = timer.Value;
 
-                        logger.LogInformation($"{State}, {Timer}");
+                        logger.LogDebug($"{State}, {Timer}");
                     }
                 }
                 catch (Exception e)
@@ -101,31 +92,11 @@ namespace HeroesReplay.Core
                     {
                         if (!ControlsHiddenSet)
                             ConfigureControls();
-
-                        await Task.Delay(500);
-
-                        //if (settings.Spectate.ZoomLevel != ZoomLevel) 
-                        //    ConfigureZoom();
-
-                        await Task.Delay(250);
-
-                        if (settings.Spectate.ZoomLevel == ZoomLevel && !FollowModeSet)
-                            ConfigureFollowMode();
-
-                        await Task.Delay(250);
                     }
 
-                    var configured = new[]
+                    if (ControlsHiddenSet)
                     {
-                        settings.Spectate.ZoomLevel == ZoomLevel,
-                        FollowModeSet,
-                        ControlsHiddenSet
-
-                    }.All(configured => configured == true);
-
-                    if (configured)
-                    {
-                        logger.LogInformation("Client configured.");
+                        logger.LogDebug("Client configured.");
                         return;
                     }
                 }
@@ -148,12 +119,11 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    if (State == State.Running && Data.Players.TryGetValue(Timer, out Focus focus) && focus.Index != index)
+                    if (State == State.Running && Data.Players.TryGetValue(Timer, out Focus? focus) && focus.Index != index)
                     {
                         /* We keep a track of the previous index so we dont send too many commands on the same hero, 
                          * because double tapping a hero will then change the spectate behaviour
                          */
-                        Focus = focus;
                         index = focus.Index;
 
                         logger.LogInformation($"Selecting {focus.Target.HeroId}. Description: {focus.Description}");
@@ -173,6 +143,8 @@ namespace HeroesReplay.Core
         {
             Panel previous = Panel.None;
             Panel next = Panel.None;
+            TimeSpan cooldown = settings.Spectate.PanelRotateTime;
+            TimeSpan second = TimeSpan.FromSeconds(1);
 
             while (State != State.End)
             {
@@ -180,26 +152,27 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    if (Data.Panels.TryGetValue(Timer, out var panel) && panel != previous)
+                    if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != previous)
                     {
-                        var name = Enum.GetName(typeof(Panel), panel);
-                        logger.LogInformation($"Selecting panel: {name}");
-                        controller.SendPanel(panel);
+                        next = panel;
                     }
-                    else
+                    else if (Timer < settings.Spectate.TalentsPanelStartTime)
+                    {
+                        next = Panel.Talents;
+                    }
+                    else if (cooldown <= TimeSpan.Zero)
                     {
                         next = previous switch
                         {
                             Panel.None => Panel.Talents,
-                            Panel.KillsDeathsAssists => Panel.ActionsPerMinute,
-                            Panel.ActionsPerMinute => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.CrowdControlEnemyHeroes,
+                            Panel.KillsDeathsAssists => Panel.ActionsPerMinute,                            
                             Panel.CarriedObjectives => Panel.CrowdControlEnemyHeroes,
                             Panel.CrowdControlEnemyHeroes => Panel.DeathDamageRole,
                             Panel.DeathDamageRole => Panel.Experience,
                             Panel.Experience => Panel.Talents,
                             Panel.Talents => Panel.TimeDeadDeathsSelfSustain,
                             Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists,
-                            _ => Panel.Talents
+                            Panel.ActionsPerMinute => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.CrowdControlEnemyHeroes,
                         };
                     }
 
@@ -207,24 +180,16 @@ namespace HeroesReplay.Core
                     {
                         previous = next;
                         controller.SendPanel(next);
+                        cooldown = settings.Spectate.PanelRotateTime;
                     }
 
-                    await Task.Delay(settings.Spectate.PanelRotateTime, token);
+                    cooldown = cooldown.Subtract(second);
+                    await Task.Delay(second);
                 }
                 catch (Exception e)
                 {
                     logger.LogError(e, "Could not complete panel loop");
                 }
-            }
-        }
-
-        private void ConfigureFollowMode()
-        {
-            if (Focus != null)
-            {
-                logger.LogInformation("A player has been selected, can now set follow selected unit mode.");
-                controller.CameraFollow();
-                FollowModeSet = true;
             }
         }
 
@@ -246,7 +211,7 @@ namespace HeroesReplay.Core
 
                      if (Timer != TimeSpan.Zero && (timer > Timer.Add(TimeSpan.FromSeconds(15)) || timer < Timer.Subtract(TimeSpan.FromSeconds(15))))
                      {
-                         logger.LogInformation($"OCR Timer is not an expected value? Before: {Timer}, After: {timer}");
+                         logger.LogDebug($"OCR Timer is not an expected value? Before: {Timer}, After: {timer}");
                          return false;
                      }
 
