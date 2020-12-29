@@ -59,22 +59,17 @@
         "versioned_id": "wasapi_output_capture",
         "volume": 1.0
     },
-    "current_program_scene": "please-wait",
-    "current_scene": "please-wait",
+    "current_program_scene": "waiting-screen",
+    "current_scene": "waiting-screen",
     "current_transition": "Fade",
     "groups": [],
     "modules": {
         "auto-scene-switcher": {
-            "active": true,
+            "active": false,
             "interval": 2000,
-            "non_matching_scene": "please-wait",
-            "switch_if_not_matching": true,
-            "switches": [
-                {
-                    "scene": "Heroes of the Storm",
-                    "window_title": "Heroes of the Storm"
-                }
-            ]
+            "non_matching_scene": "",
+            "switch_if_not_matching": false,
+            "switches": []
         },
         "captions": {
             "enabled": false,
@@ -130,7 +125,10 @@
     "scaling_off_y": 0.0,
     "scene_order": [
         {
-            "name": "Heroes of the Storm"
+            "name": "game-scene"
+        },
+        {
+            "name": "waiting-screen"
         },
         {
             "name": "summary"
@@ -142,16 +140,13 @@
             "name": "talents"
         },
         {
-            "name": "experience-over-time"
+            "name": "experience"
         },
         {
-            "name": "team-1-advanced-stats"
+            "name": "team-1-stats"
         },
         {
-            "name": "team-2-advanced-stats"
-        },
-        {
-            "name": "please-wait"
+            "name": "team-2-stats"
         }
     ],
     "sources": [
@@ -166,7 +161,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "loading-next-game",
+            "name": "heroes-profile-4",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -174,10 +169,470 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "text": "The next replay will load soon."
+                "antialiasing": true,
+                "font": {
+                    "face": "Arial",
+                    "flags": 0,
+                    "size": 36,
+                    "style": "Regular"
+                },
+                "text": "Replays and match data are provided by"
             },
             "sync": 0,
             "versioned_id": "text_gdiplus_v2",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_gdiplus",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "next-game-loading-soon",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "font": {
+                    "face": "Arial",
+                    "flags": 0,
+                    "size": 256,
+                    "style": "Regular"
+                },
+                "text": "The next replay will load soon"
+            },
+            "sync": 0,
+            "versioned_id": "text_gdiplus_v2",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "text_gdiplus",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "heroes-profile-1",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "font": {
+                    "face": "Arial",
+                    "flags": 0,
+                    "size": 36,
+                    "style": "Regular"
+                },
+                "text": "Upload your replays, link in the description below"
+            },
+            "sync": 0,
+            "versioned_id": "text_gdiplus_v2",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {},
+            "id": "image_source",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "heroes-profile-2",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "file": "D:/HotsDevelopment/full_deathwing.png"
+            },
+            "sync": 0,
+            "versioned_id": "image_source",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "filters": [
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "crop_filter",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Crop/Pad",
+                    "prev_ver": 436273152,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {},
+                    "sync": 0,
+                    "versioned_id": "crop_filter",
+                    "volume": 1.0
+                }
+            ],
+            "flags": 0,
+            "hotkeys": {
+                "libobs.mute": [],
+                "libobs.push-to-mute": [],
+                "libobs.push-to-talk": [],
+                "libobs.unmute": []
+            },
+            "id": "browser_source",
+            "mixers": 255,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "countdown",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "height": 100,
+                "restart_when_active": true,
+                "shutdown": true,
+                "url": "https://streamerific.com/tools/stream-countdown?m=3&s=0&textAlign=center&t=+&fontSize=&textColor=%23ffffff&backgroundColor=",
+                "width": 225
+            },
+            "sync": 0,
+            "versioned_id": "browser_source",
+            "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {
+                "OBSBasic.SelectScene": [],
+                "libobs.hide_scene_item.Affiliation": [],
+                "libobs.hide_scene_item.background-image-2": [],
+                "libobs.hide_scene_item.countdown": [],
+                "libobs.hide_scene_item.heroes-profile-1": [],
+                "libobs.hide_scene_item.heroes-profile-2": [],
+                "libobs.hide_scene_item.heroes-profile-4": [],
+                "libobs.hide_scene_item.next-game-loading-soon": [],
+                "libobs.hide_scene_item.soundcloud": [],
+                "libobs.show_scene_item.Affiliation": [],
+                "libobs.show_scene_item.background-image-2": [],
+                "libobs.show_scene_item.countdown": [],
+                "libobs.show_scene_item.heroes-profile-1": [],
+                "libobs.show_scene_item.heroes-profile-2": [],
+                "libobs.show_scene_item.heroes-profile-4": [],
+                "libobs.show_scene_item.next-game-loading-soon": [],
+                "libobs.show_scene_item.soundcloud": []
+            },
+            "id": "scene",
+            "mixers": 0,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "waiting-screen",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "custom_size": false,
+                "id_counter": 20,
+                "items": [
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 1920.0,
+                            "y": 1080.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 1,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 1,
+                        "locked": false,
+                        "name": "background-image-2",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 698.0,
+                            "y": 24.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 1,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 2,
+                        "locked": false,
+                        "name": "Affiliation",
+                        "pos": {
+                            "x": 593.0,
+                            "y": 1056.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.71633237600326538,
+                            "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 3,
+                        "locked": false,
+                        "name": "soundcloud",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 971.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.65750002861022949,
+                            "y": 0.65662652254104614
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 6,
+                        "locked": false,
+                        "name": "countdown",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.60000002384185791,
+                            "y": 0.60000002384185791
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 8,
+                        "locked": false,
+                        "name": "heroes-profile-2",
+                        "pos": {
+                            "x": 101.0,
+                            "y": 304.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.31120526790618896,
+                            "y": 0.31185942888259888
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 9,
+                        "locked": false,
+                        "name": "heroes-profile-1",
+                        "pos": {
+                            "x": 107.0,
+                            "y": 517.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.85734868049621582,
+                            "y": 0.8611111044883728
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 10,
+                        "locked": false,
+                        "name": "soundcloud",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 971.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.65750002861022949,
+                            "y": 0.65662652254104614
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 18,
+                        "locked": false,
+                        "name": "next-game-loading-soon",
+                        "pos": {
+                            "x": 86.0,
+                            "y": 717.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.20792078971862793,
+                            "y": 0.2083333283662796
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 20,
+                        "locked": false,
+                        "name": "heroes-profile-4",
+                        "pos": {
+                            "x": 116.0,
+                            "y": 267.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0260416269302368,
+                            "y": 1.0277777910232544
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    }
+                ]
+            },
+            "sync": 0,
+            "versioned_id": "scene",
             "volume": 1.0
         },
         {
@@ -200,31 +655,6 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "file": "D:/HotsDevelopment/alarak-heroes-of-the-storm-8y-1920x1080.jpg"
-            },
-            "sync": 0,
-            "versioned_id": "image_source",
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
-            "hotkeys": {},
-            "id": "image_source",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "background-image",
-            "prev_ver": 436273152,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "file": "C:/Users/patri/OneDrive/Pictures/full_deathwing.png"
             },
             "sync": 0,
             "versioned_id": "image_source",
@@ -269,62 +699,20 @@
             "deinterlace_mode": 0,
             "enabled": true,
             "flags": 0,
-            "hotkeys": {},
-            "id": "text_gdiplus",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "Upload to Heroes Profile",
-            "prev_ver": 436273152,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "align": "center",
-                "bk_opacity": 10,
-                "chatlog": false,
-                "extents": false,
-                "font": {
-                    "face": "Arial",
-                    "flags": 0,
-                    "size": 28,
-                    "style": "Regular"
-                },
-                "text": "Upload your replays to Heroes Profile. Link in the description panel below.* ",
-                "valign": "top"
-            },
-            "sync": 0,
-            "versioned_id": "text_gdiplus_v2",
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.Affiliation": [],
-                "libobs.hide_scene_item.Upload to Heroes Profile": [],
-                "libobs.hide_scene_item.background-image": [],
-                "libobs.hide_scene_item.background-image-2": [],
-                "libobs.hide_scene_item.interlude-music": [],
-                "libobs.hide_scene_item.loading-next-game": [],
-                "libobs.show_scene_item.Affiliation": [],
-                "libobs.show_scene_item.Upload to Heroes Profile": [],
-                "libobs.show_scene_item.background-image": [],
-                "libobs.show_scene_item.background-image-2": [],
-                "libobs.show_scene_item.interlude-music": [],
-                "libobs.show_scene_item.loading-next-game": []
+                "libobs.hide_scene_item.countdown": [],
+                "libobs.hide_scene_item.soundcloud": [],
+                "libobs.hide_scene_item.summary-browser": [],
+                "libobs.show_scene_item.countdown": [],
+                "libobs.show_scene_item.soundcloud": [],
+                "libobs.show_scene_item.summary-browser": []
             },
             "id": "scene",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "please-wait",
+            "name": "summary",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -333,24 +721,24 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 11,
+                "id_counter": 10,
                 "items": [
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
+                            "x": 1920.0,
+                            "y": 1080.0
                         },
                         "bounds_align": 0,
-                        "bounds_type": 0,
+                        "bounds_type": 2,
                         "crop_bottom": 0,
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 10,
+                        "id": 1,
                         "locked": false,
-                        "name": "background-image-2",
+                        "name": "summary-browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -360,35 +748,6 @@
                         "scale": {
                             "x": 1.0,
                             "y": 1.0
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 9,
-                        "locked": false,
-                        "name": "background-image",
-                        "pos": {
-                            "x": 110.0,
-                            "y": 176.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 0.31308850646018982,
-                            "y": 0.31332358717918396
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -408,16 +767,16 @@
                         "group_item_backup": false,
                         "id": 6,
                         "locked": false,
-                        "name": "interlude-music",
+                        "name": "soundcloud",
                         "pos": {
                             "x": 0.0,
-                            "y": 0.0
+                            "y": 971.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.0,
-                            "y": 1.0
+                            "x": 0.65750002861022949,
+                            "y": 0.65662652254104614
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -435,130 +794,9 @@
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 5,
+                        "id": 10,
                         "locked": false,
-                        "name": "Affiliation",
-                        "pos": {
-                            "x": 12.0,
-                            "y": 1040.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.2042253017425537,
-                            "y": 1.2083333730697632
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 4,
-                        "locked": false,
-                        "name": "Upload to Heroes Profile",
-                        "pos": {
-                            "x": 12.0,
-                            "y": 14.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.9141716957092285,
-                            "y": 1.9137930870056152
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 11,
-                        "locked": false,
-                        "name": "loading-next-game",
-                        "pos": {
-                            "x": 107.0,
-                            "y": 524.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 0.2084680050611496,
-                            "y": 0.2083333283662796
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    }
-                ]
-            },
-            "sync": 0,
-            "versioned_id": "scene",
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
-            "hotkeys": {
-                "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.interlude-music": [],
-                "libobs.hide_scene_item.summary-browser": [],
-                "libobs.show_scene_item.interlude-music": [],
-                "libobs.show_scene_item.summary-browser": []
-            },
-            "id": "scene",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "summary",
-            "prev_ver": 436273152,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "custom_size": false,
-                "id_counter": 4,
-                "items": [
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 4,
-                        "locked": false,
-                        "name": "interlude-music",
+                        "name": "countdown",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -566,37 +804,8 @@
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.0,
-                            "y": 1.0
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 1920.0,
-                            "y": 1080.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 2,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 1,
-                        "locked": false,
-                        "name": "summary-browser",
-                        "pos": {
-                            "x": 1.0,
-                            "y": 0.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.0,
-                            "y": 1.0
+                            "x": 0.60000002384185791,
+                            "y": 0.60000002384185791
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -622,7 +831,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "Heroes of the Storm",
+            "name": "game-scene",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -631,16 +840,16 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 3,
+                "id_counter": 12,
                 "items": [
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
+                            "x": 1920.0,
+                            "y": 1080.0
                         },
                         "bounds_align": 0,
-                        "bounds_type": 0,
+                        "bounds_type": 2,
                         "crop_bottom": 0,
                         "crop_left": 0,
                         "crop_right": 0,
@@ -702,6 +911,34 @@
             "deinterlace_field_order": 0,
             "deinterlace_mode": 0,
             "enabled": true,
+            "filters": [
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "crop_filter",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Crop/Pad",
+                    "prev_ver": 436273152,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {
+                        "left": 200,
+                        "right": 200
+                    },
+                    "sync": 0,
+                    "versioned_id": "crop_filter",
+                    "volume": 1.0
+                }
+            ],
             "flags": 0,
             "hotkeys": {
                 "libobs.mute": [],
@@ -721,11 +958,11 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert {\n  display: none\n}",
+                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "height": 700,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#summary",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#summary",
                 "width": 1920
             },
             "sync": 0,
@@ -740,10 +977,12 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.interlude-music": [],
+                "libobs.hide_scene_item.countdown": [],
                 "libobs.hide_scene_item.match-scores-browser": [],
-                "libobs.show_scene_item.interlude-music": [],
-                "libobs.show_scene_item.match-scores-browser": []
+                "libobs.hide_scene_item.soundcloud": [],
+                "libobs.show_scene_item.countdown": [],
+                "libobs.show_scene_item.match-scores-browser": [],
+                "libobs.show_scene_item.soundcloud": []
             },
             "id": "scene",
             "mixers": 0,
@@ -758,37 +997,8 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 5,
+                "id_counter": 10,
                 "items": [
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 3,
-                        "locked": false,
-                        "name": "interlude-music",
-                        "pos": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.0,
-                            "y": 1.0
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
                     {
                         "align": 5,
                         "bounds": {
@@ -817,6 +1027,64 @@
                         },
                         "scale_filter": "disable",
                         "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 7,
+                        "locked": false,
+                        "name": "soundcloud",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 971.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.65750002861022949,
+                            "y": 0.65662652254104614
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 10,
+                        "locked": false,
+                        "name": "countdown",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.60000002384185791,
+                            "y": 0.60000002384185791
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
                     }
                 ]
             },
@@ -832,16 +1100,18 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.interlude-music": [],
-                "libobs.hide_scene_item.team-1-advanced-stats-browser": [],
-                "libobs.show_scene_item.interlude-music": [],
-                "libobs.show_scene_item.team-1-advanced-stats-browser": []
+                "libobs.hide_scene_item.countdown": [],
+                "libobs.hide_scene_item.soundcloud": [],
+                "libobs.hide_scene_item.team-1-stats-browser": [],
+                "libobs.show_scene_item.countdown": [],
+                "libobs.show_scene_item.soundcloud": [],
+                "libobs.show_scene_item.team-1-stats-browser": []
             },
             "id": "scene",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "team-1-advanced-stats",
+            "name": "team-1-stats",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -850,24 +1120,24 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 3,
+                "id_counter": 7,
                 "items": [
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
+                            "x": 1920.0,
+                            "y": 1080.0
                         },
                         "bounds_align": 0,
-                        "bounds_type": 0,
+                        "bounds_type": 1,
                         "crop_bottom": 0,
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 2,
+                        "id": 3,
                         "locked": false,
-                        "name": "interlude-music",
+                        "name": "team-1-stats-browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -894,9 +1164,38 @@
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 3,
+                        "id": 5,
                         "locked": false,
-                        "name": "team-1-advanced-stats-browser",
+                        "name": "soundcloud",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 971.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.65750002861022949,
+                            "y": 0.65662652254104614
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 7,
+                        "locked": false,
+                        "name": "countdown",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -904,8 +1203,8 @@
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.0,
-                            "y": 1.0
+                            "x": 0.60000002384185791,
+                            "y": 0.60000002384185791
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -924,10 +1223,12 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.interlude-music": [],
-                "libobs.hide_scene_item.talents browser": [],
-                "libobs.show_scene_item.interlude-music": [],
-                "libobs.show_scene_item.talents browser": []
+                "libobs.hide_scene_item.countdown": [],
+                "libobs.hide_scene_item.soundcloud": [],
+                "libobs.hide_scene_item.talents-browser": [],
+                "libobs.show_scene_item.countdown": [],
+                "libobs.show_scene_item.soundcloud": [],
+                "libobs.show_scene_item.talents-browser": []
             },
             "id": "scene",
             "mixers": 0,
@@ -942,37 +1243,8 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 2,
+                "id_counter": 6,
                 "items": [
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 2,
-                        "locked": false,
-                        "name": "interlude-music",
-                        "pos": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.0,
-                            "y": 1.0
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
                     {
                         "align": 5,
                         "bounds": {
@@ -988,7 +1260,7 @@
                         "group_item_backup": false,
                         "id": 1,
                         "locked": false,
-                        "name": "talents browser",
+                        "name": "talents-browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -998,6 +1270,64 @@
                         "scale": {
                             "x": 1.0,
                             "y": 1.0
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 4,
+                        "locked": false,
+                        "name": "soundcloud",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 971.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.65750002861022949,
+                            "y": 0.65662652254104614
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 6,
+                        "locked": false,
+                        "name": "countdown",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.60000002384185791,
+                            "y": 0.60000002384185791
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -1016,16 +1346,18 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.interlude-music": [],
-                "libobs.hide_scene_item.team-2-advanced-stats-browser": [],
-                "libobs.show_scene_item.interlude-music": [],
-                "libobs.show_scene_item.team-2-advanced-stats-browser": []
+                "libobs.hide_scene_item.countdown": [],
+                "libobs.hide_scene_item.soundcloud": [],
+                "libobs.hide_scene_item.team-2-stats-browser": [],
+                "libobs.show_scene_item.countdown": [],
+                "libobs.show_scene_item.soundcloud": [],
+                "libobs.show_scene_item.team-2-stats-browser": []
             },
             "id": "scene",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "team-2-advanced-stats",
+            "name": "team-2-stats",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1034,24 +1366,24 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 2,
+                "id_counter": 6,
                 "items": [
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
+                            "x": 1920.0,
+                            "y": 1080.0
                         },
                         "bounds_align": 0,
-                        "bounds_type": 0,
+                        "bounds_type": 1,
                         "crop_bottom": 0,
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 2,
+                        "id": 1,
                         "locked": false,
-                        "name": "interlude-music",
+                        "name": "team-2-stats-browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -1068,19 +1400,48 @@
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 1920.0,
-                            "y": 1168.0
+                            "x": 0.0,
+                            "y": 0.0
                         },
                         "bounds_align": 0,
-                        "bounds_type": 2,
+                        "bounds_type": 0,
                         "crop_bottom": 0,
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 1,
+                        "id": 4,
                         "locked": false,
-                        "name": "team-2-advanced-stats-browser",
+                        "name": "soundcloud",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 971.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.65750002861022949,
+                            "y": 0.65662652254104614
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 6,
+                        "locked": false,
+                        "name": "countdown",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -1088,8 +1449,8 @@
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.0,
-                            "y": 1.0
+                            "x": 0.60000002384185791,
+                            "y": 0.60000002384185791
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -1106,6 +1467,33 @@
             "deinterlace_mode": 0,
             "enabled": true,
             "filters": [
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "crop_filter",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Crop/Pad",
+                    "prev_ver": 436273152,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {
+                        "left": 150,
+                        "right": 150,
+                        "top": 50
+                    },
+                    "sync": 0,
+                    "versioned_id": "crop_filter",
+                    "volume": 1.0
+                },
                 {
                     "balance": 0.5,
                     "deinterlace_field_order": 0,
@@ -1156,11 +1544,11 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert {\n  display: none\n}",
+                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "height": 1300,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#match-scores",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#match-scores",
                 "width": 1920
             },
             "sync": 0,
@@ -1196,10 +1584,37 @@
                         "limit_cy": true,
                         "loop": false,
                         "speed_x": 0.0,
-                        "speed_y": 30.0
+                        "speed_y": 20.0
                     },
                     "sync": 0,
                     "versioned_id": "scroll_filter",
+                    "volume": 1.0
+                },
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "crop_filter",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Crop/Pad",
+                    "prev_ver": 436273152,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {
+                        "left": 150,
+                        "relative": true,
+                        "right": 150
+                    },
+                    "sync": 0,
+                    "versioned_id": "crop_filter",
                     "volume": 1.0
                 }
             ],
@@ -1214,7 +1629,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "team-2-advanced-stats-browser",
+            "name": "team-2-stats-browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1222,12 +1637,12 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert {\n  display: none\n}",
+                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "height": 1800,
                 "reroute_audio": false,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#team-2-advanced-stats",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#team-2-advanced-stats",
                 "width": 1920
             },
             "sync": 0,
@@ -1260,7 +1675,10 @@
                     "push-to-talk-delay": 0,
                     "settings": {
                         "bottom": 400,
-                        "relative": true
+                        "left": 175,
+                        "relative": true,
+                        "right": 320,
+                        "top": 50
                     },
                     "sync": 0,
                     "versioned_id": "crop_filter",
@@ -1278,7 +1696,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "talents browser",
+            "name": "talents-browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1286,54 +1704,16 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert {\n  display: none\n}",
+                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { margin: 0px auto; overflow: hidden; }",
                 "fps_custom": false,
                 "height": 1080,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#talents",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#talents",
                 "width": 1920
             },
             "sync": 0,
             "versioned_id": "browser_source",
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
-            "hotkeys": {
-                "MediaSource.Pause": [],
-                "MediaSource.Play": [],
-                "MediaSource.Restart": [],
-                "MediaSource.Stop": [],
-                "libobs.mute": [],
-                "libobs.push-to-mute": [],
-                "libobs.push-to-talk": [],
-                "libobs.unmute": []
-            },
-            "id": "ffmpeg_source",
-            "mixers": 255,
-            "monitoring_type": 1,
-            "muted": false,
-            "name": "interlude-music",
-            "prev_ver": 436273152,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "close_when_inactive": true,
-                "hw_decode": true,
-                "local_file": "D:\\HotsDevelopment\\HGC (2018) BREAK  MUSIC (1) (128 kbps).mp3",
-                "restart_on_activate": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33800151#team-1-advanced-stats"
-            },
-            "sync": 0,
-            "versioned_id": "ffmpeg_source",
             "volume": 1.0
         },
         {
@@ -1364,10 +1744,36 @@
                         "cy": 1080,
                         "limit_cy": true,
                         "loop": true,
-                        "speed_y": 30.0
+                        "speed_y": 20.0
                     },
                     "sync": 0,
                     "versioned_id": "scroll_filter",
+                    "volume": 1.0
+                },
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "crop_filter",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Crop/Pad",
+                    "prev_ver": 436273152,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {
+                        "left": 150,
+                        "right": 150
+                    },
+                    "sync": 0,
+                    "versioned_id": "crop_filter",
                     "volume": 1.0
                 }
             ],
@@ -1382,7 +1788,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "team-1-advanced-stats-browser",
+            "name": "team-1-stats-browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1390,11 +1796,11 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert {\n  display: none\n}",
+                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "height": 1800,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33799901#team-1-advanced-stats",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#team-1-advanced-stats",
                 "width": 1920
             },
             "sync": 0,
@@ -1409,16 +1815,18 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.experience-over-time-browser": [],
-                "libobs.hide_scene_item.interlude-music": [],
-                "libobs.show_scene_item.experience-over-time-browser": [],
-                "libobs.show_scene_item.interlude-music": []
+                "libobs.hide_scene_item.countdown": [],
+                "libobs.hide_scene_item.experience-browser": [],
+                "libobs.hide_scene_item.soundcloud": [],
+                "libobs.show_scene_item.countdown": [],
+                "libobs.show_scene_item.experience-browser": [],
+                "libobs.show_scene_item.soundcloud": []
             },
             "id": "scene",
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "experience-over-time",
+            "name": "experience",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1427,24 +1835,24 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 2,
+                "id_counter": 6,
                 "items": [
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
+                            "x": 1920.0,
+                            "y": 1080.0
                         },
                         "bounds_align": 0,
-                        "bounds_type": 0,
+                        "bounds_type": 2,
                         "crop_bottom": 0,
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 2,
+                        "id": 1,
                         "locked": false,
-                        "name": "interlude-music",
+                        "name": "experience-browser",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -1461,19 +1869,48 @@
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 1920.0,
-                            "y": 1080.0
+                            "x": 0.0,
+                            "y": 0.0
                         },
                         "bounds_align": 0,
-                        "bounds_type": 2,
+                        "bounds_type": 0,
                         "crop_bottom": 0,
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 1,
+                        "id": 4,
                         "locked": false,
-                        "name": "experience-over-time-browser",
+                        "name": "soundcloud",
+                        "pos": {
+                            "x": 0.0,
+                            "y": 971.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 0.65750002861022949,
+                            "y": 0.65662652254104614
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 6,
+                        "locked": false,
+                        "name": "countdown",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -1481,8 +1918,8 @@
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.0,
-                            "y": 1.0
+                            "x": 0.60000002384185791,
+                            "y": 0.60000002384185791
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -1518,8 +1955,11 @@
                     "push-to-talk": false,
                     "push-to-talk-delay": 0,
                     "settings": {
-                        "bottom": 600,
-                        "relative": true
+                        "bottom": 625,
+                        "left": 200,
+                        "relative": true,
+                        "right": 300,
+                        "top": 50
                     },
                     "sync": 0,
                     "versioned_id": "crop_filter",
@@ -1549,6 +1989,31 @@
                     "sync": 0,
                     "versioned_id": "gpu_delay",
                     "volume": 1.0
+                },
+                {
+                    "balance": 0.5,
+                    "deinterlace_field_order": 0,
+                    "deinterlace_mode": 0,
+                    "enabled": true,
+                    "flags": 0,
+                    "hotkeys": {},
+                    "id": "gpu_delay",
+                    "mixers": 0,
+                    "monitoring_type": 0,
+                    "muted": false,
+                    "name": "Render Delay 2",
+                    "prev_ver": 436273152,
+                    "private_settings": {},
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "settings": {
+                        "delay_ms": 500
+                    },
+                    "sync": 0,
+                    "versioned_id": "gpu_delay",
+                    "volume": 1.0
                 }
             ],
             "flags": 0,
@@ -1562,7 +2027,7 @@
             "mixers": 255,
             "monitoring_type": 0,
             "muted": false,
-            "name": "experience-over-time-browser",
+            "name": "experience-browser",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1570,17 +2035,53 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert {\n  display: none\n}",
+                "css": "div#hotsapi-alert {\n  display: none\n}\n\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "fps_custom": true,
                 "height": 1080,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33799901#experience-over-time",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#experience-over-time",
                 "width": 1920
             },
             "sync": 0,
             "versioned_id": "browser_source",
             "volume": 1.0
+        },
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {
+                "libobs.mute": [],
+                "libobs.push-to-mute": [],
+                "libobs.push-to-talk": [],
+                "libobs.unmute": []
+            },
+            "id": "browser_source",
+            "mixers": 255,
+            "monitoring_type": 2,
+            "muted": false,
+            "name": "soundcloud",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "height": 166,
+                "is_local_file": false,
+                "local_file": "C:/Projects/HeroesReplay/obs/hgc-interim-music.html",
+                "reroute_audio": true,
+                "restart_when_active": true,
+                "shutdown": true,
+                "url": "https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/406284567&color=%23ff5500&auto_play=true&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true"
+            },
+            "sync": 0,
+            "versioned_id": "browser_source",
+            "volume": 0.13504089415073395
         }
     ],
     "transition_duration": 2000,

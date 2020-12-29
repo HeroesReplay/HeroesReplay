@@ -2,7 +2,7 @@
 
 namespace HeroesReplay.Core.Shared
 {
-    public record BrowserSource 
+    public record ReportScene 
     {
         public string SceneName { get; init; }
         public string SourceUrl { get; init; }

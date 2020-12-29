@@ -114,7 +114,7 @@ namespace HeroesReplay.Core
 
                 KillGame();
 
-                await Task.Delay(5000);
+                await Task.Delay(settings.Spectate.WaitingTime);
 
                 await LaunchGameFromBattlenet();
             }

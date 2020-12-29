@@ -37,18 +37,28 @@ namespace HeroesReplay.Core
 
         public async Task SpectateSessionAsync()
         {
-            await session.SpectateAsync();
-            
-            gameController.KillGame();
-
-            await replayFileWriter.ClearDetailsAsync();
-
-            if (sessionHolder.StormReplay.ReplayId.HasValue)
+            if (settings.OBS.Enabled)
             {
-                await obsController.CycleScenesAsync(sessionHolder.StormReplay.ReplayId.Value);
+                await obsController.SwapToGameSceneAsync();
+                await session.SpectateAsync();
+                gameController.KillGame();
+                await replayFileWriter.ClearDetailsAsync();
+
+                if (sessionHolder.StormReplay.ReplayId.HasValue)
+                {
+                    await obsController.CycleReportAsync(sessionHolder.StormReplay.ReplayId.Value);
+                }
+
+                await obsController.SwapToWaitingSceneAsync();
+            }
+            else
+            {
+                await session.SpectateAsync();
+                gameController.KillGame();
+                await replayFileWriter.ClearDetailsAsync();                
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(10));
+            await Task.Delay(settings.Spectate.WaitingTime);
         }
     }
 }
