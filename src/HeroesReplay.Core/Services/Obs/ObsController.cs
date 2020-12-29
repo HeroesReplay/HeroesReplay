@@ -69,6 +69,7 @@ namespace HeroesReplay.Core.Services.Obs
                 waiter.Wait();
 
                 obs.SetCurrentScene(this.settings.OBS.WaitingSceneName);
+                logger.LogDebug($"Set scene to: {this.settings.OBS.WaitingSceneName}");
 
                 obs.Disconnect();
                 logger.LogDebug($"OBS WebSocket Disconnected");
@@ -116,9 +117,9 @@ namespace HeroesReplay.Core.Services.Obs
         private async Task<bool> TryCycleScene(ReportScene source)
         {
             try
-            {
-                logger.LogDebug($"set scene to: {source.SceneName}");
+            {   
                 obs.SetCurrentScene(source.SceneName);
+                logger.LogDebug($"set scene to: {source.SceneName}");
                 await Task.Delay(source.DisplayTime);
                 return true;
             }

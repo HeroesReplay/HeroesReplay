@@ -27,6 +27,9 @@ namespace HeroesReplay.Core
 {
     public class GameController : IGameController
     {
+        private const string ExplorerProcess = "explorer.exe";
+        private const string VersionsFolder = "Versions";
+
         private readonly OcrEngine engine;
         private readonly CancellationTokenProvider tokenProvider;
         private readonly ILogger<GameController> logger;
@@ -62,7 +65,7 @@ namespace HeroesReplay.Core
 
         public async Task<StormReplay> LaunchAsync(StormReplay stormReplay)
         {
-            int latestBuild = Directory.EnumerateDirectories(Path.Combine(settings.Location.GameInstallPath, "Versions")).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
+            int latestBuild = Directory.EnumerateDirectories(Path.Combine(settings.Location.GameInstallPath, VersionsFolder)).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
             var requiresAuth = stormReplay.Replay.ReplayBuild == latestBuild;
 
             if (IsLaunched && await IsReplay())
@@ -125,7 +128,7 @@ namespace HeroesReplay.Core
         private async Task LaunchAndWait(StormReplay stormReplay)
         {
             // This will make the HeroSwitcher communicate with existing game to launch selected replay
-            using (var defaultLaunch = Process.Start("explorer.exe", stormReplay.Path))
+            using (var defaultLaunch = Process.Start(ExplorerProcess, stormReplay.Path))
             {
                 Policy
                     .Handle<Exception>()
@@ -183,7 +186,7 @@ namespace HeroesReplay.Core
                     }
                     else if (settings.Capture.SaveCaptureFailureCondition)
                     {
-                        resized.Save(Path.Combine(settings.CapturesPath, DateTime.Now.ToString()));
+                        resized.Save(Path.Combine(settings.CapturesPath, DateTime.Now.ToString(), ".bmp"));
                     }
 
                     return null;
@@ -305,8 +308,6 @@ namespace HeroesReplay.Core
         }
 
         private async Task<bool> IsHomeScreen() => await ContainsAllAsync(settings.OCR.HomeScreenText);
-
-        private async Task<bool> IsLoginScreen() => await ContainsAnyAsync(settings.OCR.LoginScreenText);
 
         private async Task<bool> IsReplay() => (await TryGetTimerAsync()) != null;
 

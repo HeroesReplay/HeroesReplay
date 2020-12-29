@@ -21,6 +21,26 @@ namespace HeroesReplay.Core.Runner
 {
     public class GameData : IGameData
     {
+        private const string ScalingLinkIdProperty = "scalingLinkId";
+        private const string HeroUnitsProperty = "heroUnits";
+        private const string UnitIdProperty = "unitId";
+        private const string DescriptorsProperty = "descriptors";
+        private const string AttributesProperty = "attributes";
+
+        private const string HeroData = "herodata_";
+        private const string UnitData = "unitdata_";
+
+        private const string AttributeMapBoss = "MapBoss";
+        private const string AttributeMapCreature = "MapCreature";
+        private const string AttributeMerc = "Merc";
+        private const string AttributeStructure = "AITargetableStructure";
+
+        private const string UnitNameLaner = "Laner";
+        private const string UnitNameDefender = "Defender";
+        private const string UnitNamePayload = "Payload";
+
+        private const string HeroicTalent = "Talent";
+
         private readonly ILogger<GameData> logger;
         private readonly Settings settings;
         private readonly string heroesDataPath;
@@ -130,9 +150,9 @@ namespace HeroesReplay.Core.Runner
 
             var files = Directory
                 .GetFiles(heroesDataPath, "*.json", SearchOption.AllDirectories)
-                .Where(x => x.Contains("herodata_") || x.Contains("unitdata_"))
-                .OrderByDescending(x => x.Contains("herodata_"))
-                .ThenBy(x => x.Contains("unitdata_"));
+                .Where(x => x.Contains(HeroData) || x.Contains(UnitData))
+                .OrderByDescending(x => x.Contains(HeroData))
+                .ThenBy(x => x.Contains(UnitData));
 
             foreach (var file in files)
             {
@@ -140,23 +160,23 @@ namespace HeroesReplay.Core.Runner
                 {
                     foreach (var o in document.RootElement.EnumerateObject())
                     {
-                        if (o.Value.TryGetProperty("scalingLinkId", out JsonElement value) && settings.HeroesToolChest.ScalingLinkId.Equals(value.GetString()))
+                        if (o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement value) && settings.HeroesToolChest.ScalingLinkId.Equals(value.GetString()))
                         {
                             coreUnits.Add(o.Name.Contains("-") ? o.Name.Split('-')[1] : o.Name);
                         }
 
-                        if (o.Value.TryGetProperty("unitId", out var unitId))
+                        if (o.Value.TryGetProperty(UnitIdProperty, out var unitId))
                         {
                             var descriptors = new List<string>();
 
-                            if (o.Value.TryGetProperty("descriptors", out var descriptorsElement))
+                            if (o.Value.TryGetProperty(DescriptorsProperty, out var descriptorsElement))
                             {
                                 descriptors.AddRange(descriptorsElement.EnumerateArray().Select(x => x.GetString()));
                             }
 
                             unitGroups[unitId.GetString()] = UnitGroup.Hero;
 
-                            if (o.Value.TryGetProperty("heroUnits", out var heroUnits))
+                            if (o.Value.TryGetProperty(HeroUnitsProperty, out var heroUnits))
                             {
                                 foreach (var hu in heroUnits.EnumerateArray())
                                 {
@@ -175,26 +195,26 @@ namespace HeroesReplay.Core.Runner
                             List<string> attributes = new List<string>();
                             List<string> descriptors = new List<string>();
 
-                            if (o.Value.TryGetProperty("attributes", out var attributesElement))
+                            if (o.Value.TryGetProperty(AttributesProperty, out var attributesElement))
                                 attributes.AddRange(attributesElement.EnumerateArray().Select(x => x.GetString()));
 
-                            if (o.Value.TryGetProperty("descriptors", out var descriptorsElement))
+                            if (o.Value.TryGetProperty(DescriptorsProperty, out var descriptorsElement))
                                 descriptors.AddRange(descriptorsElement.EnumerateArray().Select(x => x.GetString()));
 
-                            if (attributes.Contains("MapBoss") && name.EndsWith("Defender") && !ignoreUnits.Any(i => name.Contains(i)))
+                            if (attributes.Contains(AttributeMapBoss) && name.EndsWith(UnitNameDefender) && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 bossUnits.Add(name);
                                 unitGroups[name] = UnitGroup.MercenaryCamp;
                                 continue;
                             }
 
-                            if (attributes.Contains("MapBoss") && name.EndsWith("Laner") && !ignoreUnits.Any(i => name.Contains(i)))
+                            if (attributes.Contains(AttributeMapBoss) && name.EndsWith(UnitNameLaner) && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MercenaryCamp;
                                 continue;
                             }
 
-                            if (attributes.Count == 1 && attributes.Contains("Merc") && !ignoreUnits.Any(i => name.Contains(i)))
+                            if (attributes.Count == 1 && attributes.Contains(AttributeMerc) && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MercenaryCamp;
                                 continue;
@@ -214,13 +234,15 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            if ((attributes.Contains("MapCreature") || attributes.Contains("MapBoss")) && !(name.EndsWith("Laner") || name.EndsWith("Defender")) && !ignoreUnits.Any(i => name.Contains(i)))
+                            if ((attributes.Contains(AttributeMapCreature) || attributes.Contains(AttributeMapBoss)) && 
+                                                                           !(name.EndsWith(UnitNameLaner) || name.EndsWith(UnitNameDefender)) && 
+                                                                           !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
                             }
 
-                            if (name.Contains("Payload") && "hanamuradata".Contains(map) && !ignoreUnits.Any(i => name.Contains(i)))
+                            if (name.Contains(UnitNamePayload) && "hanamuradata".Contains(map) && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
@@ -232,7 +254,7 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            if (attributes.Contains("AITargetableStructure") && !ignoreUnits.Any(i => name.Contains(i)))
+                            if (attributes.Contains(AttributeStructure) && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.Structures;
                                 continue;
@@ -246,7 +268,7 @@ namespace HeroesReplay.Core.Runner
 
                             if (unitGroups.FirstOrDefault(c => o.Name.Contains(c.Key)).Key != null)
                             {
-                                unitGroups[name] = name.Contains("Talent") ? UnitGroup.HeroTalentSelection : UnitGroup.HeroAbilityUse;
+                                unitGroups[name] = name.Contains(HeroicTalent) ? UnitGroup.HeroTalentSelection : UnitGroup.HeroAbilityUse;
                                 continue;
                             }
 
