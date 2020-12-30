@@ -23,6 +23,8 @@ namespace HeroesReplay.Core
 
         public async Task CreateAsync(StormReplay stormReplay)
         {
+            DateTime start = DateTime.Now;
+
             logger.LogInformation($"Creating session for: {stormReplay.Path}");
 
             var players = replayAnalyzer.GetPlayers(stormReplay.Replay);
@@ -31,6 +33,8 @@ namespace HeroesReplay.Core
             var isCarriedObjectiveMap = replayAnalyzer.IsCarriedObjectiveMap(stormReplay.Replay);
 
             sessionSetter.Set(new SessionData(players, panels, end, isCarriedObjectiveMap), stormReplay);
+
+            logger.LogDebug($"Time to create session data: {DateTime.Now - start}");
 
             logger.LogInformation($"Session set for: {stormReplay.Path}");
         }

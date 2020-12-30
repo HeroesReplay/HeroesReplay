@@ -16,6 +16,7 @@ namespace HeroesReplay.Core.Shared
         public int MaxDistanceToOwnerChange { get; init; }
 
         public TimeSpan EndScreenTime { get; init; }
+        public TimeSpan EndCoreTime { get; init; }
         public TimeSpan PanelRotateTime { get; init; }
         public TimeSpan TalentsPanelStartTime { get; init; }
         public TimeSpan WaitingTime { get; init; }

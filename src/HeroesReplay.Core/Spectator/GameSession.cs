@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Polly;
 
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -63,7 +62,7 @@ namespace HeroesReplay.Core
 
                     if (timer.HasValue)
                     {
-                        if (timer.Value.Add(TimeSpan.FromSeconds(10)) >= Data.End) State = State.End;
+                        if (timer.Value.Add(settings.Spectate.EndCoreTime) >= Data.End) State = State.End;
                         else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
                         else if (timer.Value > Timer) State = State.Running;
                         else State = State.Start;
@@ -154,6 +153,7 @@ namespace HeroesReplay.Core
                 {
                     if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != previous)
                     {
+                        logger.LogDebug($"Data panels timer match found at: {Timer}");
                         next = panel;
                     }
                     else if (Timer < settings.Spectate.TalentsPanelStartTime)
@@ -202,6 +202,8 @@ namespace HeroesReplay.Core
             }
         }
 
+        static TimeSpan invalidThreshold = TimeSpan.FromSeconds(15);
+
         private async Task<TimeSpan?> GetOcrTimer()
         {
             return await Policy
@@ -209,7 +211,7 @@ namespace HeroesReplay.Core
                  {
                      if (timer == null) return false;
 
-                     if (Timer != TimeSpan.Zero && (timer > Timer.Add(TimeSpan.FromSeconds(15)) || timer < Timer.Subtract(TimeSpan.FromSeconds(15))))
+                     if (Timer != TimeSpan.Zero && (timer > Timer.Add(invalidThreshold) || timer < Timer.Subtract(invalidThreshold)))
                      {
                          logger.LogDebug($"OCR Timer is not an expected value? Before: {Timer}, After: {timer}");
                          return false;

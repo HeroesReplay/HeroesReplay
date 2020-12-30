@@ -59,8 +59,8 @@
         "versioned_id": "wasapi_output_capture",
         "volume": 1.0
     },
-    "current_program_scene": "waiting-screen",
-    "current_scene": "waiting-screen",
+    "current_program_scene": "game-scene",
+    "current_scene": "game-scene",
     "current_transition": "Fade",
     "groups": [],
     "modules": {
@@ -150,6 +150,41 @@
         }
     ],
     "sources": [
+        {
+            "balance": 0.5,
+            "deinterlace_field_order": 0,
+            "deinterlace_mode": 0,
+            "enabled": true,
+            "flags": 0,
+            "hotkeys": {
+                "libobs.mute": [],
+                "libobs.push-to-mute": [],
+                "libobs.push-to-talk": [],
+                "libobs.unmute": []
+            },
+            "id": "browser_source",
+            "mixers": 255,
+            "monitoring_type": 0,
+            "muted": false,
+            "name": "social-media",
+            "prev_ver": 436273152,
+            "private_settings": {},
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "settings": {
+                "is_local_file": true,
+                "local_file": "C:/Users/patri/Downloads/Social Media Popup by Nerd or Die/Popup Files/_right-social-media-popup-v2.html",
+                "restart_when_active": true,
+                "shutdown": true,
+                "url": "file:///C:/Users/patri/Downloads/Social%20Media%20Popup%20by%20Nerd%20or%20Die/Popup%20Files/_right-social-media-popup-v2.html",
+                "width": 1000
+            },
+            "sync": 0,
+            "versioned_id": "browser_source",
+            "volume": 1.0
+        },
         {
             "balance": 0.5,
             "deinterlace_field_order": 0,
@@ -343,6 +378,7 @@
                 "libobs.hide_scene_item.heroes-profile-2": [],
                 "libobs.hide_scene_item.heroes-profile-4": [],
                 "libobs.hide_scene_item.next-game-loading-soon": [],
+                "libobs.hide_scene_item.social-media": [],
                 "libobs.hide_scene_item.soundcloud": [],
                 "libobs.show_scene_item.Affiliation": [],
                 "libobs.show_scene_item.background-image-2": [],
@@ -351,6 +387,7 @@
                 "libobs.show_scene_item.heroes-profile-2": [],
                 "libobs.show_scene_item.heroes-profile-4": [],
                 "libobs.show_scene_item.next-game-loading-soon": [],
+                "libobs.show_scene_item.social-media": [],
                 "libobs.show_scene_item.soundcloud": []
             },
             "id": "scene",
@@ -366,7 +403,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 20,
+                "id_counter": 21,
                 "items": [
                     {
                         "align": 5,
@@ -501,8 +538,8 @@
                         "locked": false,
                         "name": "heroes-profile-2",
                         "pos": {
-                            "x": 101.0,
-                            "y": 304.0
+                            "x": 93.0,
+                            "y": 300.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
@@ -530,7 +567,7 @@
                         "locked": false,
                         "name": "heroes-profile-1",
                         "pos": {
-                            "x": 107.0,
+                            "x": 110.0,
                             "y": 517.0
                         },
                         "private_settings": {},
@@ -617,14 +654,43 @@
                         "locked": false,
                         "name": "heroes-profile-4",
                         "pos": {
-                            "x": 116.0,
-                            "y": 267.0
+                            "x": 121.0,
+                            "y": 250.0
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
                             "x": 1.0260416269302368,
                             "y": 1.0277777910232544
+                        },
+                        "scale_filter": "disable",
+                        "visible": true
+                    },
+                    {
+                        "align": 5,
+                        "bounds": {
+                            "x": 0.0,
+                            "y": 0.0
+                        },
+                        "bounds_align": 0,
+                        "bounds_type": 0,
+                        "crop_bottom": 0,
+                        "crop_left": 0,
+                        "crop_right": 0,
+                        "crop_top": 0,
+                        "group_item_backup": false,
+                        "id": 21,
+                        "locked": false,
+                        "name": "social-media",
+                        "pos": {
+                            "x": 920.0,
+                            "y": 0.0
+                        },
+                        "private_settings": {},
+                        "rot": 0.0,
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -962,7 +1028,7 @@
                 "height": 700,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#summary",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880856#summary",
                 "width": 1920
             },
             "sync": 0,
@@ -1548,7 +1614,7 @@
                 "height": 1300,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#match-scores",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880856#match-scores",
                 "width": 1920
             },
             "sync": 0,
@@ -1642,7 +1708,7 @@
                 "reroute_audio": false,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#team-2-advanced-stats",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880856#team-2-advanced-stats",
                 "width": 1920
             },
             "sync": 0,
@@ -1709,7 +1775,7 @@
                 "height": 1080,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#talents",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880856#talents",
                 "width": 1920
             },
             "sync": 0,
@@ -1800,7 +1866,7 @@
                 "height": 1800,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#team-1-advanced-stats",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880856#team-1-advanced-stats",
                 "width": 1920
             },
             "sync": 0,
@@ -2040,7 +2106,7 @@
                 "height": 1080,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880829#experience-over-time",
+                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880856#experience-over-time",
                 "width": 1920
             },
             "sync": 0,
@@ -2084,7 +2150,7 @@
             "volume": 0.13504089415073395
         }
     ],
-    "transition_duration": 2000,
+    "transition_duration": 1000,
     "transitions": [
         {
             "id": "obs_stinger_transition",

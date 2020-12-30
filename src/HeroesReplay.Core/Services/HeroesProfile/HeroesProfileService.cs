@@ -83,9 +83,9 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         {
             try
             {
-                using (var client = new HttpClient() { BaseAddress = new Uri("https://api.heroesprofile.com/", UriKind.Absolute) })
+                using (var client = new HttpClient() { BaseAddress = settings.OpenApiBaseUri })
                 {
-                    var json = await client.GetStringAsync(new Uri($"openApi/Replay/Min_id?min_id={minId}", UriKind.Relative)).ConfigureAwait(false);
+                    var json = await client.GetStringAsync(new Uri($"Replay/Min_id?min_id={minId}", UriKind.Relative)).ConfigureAwait(false);
 
                     return JsonSerializer.Deserialize<IEnumerable<HeroesProfileReplay>>(json).Where(x => x.Deleted == null || x.Deleted == "0");
                 }

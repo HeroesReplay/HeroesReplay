@@ -1,8 +1,6 @@
 ﻿using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Obs;
 using HeroesReplay.Core.Shared;
-
-using System;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core
