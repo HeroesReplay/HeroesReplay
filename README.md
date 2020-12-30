@@ -86,7 +86,7 @@ The spectate focus target is determined by a weighted point system. Kills are wo
 - [HotsApi](http://hotsapi.net/) an open Heroes of the Storm replay database where everyone can download replays.
 - [NSwag.MSBuild](https://github.com/RicoSuter/NSwag/wiki/NSwag.MSBuild) to generate the api client for accessing HotsApi.
 - [AWSSDK.S3](https://aws.amazon.com/sdk-for-net/) to download the `.StormReplay` files hosted in the HotsApi AWS S3 storage.
-- [Ali Obs Interface](https://github.com/Ahli/Galaxy-Observer-UI) a custom `.StormInterface` for Heroes of the Storm.
+- [AhliObs Interface](https://github.com/Ahli/Galaxy-Observer-UI) a custom `.StormInterface` for Heroes of the Storm.
 - [PInvoke.NET](https://github.com/dotnet/pinvoke/) for Windows native calls (BitBlt for game window capture) & sending input to the game window.
 - [OBS Web Sockets .NET](https://github.com/BarRaider/obs-websocket-dotnet) for automating and triggering scenes in OBS Studio
 
