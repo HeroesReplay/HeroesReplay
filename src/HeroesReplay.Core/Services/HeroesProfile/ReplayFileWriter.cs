@@ -32,7 +32,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         {
             try
             {
-                var mmr = settings.HeroesProfileApi.EnableMMR ? $"Tier: " + await heroesProfileService.CalculateMMRAsync(replay) : string.Empty;
+                var mmr = settings.HeroesProfileApi.EnableMMR ? $"Tier: " + await heroesProfileService.GetMMRTier(replay) : string.Empty;
 
                 var bans = from ban in replay.Replay.DraftOrder.Where(pick => pick.PickType == DraftPickType.Banned).Select((pick, index) => new { Hero = pick.HeroSelected, Index = index + 1 })
                            from hero in gameData.Heroes

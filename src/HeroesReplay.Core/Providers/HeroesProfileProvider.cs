@@ -103,23 +103,23 @@ namespace HeroesReplay.Core.Providers
             }
             catch (Exception e)
             {
-                logger.LogCritical(e, "Could not provide a Replay file using the HotsAPI.");
+                logger.LogCritical(e, "Could not provide a Replay file using HeroesProfile API.");
             }
 
             return null;
         }
 
-        private async Task<StormReplay?> TryLoadReplay(HeroesProfileReplay heroesProfileReplay, FileInfo cacheStormReplay)
+        private async Task<StormReplay?> TryLoadReplay(HeroesProfileReplay heroesProfileReplay, FileInfo file)
         {
-            logger.LogDebug("id: {0}, url: {1}, path: {2}", heroesProfileReplay.Id, heroesProfileReplay.Url, cacheStormReplay.FullName);
+            logger.LogDebug("id: {0}, url: {1}, path: {2}", heroesProfileReplay.Id, heroesProfileReplay.Url, file.FullName);
 
-            (ReplayParseResult result, Replay replay) = ParseReplay(await File.ReadAllBytesAsync(cacheStormReplay.FullName), ParseOptions.FullParsing);
+            (ReplayParseResult result, Replay replay) = ParseReplay(await File.ReadAllBytesAsync(file.FullName), ParseOptions.FullParsing);
 
-            logger.LogDebug("result: {0}, path: {1}", result, cacheStormReplay.FullName);
+            logger.LogDebug("result: {0}, path: {1}", result, file.FullName);
 
             if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
             {
-                return new StormReplay(cacheStormReplay.FullName, replay, heroesProfileReplay.Id);
+                return new StormReplay(file.FullName, replay, heroesProfileReplay.Id, heroesProfileReplay.GameType);
             }
 
             return null;
@@ -127,7 +127,9 @@ namespace HeroesReplay.Core.Providers
 
         private async Task DownloadStormReplay(HeroesProfileReplay replay, FileInfo cachedReplay)
         {
-            using (AmazonS3Client s3Client = new AmazonS3Client(new BasicAWSCredentials(settings.HeroesProfileApi.AwsAccessKey, settings.HeroesProfileApi.AwsSecretKey), RegionEndpoint.USEast1))
+            var credentials = new BasicAWSCredentials(settings.HeroesProfileApi.AwsAccessKey, settings.HeroesProfileApi.AwsSecretKey);
+
+            using (AmazonS3Client s3Client = new AmazonS3Client(credentials, RegionEndpoint.GetBySystemName(settings.HeroesProfileApi.S3Region)))
             {
                 if (Uri.TryCreate(replay.Url, UriKind.Absolute, out Uri? uri))
                 {
@@ -141,11 +143,11 @@ namespace HeroesReplay.Core.Providers
 
                     using (GetObjectResponse response = await s3Client.GetObjectAsync(request, provider.Token))
                     {
-                        await using (MemoryStream memoryStream = new MemoryStream())
+                        using (MemoryStream memoryStream = new MemoryStream())
                         {
                             await response.ResponseStream.CopyToAsync(memoryStream);
 
-                            await using (var stream = cachedReplay.OpenWrite())
+                            using (var stream = cachedReplay.OpenWrite())
                             {
                                 await stream.WriteAsync(memoryStream.ToArray());
                                 await stream.FlushAsync();
@@ -164,7 +166,7 @@ namespace HeroesReplay.Core.Providers
         private FileInfo CreateFile(HeroesProfileReplay replay)
         {
             var path = ReplaysDirectory.FullName;
-            var name = $"{replay.Id}{settings.StormReplay.CachedFileNameSplitter}{replay.Fingerprint}{settings.StormReplay.FileExtension}";
+            var name = $"{replay.Id}{settings.StormReplay.Seperator}{replay.GameType}{settings.StormReplay.Seperator}{replay.Fingerprint}{settings.StormReplay.FileExtension}";
             return new FileInfo(Path.Combine(path, name));
         }
 

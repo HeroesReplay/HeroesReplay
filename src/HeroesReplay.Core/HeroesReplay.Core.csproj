@@ -6,26 +6,6 @@
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
 
-  <!-- Hots API -->
-  <PropertyGroup>
-    <HotsApiClientNameSpace>HeroesReplay.Core.Services.HotsApi</HotsApiClientNameSpace>
-    <HotsApiClientClassName>HotsApiClient</HotsApiClientClassName>
-    <HotsApiClientFileName>Services/HotsApi/$(HotsApiClientClassName).g.cs</HotsApiClientFileName>
-    <HotsApiResponseClassName>HotsApiResponse</HotsApiResponseClassName>
-    <HotsApiWrapResponse>true</HotsApiWrapResponse>
-    <HotsApiDocumentUrl>http://hotsapi.net/spec/hotsapi-1.0.yaml</HotsApiDocumentUrl>
-  </PropertyGroup>
-
-  <!-- Heroes Profile API -->
-  <PropertyGroup>
-    <HeroesProfileApiClientNameSpace>HeroesReplay.Core.Replays.HeroesProfileApi</HeroesProfileApiClientNameSpace>
-    <HeroesProfileApiClientClassName>HeroesProfileApi</HeroesProfileApiClientClassName>
-    <HeroesProfileApiClientFileName>Data/$(HeroesProfileApiClientClassName).g.cs</HeroesProfileApiClientFileName>
-    <HeroesProfileApiResponseClassName>HeroesProfileApiResponse</HeroesProfileApiResponseClassName>
-    <HeroesProfileApiWrapResponse>false</HeroesProfileApiWrapResponse>
-    <HeroesProfileApiDocumentUrl>https://api.heroesprofile.com/openAPI/spec/hotsapi-1.0.yaml</HeroesProfileApiDocumentUrl>
-  </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="AWSSDK.Core" Version="3.5.1.40" />
     <PackageReference Include="AWSSDK.S3" Version="3.5.5" />
@@ -53,22 +33,5 @@
     </PackageReference>
     <PackageReference Include="TwitchLib" Version="3.1.1" />
   </ItemGroup>
-
-  <Target Name="Download" BeforeTargets="BeforeBuild">
-    <DownloadFile DestinationFileName="hotsapi-1.0.yaml" DestinationFolder="$(MSBuildProjectDirectory)" Retries="3" SourceUrl="$(HotsApiDocumentUrl)" />
-  </Target>
-
-  <Target Name="Generate" BeforeTargets="BeforeBuild" DependsOnTargets="Download">
-    <Exec Command="$(NSwagExe_Core31) openapi2csclient /input:$(MSBuildProjectDirectory)\hotsapi-1.0.yaml /wrapresponses:$(HotsApiWrapResponse) /responseclass:$(HotsApiResponseClassName) /classname:$(HotsApiClientClassName) /namespace:$(HotsApiClientNameSpace) /usebaseurl:true /output:$(HotsApiClientFileName)" />
-    <!--<Delete Files="$(MSBuildProjectDirectory)\hotsapi-1.0.yaml" />-->
-  </Target>
-
-  <!--<Target Name="Generate" BeforeTargets="BeforeBuild" DependsOnTargets="Download">
-        <Exec Command="$(NSwagExe_Core31) openapi2csclient /input:$(MSBuildProjectDirectory)\heroesprofile-1.0.yaml /wrapresponses:$(HeroesProfileApiWrapResponse) /responseclass:$(HeroesProfileApiResponseClassName) /classname:$(HeroesProfileApiClientClassName) /namespace:$(HeroesProfileApiClientNameSpace) /usebaseurl:true /output:$(HeroesProfileApiClientFileName)" />
-        -->
-  <!--<Delete Files="$(MSBuildProjectDirectory)\heroesprofile-1.0.yaml" />-->
-  <!--
-    </Target>-->
-
 
 </Project>

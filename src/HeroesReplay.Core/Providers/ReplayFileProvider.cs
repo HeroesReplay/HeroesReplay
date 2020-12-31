@@ -15,12 +15,14 @@ namespace HeroesReplay.Core.Providers
     {
         private readonly ILogger<ReplayDirectoryProvider> logger;
         private readonly Settings settings;
+        private readonly ReplayHelper replayHelper;
         private readonly Queue<string> queue;
 
-        public ReplayFileProvider(ILogger<ReplayDirectoryProvider> logger, Settings settings)
+        public ReplayFileProvider(ILogger<ReplayDirectoryProvider> logger, Settings settings, ReplayHelper replayHelper)
         {
             this.logger = logger;
             this.settings = settings;
+            this.replayHelper = replayHelper;
             this.queue = new Queue<string>(new[] { settings.Location.ReplaySourcePath });
         }
 
@@ -46,7 +48,17 @@ namespace HeroesReplay.Core.Providers
 
                 if (result != DataParser.ReplayParseResult.Exception && result != DataParser.ReplayParseResult.PreAlphaWipe && result != DataParser.ReplayParseResult.Incomplete)
                 {
-                    return new StormReplay(path, replay, null);
+                    if (replayHelper.TryGetReplayId(path, out int? replayId))
+                    {
+                        logger.LogInformation($"Replay id found for {path}: {replayId}");
+                    }
+
+                    if (replayHelper.TryGetGameType(path, out string? gameType))
+                    {
+                        logger.LogInformation($"Replay id {replayId} found with GameType: {gameType}");
+                    }
+
+                    return new StormReplay(path, replay, replayId, gameType);
                 }
             }
 

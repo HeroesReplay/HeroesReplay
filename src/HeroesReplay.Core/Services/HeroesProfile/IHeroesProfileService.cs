@@ -8,7 +8,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 {
     public interface IHeroesProfileService
     {
-        Task<string> CalculateMMRAsync(StormReplay stormReplay);
+        Task<string> GetMMRTier(StormReplay stormReplay);
         Task<Uri> GetMatchLink(StormReplay stormReplay);
         Task<IEnumerable<HeroesProfileReplay>> ListReplaysAllAsync(int minId);
     }

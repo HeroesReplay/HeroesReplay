@@ -29,20 +29,15 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         {
             var apiKey = settings.ApiKey;
 
-            if (replayHelper.TryGetReplayId(stormReplay, out var hotsApiReplayId))
+            if (replayHelper.TryGetReplayId(stormReplay, out var replayId))
             {
-                using (var client = new HttpClient() { BaseAddress = settings.BaseUri })
-                {
-                    string replayId = await client.GetStringAsync(new Uri($"Heroesprofile/ReplayID?hotsapi_replayID={hotsApiReplayId}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
-
-                    return new Uri($"https://www.heroesprofile.com/Match/Single/?replayID={replayId}");
-                }
+                return new Uri($"https://www.heroesprofile.com/Match/Single/?replayID={replayId}");
             }
 
             return new Uri($"https://www.heroesprofile.com/Match/Single/?replayID=");
         }
 
-        public async Task<string> CalculateMMRAsync(StormReplay stormReplay)
+        public async Task<string> GetMMRTier(StormReplay stormReplay)
         {
             try
             {
@@ -62,11 +57,14 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                                               let player = element.Value
                                               from p in player.EnumerateObject()
                                               where p.Name.Equals("player_mmr")
-                                              select p.Value.GetDouble()).Average();
+                                              select p.Value.GetDouble())
+                                              .OrderByDescending(x => x)
+                                              .Take(settings.MMRPoolSize)
+                                              .Average();
 
                             var mmr = Convert.ToInt32(average);
 
-                            return await client.GetStringAsync(new Uri($"MMR/Tier?mmr={mmr}&game_type=Storm League&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
+                            return await client.GetStringAsync(new Uri($"MMR/Tier?mmr={mmr}&game_type={stormReplay.GameType}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
                         }
                     }
                 }

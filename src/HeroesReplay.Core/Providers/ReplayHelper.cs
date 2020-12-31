@@ -19,18 +19,37 @@ namespace HeroesReplay.Core.Providers
 
         public bool TryGetReplayId(StormReplay stormReplay, out int? replayId) => TryGetReplayId(stormReplay.Path, out replayId);
 
+        public bool TryGetGameType(StormReplay stormReplay, out string? gameType) => TryGetGameType(stormReplay.Path, out gameType);
+
         public bool TryGetReplayId(string path, out int? replayId)
         {
             replayId = null;
 
             try
             {
-                replayId = int.Parse(Path.GetFileName(path).Split(settings.StormReplay.CachedFileNameSplitter)[0]);
+                replayId = int.Parse(Path.GetFileName(path).Split(settings.StormReplay.Seperator)[0]);
                 return true;
             }
             catch (Exception e)
             {
                 logger.LogError(e, $"Could not parse the replay ID from {path}. Is it a S3 replay file with an ID?");
+            }
+
+            return false;
+        }
+
+        public bool TryGetGameType(string path, out string? gameType)
+        {
+            gameType = null;
+
+            try
+            {
+                gameType = Path.GetFileName(path).Split(settings.StormReplay.Seperator)[1];
+                return true;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, $"Could not extract GameType from {path}. Is it a S3 replay file with an ID?");
             }
 
             return false;

@@ -55,8 +55,6 @@ namespace HeroesReplay.Core
                 gameController.KillGame();
                 await replayFileWriter.ClearDetailsAsync();                
             }
-
-            await Task.Delay(settings.Spectate.WaitingTime);
         }
     }
 }

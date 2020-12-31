@@ -57,7 +57,12 @@ namespace HeroesReplay.Core.Providers
                         logger.LogInformation($"Replay id found for file: {replayId}");
                     }
 
-                    return new StormReplay(path, replay, replayId);
+                    if (replayHelper.TryGetGameType(path, out string? gameType))
+                    {
+                        logger.LogInformation($"Replay id {replayId} found with GameType: {gameType}");
+                    }
+
+                    return new StormReplay(path, replay, replayId, gameType);
                 }
             }
 

@@ -1,9 +1,6 @@
 ﻿using HeroesReplay.Core.Shared;
-
 using Microsoft.Extensions.Logging;
-
 using Polly;
-
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -145,21 +142,21 @@ namespace HeroesReplay.Core
             TimeSpan cooldown = settings.Spectate.PanelRotateTime;
             TimeSpan second = TimeSpan.FromSeconds(1);
 
-            while (State != State.End)
+            while (State == State.Running)
             {
                 token.ThrowIfCancellationRequested();
 
                 try
                 {
-                    if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != previous)
-                    {
-                        logger.LogDebug($"Data panels timer match found at: {Timer}");
-                        next = panel;
-                    }
-                    else if (Timer < settings.Spectate.TalentsPanelStartTime)
+                    if (Timer < settings.Spectate.TalentsPanelStartTime)
                     {
                         next = Panel.Talents;
                     }
+                    else if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != previous)
+                    {
+                        logger.LogDebug($"Data panels timer match found at: {Timer}");
+                        next = panel;
+                    }                    
                     else if (cooldown <= TimeSpan.Zero)
                     {
                         next = previous switch
@@ -178,9 +175,9 @@ namespace HeroesReplay.Core
 
                     if (next != previous)
                     {
-                        previous = next;
                         controller.SendPanel(next);
                         cooldown = settings.Spectate.PanelRotateTime;
+                        previous = next;                        
                     }
 
                     cooldown = cooldown.Subtract(second);

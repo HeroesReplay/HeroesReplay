@@ -8,7 +8,6 @@ namespace HeroesReplay.CLI.Commands
         {
             AddCommand(new FileCommand());
             AddCommand(new DirectoryCommand());
-            AddCommand(new HotsApiCommand());
             AddCommand(new HeroesProfileApiCommand());
         }
     }

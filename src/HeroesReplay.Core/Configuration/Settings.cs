@@ -16,8 +16,7 @@ namespace HeroesReplay.Core.Shared
         public OBSSettings OBS { get; init; }
         public StormReplaySettings StormReplay { get; init; }
         public HeroesProfileApiSettings HeroesProfileApi { get; init; }
-        public WeightSettings Weights { get; init; }
-        public HotsApiSettings HotsApi { get; init; }
+        public WeightSettings Weights { get; init; }      
         public TwitchApiSettings TwitchApi { get; init; }
         public SpectateSettings Spectate { get; init; }
         public CaptureSettings Capture { get; init; }

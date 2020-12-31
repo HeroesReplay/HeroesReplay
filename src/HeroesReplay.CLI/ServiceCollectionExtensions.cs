@@ -14,17 +14,13 @@ using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-
 using OBSWebsocketDotNet;
-
 using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
 using TwitchLib.Client;
 
 using Windows.Media.Ocr;
-
-using static Heroes.ReplayParser.Unit;
 
 namespace HeroesReplay.CLI
 {
