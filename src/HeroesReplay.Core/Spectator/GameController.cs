@@ -111,7 +111,7 @@ namespace HeroesReplay.Core
             var loggedIn = await Policy
                 .Handle<Exception>()
                 .OrResult<bool>(loaded => loaded == false)
-                .WaitAndRetryAsync(retryCount: 20, retry => settings.OCR.CheckSleepDuration)
+                .WaitAndRetryAsync(retryCount: 60, retry => settings.OCR.CheckSleepDuration)
                 .ExecuteAsync(async (t) => await IsHomeScreen(), this.tokenProvider.Token);
 
             if (!loggedIn)
@@ -149,7 +149,7 @@ namespace HeroesReplay.Core
             await Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetryAsync(retryCount: 20, retry => settings.OCR.CheckSleepDuration)
+                    .WaitAndRetryAsync(retryCount: 60, retry => settings.OCR.CheckSleepDuration)
                     .ExecuteAsync(async (t) => await ContainsAnyAsync(searchTerms), this.tokenProvider.Token);
         }
 
@@ -314,7 +314,7 @@ namespace HeroesReplay.Core
             return false;
         }
 
-        private async Task<bool> IsHomeScreen() => await ContainsAllAsync(settings.OCR.HomeScreenText);
+        private async Task<bool> IsHomeScreen() => await ContainsAnyAsync(settings.OCR.HomeScreenText);
 
         private async Task<bool> IsReplay() => (await TryGetTimerAsync()) != null;
 

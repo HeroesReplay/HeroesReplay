@@ -9,7 +9,7 @@ namespace HeroesReplay.Core.Shared
 
         public IEnumerable<string> IgnoreUnits { get; init; }
 
-        public IEnumerable<string> ObjectivesContains { get; init; }
+        public IEnumerable<string> ObjectiveContains { get; init; }
 
         public IEnumerable<string> CaptureNames { get; init; }
 

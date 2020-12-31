@@ -209,7 +209,7 @@ namespace HeroesReplay.Core.Services.Obs
 
             try
             {
-                obs.SetSourceRender(settings.OBS.TierDivisionSourceName, visible: false);
+                obs.SetSourceRender(settings.OBS.TierDivisionSourceName, visible: false, sceneName: settings.OBS.GameSceneName);
             }
             catch(Exception e)
             {
@@ -218,7 +218,7 @@ namespace HeroesReplay.Core.Services.Obs
 
             try
             {
-                obs.SetSourceRender(settings.OBS.TierRankPointsSourceName, visible: false);
+                obs.SetSourceRender(settings.OBS.TierRankPointsSourceName, visible: false, sceneName: settings.OBS.GameSceneName);
             }
             catch(Exception e)
             {
@@ -233,7 +233,7 @@ namespace HeroesReplay.Core.Services.Obs
                 {
                     try
                     {
-                        obs.SetSourceRender(imageSource.Name, visible: false);
+                        obs.SetSourceRender(imageSource.Name, visible: false, sceneName: settings.OBS.GameSceneName);
                         logger.LogDebug($"set {imageSource.Name} to visible=false");
                     }
                     catch (Exception e)
@@ -255,7 +255,7 @@ namespace HeroesReplay.Core.Services.Obs
                 {
                     try
                     {
-                        obs.SetSourceRender(imageSource.Name, visible: true);
+                        obs.SetSourceRender(imageSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
                         logger.LogDebug($"set {imageSource.Name} to visible=true");
                     }
                     catch (Exception e)
@@ -283,7 +283,7 @@ namespace HeroesReplay.Core.Services.Obs
                                 var properties = obs.GetTextGDIPlusProperties(divisionSource.Name);
                                 properties.Text = division;
                                 obs.SetTextGDIPlusProperties(properties);
-                                obs.SetSourceRender(divisionSource.Name, visible: true);
+                                obs.SetSourceRender(divisionSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
                                 logger.LogDebug($"set {divisionSource.Name} to visible=true");
                             }
                         }
@@ -308,7 +308,7 @@ namespace HeroesReplay.Core.Services.Obs
                             var properties = obs.GetTextGDIPlusProperties(rankPointsSource.Name);
                             properties.Text = mmr.RankPoints.ToString();
                             obs.SetTextGDIPlusProperties(properties);
-                            obs.SetSourceRender(rankPointsSource.Name, visible: true);
+                            obs.SetSourceRender(rankPointsSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
                             logger.LogDebug($"set {rankPointsSource.Name} to visible=true");
                         }
                         catch (Exception e)

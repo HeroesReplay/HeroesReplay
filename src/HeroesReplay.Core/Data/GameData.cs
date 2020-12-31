@@ -231,7 +231,7 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            if (settings.HeroesToolChest.ObjectivesContains.Any(unitName => name.Contains(unitName)))
+                            if (settings.HeroesToolChest.ObjectiveContains.Any(unitName => name.Contains(unitName)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
