@@ -44,9 +44,9 @@ heroesreplay.exe spectate file
 ### State
 
 - Ensures the game is launched and validates the required game version matches the launched process version before moving onto the next step.
-- Waits for the home/loading screen before determining the next step.
-- Uses native Windows calls to get a screenshot of the game (timer & end screen) to determine current state: start, running, paused, end.
-- Detects the end of the game by checking for the MVP and awards screen and matching any awards given to players from the replay file exist on the end screen.
+- Home Screen detection by keywords, In-Game Paused/Running state by Timer detection.
+- Uses native Windows calls to get screen captures of the game (timer) to determine state: start, running, paused, end.
+- Detects the end of the game by finding out the death of the core and matching it to the timer.
 
 ### Spectating
 
