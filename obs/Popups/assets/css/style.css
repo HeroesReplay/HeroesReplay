@@ -1,0 +1,75 @@
+html,body {
+  padding: 0;
+  margin: 0;
+}
+body{ 
+  overflow: hidden;
+  opacity: 0;
+}
+
+#socialHolder {
+  position: absolute;
+  right: 0;
+  top: 60px;
+}
+
+#holder {
+  display: inline-block;
+  height: 100px;
+  line-height: 100px;
+  font-size: 40px;
+  position: absolute;
+  right: 0;
+  opacity: 1;
+}
+
+#nameHolder{
+    position: relative;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    padding: 0 40px;
+    max-height: 100px;
+        white-space: nowrap;
+}
+
+.name {
+  position: relative;
+  top: 0;
+  left: 0;
+  display: block;
+}
+
+#iconBox {
+  width: 140px;
+  height: 140px;
+  position: absolute;
+  top: -20px;
+  left: -120px;
+}
+
+#iconBox svg {
+  z-index: 99;
+  position: absolute;
+  width: 140px;
+  height: auto;
+}
+
+#bigLeft, #littleLeft, #littleRight, #bigRight, #littleUp, #bigDown, #bigUp {
+  visibility:hidden;
+}
+#canvasHolder {
+  width: 120px;
+  height: 120px;
+  overflow: hidden;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 999;
+  transform: scale(.5);
+}
+#canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}

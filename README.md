@@ -88,7 +88,8 @@ The spectate focus target is determined by a weighted point system. Kills are wo
 - [AWSSDK.S3](https://aws.amazon.com/sdk-for-net/) to download the `.StormReplay` files hosted in AWS S3 storage.
 - [AhliObs Interface](https://github.com/Ahli/Galaxy-Observer-UI) a custom `.StormInterface` for Heroes of the Storm.
 - [PInvoke.NET](https://github.com/dotnet/pinvoke/) for Windows native calls (BitBlt for game window capture) & sending input to the game window.
-- [OBS Web Sockets .NET](https://github.com/BarRaider/obs-websocket-dotnet) for automating and triggering scenes in OBS Studio
+- [OBS Web Sockets .NET](https://github.com/BarRaider/obs-websocket-dotnet) for automating and triggering scenes in OBS Studio.
+- [Nerd or Die](https://nerdordie.com/) - Social Media Popup Notification & more.
 
 ## Building the application
 

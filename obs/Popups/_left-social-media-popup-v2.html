@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Social Media Popup by Nerd or Die</title>
+  <link rel="stylesheet" type="text/css" href="assets/css/style-left.css">
+</head>
+<body>
+
+<div id="socialHolder">
+  <div id="holder">
+    <div id="nameHolder">
+    </div>
+    <div id="iconBox">
+      <div id="canvasHolder">
+        <canvas id="canvas"></canvas>
+      </div>
+      <div id="icons">
+      
+      </div>
+        <svg version="1.1" id="svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+           viewBox="0 0 140 140" style="enable-background:new 0 0 140 140;" xml:space="preserve">
+          <path id="square" d="M120,120H70H20V70V20h50h50v50V120z"/>
+          <path id="littleLeft" d="M120,20c0,0-6.5,19-6.5,50s6.5,50,6.5,50H70H20c0,0-5.8-19-5.8-50S20,20,20,20h50H120z"/>
+          <path id="littleRight" d="M20,120c0,0,6.5-19,6.5-50S20,20,20,20h50h50c0,0,5.8,19,5.8,50s-5.8,50-5.8,50H70H20z"/>
+          <path id="bigRight" d="M20,120c0,0,6.6-13.1,6.6-50.2S20,20,20,20h50h50c0,0,17.9,12.7,17.9,49.8S120,120,120,120H70H20z"/>
+          <path id="bigLeft" d="M120,20c0,0-6.6,13.1-6.6,50.2S120,120,120,120H70H20c0,0-17.9-12.7-17.9-49.8S20,20,20,20h50H120z"/>
+          <path id="littleUp" d="M120,120c0,0-19-6.6-50-6.6S20,120,20,120V70V20c0,0,19-6.5,50-6.5s50,6.5,50,6.5v50V120z"/>
+          <path id="bigDown" d="M20,20c0,0,12.8,6.6,50,6.6s50-6.6,50-6.6v50v50c0,0-12.8,18.3-50,18.3S20,120,20,120V70V20z"/>
+          <path id="bigUp" d="M120,120c0,0-12.8-6.6-50-6.6S20,120,20,120V70V20c0,0,12.8-18.3,50-18.3S120,20,120,20v50V120z"/>
+        </svg>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="assets/js/MorphSVGPlugin.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.19.1/TweenMax.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
+
+
+<script>
+// Default values ============
+var settings = {
+    "options": {
+        "pauseTime": "0",
+        "inbetweenPauseTime": "0"
+    },
+    "colors": {
+        "iconBoxColor": "rgba(0, 0, 0, 1)",
+        "textBoxColor": "rgba(255, 255, 255, 1)",
+        "iconColor": "rgba(255, 255, 255, 1)",
+        "fontColor": "rgba(0, 0, 0, 1)"
+    },
+    "fonts": {
+        "primaryFont": "Montserrat",
+        "fontWeight": "400",
+        "fontSize": "56",
+        "textYOffset": "20"
+    }
+};
+</script>
+
+<script src="settings-and-images/settings.js"></script>
+<script src="settings-and-images/dataValues.js"></script>
+
+<script>
+  console.clear();
+
+// Appearence values ============
+
+var badgeObject,
+  imageLoaded = false;
+
+var canvas,
+    canvasWidth = 120,
+    canvasHeight,
+    ctx;
+
+for (var i = 0; i < values.values.length ; i++) {
+    $("#nameHolder").append('<span class="name">' + values.values[i] + '</span>');
+}
+
+var boxTime = .4;
+
+var tl = new TimelineMax({repeat: -1});
+tl.timeScale(1);
+var square = document.getElementById("square");
+
+// Get and set widths
+var nameHolderW,
+    fullWidth;
+
+function animate(){
+  tl.to("body", 0, {opacity: 1, delay: .3});
+// // fade in the box
+tl.fromTo("#iconBox", .6, {opacity: 0}, {opacity:1});
+
+// // move right and left
+tl.to("#canvasHolder", .1, {x:"-=20"})
+tl.to(square, .2, {morphSVG:"#bigLeft"}, "-=.1")
+tl.to("#iconBox", .2, {x:"-=" + nameHolderW}, "-=.2")
+
+tl.to("#canvasHolder", .1, {x:"+=40"})
+tl.to(square, .2, {morphSVG:"#bigRight"}, "-=.1")
+tl.to("#iconBox", .3, {x: 30}, "-=.2")
+tl.from("#nameHolder", .1, {opacity: 0, scaleX: 0, transformOrigin: "left center"}, "-=.2")
+
+tl.to("#canvasHolder", .1, {x:"-=20"})
+tl.to(square, .2, {morphSVG:"#littleLeft"}, "-=.1")
+tl.to("#iconBox", .2, {x:"-=30"}, "-=.2")
+
+tl.to(square, .2, {morphSVG:"#square"})
+
+// Move Up and Down
+for (var i = 0; i < values.values.length -1 ; i++) {
+  tl.to("#canvasHolder", .1, {y:"-=20", delay: settings.options.pauseTime})
+  tl.to(square, .2, {morphSVG:"#bigUp"}, "-=.1")
+  tl.to("#iconBox", .2, {y:"-=20"}, "-=.2")
+
+  tl.to("#canvasHolder", .1, {y:"+=35"})
+  tl.to(square, .2, {morphSVG:"#bigDown"}, "-=.1")
+  tl.to("#iconBox", .2, {y:"+=40"}, "-=.2")
+  tl.to(".name", 0, {y:"-=100"}, "-=.1")
+  tl.to("#canvas", 0, {y:"-=120"}, "-=.1")
+  tl.to("#holder", .2, {y:"+=8"}, "-=.1")
+
+  tl.to("#holder", .2, {y:"-=8"}, "-=0")
+
+
+  tl.to(square, .2, {morphSVG:"#square"}, "-=.1")
+  tl.to("#iconBox", .2, {y:"-=20"}, "-=.2")
+  tl.to("#canvasHolder", .1, {y:"-=15"}, "-=.2")
+}
+
+tl.to("#canvasHolder", .1, {x:"+=10", delay: settings.options.pauseTime})
+tl.to(square, .2, {morphSVG:"#littleRight"},"-=.1")
+tl.to("#iconBox", .2, {x:"+=30"}, "-=.2")
+
+tl.to("#canvasHolder", .1, {x:"-=20"})
+tl.to(square, .2, {morphSVG:"#bigLeft"}, "-=.1")
+tl.to("#iconBox", .3, {x:"-=" + fullWidth}, "-=.2")
+tl.to("#nameHolder", .2, {opacity: 0, scaleX: 0, transformOrigin: "left center"}, "-=.3")
+
+tl.to("body", 0, {opacity: 0, delay: settings.options.inbetweenPauseTime});
+}
+
+
+
+// Initialize Canvas and Bind Events for canvas ======================
+
+function init() {
+  canvas = document.getElementById("canvas");
+  ctx = canvas.getContext("2d");
+} // end of init
+
+function changeBadge() {
+  imageURL = "settings-and-images/icon-sheet.png";
+
+  // Create image
+  badgeObject = new Image();
+
+  // When image loads, draw it
+  badgeObject.onload = function() {
+    imageLoaded = true;
+    draw();
+  };
+
+  // Load it
+  badgeObject.src = imageURL; 
+}
+changeBadge();
+
+// Draw Canvas Elements
+function draw() {
+  canvasHeight = badgeObject.height;
+  ctx.canvas.width = canvasWidth;
+  ctx.canvas.height = canvasHeight;
+
+  ctx.fillStyle = settings.colors.iconColor;
+  ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+  ctx.globalCompositeOperation = "destination-atop";
+  ctx.drawImage(badgeObject, 0, 0);
+}
+
+if(settings.fonts.primaryFont==""){
+  settings.fonts.primaryFont = "Montserrat";
+}
+
+WebFont.load({
+    google: {
+      families: [settings.fonts.primaryFont + ": 100,200,300,400,500,600,700,800,900"]
+    },
+    active: function() {
+      fontLoaded = true;
+      if(imageLoaded) {
+        $("#holder").css("font-family",settings.fonts.primaryFont);
+        nameHolderW = $("#nameHolder").width() + 80;
+        fullWidth = nameHolderW +240;
+        $("#holder").width(nameHolderW);
+        animate();
+      }
+    }
+});
+
+// Launch on load
+window.onload = init();
+
+// Set Appearence ======================
+
+$("#svg").css("fill",settings.colors.iconBoxColor);
+$("#nameHolder").css("background",settings.colors.textBoxColor);
+$(".name").css("color",settings.colors.fontColor);
+$(".name").css("font-size",settings.fonts.fontSize +"px");
+$(".name").css("top",settings.fonts.textYOffset +"px");
+$(".name").css("font-weight",settings.fonts.fontWeight);
+
+</script>
+
+</body>
+</html>
