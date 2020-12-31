@@ -31,7 +31,7 @@ namespace HeroesReplay.Core
                     var shouldFocusUnitDied = unit.PlayerKilledBy.HeroUnits
                         .SelectMany(p => p.Positions)
                         .Where(p => p.TimeSpan.Add(TimeSpan.FromSeconds(2)) >= now && p.TimeSpan.Subtract(TimeSpan.FromSeconds(2)) <= now)
-                        .Any(p => p.Point.DistanceTo(unit.PointDied) > 15);
+                        .Any(p => p.Point.DistanceTo(unit.PointDied) > settings.Spectate.MaxDistanceToEnemyKill);
 
                     // Abathur mines, Fenix Beam, Tyrande W etc etc etc
                     if (shouldFocusUnitDied)

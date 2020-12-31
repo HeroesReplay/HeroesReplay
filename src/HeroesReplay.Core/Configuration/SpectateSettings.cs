@@ -14,6 +14,7 @@ namespace HeroesReplay.Core.Shared
         public int MaxDistanceToEnemy { get; init; }
         public int MaxDistanceToObjective { get; init; }
         public int MaxDistanceToOwnerChange { get; init; }
+        public int MaxDistanceToEnemyKill { get; init; }
 
         public TimeSpan EndScreenTime { get; init; }
         public TimeSpan EndCoreTime { get; init; }
