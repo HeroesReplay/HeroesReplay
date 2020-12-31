@@ -7,7 +7,7 @@ namespace HeroesReplay.Core
         public SessionData SessionData { get; private set; }
         public StormReplay StormReplay { get; private set; }
 
-        public void Set(SessionData data, StormReplay replay)
+        public void SetSession(SessionData data, StormReplay replay)
         {
             this.SessionData = data;
             this.StormReplay = replay;

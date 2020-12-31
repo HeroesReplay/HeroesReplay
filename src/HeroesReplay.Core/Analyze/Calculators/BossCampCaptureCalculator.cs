@@ -22,6 +22,8 @@ namespace HeroesReplay.Core
         }
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
+            if (replay == null) throw new ArgumentNullException(nameof(replay));
+
             var events = replay.TrackerEvents.Where(trackerEvent => now == trackerEvent.TimeSpan && trackerEvent.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent && trackerEvent.Data.dictionary[0].blobText == "JungleCampCapture");
 
             foreach (TrackerEvent capture in events)

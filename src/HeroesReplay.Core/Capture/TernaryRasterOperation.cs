@@ -1,11 +1,6 @@
 ﻿namespace HeroesReplay.Core.Processes
 {
-    /// <summary>
-    ///     Specifies a raster-operation code. These codes define how the color data for the
-    ///     source rectangle is to be combined with the color data for the destination
-    ///     rectangle to achieve the final color.
-    /// </summary>
-    public enum TernaryRasterOperations : uint
+    public enum TernaryRasterOperation
     {
         /// <summary>dest = source</summary>
         SRCCOPY = 0x00CC0020,

@@ -11,6 +11,10 @@ namespace HeroesReplay.Core
     {
         public bool IsAbility(Replay replay, GameEvent gameEvent, AbilityDetection abilityDetection)
         {
+            if (abilityDetection == null) return false;
+            if (gameEvent == null) return false;
+            if (replay == null) return false;
+
             int abilityLink = GetAbilityLink(gameEvent.data);
 
             if (abilityDetection.CmdIndex.HasValue)
@@ -51,8 +55,8 @@ namespace HeroesReplay.Core
             return false;
         }
 
-        private int GetAbilityLink(TrackerEventStructure structure) => Convert.ToInt32(structure?.array[1]?.array[0]?.unsignedInt.GetValueOrDefault());
+        private static int GetAbilityLink(TrackerEventStructure structure) => Convert.ToInt32(structure?.array[1]?.array[0]?.unsignedInt.GetValueOrDefault());
 
-        private int GetAbilityCmdIndex(TrackerEventStructure trackerEvent) => Convert.ToInt32(trackerEvent.array[1]?.array[1]?.unsignedInt.GetValueOrDefault());
+        private static int GetAbilityCmdIndex(TrackerEventStructure trackerEvent) => Convert.ToInt32(trackerEvent.array[1]?.array[1]?.unsignedInt.GetValueOrDefault());
     }
 }

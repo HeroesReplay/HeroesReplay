@@ -32,7 +32,7 @@ namespace HeroesReplay.Core.Processes
                         Gdi32.BitBlt(
                             deviceContextDestination, 0, 0, bounds.Width, bounds.Height,
                             deviceContextSource, bounds.Left, bounds.Top,
-                            (int)TernaryRasterOperations.SRCCOPY);
+                            (int)TernaryRasterOperation.SRCCOPY);
 
                         source.ReleaseHdc(deviceContextSource);
                         destination.ReleaseHdc(deviceContextDestination);
@@ -46,6 +46,7 @@ namespace HeroesReplay.Core.Processes
             catch (Exception e)
             {
                 Logger.LogError(e, "Could not capture handle");
+
                 throw;
             }
         }

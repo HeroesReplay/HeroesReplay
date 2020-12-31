@@ -3,14 +3,12 @@
 using Microsoft.Extensions.Logging;
 
 using System;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace HeroesReplay.Core
 {
     public class SessionCreator : ISessionCreator
     {
-        private IReplayAnalzer replayAnalyzer;
+        private readonly IReplayAnalzer replayAnalyzer;
         private readonly ISessionSetter sessionSetter;
         private readonly ILogger<SessionCreator> logger;
 
@@ -21,8 +19,10 @@ namespace HeroesReplay.Core
             this.logger = logger;
         }
 
-        public async Task CreateAsync(StormReplay stormReplay)
+        public void Create(StormReplay stormReplay)
         {
+            if (stormReplay == null) throw new ArgumentNullException(nameof(stormReplay));
+
             DateTime start = DateTime.Now;
 
             logger.LogInformation($"Creating session for: {stormReplay.Path}");
@@ -32,7 +32,7 @@ namespace HeroesReplay.Core
             var end = replayAnalyzer.GetEnd(stormReplay.Replay);
             var isCarriedObjectiveMap = replayAnalyzer.IsCarriedObjectiveMap(stormReplay.Replay);
 
-            sessionSetter.Set(new SessionData(players, panels, end, isCarriedObjectiveMap), stormReplay);
+            sessionSetter.SetSession(new SessionData(players, panels, end, isCarriedObjectiveMap), stormReplay);
 
             logger.LogDebug($"Time to create session data: {DateTime.Now - start}");
 

@@ -21,6 +21,8 @@ namespace HeroesReplay.Core
         }
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
+            if (replay == null) throw new ArgumentNullException(nameof(replay));
+
             foreach (var unit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero && unit.TimeSpanDied == now && gameData.GetUnitGroup(unit.Name) == Unit.UnitGroup.Structures && unit.PlayerKilledBy != null))
             {
                 var points = unit.Name switch

@@ -5,6 +5,6 @@ namespace HeroesReplay.Core
 {
     public interface ISessionCreator
     {
-        Task CreateAsync(StormReplay stormReplay);
+        void Create(StormReplay stormReplay);
     }
 }

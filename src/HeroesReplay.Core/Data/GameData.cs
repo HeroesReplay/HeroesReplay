@@ -156,7 +156,7 @@ namespace HeroesReplay.Core.Runner
 
             foreach (var file in files)
             {
-                using (var document = JsonDocument.Parse(File.ReadAllText(file), new JsonDocumentOptions() { AllowTrailingCommas = true }))
+                using (var document = JsonDocument.Parse(await File.ReadAllTextAsync(file), new JsonDocumentOptions() { AllowTrailingCommas = true }))
                 {
                     foreach (var o in document.RootElement.EnumerateObject())
                     {

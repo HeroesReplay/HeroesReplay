@@ -9,11 +9,13 @@ namespace HeroesReplay.Core.Processes
 {
     public abstract class CaptureStrategy
     {
-        protected readonly ILogger<CaptureStrategy> Logger;
+        private readonly ILogger<CaptureStrategy> logger;
+
+        protected ILogger<CaptureStrategy> Logger => logger;
 
         protected CaptureStrategy(ILogger<CaptureStrategy> logger)
         {
-            this.Logger = logger;
+            this.logger = logger;
         }
 
         public abstract Bitmap Capture(IntPtr handle, Rectangle? region = null);

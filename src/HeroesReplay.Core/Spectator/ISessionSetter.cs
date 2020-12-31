@@ -4,6 +4,6 @@ namespace HeroesReplay.Core
 {
     public interface ISessionSetter
     {
-        void Set(SessionData data, StormReplay replay);
+        void SetSession(SessionData data, StormReplay replay);
     }
 }

@@ -5,8 +5,8 @@ namespace HeroesReplay.Core.Services.Obs
     public interface IObsController
     {
         Task CycleReportAsync(int replayId);
-        Task SwapToGameSceneAsync();
-        Task SwapToWaitingSceneAsync();
-        Task UpdateMMRTierAsync(string tier);
+        void SwapToGameScene();
+        void SwapToWaitingScene();
+        void UpdateMMRTier((int RankPoints, string Tier) mmr);
     }
 }

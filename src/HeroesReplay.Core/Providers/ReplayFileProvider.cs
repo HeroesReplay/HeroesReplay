@@ -48,7 +48,7 @@ namespace HeroesReplay.Core.Providers
 
                 if (result != DataParser.ReplayParseResult.Exception && result != DataParser.ReplayParseResult.PreAlphaWipe && result != DataParser.ReplayParseResult.Incomplete)
                 {
-                    if (replayHelper.TryGetReplayId(path, out int? replayId))
+                    if (replayHelper.TryGetReplayId(path, out int replayId))
                     {
                         logger.LogInformation($"Replay id found for {path}: {replayId}");
                     }

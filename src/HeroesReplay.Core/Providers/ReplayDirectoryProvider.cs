@@ -52,7 +52,7 @@ namespace HeroesReplay.Core.Providers
 
                 if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
                 {
-                    if (replayHelper.TryGetReplayId(path, out int? replayId))
+                    if (replayHelper.TryGetReplayId(path, out int replayId))
                     {
                         logger.LogInformation($"Replay id found for file: {replayId}");
                     }

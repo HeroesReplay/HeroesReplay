@@ -17,13 +17,13 @@ namespace HeroesReplay.Core.Providers
             this.settings = settings;
         }
 
-        public bool TryGetReplayId(StormReplay stormReplay, out int? replayId) => TryGetReplayId(stormReplay.Path, out replayId);
+        public bool TryGetReplayId(StormReplay stormReplay, out int replayId) => TryGetReplayId(stormReplay.Path, out replayId);
 
-        public bool TryGetGameType(StormReplay stormReplay, out string? gameType) => TryGetGameType(stormReplay.Path, out gameType);
+        public bool TryGetGameType(StormReplay stormReplay, out string gameType) => TryGetGameType(stormReplay.Path, out gameType);
 
-        public bool TryGetReplayId(string path, out int? replayId)
+        public bool TryGetReplayId(string path, out int replayId)
         {
-            replayId = null;
+            replayId = -1;
 
             try
             {
@@ -38,7 +38,7 @@ namespace HeroesReplay.Core.Providers
             return false;
         }
 
-        public bool TryGetGameType(string path, out string? gameType)
+        public bool TryGetGameType(string path, out string gameType)
         {
             gameType = null;
 

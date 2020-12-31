@@ -32,8 +32,8 @@ namespace HeroesReplay.Core.Shared
         public string ReplayCachePath => Path.Combine(AssetsPath, "Replays");
         public string CapturesPath => Path.Combine(AssetsPath, "Captures");
         public string CurrentReplayInfoFilePath => Path.Combine(AssetsPath, StormReplay.InfoFileName);
-        public string StormReplaysAccountPath => Path.Combine(UserGameFolderPath, "Accounts");
-        public string UserStormInterfacePath => Path.Combine(UserGameFolderPath, "Interfaces");
-        public string UserGameFolderPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm");
+        public static string StormReplaysAccountPath => Path.Combine(UserGameFolderPath, "Accounts");
+        public static string UserStormInterfacePath => Path.Combine(UserGameFolderPath, "Interfaces");
+        public static string UserGameFolderPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm");
     }
 }

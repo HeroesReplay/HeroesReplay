@@ -65,7 +65,10 @@ namespace HeroesReplay.Core
 
         public async Task<StormReplay> LaunchAsync(StormReplay stormReplay)
         {
-            int latestBuild = Directory.EnumerateDirectories(Path.Combine(settings.Location.GameInstallPath, VersionsFolder)).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
+            if (stormReplay == null) throw new ArgumentNullException(nameof(stormReplay));
+
+            string versionFolder = Path.Combine(settings.Location.GameInstallPath, VersionsFolder);
+            int latestBuild = Directory.EnumerateDirectories(versionFolder).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
             var requiresAuth = stormReplay.Replay.ReplayBuild == latestBuild;
 
             if (IsLaunched && await IsReplay())
@@ -108,7 +111,7 @@ namespace HeroesReplay.Core
             var loggedIn = await Policy
                 .Handle<Exception>()
                 .OrResult<bool>(loaded => loaded == false)
-                .WaitAndRetryAsync(retryCount: 10, retry => TimeSpan.FromSeconds(5))
+                .WaitAndRetryAsync(retryCount: 20, retry => settings.OCR.CheckSleepDuration)
                 .ExecuteAsync(async (t) => await IsHomeScreen(), this.tokenProvider.Token);
 
             if (!loggedIn)
@@ -133,16 +136,20 @@ namespace HeroesReplay.Core
                 Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetry(retryCount: 150, retry => TimeSpan.FromSeconds(5))
+                    .WaitAndRetry(retryCount: 150, retry => settings.OCR.CheckSleepDuration)
                     .Execute(() => IsMatchingClientVersion(stormReplay.Replay));
             }
 
-            var searchTerms = stormReplay.Replay.Players.Select(x => x.Name).Concat(stormReplay.Replay.Players.Select(x => x.Character)).Concat(settings.OCR.LoadingScreenText).Concat(new[] { stormReplay.Replay.Map });
+            var searchTerms = stormReplay.Replay.Players
+                .Select(x => x.Name)
+                .Concat(stormReplay.Replay.Players.Select(x => x.Character))
+                .Concat(settings.OCR.LoadingScreenText)
+                .Concat(new[] { stormReplay.Replay.Map });
 
             await Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetryAsync(retryCount: 10, retry => TimeSpan.FromSeconds(5))
+                    .WaitAndRetryAsync(retryCount: 20, retry => settings.OCR.CheckSleepDuration)
                     .ExecuteAsync(async (t) => await ContainsAnyAsync(searchTerms), this.tokenProvider.Token);
         }
 
@@ -224,7 +231,7 @@ namespace HeroesReplay.Core
                 {
                     logger.LogInformation($"Current: {Game?.MainModule.FileVersionInfo.FileVersion}");
                     logger.LogInformation($"Required: {replay.ReplayVersion}");
-                    return Game.MainModule.FileVersionInfo.FileVersion == replay.ReplayVersion;
+                    return Game?.MainModule.FileVersionInfo.FileVersion == replay.ReplayVersion;
                 }
                 else
                 {
@@ -239,7 +246,7 @@ namespace HeroesReplay.Core
             return false;
         }
 
-        private async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
+        private static async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
         {
             using (var stream = new InMemoryRandomAccessStream())
             {
@@ -268,7 +275,7 @@ namespace HeroesReplay.Core
             }
         }
 
-        private char[] SanitizeOcrTimer(string text)
+        private static char[] SanitizeOcrTimer(string text)
         {
             return text
                 .Replace("O", "0", StringComparison.OrdinalIgnoreCase)

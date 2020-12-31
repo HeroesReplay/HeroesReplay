@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HeroesReplay.Core.Shared
 {
@@ -10,6 +11,7 @@ namespace HeroesReplay.Core.Shared
         public string TimerNegativePrefix { get; init; }
         public int TimerHours { get; init; }
         public int TimerMinutes { get; init; }
+        public TimeSpan CheckSleepDuration { get; init; }
         public string TimeSpanFormatHours { get; init; }
         public string TimeSpanFormatMatchStart { get; init; }
         public string TimeSpanFormatMinutes { get; init; }

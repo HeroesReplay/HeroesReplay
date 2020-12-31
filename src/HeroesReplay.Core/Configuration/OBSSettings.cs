@@ -8,7 +8,8 @@ namespace HeroesReplay.Core.Shared
         public string WebSocketEndpoint { get; init; }
         public string GameSceneName { get; init; }
         public string WaitingSceneName { get; init; }
-        public string TierTextSourceName { get; init; }
+        public string TierDivisionSourceName { get; init; }
+        public string TierRankPointsSourceName { get; init; }
         public IEnumerable<ReportScene> ReportScenes { get; init; }
         public IEnumerable<string> TierSources { get; init; }
     }

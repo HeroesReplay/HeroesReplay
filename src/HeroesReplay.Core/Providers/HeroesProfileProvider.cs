@@ -41,9 +41,9 @@ namespace HeroesReplay.Core.Providers
                     {
                         FileInfo? latest = ReplaysDirectory.GetFiles(settings.StormReplay.WildCard).OrderByDescending(f => f.CreationTime).FirstOrDefault();
 
-                        if (replayHelper.TryGetReplayId(latest.Name, out int? replayId))
+                        if (replayHelper.TryGetReplayId(latest.Name, out int replayId))
                         {
-                            MinReplayId = replayId.Value;
+                            MinReplayId = replayId;
                         }
                     }
                     else 

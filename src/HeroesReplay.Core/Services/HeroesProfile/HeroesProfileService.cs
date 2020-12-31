@@ -23,9 +23,9 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             this.settings = settings.HeroesProfileApi;
         }
 
-        public async Task<Uri> GetMatchLink(StormReplay stormReplay) => new Uri($"{stormReplay.ReplayId}");
+        public Uri GetMatchLink(StormReplay stormReplay) => new Uri($"{stormReplay?.ReplayId}");
 
-        public async Task<string> GetMMRTier(StormReplay stormReplay)
+        public async Task<(int RankPoints, string Tier)> GetMMRAsync(StormReplay stormReplay)
         {
             try
             {
@@ -39,7 +39,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                         using (JsonDocument dataJson = JsonDocument.Parse(dataResponse))
                         {
-                            double average = (from replay in dataJson.RootElement.EnumerateObject()
+                            double mmr = (from replay in dataJson.RootElement.EnumerateObject()
                                               from element in replay.Value.EnumerateObject()
                                               where element.Value.ValueKind == JsonValueKind.Object
                                               let player = element.Value
@@ -50,9 +50,11 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                                               .Take(settings.MMRPoolSize)
                                               .Average();
 
-                            int mmr = Convert.ToInt32(average);
+                            int average = Convert.ToInt32(mmr);
 
-                            return await client.GetStringAsync(new Uri($"MMR/Tier?mmr={mmr}&game_type={stormReplay.GameType}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
+                            string tier = await client.GetStringAsync(new Uri($"MMR/Tier?mmr={average}&game_type={stormReplay.GameType}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
+
+                            return (average, tier);
                         }
                     }
                 }
@@ -62,7 +64,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 logger.LogError("Could not calculate average mmr", e);
             }
 
-            return string.Empty;
+            return default((int RankPoints, string Tier));
         }
 
         public async Task<IEnumerable<HeroesProfileReplay>> ListReplaysAllAsync(int minId)

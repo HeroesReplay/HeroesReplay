@@ -1,7 +1,10 @@
 ﻿using Heroes.ReplayParser;
+
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
+
 using Microsoft.Extensions.Logging;
+
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -27,6 +30,8 @@ namespace HeroesReplay.Core
 
         public TimeSpan GetEnd(Replay replay)
         {
+            if (replay == null) throw new ArgumentNullException(nameof(replay));
+
             return replay.Units
                 .Where(unit => gameData.CoreUnits.Contains(unit.Name) && unit.TimeSpanDied.HasValue)
                 .Min(core => core.TimeSpanDied.Value);
@@ -93,7 +98,7 @@ namespace HeroesReplay.Core
                 for (int second = 1; second < 6; second++)
                 {
                     var pastTime = currentTime.Subtract(TimeSpan.FromSeconds(second));
-                    
+
                     if (focusDictionary.TryGetValue(pastTime, out var past))
                     {
                         if (past.Points < entry.Value.Points)
@@ -137,7 +142,7 @@ namespace HeroesReplay.Core
                 );
         }
 
-        public bool IsCarriedObjectiveMap(Replay replay) => settings.Maps.CarriedObjectives.Contains(replay.Map) || 
-                                                            settings.Maps.CarriedObjectives.Contains(replay.MapAlternativeName);
+        public bool IsCarriedObjectiveMap(Replay replay) => replay != null && (settings.Maps.CarriedObjectives.Contains(replay.Map) ||
+                                                                               settings.Maps.CarriedObjectives.Contains(replay.MapAlternativeName));
     }
 }

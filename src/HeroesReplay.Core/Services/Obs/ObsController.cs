@@ -27,7 +27,7 @@ namespace HeroesReplay.Core.Services.Obs
             this.obs = obs;
         }
 
-        public async Task SwapToGameSceneAsync()
+        public void SwapToGameScene()
         {
             try
             {
@@ -55,7 +55,7 @@ namespace HeroesReplay.Core.Services.Obs
             }
         }
 
-        public async Task SwapToWaitingSceneAsync()
+        public void SwapToWaitingScene()
         {
             try
             {
@@ -166,9 +166,9 @@ namespace HeroesReplay.Core.Services.Obs
             return false;
         }
 
-        public async Task UpdateMMRTierAsync(string text)
+        public void UpdateMMRTier((int RankPoints, string Tier) mmr)
         {
-            text = string.IsNullOrEmpty(text) ? string.Empty : text;
+            var text = string.IsNullOrEmpty(mmr.Tier) ? string.Empty : mmr.Tier;
             text = text.Trim().ToLower();
 
             string? tier = null;
@@ -207,57 +207,84 @@ namespace HeroesReplay.Core.Services.Obs
 
             var sourceList = obs.GetSourcesList();
 
-            // HIDE ALL
-            foreach (var tierSource in this.settings.OBS.TierSources)
+            try
             {
-                var imageSource = sourceList.Find(si => si.Name.Equals(tierSource, StringComparison.OrdinalIgnoreCase));
+                obs.SetSourceRender(settings.OBS.TierDivisionSourceName, visible: false);
+            }
+            catch(Exception e)
+            {
+                logger.LogError(e, $"Could not set {settings.OBS.TierDivisionSourceName} to visible=false");
+            }
+
+            try
+            {
+                obs.SetSourceRender(settings.OBS.TierRankPointsSourceName, visible: false);
+            }
+            catch(Exception e)
+            {
+                logger.LogError(e, $"Could not set {settings.OBS.TierRankPointsSourceName} to visible=false");
+            }            
+            
+            foreach (var tierSourceName in settings.OBS.TierSources)
+            {
+                SourceInfo? imageSource = sourceList.Find(sourceInfo => sourceInfo.Name.Equals(tierSourceName, StringComparison.OrdinalIgnoreCase));
 
                 if (imageSource != null)
                 {
                     try
                     {
-                        obs.SetSourceRender(imageSource.Name, false);
+                        obs.SetSourceRender(imageSource.Name, visible: false);
                         logger.LogDebug($"set {imageSource.Name} to visible=false");
                     }
                     catch (Exception e)
                     {
-                        logger.LogError(e, $"could not set {tierSource} to visible=false");
+                        logger.LogError(e, $"could not set {tierSourceName} to visible=false");
                     }
+                }
+                else
+                {
+                    logger.LogDebug($"Could not find {tierSourceName} image source.");
                 }
             }
 
             try
             {
-                // SHOW CORRECT TIER
-                var source = sourceList.Find(si => si.Name.StartsWith(tier, StringComparison.OrdinalIgnoreCase));
+                SourceInfo? imageSource = sourceList.Find(si => si.Name.Equals($"{tier}-image", StringComparison.OrdinalIgnoreCase));
 
-                if (source != null)
+                if (imageSource != null)
                 {
                     try
                     {
-                        obs.SetSourceRender(source.Name, true);
-                        logger.LogDebug($"set {source.Name} to visible=true");
+                        obs.SetSourceRender(imageSource.Name, visible: true);
+                        logger.LogDebug($"set {imageSource.Name} to visible=true");
                     }
                     catch (Exception e)
                     {
                         logger.LogError(e, $"could not set {tier} to visible=false");
                     }
                 }
+                else
+                {
+                    logger.LogDebug($"Could not find {tier} image source.");
+                }
 
                 if (division != null)
                 {
-                    var divisionSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierTextSourceName, StringComparison.OrdinalIgnoreCase));
+                    SourceInfo? divisionSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierDivisionSourceName, StringComparison.OrdinalIgnoreCase));
 
                     if (divisionSource != null)
                     {
                         try
                         {
-                            // We dont want to set something that IS NOT 1-5
-                            if (int.TryParse(division, out int result) && result >= 1 || result <= 5)
+                            bool isValidDivision = int.TryParse(division, out int result) && result >= 1 || result <= 5;
+
+                            if (isValidDivision)
                             {
-                                obs.SetTextGDIPlusProperties(new TextGDIPlusProperties { SourceName = source.Name, Text = division });
-                                obs.SetSourceRender(divisionSource.Name, true);
-                                logger.LogDebug($"set {source.Name} to visible=true");
+                                var properties = obs.GetTextGDIPlusProperties(divisionSource.Name);
+                                properties.Text = division;
+                                obs.SetTextGDIPlusProperties(properties);
+                                obs.SetSourceRender(divisionSource.Name, visible: true);
+                                logger.LogDebug($"set {divisionSource.Name} to visible=true");
                             }
                         }
                         catch (Exception e)
@@ -267,14 +294,37 @@ namespace HeroesReplay.Core.Services.Obs
                     }
                     else
                     {
-                        obs.SetTextGDIPlusProperties(new TextGDIPlusProperties { SourceName = source.Name, Text = string.Empty });
-                        obs.SetSourceRender(divisionSource.Name, false);
+                        logger.LogDebug($"could not find source {settings.OBS.TierDivisionSourceName}");
+                    }
+                }
+                else
+                {
+                    SourceInfo? rankPointsSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierRankPointsSourceName, StringComparison.OrdinalIgnoreCase));
+
+                    if (rankPointsSource != null)
+                    {
+                        try
+                        {
+                            var properties = obs.GetTextGDIPlusProperties(rankPointsSource.Name);
+                            properties.Text = mmr.RankPoints.ToString();
+                            obs.SetTextGDIPlusProperties(properties);
+                            obs.SetSourceRender(rankPointsSource.Name, visible: true);
+                            logger.LogDebug($"set {rankPointsSource.Name} to visible=true");
+                        }
+                        catch (Exception e)
+                        {
+                            logger.LogError(e, $"could not set {tier} to visible=false");
+                        }
+                    }
+                    else
+                    {
+                        logger.LogDebug($"could not find source {settings.OBS.TierRankPointsSourceName}");
                     }
                 }
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Could not set the Tier from {text} for OBS");
+                logger.LogError(e, $"Could not set the Tier from {text} for OBS.");
             }
 
             obs.Disconnect();

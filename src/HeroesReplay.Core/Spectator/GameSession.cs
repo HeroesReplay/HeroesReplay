@@ -12,8 +12,10 @@ namespace HeroesReplay.Core
         private readonly IGameController controller;
         private readonly ILogger<GameSession> logger;
         private readonly Settings settings;
+        private readonly CancellationTokenProvider tokenProvider;
         private readonly ISessionHolder sessionHolder;
-        private readonly CancellationToken token;
+
+        private CancellationToken Token => tokenProvider.Token;
 
         private State State { get; set; }
 
@@ -25,11 +27,11 @@ namespace HeroesReplay.Core
 
         public GameSession(ILogger<GameSession> logger, Settings settings, ISessionHolder sessionHolder, IGameController controller, CancellationTokenProvider tokenProvider)
         {
-            this.logger = logger;
-            this.settings = settings;
-            this.sessionHolder = sessionHolder;
-            this.controller = controller;
-            this.token = tokenProvider.Token;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.sessionHolder = sessionHolder ?? throw new ArgumentNullException(nameof(sessionHolder));
+            this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
+            this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         }
 
         public async Task SpectateAsync()
@@ -39,10 +41,10 @@ namespace HeroesReplay.Core
             ControlsHiddenSet = false;
 
             await Task.WhenAll(
-                Task.Run(PanelLoopAsync, token),
-                Task.Run(FocusLoopAsync, token),
-                Task.Run(StateLoopAsync, token),
-                Task.Run(ConfigureLoopAsync, token));
+                Task.Run(PanelLoopAsync, Token),
+                Task.Run(FocusLoopAsync, Token),
+                Task.Run(StateLoopAsync, Token),
+                Task.Run(ConfigureLoopAsync, Token));
 
             await Task.Delay(settings.Spectate.EndScreenTime);
         }
@@ -51,7 +53,7 @@ namespace HeroesReplay.Core
         {
             while (State != State.End)
             {
-                token.ThrowIfCancellationRequested();
+                Token.ThrowIfCancellationRequested();
 
                 try
                 {
@@ -74,7 +76,7 @@ namespace HeroesReplay.Core
                     logger.LogError(e, "Could not complete state loop");
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(1), token);
+                await Task.Delay(TimeSpan.FromSeconds(1), Token);
             }
         }
 
@@ -87,7 +89,9 @@ namespace HeroesReplay.Core
                     if (State == State.Running)
                     {
                         if (!ControlsHiddenSet)
+                        {
                             ConfigureControls();
+                        }
                     }
 
                     if (ControlsHiddenSet)
@@ -111,7 +115,7 @@ namespace HeroesReplay.Core
 
             while (State != State.End)
             {
-                token.ThrowIfCancellationRequested();
+                Token.ThrowIfCancellationRequested();
 
                 try
                 {
@@ -131,7 +135,7 @@ namespace HeroesReplay.Core
                     logger.LogError(e, "Could not complete focus loop");
                 }
 
-                await Task.Delay(950);
+                await Task.Delay(TimeSpan.FromSeconds(0.5)).ConfigureAwait(false);
             }
         }
 
@@ -140,11 +144,11 @@ namespace HeroesReplay.Core
             Panel previous = Panel.None;
             Panel next = Panel.None;
             TimeSpan cooldown = settings.Spectate.PanelRotateTime;
-            TimeSpan second = TimeSpan.FromSeconds(1);
+            TimeSpan delay = TimeSpan.FromSeconds(1);
 
             while (State != State.End)
             {
-                token.ThrowIfCancellationRequested();
+                Token.ThrowIfCancellationRequested();
 
                 if (State == State.Running)
                 {
@@ -182,8 +186,8 @@ namespace HeroesReplay.Core
                             previous = next;
                         }
 
-                        cooldown = cooldown.Subtract(second);
-                        await Task.Delay(second);
+                        cooldown = cooldown.Subtract(delay);
+                        await Task.Delay(delay);
                     }
                     catch (Exception e)
                     {
@@ -202,7 +206,7 @@ namespace HeroesReplay.Core
             }
         }
 
-        static TimeSpan invalidThreshold = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan invalidThreshold = TimeSpan.FromSeconds(15);
 
         private async Task<TimeSpan?> GetOcrTimer()
         {
@@ -220,7 +224,7 @@ namespace HeroesReplay.Core
                      return true;
                  })
                  .WaitAndRetryAsync(retryCount: 5, retry => TimeSpan.FromSeconds(1))
-                 .ExecuteAsync(async (t) => await controller.TryGetTimerAsync(), token);
+                 .ExecuteAsync(async (t) => await controller.TryGetTimerAsync(), Token);
         }
 
     }

@@ -19,6 +19,8 @@ namespace HeroesReplay.Core
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
+            if (replay == null) throw new ArgumentNullException(nameof(replay));
+
             List<IGrouping<int, Unit>> teams = replay.Players.SelectMany(x => x.HeroUnits).Where(unit => unit.Team != null && unit.TimeSpanBorn < now && unit.TimeSpanDied > now).GroupBy(x => x.Team.Value).ToList();
 
             if (teams.Count != 2) yield break;
