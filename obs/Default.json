@@ -62,125 +62,7 @@
     "current_program_scene": "waiting-screen",
     "current_scene": "waiting-screen",
     "current_transition": "Fade",
-    "groups": [
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
-            "hotkeys": {},
-            "id": "group",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "menu-window-1",
-            "prev_ver": 436273152,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "custom_size": true,
-                "cx": 399,
-                "cy": 226,
-                "id_counter": 0,
-                "items": [
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 395.0,
-                            "y": 222.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 2,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 39,
-                        "locked": false,
-                        "name": "heros-loading",
-                        "pos": {
-                            "x": 2.0,
-                            "y": 1.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.0,
-                            "y": 1.0
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 6,
-                        "locked": false,
-                        "name": "countdown",
-                        "pos": {
-                            "x": 1.990081787109375,
-                            "y": 25.885467529296875
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.7512220144271851,
-                            "y": 1.752246618270874
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 399.0,
-                            "y": 226.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 1,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 27,
-                        "locked": false,
-                        "name": "alarak-menu-ui-1",
-                        "pos": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.1759999990463257,
-                            "y": 1.1743589639663696
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    }
-                ]
-            },
-            "sync": 0,
-            "versioned_id": "group",
-            "volume": 1.0
-        }
-    ],
+    "groups": [],
     "modules": {
         "auto-scene-switcher": {
             "active": false,
@@ -268,36 +150,6 @@
         }
     ],
     "sources": [
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
-            "hotkeys": {},
-            "id": "window_capture",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "heros-loading",
-            "prev_ver": 436273152,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "client_area": true,
-                "compatibility": false,
-                "cursor": false,
-                "method": 0,
-                "priority": 1,
-                "window": "Heroes of the Storm:Heroes of the Storm:HeroesOfTheStorm_x64.exe"
-            },
-            "sync": 0,
-            "versioned_id": "window_capture",
-            "volume": 1.0
-        },
         {
             "balance": 0.5,
             "deinterlace_field_order": 0,
@@ -1551,7 +1403,7 @@
             "mixers": 0,
             "monitoring_type": 0,
             "muted": false,
-            "name": "Game Capture",
+            "name": "game-capture",
             "prev_ver": 436273152,
             "private_settings": {},
             "push-to-mute": false,
@@ -1577,10 +1429,10 @@
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
-                "libobs.hide_scene_item.Game Capture": [],
                 "libobs.hide_scene_item.bronze-image": [],
                 "libobs.hide_scene_item.current-replay": [],
                 "libobs.hide_scene_item.diamond-image": [],
+                "libobs.hide_scene_item.game-capture": [],
                 "libobs.hide_scene_item.gold-image": [],
                 "libobs.hide_scene_item.grandmaster-image": [],
                 "libobs.hide_scene_item.master-image": [],
@@ -1588,10 +1440,10 @@
                 "libobs.hide_scene_item.rank-points": [],
                 "libobs.hide_scene_item.silver-image": [],
                 "libobs.hide_scene_item.tier-division": [],
-                "libobs.show_scene_item.Game Capture": [],
                 "libobs.show_scene_item.bronze-image": [],
                 "libobs.show_scene_item.current-replay": [],
                 "libobs.show_scene_item.diamond-image": [],
+                "libobs.show_scene_item.game-capture": [],
                 "libobs.show_scene_item.gold-image": [],
                 "libobs.show_scene_item.grandmaster-image": [],
                 "libobs.show_scene_item.master-image": [],
@@ -1632,7 +1484,7 @@
                         "group_item_backup": false,
                         "id": 2,
                         "locked": false,
-                        "name": "Game Capture",
+                        "name": "game-capture",
                         "pos": {
                             "x": 0.0,
                             "y": 0.0
@@ -1702,7 +1554,7 @@
                             "y": 0.69512194395065308
                         },
                         "scale_filter": "disable",
-                        "visible": true
+                        "visible": false
                     },
                     {
                         "align": 5,
@@ -1905,7 +1757,7 @@
                             "y": 0.41624364256858826
                         },
                         "scale_filter": "disable",
-                        "visible": true
+                        "visible": false
                     },
                     {
                         "align": 5,
@@ -1934,7 +1786,7 @@
                             "y": 1.1428571939468384
                         },
                         "scale_filter": "disable",
-                        "visible": true
+                        "visible": false
                     }
                 ]
             },
@@ -2107,84 +1959,24 @@
             "deinterlace_field_order": 0,
             "deinterlace_mode": 0,
             "enabled": true,
-            "filters": [
-                {
-                    "balance": 0.5,
-                    "deinterlace_field_order": 0,
-                    "deinterlace_mode": 0,
-                    "enabled": true,
-                    "flags": 0,
-                    "hotkeys": {},
-                    "id": "sharpness_filter",
-                    "mixers": 0,
-                    "monitoring_type": 0,
-                    "muted": false,
-                    "name": "Sharpen",
-                    "prev_ver": 436273152,
-                    "private_settings": {},
-                    "push-to-mute": false,
-                    "push-to-mute-delay": 0,
-                    "push-to-talk": false,
-                    "push-to-talk-delay": 0,
-                    "settings": {
-                        "sharpness": 0.0
-                    },
-                    "sync": 0,
-                    "versioned_id": "sharpness_filter",
-                    "volume": 1.0
-                }
-            ],
-            "flags": 0,
-            "hotkeys": {},
-            "id": "image_source",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "hyperion-cantina",
-            "prev_ver": 436273152,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "file": "C:/Projects/HeroesReplay/obs/cantina.jpg"
-            },
-            "sync": 0,
-            "versioned_id": "image_source",
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
             "flags": 0,
             "hotkeys": {
                 "OBSBasic.SelectScene": [],
                 "libobs.hide_scene_item.Affiliation": [],
-                "libobs.hide_scene_item.alarak-clan-loading-gif": [],
                 "libobs.hide_scene_item.alarak-menu-ui-1": [],
                 "libobs.hide_scene_item.countdown": [],
+                "libobs.hide_scene_item.game-capture": [],
                 "libobs.hide_scene_item.heroes-profile-section": [],
-                "libobs.hide_scene_item.heros-loading": [],
                 "libobs.hide_scene_item.hots-logo": [],
-                "libobs.hide_scene_item.hyperion-cantina": [],
-                "libobs.hide_scene_item.menu-window-1": [],
-                "libobs.hide_scene_item.replay-loading-section": [],
                 "libobs.hide_scene_item.sc2-main-menu-alarak": [],
                 "libobs.hide_scene_item.social-media": [],
                 "libobs.hide_scene_item.soundcloud": [],
                 "libobs.show_scene_item.Affiliation": [],
-                "libobs.show_scene_item.alarak-clan-loading-gif": [],
                 "libobs.show_scene_item.alarak-menu-ui-1": [],
                 "libobs.show_scene_item.countdown": [],
+                "libobs.show_scene_item.game-capture": [],
                 "libobs.show_scene_item.heroes-profile-section": [],
-                "libobs.show_scene_item.heros-loading": [],
                 "libobs.show_scene_item.hots-logo": [],
-                "libobs.show_scene_item.hyperion-cantina": [],
-                "libobs.show_scene_item.menu-window-1": [],
-                "libobs.show_scene_item.replay-loading-section": [],
                 "libobs.show_scene_item.sc2-main-menu-alarak": [],
                 "libobs.show_scene_item.social-media": [],
                 "libobs.show_scene_item.soundcloud": []
@@ -2202,7 +1994,7 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "custom_size": false,
-                "id_counter": 39,
+                "id_counter": 44,
                 "items": [
                     {
                         "align": 5,
@@ -2236,35 +2028,6 @@
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 1922.0,
-                            "y": 1080.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 1,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 1,
-                        "locked": false,
-                        "name": "hyperion-cantina",
-                        "pos": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.0,
-                            "y": 1.0
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
                             "x": 698.0,
                             "y": 24.0
                         },
@@ -2287,35 +2050,6 @@
                         "scale": {
                             "x": 0.71633237600326538,
                             "y": 1.0
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 3,
-                        "locked": false,
-                        "name": "soundcloud",
-                        "pos": {
-                            "x": 0.0,
-                            "y": 971.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 0.65750002861022949,
-                            "y": 0.65662652254104614
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -2381,8 +2115,8 @@
                     {
                         "align": 5,
                         "bounds": {
-                            "x": 395.0,
-                            "y": 222.0
+                            "x": 395.3818359375,
+                            "y": 226.00003051757812
                         },
                         "bounds_align": 0,
                         "bounds_type": 2,
@@ -2390,19 +2124,19 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 39,
+                        "group_item_backup": false,
+                        "id": 41,
                         "locked": false,
-                        "name": "heros-loading",
+                        "name": "game-capture",
                         "pos": {
                             "x": 139.01002502441406,
-                            "y": 331.00442504882812
+                            "y": 329.98672485351562
                         },
                         "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.0050125122070312,
-                            "y": 1.0044248104095459
+                            "x": 1.0,
+                            "y": 1.0
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -2419,12 +2153,12 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 6,
+                        "group_item_backup": false,
+                        "id": 42,
                         "locked": false,
                         "name": "countdown",
                         "pos": {
-                            "x": 139.00006103515625,
+                            "x": 139.00010681152344,
                             "y": 356.0
                         },
                         "private_settings": {},
@@ -2448,8 +2182,8 @@
                         "crop_left": 0,
                         "crop_right": 0,
                         "crop_top": 0,
-                        "group_item_backup": true,
-                        "id": 27,
+                        "group_item_backup": false,
+                        "id": 43,
                         "locked": false,
                         "name": "alarak-menu-ui-1",
                         "pos": {
@@ -2478,20 +2212,18 @@
                         "crop_right": 0,
                         "crop_top": 0,
                         "group_item_backup": false,
-                        "id": 38,
+                        "id": 44,
                         "locked": false,
-                        "name": "menu-window-1",
+                        "name": "heroes-profile-section",
                         "pos": {
-                            "x": 137.0,
-                            "y": 330.0
+                            "x": 135.0,
+                            "y": 577.0
                         },
-                        "private_settings": {
-                            "collapsed": false
-                        },
+                        "private_settings": {},
                         "rot": 0.0,
                         "scale": {
-                            "x": 1.0050125122070312,
-                            "y": 1.0044248104095459
+                            "x": 1.0718085765838623,
+                            "y": 1.0722891092300415
                         },
                         "scale_filter": "disable",
                         "visible": true
@@ -2524,93 +2256,6 @@
                         },
                         "scale_filter": "disable",
                         "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 32,
-                        "locked": false,
-                        "name": "heroes-profile-section",
-                        "pos": {
-                            "x": 135.0,
-                            "y": 577.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.0718084573745728,
-                            "y": 1.0722891092300415
-                        },
-                        "scale_filter": "disable",
-                        "visible": true
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 34,
-                        "locked": false,
-                        "name": "replay-loading-section",
-                        "pos": {
-                            "x": 136.0,
-                            "y": 682.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.061170220375061,
-                            "y": 1.0602409839630127
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
-                    },
-                    {
-                        "align": 5,
-                        "bounds": {
-                            "x": 0.0,
-                            "y": 0.0
-                        },
-                        "bounds_align": 0,
-                        "bounds_type": 0,
-                        "crop_bottom": 0,
-                        "crop_left": 0,
-                        "crop_right": 0,
-                        "crop_top": 0,
-                        "group_item_backup": false,
-                        "id": 36,
-                        "locked": false,
-                        "name": "alarak-clan-loading-gif",
-                        "pos": {
-                            "x": 131.0,
-                            "y": 681.0
-                        },
-                        "private_settings": {},
-                        "rot": 0.0,
-                        "scale": {
-                            "x": 1.8297872543334961,
-                            "y": 1.8297872543334961
-                        },
-                        "scale_filter": "disable",
-                        "visible": false
                     }
                 ]
             },
@@ -3125,56 +2770,6 @@
             "push-to-talk-delay": 0,
             "settings": {
                 "file": "C:/Projects/HeroesReplay/obs/UI/heroes-profile-section.png"
-            },
-            "sync": 0,
-            "versioned_id": "image_source",
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
-            "hotkeys": {},
-            "id": "image_source",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "replay-loading-section",
-            "prev_ver": 436273152,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "file": "C:/Projects/HeroesReplay/obs/UI/starcraft-menu-ui-2-blackbox.png"
-            },
-            "sync": 0,
-            "versioned_id": "image_source",
-            "volume": 1.0
-        },
-        {
-            "balance": 0.5,
-            "deinterlace_field_order": 0,
-            "deinterlace_mode": 0,
-            "enabled": true,
-            "flags": 0,
-            "hotkeys": {},
-            "id": "image_source",
-            "mixers": 0,
-            "monitoring_type": 0,
-            "muted": false,
-            "name": "alarak-clan-loading-gif",
-            "prev_ver": 436273152,
-            "private_settings": {},
-            "push-to-mute": false,
-            "push-to-mute-delay": 0,
-            "push-to-talk": false,
-            "push-to-talk-delay": 0,
-            "settings": {
-                "file": "C:/Projects/HeroesReplay/obs/alarak-loading.gif"
             },
             "sync": 0,
             "versioned_id": "image_source",
