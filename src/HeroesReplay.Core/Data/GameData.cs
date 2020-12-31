@@ -26,6 +26,7 @@ namespace HeroesReplay.Core.Runner
         private const string UnitIdProperty = "unitId";
         private const string DescriptorsProperty = "descriptors";
         private const string AttributesProperty = "attributes";
+        private const string ObjectNameSeperator = "-";
 
         private const string HeroData = "herodata_";
         private const string UnitData = "unitdata_";
@@ -34,10 +35,15 @@ namespace HeroesReplay.Core.Runner
         private const string AttributeMapCreature = "MapCreature";
         private const string AttributeMerc = "Merc";
         private const string AttributeStructure = "AITargetableStructure";
+        private const string AttributeHeroic = "Heroic";
+        private const string AttributeMinion = "Minion";
+
+        private const string DescriptorPowerfulLaner = "PowerfulLaner";
 
         private const string UnitNameLaner = "Laner";
         private const string UnitNameDefender = "Defender";
         private const string UnitNamePayload = "Payload";
+        
 
         private const string HeroicTalent = "Talent";
 
@@ -102,7 +108,9 @@ namespace HeroesReplay.Core.Runner
                 logger.LogInformation($"heroes-data does not exists. Downloading files to: {heroesDataPath}");
 
                 if (!exists)
+                {
                     Directory.CreateDirectory(heroesDataPath);
+                }
 
                 using (var client = new HttpClient())
                 {
@@ -141,6 +149,9 @@ namespace HeroesReplay.Core.Runner
             }
         }
 
+        /// <summary>
+        /// This method is used because we CANNOT rely on the UnitGroups inside Heroes.ReplayParser.
+        /// </summary>
         private async Task LoadUnitsAsync()
         {
             var unitGroups = new Dictionary<string, UnitGroup>();
@@ -162,7 +173,7 @@ namespace HeroesReplay.Core.Runner
                     {
                         if (o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement value) && settings.HeroesToolChest.ScalingLinkId.Equals(value.GetString()))
                         {
-                            coreUnits.Add(o.Name.Contains("-") ? o.Name.Split('-')[1] : o.Name);
+                            coreUnits.Add(o.Name.Contains(ObjectNameSeperator) ? o.Name.Split(ObjectNameSeperator)[1] : o.Name);
                         }
 
                         if (o.Value.TryGetProperty(UnitIdProperty, out var unitId))
@@ -189,8 +200,8 @@ namespace HeroesReplay.Core.Runner
                         }
                         else
                         {
-                            var name = o.Name.Contains("-") ? o.Name.Split('-')[1] : o.Name;
-                            var map = o.Name.Contains("-") ? o.Name.Split('-')[0] : string.Empty;
+                            var name = o.Name.Contains(ObjectNameSeperator) ? o.Name.Split(ObjectNameSeperator)[1] : o.Name;
+                            var map = o.Name.Contains(ObjectNameSeperator) ? o.Name.Split(ObjectNameSeperator)[0] : string.Empty;
 
                             List<string> attributes = new List<string>();
                             List<string> descriptors = new List<string>();
@@ -220,15 +231,7 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            // Beacons
-                            // Gems on Tomb
-                            if (name.EndsWith("CaptureBeacon") ||
-                                name.EndsWith("ControlBeacon") ||
-                                name.StartsWith("ItemSoulPickup") ||
-                                name.Equals("ItemCannonball") ||
-                                name.StartsWith("SoulCage") ||
-                                name.Equals("DocksTreasureChest") ||
-                                name.Equals("DocksPirateCaptain"))
+                            if (settings.HeroesToolChest.ObjectivesContains.Any(unitName => name.Contains(unitName)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
@@ -248,7 +251,7 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            if (attributes.Contains("Heroic") && descriptors.Contains("PowerfulLaner") && !ignoreUnits.Any(i => name.Contains(i)))
+                            if (attributes.Contains(AttributeHeroic) && descriptors.Contains(DescriptorPowerfulLaner) && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;
@@ -260,7 +263,7 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            if (attributes.Count == 1 && attributes.Contains("Minion") && name.EndsWith("Minion") && !ignoreUnits.Any(i => name.Contains(i)))
+                            if (attributes.Count == 1 && attributes.Contains(AttributeMinion) && name.EndsWith(AttributeMinion) && !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.Minions;
                                 continue;
