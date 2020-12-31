@@ -16,6 +16,7 @@ namespace HeroesReplay.Core.Shared
         public string S3Region { get; init; }
         public int MinReplayId { get; init; }
         public int MMRPoolSize { get; init; }
+        public string MMRProperty { get; init; }
         public bool EnableMMR { get; init; }
     }
 }

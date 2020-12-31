@@ -142,50 +142,53 @@ namespace HeroesReplay.Core
             TimeSpan cooldown = settings.Spectate.PanelRotateTime;
             TimeSpan second = TimeSpan.FromSeconds(1);
 
-            while (State == State.Running)
+            while (State != State.End)
             {
                 token.ThrowIfCancellationRequested();
 
-                try
+                if (State == State.Running)
                 {
-                    if (Timer < settings.Spectate.TalentsPanelStartTime)
+                    try
                     {
-                        next = Panel.Talents;
-                    }
-                    else if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != previous)
-                    {
-                        logger.LogDebug($"Data panels timer match found at: {Timer}");
-                        next = panel;
-                    }                    
-                    else if (cooldown <= TimeSpan.Zero)
-                    {
-                        next = previous switch
+                        if (Timer < settings.Spectate.TalentsPanelStartTime)
                         {
-                            Panel.None => Panel.Talents,
-                            Panel.KillsDeathsAssists => Panel.ActionsPerMinute,                            
-                            Panel.CarriedObjectives => Panel.CrowdControlEnemyHeroes,
-                            Panel.CrowdControlEnemyHeroes => Panel.DeathDamageRole,
-                            Panel.DeathDamageRole => Panel.Experience,
-                            Panel.Experience => Panel.Talents,
-                            Panel.Talents => Panel.TimeDeadDeathsSelfSustain,
-                            Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists,
-                            Panel.ActionsPerMinute => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.CrowdControlEnemyHeroes,
-                        };
-                    }
+                            next = Panel.Talents;
+                        }
+                        else if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != previous)
+                        {
+                            logger.LogDebug($"Data panels timer match found at: {Timer}");
+                            next = panel;
+                        }
+                        else if (cooldown <= TimeSpan.Zero)
+                        {
+                            next = previous switch
+                            {
+                                Panel.None => Panel.Talents,
+                                Panel.KillsDeathsAssists => Panel.ActionsPerMinute,
+                                Panel.CarriedObjectives => Panel.CrowdControlEnemyHeroes,
+                                Panel.CrowdControlEnemyHeroes => Panel.DeathDamageRole,
+                                Panel.DeathDamageRole => Panel.Experience,
+                                Panel.Experience => Panel.Talents,
+                                Panel.Talents => Panel.TimeDeadDeathsSelfSustain,
+                                Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists,
+                                Panel.ActionsPerMinute => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.CrowdControlEnemyHeroes,
+                            };
+                        }
 
-                    if (next != previous)
+                        if (next != previous)
+                        {
+                            controller.SendPanel(next);
+                            cooldown = settings.Spectate.PanelRotateTime;
+                            previous = next;
+                        }
+
+                        cooldown = cooldown.Subtract(second);
+                        await Task.Delay(second);
+                    }
+                    catch (Exception e)
                     {
-                        controller.SendPanel(next);
-                        cooldown = settings.Spectate.PanelRotateTime;
-                        previous = next;                        
+                        logger.LogError(e, "Could not complete panel loop");
                     }
-
-                    cooldown = cooldown.Subtract(second);
-                    await Task.Delay(second);
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "Could not complete panel loop");
                 }
             }
         }

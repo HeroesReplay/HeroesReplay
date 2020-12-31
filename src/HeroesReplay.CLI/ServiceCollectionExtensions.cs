@@ -72,7 +72,7 @@ namespace HeroesReplay.CLI
                     return new ApiSettings { AccessToken = settings.TwitchApi.AccessToken, ClientId = settings.TwitchApi.ClientId };
                 })
                 .AddSingleton<IHeroesProfileService, HeroesProfileService>()
-                .AddSingleton<ReplayFileWriter>()
+                .AddSingleton<ReplayDetailsWriter>()
                 .AddSingleton(typeof(IReplayProvider), replayProvider)
                 .AddSingleton<SaltySadism>();
         }

@@ -15,39 +15,27 @@ namespace HeroesReplay.Core.Services.HeroesProfile
     public class HeroesProfileService : IHeroesProfileService
     {
         private readonly ILogger<HeroesProfileService> logger;
-        private readonly ReplayHelper replayHelper;
         private readonly HeroesProfileApiSettings settings;
 
-        public HeroesProfileService(ILogger<HeroesProfileService> logger, Settings settings, ReplayHelper replayHelper)
+        public HeroesProfileService(ILogger<HeroesProfileService> logger, Settings settings)
         {
             this.logger = logger;
             this.settings = settings.HeroesProfileApi;
-            this.replayHelper = replayHelper;
         }
 
-        public async Task<Uri> GetMatchLink(StormReplay stormReplay)
-        {
-            var apiKey = settings.ApiKey;
-
-            if (replayHelper.TryGetReplayId(stormReplay, out var replayId))
-            {
-                return new Uri($"https://www.heroesprofile.com/Match/Single/?replayID={replayId}");
-            }
-
-            return new Uri($"https://www.heroesprofile.com/Match/Single/?replayID=");
-        }
+        public async Task<Uri> GetMatchLink(StormReplay stormReplay) => new Uri($"{stormReplay.ReplayId}");
 
         public async Task<string> GetMMRTier(StormReplay stormReplay)
         {
             try
             {
-                if (replayHelper.TryGetReplayId(stormReplay, out var replayId))
+                if (stormReplay.ReplayId.HasValue)
                 {
                     var apiKey = settings.ApiKey;
 
                     using (var client = new HttpClient() { BaseAddress = settings.BaseUri })
                     {
-                        string dataResponse = await client.GetStringAsync(new Uri($"Replay/Data?mode=json&replayID={replayId}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
+                        string dataResponse = await client.GetStringAsync(new Uri($"Replay/Data?mode=json&replayID={stormReplay.ReplayId.Value}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
 
                         using (JsonDocument dataJson = JsonDocument.Parse(dataResponse))
                         {
@@ -56,13 +44,13 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                                               where element.Value.ValueKind == JsonValueKind.Object
                                               let player = element.Value
                                               from p in player.EnumerateObject()
-                                              where p.Name.Equals("player_mmr")
+                                              where p.Name.Equals(settings.MMRProperty)
                                               select p.Value.GetDouble())
                                               .OrderByDescending(x => x)
                                               .Take(settings.MMRPoolSize)
                                               .Average();
 
-                            var mmr = Convert.ToInt32(average);
+                            int mmr = Convert.ToInt32(average);
 
                             return await client.GetStringAsync(new Uri($"MMR/Tier?mmr={mmr}&game_type={stormReplay.GameType}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
                         }
@@ -74,7 +62,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 logger.LogError("Could not calculate average mmr", e);
             }
 
-            return "Unknown";
+            return string.Empty;
         }
 
         public async Task<IEnumerable<HeroesProfileReplay>> ListReplaysAllAsync(int minId)
@@ -84,7 +72,6 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 using (var client = new HttpClient() { BaseAddress = settings.OpenApiBaseUri })
                 {
                     var json = await client.GetStringAsync(new Uri($"Replay/Min_id?min_id={minId}", UriKind.Relative)).ConfigureAwait(false);
-
                     return JsonSerializer.Deserialize<IEnumerable<HeroesProfileReplay>>(json).Where(x => x.Deleted == null || x.Deleted == "0");
                 }
             }
