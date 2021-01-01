@@ -26,7 +26,7 @@ namespace HeroesReplay.Core.Processes
 
             var rectangle = new Rectangle(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
 
-            Logger.LogDebug("window dimensions: " + rectangle.Width + "x" + rectangle.Height);
+            Logger.LogTrace("window dimensions: " + rectangle.Width + "x" + rectangle.Height);
 
             return rectangle;
         }

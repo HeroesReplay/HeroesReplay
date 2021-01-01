@@ -16,8 +16,6 @@ namespace HeroesReplay.Core.Processes
 
         public override Bitmap Capture(IntPtr handle, Rectangle? region = null)
         {
-            DateTime start = DateTime.Now;
-
             Rectangle bounds = region ?? GetDimensions(handle);
 
             User32.SetForegroundWindow(handle);
@@ -28,8 +26,6 @@ namespace HeroesReplay.Core.Processes
             {
                 graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
             }
-
-            Logger.LogInformation("capture time: " + (DateTime.Now - start));
 
             return result;
         }

@@ -1,6 +1,9 @@
 ﻿using HeroesReplay.Core.Shared;
+
 using Microsoft.Extensions.Logging;
+
 using Polly;
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,8 +22,6 @@ namespace HeroesReplay.Core
 
         private State State { get; set; }
 
-        private bool ControlsHiddenSet { get; set; }
-
         private TimeSpan Timer { get; set; }
 
         private SessionData Data => sessionHolder.SessionData;
@@ -38,13 +39,13 @@ namespace HeroesReplay.Core
         {
             State = State.Start;
             Timer = default(TimeSpan);
-            ControlsHiddenSet = false;
 
             await Task.WhenAll(
                 Task.Run(PanelLoopAsync, Token),
                 Task.Run(FocusLoopAsync, Token),
-                Task.Run(StateLoopAsync, Token),
-                Task.Run(ConfigureLoopAsync, Token));
+                Task.Run(StateLoopAsync, Token));
+
+            logger.LogInformation($"Game has ended. Waiting for {settings.Spectate.EndScreenTime}");
 
             await Task.Delay(settings.Spectate.EndScreenTime);
         }
@@ -57,11 +58,15 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    TimeSpan? timer = await GetOcrTimer();
+                    TimeSpan? timer = await TryGetOcrTimer();
 
                     if (timer.HasValue)
                     {
-                        if (timer.Value.Add(settings.Spectate.EndCoreTime) >= Data.End) State = State.End;
+                        if (timer.Value.Add(settings.Spectate.EndCoreTime) >= Data.End)
+                        {
+                            State = State.End;
+                            logger.LogInformation($"Game end detected via Timer at {timer.Value}");
+                        }
                         else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
                         else if (timer.Value > Timer) State = State.Running;
                         else State = State.Start;
@@ -77,35 +82,6 @@ namespace HeroesReplay.Core
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(1), Token);
-            }
-        }
-
-        private async Task ConfigureLoopAsync()
-        {
-            while (State != State.End)
-            {
-                try
-                {
-                    if (State == State.Running)
-                    {
-                        if (!ControlsHiddenSet)
-                        {
-                            ConfigureControls();
-                        }
-                    }
-
-                    if (ControlsHiddenSet)
-                    {
-                        logger.LogDebug("Client configured.");
-                        return;
-                    }
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "Could not complete configure loop");
-                }
-
-                await Task.Delay(250);
             }
         }
 
@@ -197,33 +173,35 @@ namespace HeroesReplay.Core
             }
         }
 
-        private void ConfigureControls()
-        {
-            if (!ControlsHiddenSet)
-            {
-                controller.ToggleControls();
-                ControlsHiddenSet = true;
-            }
-        }
-
         private static readonly TimeSpan invalidThreshold = TimeSpan.FromSeconds(15);
 
-        private async Task<TimeSpan?> GetOcrTimer()
+        private async Task<TimeSpan?> TryGetOcrTimer()
         {
             return await Policy
-                 .HandleResult<TimeSpan?>(timer =>
-                 {
-                     if (timer == null) return false;
+                .HandleResult<TimeSpan?>(timer =>
+                {
+                    if (timer == null) return false;
 
-                     if (Timer != TimeSpan.Zero && (timer > Timer.Add(invalidThreshold) || timer < Timer.Subtract(invalidThreshold)))
-                     {
-                         logger.LogDebug($"OCR Timer is not an expected value? Before: {Timer}, After: {timer}");
-                         return false;
-                     }
+                    if (Timer != TimeSpan.Zero && (timer > Timer.Add(invalidThreshold) || timer < Timer.Subtract(invalidThreshold)))
+                    {
+                        logger.LogError($"OCR Timer is not an expected value. Before: {Timer}, After: {timer}");
+                        return false;
+                    }
 
-                     return true;
-                 })
-                 .WaitAndRetryAsync(retryCount: 5, retry => TimeSpan.FromSeconds(1))
+                    return true;
+                })
+                .WaitAndRetryAsync(retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd, retry =>
+                {
+                    logger.LogDebug($"Could not find Timer on retry: {retry}");
+
+                    if (retry >= settings.Spectate.RetryTimerCountBeforeForceEnd && Timer.Add(TimeSpan.FromMinutes(1)) >= Data.End)
+                    {
+                        logger.LogError($"OCR Timer could not be found after {retry} times. Last known Time: {Timer}. Forcing State=End");
+                        State = State.End;
+                    }
+
+                    return settings.Spectate.RetryTimerSleepDuration;
+                })
                  .ExecuteAsync(async (t) => await controller.TryGetTimerAsync(), Token);
         }
 

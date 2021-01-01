@@ -16,8 +16,6 @@ namespace HeroesReplay.Core.Processes
         {
             try
             {
-                DateTime start = DateTime.Now;
-
                 Rectangle bounds = region ?? GetDimensions(handle);
 
                 using (Graphics source = Graphics.FromHwnd(handle))
@@ -37,8 +35,6 @@ namespace HeroesReplay.Core.Processes
                         source.ReleaseHdc(deviceContextSource);
                         destination.ReleaseHdc(deviceContextDestination);
                     }
-
-                    Logger.LogDebug("capture time: " + (DateTime.Now - start));
 
                     return bitmap;
                 }

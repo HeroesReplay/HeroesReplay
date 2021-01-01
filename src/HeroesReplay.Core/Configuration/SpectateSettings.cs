@@ -16,11 +16,14 @@ namespace HeroesReplay.Core.Shared
         public int MaxDistanceToOwnerChange { get; init; }
         public int MaxDistanceToEnemyKill { get; init; }
 
+        public int RetryTimerCountBeforeForceEnd { get; init; }
+        public TimeSpan RetryTimerSleepDuration { get; init; }
+
         public TimeSpan EndScreenTime { get; init; }
         public TimeSpan EndCoreTime { get; init; }
         public TimeSpan PanelRotateTime { get; init; }
         public TimeSpan TalentsPanelStartTime { get; init; }
-        public TimeSpan WaitingTime { get; init; }
+        public TimeSpan WaitingTime { get; init; }        
 
         public IEnumerable<int> TalentLevels { get; init; }        
     }
