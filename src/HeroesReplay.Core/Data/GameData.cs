@@ -1,4 +1,5 @@
-﻿using HeroesReplay.Core.Services.HeroesProfile;
+﻿using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -42,14 +43,12 @@ namespace HeroesReplay.Core.Runner
 
         private const string UnitNameLaner = "Laner";
         private const string UnitNameDefender = "Defender";
-        private const string UnitNamePayload = "Payload";
-        
+        private const string UnitNamePayload = "Payload";        
 
         private const string HeroicTalent = "Talent";
 
         private readonly ILogger<GameData> logger;
-        private readonly Settings settings;
-        private readonly string heroesDataPath;
+        private readonly AppSettings settings;
 
         public IReadOnlyDictionary<string, UnitGroup> UnitGroups { get; private set; }
         public IReadOnlyList<Map> Maps { get; private set; }
@@ -57,11 +56,10 @@ namespace HeroesReplay.Core.Runner
         public IReadOnlyCollection<string> CoreUnits { get; private set; }
         public IReadOnlyCollection<string> BossUnits { get; private set; }
 
-        public GameData(ILogger<GameData> logger, Settings settings)
+        public GameData(ILogger<GameData> logger, AppSettings settings)
         {
-            this.logger = logger;
-            this.settings = settings;
-            this.heroesDataPath = settings.HeroesDataPath;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
         private async Task LoadHeroesAsync()
@@ -96,20 +94,20 @@ namespace HeroesReplay.Core.Runner
 
         private async Task DownloadIfEmptyAsync()
         {
-            var exists = Directory.Exists(heroesDataPath);
+            var exists = Directory.Exists(settings.HeroesDataPath);
             var release = settings.HeroesToolChest.HeroesDataReleaseUri;
 
-            if (exists && Directory.EnumerateFiles(heroesDataPath, "*.json", SearchOption.AllDirectories).Any())
+            if (exists && Directory.EnumerateFiles(settings.HeroesDataPath, "*.json", SearchOption.AllDirectories).Any())
             {
                 logger.LogInformation("Heroes Data exists. No need to download HeroesToolChest hero-data.");
             }
             else
             {
-                logger.LogInformation($"heroes-data does not exists. Downloading files to: {heroesDataPath}");
+                logger.LogInformation($"heroes-data does not exists. Downloading files to: {settings.HeroesDataPath}");
 
                 if (!exists)
                 {
-                    Directory.CreateDirectory(heroesDataPath);
+                    Directory.CreateDirectory(settings.HeroesDataPath);
                 }
 
                 using (var client = new HttpClient())
@@ -131,17 +129,17 @@ namespace HeroesReplay.Core.Runner
 
                             using (var data = await client.GetStreamAsync(new Uri(uri)))
                             {
-                                using (var write = File.OpenWrite(Path.Combine(heroesDataPath, name)))
+                                using (var write = File.OpenWrite(Path.Combine(settings.HeroesDataPath, name)))
                                 {
                                     await data.CopyToAsync(write);
                                     await write.FlushAsync();
                                 }
                             }
 
-                            using (var reader = File.OpenRead(Path.Combine(heroesDataPath, name)))
+                            using (var reader = File.OpenRead(Path.Combine(settings.HeroesDataPath, name)))
                             {
                                 ZipArchive zip = new ZipArchive(reader);
-                                zip.ExtractToDirectory(heroesDataPath);
+                                zip.ExtractToDirectory(settings.HeroesDataPath);
                             }
                         }
                     }
@@ -160,7 +158,7 @@ namespace HeroesReplay.Core.Runner
             var coreUnits = new HashSet<string>();
 
             var files = Directory
-                .GetFiles(heroesDataPath, "*.json", SearchOption.AllDirectories)
+                .GetFiles(settings.HeroesDataPath, "*.json", SearchOption.AllDirectories)
                 .Where(x => x.Contains(HeroData) || x.Contains(UnitData))
                 .OrderByDescending(x => x.Contains(HeroData))
                 .ThenBy(x => x.Contains(UnitData));

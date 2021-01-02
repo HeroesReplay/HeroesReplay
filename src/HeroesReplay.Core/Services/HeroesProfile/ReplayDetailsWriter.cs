@@ -1,5 +1,7 @@
 using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
 
@@ -17,17 +19,20 @@ namespace HeroesReplay.Core.Services.HeroesProfile
     {
         private readonly ILogger<ReplayDetailsWriter> logger;
         private readonly IGameData gameData;
-        private readonly Settings settings;
+        private readonly AppSettings settings;
 
-        public ReplayDetailsWriter(ILogger<ReplayDetailsWriter> logger, Settings settings, IGameData gameData)
+        public ReplayDetailsWriter(ILogger<ReplayDetailsWriter> logger, AppSettings settings, IGameData gameData)
         {
-            this.logger = logger;
-            this.gameData = gameData;
-            this.settings = settings;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
         public async Task WriteDetailsAsync(StormReplay replay)
         {
+            if(replay == null) 
+                throw new ArgumentNullException(nameof(replay));
+
             try
             {
                 var bans = from ban in replay.Replay.DraftOrder.Where(pick => pick.PickType == DraftPickType.Banned).Select((pick, index) => new { Hero = pick.HeroSelected, Index = index + 1 })

@@ -1,5 +1,7 @@
 ﻿using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Shared;
 
 using System;
@@ -10,9 +12,9 @@ namespace HeroesReplay.Core
 {
     public class NearEnemyCalculator : IFocusCalculator
     {
-        private readonly Settings settings;
+        private readonly AppSettings settings;
 
-        public NearEnemyCalculator(Settings settings)
+        public NearEnemyCalculator(AppSettings settings)
         {
             this.settings = settings;
         }
@@ -21,7 +23,10 @@ namespace HeroesReplay.Core
         {
             if (replay == null) throw new ArgumentNullException(nameof(replay));
 
-            List<IGrouping<int, Unit>> teams = replay.Players.SelectMany(x => x.HeroUnits).Where(unit => unit.Team != null && unit.TimeSpanBorn < now && unit.TimeSpanDied > now).GroupBy(x => x.Team.Value).ToList();
+            List<IGrouping<int, Unit>> teams = replay.Players
+                .SelectMany(x => x.HeroUnits)
+                .Where(unit => unit.Team != null && unit.TimeSpanBorn < now && unit.TimeSpanDied > now)
+                .GroupBy(x => x.Team.GetValueOrDefault()).ToList();
 
             if (teams.Count != 2) yield break;
 

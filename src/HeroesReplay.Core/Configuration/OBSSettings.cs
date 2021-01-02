@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Shared
+using System.Collections.Generic;
+
+namespace HeroesReplay.Core.Configuration
 {
     public record OBSSettings
     {

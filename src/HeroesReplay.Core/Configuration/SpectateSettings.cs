@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Configuration
 {
     public record SpectateSettings
     {
@@ -23,8 +23,8 @@ namespace HeroesReplay.Core.Shared
         public TimeSpan EndCoreTime { get; init; }
         public TimeSpan PanelRotateTime { get; init; }
         public TimeSpan TalentsPanelStartTime { get; init; }
-        public TimeSpan WaitingTime { get; init; }        
+        public TimeSpan WaitingTime { get; init; }
 
-        public IEnumerable<int> TalentLevels { get; init; }        
+        public IEnumerable<int> TalentLevels { get; init; }
     }
 }

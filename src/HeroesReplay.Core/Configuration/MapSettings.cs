@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Configuration
 {
     public record MapSettings
     {

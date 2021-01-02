@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Models
 {
     public record ReportScene 
     {

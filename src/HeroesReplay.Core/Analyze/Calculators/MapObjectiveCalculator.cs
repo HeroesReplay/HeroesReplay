@@ -1,5 +1,7 @@
 ﻿using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
 
@@ -11,10 +13,10 @@ namespace HeroesReplay.Core
 {
     public class MapObjectiveCalculator : IFocusCalculator
     {
-        private readonly Settings settings;
+        private readonly AppSettings settings;
         private readonly IGameData heroesData;
 
-        public MapObjectiveCalculator(Settings settings, IGameData heroesTool)
+        public MapObjectiveCalculator(AppSettings settings, IGameData heroesTool)
         {
             this.settings = settings;
             this.heroesData = heroesTool;
@@ -22,6 +24,9 @@ namespace HeroesReplay.Core
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
+            if (replay == null)
+                throw new ArgumentNullException(nameof(replay));
+
             foreach (TeamObjective? teamObjective in replay.TeamObjectives.SelectMany(to => to).Where(to => to.Player != null && to.TimeSpan == now))
             {
                 var heroUnit = teamObjective.Player.HeroUnits.FirstOrDefault(hu => hu.Positions.Any(p => p.TimeSpan == now));

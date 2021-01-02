@@ -1,7 +1,7 @@
 ﻿using Heroes.ReplayParser;
 
-using HeroesReplay.Core.Runner;
-using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 
 using System;
 using System.Collections.Generic;
@@ -11,17 +11,18 @@ namespace HeroesReplay.Core
 {
     public class CaptureBeaconCalculator : IFocusCalculator
     {
-        private readonly Settings settings;
-        private readonly IGameData gameData;
+        private readonly AppSettings settings;
 
-        public CaptureBeaconCalculator(Settings settings, IGameData gameData)
+        public CaptureBeaconCalculator(AppSettings settings)
         {
-            this.settings = settings;
-            this.gameData = gameData;
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
+            if (replay == null)
+                throw new ArgumentNullException(nameof(replay));
+
             foreach (var heroUnit in replay.Players.SelectMany(x => x.HeroUnits).Where(u => u.TimeSpanBorn < now && u.TimeSpanDied > now))
             {
                 foreach (var captureUnit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero && 
@@ -37,7 +38,7 @@ namespace HeroesReplay.Core
                             GetType(), 
                             heroUnit, 
                             heroUnit.PlayerControlledBy, 
-                            settings.Weights.NearCaptureBeacon, 
+                            settings.Weights.CaptureBeacon, 
                             $"{heroUnit.PlayerControlledBy.HeroId} near {captureUnit.Name} (CaptureBeacons)");
                     }
                 }

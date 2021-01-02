@@ -1,6 +1,7 @@
 ﻿using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Shared;
 
 using System;

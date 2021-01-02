@@ -2,6 +2,7 @@
 
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Models;
 
 using Microsoft.Extensions.Logging;
 
@@ -10,6 +11,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using HeroesReplay.Core.Configuration;
 
 namespace HeroesReplay.Core
 {
@@ -18,9 +20,9 @@ namespace HeroesReplay.Core
         private readonly IEnumerable<IFocusCalculator> calculators;
         private readonly IGameData gameData;
         private readonly ILogger<ReplayAnalyzer> logger;
-        private readonly Settings settings;
+        private readonly AppSettings settings;
 
-        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, Settings settings, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
+        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, AppSettings settings, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
         {
             this.calculators = calculators;
             this.gameData = gameData;
@@ -30,20 +32,23 @@ namespace HeroesReplay.Core
 
         public TimeSpan GetEnd(Replay replay)
         {
-            if (replay == null) throw new ArgumentNullException(nameof(replay));
+            if (replay == null) 
+                throw new ArgumentNullException(nameof(replay));
 
             return replay.Units
                 .Where(unit => gameData.CoreUnits.Contains(unit.Name) && unit.TimeSpanDied.HasValue)
-                .Min(core => core.TimeSpanDied.Value);
+                .Min(core => core.TimeSpanDied.GetValueOrDefault());
         }
 
         public IReadOnlyDictionary<TimeSpan, Panel> GetPanels(Replay replay)
         {
+            if (replay == null) throw new ArgumentNullException(nameof(replay));
+
             IDictionary<TimeSpan, Panel> panels = new SortedDictionary<TimeSpan, Panel>();
 
             if (settings.ParseOptions.ShouldParseUnits)
             {
-                foreach (var deathTime in replay.Units.AsParallel().Where(u => Unit.UnitGroup.Hero.Equals(gameData.GetUnitGroup(u.Name)) && u.TimeSpanDied.HasValue).GroupBy(x => x.TimeSpanDied.Value))
+                foreach (var deathTime in replay.Units.AsParallel().Where(u => Unit.UnitGroup.Hero.Equals(gameData.GetUnitGroup(u.Name)) && u.TimeSpanDied.HasValue).GroupBy(x => x.TimeSpanDied.GetValueOrDefault()))
                 {
                     panels[deathTime.Key] = Panel.KillsDeathsAssists;
                 }
@@ -62,6 +67,8 @@ namespace HeroesReplay.Core
 
         public IReadOnlyDictionary<TimeSpan, Focus> GetPlayers(Replay replay)
         {
+            if (replay == null) throw new ArgumentNullException(nameof(replay));
+
             var focusDictionary = new ConcurrentDictionary<TimeSpan, Focus>();
             var timeSpans = Enumerable.Range(0, (int)replay.ReplayLength.TotalSeconds).Select(x => TimeSpan.FromSeconds(x)).ToList();
 

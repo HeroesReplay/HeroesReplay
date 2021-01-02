@@ -6,9 +6,9 @@ namespace System.Runtime.CompilerServices
     public class IsExternalInit { }
 }
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Configuration
 {
-    public class Settings
+    public class AppSettings
     {
         public ProcessSettings Process { get; init; }
         public HeroesToolChestSettings HeroesToolChest { get; init; }

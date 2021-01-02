@@ -1,4 +1,4 @@
-﻿namespace HeroesReplay.Core
+﻿namespace HeroesReplay.Core.Models
 {
     public enum Panel
     {

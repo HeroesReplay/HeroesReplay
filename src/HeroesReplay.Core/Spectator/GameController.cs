@@ -1,6 +1,7 @@
 ﻿using Heroes.ReplayParser;
 
 using HeroesReplay.Core.Processes;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -22,6 +23,7 @@ using Windows.Media.Ocr;
 using Windows.Storage.Streams;
 
 using static PInvoke.User32;
+using HeroesReplay.Core.Configuration;
 
 namespace HeroesReplay.Core
 {
@@ -33,7 +35,7 @@ namespace HeroesReplay.Core
         private readonly OcrEngine engine;
         private readonly CancellationTokenProvider tokenProvider;
         private readonly ILogger<GameController> logger;
-        private readonly Settings settings;
+        private readonly AppSettings settings;
         private readonly CaptureStrategy captureStrategy;
 
         public static readonly VirtualKey[] Keys =
@@ -54,18 +56,19 @@ namespace HeroesReplay.Core
         private Process? Game => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
         private IntPtr Handle => Game?.MainWindowHandle ?? IntPtr.Zero;
 
-        public GameController(ILogger<GameController> logger, Settings settings, CaptureStrategy captureStrategy, OcrEngine engine, CancellationTokenProvider tokenProvider)
+        public GameController(ILogger<GameController> logger, AppSettings settings, CaptureStrategy captureStrategy, OcrEngine engine, CancellationTokenProvider tokenProvider)
         {
-            this.logger = logger;
-            this.settings = settings;
-            this.captureStrategy = captureStrategy;
-            this.engine = engine;
-            this.tokenProvider = tokenProvider;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(settings));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.captureStrategy = captureStrategy ?? throw new ArgumentNullException(nameof(settings));
+            this.engine = engine ?? throw new ArgumentNullException(nameof(settings)); ;
+            this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(settings));
         }
 
         public async Task<StormReplay> LaunchAsync(StormReplay stormReplay)
         {
-            if (stormReplay == null) throw new ArgumentNullException(nameof(stormReplay));
+            if (stormReplay == null)
+                throw new ArgumentNullException(nameof(stormReplay));
 
             string versionFolder = Path.Combine(settings.Location.GameInstallPath, VersionsFolder);
             int latestBuild = Directory.EnumerateDirectories(versionFolder).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
@@ -136,7 +139,7 @@ namespace HeroesReplay.Core
                 Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetry(retryCount: 150, retry => settings.OCR.CheckSleepDuration)
+                    .WaitAndRetry(retryCount: 150, sleepDurationProvider: retry => settings.OCR.CheckSleepDuration)
                     .Execute(() => IsMatchingClientVersion(stormReplay.Replay));
             }
 
@@ -149,7 +152,7 @@ namespace HeroesReplay.Core
             await Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetryAsync(retryCount: 60, retry => settings.OCR.CheckSleepDuration)
+                    .WaitAndRetryAsync(retryCount: 60, sleepDurationProvider: retry => settings.OCR.CheckSleepDuration)
                     .ExecuteAsync(async (t) => await ContainsAnyAsync(searchTerms), this.tokenProvider.Token);
         }
 
@@ -161,9 +164,14 @@ namespace HeroesReplay.Core
 
             try
             {
-                Rectangle dimensions = captureStrategy.GetDimensions(Handle);
-                timerBitmap = GetTopTimerAhliObsInterface(dimensions); // settings.Toggles.DefaultInterface ? GetTopTimerDefaultInterface(dimensions) : 
+                timerBitmap = GetNegativeOffsetTimer();
                 if (timerBitmap == null) return null;
+
+                if (settings.Capture.SaveTimerRegion)
+                {
+                    timerBitmap.Save(Path.Combine(settings.CapturesPath, "timer-" + Guid.NewGuid().ToString() + ".bmp"));
+                }
+
                 return await ConvertBitmapTimerToTimeSpan(timerBitmap);
             }
             catch (Exception e)
@@ -180,7 +188,7 @@ namespace HeroesReplay.Core
 
         private async Task<TimeSpan?> ConvertBitmapTimerToTimeSpan(Bitmap bitmap)
         {
-            using (Bitmap resized = bitmap.GetResized(zoom: 2))
+            using (Bitmap resized = bitmap.GetResized(zoom: 4))
             {
                 using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized))
                 {
@@ -193,7 +201,12 @@ namespace HeroesReplay.Core
                     }
                     else if (settings.Capture.SaveCaptureFailureCondition)
                     {
-                        resized.Save(Path.Combine(settings.CapturesPath, DateTime.Now.ToString(), ".bmp"));
+                        if (!Directory.Exists(settings.CapturesPath))
+                        {
+                            Directory.CreateDirectory(settings.CapturesPath);
+                        }
+
+                        resized.Save(Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
                     }
 
                     return null;
@@ -201,26 +214,16 @@ namespace HeroesReplay.Core
             }
         }
 
-        private Bitmap GetTopTimerAhliObsInterface(Rectangle dimensions)
+        private Bitmap GetNegativeOffsetTimer()
         {
+            const int MIN_HEIGHT_FOR_OCR_TO_WORK = 50;
+            Rectangle dimensions = captureStrategy.GetDimensions(Handle);
             var width = dimensions.Width;
             var column = dimensions.Width / 50;
             var start = width / 2 - column;
             var end = column * 2;
 
-            return captureStrategy.Capture(Handle, new Rectangle(dimensions.Width / 2 - 50, 0, 100, 50));
-        }
-
-        private Bitmap GetTopTimerDefaultInterface(Rectangle dimensions)
-        {
-            Bitmap timerBitmap;
-            var width = dimensions.Width;
-            var column = dimensions.Width / 50;
-            var start = width / 2 - column;
-            var end = column * 2;
-
-            timerBitmap = captureStrategy.Capture(Handle, new Rectangle(start, 0, end, 200));
-            return timerBitmap;
+            return captureStrategy.Capture(Handle, new Rectangle(start, 0, end, MIN_HEIGHT_FOR_OCR_TO_WORK));
         }
 
         private bool IsMatchingClientVersion(Replay replay)
@@ -286,34 +289,6 @@ namespace HeroesReplay.Core
                 .ToArray();
         }
 
-        private async Task<bool> ContainsAllAsync(IEnumerable<string> words)
-        {
-            try
-            {
-                using (Bitmap capture = captureStrategy.Capture(Handle))
-                {
-                    using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(capture))
-                    {
-                        OcrResult result = await engine.RecognizeAsync(softwareBitmap);
-                        var containsAll = words.All(word => result.Text.Contains(word));
-
-                        if (containsAll) return true;
-
-                        if (settings.Capture.SaveCaptureFailureCondition)
-                        {
-                            capture.Save(Path.Combine(settings.CapturesPath, DateTime.Now.ToString()));
-                        }
-                    }
-                }
-            }
-            catch
-            {
-
-            }
-
-            return false;
-        }
-
         private async Task<bool> IsHomeScreen() => await ContainsAnyAsync(settings.OCR.HomeScreenText);
 
         private async Task<bool> IsReplay() => (await TryGetTimerAsync()) != null;
@@ -331,7 +306,12 @@ namespace HeroesReplay.Core
 
                     if (settings.Capture.SaveCaptureFailureCondition)
                     {
-                        capture.Save(Path.Combine(settings.CapturesPath, DateTime.Now.ToString()));
+                        if (!Directory.Exists(settings.CapturesPath))
+                        {
+                            Directory.CreateDirectory(settings.CapturesPath);
+                        }
+
+                        capture.Save(Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
                     }
                 }
             }
@@ -428,7 +408,7 @@ namespace HeroesReplay.Core
                 Game?.Kill();
                 logger.LogInformation("Game process has been killed.");
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 logger.LogError(e, "Could not kill game process.");
             }

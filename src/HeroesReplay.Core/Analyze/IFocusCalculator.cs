@@ -1,5 +1,7 @@
 ﻿using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Models;
+
 using System;
 using System.Collections.Generic;
 

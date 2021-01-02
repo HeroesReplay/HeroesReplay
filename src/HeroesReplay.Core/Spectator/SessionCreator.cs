@@ -1,4 +1,5 @@
-﻿using HeroesReplay.Core.Shared;
+﻿using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
 
@@ -14,14 +15,15 @@ namespace HeroesReplay.Core
 
         public SessionCreator(ILogger<SessionCreator> logger, IReplayAnalzer replayAnalyzer, ISessionSetter sessionSetter)
         {
-            this.replayAnalyzer = replayAnalyzer;
-            this.sessionSetter = sessionSetter;
-            this.logger = logger;
+            this.replayAnalyzer = replayAnalyzer ?? throw new ArgumentNullException(nameof(replayAnalyzer));
+            this.sessionSetter = sessionSetter ?? throw new ArgumentNullException(nameof(sessionSetter));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public void Create(StormReplay stormReplay)
         {
-            if (stormReplay == null) throw new ArgumentNullException(nameof(stormReplay));
+            if (stormReplay == null)
+                throw new ArgumentNullException(nameof(stormReplay));
 
             DateTime start = DateTime.Now;
 

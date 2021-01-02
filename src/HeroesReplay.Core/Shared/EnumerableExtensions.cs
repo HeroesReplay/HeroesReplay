@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.Linq;
 
 namespace HeroesReplay.Core.Shared
@@ -10,6 +11,12 @@ namespace HeroesReplay.Core.Shared
 
         public static IEnumerable<TSource> Interleave<TSource>(this IEnumerable<TSource> source1, IEnumerable<TSource> source2)
         {
+            if (source1 == null)
+                throw new ArgumentNullException(nameof(source1));
+
+            if (source2 == null)
+                throw new ArgumentNullException(nameof(source2));
+
             using (var enumerator1 = source1.GetEnumerator())
             {
                 using (var enumerator2 = source2.GetEnumerator())

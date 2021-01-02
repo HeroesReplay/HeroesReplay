@@ -1,5 +1,5 @@
 ﻿using HeroesReplay.Core.Shared;
-
+using HeroesReplay.Core.Models;
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json.Linq;
@@ -11,20 +11,21 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Configuration;
 
 namespace HeroesReplay.Core.Services.Obs
 {
     public class ObsController : IObsController
     {
         private readonly ILogger<ObsController> logger;
-        private readonly Settings settings;
+        private readonly AppSettings settings;
         private readonly OBSWebsocket obs;
 
-        public ObsController(ILogger<ObsController> logger, Settings settings, OBSWebsocket obs)
+        public ObsController(ILogger<ObsController> logger, AppSettings settings, OBSWebsocket obs)
         {
-            this.logger = logger;
-            this.settings = settings;
-            this.obs = obs;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.obs = obs ?? throw new ArgumentNullException(nameof(obs));
         }
 
         public void SwapToGameScene()
@@ -33,11 +34,11 @@ namespace HeroesReplay.Core.Services.Obs
             {
                 var waiter = new ManualResetEventSlim();
 
-                EventHandler connected = (sender, e) =>
+                void connected(object? sender, EventArgs e)
                 {
                     waiter.Set();
                     logger.LogDebug("OBS Web Socket Connected");
-                };
+                }
 
                 obs.Connected += connected;
                 obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
@@ -61,11 +62,11 @@ namespace HeroesReplay.Core.Services.Obs
             {
                 var waiter = new ManualResetEventSlim();
 
-                EventHandler connected = (sender, e) =>
+                void connected(object? sender, EventArgs e)
                 {
                     waiter.Set();
-                    logger.LogDebug("OBS Web Socket Connected");
-                };
+                    logger.LogInformation("OBS Web Socket Connected");
+                }
 
                 obs.Connected += connected;
                 obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
@@ -73,10 +74,10 @@ namespace HeroesReplay.Core.Services.Obs
                 obs.Connected -= connected;
 
                 obs.SetCurrentScene(this.settings.OBS.WaitingSceneName);
-                logger.LogDebug($"Set scene to: {this.settings.OBS.WaitingSceneName}");
+                logger.LogInformation($"Set scene to: {this.settings.OBS.WaitingSceneName}");
 
                 obs.Disconnect();
-                logger.LogDebug($"OBS WebSocket Disconnected");
+                logger.LogInformation($"OBS WebSocket Disconnected");
             }
             catch (Exception e)
             {
@@ -90,11 +91,11 @@ namespace HeroesReplay.Core.Services.Obs
             {
                 var waiter = new ManualResetEventSlim();
 
-                EventHandler connected = (sender, e) =>
+                void connected(object? sender, EventArgs e)
                 {
                     waiter.Set();
-                    logger.LogDebug("OBS Web Socket Connected");
-                };
+                    logger.LogInformation("OBS Web Socket Connected");
+                }
 
                 obs.Connected += connected;
                 obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
@@ -116,7 +117,7 @@ namespace HeroesReplay.Core.Services.Obs
 
                 obs.Connected -= connected;
                 obs.Disconnect();
-                logger.LogDebug($"OBS WebSocket Disconnected");
+                logger.LogInformation($"OBS WebSocket Disconnected");
             }
             catch (Exception e)
             {
@@ -129,7 +130,7 @@ namespace HeroesReplay.Core.Services.Obs
             try
             {
                 obs.SetCurrentScene(source.SceneName);
-                logger.LogDebug($"set scene to: {source.SceneName}");
+                logger.LogInformation($"set scene to: {source.SceneName}");
                 await Task.Delay(source.DisplayTime);
                 return true;
             }
@@ -192,142 +193,149 @@ namespace HeroesReplay.Core.Services.Obs
                 logger.LogError(e, $"Could not extract division from {text}");
             }
 
-            var waiter = new ManualResetEventSlim();
-
-            EventHandler connected = (sender, e) =>
-            {
-                waiter.Set();
-                logger.LogDebug("OBS Web Socket Connected");
-            };
-
-            obs.Connected += connected;
-            obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-            waiter.Wait();
-            obs.Connected -= connected;
-
-            var sourceList = obs.GetSourcesList();
-
             try
             {
-                obs.SetSourceRender(settings.OBS.TierDivisionSourceName, visible: false, sceneName: settings.OBS.GameSceneName);
-            }
-            catch(Exception e)
-            {
-                logger.LogError(e, $"Could not set {settings.OBS.TierDivisionSourceName} to visible=false");
-            }
+                var waiter = new ManualResetEventSlim();
 
-            try
-            {
-                obs.SetSourceRender(settings.OBS.TierRankPointsSourceName, visible: false, sceneName: settings.OBS.GameSceneName);
-            }
-            catch(Exception e)
-            {
-                logger.LogError(e, $"Could not set {settings.OBS.TierRankPointsSourceName} to visible=false");
-            }            
-            
-            foreach (var tierSourceName in settings.OBS.TierSources)
-            {
-                SourceInfo? imageSource = sourceList.Find(sourceInfo => sourceInfo.Name.Equals(tierSourceName, StringComparison.OrdinalIgnoreCase));
-
-                if (imageSource != null)
+                void connected(object? sender, EventArgs e)
                 {
-                    try
-                    {
-                        obs.SetSourceRender(imageSource.Name, visible: false, sceneName: settings.OBS.GameSceneName);
-                        logger.LogDebug($"set {imageSource.Name} to visible=false");
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogError(e, $"could not set {tierSourceName} to visible=false");
-                    }
-                }
-                else
-                {
-                    logger.LogDebug($"Could not find {tierSourceName} image source.");
-                }
-            }
-
-            try
-            {
-                SourceInfo? imageSource = sourceList.Find(si => si.Name.Equals($"{tier}-image", StringComparison.OrdinalIgnoreCase));
-
-                if (imageSource != null)
-                {
-                    try
-                    {
-                        obs.SetSourceRender(imageSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
-                        logger.LogDebug($"set {imageSource.Name} to visible=true");
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogError(e, $"could not set {tier} to visible=false");
-                    }
-                }
-                else
-                {
-                    logger.LogDebug($"Could not find {tier} image source.");
+                    waiter.Set();
+                    logger.LogDebug("OBS Web Socket Connected");
                 }
 
-                if (division != null)
-                {
-                    SourceInfo? divisionSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierDivisionSourceName, StringComparison.OrdinalIgnoreCase));
+                obs.Connected += connected;
+                obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+                waiter.Wait();
+                obs.Connected -= connected;
 
-                    if (divisionSource != null)
+                var sourceList = obs.GetSourcesList();
+
+                try
+                {
+                    obs.SetSourceRender(settings.OBS.TierDivisionSourceName, visible: false, sceneName: settings.OBS.GameSceneName);
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, $"Could not set {settings.OBS.TierDivisionSourceName} to visible=false");
+                }
+
+                try
+                {
+                    obs.SetSourceRender(settings.OBS.TierRankPointsSourceName, visible: false, sceneName: settings.OBS.GameSceneName);
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, $"Could not set {settings.OBS.TierRankPointsSourceName} to visible=false");
+                }
+
+                foreach (var tierSourceName in settings.OBS.TierSources)
+                {
+                    SourceInfo? imageSource = sourceList.Find(sourceInfo => sourceInfo.Name.Equals(tierSourceName, StringComparison.OrdinalIgnoreCase));
+
+                    if (imageSource != null)
                     {
                         try
                         {
-                            bool isValidDivision = int.TryParse(division, out int result) && result >= 1 || result <= 5;
+                            obs.SetSourceRender(imageSource.Name, visible: false, sceneName: settings.OBS.GameSceneName);
+                            logger.LogDebug($"set {imageSource.Name} to visible=false");
+                        }
+                        catch (Exception e)
+                        {
+                            logger.LogError(e, $"could not set {tierSourceName} to visible=false");
+                        }
+                    }
+                    else
+                    {
+                        logger.LogDebug($"Could not find {tierSourceName} image source.");
+                    }
+                }
 
-                            if (isValidDivision)
+                try
+                {
+                    SourceInfo? imageSource = sourceList.Find(si => si.Name.Equals($"{tier}-image", StringComparison.OrdinalIgnoreCase));
+
+                    if (imageSource != null)
+                    {
+                        try
+                        {
+                            obs.SetSourceRender(imageSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
+                            logger.LogInformation($"set {imageSource.Name} to visible=true");
+                        }
+                        catch (Exception e)
+                        {
+                            logger.LogError(e, $"could not set {tier} to visible=false");
+                        }
+                    }
+                    else
+                    {
+                        logger.LogDebug($"Could not find {tier} image source.");
+                    }
+
+                    if (division != null)
+                    {
+                        SourceInfo? divisionSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierDivisionSourceName, StringComparison.OrdinalIgnoreCase));
+
+                        if (divisionSource != null)
+                        {
+                            try
                             {
-                                var properties = obs.GetTextGDIPlusProperties(divisionSource.Name);
-                                properties.Text = division;
-                                obs.SetTextGDIPlusProperties(properties);
-                                obs.SetSourceRender(divisionSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
-                                logger.LogDebug($"set {divisionSource.Name} to visible=true");
+                                bool isValidDivision = int.TryParse(division, out int result) && result >= 1 || result <= 5;
+
+                                if (isValidDivision)
+                                {
+                                    var properties = obs.GetTextGDIPlusProperties(divisionSource.Name);
+                                    properties.Text = division;
+                                    obs.SetTextGDIPlusProperties(properties);
+                                    obs.SetSourceRender(divisionSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
+                                    logger.LogInformation($"set {divisionSource.Name} to visible=true");
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                logger.LogError(e, $"could not set {tier} to visible=false");
                             }
                         }
-                        catch (Exception e)
+                        else
                         {
-                            logger.LogError(e, $"could not set {tier} to visible=false");
+                            logger.LogDebug($"could not find source {settings.OBS.TierDivisionSourceName}");
                         }
                     }
                     else
                     {
-                        logger.LogDebug($"could not find source {settings.OBS.TierDivisionSourceName}");
-                    }
-                }
-                else
-                {
-                    SourceInfo? rankPointsSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierRankPointsSourceName, StringComparison.OrdinalIgnoreCase));
+                        SourceInfo? rankPointsSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierRankPointsSourceName, StringComparison.OrdinalIgnoreCase));
 
-                    if (rankPointsSource != null)
-                    {
-                        try
+                        if (rankPointsSource != null)
                         {
-                            var properties = obs.GetTextGDIPlusProperties(rankPointsSource.Name);
-                            properties.Text = mmr.RankPoints.ToString();
-                            obs.SetTextGDIPlusProperties(properties);
-                            obs.SetSourceRender(rankPointsSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
-                            logger.LogDebug($"set {rankPointsSource.Name} to visible=true");
+                            try
+                            {
+                                var properties = obs.GetTextGDIPlusProperties(rankPointsSource.Name);
+                                properties.Text = mmr.RankPoints.ToString();
+                                obs.SetTextGDIPlusProperties(properties);
+                                obs.SetSourceRender(rankPointsSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
+                                logger.LogInformation($"set {rankPointsSource.Name} to visible=true");
+                            }
+                            catch (Exception e)
+                            {
+                                logger.LogError(e, $"could not set {tier} to visible=false");
+                            }
                         }
-                        catch (Exception e)
+                        else
                         {
-                            logger.LogError(e, $"could not set {tier} to visible=false");
+                            logger.LogDebug($"could not find source {settings.OBS.TierRankPointsSourceName}");
                         }
-                    }
-                    else
-                    {
-                        logger.LogDebug($"could not find source {settings.OBS.TierRankPointsSourceName}");
                     }
                 }
+                catch (Exception e)
+                {
+                    logger.LogError(e, $"Could not set the Tier from {text} for OBS.");
+                }
+
+                obs.Disconnect();
             }
             catch (Exception e)
             {
                 logger.LogError(e, $"Could not set the Tier from {text} for OBS.");
             }
-
-            obs.Disconnect();
         }
     }
 }

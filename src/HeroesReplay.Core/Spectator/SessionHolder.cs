@@ -1,4 +1,4 @@
-﻿using HeroesReplay.Core.Shared;
+﻿using HeroesReplay.Core.Models;
 
 namespace HeroesReplay.Core
 {

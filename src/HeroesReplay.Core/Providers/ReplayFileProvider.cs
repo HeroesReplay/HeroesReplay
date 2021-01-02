@@ -1,5 +1,7 @@
 ﻿using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -14,15 +16,15 @@ namespace HeroesReplay.Core.Providers
     public sealed class ReplayFileProvider : IReplayProvider
     {
         private readonly ILogger<ReplayDirectoryProvider> logger;
-        private readonly Settings settings;
+        private readonly AppSettings settings;
         private readonly ReplayHelper replayHelper;
         private readonly Queue<string> queue;
 
-        public ReplayFileProvider(ILogger<ReplayDirectoryProvider> logger, Settings settings, ReplayHelper replayHelper)
+        public ReplayFileProvider(ILogger<ReplayDirectoryProvider> logger, AppSettings settings, ReplayHelper replayHelper)
         {
-            this.logger = logger;
-            this.settings = settings;
-            this.replayHelper = replayHelper;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
             this.queue = new Queue<string>(new[] { settings.Location.ReplaySourcePath });
         }
 

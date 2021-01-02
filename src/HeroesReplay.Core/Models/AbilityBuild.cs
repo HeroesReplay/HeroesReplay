@@ -1,4 +1,4 @@
-﻿namespace HeroesReplay.Core.Shared
+﻿namespace HeroesReplay.Core.Models
 {
     public record AbilityBuild
     {

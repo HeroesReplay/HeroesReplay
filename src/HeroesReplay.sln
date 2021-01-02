@@ -12,7 +12,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.CLI", "HeroesR
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Tests", "HeroesReplay.Tests\HeroesReplay.Tests.csproj", "{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.Core", "HeroesReplay.Core\HeroesReplay.Core.csproj", "{1F3B79A5-1AAE-4F1E-A2AD-2D0D30BA4351}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Core", "HeroesReplay.Core\HeroesReplay.Core.csproj", "{1F3B79A5-1AAE-4F1E-A2AD-2D0D30BA4351}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

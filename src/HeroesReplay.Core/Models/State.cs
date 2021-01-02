@@ -1,10 +1,9 @@
-﻿namespace HeroesReplay.Core
+﻿namespace HeroesReplay.Core.Models
 {
     public enum State
     {
         Start,
         Running,
-        Paused,
         End
     }
 }

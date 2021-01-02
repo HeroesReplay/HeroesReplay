@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 
 using HeroesReplay.Core;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Processes;
 using HeroesReplay.Core.Providers;
 using HeroesReplay.Core.Runner;
@@ -42,7 +43,7 @@ namespace HeroesReplay.CLI
                 services.AddSingleton(focusCalculator, calculatorType);
             }
 
-            var settings = configuration.Get<Settings>();
+            var settings = configuration.Get<AppSettings>();
 
             return services
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
@@ -68,7 +69,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<TwitchAPI>()
                 .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
                 {
-                    Settings settings = serviceProvider.GetRequiredService<Settings>();
+                    AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
                     return new ApiSettings { AccessToken = settings.TwitchApi.AccessToken, ClientId = settings.TwitchApi.ClientId };
                 })
                 .AddSingleton<IHeroesProfileService, HeroesProfileService>()

@@ -1,6 +1,8 @@
 ﻿using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Shared;
 
 using System;
@@ -11,10 +13,10 @@ namespace HeroesReplay.Core
 {
     public class PlayerTauntingCalculator : IFocusCalculator
     {
-        private readonly Settings settings;
+        private readonly AppSettings settings;
         private readonly IAbilityDetector abilityDetector;
 
-        public PlayerTauntingCalculator(Settings settings, IAbilityDetector abilityDetector)
+        public PlayerTauntingCalculator(AppSettings settings, IAbilityDetector abilityDetector)
         {
             this.settings = settings;
             this.abilityDetector = abilityDetector;
@@ -23,6 +25,9 @@ namespace HeroesReplay.Core
         // https://github.com/ebshimizu/hots-parser/blob/master/parser.js#L2185
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
+            if (replay == null)
+                throw new ArgumentNullException(nameof(replay));
+
             IEnumerable<GameEvent> gameEvents = replay.GameEvents.Where(e => e.TimeSpan == now && e.eventType == GameEventType.CCmdEvent);
 
             foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => abilityDetector.IsAbility(replay, e, settings.AbilityDetection.Hearth)).GroupBy(e => e.player))
@@ -36,7 +41,7 @@ namespace HeroesReplay.Core
                         GetType(),
                         events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)),
                         events.Key,
-                        settings.Weights.TauntingBStep,
+                        settings.Weights.BStep,
                         $"{events.Key.HeroId} bstepping");
                 }
             }
@@ -47,7 +52,7 @@ namespace HeroesReplay.Core
                     GetType(),
                     events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)),
                     events.Key,
-                    settings.Weights.TauntingEmote,
+                    settings.Weights.Taunt,
                     $"{events.Key.HeroId} taunting");
             }
 
@@ -57,7 +62,7 @@ namespace HeroesReplay.Core
                     GetType(), 
                     events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)),
                     events.Key,
-                    settings.Weights.TauntingDance,
+                    settings.Weights.Dance,
                     $"{events.Key.HeroId} dancing");
             }
         }

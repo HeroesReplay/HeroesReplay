@@ -1,4 +1,6 @@
-﻿using HeroesReplay.Core.Shared;
+﻿using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +16,7 @@ namespace HeroesReplay.Core
     {
         private readonly IGameController controller;
         private readonly ILogger<GameSession> logger;
-        private readonly Settings settings;
+        private readonly AppSettings settings;
         private readonly CancellationTokenProvider tokenProvider;
         private readonly ISessionHolder sessionHolder;
 
@@ -26,7 +28,7 @@ namespace HeroesReplay.Core
 
         private SessionData Data => sessionHolder.SessionData;
 
-        public GameSession(ILogger<GameSession> logger, Settings settings, ISessionHolder sessionHolder, IGameController controller, CancellationTokenProvider tokenProvider)
+        public GameSession(ILogger<GameSession> logger, AppSettings settings, ISessionHolder sessionHolder, IGameController controller, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -38,7 +40,7 @@ namespace HeroesReplay.Core
         public async Task SpectateAsync()
         {
             State = State.Start;
-            Timer = default(TimeSpan);
+            Timer = default;
 
             await Task.WhenAll(
                 Task.Run(PanelLoopAsync, Token),
@@ -58,22 +60,19 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    TimeSpan? timer = await TryGetOcrTimer();
+                    (TimeSpan? timer, bool endDetected) = await TryGetOcrTimer();
 
-                    if (timer.HasValue)
+                    if (endDetected)
                     {
-                        if (timer.Value.Add(settings.Spectate.EndCoreTime) >= Data.End)
-                        {
-                            State = State.End;
-                            logger.LogInformation($"Game end detected via Timer at {timer.Value}");
-                        }
-                        else if (Timer == timer.Value && Timer != TimeSpan.Zero) State = State.Paused;
-                        else if (timer.Value > Timer) State = State.Running;
-                        else State = State.Start;
-
+                        State = State.End;
+                    }
+                    else if (timer.HasValue)
+                    {
+                        State = State.Running;
                         Timer = timer.Value;
 
-                        logger.LogDebug($"{State}, {Timer}");
+                        TimeSpan UITimer = Timer.AddNegativeOffset(settings.Spectate.GameLoopsOffset, settings.Spectate.GameLoopsPerSecond);
+                        logger.LogInformation($"{State}, UI: {UITimer} Actual: {Timer}");
                     }
                 }
                 catch (Exception e)
@@ -81,7 +80,7 @@ namespace HeroesReplay.Core
                     logger.LogError(e, "Could not complete state loop");
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(1), Token);
+                await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
             }
         }
 
@@ -95,15 +94,14 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    if (State == State.Running && Data.Players.TryGetValue(Timer, out Focus? focus) && focus.Index != index)
+                    if (State == State.Running)
                     {
-                        /* We keep a track of the previous index so we dont send too many commands on the same hero, 
-                         * because double tapping a hero will then change the spectate behaviour
-                         */
-                        index = focus.Index;
-
-                        logger.LogInformation($"Selecting {focus.Target.HeroId}. Description: {focus.Description}");
-                        controller.SendFocus(focus.Index);
+                        if (Data.Players.TryGetValue(Timer, out Focus? focus) && focus != null && focus.Index != index)
+                        {
+                            index = focus.Index;
+                            logger.LogInformation($"Selecting {focus.Target.HeroId}. Description: {focus.Description}");
+                            controller.SendFocus(focus.Index);
+                        }
                     }
                 }
                 catch (Exception e)
@@ -120,7 +118,7 @@ namespace HeroesReplay.Core
             Panel previous = Panel.None;
             Panel next = Panel.None;
             TimeSpan cooldown = settings.Spectate.PanelRotateTime;
-            TimeSpan delay = TimeSpan.FromSeconds(1);
+            TimeSpan second = TimeSpan.FromSeconds(1);
 
             while (State != State.End)
             {
@@ -152,6 +150,7 @@ namespace HeroesReplay.Core
                                 Panel.Talents => Panel.TimeDeadDeathsSelfSustain,
                                 Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists,
                                 Panel.ActionsPerMinute => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.CrowdControlEnemyHeroes,
+                                _ => Panel.Talents,
                             };
                         }
 
@@ -162,8 +161,8 @@ namespace HeroesReplay.Core
                             previous = next;
                         }
 
-                        cooldown = cooldown.Subtract(delay);
-                        await Task.Delay(delay);
+                        cooldown = cooldown.Subtract(second);
+                        await Task.Delay(second).ConfigureAwait(false);
                     }
                     catch (Exception e)
                     {
@@ -173,37 +172,47 @@ namespace HeroesReplay.Core
             }
         }
 
-        private static readonly TimeSpan invalidThreshold = TimeSpan.FromSeconds(15);
-
-        private async Task<TimeSpan?> TryGetOcrTimer()
+        private async Task<(TimeSpan? Timer, bool ForceEnd)> TryGetOcrTimer()
         {
-            return await Policy
-                .HandleResult<TimeSpan?>(timer =>
-                {
-                    if (timer == null) return false;
+            var context = new Context("Timer");
+            context.Add("ForceEnd", false);
+            context.Add("State", State);
+            context.Add("End", Data.End);
 
-                    if (Timer != TimeSpan.Zero && (timer > Timer.Add(invalidThreshold) || timer < Timer.Subtract(invalidThreshold)))
+            TimeSpan? timer = await Policy
+                .HandleResult<TimeSpan?>(result => result == null)
+                .WaitAndRetryAsync(
+                    retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd,
+                    sleepDurationProvider: (retry, context) => settings.Spectate.RetryTimerSleepDuration,
+                    onRetry: (outcome, duration, retryCount, context) =>
                     {
-                        logger.LogError($"OCR Timer is not an expected value. Before: {Timer}, After: {timer}");
-                        return false;
-                    }
+                        logger.LogError($"Timer failed. Waiting {duration} before next retry. Retry attempt {retryCount}");
 
-                    return true;
-                })
-                .WaitAndRetryAsync(retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd, retry =>
-                {
-                    logger.LogDebug($"Could not find Timer on retry: {retry}");
+                        var end = (TimeSpan)context["End"];
+                        var state = (State)context["State"];
+                        var isMax = retryCount >= settings.Spectate.RetryTimerCountBeforeForceEnd;
+                        var isTimerNotFound = outcome.Result == null;
+                        var timeToCoreKill = (end - Timer).TotalSeconds;
+                        var lastKnownTimeNearCoreKill = timeToCoreKill <= 30;
 
-                    if (retry >= settings.Spectate.RetryTimerCountBeforeForceEnd && Timer.Add(TimeSpan.FromMinutes(1)) >= Data.End)
-                    {
-                        logger.LogError($"OCR Timer could not be found after {retry} times. Last known Time: {Timer}. Forcing State=End");
-                        State = State.End;
-                    }
+                        if (state == State.Start)
+                        {
+                            logger.LogError($"Timer could not be found after {retryCount}. Game still loading.");
+                        }
+                        else if (state == State.Running && isTimerNotFound && isMax)
+                        {
+                            logger.LogError($"Timer could not be found after {retryCount}. Shutting down.");
+                            context["ForceEnd"] = true;
+                        }
+                        else if (state == State.Running && isTimerNotFound && !isMax &&  lastKnownTimeNearCoreKill)
+                        {
+                            logger.LogError($"Timer could not be found after {retryCount} AND is last known to be {timeToCoreKill}s from Core Kill {context["End"]}. Shutting down.");
+                            context["ForceEnd"] = true;
+                        }
+                    })
+                .ExecuteAsync((context, token) => controller.TryGetTimerAsync(), context, Token).ConfigureAwait(false);
 
-                    return settings.Spectate.RetryTimerSleepDuration;
-                })
-                 .ExecuteAsync(async (t) => await controller.TryGetTimerAsync(), Token);
+            return (Timer: timer, ForceEnd: (bool)context["ForceEnd"]);
         }
-
     }
 }

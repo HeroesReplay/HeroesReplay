@@ -1,6 +1,8 @@
 ﻿using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Shared;
 
@@ -12,10 +14,10 @@ namespace HeroesReplay.Core
 {
     public class BossCampCaptureCalculator : IFocusCalculator
     {
-        private readonly Settings settings;
+        private readonly AppSettings settings;
         private readonly IGameData gameData;
 
-        public BossCampCaptureCalculator(Settings settings, IGameData gameData)
+        public BossCampCaptureCalculator(AppSettings settings, IGameData gameData)
         {
             this.settings = settings;
             this.gameData = gameData;
@@ -28,7 +30,7 @@ namespace HeroesReplay.Core
 
             foreach (TrackerEvent capture in events)
             {
-                int teamId = (int)capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.Value - 1;
+                int teamId = (int)capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.GetValueOrDefault() - 1;
 
                 foreach (Unit unit in replay.Units.Where(unit => unit.TimeSpanDied < capture.TimeSpan && unit.TimeSpanBorn < capture.TimeSpan && unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId && unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10))))
                 {

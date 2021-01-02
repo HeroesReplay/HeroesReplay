@@ -1,4 +1,6 @@
-﻿using HeroesReplay.Core.Shared;
+﻿using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 
 using System;
@@ -9,17 +11,29 @@ namespace HeroesReplay.Core.Providers
     public class ReplayHelper
     {
         private readonly ILogger<ReplayHelper> logger;
-        private readonly Settings settings;
+        private readonly AppSettings settings;
 
-        public ReplayHelper(ILogger<ReplayHelper> logger, Settings settings)
+        public ReplayHelper(ILogger<ReplayHelper> logger, AppSettings settings)
         {
             this.logger = logger;
             this.settings = settings;
         }
 
-        public bool TryGetReplayId(StormReplay stormReplay, out int replayId) => TryGetReplayId(stormReplay.Path, out replayId);
+        public bool TryGetReplayId(StormReplay stormReplay, out int replayId)
+        {
+            if (stormReplay == null)
+                throw new ArgumentNullException(nameof(stormReplay));
 
-        public bool TryGetGameType(StormReplay stormReplay, out string gameType) => TryGetGameType(stormReplay.Path, out gameType);
+            return TryGetReplayId(stormReplay.Path, out replayId);
+        }
+
+        public bool TryGetGameType(StormReplay stormReplay, out string? gameType)
+        {
+            if (stormReplay == null)
+                throw new ArgumentNullException(nameof(stormReplay));
+
+            return TryGetGameType(stormReplay.Path, out gameType);
+        }
 
         public bool TryGetReplayId(string path, out int replayId)
         {
@@ -38,7 +52,7 @@ namespace HeroesReplay.Core.Providers
             return false;
         }
 
-        public bool TryGetGameType(string path, out string gameType)
+        public bool TryGetGameType(string path, out string? gameType)
         {
             gameType = null;
 

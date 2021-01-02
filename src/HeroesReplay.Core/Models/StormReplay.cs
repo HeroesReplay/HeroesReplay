@@ -1,6 +1,6 @@
 ﻿using Heroes.ReplayParser;
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Models
 {
     /// <summary>
     /// The StormReplay is a wrapper which links a raw replay file on disk to an in-memory parsed version of that file

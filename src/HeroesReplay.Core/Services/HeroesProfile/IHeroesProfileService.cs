@@ -1,5 +1,4 @@
-﻿using HeroesReplay.Core.Shared;
-
+﻿using HeroesReplay.Core.Models;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;

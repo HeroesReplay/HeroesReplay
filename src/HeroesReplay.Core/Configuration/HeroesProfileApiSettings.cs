@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Configuration
 {
     public record HeroesProfileApiSettings
     {
@@ -18,5 +18,6 @@ namespace HeroesReplay.Core.Shared
         public int MMRPoolSize { get; init; }
         public string MMRProperty { get; init; }
         public bool EnableMMR { get; init; }
+        public TimeSpan APIRetryWaitTime { get; init; }
     }
 }

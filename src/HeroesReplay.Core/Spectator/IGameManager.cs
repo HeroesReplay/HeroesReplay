@@ -1,4 +1,4 @@
-﻿using HeroesReplay.Core.Shared;
+﻿using HeroesReplay.Core.Models;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core

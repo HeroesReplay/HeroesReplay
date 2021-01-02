@@ -5,6 +5,8 @@ using Amazon.S3.Model;
 
 using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
 
@@ -24,7 +26,7 @@ namespace HeroesReplay.Core.Providers
 {
     public class HeroesProfileProvider : IReplayProvider
     {
-        private readonly Settings settings;
+        private readonly AppSettings settings;
         private readonly CancellationTokenProvider provider;
         private readonly ReplayHelper replayHelper;
         private readonly ILogger<HeroesProfileProvider> logger;
@@ -67,7 +69,7 @@ namespace HeroesReplay.Core.Providers
             }
         }
 
-        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, IHeroesProfileService heroesProfileService, CancellationTokenProvider provider, ReplayHelper replayHelper, Settings settings)
+        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, IHeroesProfileService heroesProfileService, CancellationTokenProvider provider, ReplayHelper replayHelper, AppSettings settings)
         {
             this.provider = provider;
             this.replayHelper = replayHelper;
@@ -113,8 +115,20 @@ namespace HeroesReplay.Core.Providers
         {
             logger.LogDebug("id: {0}, url: {1}, path: {2}", heroesProfileReplay.Id, heroesProfileReplay.Url, file.FullName);
 
-            (ReplayParseResult result, Replay replay) = ParseReplay(await File.ReadAllBytesAsync(file.FullName), ParseOptions.FullParsing);
+            var options = new ParseOptions
+            {
+                ShouldParseEvents = settings.ParseOptions.ShouldParseEvents,
+                AllowPTR = false,
+                IgnoreErrors = true,
+                ShouldParseMessageEvents = settings.ParseOptions.ShouldParseEvents,
+                ShouldParseStatistics = settings.ParseOptions.ShouldParseStatistics,
+                ShouldParseMouseEvents = settings.ParseOptions.ShouldParseMouseEvents,
+                ShouldParseUnits = settings.ParseOptions.ShouldParseUnits,
+                ShouldParseDetailedBattleLobby = settings.ParseOptions.ShouldParseDetailedBattleLobby
+            };
 
+            (ReplayParseResult result, Replay replay) = ParseReplay(await File.ReadAllBytesAsync(file.FullName), options);
+            
             logger.LogDebug("result: {0}, path: {1}", result, file.FullName);
 
             if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
@@ -137,8 +151,7 @@ namespace HeroesReplay.Core.Providers
                     {
                         RequestPayer = RequestPayer.Requester,
                         BucketName = uri.Host.Split('.')[0],
-                        Key = uri.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped),
-
+                        Key = uri.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped)
                     };
 
                     using (GetObjectResponse response = await s3Client.GetObjectAsync(request, provider.Token))
@@ -181,7 +194,7 @@ namespace HeroesReplay.Core.Providers
                 return await Policy
                        .Handle<Exception>()
                        .OrResult<HeroesProfileReplay?>(replay => replay == null)
-                       .WaitAndRetryAsync(60, retry => TimeSpan.FromSeconds(10))
+                       .WaitAndRetryAsync(60, retry => settings.HeroesProfileApi.APIRetryWaitTime)
                        .ExecuteAsync(async token =>
                        {
                            IEnumerable<HeroesProfileReplay> response = await heroesProfileService.ListReplaysAllAsync(MinReplayId).ConfigureAwait(false);
@@ -192,6 +205,7 @@ namespace HeroesReplay.Core.Providers
                            {
                                replay = (from r in response
                                          where r.Url.Contains(settings.HeroesProfileApi.S3Bucket)
+                                         where r.Valid == 1
                                          where r.Id > MinReplayId
                                          let version = Version.Parse(r.GameVersion)
                                          where version.Major == minVersion.Major && 

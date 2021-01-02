@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Models
 {
     public class SessionData
     {

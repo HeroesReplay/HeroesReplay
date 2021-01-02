@@ -1,5 +1,4 @@
-﻿using HeroesReplay.Core.Shared;
-
+﻿using HeroesReplay.Core.Models;
 using Microsoft.Extensions.Logging;
 
 using System;
@@ -30,7 +29,7 @@ namespace HeroesReplay.Core
 
         public Task<TimeSpan?> TryGetTimerAsync()
         {
-            return Task.FromResult(new TimeSpan?(sessionHolder.SessionData.End));
+            // return Task.FromResult(new TimeSpan?(sessionHolder.SessionData.End));
 
             var next = TimeSpan;
             TimeSpan = TimeSpan.Add(TimeSpan.FromSeconds(1));

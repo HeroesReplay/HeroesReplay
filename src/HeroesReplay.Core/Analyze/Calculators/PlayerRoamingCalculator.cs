@@ -1,5 +1,7 @@
 ﻿using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Shared;
 
 using System;
@@ -10,15 +12,18 @@ namespace HeroesReplay.Core
 {
     public class PlayerRoamingCalculator : IFocusCalculator
     {
-        private readonly Settings settings;
+        private readonly AppSettings settings;
 
-        public PlayerRoamingCalculator(Settings settings)
+        public PlayerRoamingCalculator(AppSettings settings)
         {
             this.settings = settings;
         }
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
+            if (replay == null)
+                throw new ArgumentNullException(nameof(replay));
+
             foreach (Unit heroUnit in replay.Players.SelectMany(p => p.HeroUnits.Where(unit => unit.TimeSpanBorn < now && (unit.TimeSpanDied == null || unit.TimeSpanDied > now))))
             {
                 var spawn = heroUnit.PlayerControlledBy.HeroUnits[0].PointBorn;
