@@ -39,11 +39,11 @@ namespace HeroesReplay.Core
                     // Abathur mines, Fenix Beam, Tyrande W etc etc etc
                     if (shouldFocusUnitDied)
                     {
-                        yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.PlayerKill + weightForKillCount, $"{killer.Key.HeroId} kills: {unit.PlayerControlledBy.HeroId}");
+                        yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.PlayerKill + weightForKillCount, $"{killer.Key.Character} kills: {unit.PlayerControlledBy.Character}");
                     }
                     else
                     {
-                        yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.PlayerKill + weightForKillCount, $"{killer.Key.HeroId} kills: {unit.PlayerControlledBy.HeroId}");
+                        yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.PlayerKill + weightForKillCount, $"{killer.Key.Character} kills: {unit.PlayerControlledBy.Character}");
                     }
                 }
             }

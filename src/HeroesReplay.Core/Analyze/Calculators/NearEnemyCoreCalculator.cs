@@ -32,7 +32,7 @@ namespace HeroesReplay.Core
                 {
                     foreach (Position heroPosition in heroUnit.Positions.Where(p => p.TimeSpan.Add(TimeSpan.FromSeconds(2)) >= now && p.TimeSpan.Subtract(TimeSpan.FromSeconds(2)) <= now && p.Point.DistanceTo(enemyUnit.PointBorn) < settings.Spectate.MaxDistanceToCore))
                     {
-                        yield return new Focus(GetType(), heroUnit, heroUnit.PlayerControlledBy, settings.Weights.NearEnemyCore, $"{heroUnit.PlayerControlledBy.HeroId} near enemy core: {enemyUnit.Name}");
+                        yield return new Focus(GetType(), heroUnit, heroUnit.PlayerControlledBy, settings.Weights.NearEnemyCore, $"{heroUnit.PlayerControlledBy.Character} near enemy core: {enemyUnit.Name}");
                     }
                 }
             }

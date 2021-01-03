@@ -30,6 +30,7 @@ namespace HeroesReplay.Core.Configuration
         public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
         public string HeroesDataPath => Path.Combine(AssetsPath, "HeroesData");
         public string ReplayCachePath => Path.Combine(AssetsPath, "Replays");
+        public string AnalyzePath => Path.Combine(AssetsPath, "AnalyzeOutput");
         public string CapturesPath => Path.Combine(AssetsPath, "Captures");
         public string CurrentReplayInfoFilePath => Path.Combine(AssetsPath, StormReplay.InfoFileName);
         public static string StormReplaysAccountPath => Path.Combine(UserGameFolderPath, "Accounts");

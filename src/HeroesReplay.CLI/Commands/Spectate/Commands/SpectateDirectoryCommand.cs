@@ -10,16 +10,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands
 {
-    public class HeroesProfileApiCommand : Command
+    public class SpectateDirectoryCommand : Command
     {
-        public HeroesProfileApiCommand() : base("heroesprofile", "Access the HeroesProfile S3 bucket to download uploaded replays and spectate them.")
+        public SpectateDirectoryCommand() : base("directory", $"The directory that contains .StormReplay files.")
         {
             Handler = CommandHandler.Create<CancellationToken>(CommandAsync);
         }
 
         protected async Task CommandAsync(CancellationToken cancellationToken)
         {
-            using (IServiceScope scope = new ServiceCollection().AddCoreServices(cancellationToken, typeof(HeroesProfileProvider)).BuildServiceProvider().CreateScope())
+            using (IServiceScope scope = new ServiceCollection().AddCoreServices(cancellationToken, typeof(ReplayDirectoryProvider)).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }).CreateScope())
             {
                 SaltySadism saltySadism = scope.ServiceProvider.GetRequiredService<SaltySadism>();
 

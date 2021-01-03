@@ -10,9 +10,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands
 {
-    public class FileCommand : Command
+    public class SpectateFileCommand : Command
     {
-        public FileCommand() : base("file", "The individual .StormReplay file to spectate.")
+        public SpectateFileCommand() : base("file", "The individual .StormReplay file to spectate.")
         {
              Handler = CommandHandler.Create<CancellationToken>(CommandAsync);
         }

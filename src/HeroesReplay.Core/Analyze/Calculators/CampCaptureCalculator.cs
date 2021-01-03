@@ -48,7 +48,7 @@ namespace HeroesReplay.Core
                         unit,
                         unit.PlayerKilledBy,
                         settings.Weights.CampCapture,
-                        $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
+                        $"{unit.PlayerKilledBy.Character} captured {unit.Name} (CampCaptures)");
                     }
                 }
             }

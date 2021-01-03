@@ -40,7 +40,7 @@ namespace HeroesReplay.Core
                         unit,
                         unit.PlayerKilledBy,
                         settings.Weights.BossCapture,
-                        $"{unit.PlayerKilledBy.HeroId} captured {unit.Name} (CampCaptures)");
+                        $"{unit.PlayerKilledBy.Character} captured {unit.Name} (CampCaptures)");
                     }
                 }
             }

@@ -39,7 +39,7 @@ namespace HeroesReplay.Core
                             heroUnit, 
                             heroUnit.PlayerControlledBy, 
                             settings.Weights.CaptureBeacon, 
-                            $"{heroUnit.PlayerControlledBy.HeroId} near {captureUnit.Name} (CaptureBeacons)");
+                            $"{heroUnit.PlayerControlledBy.Character} near {captureUnit.Name} (CaptureBeacons)");
                     }
                 }
             }

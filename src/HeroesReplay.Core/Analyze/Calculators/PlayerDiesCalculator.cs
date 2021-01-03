@@ -34,7 +34,7 @@ namespace HeroesReplay.Core
                     unit, 
                     unit.PlayerControlledBy, 
                     settings.Weights.PlayerDeath,
-                    $"{unit.PlayerControlledBy.HeroId} killed by {unit.UnitKilledBy?.Name} in {unit.TimeSpanDied.GetValueOrDefault().Subtract(now).TotalSeconds} (death)");
+                    $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name} in {unit.TimeSpanDied.GetValueOrDefault().Subtract(now).TotalSeconds} (death)");
             }
         }
     }

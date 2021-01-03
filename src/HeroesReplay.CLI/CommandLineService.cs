@@ -54,7 +54,7 @@ namespace HeroesReplay.CLI
 
         private async Task CheckAdminMiddlewareAsync(InvocationContext context, Func<InvocationContext, Task> next)
         {
-            if (!adminChecker.IsAdministrator())
+            if (context.ParseResult.CommandResult.Command.Parents[0].Name.Equals("spectate") && !adminChecker.IsAdministrator())
             {
                 context.Console.Out.WriteLine("You must be running this application as an administrator.");
             }

@@ -6,9 +6,11 @@ namespace HeroesReplay.CLI.Commands
     {
         public SpectateCommand() : base("spectate", $"Auto Spectate .StormReplay files using built-in replay analysis which auto focuses on heroes based on events that happen.")
         {
-            AddCommand(new FileCommand());
-            AddCommand(new DirectoryCommand());
-            AddCommand(new HeroesProfileApiCommand());
+            AddCommand(new SpectateFileCommand());
+            AddCommand(new SpectateDirectoryCommand());
+            AddCommand(new SpectateHeroesProfileApiCommand());
         }
     }
+
+    
 }

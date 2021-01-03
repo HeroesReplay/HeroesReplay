@@ -196,11 +196,7 @@ namespace HeroesReplay.Core
                     }
                     else if (settings.Capture.SaveCaptureFailureCondition)
                     {
-                        if (!Directory.Exists(settings.CapturesPath))
-                        {
-                            Directory.CreateDirectory(settings.CapturesPath);
-                        }
-
+                        Directory.CreateDirectory(settings.CapturesPath);
                         resized.Save(Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
                     }
 
@@ -320,11 +316,7 @@ namespace HeroesReplay.Core
 
                     if (settings.Capture.SaveCaptureFailureCondition)
                     {
-                        if (!Directory.Exists(settings.CapturesPath))
-                        {
-                            Directory.CreateDirectory(settings.CapturesPath);
-                        }
-
+                        Directory.CreateDirectory(settings.CapturesPath);
                         capture.Save(Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
                     }
                 }

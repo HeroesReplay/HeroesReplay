@@ -89,7 +89,7 @@ namespace HeroesReplay.Core
                     if (State == State.TimerDetected && Data.Players.TryGetValue(Timer, out Focus focus) && focus != null && focus.Index != index)
                     {
                         index = focus.Index;
-                        logger.LogInformation($"Selecting {focus.Target.HeroId}. Description: {focus.Description}");
+                        logger.LogInformation($"Selecting {focus.Target.Character}. Description: {focus.Description}");
                         controller.SendFocus(focus.Index);
                     }
                 }

@@ -43,7 +43,7 @@ namespace HeroesReplay.Core
                             {
                                 var unit = new[] { teamOneUnit, teamTwoUnit }.OrderBy(x => Guid.NewGuid()).First();
 
-                                yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.NearEnemyHero, $"{teamOneUnit.PlayerControlledBy.HeroId} is in proximity of {teamTwoUnit.PlayerControlledBy.HeroId}");
+                                yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.NearEnemyHero, $"{teamOneUnit.PlayerControlledBy.Character} is in proximity of {teamTwoUnit.PlayerControlledBy.Character}");
                             }
                         }
                     }

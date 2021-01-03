@@ -44,7 +44,7 @@ namespace HeroesReplay.Core
                     _ => settings.Weights.Structure
                 };
 
-                yield return new Focus(GetType(), unit, unit.PlayerKilledBy, points, $"{unit.PlayerKilledBy.HeroId} destroyed {unit.Name}");
+                yield return new Focus(GetType(), unit, unit.PlayerKilledBy, points, $"{unit.PlayerKilledBy.Character} destroyed {unit.Name}");
             }
         }
     }

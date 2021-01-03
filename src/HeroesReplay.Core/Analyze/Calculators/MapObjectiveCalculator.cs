@@ -37,7 +37,7 @@ namespace HeroesReplay.Core
                         heroUnit, 
                         teamObjective.Player, 
                         settings.Weights.MapObjective, 
-                        $"{teamObjective.Player.HeroId} did {teamObjective.TeamObjectiveType} (TeamObjective)");
+                        $"{teamObjective.Player.Character} did {teamObjective.TeamObjectiveType} (TeamObjective)");
                 }
             }
 
@@ -47,7 +47,7 @@ namespace HeroesReplay.Core
                     GetType(),                     
                     mapUnit, 
                     mapUnit.PlayerKilledBy,
-                    settings.Weights.MapObjective, $"{mapUnit.PlayerKilledBy.HeroId} destroyed {mapUnit.Name} (MapObjective)");
+                    settings.Weights.MapObjective, $"{mapUnit.PlayerKilledBy.Character} destroyed {mapUnit.Name} (MapObjective)");
             }
         }
     }

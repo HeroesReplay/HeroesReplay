@@ -1,4 +1,6 @@
-﻿using System.CommandLine;
+﻿using HeroesReplay.CLI.Commands.Analyze;
+
+using System.CommandLine;
 
 namespace HeroesReplay.CLI.Commands
 {
@@ -7,6 +9,7 @@ namespace HeroesReplay.CLI.Commands
         public HeroesReplayCommand() : base("HeroesReplay: The Heroes of the Storm automated spectator.")
         {
             AddCommand(new SpectateCommand());
+            AddCommand(new AnalyzeCommand());
         }
     }
 }

@@ -41,7 +41,7 @@ namespace HeroesReplay.Core
                         events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)),
                         events.Key,
                         settings.Weights.BStep,
-                        $"{events.Key.HeroId} bstepping");
+                        $"{events.Key.Character} bstepping");
                 }
             }
 
@@ -52,7 +52,7 @@ namespace HeroesReplay.Core
                     events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)),
                     events.Key,
                     settings.Weights.Taunt,
-                    $"{events.Key.HeroId} taunting");
+                    $"{events.Key.Character} taunting");
             }
 
             foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => abilityDetector.IsAbility(replay, e, settings.AbilityDetection.Dance)).GroupBy(e => e.player))
@@ -62,7 +62,7 @@ namespace HeroesReplay.Core
                     events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)),
                     events.Key,
                     settings.Weights.Dance,
-                    $"{events.Key.HeroId} dancing");
+                    $"{events.Key.Character} dancing");
             }
         }
     }
