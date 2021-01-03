@@ -296,6 +296,7 @@ namespace HeroesReplay.Core
                 .Replace("G", "6", StringComparison.OrdinalIgnoreCase)
                 .Replace("T", "7", StringComparison.OrdinalIgnoreCase)
                 .Replace("B", "13", StringComparison.OrdinalIgnoreCase)
+                .Replace(".", ":", StringComparison.OrdinalIgnoreCase)
                 .Replace("'", string.Empty, StringComparison.OrdinalIgnoreCase)
                 .Replace("\"", string.Empty, StringComparison.OrdinalIgnoreCase)
                 .Where(c => char.IsDigit(c) || c.Equals(':') || c.Equals('-'))
