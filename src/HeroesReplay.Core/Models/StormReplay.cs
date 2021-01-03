@@ -11,11 +11,11 @@ namespace HeroesReplay.Core.Models
 
         public int? ReplayId { get; }
 
-        public string? GameType { get; }
+        public string GameType { get; }
 
         public Replay Replay { get; }
 
-        public StormReplay(string path, Replay replay, int? replayId, string? gameType)
+        public StormReplay(string path, Replay replay, int? replayId, string gameType)
         {
             Replay = replay;
             Path = path;

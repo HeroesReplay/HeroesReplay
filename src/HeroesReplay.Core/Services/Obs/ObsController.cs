@@ -1,5 +1,4 @@
-﻿using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.Models;
+﻿using HeroesReplay.Core.Models;
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json.Linq;
@@ -34,7 +33,7 @@ namespace HeroesReplay.Core.Services.Obs
             {
                 var waiter = new ManualResetEventSlim();
 
-                void connected(object? sender, EventArgs e)
+                void connected(object sender, EventArgs e)
                 {
                     waiter.Set();
                     logger.LogDebug("OBS Web Socket Connected");
@@ -62,7 +61,7 @@ namespace HeroesReplay.Core.Services.Obs
             {
                 var waiter = new ManualResetEventSlim();
 
-                void connected(object? sender, EventArgs e)
+                void connected(object sender, EventArgs e)
                 {
                     waiter.Set();
                     logger.LogInformation("OBS Web Socket Connected");
@@ -91,7 +90,7 @@ namespace HeroesReplay.Core.Services.Obs
             {
                 var waiter = new ManualResetEventSlim();
 
-                void connected(object? sender, EventArgs e)
+                void connected(object sender, EventArgs e)
                 {
                     waiter.Set();
                     logger.LogInformation("OBS Web Socket Connected");
@@ -105,14 +104,14 @@ namespace HeroesReplay.Core.Services.Obs
                 var sceneList = obs.GetSceneList();
                 var sourceList = obs.GetSourcesList();
 
-                foreach (ReportScene? segment in settings.OBS.ReportScenes)
+                foreach (ReportScene segment in settings.OBS.ReportScenes)
                 {
                     TrySetBrowserSourceSegment(replayId, obs, sourceList, segment);
                 }
 
-                foreach (ReportScene? source in settings.OBS.ReportScenes)
+                foreach (ReportScene source in settings.OBS.ReportScenes)
                 {
-                    await TryCycleSceneAsync(source);
+                    await TryCycleSceneAsync(source).ConfigureAwait(false);
                 }
 
                 obs.Connected -= connected;
@@ -131,7 +130,7 @@ namespace HeroesReplay.Core.Services.Obs
             {
                 obs.SetCurrentScene(source.SceneName);
                 logger.LogInformation($"set scene to: {source.SceneName}");
-                await Task.Delay(source.DisplayTime);
+                await Task.Delay(source.DisplayTime).ConfigureAwait(false);
                 return true;
             }
             catch (Exception e)
@@ -144,7 +143,7 @@ namespace HeroesReplay.Core.Services.Obs
 
         private bool TrySetBrowserSourceSegment(int replayId, OBSWebsocket obs, List<SourceInfo> sourceList, ReportScene segment)
         {
-            var url = segment.SourceUrl.Replace("[ID]", replayId.ToString());
+            var url = segment.SourceUrl.ToString().Replace("[ID]", replayId.ToString());
             var source = sourceList.Find(si => si.Name.Equals(segment.SourceName, StringComparison.OrdinalIgnoreCase));
 
             if (source != null)
@@ -172,8 +171,8 @@ namespace HeroesReplay.Core.Services.Obs
             var text = string.IsNullOrEmpty(mmr.Tier) ? string.Empty : mmr.Tier;
             text = text.Trim().ToLower();
 
-            string? tier = null;
-            string? division = null;
+            string tier = null;
+            string division = null;
 
             try
             {
@@ -197,7 +196,7 @@ namespace HeroesReplay.Core.Services.Obs
             {
                 var waiter = new ManualResetEventSlim();
 
-                void connected(object? sender, EventArgs e)
+                void connected(object sender, EventArgs e)
                 {
                     waiter.Set();
                     logger.LogDebug("OBS Web Socket Connected");
@@ -230,7 +229,7 @@ namespace HeroesReplay.Core.Services.Obs
 
                 foreach (var tierSourceName in settings.OBS.TierSources)
                 {
-                    SourceInfo? imageSource = sourceList.Find(sourceInfo => sourceInfo.Name.Equals(tierSourceName, StringComparison.OrdinalIgnoreCase));
+                    SourceInfo imageSource = sourceList.Find(sourceInfo => sourceInfo.Name.Equals(tierSourceName, StringComparison.OrdinalIgnoreCase));
 
                     if (imageSource != null)
                     {
@@ -252,7 +251,7 @@ namespace HeroesReplay.Core.Services.Obs
 
                 try
                 {
-                    SourceInfo? imageSource = sourceList.Find(si => si.Name.Equals($"{tier}-image", StringComparison.OrdinalIgnoreCase));
+                    SourceInfo imageSource = sourceList.Find(si => si.Name.Equals($"{tier}-image", StringComparison.OrdinalIgnoreCase));
 
                     if (imageSource != null)
                     {
@@ -273,7 +272,7 @@ namespace HeroesReplay.Core.Services.Obs
 
                     if (division != null)
                     {
-                        SourceInfo? divisionSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierDivisionSourceName, StringComparison.OrdinalIgnoreCase));
+                        SourceInfo divisionSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierDivisionSourceName, StringComparison.OrdinalIgnoreCase));
 
                         if (divisionSource != null)
                         {
@@ -302,7 +301,7 @@ namespace HeroesReplay.Core.Services.Obs
                     }
                     else
                     {
-                        SourceInfo? rankPointsSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierRankPointsSourceName, StringComparison.OrdinalIgnoreCase));
+                        SourceInfo rankPointsSource = sourceList.Find(si => si.Name.Equals(settings.OBS.TierRankPointsSourceName, StringComparison.OrdinalIgnoreCase));
 
                         if (rankPointsSource != null)
                         {

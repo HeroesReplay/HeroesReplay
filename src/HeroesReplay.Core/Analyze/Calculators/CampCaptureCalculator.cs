@@ -4,7 +4,6 @@ using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Runner;
-using HeroesReplay.Core.Shared;
 
 using System;
 using System.Collections.Generic;

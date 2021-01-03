@@ -31,16 +31,16 @@ namespace HeroesReplay.Core
         {
             try
             {
-                await gameData.LoadDataAsync();
+                await gameData.LoadDataAsync().ConfigureAwait(false);
 
                 while (!tokenProvider.Token.IsCancellationRequested)
                 {
-                    StormReplay? stormReplay = await replayProvider.TryLoadReplayAsync();
+                    StormReplay stormReplay = await replayProvider.TryLoadReplayAsync().ConfigureAwait(false);
 
                     if (stormReplay != null)
                     {
-                        await gameManager.SetSessionAsync(stormReplay);
-                        await gameManager.SpectateSessionAsync();
+                        await gameManager.SetSessionAsync(stormReplay).ConfigureAwait(false);
+                        await gameManager.SpectateSessionAsync().ConfigureAwait(false);
                     }
                 }
             }

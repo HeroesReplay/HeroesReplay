@@ -1,13 +1,9 @@
 ﻿using Heroes.ReplayParser;
-
 using HeroesReplay.Core.Processes;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Shared;
-
 using Microsoft.Extensions.Logging;
-
 using Polly;
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -15,9 +11,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
@@ -53,7 +47,7 @@ namespace HeroesReplay.Core
         };
 
         private bool IsLaunched => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).Any();
-        private Process? Game => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
+        private Process Game => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
         private IntPtr Handle => Game?.MainWindowHandle ?? IntPtr.Zero;
 
         public GameController(ILogger<GameController> logger, AppSettings settings, CaptureStrategy captureStrategy, OcrEngine engine, CancellationTokenProvider tokenProvider)
@@ -68,28 +62,30 @@ namespace HeroesReplay.Core
         public async Task<StormReplay> LaunchAsync(StormReplay stormReplay)
         {
             if (stormReplay == null)
+            {
                 throw new ArgumentNullException(nameof(stormReplay));
+            }
 
             string versionFolder = Path.Combine(settings.Location.GameInstallPath, VersionsFolder);
             int latestBuild = Directory.EnumerateDirectories(versionFolder).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
             var requiresAuth = stormReplay.Replay.ReplayBuild == latestBuild;
 
-            if (IsLaunched && await IsReplay())
+            if (IsLaunched && await IsReplay().ConfigureAwait(false))
             {
                 return stormReplay; // already authenticated or in a replay
             }
-            else if (IsLaunched && await IsHomeScreen())
+            else if (IsLaunched && await IsHomeScreen().ConfigureAwait(false))
             {
-                await LaunchAndWait(stormReplay);
+                await LaunchAndWait(stormReplay).ConfigureAwait(false);
             }
             else if (requiresAuth)
             {
-                await LaunchGameFromBattlenet();
-                await LaunchAndWait(stormReplay);
+                await LaunchGameFromBattlenet().ConfigureAwait(false);
+                await LaunchAndWait(stormReplay).ConfigureAwait(false);
             }
             else
             {
-                await LaunchAndWait(stormReplay);
+                await LaunchAndWait(stormReplay).ConfigureAwait(false);
             }
 
             return stormReplay;
@@ -115,7 +111,7 @@ namespace HeroesReplay.Core
                 .Handle<Exception>()
                 .OrResult<bool>(loaded => loaded == false)
                 .WaitAndRetryAsync(retryCount: 60, retry => settings.OCR.CheckSleepDuration)
-                .ExecuteAsync(async (t) => await IsHomeScreen(), this.tokenProvider.Token);
+                .ExecuteAsync(async (t) => await IsHomeScreen().ConfigureAwait(false), this.tokenProvider.Token).ConfigureAwait(false);
 
             if (!loggedIn)
             {
@@ -123,9 +119,8 @@ namespace HeroesReplay.Core
 
                 KillGame();
 
-                await Task.Delay(settings.Spectate.WaitingTime);
-
-                await LaunchGameFromBattlenet();
+                await Task.Delay(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                await LaunchGameFromBattlenet().ConfigureAwait(false);
             }
 
             logger.LogInformation("Heroes of the Storm Home Screen detected");
@@ -153,14 +148,14 @@ namespace HeroesReplay.Core
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
                     .WaitAndRetryAsync(retryCount: 60, sleepDurationProvider: retry => settings.OCR.CheckSleepDuration)
-                    .ExecuteAsync(async (t) => await ContainsAnyAsync(searchTerms), this.tokenProvider.Token);
+                    .ExecuteAsync((t) => ContainsAnyAsync(searchTerms), this.tokenProvider.Token).ConfigureAwait(false);
         }
 
         public async Task<TimeSpan?> TryGetTimerAsync()
         {
             if (Handle == IntPtr.Zero) return null;
 
-            Bitmap? timerBitmap = null;
+            Bitmap timerBitmap = null;
 
             try
             {
@@ -172,7 +167,7 @@ namespace HeroesReplay.Core
                     timerBitmap.Save(Path.Combine(settings.CapturesPath, "timer-" + Guid.NewGuid().ToString() + ".bmp"));
                 }
 
-                return await ConvertBitmapTimerToTimeSpan(timerBitmap);
+                return await ConvertBitmapTimerToTimeSpan(timerBitmap).ConfigureAwait(false);
             }
             catch (Exception e)
             {
@@ -190,7 +185,7 @@ namespace HeroesReplay.Core
         {
             using (Bitmap resized = bitmap.GetResized(zoom: 4))
             {
-                using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized))
+                using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized).ConfigureAwait(false))
                 {
                     OcrResult ocrResult = await engine.RecognizeAsync(softwareBitmap);
                     TimeSpan? timer = TryParseTimeSpan(ocrResult.Text);
@@ -232,9 +227,9 @@ namespace HeroesReplay.Core
             {
                 if (Game != null)
                 {
-                    logger.LogInformation($"Current: {Game?.MainModule.FileVersionInfo.FileVersion}");
+                    logger.LogInformation($"Current: {Game.MainModule.FileVersionInfo.FileVersion}");
                     logger.LogInformation($"Required: {replay.ReplayVersion}");
-                    return Game?.MainModule.FileVersionInfo.FileVersion == replay.ReplayVersion;
+                    return Game.MainModule.FileVersionInfo.FileVersion == replay.ReplayVersion;
                 }
                 else
                 {
@@ -266,38 +261,56 @@ namespace HeroesReplay.Core
                 string time = new string(SanitizeOcrTimer(text));
                 string[] segments = time.Split(settings.OCR.TimerSeperator);
 
-                if (segments.Length == settings.OCR.TimerHours) return time.ParseTimerHours(settings.OCR.TimeSpanFormatHours);
-                else if (segments.Length == settings.OCR.TimerMinutes && segments[0].StartsWith(settings.OCR.TimerNegativePrefix)) return time.ParseNegativeTimerMinutes(settings.OCR.TimeSpanFormatMatchStart);
-                else if (segments.Length == settings.OCR.TimerMinutes) return time.ParsePositiveTimerMinutes(settings.OCR.TimerSeperator);
+                if (segments.Length == settings.OCR.TimerHours)
+                {
+                    return time.ParseTimerHours(settings.OCR.TimeSpanFormatHours);
+                }
+                else if (segments.Length == settings.OCR.TimerMinutes && segments[0].StartsWith(settings.OCR.TimerNegativePrefix))
+                {
+                    return time.ParseNegativeTimerMinutes(settings.OCR.TimeSpanFormatMatchStart);
+                }
+                else if (segments.Length == settings.OCR.TimerMinutes)
+                {
+                    return time.ParsePositiveTimerMinutes(settings.OCR.TimerSeperator);
+                }
 
                 throw new Exception($"Unhandled segments: {segments.Length}");
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                return null;
+                logger.LogError(e, $"Could not parse the timespan: {text ?? string.Empty}");                
             }
+
+            return null;
         }
 
         private static char[] SanitizeOcrTimer(string text)
         {
             return text
                 .Replace("O", "0", StringComparison.OrdinalIgnoreCase)
+                .Replace("L", "1", StringComparison.OrdinalIgnoreCase)
+                .Replace("Z", "2", StringComparison.OrdinalIgnoreCase)
+                .Replace("E", "3", StringComparison.OrdinalIgnoreCase)
+                .Replace("A", "4", StringComparison.OrdinalIgnoreCase)
                 .Replace("S", "5", StringComparison.OrdinalIgnoreCase)
+                .Replace("G", "6", StringComparison.OrdinalIgnoreCase)
+                .Replace("T", "7", StringComparison.OrdinalIgnoreCase)
+                .Replace("B", "13", StringComparison.OrdinalIgnoreCase)
                 .Replace("'", string.Empty, StringComparison.OrdinalIgnoreCase)
                 .Replace("\"", string.Empty, StringComparison.OrdinalIgnoreCase)
                 .Where(c => char.IsDigit(c) || c.Equals(':') || c.Equals('-'))
                 .ToArray();
         }
 
-        private async Task<bool> IsHomeScreen() => await ContainsAnyAsync(settings.OCR.HomeScreenText);
+        private async Task<bool> IsHomeScreen() => IsLaunched && await ContainsAnyAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
 
-        private async Task<bool> IsReplay() => (await TryGetTimerAsync()) != null;
+        private async Task<bool> IsReplay() => IsLaunched && (await TryGetTimerAsync().ConfigureAwait(false)) != null;
 
         private async Task<bool> ContainsAnyAsync(IEnumerable<string> words)
         {
             using (Bitmap capture = captureStrategy.Capture(Handle))
             {
-                using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(capture))
+                using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(capture).ConfigureAwait(false))
                 {
                     OcrResult result = await engine.RecognizeAsync(softwareBitmap);
                     var containsAny = words.Any(word => result.Text.Contains(word));

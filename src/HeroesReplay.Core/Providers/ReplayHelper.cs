@@ -1,6 +1,5 @@
 ﻿using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 
 using System;
@@ -27,7 +26,7 @@ namespace HeroesReplay.Core.Providers
             return TryGetReplayId(stormReplay.Path, out replayId);
         }
 
-        public bool TryGetGameType(StormReplay stormReplay, out string? gameType)
+        public bool TryGetGameType(StormReplay stormReplay, out string gameType)
         {
             if (stormReplay == null)
                 throw new ArgumentNullException(nameof(stormReplay));
@@ -52,7 +51,7 @@ namespace HeroesReplay.Core.Providers
             return false;
         }
 
-        public bool TryGetGameType(string path, out string? gameType)
+        public bool TryGetGameType(string path, out string gameType)
         {
             gameType = null;
 
@@ -64,9 +63,8 @@ namespace HeroesReplay.Core.Providers
             catch (Exception e)
             {
                 logger.LogError(e, $"Could not extract GameType from {path}. Is it a S3 replay file with an ID?");
+                return false;
             }
-
-            return false;
         }
     }
 }

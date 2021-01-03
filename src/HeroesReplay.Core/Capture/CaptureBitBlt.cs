@@ -1,7 +1,8 @@
-﻿using HeroesReplay.Core.Configuration;
-
+﻿
 using Microsoft.Extensions.Logging;
+
 using PInvoke;
+
 using System;
 using System.Drawing;
 

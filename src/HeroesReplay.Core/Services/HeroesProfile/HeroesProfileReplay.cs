@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using System;
+using System.Text.Json.Serialization;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
 {
@@ -14,7 +15,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         public string Region { get; set; }
 
         [JsonPropertyName("url")]
-        public string Url { get; set; }
+        public Uri Url { get; set; }
 
         [JsonPropertyName("fingerprint")]
         public string Fingerprint { get; set; }
@@ -29,7 +30,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         public int? Valid { get; set; }
 
         [JsonPropertyName("deleted")]
-        public string? Deleted { get; set; }
+        public string Deleted { get; set; }
 
         [JsonPropertyName("game_type")]
         public string GameType { get; set; }

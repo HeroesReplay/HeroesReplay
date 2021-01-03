@@ -2,7 +2,6 @@
 
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
 
@@ -32,7 +31,7 @@ namespace HeroesReplay.Core.Providers
             queue = new Queue<string>(Directory.GetFiles(settings.Location.ReplaySourcePath, settings.StormReplay.WildCard, SearchOption.AllDirectories).OrderBy(GetCreationTime));
         }
 
-        public async Task<StormReplay?> TryLoadReplayAsync()
+        public async Task<StormReplay> TryLoadReplayAsync()
         {
             var parseOptions = new ParseOptions
             {
@@ -46,9 +45,9 @@ namespace HeroesReplay.Core.Providers
                 IgnoreErrors = false
             };
 
-            if (queue.TryDequeue(out string? path))
+            if (queue.TryDequeue(out string path))
             {
-                (ReplayParseResult result, Replay replay) = ParseReplay(await ReadAllBytesAsync(path), parseOptions);
+                (ReplayParseResult result, Replay replay) = ParseReplay(await ReadAllBytesAsync(path).ConfigureAwait(false), parseOptions);
 
                 logger.LogInformation($"{path}:{result}");
 
@@ -59,7 +58,7 @@ namespace HeroesReplay.Core.Providers
                         logger.LogInformation($"Replay id found for file: {replayId}");
                     }
 
-                    if (replayHelper.TryGetGameType(path, out string? gameType))
+                    if (replayHelper.TryGetGameType(path, out string gameType))
                     {
                         logger.LogInformation($"Replay id {replayId} found with GameType: {gameType}");
                     }

@@ -1,6 +1,5 @@
 ﻿using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
 
@@ -64,7 +63,7 @@ namespace HeroesReplay.Core.Runner
 
         private async Task LoadHeroesAsync()
         {
-            var json = await File.ReadAllTextAsync(Path.Combine(settings.AssetsPath, "Heroes.json"));
+            var json = await File.ReadAllTextAsync(Path.Combine(settings.AssetsPath, "Heroes.json")).ConfigureAwait(false);
 
             using (JsonDocument heroJson = JsonDocument.Parse(json))
             {
@@ -80,7 +79,7 @@ namespace HeroesReplay.Core.Runner
 
         private async Task LoadMapsAsync()
         {
-            var json = await File.ReadAllTextAsync(Path.Combine(settings.AssetsPath, "Maps.json"));
+            var json = await File.ReadAllTextAsync(Path.Combine(settings.AssetsPath, "Maps.json")).ConfigureAwait(false);
 
             using (var mapJson = JsonDocument.Parse(json))
             {
@@ -117,8 +116,8 @@ namespace HeroesReplay.Core.Runner
                     client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("HeroesReplay", "1.0"));
                     client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", base64);
 
-                    var response = await client.GetAsync(release);
-                    var json = await response.Content.ReadAsStringAsync();
+                    var response = await client.GetAsync(release).ConfigureAwait(false);
+                    var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
                     using (var document = JsonDocument.Parse(json))
                     {
@@ -127,12 +126,12 @@ namespace HeroesReplay.Core.Runner
                             var name = commit.GetString();
                             var uri = link.GetString();
 
-                            using (var data = await client.GetStreamAsync(new Uri(uri)))
+                            using (var data = await client.GetStreamAsync(new Uri(uri)).ConfigureAwait(false))
                             {
                                 using (var write = File.OpenWrite(Path.Combine(settings.HeroesDataPath, name)))
                                 {
-                                    await data.CopyToAsync(write);
-                                    await write.FlushAsync();
+                                    await data.CopyToAsync(write).ConfigureAwait(false);
+                                    await write.FlushAsync().ConfigureAwait(false);
                                 }
                             }
 
@@ -165,7 +164,7 @@ namespace HeroesReplay.Core.Runner
 
             foreach (var file in files)
             {
-                using (var document = JsonDocument.Parse(await File.ReadAllTextAsync(file), new JsonDocumentOptions() { AllowTrailingCommas = true }))
+                using (var document = JsonDocument.Parse(await File.ReadAllTextAsync(file).ConfigureAwait(false), new JsonDocumentOptions() { AllowTrailingCommas = true }))
                 {
                     foreach (var o in document.RootElement.EnumerateObject())
                     {
@@ -301,10 +300,10 @@ namespace HeroesReplay.Core.Runner
 
         public async Task LoadDataAsync()
         {
-            await DownloadIfEmptyAsync();
-            await LoadUnitsAsync();
-            await LoadMapsAsync();
-            await LoadHeroesAsync();
+            await DownloadIfEmptyAsync().ConfigureAwait(false);
+            await LoadUnitsAsync().ConfigureAwait(false);
+            await LoadMapsAsync().ConfigureAwait(false);
+            await LoadHeroesAsync().ConfigureAwait(false);
         }
     }
 }

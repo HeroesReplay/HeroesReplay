@@ -1,7 +1,6 @@
 ﻿using Heroes.ReplayParser;
 
 using HeroesReplay.Core.Runner;
-using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Models;
 
 using Microsoft.Extensions.Logging;
@@ -76,7 +75,7 @@ namespace HeroesReplay.Core
             {
                 foreach (Focus focus in calculators.SelectMany(calculator => calculator.GetPlayers(timeSpan, replay)))
                 {
-                    if (focusDictionary.TryGetValue(timeSpan, out Focus? previous) && previous?.Points < focus.Points)
+                    if (focusDictionary.TryGetValue(timeSpan, out Focus previous) && previous?.Points < focus.Points)
                     {
                         if (focusDictionary.TryUpdate(timeSpan, focus, previous))
                         {

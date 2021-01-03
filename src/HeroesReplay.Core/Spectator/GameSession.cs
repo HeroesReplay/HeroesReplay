@@ -39,40 +39,32 @@ namespace HeroesReplay.Core
 
         public async Task SpectateAsync()
         {
-            State = State.Start;
+            State = State.Loading;
             Timer = default;
 
             await Task.WhenAll(
                 Task.Run(PanelLoopAsync, Token),
                 Task.Run(FocusLoopAsync, Token),
-                Task.Run(StateLoopAsync, Token));
-
-            logger.LogInformation($"Game has ended. Waiting for {settings.Spectate.EndScreenTime}");
-
-            await Task.Delay(settings.Spectate.EndScreenTime);
+                Task.Run(StateLoopAsync, Token)).ConfigureAwait(false);
         }
 
         private async Task StateLoopAsync()
         {
-            while (State != State.End)
+            while (State != State.EndDetected)
             {
                 Token.ThrowIfCancellationRequested();
 
                 try
                 {
-                    (TimeSpan? timer, bool endDetected) = await TryGetOcrTimer();
+                    (TimeSpan? Timer, bool EndDetected) result = await TryGetOcrTimer().ConfigureAwait(false);
 
-                    if (endDetected)
-                    {
-                        State = State.End;
-                    }
-                    else if (timer.HasValue)
-                    {
-                        State = State.Running;
-                        Timer = timer.Value;
+                    State = result.EndDetected ? State.EndDetected : result.Timer.HasValue ? State.TimerDetected : State.Loading;
+                    Timer = result.Timer ?? Timer;
 
+                    if (result.Timer.HasValue)
+                    {
                         TimeSpan UITimer = Timer.AddNegativeOffset(settings.Spectate.GameLoopsOffset, settings.Spectate.GameLoopsPerSecond);
-                        logger.LogInformation($"{State}, UI: {UITimer} Actual: {Timer}");
+                        logger.LogInformation($"{State}, UI Time: {UITimer} Replay Time: {Timer}");
                     }
                 }
                 catch (Exception e)
@@ -88,20 +80,17 @@ namespace HeroesReplay.Core
         {
             int index = -1;
 
-            while (State != State.End)
+            while (State != State.EndDetected)
             {
                 Token.ThrowIfCancellationRequested();
 
                 try
                 {
-                    if (State == State.Running)
+                    if (State == State.TimerDetected && Data.Players.TryGetValue(Timer, out Focus focus) && focus != null && focus.Index != index)
                     {
-                        if (Data.Players.TryGetValue(Timer, out Focus? focus) && focus != null && focus.Index != index)
-                        {
-                            index = focus.Index;
-                            logger.LogInformation($"Selecting {focus.Target.HeroId}. Description: {focus.Description}");
-                            controller.SendFocus(focus.Index);
-                        }
+                        index = focus.Index;
+                        logger.LogInformation($"Selecting {focus.Target.HeroId}. Description: {focus.Description}");
+                        controller.SendFocus(focus.Index);
                     }
                 }
                 catch (Exception e)
@@ -120,11 +109,11 @@ namespace HeroesReplay.Core
             TimeSpan cooldown = settings.Spectate.PanelRotateTime;
             TimeSpan second = TimeSpan.FromSeconds(1);
 
-            while (State != State.End)
+            while (State != State.EndDetected)
             {
                 Token.ThrowIfCancellationRequested();
 
-                if (State == State.Running)
+                if (State == State.TimerDetected)
                 {
                     try
                     {
@@ -172,47 +161,55 @@ namespace HeroesReplay.Core
             }
         }
 
-        private async Task<(TimeSpan? Timer, bool ForceEnd)> TryGetOcrTimer()
+        private async Task<(TimeSpan? Timer, bool EndDetected)> TryGetOcrTimer()
         {
-            var context = new Context("Timer");
-            context.Add("ForceEnd", false);
-            context.Add("State", State);
-            context.Add("End", Data.End);
+            const string EndDetectedKey = "EndDetected";
+            const string StateKey = "State";
+            const string EndKey = "End";
+
+            var context = new Context("Timer")
+            {
+                { EndDetectedKey, false },
+                { StateKey, State },
+                { EndKey, Data.End }
+            };
+
+            void onRetry(DelegateResult<TimeSpan?> outcome, TimeSpan duration, int retryCount, Context context)
+            {
+                var end = (TimeSpan)context[EndKey];
+                var state = (State)context[StateKey];
+                var isMax = retryCount >= settings.Spectate.RetryTimerCountBeforeForceEnd;
+                var isTimerNotFound = outcome.Result == null;
+                var timeToCoreKill = (end - Timer);
+                var timeClosetoCoreKill = timeToCoreKill <= settings.Spectate.EndCoreTime;
+
+                if (state == State.Loading)
+                {
+                    logger.LogWarning($"Timer could not be found after {retryCount}. Game still loading.");
+                }
+                else if (state == State.TimerDetected && isTimerNotFound && isMax)
+                {
+                    logger.LogWarning($"Timer could not be found after {retryCount}. Shutting down.");
+                    context[EndDetectedKey] = true;
+                }
+                else if (state == State.TimerDetected && isTimerNotFound && !isMax && timeClosetoCoreKill)
+                {
+                    logger.LogWarning($"Timer could not be found after {retryCount} AND is last known to be {timeToCoreKill}s from Core Kill {context["End"]}. Shutting down.");
+
+                    context[EndDetectedKey] = true;
+                }
+                else
+                {
+                    logger.LogWarning($"Timer failed. Waiting {duration} before next retry. Retry attempt {retryCount}");
+                }
+            }
 
             TimeSpan? timer = await Policy
                 .HandleResult<TimeSpan?>(result => result == null)
-                .WaitAndRetryAsync(
-                    retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd,
-                    sleepDurationProvider: (retry, context) => settings.Spectate.RetryTimerSleepDuration,
-                    onRetry: (outcome, duration, retryCount, context) =>
-                    {
-                        logger.LogError($"Timer failed. Waiting {duration} before next retry. Retry attempt {retryCount}");
-
-                        var end = (TimeSpan)context["End"];
-                        var state = (State)context["State"];
-                        var isMax = retryCount >= settings.Spectate.RetryTimerCountBeforeForceEnd;
-                        var isTimerNotFound = outcome.Result == null;
-                        var timeToCoreKill = (end - Timer).TotalSeconds;
-                        var lastKnownTimeNearCoreKill = timeToCoreKill <= 30;
-
-                        if (state == State.Start)
-                        {
-                            logger.LogError($"Timer could not be found after {retryCount}. Game still loading.");
-                        }
-                        else if (state == State.Running && isTimerNotFound && isMax)
-                        {
-                            logger.LogError($"Timer could not be found after {retryCount}. Shutting down.");
-                            context["ForceEnd"] = true;
-                        }
-                        else if (state == State.Running && isTimerNotFound && !isMax &&  lastKnownTimeNearCoreKill)
-                        {
-                            logger.LogError($"Timer could not be found after {retryCount} AND is last known to be {timeToCoreKill}s from Core Kill {context["End"]}. Shutting down.");
-                            context["ForceEnd"] = true;
-                        }
-                    })
+                .WaitAndRetryAsync(retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd, sleepDurationProvider: (retry, context) => settings.Spectate.RetryTimerSleepDuration, onRetry: onRetry)
                 .ExecuteAsync((context, token) => controller.TryGetTimerAsync(), context, Token).ConfigureAwait(false);
 
-            return (Timer: timer, ForceEnd: (bool)context["ForceEnd"]);
+            return (Timer: timer, EndDetected: (bool)context[EndDetectedKey]);
         }
     }
 }

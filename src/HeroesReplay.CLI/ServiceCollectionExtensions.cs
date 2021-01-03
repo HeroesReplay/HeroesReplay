@@ -51,7 +51,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton(settings)
                 .AddSingleton(new CancellationTokenProvider(token))
                 .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
-                .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(CaptureStub), CaptureMethod.BitBlt => typeof(CaptureBitBlt), CaptureMethod.CopyFromScreen => typeof(CaptureFromScreen), _ => typeof(CaptureBitBlt) })
+                .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(CaptureStub), CaptureMethod.BitBlt => typeof(CaptureBitBlt), _ => typeof(CaptureBitBlt) })
                 .AddSingleton(typeof(IGameController), settings.Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
                 .AddSingleton<IGameData, GameData>()
                 .AddSingleton<ReplayHelper>()

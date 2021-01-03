@@ -3,7 +3,6 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Runner;
-using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
 

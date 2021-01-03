@@ -3,7 +3,6 @@
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Runner;
-using HeroesReplay.Core.Shared;
 
 using System;
 using System.Collections.Generic;
@@ -27,7 +26,7 @@ namespace HeroesReplay.Core
             if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
 
-            foreach (TeamObjective? teamObjective in replay.TeamObjectives.SelectMany(to => to).Where(to => to.Player != null && to.TimeSpan == now))
+            foreach (TeamObjective teamObjective in replay.TeamObjectives.SelectMany(to => to).Where(to => to.Player != null && to.TimeSpan == now))
             {
                 var heroUnit = teamObjective.Player.HeroUnits.FirstOrDefault(hu => hu.Positions.Any(p => p.TimeSpan == now));
 
