@@ -165,23 +165,18 @@ namespace HeroesReplay.Core
         {
             const string EndDetectedKey = "EndDetected";
             const string StateKey = "State";
-            const string EndKey = "End";
 
             var context = new Context("Timer")
             {
                 { EndDetectedKey, false },
-                { StateKey, State },
-                { EndKey, Data.End }
+                { StateKey, State }
             };
 
             void onRetry(DelegateResult<TimeSpan?> outcome, TimeSpan duration, int retryCount, Context context)
             {
-                var end = (TimeSpan)context[EndKey];
                 var state = (State)context[StateKey];
                 var isMax = retryCount >= settings.Spectate.RetryTimerCountBeforeForceEnd;
                 var isTimerNotFound = outcome.Result == null;
-                var timeToCoreKill = (end - Timer);
-                var timeClosetoCoreKill = timeToCoreKill <= settings.Spectate.EndCoreTime;
 
                 if (state == State.Loading)
                 {
@@ -191,13 +186,7 @@ namespace HeroesReplay.Core
                 {
                     logger.LogWarning($"Timer could not be found after {retryCount}. Shutting down.");
                     context[EndDetectedKey] = true;
-                }
-                else if (state == State.TimerDetected && isTimerNotFound && !isMax && timeClosetoCoreKill)
-                {
-                    logger.LogWarning($"Timer could not be found after {retryCount} AND is last known to be {timeToCoreKill}s from Core Kill {context["End"]}. Shutting down.");
-
-                    context[EndDetectedKey] = true;
-                }
+                }                
                 else
                 {
                     logger.LogWarning($"Timer failed. Waiting {duration} before next retry. Retry attempt {retryCount}");
