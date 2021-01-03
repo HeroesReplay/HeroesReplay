@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
+using System.Linq;
 
 namespace HeroesReplay.Core.Services.Obs
 {
@@ -104,12 +105,12 @@ namespace HeroesReplay.Core.Services.Obs
                 var sceneList = obs.GetSceneList();
                 var sourceList = obs.GetSourcesList();
 
-                foreach (ReportScene segment in settings.OBS.ReportScenes)
+                foreach (ReportScene segment in settings.OBS.ReportScenes.Where(scene => scene.Enabled))
                 {
                     TrySetBrowserSourceSegment(replayId, obs, sourceList, segment);
                 }
 
-                foreach (ReportScene source in settings.OBS.ReportScenes)
+                foreach (ReportScene source in settings.OBS.ReportScenes.Where(scene => scene.Enabled))
                 {
                     await TryCycleSceneAsync(source).ConfigureAwait(false);
                 }
