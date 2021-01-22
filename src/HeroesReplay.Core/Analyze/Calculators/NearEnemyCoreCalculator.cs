@@ -30,9 +30,18 @@ namespace HeroesReplay.Core
             {
                 foreach (Unit enemyUnit in replay.Units.Where(u => gameData.GetUnitGroup(u.Name) == Unit.UnitGroup.Structures && u.TimeSpanBorn < now && u.Team != heroUnit.Team && gameData.CoreUnits.Any(core => u.Name.Equals(core))))
                 {
-                    foreach (Position heroPosition in heroUnit.Positions.Where(p => p.TimeSpan.Add(TimeSpan.FromSeconds(2)) >= now && p.TimeSpan.Subtract(TimeSpan.FromSeconds(2)) <= now && p.Point.DistanceTo(enemyUnit.PointBorn) < settings.Spectate.MaxDistanceToCore))
+                    var positions = heroUnit.Positions.Where(p => p.Point.DistanceTo(enemyUnit.PointBorn) < settings.Spectate.MaxDistanceToCore);
+
+                    foreach (Position heroPosition in positions)
                     {
-                        yield return new Focus(GetType(), heroUnit, heroUnit.PlayerControlledBy, settings.Weights.NearEnemyCore, $"{heroUnit.PlayerControlledBy.Character} near enemy core: {enemyUnit.Name}");
+                        var distance = heroPosition.Point.DistanceTo(enemyUnit.PointBorn);
+
+                        yield return new Focus(
+                            GetType(), 
+                            heroUnit, 
+                            heroUnit.PlayerControlledBy, 
+                            settings.Weights.NearEnemyCore, 
+                            $"{heroUnit.PlayerControlledBy.Character} near enemy core: {enemyUnit.Name} ({distance})");
                     }
                 }
             }

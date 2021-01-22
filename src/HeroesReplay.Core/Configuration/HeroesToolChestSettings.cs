@@ -11,7 +11,7 @@ namespace HeroesReplay.Core.Configuration
 
         public IEnumerable<string> ObjectiveContains { get; init; }
 
-        public IEnumerable<string> CaptureNames { get; init; }
+        public IEnumerable<string> CaptureContains { get; init; }
 
         public string ScalingLinkId { get; init; }
     }

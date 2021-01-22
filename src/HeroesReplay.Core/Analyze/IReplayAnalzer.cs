@@ -14,6 +14,7 @@ namespace HeroesReplay.Core
         TimeSpan GetEnd(Replay replay);
 
         bool IsCarriedObjectiveMap(Replay replay);
+        TimeSpan GetStart(Replay replay);
     }
 
 }

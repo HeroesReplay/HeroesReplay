@@ -27,8 +27,7 @@ namespace HeroesReplay.Core
             {
                 foreach (var captureUnit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero && 
                                                                        unit.TimeSpanDied == null && 
-                                                                       unit.Team == null && 
-                                                                       !settings.HeroesToolChest.IgnoreUnits.Any(ignoreUnit => unit.Name.Contains(ignoreUnit))))
+                                                                       settings.HeroesToolChest.CaptureContains.Any(captureName => unit.Name.Contains(captureName))))
                 {
                     var positions = heroUnit.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(captureUnit.PointBorn) < settings.Spectate.MaxDistanceToOwnerChange);
 

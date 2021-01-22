@@ -24,7 +24,7 @@ namespace HeroesReplay.Core
             if (stormReplay == null)
                 throw new ArgumentNullException(nameof(stormReplay));
 
-            DateTime start = DateTime.Now;
+            DateTime started = DateTime.Now;
 
             logger.LogInformation($"Creating session for: {stormReplay.Path}");
 
@@ -32,10 +32,14 @@ namespace HeroesReplay.Core
             var panels = replayAnalyzer.GetPanels(stormReplay.Replay);
             var end = replayAnalyzer.GetEnd(stormReplay.Replay);
             var isCarriedObjectiveMap = replayAnalyzer.IsCarriedObjectiveMap(stormReplay.Replay);
+            var start = replayAnalyzer.GetStart(stormReplay.Replay);
 
-            sessionSetter.SetSession(new SessionData(players, panels, end, isCarriedObjectiveMap), stormReplay);
+            sessionSetter.SetSession(new SessionData(players, panels, start, end, isCarriedObjectiveMap), stormReplay);
 
-            logger.LogDebug($"Time to create session data: {DateTime.Now - start}");
+            var ended = DateTime.Now;
+            var duration = ended - started;
+
+            logger.LogDebug($"Time to create session data: {duration}");
 
             logger.LogInformation($"Session set for: {stormReplay.Path}");
         }

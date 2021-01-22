@@ -6,8 +6,7 @@ namespace HeroesReplay.Core.Configuration
 {
     public record SpectateSettings
     {
-        public int GameLoopsOffset { get; init; }
-        public int GameLoopsPerSecond { get; init; }
+       
         public Version MinVersionSupported { get; init; }
         public int MinDistanceToSpawn { get; init; }
         public int MaxDistanceToCore { get; init; }
@@ -15,15 +14,17 @@ namespace HeroesReplay.Core.Configuration
         public int MaxDistanceToObjective { get; init; }
         public int MaxDistanceToOwnerChange { get; init; }
         public int MaxDistanceToEnemyKill { get; init; }
+        public int MaxDistanceToClear { get; init; }
 
         public int RetryTimerCountBeforeForceEnd { get; init; }
         public TimeSpan RetryTimerSleepDuration { get; init; }
 
         public TimeSpan EndScreenTime { get; init; }
-        public TimeSpan PanelRotateTime { get; init; }
+        public TimeSpan PanelDownTime { get; init; }
         public TimeSpan TalentsPanelStartTime { get; init; }
         public TimeSpan WaitingTime { get; init; }
 
         public IEnumerable<int> TalentLevels { get; init; }
+        
     }
 }

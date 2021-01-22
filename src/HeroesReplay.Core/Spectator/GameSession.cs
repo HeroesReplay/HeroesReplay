@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 using Polly;
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -56,15 +58,14 @@ namespace HeroesReplay.Core
 
                 try
                 {
-                    (TimeSpan? Timer, bool EndDetected) result = await TryGetOcrTimer().ConfigureAwait(false);
+                    var result = await TryGetOcrTimer().ConfigureAwait(false);
 
                     State = result.EndDetected ? State.EndDetected : result.Timer.HasValue ? State.TimerDetected : State.Loading;
-                    Timer = result.Timer ?? Timer;
 
                     if (result.Timer.HasValue)
                     {
-                        TimeSpan UITimer = Timer.AddNegativeOffset(settings.Spectate.GameLoopsOffset, settings.Spectate.GameLoopsPerSecond);
-                        logger.LogInformation($"{State}, UI Time: {UITimer} Replay Time: {Timer}");
+                        Timer = result.Timer.Value.Add(sessionHolder.SessionData.GatesOpen);
+                        logger.LogInformation($"{State}, UI Time: {result.Timer.Value} Replay Time: {Timer}");
                     }
                 }
                 catch (Exception e)
@@ -104,10 +105,26 @@ namespace HeroesReplay.Core
 
         private async Task PanelLoopAsync()
         {
-            Panel previous = Panel.None;
+            var panelTimes = new Dictionary<Panel, TimeSpan>()
+            {
+                { Panel.KillsDeathsAssists, settings.PanelTimes.KillsDeathsAssists },
+                { Panel.CarriedObjectives, settings.PanelTimes.CarriedObjectives },
+                { Panel.CrowdControlEnemyHeroes,settings.PanelTimes.CrowdControlEnemyHeroes },
+                { Panel.DeathDamageRole, settings.PanelTimes.DeathDamageRole },
+                { Panel.Talents, settings.PanelTimes.Talents },
+                { Panel.Experience, settings.PanelTimes.Experience },
+                { Panel.TimeDeadDeathsSelfSustain, settings.PanelTimes.TimeDeadDeathsSelfSustain  },
+                { Panel.None, TimeSpan.Zero }
+            };
+
+            Panel current = Panel.None;
             Panel next = Panel.None;
-            TimeSpan cooldown = settings.Spectate.PanelRotateTime;
+
             TimeSpan second = TimeSpan.FromSeconds(1);
+            TimeSpan timeHidden = TimeSpan.Zero;
+            TimeSpan timeShown = TimeSpan.Zero;
+
+            bool visible = true;
 
             while (State != State.EndDetected)
             {
@@ -121,36 +138,42 @@ namespace HeroesReplay.Core
                         {
                             next = Panel.Talents;
                         }
-                        else if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != previous)
+                        else if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != current)
                         {
                             logger.LogDebug($"Data panels timer match found at: {Timer}");
                             next = panel;
                         }
-                        else if (cooldown <= TimeSpan.Zero)
+                        else if (timeHidden >= settings.Spectate.PanelDownTime)
                         {
-                            next = previous switch
-                            {
-                                Panel.None => Panel.Talents,
-                                Panel.KillsDeathsAssists => Panel.ActionsPerMinute,
-                                Panel.CarriedObjectives => Panel.CrowdControlEnemyHeroes,
-                                Panel.CrowdControlEnemyHeroes => Panel.DeathDamageRole,
-                                Panel.DeathDamageRole => Panel.Experience,
-                                Panel.Experience => Panel.Talents,
-                                Panel.Talents => Panel.TimeDeadDeathsSelfSustain,
-                                Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists,
-                                Panel.ActionsPerMinute => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.CrowdControlEnemyHeroes,
-                                _ => Panel.Talents,
-                            };
+                            next = GetNextPanel(current);
                         }
 
-                        if (next != previous)
+                        bool shouldHide = current != Panel.None && timeShown >= panelTimes[current];
+
+                        if (shouldHide)
+                        {
+                            controller.SendPanel(current); // press again, to hide
+                            visible = false;
+                            timeHidden = TimeSpan.Zero; // how long hidden ? 0 
+                            timeShown = TimeSpan.Zero; // how long shown ? 0
+                        }
+
+                        bool shouldShow = current == Panel.None || timeHidden >= settings.Spectate.PanelDownTime || next != current;
+
+                        if (shouldShow) // if hidden for 15+ seconds
                         {
                             controller.SendPanel(next);
-                            cooldown = settings.Spectate.PanelRotateTime;
-                            previous = next;
+                            visible = true;
+                            timeShown = TimeSpan.Zero; // time shown set back to 0
+                            timeHidden = TimeSpan.Zero; // its not hidden
+                            current = next; // set the current to the new one
                         }
 
-                        cooldown = cooldown.Subtract(second);
+                        timeShown = timeShown.Add(visible ? second : TimeSpan.Zero);
+                        timeHidden = timeHidden.Add(visible ? TimeSpan.Zero : second);
+
+                        logger.LogDebug(visible ? $"Panel shown for: {timeShown}" : $"Panel hidden for: {timeHidden}");
+
                         await Task.Delay(second).ConfigureAwait(false);
                     }
                     catch (Exception e)
@@ -159,6 +182,22 @@ namespace HeroesReplay.Core
                     }
                 }
             }
+        }
+
+        private Panel GetNextPanel(Panel current)
+        {
+            return current switch
+            {
+                Panel.None => Panel.Talents,
+                Panel.KillsDeathsAssists => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.CrowdControlEnemyHeroes,
+                Panel.CarriedObjectives => Panel.CrowdControlEnemyHeroes,
+                Panel.CrowdControlEnemyHeroes => Panel.DeathDamageRole,
+                Panel.DeathDamageRole => Panel.Experience,
+                Panel.Experience => Panel.Talents,
+                Panel.Talents => Panel.TimeDeadDeathsSelfSustain,
+                Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists,
+                _ => Panel.Talents,
+            };
         }
 
         private async Task<(TimeSpan? Timer, bool EndDetected)> TryGetOcrTimer()
@@ -186,7 +225,7 @@ namespace HeroesReplay.Core
                 {
                     logger.LogWarning($"Timer could not be found after {retryCount}. Shutting down.");
                     context[EndDetectedKey] = true;
-                }                
+                }
                 else
                 {
                     logger.LogWarning($"Timer failed. Waiting {duration} before next retry. Retry attempt {retryCount}");

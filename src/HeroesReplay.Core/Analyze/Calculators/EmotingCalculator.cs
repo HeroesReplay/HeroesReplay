@@ -10,12 +10,12 @@ using System.Linq;
 
 namespace HeroesReplay.Core
 {
-    public class PlayerTauntingCalculator : IFocusCalculator
+    public class EmotingCalculator : IFocusCalculator
     {
         private readonly AppSettings settings;
         private readonly IAbilityDetector abilityDetector;
 
-        public PlayerTauntingCalculator(AppSettings settings, IAbilityDetector abilityDetector)
+        public EmotingCalculator(AppSettings settings, IAbilityDetector abilityDetector)
         {
             this.settings = settings;
             this.abilityDetector = abilityDetector;

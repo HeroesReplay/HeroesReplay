@@ -20,6 +20,7 @@ namespace HeroesReplay.Core.Configuration
         public ReplayDetailsWriterSettings ReplayDetailsWriter { get; init; }
         public TwitchApiSettings TwitchApi { get; init; }
         public SpectateSettings Spectate { get; init; }
+        public PanelTimesSettings PanelTimes { get; init; }
         public CaptureSettings Capture { get; init; }
         public LocationSettings Location { get; init; }
         public OCRSettings OCR { get; init; }

@@ -20,7 +20,8 @@ namespace HeroesReplay.Core
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
         {
-            if (replay == null) throw new ArgumentNullException(nameof(replay));
+            if (replay == null) 
+                throw new ArgumentNullException(nameof(replay));
 
             List<IGrouping<int, Unit>> teams = replay.Players
                 .SelectMany(x => x.HeroUnits)
@@ -28,6 +29,8 @@ namespace HeroesReplay.Core
                 .GroupBy(x => x.Team.GetValueOrDefault()).ToList();
 
             if (teams.Count != 2) yield break;
+
+            var units = new List<(Unit teamOneUnit, Unit teamTwoUnit, double Distance)>();
 
             foreach (var teamOneUnit in teams[0])
             {
@@ -41,13 +44,29 @@ namespace HeroesReplay.Core
 
                             if (distance <= settings.Spectate.MaxDistanceToEnemy)
                             {
-                                var unit = new[] { teamOneUnit, teamTwoUnit }.OrderBy(x => Guid.NewGuid()).First();
-
-                                yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.NearEnemyHero, $"{teamOneUnit.PlayerControlledBy.Character} is in proximity of {teamTwoUnit.PlayerControlledBy.Character}");
+                                units.Add((teamOneUnit, teamTwoUnit, distance));
                             }
                         }
                     }
                 }
+            }
+
+            var pair = units.OrderBy(x => x.Distance).FirstOrDefault();
+
+            if (pair.teamOneUnit != null && pair.teamTwoUnit != null)
+            {
+                var heroes = new[] { pair.teamOneUnit, pair.teamTwoUnit };
+                Unit target = heroes.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
+                Unit enemy = heroes.Except(new[] { target }).FirstOrDefault();
+
+                float prioritiseCloserHero = Convert.ToSingle(pair.Distance) / settings.Weights.NearEnemyHeroDistanceDivisor;
+
+                yield return new Focus(
+                    GetType(), 
+                    target, 
+                    target.PlayerControlledBy,
+                    settings.Weights.NearEnemyHero + settings.Weights.NearEnemyHeroOffset - prioritiseCloserHero,
+                    $"{target.PlayerControlledBy.Character} is in proximity of {enemy.PlayerControlledBy.Character} ({pair.Distance})");
             }
         }
     }

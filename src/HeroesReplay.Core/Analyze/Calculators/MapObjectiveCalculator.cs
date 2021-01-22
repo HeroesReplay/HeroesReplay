@@ -13,12 +13,12 @@ namespace HeroesReplay.Core
     public class MapObjectiveCalculator : IFocusCalculator
     {
         private readonly AppSettings settings;
-        private readonly IGameData heroesData;
+        private readonly IGameData gameData;
 
-        public MapObjectiveCalculator(AppSettings settings, IGameData heroesTool)
+        public MapObjectiveCalculator(AppSettings settings, IGameData gameData)
         {
             this.settings = settings;
-            this.heroesData = heroesTool;
+            this.gameData = gameData;
         }
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
@@ -41,13 +41,14 @@ namespace HeroesReplay.Core
                 }
             }
 
-            foreach (Unit mapUnit in replay.Units.Where(unit => heroesData.GetUnitGroup(unit.Name) == Unit.UnitGroup.MapObjective && unit.TimeSpanDied == now && unit.PlayerKilledBy != null))
+            foreach (Unit mapUnit in replay.Units.Where(unit => gameData.GetUnitGroup(unit.Name) == Unit.UnitGroup.MapObjective && unit.TimeSpanDied == now && unit.PlayerKilledBy != null))
             {
                 yield return new Focus(
                     GetType(),                     
                     mapUnit, 
                     mapUnit.PlayerKilledBy,
-                    settings.Weights.MapObjective, $"{mapUnit.PlayerKilledBy.Character} destroyed {mapUnit.Name} (MapObjective)");
+                    settings.Weights.MapObjective, 
+                    $"{mapUnit.PlayerKilledBy.Character} destroyed {mapUnit.Name} (MapObjective)");
             }
         }
     }

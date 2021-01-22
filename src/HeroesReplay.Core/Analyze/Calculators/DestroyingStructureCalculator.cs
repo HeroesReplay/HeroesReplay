@@ -33,7 +33,7 @@ namespace HeroesReplay.Core
 
             foreach (var unit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero && unit.TimeSpanDied == now && gameData.GetUnitGroup(unit.Name) == Unit.UnitGroup.Structures && unit.PlayerKilledBy != null))
             {
-                var points = unit.Name switch
+                var weighting = unit.Name switch
                 {
                     string name when name.StartsWith(TownWallUnit) => settings.Weights.TownWall,
                     string name when name.StartsWith(TownGateUnit) => settings.Weights.TownGate,
@@ -44,7 +44,12 @@ namespace HeroesReplay.Core
                     _ => settings.Weights.Structure
                 };
 
-                yield return new Focus(GetType(), unit, unit.PlayerKilledBy, points, $"{unit.PlayerKilledBy.Character} destroyed {unit.Name}");
+                yield return new Focus(
+                    GetType(), 
+                    unit,
+                    unit.PlayerKilledBy,
+                    weighting, 
+                    $"{unit.PlayerKilledBy.Character} destroyed {unit.Name}");
             }
         }
     }

@@ -9,13 +9,15 @@ namespace HeroesReplay.Core.Models
         public IReadOnlyDictionary<TimeSpan, Panel> Panels { get; }
         public TimeSpan End { get; }
         public bool IsCarriedObjectiveMap { get; }
+        public TimeSpan GatesOpen { get; }
 
-        public SessionData(IReadOnlyDictionary<TimeSpan, Focus> players, IReadOnlyDictionary<TimeSpan, Panel> panels, TimeSpan end, bool carried)
+        public SessionData(IReadOnlyDictionary<TimeSpan, Focus> players, IReadOnlyDictionary<TimeSpan, Panel> panels, TimeSpan start, TimeSpan end, bool carried)
         {
             Players = players;
             Panels = panels;
             End = end;
             IsCarriedObjectiveMap = carried;
+            GatesOpen = start;
         }
     }
 }

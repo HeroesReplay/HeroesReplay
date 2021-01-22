@@ -31,7 +31,7 @@ namespace HeroesReplay.Core
 
         public TimeSpan GetEnd(Replay replay)
         {
-            if (replay == null) 
+            if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
 
             return replay.Units
@@ -55,9 +55,13 @@ namespace HeroesReplay.Core
 
             if (settings.ParseOptions.ShouldParseStatistics)
             {
+                var padding = TimeSpan.FromSeconds(1);
+
                 foreach (var talentTime in replay.TeamLevels.SelectMany(x => x).Where(x => settings.Spectate.TalentLevels.Contains(x.Key)).Select(x => x.Value))
                 {
+                    panels[talentTime.Subtract(padding)] = Panel.Talents;
                     panels[talentTime] = Panel.Talents;
+                    panels[talentTime.Add(padding)] = Panel.Talents;
                 }
             }
 
@@ -69,17 +73,23 @@ namespace HeroesReplay.Core
             if (replay == null) throw new ArgumentNullException(nameof(replay));
 
             var focusDictionary = new ConcurrentDictionary<TimeSpan, Focus>();
-            var timeSpans = Enumerable.Range(0, (int)replay.ReplayLength.TotalSeconds).Select(x => TimeSpan.FromSeconds(x)).ToList();
+            var timeSpans = Enumerable.Range(-30, (int)replay.ReplayLength.TotalSeconds).Select(x => TimeSpan.FromSeconds(x)).ToList();
 
             timeSpans.AsParallel().ForAll(timeSpan =>
             {
-                foreach (Focus focus in calculators.SelectMany(calculator => calculator.GetPlayers(timeSpan, replay)))
+                var focuses = new List<Focus>(calculators.SelectMany(calculator => calculator.GetPlayers(timeSpan, replay)));
+
+                foreach (Focus focus in focuses)
                 {
-                    if (focusDictionary.TryGetValue(timeSpan, out Focus previous) && previous?.Points < focus.Points)
+                    if (focusDictionary.TryGetValue(timeSpan, out Focus previous) && previous.Points < focus.Points)
                     {
                         if (focusDictionary.TryUpdate(timeSpan, focus, previous))
                         {
                             logger.LogInformation($"Updating. Previous: {timeSpan}={previous.Points}. Now: {timeSpan}={focus.Points}");
+                        }
+                        else
+                        {
+                            logger.LogWarning($"Failed to update for {timeSpan}");
                         }
                     }
                     else
@@ -88,51 +98,111 @@ namespace HeroesReplay.Core
                         {
                             logger.LogInformation($"Adding {timeSpan}={focus.Points}");
                         }
+                        else
+                        {
+                            logger.LogWarning($"Failed to add for {timeSpan} because it already exists");
+                        }
                     }
                 }
             });
 
-            var processed = new List<Unit>();
+            var processed = new List<(TimeSpan, Player)>();
 
-            foreach (var entry in focusDictionary.Where(x => x.Value.Points >= settings.Weights.PlayerDeath).ToList())
+            const int hisoricalViewerContext = 6;
+            const int presentViewerContext = 3;
+
+            foreach (var entry in focusDictionary.Where(x => x.Value.Points >= settings.Weights.NearEnemyHero && x.Value.Points <= (settings.Weights.NearEnemyHero + settings.Weights.NearEnemyHeroOffset)).ToList())
             {
                 var currentTime = entry.Key;
 
-                if (processed.Contains(entry.Value.Unit))
+                if (processed.Contains((currentTime, entry.Value.Target)))
+                {
+                    logger.LogWarning("NearEnemyHero viewer 'context' time padding has already been processed. Skipping.");
                     continue;
+                }
 
-                for (int second = 1; second < 6; second++)
+                for (int second = 1; second < hisoricalViewerContext; second++)
                 {
                     var pastTime = currentTime.Subtract(TimeSpan.FromSeconds(second));
 
                     if (focusDictionary.TryGetValue(pastTime, out var past))
                     {
-                        if (past.Points < entry.Value.Points)
+                        var previousLessWeight = past.Points < entry.Value.Points;
+
+                        if (previousLessWeight)
                         {
                             focusDictionary[pastTime] = entry.Value;
                         }
-                    }
-                    else
-                    {
-                        focusDictionary.TryAdd(pastTime, entry.Value);
-                    }
 
+                    }
+                    else focusDictionary.TryAdd(pastTime, entry.Value);
+                }
+
+                // fix jarring VX when the focus swaps between close proximity heroes
+                for (int second = 1; second < presentViewerContext; second++)
+                {
                     var futureTime = currentTime.Add(TimeSpan.FromSeconds(second));
 
                     if (focusDictionary.TryGetValue(futureTime, out var future) && future.Unit.TimeSpanDied > futureTime)
                     {
-                        if (entry.Value.Points > future.Points)
+                        var futureWeightedMore = entry.Value.Points > future.Points;
+
+                        if (futureWeightedMore)
+                        {
+                            focusDictionary[futureTime] = entry.Value;
+                        }
+                    }
+                    else focusDictionary.TryAdd(futureTime, entry.Value);
+                }
+
+                processed.Add((currentTime, entry.Value.Target));
+            }
+
+            foreach (var entry in focusDictionary.Where(x => x.Value.Points >= settings.Weights.PlayerDeath).ToList())
+            {
+                var currentTime = entry.Key;
+
+                if (processed.Contains((currentTime, entry.Value.Target)))
+                {
+                    logger.LogWarning("PlayerDeath viewer 'context' time padding has already been processed. Skipping.");
+                    continue;
+                }
+
+                for (int second = 1; second < hisoricalViewerContext; second++)
+                {
+                    var pastTime = currentTime.Subtract(TimeSpan.FromSeconds(second));
+
+                    if (focusDictionary.TryGetValue(pastTime, out var past))
+                    {
+                        var previousLessWeight = past.Points < entry.Value.Points;
+
+                        if (previousLessWeight)
                         {
                             focusDictionary[pastTime] = entry.Value;
                         }
+
                     }
-                    else
-                    {
-                        focusDictionary.TryAdd(futureTime, entry.Value);
-                    }
+                    else focusDictionary.TryAdd(pastTime, entry.Value);
                 }
 
-                processed.Add(entry.Value.Unit);
+                // Reduce jarring VX when the focus swaps after a kill
+                for (int second = 1; second < presentViewerContext; second++)
+                {
+                    var futureTime = currentTime.Add(TimeSpan.FromSeconds(second));
+
+                    if (focusDictionary.TryGetValue(futureTime, out var future) && future.Unit.TimeSpanDied > futureTime)
+                    {
+                        var futureWeightedMore = entry.Value.Points > future.Points;
+
+                        if (futureWeightedMore)
+                        {
+                            focusDictionary[futureTime] = entry.Value;
+                        }
+                    }
+                    else focusDictionary.TryAdd(futureTime, entry.Value);
+                }
+
+                processed.Add((currentTime, entry.Value.Target));
             }
 
             return new ReadOnlyDictionary<TimeSpan, Focus>(
@@ -147,6 +217,8 @@ namespace HeroesReplay.Core
                     ))
                 );
         }
+
+        public TimeSpan GetStart(Replay replay) => replay.TrackerEvents.First(x => x.Data.dictionary[0].blobText == "GatesOpen").TimeSpan;
 
         public bool IsCarriedObjectiveMap(Replay replay) => replay != null && (settings.Maps.CarriedObjectives.Contains(replay.Map) ||
                                                                                settings.Maps.CarriedObjectives.Contains(replay.MapAlternativeName));

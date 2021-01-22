@@ -10,16 +10,15 @@ using System.Linq;
 
 namespace HeroesReplay.Core
 {
-
-    public class PlayerDiesCalculator : IFocusCalculator
+    public class DeathCalculator : IFocusCalculator
     {
         private readonly AppSettings settings;
         private readonly IGameData gameData;
 
-        public PlayerDiesCalculator(AppSettings settings, IGameData gameData)
+        public DeathCalculator(AppSettings settings, IGameData gameData)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            this.gameData = gameData;
+            this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
         }
 
         public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
@@ -34,7 +33,7 @@ namespace HeroesReplay.Core
                     unit, 
                     unit.PlayerControlledBy, 
                     settings.Weights.PlayerDeath,
-                    $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name} in {unit.TimeSpanDied.GetValueOrDefault().Subtract(now).TotalSeconds} (death)");
+                    $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name}");
             }
         }
     }

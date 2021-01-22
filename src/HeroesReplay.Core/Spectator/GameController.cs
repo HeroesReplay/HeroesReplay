@@ -190,10 +190,7 @@ namespace HeroesReplay.Core
                     OcrResult ocrResult = await engine.RecognizeAsync(softwareBitmap);
                     TimeSpan? timer = TryParseTimeSpan(ocrResult.Text);
 
-                    if (timer.HasValue)
-                    {
-                        return timer.RemoveNegativeOffset(settings.Spectate.GameLoopsOffset, settings.Spectate.GameLoopsPerSecond);
-                    }
+                    if (timer.HasValue) return timer;
                     else if (settings.Capture.SaveCaptureFailureCondition)
                     {
                         Directory.CreateDirectory(settings.CapturesPath);

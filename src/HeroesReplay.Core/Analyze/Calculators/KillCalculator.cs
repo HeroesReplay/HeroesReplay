@@ -9,11 +9,11 @@ using System.Linq;
 
 namespace HeroesReplay.Core
 {
-    public class PlayerKillsCalculator : IFocusCalculator
+    public class KillCalculator : IFocusCalculator
     {
         private readonly AppSettings settings;
 
-        public PlayerKillsCalculator(AppSettings settings)
+        public KillCalculator(AppSettings settings)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
@@ -27,7 +27,7 @@ namespace HeroesReplay.Core
 
             foreach (IGrouping<Player, Unit> killer in killers)
             {
-                int weightForKillCount = killer.Count();
+                float weight = settings.Weights.PlayerKill + Convert.ToSingle(killer.Count());
 
                 foreach (Unit unit in killer)
                 {
@@ -39,11 +39,11 @@ namespace HeroesReplay.Core
                     // Abathur mines, Fenix Beam, Tyrande W etc etc etc
                     if (shouldFocusUnitDied)
                     {
-                        yield return new Focus(GetType(), unit, unit.PlayerControlledBy, settings.Weights.PlayerKill + weightForKillCount, $"{killer.Key.Character} kills: {unit.PlayerControlledBy.Character}");
+                        yield return new Focus(GetType(), unit, unit.PlayerControlledBy, weight, $"{killer.Key.Character} kills {unit.PlayerControlledBy.Character}");
                     }
                     else
                     {
-                        yield return new Focus(GetType(), unit, unit.PlayerKilledBy, settings.Weights.PlayerKill + weightForKillCount, $"{killer.Key.Character} kills: {unit.PlayerControlledBy.Character}");
+                        yield return new Focus(GetType(), unit, unit.PlayerKilledBy, weight, $"{killer.Key.Character} kills {unit.PlayerControlledBy.Character}");
                     }
                 }
             }

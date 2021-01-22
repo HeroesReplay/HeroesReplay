@@ -24,7 +24,10 @@
         public float MapObjective { get; init; }
         
         public float NearEnemyCore { get; init; }
+
         public float NearEnemyHero { get; init; }
+        public float NearEnemyHeroOffset { get; init; }
+        public float NearEnemyHeroDistanceDivisor { get; init; }
         
         public float PlayerDeath { get; init; }
         public float PlayerKill { get; init; }
