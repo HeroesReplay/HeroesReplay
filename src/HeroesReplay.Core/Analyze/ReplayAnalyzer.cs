@@ -106,63 +106,16 @@ namespace HeroesReplay.Core
                 }
             });
 
-            var processed = new List<(TimeSpan, Player)>();
+            var processed = new List<Unit>();                      
 
             const int hisoricalViewerContext = 6;
             const int presentViewerContext = 3;
-
-            foreach (var entry in focusDictionary.Where(x => x.Value.Points >= settings.Weights.NearEnemyHero && x.Value.Points <= (settings.Weights.NearEnemyHero + settings.Weights.NearEnemyHeroOffset)).ToList())
-            {
-                var currentTime = entry.Key;
-
-                if (processed.Contains((currentTime, entry.Value.Target)))
-                {
-                    logger.LogWarning("NearEnemyHero viewer 'context' time padding has already been processed. Skipping.");
-                    continue;
-                }
-
-                for (int second = 1; second < hisoricalViewerContext; second++)
-                {
-                    var pastTime = currentTime.Subtract(TimeSpan.FromSeconds(second));
-
-                    if (focusDictionary.TryGetValue(pastTime, out var past))
-                    {
-                        var previousLessWeight = past.Points < entry.Value.Points;
-
-                        if (previousLessWeight)
-                        {
-                            focusDictionary[pastTime] = entry.Value;
-                        }
-
-                    }
-                    else focusDictionary.TryAdd(pastTime, entry.Value);
-                }
-
-                // fix jarring VX when the focus swaps between close proximity heroes
-                for (int second = 1; second < presentViewerContext; second++)
-                {
-                    var futureTime = currentTime.Add(TimeSpan.FromSeconds(second));
-
-                    if (focusDictionary.TryGetValue(futureTime, out var future) && future.Unit.TimeSpanDied > futureTime)
-                    {
-                        var futureWeightedMore = entry.Value.Points > future.Points;
-
-                        if (futureWeightedMore)
-                        {
-                            focusDictionary[futureTime] = entry.Value;
-                        }
-                    }
-                    else focusDictionary.TryAdd(futureTime, entry.Value);
-                }
-
-                processed.Add((currentTime, entry.Value.Target));
-            }
 
             foreach (var entry in focusDictionary.Where(x => x.Value.Points >= settings.Weights.PlayerDeath).ToList())
             {
                 var currentTime = entry.Key;
 
-                if (processed.Contains((currentTime, entry.Value.Target)))
+                if (processed.Contains(entry.Value.Unit))
                 {
                     logger.LogWarning("PlayerDeath viewer 'context' time padding has already been processed. Skipping.");
                     continue;
@@ -180,7 +133,6 @@ namespace HeroesReplay.Core
                         {
                             focusDictionary[pastTime] = entry.Value;
                         }
-
                     }
                     else focusDictionary.TryAdd(pastTime, entry.Value);
                 }
@@ -202,7 +154,7 @@ namespace HeroesReplay.Core
                     else focusDictionary.TryAdd(futureTime, entry.Value);
                 }
 
-                processed.Add((currentTime, entry.Value.Target));
+                processed.Add(entry.Value.Unit);
             }
 
             return new ReadOnlyDictionary<TimeSpan, Focus>(

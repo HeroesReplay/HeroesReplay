@@ -35,7 +35,7 @@ namespace HeroesReplay.Core
             foreach (var teamOneUnit in teams[0])
             {
                 foreach (var teamTwoUnit in teams[1])
-                {
+                {                    
                     foreach (var teamTwoPos in teamTwoUnit.Positions.Where(p => p.TimeSpan == now))
                     {
                         foreach (var teamOnePos in teamOneUnit.Positions.Where(p => p.TimeSpan == now))

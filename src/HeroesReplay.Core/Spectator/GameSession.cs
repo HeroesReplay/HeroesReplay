@@ -105,15 +105,13 @@ namespace HeroesReplay.Core
 
         private async Task PanelLoopAsync()
         {
-            var panelTimes = new Dictionary<Panel, TimeSpan>()
+            Dictionary<Panel, TimeSpan> panelTimes = new ()
             {
-                { Panel.KillsDeathsAssists, settings.PanelTimes.KillsDeathsAssists },
-                { Panel.CarriedObjectives, settings.PanelTimes.CarriedObjectives },
-                { Panel.CrowdControlEnemyHeroes,settings.PanelTimes.CrowdControlEnemyHeroes },
-                { Panel.DeathDamageRole, settings.PanelTimes.DeathDamageRole },
                 { Panel.Talents, settings.PanelTimes.Talents },
+                { Panel.DeathDamageRole, settings.PanelTimes.DeathDamageRole },
+                { Panel.KillsDeathsAssists, settings.PanelTimes.KillsDeathsAssists },
                 { Panel.Experience, settings.PanelTimes.Experience },
-                { Panel.TimeDeadDeathsSelfSustain, settings.PanelTimes.TimeDeadDeathsSelfSustain  },
+                { Panel.CarriedObjectives, settings.PanelTimes.CarriedObjectives },  
                 { Panel.None, TimeSpan.Zero }
             };
 
@@ -152,27 +150,27 @@ namespace HeroesReplay.Core
 
                         if (shouldHide)
                         {
-                            controller.SendPanel(current); // press again, to hide
+                            controller.SendPanel(current);
                             visible = false;
-                            timeHidden = TimeSpan.Zero; // how long hidden ? 0 
-                            timeShown = TimeSpan.Zero; // how long shown ? 0
+                            timeHidden = TimeSpan.Zero;
+                            timeShown = TimeSpan.Zero;
                         }
 
                         bool shouldShow = current == Panel.None || timeHidden >= settings.Spectate.PanelDownTime || next != current;
 
-                        if (shouldShow) // if hidden for 15+ seconds
+                        if (shouldShow)
                         {
                             controller.SendPanel(next);
                             visible = true;
-                            timeShown = TimeSpan.Zero; // time shown set back to 0
-                            timeHidden = TimeSpan.Zero; // its not hidden
-                            current = next; // set the current to the new one
+                            timeShown = TimeSpan.Zero; 
+                            timeHidden = TimeSpan.Zero;
+                            current = next;
                         }
 
                         timeShown = timeShown.Add(visible ? second : TimeSpan.Zero);
                         timeHidden = timeHidden.Add(visible ? TimeSpan.Zero : second);
-
-                        logger.LogDebug(visible ? $"Panel shown for: {timeShown}" : $"Panel hidden for: {timeHidden}");
+                                                
+                        logger.LogDebug($"{Enum.GetName(typeof(Panel), current)}" + (visible ? $" shown for: {timeShown}" : $" hidden for: {timeHidden}"));
 
                         await Task.Delay(second).ConfigureAwait(false);
                     }
@@ -184,21 +182,16 @@ namespace HeroesReplay.Core
             }
         }
 
-        private Panel GetNextPanel(Panel current)
+        private Panel GetNextPanel(Panel current) => current switch
         {
-            return current switch
-            {
-                Panel.None => Panel.Talents,
-                Panel.KillsDeathsAssists => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.CrowdControlEnemyHeroes,
-                Panel.CarriedObjectives => Panel.CrowdControlEnemyHeroes,
-                Panel.CrowdControlEnemyHeroes => Panel.DeathDamageRole,
-                Panel.DeathDamageRole => Panel.Experience,
-                Panel.Experience => Panel.Talents,
-                Panel.Talents => Panel.TimeDeadDeathsSelfSustain,
-                Panel.TimeDeadDeathsSelfSustain => Panel.KillsDeathsAssists,
-                _ => Panel.Talents,
-            };
-        }
+            Panel.None => Panel.Talents,
+            Panel.Talents => Panel.KillsDeathsAssists,
+            Panel.KillsDeathsAssists => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.DeathDamageRole,
+            Panel.CarriedObjectives => Panel.DeathDamageRole,
+            Panel.DeathDamageRole => Panel.Experience,
+            Panel.Experience => Panel.Talents,            
+            _ => Panel.Talents,
+        };
 
         private async Task<(TimeSpan? Timer, bool EndDetected)> TryGetOcrTimer()
         {

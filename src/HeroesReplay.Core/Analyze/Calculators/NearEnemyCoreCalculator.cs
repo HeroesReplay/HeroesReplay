@@ -28,20 +28,18 @@ namespace HeroesReplay.Core
 
             foreach (Unit heroUnit in replay.Players.SelectMany(p => p.HeroUnits.Where(unit => unit.TimeSpanDied > now && unit.TimeSpanBorn < now)))
             {
-                foreach (Unit enemyUnit in replay.Units.Where(u => gameData.GetUnitGroup(u.Name) == Unit.UnitGroup.Structures && u.TimeSpanBorn < now && u.Team != heroUnit.Team && gameData.CoreUnits.Any(core => u.Name.Equals(core))))
+                foreach (Unit enemyUnit in replay.Units.Where(u => u.Team != heroUnit.Team && gameData.CoreUnits.Any(core => u.Name.Equals(core))))
                 {
-                    var positions = heroUnit.Positions.Where(p => p.Point.DistanceTo(enemyUnit.PointBorn) < settings.Spectate.MaxDistanceToCore);
+                    var nearCore = heroUnit.Positions.Any(p => p.TimeSpan == now && p.Point.DistanceTo(enemyUnit.PointBorn) < settings.Spectate.MaxDistanceToCore);
 
-                    foreach (Position heroPosition in positions)
+                    if (nearCore)
                     {
-                        var distance = heroPosition.Point.DistanceTo(enemyUnit.PointBorn);
-
                         yield return new Focus(
-                            GetType(), 
-                            heroUnit, 
-                            heroUnit.PlayerControlledBy, 
-                            settings.Weights.NearEnemyCore, 
-                            $"{heroUnit.PlayerControlledBy.Character} near enemy core: {enemyUnit.Name} ({distance})");
+                            GetType(),
+                            heroUnit,
+                            heroUnit.PlayerControlledBy,
+                            settings.Weights.NearEnemyCore,
+                            $"{heroUnit.PlayerControlledBy.Character} near enemy core: {enemyUnit.Name}.");
                     }
                 }
             }
