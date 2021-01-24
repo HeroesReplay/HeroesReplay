@@ -183,7 +183,7 @@ namespace HeroesReplay.Core.Providers
 
         private async Task<HeroesProfileReplay> GetNextReplayAsync()
         {
-            Version minVersion = settings.Spectate.MinVersionSupported;
+            Version version = settings.Spectate.VersionSupported;
 
             try
             {
@@ -204,10 +204,10 @@ namespace HeroesReplay.Core.Providers
                                          where r.Valid == 1
                                          where r.Id > MinReplayId
                                          let version = Version.Parse(r.GameVersion)
-                                         where version.Major == minVersion.Major && 
-                                               version.Minor == minVersion.Minor && 
-                                               version.Build == minVersion.Build && 
-                                               version.Revision == minVersion.Revision
+                                         where version.Major == version.Major && 
+                                               version.Minor == version.Minor && 
+                                               version.Build == version.Build && 
+                                               version.Revision == version.Revision
                                          where settings.HeroesProfileApi.GameTypes.Contains(r.GameType, StringComparer.CurrentCultureIgnoreCase)
                                          select r)
                                          .OrderBy(x => x.Id)
@@ -215,12 +215,12 @@ namespace HeroesReplay.Core.Providers
 
                                if (replay == null)
                                {
-                                   logger.LogInformation($"Replay not found with given Criteria. Setting MinReplayId = {MinReplayId}");
+                                   logger.LogWarning($"Replay not found with criteria. MinReplayId = {MinReplayId}");
                                    MinReplayId = response.Max(x => x.Id);
                                }
                                else
                                {
-                                   logger.LogInformation($"Replay found with given Criteria. Setting MinReplayId = {MinReplayId}");
+                                   logger.LogInformation($"Replay found. MinReplayId = {MinReplayId}");
                                    return replay;
                                }
                            }

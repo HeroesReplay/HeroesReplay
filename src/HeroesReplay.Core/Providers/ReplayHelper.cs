@@ -1,5 +1,6 @@
 ﻿using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+
 using Microsoft.Extensions.Logging;
 
 using System;
@@ -14,8 +15,8 @@ namespace HeroesReplay.Core.Providers
 
         public ReplayHelper(ILogger<ReplayHelper> logger, AppSettings settings)
         {
-            this.logger = logger;
-            this.settings = settings;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
         public bool TryGetReplayId(StormReplay stormReplay, out int replayId)
@@ -43,9 +44,9 @@ namespace HeroesReplay.Core.Providers
                 replayId = int.Parse(Path.GetFileName(path).Split(settings.StormReplay.Seperator)[0]);
                 return true;
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                logger.LogError(e, $"Could not parse the replay ID from {path}. Is it a S3 replay file with an ID?");
+                logger.LogWarning($"Could not parse the replay ID from {path}.");
             }
 
             return false;
@@ -60,11 +61,12 @@ namespace HeroesReplay.Core.Providers
                 gameType = Path.GetFileName(path).Split(settings.StormReplay.Seperator)[1];
                 return true;
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                logger.LogError(e, $"Could not extract GameType from {path}. Is it a S3 replay file with an ID?");
-                return false;
+                logger.LogWarning($"Could not extract GameType from {path}.");
             }
+
+            return false;
         }
     }
 }

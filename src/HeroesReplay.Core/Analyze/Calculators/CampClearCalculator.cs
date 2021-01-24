@@ -21,7 +21,7 @@ namespace HeroesReplay.Core
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
         }
 
-        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
         {
             if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
@@ -30,7 +30,8 @@ namespace HeroesReplay.Core
             {
                 if (unit.PlayerKilledBy != null)
                 {
-                    // no point focusing if they're so far away?
+                    // no point focusing if they're so far away
+                    // for example an azmodan Dunk or long range ability is going to look weird
                     bool isNearMercs = unit.PlayerKilledBy.HeroUnits.SelectMany(u => u.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(unit.PointDied) < settings.Spectate.MaxDistanceToClear)).Any();
 
                     if (isNearMercs)

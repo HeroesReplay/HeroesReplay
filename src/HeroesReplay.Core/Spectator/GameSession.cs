@@ -146,7 +146,9 @@ namespace HeroesReplay.Core
                             next = GetNextPanel(current);
                         }
 
-                        bool shouldHide = current != Panel.None && timeShown >= panelTimes[current];
+                        bool shouldHide = Timer > settings.Spectate.TalentsPanelStartTime && 
+                                          current != Panel.None && 
+                                          timeShown >= panelTimes[current];
 
                         if (shouldHide)
                         {
@@ -156,7 +158,9 @@ namespace HeroesReplay.Core
                             timeShown = TimeSpan.Zero;
                         }
 
-                        bool shouldShow = current == Panel.None || timeHidden >= settings.Spectate.PanelDownTime || next != current;
+                        bool shouldShow = current == Panel.None || 
+                                          timeHidden >= settings.Spectate.PanelDownTime || 
+                                          next != current;
 
                         if (shouldShow)
                         {

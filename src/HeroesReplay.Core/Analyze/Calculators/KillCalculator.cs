@@ -18,12 +18,14 @@ namespace HeroesReplay.Core
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
-        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
         {
             if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
 
-            var killers = replay.Players.SelectMany(x => x.HeroUnits).Where(u => u.TimeSpanDied == now && u.PlayerKilledBy != null).GroupBy(heroUnit => heroUnit.PlayerKilledBy);
+            var killers = replay.Players.SelectMany(x => x.HeroUnits)
+                .Where(u => u.TimeSpanDied == now && u.PlayerKilledBy != null)
+                .GroupBy(heroUnit => heroUnit.PlayerKilledBy);
 
             foreach (IGrouping<Player, Unit> killer in killers)
             {

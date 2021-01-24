@@ -16,6 +16,8 @@ namespace HeroesReplay.Core
 {
     public class ReplayAnalyzer : IReplayAnalzer
     {
+        private const string TrackerEventGatesOpen = "GatesOpen";
+
         private readonly IEnumerable<IFocusCalculator> calculators;
         private readonly IGameData gameData;
         private readonly ILogger<ReplayAnalyzer> logger;
@@ -23,10 +25,10 @@ namespace HeroesReplay.Core
 
         public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, AppSettings settings, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
         {
-            this.calculators = calculators;
-            this.gameData = gameData;
-            this.logger = logger;
-            this.settings = settings;
+            this.calculators = calculators ?? throw new ArgumentNullException(nameof(calculators));
+            this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
         public TimeSpan GetEnd(Replay replay)
@@ -47,7 +49,7 @@ namespace HeroesReplay.Core
 
             if (settings.ParseOptions.ShouldParseUnits)
             {
-                foreach (var deathTime in replay.Units.AsParallel().Where(u => Unit.UnitGroup.Hero.Equals(gameData.GetUnitGroup(u.Name)) && u.TimeSpanDied.HasValue).GroupBy(x => x.TimeSpanDied.GetValueOrDefault()))
+                foreach (var deathTime in replay.Players.SelectMany(x => x.HeroUnits).Where(u => u.TimeSpanDied.HasValue).GroupBy(x => x.TimeSpanDied.GetValueOrDefault()))
                 {
                     panels[deathTime.Key] = Panel.KillsDeathsAssists;
                 }
@@ -70,58 +72,46 @@ namespace HeroesReplay.Core
 
         public IReadOnlyDictionary<TimeSpan, Focus> GetPlayers(Replay replay)
         {
-            if (replay == null) throw new ArgumentNullException(nameof(replay));
+            if (replay == null)
+                throw new ArgumentNullException(nameof(replay));
 
             var focusDictionary = new ConcurrentDictionary<TimeSpan, Focus>();
-            var timeSpans = Enumerable.Range(-30, (int)replay.ReplayLength.TotalSeconds).Select(x => TimeSpan.FromSeconds(x)).ToList();
+            var timeSpans = Enumerable.Range(TimeSpan.Zero.Seconds, Convert.ToInt32(replay.ReplayLength.TotalSeconds)).Select(second => TimeSpan.FromSeconds(second)).ToList();
 
-            timeSpans.AsParallel().ForAll(timeSpan =>
-            {
-                var focuses = new List<Focus>(calculators.SelectMany(calculator => calculator.GetPlayers(timeSpan, replay)));
-
-                foreach (Focus focus in focuses)
+            timeSpans
+                .AsParallel()
+                .ForAll(second =>
                 {
-                    if (focusDictionary.TryGetValue(timeSpan, out Focus previous) && previous.Points < focus.Points)
+                    foreach (var focus in calculators.SelectMany(calculator => calculator.GetFocusPlayers(second, replay)))
                     {
-                        if (focusDictionary.TryUpdate(timeSpan, focus, previous))
+                        if (!focusDictionary.ContainsKey(second))
                         {
-                            logger.LogInformation($"Updating. Previous: {timeSpan}={previous.Points}. Now: {timeSpan}={focus.Points}");
+                            logger.LogInformation($"Added: {focus.Description}");
+                            focusDictionary[second] = focus;
                         }
-                        else
+                        else if (focusDictionary.ContainsKey(second) && focusDictionary[second].Points < focus.Points)
                         {
-                            logger.LogWarning($"Failed to update for {timeSpan}");
+                            logger.LogInformation($"Updated: {focus.Description}");
+                            focusDictionary[second] = focus;
                         }
                     }
-                    else
-                    {
-                        if (focusDictionary.TryAdd(timeSpan, focus))
-                        {
-                            logger.LogInformation($"Adding {timeSpan}={focus.Points}");
-                        }
-                        else
-                        {
-                            logger.LogWarning($"Failed to add for {timeSpan} because it already exists");
-                        }
-                    }
-                }
-            });
+                });
 
-            var processed = new List<Unit>();                      
+            var unitDied = new List<Unit>();
 
-            const int hisoricalViewerContext = 6;
-            const int presentViewerContext = 3;
+            var deathEntries = focusDictionary.Where(kv => kv.Value.Calculator == typeof(KillCalculator) || kv.Value.Calculator == typeof(DeathCalculator)).ToList();
 
-            foreach (var entry in focusDictionary.Where(x => x.Value.Points >= settings.Weights.PlayerDeath).ToList())
+            foreach (var entry in deathEntries)
             {
                 var currentTime = entry.Key;
 
-                if (processed.Contains(entry.Value.Unit))
+                if (unitDied.Contains(entry.Value.Unit))
                 {
-                    logger.LogWarning("PlayerDeath viewer 'context' time padding has already been processed. Skipping.");
+                    logger.LogWarning("Death viewer 'context' has already been processed. Skipping.");
                     continue;
                 }
 
-                for (int second = 1; second < hisoricalViewerContext; second++)
+                for (int second = 1; second < settings.Spectate.PastDeathContextTime.TotalSeconds; second++)
                 {
                     var pastTime = currentTime.Subtract(TimeSpan.FromSeconds(second));
 
@@ -130,15 +120,18 @@ namespace HeroesReplay.Core
                         var previousLessWeight = past.Points < entry.Value.Points;
 
                         if (previousLessWeight)
-                        {
+                        {                            
                             focusDictionary[pastTime] = entry.Value;
                         }
                     }
-                    else focusDictionary.TryAdd(pastTime, entry.Value);
+                    else
+                    {
+                        focusDictionary.TryAdd(pastTime, entry.Value);
+                    }
                 }
 
                 // Reduce jarring VX when the focus swaps after a kill
-                for (int second = 1; second < presentViewerContext; second++)
+                for (int second = 1; second < settings.Spectate.PresentDeathContextTime.TotalSeconds; second++)
                 {
                     var futureTime = currentTime.Add(TimeSpan.FromSeconds(second));
 
@@ -151,10 +144,13 @@ namespace HeroesReplay.Core
                             focusDictionary[futureTime] = entry.Value;
                         }
                     }
-                    else focusDictionary.TryAdd(futureTime, entry.Value);
+                    else
+                    {
+                         focusDictionary.TryAdd(futureTime, entry.Value);
+                    }
                 }
 
-                processed.Add(entry.Value.Unit);
+                unitDied.Add(entry.Value.Unit);
             }
 
             return new ReadOnlyDictionary<TimeSpan, Focus>(
@@ -170,7 +166,13 @@ namespace HeroesReplay.Core
                 );
         }
 
-        public TimeSpan GetStart(Replay replay) => replay.TrackerEvents.First(x => x.Data.dictionary[0].blobText == "GatesOpen").TimeSpan;
+        public TimeSpan GetStart(Replay replay)
+        {
+            if (replay == null)
+                throw new ArgumentNullException(nameof(replay));
+
+            return replay.TrackerEvents.First(x => x.Data.dictionary[0].blobText == TrackerEventGatesOpen).TimeSpan;
+        }
 
         public bool IsCarriedObjectiveMap(Replay replay) => replay != null && (settings.Maps.CarriedObjectives.Contains(replay.Map) ||
                                                                                settings.Maps.CarriedObjectives.Contains(replay.MapAlternativeName));

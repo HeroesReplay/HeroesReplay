@@ -16,25 +16,6 @@ namespace HeroesReplay.Core.Shared
 
             string[] segments = time.Split(seperator);
             return new TimeSpan(days: 0, hours: 0, minutes: int.Parse(segments[0]), seconds: int.Parse(segments[1]));
-        }
-
-        public static TimeSpan? RemoveNegativeOffset(this TimeSpan? timer, int gameLoopsOffset, int gameLoopsPerSecond)
-        {
-            if (timer != null)
-            {
-                var offset = (timer.Value.Seconds + gameLoopsOffset) / gameLoopsPerSecond;
-                var replayTimer = timer.Value.Add(TimeSpan.FromSeconds(offset));
-                return new TimeSpan?(new TimeSpan(replayTimer.Days, replayTimer.Hours, replayTimer.Minutes, replayTimer.Seconds, milliseconds: 0));
-            }
-
-            return null;
-        }
-
-        public static TimeSpan AddNegativeOffset(this TimeSpan timer, int gameLoopsOffset, int gameLoopsPerSecond)
-        {
-            var offset = (timer.Seconds + gameLoopsOffset) / gameLoopsPerSecond;
-            var replayTimer = timer.Subtract(TimeSpan.FromSeconds(offset));
-            return new TimeSpan(replayTimer.Days, replayTimer.Hours, replayTimer.Minutes, replayTimer.Seconds, milliseconds: 0);
-        }
+        }       
     }
 }

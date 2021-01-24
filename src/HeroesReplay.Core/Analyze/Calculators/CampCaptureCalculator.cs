@@ -16,28 +16,35 @@ namespace HeroesReplay.Core
         private readonly AppSettings settings;
         private readonly IGameData gameData;
 
+        private const string JungleCampCapture = nameof(JungleCampCapture);
+
         public CampCaptureCalculator(AppSettings settings, IGameData gameData)
         {
             this.settings = settings;
             this.gameData = gameData;
         }
 
-        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
         {
             if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
 
-            var events = replay.TrackerEvents.Where(trackerEvent => trackerEvent.TimeSpan == now && 
-                                                                    trackerEvent.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent && 
-                                                                    trackerEvent.Data.dictionary[0].blobText == "JungleCampCapture");
+            var campCaptures = replay.TrackerEvents.Where(trackerEvent => (trackerEvent.TimeSpan == now || 
+                                                                            (trackerEvent.TimeSpan.Add(TimeSpan.FromSeconds(1)) > now && 
+                                                                             trackerEvent.TimeSpan.Subtract(TimeSpan.FromSeconds(1)) < now)
+                                                                          ) &&
+                                                                    trackerEvent.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent &&
+                                                                    trackerEvent.Data.dictionary[0].blobText == JungleCampCapture);
 
-            foreach (TrackerEvent capture in events)
+            foreach (TrackerEvent capture in campCaptures)
             {
                 int teamId = (int)capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.GetValueOrDefault() - 1;
-                IEnumerable<Unit> mercenaries = replay.Units.Where(unit => gameData.GetUnitGroup(unit.Name) == Unit.UnitGroup.MercenaryCamp);
-                IEnumerable<Unit> captured = mercenaries.Where(unit => unit.TimeSpanBorn < capture.TimeSpan && unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10)) && unit.PlayerKilledBy != null && unit.PlayerKilledBy.Team == teamId);
 
-                foreach (Unit unit in captured)
+                foreach (Unit unit in replay.Units.Where(unit => unit.TimeSpanDied < capture.TimeSpan &&
+                                                                 unit.TimeSpanBorn < capture.TimeSpan &&
+                                                                 unit.PlayerKilledBy != null &&
+                                                                 unit.PlayerKilledBy.Team == teamId &&
+                                                                 unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10))))
                 {
                     var standardCamp = !gameData.BossUnits.Contains(unit.Name);
 

@@ -21,7 +21,7 @@ namespace HeroesReplay.Core
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
         }
 
-        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
         {
             if (replay == null) 
                 throw new ArgumentNullException(nameof(replay));

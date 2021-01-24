@@ -21,16 +21,16 @@ namespace HeroesReplay.Core
             this.gameData = gameData;
         }
 
-        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
         {
             if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
 
             foreach (Unit heroUnit in replay.Players.SelectMany(p => p.HeroUnits.Where(unit => unit.TimeSpanDied > now && unit.TimeSpanBorn < now)))
             {
-                foreach (Unit enemyUnit in replay.Units.Where(u => u.Team != heroUnit.Team && gameData.CoreUnits.Any(core => u.Name.Equals(core))))
+                foreach (Unit core in replay.Units.Where(u => u.Team != heroUnit.Team && gameData.CoreUnits.Any(core => u.Name.Equals(core, StringComparison.OrdinalIgnoreCase))))
                 {
-                    var nearCore = heroUnit.Positions.Any(p => p.TimeSpan == now && p.Point.DistanceTo(enemyUnit.PointBorn) < settings.Spectate.MaxDistanceToCore);
+                    var nearCore = heroUnit.Positions.Any(p => p.TimeSpan == now && p.Point.DistanceTo(core.PointBorn) <= settings.Spectate.MaxDistanceToCore);
 
                     if (nearCore)
                     {
@@ -39,7 +39,7 @@ namespace HeroesReplay.Core
                             heroUnit,
                             heroUnit.PlayerControlledBy,
                             settings.Weights.NearEnemyCore,
-                            $"{heroUnit.PlayerControlledBy.Character} near enemy core: {enemyUnit.Name}.");
+                            $"{heroUnit.PlayerControlledBy.Character} near enemy core: {core.Name}.");
                     }
                 }
             }

@@ -7,7 +7,7 @@ namespace HeroesReplay.Core.Configuration
     public record SpectateSettings
     {
        
-        public Version MinVersionSupported { get; init; }
+        public Version VersionSupported { get; init; }
         public int MinDistanceToSpawn { get; init; }
         public int MaxDistanceToCore { get; init; }
         public int MaxDistanceToEnemy { get; init; }
@@ -23,6 +23,9 @@ namespace HeroesReplay.Core.Configuration
         public TimeSpan PanelDownTime { get; init; }
         public TimeSpan TalentsPanelStartTime { get; init; }
         public TimeSpan WaitingTime { get; init; }
+
+        public TimeSpan PastDeathContextTime { get; init; }
+        public TimeSpan PresentDeathContextTime { get; init; }
 
         public IEnumerable<int> TalentLevels { get; init; }
         

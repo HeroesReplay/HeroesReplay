@@ -9,6 +9,6 @@ namespace HeroesReplay.Core
 {
     public interface IFocusCalculator
     {
-        IEnumerable<Focus> GetPlayers(TimeSpan timeSpan, Replay replay);
+        IEnumerable<Focus> GetFocusPlayers(TimeSpan timeSpan, Replay replay);
     }
 }

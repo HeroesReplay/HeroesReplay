@@ -9,16 +9,16 @@ using System.Linq;
 
 namespace HeroesReplay.Core
 {
-    public class CaptureBeaconCalculator : IFocusCalculator
+    public class NearCaptureBeaconCalculator : IFocusCalculator
     {
         private readonly AppSettings settings;
 
-        public CaptureBeaconCalculator(AppSettings settings)
+        public NearCaptureBeaconCalculator(AppSettings settings)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
 
-        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
         {
             if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
@@ -29,7 +29,8 @@ namespace HeroesReplay.Core
                                                                        unit.TimeSpanDied == null && 
                                                                        settings.HeroesToolChest.CaptureContains.Any(captureName => unit.Name.Contains(captureName))))
                 {
-                    var positions = heroUnit.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(captureUnit.PointBorn) < settings.Spectate.MaxDistanceToOwnerChange);
+                    var positions = heroUnit.Positions.Where(p => p.TimeSpan == now && 
+                                                                  p.Point.DistanceTo(captureUnit.PointBorn) < settings.Spectate.MaxDistanceToOwnerChange);
 
                     foreach (var position in positions)
                     {

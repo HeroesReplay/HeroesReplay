@@ -22,7 +22,7 @@ namespace HeroesReplay.Core
         }
 
         // https://github.com/ebshimizu/hots-parser/blob/master/parser.js#L2185
-        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
         {
             if (replay == null)
                 throw new ArgumentNullException(nameof(replay));

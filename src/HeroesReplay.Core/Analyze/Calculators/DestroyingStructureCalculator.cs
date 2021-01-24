@@ -26,7 +26,7 @@ namespace HeroesReplay.Core
             this.settings = settings;
             this.gameData = gameData;
         }
-        public IEnumerable<Focus> GetPlayers(TimeSpan now, Replay replay)
+        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
         {
             if (replay == null) 
                 throw new ArgumentNullException(nameof(replay));
