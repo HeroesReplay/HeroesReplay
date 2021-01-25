@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
 {
-    public class ReplayDetailsWriter
+    public class ReplayDetailsWriter : IReplayDetailsWriter
     {
         private readonly ILogger<ReplayDetailsWriter> logger;
         private readonly IGameData gameData;
@@ -29,7 +29,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
         public async Task WriteDetailsAsync(StormReplay replay)
         {
-            if(replay == null) 
+            if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
 
             try

@@ -8,7 +8,7 @@ using System.IO;
 
 namespace HeroesReplay.Core.Providers
 {
-    public class ReplayHelper
+    public class ReplayHelper : IReplayHelper
     {
         private readonly ILogger<ReplayHelper> logger;
         private readonly AppSettings settings;

@@ -54,7 +54,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(CaptureStub), CaptureMethod.BitBlt => typeof(CaptureBitBlt), _ => typeof(CaptureBitBlt) })
                 .AddSingleton(typeof(IGameController), settings.Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
                 .AddSingleton<IGameData, GameData>()
-                .AddSingleton<ReplayHelper>()
+                .AddSingleton<IReplayHelper, ReplayHelper>()
                 .AddSingleton<SessionHolder>()
                 .AddSingleton<OBSWebsocket>()
                 .AddSingleton<IAbilityDetector, AbilityDetector>()
@@ -73,7 +73,7 @@ namespace HeroesReplay.CLI
                     return new ApiSettings { AccessToken = settings.TwitchApi.AccessToken, ClientId = settings.TwitchApi.ClientId };
                 })
                 .AddSingleton<IHeroesProfileService, HeroesProfileService>()
-                .AddSingleton<ReplayDetailsWriter>()
+                .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
                 .AddSingleton(typeof(IReplayProvider), replayProvider)
                 .AddSingleton<SaltySadism>();
         }

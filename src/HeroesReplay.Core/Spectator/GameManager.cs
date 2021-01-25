@@ -17,9 +17,9 @@ namespace HeroesReplay.Core
         private readonly IGameController gameController;
         private readonly ISessionHolder sessionHolder;
         private readonly IObsController obsController;
-        private readonly ReplayDetailsWriter replayDetailsWriter;
+        private readonly IReplayDetailsWriter replayDetailsWriter;
 
-        public GameManager(AppSettings settings, ISessionCreator sessionCreator, IGameSession session, IHeroesProfileService heroesProfileService, IGameController gameController, ISessionHolder sessionHolder, IObsController obsController, ReplayDetailsWriter replayDetailsWriter)
+        public GameManager(AppSettings settings, ISessionCreator sessionCreator, IGameSession session, IHeroesProfileService heroesProfileService, IGameController gameController, ISessionHolder sessionHolder, IObsController obsController, IReplayDetailsWriter replayDetailsWriter)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.sessionCreater = sessionCreator ?? throw new ArgumentNullException(nameof(sessionCreator));

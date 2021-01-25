@@ -39,7 +39,7 @@ namespace HeroesReplay.Core
             var ended = DateTime.Now;
             var duration = ended - started;
 
-            logger.LogDebug($"Time to create session data: {duration}");
+            logger.LogInformation($"Time to create session data: {duration}");
 
             logger.LogInformation($"Session set for: {stormReplay.Path}");
         }

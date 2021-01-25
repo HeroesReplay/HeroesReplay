@@ -39,10 +39,9 @@ namespace HeroesReplay.Core.Processes
                     return bitmap;
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                Logger.LogError(e, "Could not capture handle");
-
+                Logger.LogWarning($"Could not capture handle: {handle}");
                 throw;
             }
         }

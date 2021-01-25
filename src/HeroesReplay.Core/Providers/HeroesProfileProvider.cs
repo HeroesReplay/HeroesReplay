@@ -28,7 +28,7 @@ namespace HeroesReplay.Core.Providers
     {
         private readonly AppSettings settings;
         private readonly CancellationTokenProvider provider;
-        private readonly ReplayHelper replayHelper;
+        private readonly IReplayHelper replayHelper;
         private readonly ILogger<HeroesProfileProvider> logger;
         private readonly IHeroesProfileService heroesProfileService;
         private int minReplayId;
@@ -69,7 +69,7 @@ namespace HeroesReplay.Core.Providers
             }
         }
 
-        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, IHeroesProfileService heroesProfileService, CancellationTokenProvider provider, ReplayHelper replayHelper, AppSettings settings)
+        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, IHeroesProfileService heroesProfileService, CancellationTokenProvider provider, IReplayHelper replayHelper, AppSettings settings)
         {
             this.provider = provider;
             this.replayHelper = replayHelper;
@@ -183,7 +183,7 @@ namespace HeroesReplay.Core.Providers
 
         private async Task<HeroesProfileReplay> GetNextReplayAsync()
         {
-            Version version = settings.Spectate.VersionSupported;
+            Version supportedVersion = settings.Spectate.VersionSupported;
 
             try
             {
@@ -204,10 +204,10 @@ namespace HeroesReplay.Core.Providers
                                          where r.Valid == 1
                                          where r.Id > MinReplayId
                                          let version = Version.Parse(r.GameVersion)
-                                         where version.Major == version.Major && 
-                                               version.Minor == version.Minor && 
-                                               version.Build == version.Build && 
-                                               version.Revision == version.Revision
+                                         where supportedVersion.Major == version.Major &&
+                                               supportedVersion.Minor == version.Minor &&
+                                               supportedVersion.Build == version.Build &&
+                                               supportedVersion.Revision == version.Revision
                                          where settings.HeroesProfileApi.GameTypes.Contains(r.GameType, StringComparer.CurrentCultureIgnoreCase)
                                          select r)
                                          .OrderBy(x => x.Id)

@@ -6,3 +6,8 @@
 using System.Diagnostics.CodeAnalysis;
 
 [assembly: SuppressMessage("Design", "CA1031:Do not catch general exception types")]
+
+namespace System.Runtime.CompilerServices
+{
+    internal static class IsExternalInit { }
+}

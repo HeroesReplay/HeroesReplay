@@ -16,10 +16,10 @@ namespace HeroesReplay.Core.Providers
     {
         private readonly ILogger<ReplayDirectoryProvider> logger;
         private readonly AppSettings settings;
-        private readonly ReplayHelper replayHelper;
+        private readonly IReplayHelper replayHelper;
         private readonly Queue<string> queue;
 
-        public ReplayFileProvider(ILogger<ReplayDirectoryProvider> logger, AppSettings settings, ReplayHelper replayHelper)
+        public ReplayFileProvider(ILogger<ReplayDirectoryProvider> logger, AppSettings settings, IReplayHelper replayHelper)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));

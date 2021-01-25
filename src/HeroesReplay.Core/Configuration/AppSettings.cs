@@ -1,11 +1,6 @@
 ﻿using System;
 using System.IO;
 
-namespace System.Runtime.CompilerServices
-{
-    public class IsExternalInit { }
-}
-
 namespace HeroesReplay.Core.Configuration
 {
     public class AppSettings

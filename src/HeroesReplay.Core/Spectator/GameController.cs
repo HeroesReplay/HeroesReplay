@@ -46,7 +46,7 @@ namespace HeroesReplay.Core
             VirtualKey.VK_KEY_0
         };
 
-        private bool IsLaunched => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).Any();
+        private bool IsLaunched => Game != null;
         private Process Game => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
         private IntPtr Handle => Game?.MainWindowHandle ?? IntPtr.Zero;
 
@@ -269,9 +269,9 @@ namespace HeroesReplay.Core
 
                 throw new Exception($"Unhandled segments: {segments.Length}");
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                logger.LogError(e, $"Could not parse the timespan: {text ?? string.Empty}");                
+                logger.LogWarning($"Could not parse the timer: {text ?? string.Empty}");                
             }
 
             return null;
