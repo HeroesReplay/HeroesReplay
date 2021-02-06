@@ -11,6 +11,8 @@ namespace HeroesReplay.Core.Configuration
         public OBSSettings OBS { get; init; }
         public StormReplaySettings StormReplay { get; init; }
         public HeroesProfileApiSettings HeroesProfileApi { get; init; }
+        public HeroesProfileTwitchExtensionSettings TwitchExtension { get; init; }
+        public TrackerEventSettings TrackerEvents { get; init; }
         public WeightSettings Weights { get; init; }
         public ReplayDetailsWriterSettings ReplayDetailsWriter { get; init; }
         public TwitchApiSettings TwitchApi { get; init; }

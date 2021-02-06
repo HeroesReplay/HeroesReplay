@@ -17,6 +17,13 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         private readonly ILogger<HeroesProfileService> logger;
         private readonly AppSettings settings;
 
+        private const string CreateReplayUrl = @"twitch/extension/save/replay";
+        private const string UpdateReplayUrl = @"twitch/extension/update/replay/";
+        private const string CreatePlayerUrl = @"twitch/extension/save/player";
+        private const string UpdatePlayerUrl = @"twitch/extension/update/player";
+        private const string SaveTalentUrl = @"twitch/extension/save/talent";
+        private const string NotifyUrl = @"twitch/extension/notify/talent/update";
+
         public HeroesProfileService(ILogger<HeroesProfileService> logger, AppSettings settings)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -24,6 +31,32 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         }
 
         public Uri GetMatchLink(StormReplay stormReplay) => new Uri($"{stormReplay?.ReplayId}");
+
+        public async Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload)
+        {
+            // TODO: Polly
+            using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+            {
+                var response = await client.PostAsync(CreateReplayUrl, new FormUrlEncodedContent(payload.Content[0]));
+
+                if (response.IsSuccessStatusCode)
+                {
+                    string result = await response.Content.ReadAsStringAsync();
+
+                    if (int.TryParse(result, out _))
+                    {
+                        return result;
+                    }
+                }
+                else
+                {
+                    logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                }
+            }
+
+            return null;
+        }
+
 
         public async Task<(int RankPoints, string Tier)> GetMMRAsync(StormReplay stormReplay)
         {
@@ -86,6 +119,151 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             }
 
             return Enumerable.Empty<HeroesProfileReplay>();
+        }
+
+        public async Task CreatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId)
+        {
+            if (payload == null)
+                throw new ArgumentNullException(nameof(payload));
+
+            if (sessionId == null)
+                throw new ArgumentNullException(nameof(sessionId));
+
+            try
+            {
+                payload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
+
+                // TODO: Polly
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                {
+                    foreach (var content in payload.Content)
+                    {
+                        var response = await client.PostAsync(CreatePlayerUrl, new FormUrlEncodedContent(content));
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            logger.LogInformation("Player data created.");
+                        }
+                        else
+                        {
+                            logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not create player data.");
+            }
+        }
+
+        public async Task UpdateReplayDataAsync(HeroesProfileTwitchPayload payload, string sessionId)
+        {
+            if (payload == null)
+                throw new ArgumentNullException(nameof(payload));
+
+            if (sessionId == null)
+                throw new ArgumentNullException(nameof(sessionId));
+
+            try
+            {
+                payload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
+
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                {
+                    foreach (var content in payload.Content)
+                    {
+                        var response = await client.PostAsync(UpdateReplayUrl, new FormUrlEncodedContent(content));
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            logger.LogInformation("Replay data updated.");
+                        }
+                        else
+                        {
+                            logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not update replay data.");
+            }
+        }
+
+        public async Task UpdatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId)
+        {
+            if (payload == null)
+                throw new ArgumentNullException(nameof(payload));
+
+            if (sessionId == null)
+                throw new ArgumentNullException(nameof(sessionId));
+
+            try
+            {
+                payload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
+
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                {
+                    foreach (var playerContent in payload.Content)
+                    {
+                        var response = await client.PostAsync(UpdatePlayerUrl, new FormUrlEncodedContent(playerContent));
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            logger.LogInformation("Player data created.");
+                        }
+                        else
+                        {
+                            logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not update player data.");
+            }
+        }
+
+        public async Task UpdatePlayerTalentsAsync(List<HeroesProfileTwitchPayload> talentPayloads, string sessionId)
+        {
+            if (talentPayloads == null)
+                throw new ArgumentNullException(nameof(talentPayloads));
+
+            if (sessionId == null)
+                throw new ArgumentNullException(nameof(sessionId));
+
+            using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+            {
+                foreach (var talentPayload in talentPayloads)
+                {
+                    talentPayload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
+
+                    foreach (var content in talentPayload.Content)
+                    {
+                        var response = await client.PostAsync(SaveTalentUrl, new FormUrlEncodedContent(content));
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            logger.LogInformation("Replay data updated.");
+                        }
+                        else
+                        {
+                            logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                        }
+                    }
+                }
+
+                await client.PostAsync(NotifyUrl, new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    { settings.TwitchExtension.TwitchApiKey, settings.TwitchExtension.APIKey },
+                    { settings.TwitchExtension.TwitchEmailKey, settings.TwitchExtension.APIEmail },
+                    { settings.TwitchExtension.TwitchUserNameKey, settings.TwitchExtension.TwitchUserName },
+                    { settings.TwitchExtension.UserIdKey, settings.TwitchExtension.ApiUserId },
+                }));
+            }
         }
     }
 }

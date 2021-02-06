@@ -18,6 +18,7 @@ using Windows.Storage.Streams;
 
 using static PInvoke.User32;
 using HeroesReplay.Core.Configuration;
+using Polly.CircuitBreaker;
 
 namespace HeroesReplay.Core
 {
@@ -408,7 +409,20 @@ namespace HeroesReplay.Core
         {
             try
             {
-                Game?.Kill();
+                Policy
+                    .Handle<Exception>()
+                    .OrResult<bool>(result => result == true)
+                    .WaitAndRetry(retryCount: 10, sleepDurationProvider: retry => settings.OCR.CheckSleepDuration)
+                    .Execute(() =>
+                    {
+                        foreach(var process in Process.GetProcessesByName(this.settings.Process.HeroesOfTheStorm))
+                        {
+                            process.Kill();
+                        }
+
+                        return !Process.GetProcessesByName(this.settings.Process.HeroesOfTheStorm).Any();
+                    });
+
                 logger.LogInformation("Game process has been killed.");
             }
             catch (Exception e)

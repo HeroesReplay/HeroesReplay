@@ -1,5 +1,6 @@
 ﻿using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,7 @@ namespace HeroesReplay.Core
     public class GameSession : IGameSession
     {
         private readonly IGameController controller;
+        private readonly IHeroesProfileService heroesProfileService;
         private readonly ILogger<GameSession> logger;
         private readonly AppSettings settings;
         private readonly CancellationTokenProvider tokenProvider;
@@ -30,12 +32,19 @@ namespace HeroesReplay.Core
 
         private SessionData Data => sessionHolder.SessionData;
 
-        public GameSession(ILogger<GameSession> logger, AppSettings settings, ISessionHolder sessionHolder, IGameController controller, CancellationTokenProvider tokenProvider)
+        public GameSession(
+            ILogger<GameSession> logger,
+            AppSettings settings,
+            ISessionHolder sessionHolder,
+            IGameController controller,
+            IHeroesProfileService heroesProfileService,
+            CancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.sessionHolder = sessionHolder ?? throw new ArgumentNullException(nameof(sessionHolder));
             this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
+            this.heroesProfileService = heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         }
 
@@ -47,7 +56,69 @@ namespace HeroesReplay.Core
             await Task.WhenAll(
                 Task.Run(PanelLoopAsync, Token),
                 Task.Run(FocusLoopAsync, Token),
+                Task.Run(TalentsLoopAsync, Token),
                 Task.Run(StateLoopAsync, Token)).ConfigureAwait(false);
+        }
+
+        private async Task TalentsLoopAsync()
+        {
+            string sessionId = null;
+
+            while (State != State.EndDetected && settings.TwitchExtension.Enabled)
+            {
+                Token.ThrowIfCancellationRequested();
+
+                try
+                {
+                    // Creation Steps
+                    while (this.Data.Payloads.Create.TryDequeue(out var payload))
+                    {
+                        switch (payload.Step)
+                        {
+                            case HeroesProfileTwitchExtensionStep.CreateReplayData:
+                                {
+                                    sessionId = await heroesProfileService.CreateReplaySessionAsync(payload);
+                                    break;
+                                }
+                            case HeroesProfileTwitchExtensionStep.CreatePlayerData:
+                                {
+                                    await heroesProfileService.CreatePlayerDataAsync(payload, sessionId);
+                                    break;
+                                }
+                        }
+                    }
+
+                    // Update Steps
+                    while (this.Data.Payloads.Update.TryDequeue(out var payload))
+                    {
+                        switch (payload.Step)
+                        {
+                            case HeroesProfileTwitchExtensionStep.UpdateReplayData:
+                                {
+                                    await heroesProfileService.UpdatePlayerDataAsync(payload, sessionId);
+                                    break;
+                                }
+                            case HeroesProfileTwitchExtensionStep.UpdatePlayerData:
+                                {
+                                    await heroesProfileService.UpdatePlayerDataAsync(payload, sessionId);
+                                    break;
+                                }
+                        }
+                    }
+
+                    // Talent steps
+                    if (Data.Payloads.Talents.ContainsKey(Timer))
+                    {
+                        await heroesProfileService.UpdatePlayerTalentsAsync(Data.Payloads.Talents[Timer], sessionId);
+                    }
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, "Could not complete Heroes Profile Talents loop");
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
+            }
         }
 
         private async Task StateLoopAsync()
@@ -105,13 +176,13 @@ namespace HeroesReplay.Core
 
         private async Task PanelLoopAsync()
         {
-            Dictionary<Panel, TimeSpan> panelTimes = new ()
+            Dictionary<Panel, TimeSpan> panelTimes = new()
             {
                 { Panel.Talents, settings.PanelTimes.Talents },
                 { Panel.DeathDamageRole, settings.PanelTimes.DeathDamageRole },
                 { Panel.KillsDeathsAssists, settings.PanelTimes.KillsDeathsAssists },
                 { Panel.Experience, settings.PanelTimes.Experience },
-                { Panel.CarriedObjectives, settings.PanelTimes.CarriedObjectives },  
+                { Panel.CarriedObjectives, settings.PanelTimes.CarriedObjectives },
                 { Panel.None, TimeSpan.Zero }
             };
 
@@ -139,15 +210,17 @@ namespace HeroesReplay.Core
                         else if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != current)
                         {
                             logger.LogDebug($"Data panels timer match found at: {Timer}");
-                            next = panel;
+
+                            if (current != Panel.Talents)
+                                next = panel; // It's not important enough to show KDA over Talents
                         }
                         else if (timeHidden >= settings.Spectate.PanelDownTime)
                         {
                             next = GetNextPanel(current);
                         }
 
-                        bool shouldHide = Timer > settings.Spectate.TalentsPanelStartTime && 
-                                          current != Panel.None && 
+                        bool shouldHide = Timer > settings.Spectate.TalentsPanelStartTime &&
+                                          current != Panel.None &&
                                           timeShown >= panelTimes[current];
 
                         if (shouldHide)
@@ -158,22 +231,22 @@ namespace HeroesReplay.Core
                             timeShown = TimeSpan.Zero;
                         }
 
-                        bool shouldShow = current == Panel.None || 
-                                          timeHidden >= settings.Spectate.PanelDownTime || 
+                        bool shouldShow = current == Panel.None ||
+                                          timeHidden >= settings.Spectate.PanelDownTime ||
                                           next != current;
 
                         if (shouldShow)
                         {
                             controller.SendPanel(next);
                             visible = true;
-                            timeShown = TimeSpan.Zero; 
+                            timeShown = TimeSpan.Zero;
                             timeHidden = TimeSpan.Zero;
                             current = next;
                         }
 
                         timeShown = timeShown.Add(visible ? second : TimeSpan.Zero);
                         timeHidden = timeHidden.Add(visible ? TimeSpan.Zero : second);
-                                                
+
                         logger.LogDebug($"{Enum.GetName(typeof(Panel), current)}" + (visible ? $" shown for: {timeShown}" : $" hidden for: {timeHidden}"));
 
                         await Task.Delay(second).ConfigureAwait(false);
@@ -189,11 +262,11 @@ namespace HeroesReplay.Core
         private Panel GetNextPanel(Panel current) => current switch
         {
             Panel.None => Panel.Talents,
-            Panel.Talents => Panel.KillsDeathsAssists,
+            Panel.Talents => Panel.DeathDamageRole,
             Panel.KillsDeathsAssists => Data.IsCarriedObjectiveMap ? Panel.CarriedObjectives : Panel.DeathDamageRole,
             Panel.CarriedObjectives => Panel.DeathDamageRole,
             Panel.DeathDamageRole => Panel.Experience,
-            Panel.Experience => Panel.Talents,            
+            Panel.Experience => Panel.Talents,
             _ => Panel.Talents,
         };
 
