@@ -33,12 +33,32 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 {
                     case HeroesProfileTwitchExtensionStep.CreateReplayData:
                         {
-                            SessionId = await heroesProfileService.CreateReplaySessionAsync(payload);
+                            string session = null;
+
+                            while (session == null)
+                            {
+                                session = await heroesProfileService.CreateReplaySessionAsync(payload).ConfigureAwait(false);
+
+                                if (session == null)
+                                {
+                                    await Task.Delay(TimeSpan.FromSeconds(1));
+                                }
+                            }
                             break;
                         }
                     case HeroesProfileTwitchExtensionStep.CreatePlayerData:
                         {
-                            await heroesProfileService.CreatePlayerDataAsync(payload, SessionId);
+                            bool created = false;
+
+                            while (!created)
+                            {
+                                created = await heroesProfileService.CreatePlayerDataAsync(payload, SessionId).ConfigureAwait(false);
+
+                                if (!created)
+                                {
+                                    await Task.Delay(TimeSpan.FromSeconds(1));
+                                }
+                            }
                             break;
                         }
                 }
@@ -51,12 +71,32 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 {
                     case HeroesProfileTwitchExtensionStep.UpdateReplayData:
                         {
-                            await heroesProfileService.UpdateReplayDataAsync(payload, SessionId);
+                            bool updated = false;
+
+                            while (!updated)
+                            {
+                                updated = await heroesProfileService.UpdateReplayDataAsync(payload, SessionId).ConfigureAwait(false);
+
+                                if (!updated)
+                                {
+                                    await Task.Delay(TimeSpan.FromSeconds(1));
+                                }
+                            }
                             break;
                         }
                     case HeroesProfileTwitchExtensionStep.UpdatePlayerData:
                         {
-                            await heroesProfileService.UpdatePlayerDataAsync(payload, SessionId);
+                            bool updated = false;
+
+                            if (!updated)
+                            {
+                                await heroesProfileService.UpdatePlayerDataAsync(payload, SessionId).ConfigureAwait(false);
+
+                                if (!updated)
+                                {
+                                    await Task.Delay(TimeSpan.FromSeconds(1));
+                                }
+                            }
                             break;
                         }
                 }
@@ -71,11 +111,15 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 {
                     logger.LogInformation($"Talents at {talentTime} was found during timer: {timer}");
 
-                    await heroesProfileService.UpdatePlayerTalentsAsync(Data.Payloads.Talents[talentTime], SessionId);
+                    bool success = await heroesProfileService.UpdatePlayerTalentsAsync(Data.Payloads.Talents[talentTime], SessionId).ConfigureAwait(false);
 
-                    if (Data.Payloads.Talents.Remove(talentTime))
+                    if (success)
                     {
-                        logger.LogInformation($"Removed talents key: {talentTime}");
+                        if (Data.Payloads.Talents.Remove(talentTime))
+                        {
+                            logger.LogInformation($"Removed talents key: {talentTime}");
+                            await heroesProfileService.NotifyTwitchAsync().ConfigureAwait(false);
+                        }
                     }
                 }
             }
