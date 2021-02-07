@@ -15,6 +15,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload);
         Task CreatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId);
         Task UpdatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId);
+        Task UpdateReplayDataAsync(HeroesProfileTwitchPayload payload, string sessionId);
         Task UpdatePlayerTalentsAsync(List<HeroesProfileTwitchPayload> lists, string sessionId);
     }
 }

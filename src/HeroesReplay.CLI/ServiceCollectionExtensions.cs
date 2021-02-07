@@ -75,6 +75,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IHeroesProfileService, HeroesProfileService>()
                 .AddSingleton<IHeroesProfileExtensionPayloadsBuilder, HeroesProfileExtensionPayloadsBuilder>()
                 .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
+                .AddSingleton<ITalentNotifier, TalentNotifier>()
                 .AddSingleton(typeof(IReplayProvider), replayProvider)
                 .AddSingleton<SaltySadism>();
         }

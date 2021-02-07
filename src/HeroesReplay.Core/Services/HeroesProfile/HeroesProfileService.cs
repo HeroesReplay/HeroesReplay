@@ -17,12 +17,12 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         private readonly ILogger<HeroesProfileService> logger;
         private readonly AppSettings settings;
 
-        private const string CreateReplayUrl = @"twitch/extension/save/replay";
-        private const string UpdateReplayUrl = @"twitch/extension/update/replay/";
-        private const string CreatePlayerUrl = @"twitch/extension/save/player";
-        private const string UpdatePlayerUrl = @"twitch/extension/update/player";
-        private const string SaveTalentUrl = @"twitch/extension/save/talent";
-        private const string NotifyUrl = @"twitch/extension/notify/talent/update";
+        private const string CreateReplayUrl = @"save/replay";
+        private const string UpdateReplayUrl = @"update/replay/";
+        private const string CreatePlayerUrl = @"save/player";
+        private const string UpdatePlayerUrl = @"update/player";
+        private const string SaveTalentUrl = @"save/talent";
+        private const string NotifyUrl = @"notify/talent/update";
 
         public HeroesProfileService(ILogger<HeroesProfileService> logger, AppSettings settings)
         {
@@ -35,9 +35,9 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         public async Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload)
         {
             // TODO: Polly
-            using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+            using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
             {
-                var response = await client.PostAsync(CreateReplayUrl, new FormUrlEncodedContent(payload.Content[0]));
+                var response = await client.PostAsync(CreateReplayUrl, new FormUrlEncodedContent(payload.Content.Single()));
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -56,7 +56,6 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             return null;
         }
-
 
         public async Task<(int RankPoints, string Tier)> GetMMRAsync(StormReplay stormReplay)
         {
@@ -134,7 +133,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 payload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
 
                 // TODO: Polly
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                 {
                     foreach (var content in payload.Content)
                     {
@@ -169,20 +168,17 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             {
                 payload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
 
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                 {
-                    foreach (var content in payload.Content)
-                    {
-                        var response = await client.PostAsync(UpdateReplayUrl, new FormUrlEncodedContent(content));
+                    var response = await client.PostAsync(UpdateReplayUrl, new FormUrlEncodedContent(payload.Content.Single()));
 
-                        if (response.IsSuccessStatusCode)
-                        {
-                            logger.LogInformation("Replay data updated.");
-                        }
-                        else
-                        {
-                            logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
-                        }
+                    if (response.IsSuccessStatusCode)
+                    {
+                        logger.LogInformation("Replay data updated.");
+                    }
+                    else
+                    {
+                        logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
                     }
                 }
             }
@@ -204,7 +200,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             {
                 payload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
 
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                 {
                     foreach (var playerContent in payload.Content)
                     {
@@ -235,34 +231,68 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             if (sessionId == null)
                 throw new ArgumentNullException(nameof(sessionId));
 
-            using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+            try
             {
-                foreach (var talentPayload in talentPayloads)
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                 {
-                    talentPayload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
-
-                    foreach (var content in talentPayload.Content)
+                    foreach (var talentPayload in talentPayloads)
                     {
-                        var response = await client.PostAsync(SaveTalentUrl, new FormUrlEncodedContent(content));
+                        talentPayload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
 
-                        if (response.IsSuccessStatusCode)
+                        foreach (var content in talentPayload.Content)
                         {
-                            logger.LogInformation("Replay data updated.");
-                        }
-                        else
-                        {
-                            logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                            Dictionary<string, string> clone = new Dictionary<string, string>();
+
+                            foreach (var item in content)
+                            {
+                                if (item.Key == settings.TwitchExtension.TwitchApiKey ||
+                                    item.Key == settings.TwitchExtension.TwitchEmailKey ||
+                                    item.Key == settings.TwitchExtension.UserIdKey)
+                                {
+                                    continue;
+                                }
+
+                                clone[item.Key] = item.Value;
+                            }
+
+                            var talentJson = JsonSerializer.Serialize(clone, typeof(Dictionary<string, string>), new JsonSerializerOptions { WriteIndented = true });
+
+                            logger.LogInformation(talentJson);
+
+                            var talentResponse = await client.PostAsync(SaveTalentUrl, new FormUrlEncodedContent(content));
+
+                            if (talentResponse.IsSuccessStatusCode)
+                            {
+                                logger.LogInformation("Talent updated.");
+                            }
+                            else
+                            {
+                                logger.LogError($"Talent failure: {talentResponse.StatusCode} ({talentResponse.ReasonPhrase})");
+                            }
                         }
                     }
-                }
 
-                await client.PostAsync(NotifyUrl, new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    { settings.TwitchExtension.TwitchApiKey, settings.TwitchExtension.APIKey },
-                    { settings.TwitchExtension.TwitchEmailKey, settings.TwitchExtension.APIEmail },
-                    { settings.TwitchExtension.TwitchUserNameKey, settings.TwitchExtension.TwitchUserName },
-                    { settings.TwitchExtension.UserIdKey, settings.TwitchExtension.ApiUserId },
-                }));
+                    var notifyResponse = await client.PostAsync(NotifyUrl, new FormUrlEncodedContent(new Dictionary<string, string>
+                    {
+                        { settings.TwitchExtension.TwitchApiKey, settings.TwitchExtension.ApiKey },
+                        { settings.TwitchExtension.TwitchEmailKey, settings.TwitchExtension.ApiEmail },
+                        { settings.TwitchExtension.TwitchUserNameKey, settings.TwitchExtension.TwitchUserName },
+                        { settings.TwitchExtension.UserIdKey, settings.TwitchExtension.ApiUserId },
+                    }));
+
+                    if (notifyResponse.IsSuccessStatusCode)
+                    {
+                        logger.LogInformation("Notify successful.");
+                    }
+                    else
+                    {
+                        logger.LogError($"Notify failure: {notifyResponse.StatusCode} ({notifyResponse.ReasonPhrase})");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, $"Could not update talents.");
             }
         }
     }

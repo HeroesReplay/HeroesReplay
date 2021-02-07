@@ -18,7 +18,7 @@ namespace HeroesReplay.Core
     public class GameSession : IGameSession
     {
         private readonly IGameController controller;
-        private readonly IHeroesProfileService heroesProfileService;
+        private readonly ITalentNotifier talentsNotifier;
         private readonly ILogger<GameSession> logger;
         private readonly AppSettings settings;
         private readonly CancellationTokenProvider tokenProvider;
@@ -37,14 +37,14 @@ namespace HeroesReplay.Core
             AppSettings settings,
             ISessionHolder sessionHolder,
             IGameController controller,
-            IHeroesProfileService heroesProfileService,
+            ITalentNotifier talentsNotifier,
             CancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.sessionHolder = sessionHolder ?? throw new ArgumentNullException(nameof(sessionHolder));
             this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
-            this.heroesProfileService = heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
+            this.talentsNotifier = talentsNotifier ?? throw new ArgumentNullException(nameof(talentsNotifier));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         }
 
@@ -62,62 +62,34 @@ namespace HeroesReplay.Core
 
         private async Task TalentsLoopAsync()
         {
-            string sessionId = null;
-
-            while (State != State.EndDetected && settings.TwitchExtension.Enabled)
+            if (settings.TwitchExtension.Enabled)
             {
-                Token.ThrowIfCancellationRequested();
-
                 try
                 {
-                    // Creation Steps
-                    while (this.Data.Payloads.Create.TryDequeue(out var payload))
-                    {
-                        switch (payload.Step)
-                        {
-                            case HeroesProfileTwitchExtensionStep.CreateReplayData:
-                                {
-                                    sessionId = await heroesProfileService.CreateReplaySessionAsync(payload);
-                                    break;
-                                }
-                            case HeroesProfileTwitchExtensionStep.CreatePlayerData:
-                                {
-                                    await heroesProfileService.CreatePlayerDataAsync(payload, sessionId);
-                                    break;
-                                }
-                        }
-                    }
-
-                    // Update Steps
-                    while (this.Data.Payloads.Update.TryDequeue(out var payload))
-                    {
-                        switch (payload.Step)
-                        {
-                            case HeroesProfileTwitchExtensionStep.UpdateReplayData:
-                                {
-                                    await heroesProfileService.UpdatePlayerDataAsync(payload, sessionId);
-                                    break;
-                                }
-                            case HeroesProfileTwitchExtensionStep.UpdatePlayerData:
-                                {
-                                    await heroesProfileService.UpdatePlayerDataAsync(payload, sessionId);
-                                    break;
-                                }
-                        }
-                    }
-
-                    // Talent steps
-                    if (Data.Payloads.Talents.ContainsKey(Timer))
-                    {
-                        await heroesProfileService.UpdatePlayerTalentsAsync(Data.Payloads.Talents[Timer], sessionId);
-                    }
+                    await talentsNotifier.TryInitializeSessionAsync().ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
-                    logger.LogError(e, "Could not complete Heroes Profile Talents loop");
+                    logger.LogError(e, "Could not initialize Talents session");
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
+                while (State != State.EndDetected && talentsNotifier.SessionCreated)
+                {
+                    Token.ThrowIfCancellationRequested();
+
+                    try
+                    {
+                        await talentsNotifier.SendCurrentTalentsAsync(Timer).ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        logger.LogError(e, "Could not complete Heroes Profile Talents loop");
+                    }
+
+                    await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
+                }
+
+                talentsNotifier.ClearSession();
             }
         }
 

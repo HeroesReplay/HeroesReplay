@@ -3,8 +3,8 @@
     public record HeroesProfileTwitchExtensionSettings
     {
         public bool Enabled { get; init; }
-        public string APIKey { get; init; }
-        public string APIEmail { get; init; }
+        public string ApiKey { get; init; }
+        public string ApiEmail { get; init; }
         public string TwitchUserName { get; init; }
         public string ApiUserId { get; init; }
 
