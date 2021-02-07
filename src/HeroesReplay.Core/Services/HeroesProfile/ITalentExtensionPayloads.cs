@@ -5,8 +5,8 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 {
     public interface ITalentExtensionPayloads
     {
-        Queue<HeroesProfileTwitchPayload> Create { get; }
+        List<HeroesProfileTwitchPayload> Create { get; }
+        List<HeroesProfileTwitchPayload> Update { get; }
         Dictionary<TimeSpan, List<HeroesProfileTwitchPayload>> Talents { get; }
-        Queue<HeroesProfileTwitchPayload> Update { get; }
     }
 }

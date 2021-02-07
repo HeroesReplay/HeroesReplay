@@ -3,6 +3,7 @@
 using Microsoft.Extensions.Logging;
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
@@ -24,86 +25,83 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             this.heroesProfileService = heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
         }
 
-        public async Task TryInitializeSessionAsync()
+        public async Task SendCurrentTalentsAsync(TimeSpan timer)
         {
-            // Creation Steps
-            while (this.Data.Payloads.Create.TryDequeue(out var payload))
+            if (this.Data.Payloads.Create.Any())
             {
-                switch (payload.Step)
+                await SendCreatePayloadsAsync().ConfigureAwait(false);
+            }
+            else if (this.Data.Payloads.Update.Any() && !string.IsNullOrWhiteSpace(SessionId))
+            {
+                await SendUpdatePayloadsAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                await UpdateTalentsAsync(timer).ConfigureAwait(false);
+            }
+        }
+
+        private async Task SendCreatePayloadsAsync()
+        {
+            var createReplayPayload = this.Data.Payloads.Create.Find(p => p.Step == HeroesProfileTwitchExtensionStep.CreateReplayData);
+
+            if (createReplayPayload != null)
+            {
+                var session = await heroesProfileService.CreateReplaySessionAsync(createReplayPayload).ConfigureAwait(false);
+                var success = !string.IsNullOrWhiteSpace(session);
+
+                if (success)
                 {
-                    case HeroesProfileTwitchExtensionStep.CreateReplayData:
-                        {
-                            string session = null;
-
-                            while (session == null)
-                            {
-                                session = await heroesProfileService.CreateReplaySessionAsync(payload).ConfigureAwait(false);
-
-                                if (session == null)
-                                {
-                                    await Task.Delay(TimeSpan.FromSeconds(1));
-                                }
-                            }
-                            break;
-                        }
-                    case HeroesProfileTwitchExtensionStep.CreatePlayerData:
-                        {
-                            bool created = false;
-
-                            while (!created)
-                            {
-                                created = await heroesProfileService.CreatePlayerDataAsync(payload, SessionId).ConfigureAwait(false);
-
-                                if (!created)
-                                {
-                                    await Task.Delay(TimeSpan.FromSeconds(1));
-                                }
-                            }
-                            break;
-                        }
+                    this.Data.Payloads.Create.Remove(createReplayPayload);
+                    SessionId = session;
                 }
             }
-
-            // Update Steps
-            while (this.Data.Payloads.Update.TryDequeue(out var payload))
+            else
             {
-                switch (payload.Step)
+                var createPlayerPayload = this.Data.Payloads.Create.Find(p => p.Step == HeroesProfileTwitchExtensionStep.CreatePlayerData);
+
+                if(createPlayerPayload != null)
                 {
-                    case HeroesProfileTwitchExtensionStep.UpdateReplayData:
-                        {
-                            bool updated = false;
+                    bool success = await heroesProfileService.CreatePlayerDataAsync(createPlayerPayload, SessionId).ConfigureAwait(false);
 
-                            while (!updated)
-                            {
-                                updated = await heroesProfileService.UpdateReplayDataAsync(payload, SessionId).ConfigureAwait(false);
-
-                                if (!updated)
-                                {
-                                    await Task.Delay(TimeSpan.FromSeconds(1));
-                                }
-                            }
-                            break;
-                        }
-                    case HeroesProfileTwitchExtensionStep.UpdatePlayerData:
-                        {
-                            bool updated = false;
-
-                            if (!updated)
-                            {
-                                await heroesProfileService.UpdatePlayerDataAsync(payload, SessionId).ConfigureAwait(false);
-
-                                if (!updated)
-                                {
-                                    await Task.Delay(TimeSpan.FromSeconds(1));
-                                }
-                            }
-                            break;
-                        }
+                    if (success)
+                    {
+                        this.Data.Payloads.Create.Remove(createPlayerPayload);
+                    }
                 }
             }
         }
 
-        public async Task SendCurrentTalentsAsync(TimeSpan timer)
+        private async Task SendUpdatePayloadsAsync()
+        {
+            var updateReplayPayload = this.Data.Payloads.Update.Find(p => p.Step == HeroesProfileTwitchExtensionStep.UpdateReplayData);
+
+            if (updateReplayPayload != null)
+            {
+                bool success = await heroesProfileService.UpdateReplayDataAsync(updateReplayPayload, SessionId).ConfigureAwait(false);
+
+                if (success)
+                {
+                    this.Data.Payloads.Update.Remove(updateReplayPayload);
+                }
+            }
+            else
+            {
+                var updatePlayerPayload = this.Data.Payloads.Update.Find(p => p.Step == HeroesProfileTwitchExtensionStep.UpdatePlayerData);
+
+                if (updatePlayerPayload != null)
+                {
+                    bool success = await heroesProfileService.UpdatePlayerDataAsync(updatePlayerPayload, SessionId).ConfigureAwait(false);
+
+                    if (success)
+                    {
+                        this.Data.Payloads.Update.Remove(updatePlayerPayload);
+                    }
+                }
+            }
+        }
+
+        private async Task UpdateTalentsAsync(TimeSpan timer)
         {
             foreach (TimeSpan talentTime in Data.Payloads.Talents.Keys)
             {
@@ -118,8 +116,9 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                         if (Data.Payloads.Talents.Remove(talentTime))
                         {
                             logger.LogInformation($"Removed talents key: {talentTime}");
-                            await heroesProfileService.NotifyTwitchAsync().ConfigureAwait(false);
                         }
+
+                        await heroesProfileService.NotifyTwitchAsync().ConfigureAwait(false);
                     }
                 }
             }

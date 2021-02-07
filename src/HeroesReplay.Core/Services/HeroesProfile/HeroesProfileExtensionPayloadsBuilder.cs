@@ -25,20 +25,22 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
         public TalentExtensionPayloads CreatePayloads(Replay replay)
         {
-            TalentExtensionPayloads payloads = new();
-
             if (settings.TwitchExtension.Enabled)
             {
-                payloads.Create.Enqueue(CreateReplay(replay));
-                payloads.Create.Enqueue(CreatePlayer(replay));
+                TalentExtensionPayloads payloads = new();
 
-                payloads.Update.Enqueue(UpdateReplay(replay));
-                payloads.Update.Enqueue(UpdatePlayer(replay));
+                payloads.Create.Add(CreateReplay(replay));
+                payloads.Create.Add(CreatePlayer(replay));
+
+                payloads.Update.Add(UpdateReplay(replay));
+                payloads.Update.Add(UpdatePlayer(replay));
 
                 payloads.Talents = CreateTalents(replay);
+
+                return payloads;
             }
 
-            return payloads;
+            return null;
         }
 
         private Dictionary<TimeSpan, List<HeroesProfileTwitchPayload>> CreateTalents(Replay replay)

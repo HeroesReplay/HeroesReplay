@@ -32,31 +32,6 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
         public Uri GetMatchLink(StormReplay stormReplay) => new Uri($"{stormReplay?.ReplayId}");
 
-        public async Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload)
-        {
-            // TODO: Polly
-            using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
-            {
-                var response = await client.PostAsync(CreateReplayUrl, new FormUrlEncodedContent(payload.Content.Single()));
-
-                if (response.IsSuccessStatusCode)
-                {
-                    string result = await response.Content.ReadAsStringAsync();
-
-                    if (int.TryParse(result, out _))
-                    {
-                        return result;
-                    }
-                }
-                else
-                {
-                    logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
-                }
-            }
-
-            return null;
-        }
-
         public async Task<(int RankPoints, string Tier)> GetMMRAsync(StormReplay stormReplay)
         {
             if (stormReplay == null)
@@ -120,6 +95,40 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return Enumerable.Empty<HeroesProfileReplay>();
         }
 
+        public async Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload)
+        {
+            if (payload == null)
+                throw new ArgumentNullException(nameof(payload));
+
+            try
+            {
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
+                {
+                    var response = await client.PostAsync(CreateReplayUrl, new FormUrlEncodedContent(payload.Content.Single()));
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string result = await response.Content.ReadAsStringAsync();
+
+                        if (int.TryParse(result, out _))
+                        {
+                            return result;
+                        }
+                    }
+                    else
+                    {
+                        logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not create session.");
+            }
+
+            return null;
+        }
+
         public async Task<bool> CreatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId)
         {
             if (payload == null)
@@ -127,6 +136,8 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             if (sessionId == null)
                 throw new ArgumentNullException(nameof(sessionId));
+
+            bool success = true;
 
             try
             {
@@ -141,12 +152,11 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                         if (response.IsSuccessStatusCode)
                         {
-                            return true;
-
                             logger.LogInformation("Player data created.");
                         }
                         else
                         {
+                            success = false;
                             logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
                         }
                     }
@@ -154,10 +164,11 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             }
             catch (Exception e)
             {
+                success = false;
                 logger.LogError(e, "Could not create player data.");
             }
 
-            return false;
+            return success;
         }
 
         public async Task<bool> UpdateReplayDataAsync(HeroesProfileTwitchPayload payload, string sessionId)
@@ -167,6 +178,8 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             if (sessionId == null)
                 throw new ArgumentNullException(nameof(sessionId));
+
+            bool success = false;
 
             try
             {
@@ -178,8 +191,8 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                     if (response.IsSuccessStatusCode)
                     {
-                        return true;
                         logger.LogInformation("Replay data updated.");
+                        success = true;
                     }
                     else
                     {
@@ -189,10 +202,11 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             }
             catch (Exception e)
             {
+                success = false;
                 logger.LogError(e, "Could not update replay data.");
             }
 
-            return false;
+            return success;
         }
 
         public async Task<bool> UpdatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId)
@@ -202,6 +216,8 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             if (sessionId == null)
                 throw new ArgumentNullException(nameof(sessionId));
+
+            bool success = true;
 
             try
             {
@@ -216,21 +232,22 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                         if (response.IsSuccessStatusCode)
                         {
                             logger.LogInformation("Player data created.");
-                            return true;
                         }
                         else
                         {
                             logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                            success = false;
                         }
                     }
                 }
             }
             catch (Exception e)
             {
+                success = false;
                 logger.LogError(e, "Could not update player data.");
             }
 
-            return false;
+            return success;
         }
 
         public async Task<bool> NotifyTwitchAsync()
@@ -265,6 +282,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             return false;
         }
+
         public async Task<bool> UpdatePlayerTalentsAsync(List<HeroesProfileTwitchPayload> talentPayloads, string sessionId)
         {
             if (talentPayloads == null)
@@ -289,14 +307,12 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                             foreach (var item in content)
                             {
-                                if (item.Key == settings.TwitchExtension.TwitchApiKey ||
-                                    item.Key == settings.TwitchExtension.TwitchEmailKey ||
-                                    item.Key == settings.TwitchExtension.UserIdKey)
+                                if (item.Key != settings.TwitchExtension.TwitchApiKey &&
+                                    item.Key != settings.TwitchExtension.TwitchEmailKey &&
+                                    item.Key != settings.TwitchExtension.UserIdKey)
                                 {
-                                    continue;
+                                    clone[item.Key] = item.Value;
                                 }
-
-                                clone[item.Key] = item.Value;
                             }
 
                             var talentJson = JsonSerializer.Serialize(clone, typeof(Dictionary<string, string>), new JsonSerializerOptions { WriteIndented = true });
@@ -321,6 +337,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             }
             catch (Exception e)
             {
+                success = false;
                 logger.LogError(e, $"Could not update talents.");
             }
 

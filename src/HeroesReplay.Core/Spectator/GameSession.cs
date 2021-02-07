@@ -64,16 +64,7 @@ namespace HeroesReplay.Core
         {
             if (settings.TwitchExtension.Enabled)
             {
-                try
-                {
-                    await talentsNotifier.TryInitializeSessionAsync().ConfigureAwait(false);
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "Could not initialize Talents session");
-                }
-
-                while (State != State.EndDetected && talentsNotifier.SessionCreated)
+                while (State != State.EndDetected)
                 {
                     Token.ThrowIfCancellationRequested();
 
