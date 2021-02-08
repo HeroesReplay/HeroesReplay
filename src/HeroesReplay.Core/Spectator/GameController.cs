@@ -272,7 +272,7 @@ namespace HeroesReplay.Core
             }
             catch (Exception)
             {
-                logger.LogWarning($"Could not parse the timer: {text ?? string.Empty}");                
+                logger.LogWarning($"Could not parse the timer: {text ?? string.Empty}");
             }
 
             return null;
@@ -412,10 +412,10 @@ namespace HeroesReplay.Core
                 Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == true)
-                    .WaitAndRetry(retryCount: 10, sleepDurationProvider: retry => settings.OCR.CheckSleepDuration)
+                    .WaitAndRetry(retryCount: 10, sleepDurationProvider: (retry) => TimeSpan.FromSeconds(Math.Pow(2, retry)))
                     .Execute(() =>
                     {
-                        foreach(var process in Process.GetProcessesByName(this.settings.Process.HeroesOfTheStorm))
+                        foreach (var process in Process.GetProcessesByName(this.settings.Process.HeroesOfTheStorm))
                         {
                             process.Kill();
                         }

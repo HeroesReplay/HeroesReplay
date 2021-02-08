@@ -39,4 +39,3 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         public string GameVersion { get; set; }
     }
 }
-

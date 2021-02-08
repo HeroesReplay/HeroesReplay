@@ -60,7 +60,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             {
                 var createPlayerPayload = this.Data.Payloads.Create.Find(p => p.Step == HeroesProfileTwitchExtensionStep.CreatePlayerData);
 
-                if(createPlayerPayload != null)
+                if (createPlayerPayload != null)
                 {
                     bool success = await heroesProfileService.CreatePlayerDataAsync(createPlayerPayload, SessionId).ConfigureAwait(false);
 
