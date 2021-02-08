@@ -32,23 +32,24 @@ namespace HeroesReplay.Core.Services.Obs
         {
             try
             {
-                var waiter = new ManualResetEventSlim();
-
-                void connected(object sender, EventArgs e)
+                using (var waiter = new ManualResetEventSlim())
                 {
-                    waiter.Set();
-                    logger.LogDebug("OBS Web Socket Connected");
+                    void connected(object sender, EventArgs e)
+                    {
+                        waiter.Set();
+                        logger.LogDebug("OBS Web Socket Connected");
+                    }
+
+                    obs.Connected += connected;
+                    obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+                    waiter.Wait();
+                    obs.Connected -= connected;
+
+                    obs.SetCurrentScene(this.settings.OBS.GameSceneName);
+
+                    obs.Disconnect();
+                    logger.LogDebug($"OBS WebSocket Disconnected");
                 }
-
-                obs.Connected += connected;
-                obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-                waiter.Wait();
-                obs.Connected -= connected;
-
-                obs.SetCurrentScene(this.settings.OBS.GameSceneName);
-
-                obs.Disconnect();
-                logger.LogDebug($"OBS WebSocket Disconnected");
             }
             catch (Exception e)
             {
@@ -60,24 +61,25 @@ namespace HeroesReplay.Core.Services.Obs
         {
             try
             {
-                var waiter = new ManualResetEventSlim();
-
-                void connected(object sender, EventArgs e)
+                using (var waiter = new ManualResetEventSlim())
                 {
-                    waiter.Set();
-                    logger.LogInformation("OBS Web Socket Connected");
+                    void connected(object sender, EventArgs e)
+                    {
+                        waiter.Set();
+                        logger.LogInformation("OBS Web Socket Connected");
+                    }
+
+                    obs.Connected += connected;
+                    obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+                    waiter.Wait();
+                    obs.Connected -= connected;
+
+                    obs.SetCurrentScene(this.settings.OBS.WaitingSceneName);
+                    logger.LogInformation($"Set scene to: {this.settings.OBS.WaitingSceneName}");
+
+                    obs.Disconnect();
+                    logger.LogInformation($"OBS WebSocket Disconnected");
                 }
-
-                obs.Connected += connected;
-                obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-                waiter.Wait();
-                obs.Connected -= connected;
-
-                obs.SetCurrentScene(this.settings.OBS.WaitingSceneName);
-                logger.LogInformation($"Set scene to: {this.settings.OBS.WaitingSceneName}");
-
-                obs.Disconnect();
-                logger.LogInformation($"OBS WebSocket Disconnected");
             }
             catch (Exception e)
             {
@@ -89,35 +91,35 @@ namespace HeroesReplay.Core.Services.Obs
         {
             try
             {
-                var waiter = new ManualResetEventSlim();
-
-                void connected(object sender, EventArgs e)
+                using (var waiter = new ManualResetEventSlim())
                 {
-                    waiter.Set();
-                    logger.LogInformation("OBS Web Socket Connected");
+                    void connected(object sender, EventArgs e)
+                    {
+                        waiter.Set();
+                        logger.LogInformation("OBS Web Socket Connected");
+                    }
+
+                    obs.Connected += connected;
+                    obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+                    waiter.Wait();
+                    obs.Connected -= connected;
+
+                    var sceneList = obs.GetSceneList();
+                    var sourceList = obs.GetSourcesList();
+
+                    foreach (ReportScene segment in settings.OBS.ReportScenes.Where(scene => scene.Enabled))
+                    {
+                        TrySetBrowserSourceSegment(replayId, obs, sourceList, segment);
+                    }
+
+                    foreach (ReportScene source in settings.OBS.ReportScenes.Where(scene => scene.Enabled))
+                    {
+                        await TryCycleSceneAsync(source).ConfigureAwait(false);
+                    }
+
+                    obs.Disconnect();
+                    logger.LogInformation($"OBS WebSocket Disconnected");
                 }
-
-                obs.Connected += connected;
-                obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-                waiter.Wait();
-                obs.Connected -= connected;
-
-                var sceneList = obs.GetSceneList();
-                var sourceList = obs.GetSourcesList();
-
-                foreach (ReportScene segment in settings.OBS.ReportScenes.Where(scene => scene.Enabled))
-                {
-                    TrySetBrowserSourceSegment(replayId, obs, sourceList, segment);
-                }
-
-                foreach (ReportScene source in settings.OBS.ReportScenes.Where(scene => scene.Enabled))
-                {
-                    await TryCycleSceneAsync(source).ConfigureAwait(false);
-                }
-
-                obs.Connected -= connected;
-                obs.Disconnect();
-                logger.LogInformation($"OBS WebSocket Disconnected");
             }
             catch (Exception e)
             {
