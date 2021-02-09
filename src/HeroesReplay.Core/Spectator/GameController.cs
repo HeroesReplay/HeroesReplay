@@ -19,6 +19,7 @@ using Windows.Storage.Streams;
 using static PInvoke.User32;
 using HeroesReplay.Core.Configuration;
 using Polly.CircuitBreaker;
+using System.ComponentModel;
 
 namespace HeroesReplay.Core
 {
@@ -410,7 +411,9 @@ namespace HeroesReplay.Core
             try
             {
                 Policy
-                    .Handle<Exception>()
+                    .Handle<Win32Exception>()
+                    .Or<InvalidOperationException>()
+                    .Or<NotSupportedException>()
                     .OrResult<bool>(result => result == true)
                     .WaitAndRetry(retryCount: 10, sleepDurationProvider: (retry) => TimeSpan.FromSeconds(Math.Pow(2, retry)))
                     .Execute(() =>

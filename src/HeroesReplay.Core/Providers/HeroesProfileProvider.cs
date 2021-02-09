@@ -48,7 +48,7 @@ namespace HeroesReplay.Core.Providers
                             MinReplayId = replayId;
                         }
                     }
-                    else 
+                    else
                     {
                         MinReplayId = settings.HeroesProfileApi.MinReplayId;
                     }
@@ -128,7 +128,7 @@ namespace HeroesReplay.Core.Providers
             };
 
             (ReplayParseResult result, Replay replay) = ParseReplay(await File.ReadAllBytesAsync(file.FullName).ConfigureAwait(false), options);
-            
+
             logger.LogDebug("result: {0}, path: {1}", result, file.FullName);
 
             if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
@@ -144,8 +144,7 @@ namespace HeroesReplay.Core.Providers
             var credentials = new BasicAWSCredentials(settings.HeroesProfileApi.AwsAccessKey, settings.HeroesProfileApi.AwsSecretKey);
 
             using (AmazonS3Client s3Client = new AmazonS3Client(credentials, RegionEndpoint.GetBySystemName(settings.HeroesProfileApi.S3Region)))
-            {                
-
+            {
                 GetObjectRequest request = new GetObjectRequest
                 {
                     RequestPayer = RequestPayer.Requester,
@@ -157,12 +156,12 @@ namespace HeroesReplay.Core.Providers
                 {
                     using (MemoryStream memoryStream = new MemoryStream())
                     {
-                        await response.ResponseStream.CopyToAsync(memoryStream).ConfigureAwait(false);
+                        await response.ResponseStream.CopyToAsync(memoryStream, provider.Token).ConfigureAwait(false);
 
                         using (var stream = cachedReplay.OpenWrite())
                         {
-                            await stream.WriteAsync(memoryStream.ToArray()).ConfigureAwait(false);
-                            await stream.FlushAsync().ConfigureAwait(false);
+                            await stream.WriteAsync(memoryStream.ToArray(), provider.Token).ConfigureAwait(false);
+                            await stream.FlushAsync(provider.Token).ConfigureAwait(false);
                         }
 
                         logger.LogInformation($"downloaded heroesprofile replay.");
@@ -195,33 +194,33 @@ namespace HeroesReplay.Core.Providers
                        .WaitAndRetryAsync(60, retry => settings.HeroesProfileApi.APIRetryWaitTime)
                        .ExecuteAsync(async token =>
                        {
-                           IEnumerable<HeroesProfileReplay> response = await heroesProfileService.ListReplaysAllAsync(MinReplayId).ConfigureAwait(false);
+                           IEnumerable<HeroesProfileReplay> replays = await heroesProfileService.ListReplaysAllAsync(MinReplayId).ConfigureAwait(false);
 
-                           if (response != null && response.Any())
+                           if (replays != null && replays.Any())
                            {
-                               HeroesProfileReplay replay = (from r in response
-                                         where r.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket)
-                                         where r.Valid == 1
-                                         where r.Id > MinReplayId
-                                         let version = Version.Parse(r.GameVersion)
-                                         where supportedVersion.Major == version.Major &&
-                                               supportedVersion.Minor == version.Minor &&
-                                               supportedVersion.Build == version.Build &&
-                                               supportedVersion.Revision == version.Revision
-                                         where settings.HeroesProfileApi.GameTypes.Contains(r.GameType, StringComparer.CurrentCultureIgnoreCase)
-                                         select r)
+                               HeroesProfileReplay found = (from replay in replays
+                                                            where replay.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket)
+                                                            where replay.Valid == 1
+                                                            where replay.Id > MinReplayId
+                                                            let version = Version.Parse(replay.GameVersion)
+                                                            where supportedVersion.Major == version.Major &&
+                                                                  supportedVersion.Minor == version.Minor &&
+                                                                  supportedVersion.Build == version.Build &&
+                                                                  supportedVersion.Revision == version.Revision
+                                                            where settings.HeroesProfileApi.GameTypes.Contains(replay.GameType, StringComparer.CurrentCultureIgnoreCase)
+                                                            select replay)
                                          .OrderBy(x => x.Id)
                                          .FirstOrDefault();
 
-                               if (replay == null)
+                               if (found == null)
                                {
                                    logger.LogWarning($"Replay not found with criteria. MinReplayId = {MinReplayId}");
-                                   MinReplayId = response.Max(x => x.Id);
+                                   MinReplayId = replays.Max(x => x.Id);
                                }
                                else
                                {
                                    logger.LogInformation($"Replay found. MinReplayId = {MinReplayId}");
-                                   return replay;
+                                   return found;
                                }
                            }
 

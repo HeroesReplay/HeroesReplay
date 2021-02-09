@@ -98,8 +98,18 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             {
                 using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.OpenApiBaseUri })
                 {
-                    var json = await client.GetStringAsync(new Uri($"Replay/Min_id?min_id={minId}", UriKind.Relative)).ConfigureAwait(false);
-                    return JsonSerializer.Deserialize<IEnumerable<HeroesProfileReplay>>(json).Where(x => x.Deleted == null || x.Deleted == "0");
+                    HttpResponseMessage response = await Policy
+                           .Handle<Exception>()
+                           .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                           .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                           .ExecuteAsync(async (context, token) => await client.GetAsync(new Uri($"Replay/Min_id?min_id={minId}", UriKind.Relative), token), new Context(), tokenProvider.Token)
+                           .ConfigureAwait(false);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return JsonSerializer.Deserialize<IEnumerable<HeroesProfileReplay>>(await response.Content.ReadAsStringAsync())
+                                             .Where(x => x.Deleted == null || x.Deleted == "0");
+                    }
                 }
             }
             catch (Exception e)
