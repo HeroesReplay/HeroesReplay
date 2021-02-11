@@ -23,6 +23,7 @@ namespace HeroesReplay.Core
         private readonly AppSettings settings;
         private readonly CancellationTokenProvider tokenProvider;
         private readonly ISessionHolder sessionHolder;
+        private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
         private CancellationToken Token => tokenProvider.Token;
 
@@ -46,6 +47,16 @@ namespace HeroesReplay.Core
             this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
             this.talentsNotifier = talentsNotifier ?? throw new ArgumentNullException(nameof(talentsNotifier));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+
+            this.panelTimes = new()
+            {
+                { Panel.Talents, settings.PanelTimes.Talents },
+                { Panel.DeathDamageRole, settings.PanelTimes.DeathDamageRole },
+                { Panel.KillsDeathsAssists, settings.PanelTimes.KillsDeathsAssists },
+                { Panel.Experience, settings.PanelTimes.Experience },
+                { Panel.CarriedObjectives, settings.PanelTimes.CarriedObjectives },
+                { Panel.None, TimeSpan.Zero }
+            };
         }
 
         public async Task SpectateAsync()
@@ -139,16 +150,6 @@ namespace HeroesReplay.Core
 
         private async Task PanelLoopAsync()
         {
-            Dictionary<Panel, TimeSpan> panelTimes = new()
-            {
-                { Panel.Talents, settings.PanelTimes.Talents },
-                { Panel.DeathDamageRole, settings.PanelTimes.DeathDamageRole },
-                { Panel.KillsDeathsAssists, settings.PanelTimes.KillsDeathsAssists },
-                { Panel.Experience, settings.PanelTimes.Experience },
-                { Panel.CarriedObjectives, settings.PanelTimes.CarriedObjectives },
-                { Panel.None, TimeSpan.Zero }
-            };
-
             Panel current = Panel.None;
             Panel next = Panel.None;
 
@@ -233,44 +234,47 @@ namespace HeroesReplay.Core
             _ => Panel.Talents,
         };
 
+        const string EndDetectedKey = "EndDetected";
+        const string StateKey = "State";
+
         private async Task<(TimeSpan? Timer, bool EndDetected)> TryGetOcrTimer()
         {
-            const string EndDetectedKey = "EndDetected";
-            const string StateKey = "State";
-
             var context = new Context("Timer")
             {
                 { EndDetectedKey, false },
                 { StateKey, State }
             };
 
-            void onRetry(DelegateResult<TimeSpan?> outcome, TimeSpan duration, int retryCount, Context context)
-            {
-                var state = (State)context[StateKey];
-                var isMax = retryCount >= settings.Spectate.RetryTimerCountBeforeForceEnd;
-                var isTimerNotFound = outcome.Result == null;
-
-                if (state == State.Loading)
-                {
-                    logger.LogWarning($"Timer could not be found after {retryCount}. Game still loading.");
-                }
-                else if (state == State.TimerDetected && isTimerNotFound && isMax)
-                {
-                    logger.LogWarning($"Timer could not be found after {retryCount}. Shutting down.");
-                    context[EndDetectedKey] = true;
-                }
-                else
-                {
-                    logger.LogWarning($"Timer failed. Waiting {duration} before next retry. Retry attempt {retryCount}");
-                }
-            }
-
             TimeSpan? timer = await Policy
                 .HandleResult<TimeSpan?>(result => result == null)
-                .WaitAndRetryAsync(retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd, sleepDurationProvider: (retry, context) => settings.Spectate.RetryTimerSleepDuration, onRetry: onRetry)
+                .WaitAndRetryAsync(
+                        retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd,
+                        sleepDurationProvider: (retry, context) => settings.Spectate.RetryTimerSleepDuration,
+                        onRetry: OnRetry)
                 .ExecuteAsync((context, token) => controller.TryGetTimerAsync(), context, Token).ConfigureAwait(false);
 
             return (Timer: timer, EndDetected: (bool)context[EndDetectedKey]);
+        }
+
+        private void OnRetry(DelegateResult<TimeSpan?> outcome, TimeSpan duration, int retryCount, Context context)
+        {
+            var state = (State)context[StateKey];
+            var isMax = retryCount >= settings.Spectate.RetryTimerCountBeforeForceEnd;
+            var isTimerNotFound = outcome.Result == null;
+
+            if (state == State.Loading)
+            {
+                logger.LogWarning($"Waiting for timer...attempt {retryCount}.");
+            }
+            else if (state == State.TimerDetected && isTimerNotFound && isMax)
+            {
+                logger.LogWarning($"Timer could not be found after {retryCount}. Shutting down.");
+                context[EndDetectedKey] = true;
+            }
+            else
+            {
+                logger.LogWarning($"Timer failed. Waiting {duration} before next retry. Retry attempt {retryCount}");
+            }
         }
     }
 }

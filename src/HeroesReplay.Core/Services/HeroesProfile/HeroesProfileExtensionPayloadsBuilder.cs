@@ -16,11 +16,20 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
         private readonly ILogger<HeroesProfileExtensionPayloadsBuilder> logger;
         private readonly AppSettings settings;
+        private readonly List<KeyValuePair<string, string>> sharedFormData;
 
         public HeroesProfileExtensionPayloadsBuilder(ILogger<HeroesProfileExtensionPayloadsBuilder> logger, AppSettings settings)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+
+            this.sharedFormData = new List<KeyValuePair<string, string>>()
+            {
+                new KeyValuePair<string, string>(TwitchExtensionFormKeys.TwitchKey, settings.TwitchExtension.ApiKey),
+                new KeyValuePair<string, string>(TwitchExtensionFormKeys.Email, settings.TwitchExtension.ApiEmail),
+                new KeyValuePair<string, string>(TwitchExtensionFormKeys.TwitchUserName, settings.TwitchExtension.TwitchUserName),
+                new KeyValuePair<string, string>(TwitchExtensionFormKeys.UserId, settings.TwitchExtension.ApiUserId),
+            };
         }
 
         public TalentExtensionPayloads CreatePayloads(Replay replay)
@@ -29,7 +38,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             {
                 TalentExtensionPayloads payloads = new();
 
-                payloads.Create.Add(CreateReplay(replay));
+                payloads.Create.Add(CreateSession());
                 payloads.Create.Add(CreatePlayer(replay));
 
                 payloads.Update.Add(UpdateReplay(replay));
@@ -49,15 +58,13 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             if (replay.TrackerEvents != null)
             {
-                for (int i = 0; i < replay.TrackerEvents.Count; i++)
+                foreach (var trackerEvent in replay.TrackerEvents) 
                 {
-                    var trackerEvent = replay.TrackerEvents[i];
-
                     if (trackerEvent.Data.dictionary[0].blobText == settings.TrackerEvents.TalentChosen)
                     {
                         string talentName = trackerEvent.Data.dictionary[1].optionalData.array[0].dictionary[1].blobText;
                         TimeSpan timeSpan = trackerEvent.TimeSpan;
-                        int playerID = Convert.ToInt32(replay.TrackerEvents[i].Data.dictionary[2].optionalData.array[0].dictionary[1].vInt.Value);
+                        int playerID = Convert.ToInt32(trackerEvent.Data.dictionary[2].optionalData.array[0].dictionary[1].vInt.Value);
                         Player player = replay.Players[playerID - 1];
 
                         if (!talentEvents.ContainsKey(timeSpan))
@@ -72,18 +79,15 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                             Step = HeroesProfileTwitchExtensionStep.SaveTalentData,
                             Content = new List<Dictionary<string, string>>()
                             {
-                                new ()
+                                new (sharedFormData)
                                 {
-                                    { settings.TwitchExtension.TwitchApiKey , settings.TwitchExtension.ApiKey },
-                                    { settings.TwitchExtension.TwitchEmailKey, settings.TwitchExtension.ApiEmail },
-                                    { settings.TwitchExtension.TwitchUserNameKey, settings.TwitchExtension.TwitchUserName },
-                                    { settings.TwitchExtension.UserIdKey, settings.TwitchExtension.ApiUserId },
-                                    { settings.TwitchExtension.ReplayIdKey, PLACEHOLDER_SESSION_ID },
-                                    { settings.TwitchExtension.BlizzIdKey, player.BattleNetId.ToString() },
-                                    { settings.TwitchExtension.BattleTagKey, player.Name },
-                                    { settings.TwitchExtension.RegionKey, player.BattleNetRegionId.ToString() },
-                                    { settings.TwitchExtension.TalentKey, talentName },
-                                    { settings.TwitchExtension.HeroKey, player.Character },
+                                    { TwitchExtensionFormKeys.SessionId, PLACEHOLDER_SESSION_ID },
+                                    { TwitchExtensionFormKeys.BlizzId, player.BattleNetId.ToString() },
+                                    { TwitchExtensionFormKeys.BattleTag, player.Name },
+                                    { TwitchExtensionFormKeys.BattleNetId, player.BattleNetId.ToString() },
+                                    { TwitchExtensionFormKeys.Region, player.BattleNetRegionId.ToString() },
+                                    { TwitchExtensionFormKeys.Talent, talentName },
+                                    { TwitchExtensionFormKeys.Hero, player.Character },
                                 }
                             }
                         });
@@ -105,17 +109,13 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 Step = HeroesProfileTwitchExtensionStep.UpdateReplayData,
                 Content = new List<Dictionary<string, string>>()
                 {
-                    new ()
+                    new (sharedFormData)
                     {
-                        { settings.TwitchExtension.TwitchApiKey , settings.TwitchExtension.ApiKey },
-                        { settings.TwitchExtension.TwitchEmailKey, settings.TwitchExtension.ApiEmail },
-                        { settings.TwitchExtension.TwitchUserNameKey, settings.TwitchExtension.TwitchUserName },
-                        { settings.TwitchExtension.UserIdKey, settings.TwitchExtension.ApiUserId },
-                        { settings.TwitchExtension.ReplayIdKey, PLACEHOLDER_SESSION_ID },
-                        { settings.TwitchExtension.GameTypeKey, replay.GameMode.ToString() },
-                        { settings.TwitchExtension.GameMapKey, replay.Map },
-                        { settings.TwitchExtension.GameVersionKey, replay.ReplayVersion },
-                        { settings.TwitchExtension.RegionKey, replay.Players[0].BattleNetRegionId.ToString() },
+                        { TwitchExtensionFormKeys.SessionId, PLACEHOLDER_SESSION_ID },
+                        { TwitchExtensionFormKeys.GameType, replay.GameMode.ToString() },
+                        { TwitchExtensionFormKeys.GameMap, replay.Map },
+                        { TwitchExtensionFormKeys.GameVersion, replay.ReplayVersion },
+                        { TwitchExtensionFormKeys.Region, replay.Players[0].BattleNetRegionId.ToString() },
                     }
                 }
             };
@@ -126,18 +126,17 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return new HeroesProfileTwitchPayload
             {
                 Step = HeroesProfileTwitchExtensionStep.UpdatePlayerData,
-                Content = replay.Players.Select(player => new Dictionary<string, string>()
+                Content = replay.Players.Select(player => new Dictionary<string, string>(sharedFormData)
                 {
-                    { settings.TwitchExtension.TwitchApiKey , settings.TwitchExtension.ApiKey },
-                    { settings.TwitchExtension.TwitchEmailKey, settings.TwitchExtension.ApiEmail },
-                    { settings.TwitchExtension.TwitchUserNameKey, settings.TwitchExtension.TwitchUserName },
-                    { settings.TwitchExtension.UserIdKey, settings.TwitchExtension.ApiUserId },
-                    { settings.TwitchExtension.BattleTagKey, player.Name },
-                    { settings.TwitchExtension.ReplayIdKey, PLACEHOLDER_SESSION_ID },
-                    { settings.TwitchExtension.BlizzIdKey, player.BattleNetId.ToString() },
-                    { settings.TwitchExtension.TeamKey, player.Team.ToString() },
-                    { settings.TwitchExtension.HeroKey, player.Character },
-                    { settings.TwitchExtension.RegionKey, player.BattleNetRegionId.ToString() }
+                    { TwitchExtensionFormKeys.BattleTag, player.Name },
+                    { TwitchExtensionFormKeys.BattleNetId, player.BattleNetId.ToString() },
+                    { TwitchExtensionFormKeys.HeroId, player.HeroId },
+                    { TwitchExtensionFormKeys.HeroAttributeId, player.HeroAttributeId },
+                    { TwitchExtensionFormKeys.SessionId, PLACEHOLDER_SESSION_ID },
+                    { TwitchExtensionFormKeys.BlizzId, player.BattleNetId.ToString() },
+                    { TwitchExtensionFormKeys.Team, player.Team.ToString() },
+                    { TwitchExtensionFormKeys.Hero, player.Character },
+                    { TwitchExtensionFormKeys.Region, player.BattleNetRegionId.ToString() }
                 }).ToList()
             };
         }
@@ -147,33 +146,25 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return new HeroesProfileTwitchPayload
             {
                 Step = HeroesProfileTwitchExtensionStep.CreatePlayerData,
-                Content = replay.Players.Select(player => new Dictionary<string, string>()
+                Content = replay.Players.Select(player => new Dictionary<string, string>(sharedFormData)
                 {
-                    { settings.TwitchExtension.TwitchApiKey , settings.TwitchExtension.ApiKey },
-                    { settings.TwitchExtension.TwitchEmailKey, settings.TwitchExtension.ApiEmail },
-                    { settings.TwitchExtension.TwitchUserNameKey, settings.TwitchExtension.TwitchUserName },
-                    { settings.TwitchExtension.ReplayIdKey, PLACEHOLDER_SESSION_ID },
-                    { settings.TwitchExtension.UserIdKey, settings.TwitchExtension.ApiUserId },
-                    { settings.TwitchExtension.BattleTagKey, player.Name },
-                    { settings.TwitchExtension.TeamKey, player.Team.ToString() },
+                    { TwitchExtensionFormKeys.SessionId, PLACEHOLDER_SESSION_ID },
+                    { TwitchExtensionFormKeys.BattleTag, player.Name },
+                    { TwitchExtensionFormKeys.Team, player.Team.ToString() },
                 }).ToList()
             };
         }
 
-        private HeroesProfileTwitchPayload CreateReplay(Replay replay)
+        private HeroesProfileTwitchPayload CreateSession()
         {
             return new HeroesProfileTwitchPayload
             {
                 Step = HeroesProfileTwitchExtensionStep.CreateReplayData,
                 Content = new List<Dictionary<string, string>>()
                 {
-                    new ()
+                    new (sharedFormData)
                     {
-                        { settings.TwitchExtension.TwitchApiKey , settings.TwitchExtension.ApiKey },
-                        { settings.TwitchExtension.TwitchEmailKey, settings.TwitchExtension.ApiEmail },
-                        { settings.TwitchExtension.TwitchUserNameKey, settings.TwitchExtension.TwitchUserName },
-                        { settings.TwitchExtension.UserIdKey, settings.TwitchExtension.ApiUserId },
-                        { settings.TwitchExtension.GameDateKey, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") },
+                        { TwitchExtensionFormKeys.GameDate, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") },
                     }
                 }
             };

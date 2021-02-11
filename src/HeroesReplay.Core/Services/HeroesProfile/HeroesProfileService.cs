@@ -13,6 +13,8 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
+using static HeroesReplay.Core.Services.HeroesProfile.HeroesProfileExtensionPayloadsBuilder;
+
 namespace HeroesReplay.Core.Services.HeroesProfile
 {
     public class HeroesProfileService : IHeroesProfileService
@@ -38,10 +40,10 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             this.notifyContent = new(new Dictionary<string, string>
             {
-                { settings.TwitchExtension.TwitchApiKey, settings.TwitchExtension.ApiKey },
-                { settings.TwitchExtension.TwitchEmailKey, settings.TwitchExtension.ApiEmail },
-                { settings.TwitchExtension.TwitchUserNameKey, settings.TwitchExtension.TwitchUserName },
-                { settings.TwitchExtension.UserIdKey, settings.TwitchExtension.ApiUserId }
+                { TwitchExtensionFormKeys.TwitchKey, settings.TwitchExtension.ApiKey },
+                { TwitchExtensionFormKeys.Email, settings.TwitchExtension.ApiEmail },
+                { TwitchExtensionFormKeys.TwitchUserName, settings.TwitchExtension.TwitchUserName },
+                { TwitchExtensionFormKeys.UserId, settings.TwitchExtension.ApiUserId }
             });
         }
 
@@ -171,7 +173,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             try
             {
-                payload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
+                payload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
 
                 using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                 {
@@ -206,7 +208,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             try
             {
-                payload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
+                payload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
 
                 using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                 {
@@ -240,7 +242,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             try
             {
-                payload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
+                payload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
 
                 using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                 {
@@ -305,7 +307,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 {
                     foreach (var talentPayload in talentPayloads)
                     {
-                        talentPayload.SetGameSessionReplayId(settings.TwitchExtension.ReplayIdKey, sessionId);
+                        talentPayload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
 
                         foreach (var content in talentPayload.Content)
                         {

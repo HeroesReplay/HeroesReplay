@@ -18,7 +18,6 @@ using Windows.Storage.Streams;
 
 using static PInvoke.User32;
 using HeroesReplay.Core.Configuration;
-using Polly.CircuitBreaker;
 using System.ComponentModel;
 
 namespace HeroesReplay.Core
@@ -97,7 +96,7 @@ namespace HeroesReplay.Core
         {
             logger.LogInformation("Launching battlenet because this replay is the latest build and requires auth.");
 
-            using (var process = Process.Start(new ProcessStartInfo(settings.Location.BattlenetPath, $"--game=heroes --gamepath=\"{settings.Location.GameInstallPath}\" --sso=1 -launch -uid heroes")))
+            using (Process process = Process.Start(new ProcessStartInfo(settings.Location.BattlenetPath, $"--game=heroes --gamepath=\"{settings.Location.GameInstallPath}\" --sso=1 -launch -uid heroes")))
             {
                 process.WaitForExit();
 
@@ -157,27 +156,23 @@ namespace HeroesReplay.Core
         {
             if (Handle == IntPtr.Zero) return null;
 
-            Bitmap timerBitmap = null;
-
             try
             {
-                timerBitmap = GetNegativeOffsetTimer();
-                if (timerBitmap == null) return null;
-
-                if (settings.Capture.SaveTimerRegion)
+                using (var timerBitmap = GetNegativeOffsetTimer())
                 {
-                    timerBitmap.Save(Path.Combine(settings.CapturesPath, "timer-" + Guid.NewGuid().ToString() + ".bmp"));
-                }
+                    if (timerBitmap == null) return null;
 
-                return await ConvertBitmapTimerToTimeSpan(timerBitmap).ConfigureAwait(false);
+                    if (settings.Capture.SaveTimerRegion)
+                    {
+                        timerBitmap.Save(Path.Combine(settings.CapturesPath, "timer-" + Guid.NewGuid().ToString() + ".bmp"));
+                    }
+
+                    return await ConvertBitmapTimerToTimeSpan(timerBitmap).ConfigureAwait(false);
+                }
             }
             catch (Exception e)
             {
                 logger.LogError(e, "Could not get timer from bitmap");
-            }
-            finally
-            {
-                timerBitmap?.Dispose();
             }
 
             return null;
@@ -332,17 +327,6 @@ namespace HeroesReplay.Core
             SendMessage(Handle, WindowMessage.WM_KEYUP, key, IntPtr.Zero);
         }
 
-        public void ToggleChatWindow()
-        {
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_C, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_C, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_C, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
-        }
-
         public void CameraFollow()
         {
             SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
@@ -350,25 +334,6 @@ namespace HeroesReplay.Core
             SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
         }
 
-        public void ToggleTimer()
-        {
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
-        }
-
-        public void ToggleControls()
-        {
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_O, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_O, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_O, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
-        }
 
         public void SendToggleMaximumZoom()
         {
@@ -395,17 +360,6 @@ namespace HeroesReplay.Core
             SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
         }
 
-        public void ToggleUnitPanel()
-        {
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_MENU, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_K, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_K, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_K, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_MENU, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
-        }
-
         public void KillGame()
         {
             try
@@ -420,7 +374,10 @@ namespace HeroesReplay.Core
                     {
                         foreach (var process in Process.GetProcessesByName(this.settings.Process.HeroesOfTheStorm))
                         {
-                            process.Kill();
+                            using (process)
+                            {
+                                process.Kill();
+                            }
                         }
 
                         return !Process.GetProcessesByName(this.settings.Process.HeroesOfTheStorm).Any();

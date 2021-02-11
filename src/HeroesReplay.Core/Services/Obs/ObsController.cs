@@ -107,7 +107,7 @@ namespace HeroesReplay.Core.Services.Obs
 
                 var sceneList = obs.GetSceneList();
                 var sourceList = obs.GetSourcesList();
-
+                
                 foreach (ReportScene segment in settings.OBS.ReportScenes.Where(scene => scene.Enabled))
                 {
                     TrySetBrowserSourceSegment(replayId, obs, sourceList, segment);
