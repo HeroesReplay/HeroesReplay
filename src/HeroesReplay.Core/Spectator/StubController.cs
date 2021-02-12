@@ -1,7 +1,10 @@
 ﻿using HeroesReplay.Core.Models;
+
 using Microsoft.Extensions.Logging;
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core
@@ -11,7 +14,7 @@ namespace HeroesReplay.Core
         private readonly ILogger<StubController> logger;
         private readonly ISessionHolder sessionHolder;
 
-        private TimeSpan TimeSpan { get; set; } = TimeSpan.Zero;
+        private List<TimeSpan?> Timers { get; set; } = new();
 
         public StubController(ILogger<StubController> logger, ISessionHolder sessionHolder)
         {
@@ -21,7 +24,20 @@ namespace HeroesReplay.Core
 
         public void KillGame() { }
 
-        public Task<StormReplay> LaunchAsync(StormReplay stormReplay) => Task.FromResult(stormReplay);
+
+        public async Task<StormReplay> LaunchAsync(StormReplay stormReplay)
+        {
+            var timeSpans = Enumerable.Range((int)sessionHolder.SessionData.GatesOpen.TotalSeconds, (int)stormReplay.Replay.ReplayLength.TotalSeconds).ToList();
+            var total = timeSpans.Count;
+            var sections = (total / 4);
+
+            Timers.Add(TimeSpan.FromSeconds(timeSpans[0])); // Start
+            Timers.Add(TimeSpan.FromSeconds(timeSpans[sections * 1])); // Middle
+            Timers.Add(TimeSpan.FromSeconds(timeSpans[sections * 2])); // Middle 
+            Timers.Add(TimeSpan.FromSeconds(timeSpans[sections * 3])); // End
+
+            return await Task.FromResult(stormReplay).ConfigureAwait(false);
+        }
 
         public void SendFocus(int player) => logger.LogInformation($"Selected player {player}");
 
@@ -29,11 +45,15 @@ namespace HeroesReplay.Core
 
         public Task<TimeSpan?> TryGetTimerAsync()
         {
-            // return Task.FromResult(new TimeSpan?(sessionHolder.SessionData.End));
+            TimeSpan? timer = null;
 
-            var next = TimeSpan;
-            TimeSpan = TimeSpan.Add(TimeSpan.FromSeconds(1));
-            return Task.FromResult(new TimeSpan?(next));
+            if (Timers.Count > 0)
+            {
+                timer = Timers[0];
+                Timers.Remove(timer);
+            }
+
+            return Task.FromResult(timer);
         }
 
         public void SendToggleMaximumZoom() => logger.LogInformation($"SendToggleMaximumZoom");

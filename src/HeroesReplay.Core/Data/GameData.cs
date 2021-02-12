@@ -137,8 +137,10 @@ namespace HeroesReplay.Core.Runner
 
                             using (var reader = File.OpenRead(Path.Combine(settings.HeroesDataPath, name)))
                             {
-                                ZipArchive zip = new ZipArchive(reader);
-                                zip.ExtractToDirectory(settings.HeroesDataPath);
+                                using (ZipArchive zip = new ZipArchive(reader))
+                                {
+                                    zip.ExtractToDirectory(settings.HeroesDataPath);
+                                }
                             }
                         }
                     }

@@ -21,7 +21,11 @@
         "HEROES_REPLAY_Capture__Method": "BitBlt",
         "HEROES_REPLAY_HeroesProfileApi__AwsAccessKey": "",
         "HEROES_REPLAY_HeroesProfileApi__AwsSecretKey": "",
-        "HEROES_REPLAY_HeroesProfileApi__ApiKey": ""
+        "HEROES_REPLAY_HeroesProfileApi__ApiKey": "",
+        "HEROES_REPLAY_TwitchExtension__ApiKey": "",
+        "HEROES_REPLAY_TwitchExtension__ApiEmail": "",
+        "HEROES_REPLAY_TwitchExtension__TwitchUserName": "",
+        "HEROES_REPLAY_TwitchExtension__ApiUserId": ""
       }
     },
     "HeroesReplay.CLI [Spectate][FILE]": {

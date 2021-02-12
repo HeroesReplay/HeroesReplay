@@ -8,6 +8,7 @@ namespace HeroesReplay.Core.Configuration
     {
         public Uri BaseUri { get; init; }
         public Uri OpenApiBaseUri { get; init; }
+        public Uri TwitchBaseUri { get; init; }
         public string ApiKey { get; init; }
         public string AwsAccessKey { get; init; }
         public string AwsSecretKey { get; init; }

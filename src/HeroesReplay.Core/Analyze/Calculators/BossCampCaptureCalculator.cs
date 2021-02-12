@@ -21,22 +21,23 @@ namespace HeroesReplay.Core
             this.settings = settings;
             this.gameData = gameData;
         }
+
         public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
         {
             if (replay == null) throw new ArgumentNullException(nameof(replay));
 
             var campCaptures = replay.TrackerEvents.Where(trackerEvent => trackerEvent.TimeSpan == now &&
                                                                     trackerEvent.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent &&
-                                                                    trackerEvent.Data.dictionary[0].blobText == "JungleCampCapture");
+                                                                    trackerEvent.Data.dictionary[0].blobText == settings.TrackerEvents.JungleCampCapture);
 
             foreach (TrackerEvent capture in campCaptures)
             {
                 int teamId = (int)capture.Data.dictionary[3].optionalData.array[0].dictionary[1].vInt.GetValueOrDefault() - 1;
 
-                foreach (Unit unit in replay.Units.Where(unit => unit.TimeSpanDied < capture.TimeSpan && 
-                                                                 unit.TimeSpanBorn < capture.TimeSpan && 
-                                                                 unit.PlayerKilledBy != null && 
-                                                                 unit.PlayerKilledBy.Team == teamId && 
+                foreach (Unit unit in replay.Units.Where(unit => unit.TimeSpanDied < capture.TimeSpan &&
+                                                                 unit.TimeSpanBorn < capture.TimeSpan &&
+                                                                 unit.PlayerKilledBy != null &&
+                                                                 unit.PlayerKilledBy.Team == teamId &&
                                                                  unit.TimeSpanDied > capture.TimeSpan.Subtract(TimeSpan.FromSeconds(10))))
                 {
                     if (gameData.BossUnits.Contains(unit.Name))

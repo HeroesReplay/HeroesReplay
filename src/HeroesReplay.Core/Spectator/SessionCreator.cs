@@ -31,10 +31,11 @@ namespace HeroesReplay.Core
             var players = replayAnalyzer.GetPlayers(stormReplay.Replay);
             var panels = replayAnalyzer.GetPanels(stormReplay.Replay);
             var end = replayAnalyzer.GetEnd(stormReplay.Replay);
-            var isCarriedObjectiveMap = replayAnalyzer.IsCarriedObjectiveMap(stormReplay.Replay);
+            var carriedObjectives = replayAnalyzer.IsCarriedObjectiveMap(stormReplay.Replay);
             var start = replayAnalyzer.GetStart(stormReplay.Replay);
+            var payloads = replayAnalyzer.GetPayloads(stormReplay.Replay);
 
-            sessionSetter.SetSession(new SessionData(players, panels, start, end, isCarriedObjectiveMap), stormReplay);
+            sessionSetter.SetSession(new SessionData(payloads, players, panels, start, end, carriedObjectives), stormReplay);
 
             var ended = DateTime.Now;
             var duration = ended - started;

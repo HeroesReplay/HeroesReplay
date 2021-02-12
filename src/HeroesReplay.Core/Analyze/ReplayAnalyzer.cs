@@ -11,24 +11,25 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core
 {
     public class ReplayAnalyzer : IReplayAnalzer
     {
-        private const string TrackerEventGatesOpen = "GatesOpen";
-
         private readonly IEnumerable<IFocusCalculator> calculators;
         private readonly IGameData gameData;
         private readonly ILogger<ReplayAnalyzer> logger;
         private readonly AppSettings settings;
+        private readonly IHeroesProfileExtensionPayloadsBuilder talentPayloadsBuilder;
 
-        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, AppSettings settings, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
+        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, AppSettings settings, IHeroesProfileExtensionPayloadsBuilder talentPayloadsBuilder, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
         {
             this.calculators = calculators ?? throw new ArgumentNullException(nameof(calculators));
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.talentPayloadsBuilder = talentPayloadsBuilder ?? throw new ArgumentNullException(nameof(talentPayloadsBuilder));
         }
 
         public TimeSpan GetEnd(Replay replay)
@@ -68,6 +69,11 @@ namespace HeroesReplay.Core
             }
 
             return new ReadOnlyDictionary<TimeSpan, Panel>(panels);
+        }
+
+        public ITalentExtensionPayloads GetPayloads(Replay replay)
+        {
+            return talentPayloadsBuilder.CreatePayloads(replay);
         }
 
         public IReadOnlyDictionary<TimeSpan, Focus> GetPlayers(Replay replay)
@@ -120,7 +126,7 @@ namespace HeroesReplay.Core
                         var previousLessWeight = past.Points < entry.Value.Points;
 
                         if (previousLessWeight)
-                        {                            
+                        {
                             focusDictionary[pastTime] = entry.Value;
                         }
                     }
@@ -146,7 +152,7 @@ namespace HeroesReplay.Core
                     }
                     else
                     {
-                         focusDictionary.TryAdd(futureTime, entry.Value);
+                        focusDictionary.TryAdd(futureTime, entry.Value);
                     }
                 }
 
@@ -171,7 +177,7 @@ namespace HeroesReplay.Core
             if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
 
-            return replay.TrackerEvents.First(x => x.Data.dictionary[0].blobText == TrackerEventGatesOpen).TimeSpan;
+            return replay.TrackerEvents.First(x => x.Data.dictionary[0].blobText == settings.TrackerEvents.GatesOpen).TimeSpan;
         }
 
         public bool IsCarriedObjectiveMap(Replay replay) => replay != null && (settings.Maps.CarriedObjectives.Contains(replay.Map) ||

@@ -8,15 +8,14 @@ namespace HeroesReplay.Tests
 {
     public class AnalyzerTests : IClassFixture<ReplayFixture>
     {
-        private ReplayFixture fixture;
-
-        private IReplayAnalzer replayAnalzer;
+        private readonly ReplayFixture fixture;
+        private readonly IReplayAnalzer replayAnalzer;
 
         public AnalyzerTests(ReplayFixture fixture)
         {
             this.fixture = fixture;
             var settings = new AppSettings { Weights = new WeightSettings() { } };
-            replayAnalzer = new ReplayAnalyzer(new NullLogger<ReplayAnalyzer>(), settings, new[] { new KillCalculator(settings) }, null);
+            replayAnalzer = new ReplayAnalyzer(new NullLogger<ReplayAnalyzer>(), settings, null, new[] { new KillCalculator(settings) }, null);
         }
 
         [Fact]

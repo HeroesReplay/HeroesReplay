@@ -16,8 +16,6 @@ namespace HeroesReplay.Core
         private readonly AppSettings settings;
         private readonly IGameData gameData;
 
-        private const string JungleCampCapture = nameof(JungleCampCapture);
-
         public CampCaptureCalculator(AppSettings settings, IGameData gameData)
         {
             this.settings = settings;
@@ -34,7 +32,7 @@ namespace HeroesReplay.Core
                                                                              trackerEvent.TimeSpan.Subtract(TimeSpan.FromSeconds(1)) < now)
                                                                           ) &&
                                                                     trackerEvent.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent &&
-                                                                    trackerEvent.Data.dictionary[0].blobText == JungleCampCapture);
+                                                                    trackerEvent.Data.dictionary[0].blobText == settings.TrackerEvents.JungleCampCapture);
 
             foreach (TrackerEvent capture in campCaptures)
             {

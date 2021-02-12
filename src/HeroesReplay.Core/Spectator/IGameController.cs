@@ -13,11 +13,7 @@ namespace HeroesReplay.Core
         void SendPanel(Panel panel);
         void KillGame();
         void SendToggleMaximumZoom();
-        void ToggleControls();
-        void ToggleTimer();
         void CameraFollow();
-        void ToggleChatWindow();
         void SendToggleMediumZoom();
-        void ToggleUnitPanel();
     }
 }

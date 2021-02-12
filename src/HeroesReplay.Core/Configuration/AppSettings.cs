@@ -11,6 +11,8 @@ namespace HeroesReplay.Core.Configuration
         public OBSSettings OBS { get; init; }
         public StormReplaySettings StormReplay { get; init; }
         public HeroesProfileApiSettings HeroesProfileApi { get; init; }
+        public HeroesProfileTwitchExtensionSettings TwitchExtension { get; init; }
+        public TrackerEventSettings TrackerEvents { get; init; }
         public WeightSettings Weights { get; init; }
         public ReplayDetailsWriterSettings ReplayDetailsWriter { get; init; }
         public TwitchApiSettings TwitchApi { get; init; }
@@ -22,6 +24,7 @@ namespace HeroesReplay.Core.Configuration
         public MapSettings Maps { get; init; }
         public ParseOptionsSettings ParseOptions { get; init; }
         public AbilityDetectionSettings AbilityDetection { get; init; }
+
         public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
         public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
         public string HeroesDataPath => Path.Combine(AssetsPath, "HeroesData");
