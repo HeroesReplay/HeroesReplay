@@ -96,14 +96,9 @@ namespace HeroesReplay.Core
         {
             logger.LogInformation("Launching battlenet because this replay is the latest build and requires auth.");
 
-            using (Process process = Process.Start(new ProcessStartInfo(settings.Location.BattlenetPath, $"--game=heroes --gamepath=\"{settings.Location.GameInstallPath}\" --sso=1 -launch -uid heroes")))
+            using (Process process = Process.Start(new ProcessStartInfo(settings.Location.BattlenetPath, $"--exec=\"launch Hero\"")))
             {
                 process.WaitForExit();
-
-                var window = Process.GetProcessesByName(settings.Process.Battlenet).Single(x => !string.IsNullOrWhiteSpace(x.MainWindowTitle)).MainWindowHandle;
-                SendMessage(window, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_RETURN, IntPtr.Zero);
-                SendMessage(window, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_RETURN, IntPtr.Zero);
-
                 logger.LogInformation("Heroes of the Storm launched from Battlenet.");
             }
 
