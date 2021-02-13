@@ -176,7 +176,8 @@ namespace HeroesReplay.Core.Providers
         private FileInfo CreateFile(HeroesProfileReplay replay)
         {
             var path = ReplaysDirectory.FullName;
-            var name = $"{replay.Id}{settings.StormReplay.Seperator}{replay.GameType}{settings.StormReplay.Seperator}{replay.Fingerprint}{settings.StormReplay.FileExtension}";
+            var seperator = settings.StormReplay.Seperator;
+            var name = $"{replay.Id}{seperator}{replay.GameType}{seperator}{replay.Fingerprint}{settings.StormReplay.FileExtension}";
             return new FileInfo(Path.Combine(path, name));
         }
 

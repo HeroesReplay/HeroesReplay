@@ -16,6 +16,8 @@ namespace HeroesReplay.Core.Runner
 
         IReadOnlyCollection<string> BossUnits { get; }        
 
+        IReadOnlyCollection<string> VehicleUnits { get; }
+
         UnitGroup GetUnitGroup(string unitName);
 
         IReadOnlyList<Map> Maps { get; }

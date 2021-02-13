@@ -54,6 +54,7 @@ namespace HeroesReplay.Core.Runner
         public IReadOnlyList<Hero> Heroes { get; private set; }
         public IReadOnlyCollection<string> CoreUnits { get; private set; }
         public IReadOnlyCollection<string> BossUnits { get; private set; }
+        public IReadOnlyCollection<string> VehicleUnits { get; private set; }
 
         public GameData(ILogger<GameData> logger, AppSettings settings)
         {
@@ -157,6 +158,7 @@ namespace HeroesReplay.Core.Runner
             var ignoreUnits = settings.HeroesToolChest.IgnoreUnits.ToList();
             var bossUnits = new HashSet<string>();
             var coreUnits = new HashSet<string>();
+            var vehicleUnits = new HashSet<string>();
 
             var files = Directory
                 .GetFiles(settings.HeroesDataPath, "*.json", SearchOption.AllDirectories)
@@ -170,9 +172,13 @@ namespace HeroesReplay.Core.Runner
                 {
                     foreach (var o in document.RootElement.EnumerateObject())
                     {
-                        if (o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement value) && settings.HeroesToolChest.ScalingLinkId.Equals(value.GetString()))
+                        if (o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement core) && settings.HeroesToolChest.CoreScalingLinkId.Equals(core.GetString()))
                         {
                             coreUnits.Add(o.Name.Contains(ObjectNameSeperator) ? o.Name.Split(ObjectNameSeperator)[1] : o.Name);
+                        }
+                        else if (o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement vehicle) && settings.HeroesToolChest.VehicleScalingLinkIds.Contains(vehicle.GetString()))
+                        {
+                            vehicleUnits.Add(o.Name.Contains(ObjectNameSeperator) ? o.Name.Split(ObjectNameSeperator)[1] : o.Name);
                         }
 
                         if (o.Value.TryGetProperty(UnitIdProperty, out var unitId))
@@ -287,6 +293,7 @@ namespace HeroesReplay.Core.Runner
             this.UnitGroups = new ReadOnlyDictionary<string, UnitGroup>(unitGroups);
             this.BossUnits = new ReadOnlyCollection<string>(bossUnits.ToList());
             this.CoreUnits = new ReadOnlyCollection<string>(coreUnits.ToList());
+            this.VehicleUnits = new ReadOnlyCollection<string>(vehicleUnits.ToList());
         }
 
         public UnitGroup GetUnitGroup(string name)

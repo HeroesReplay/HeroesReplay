@@ -13,7 +13,6 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-using static HeroesReplay.Core.Services.HeroesProfile.HeroesProfileExtensionPayloadsBuilder;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
 {
@@ -47,42 +46,34 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             });
         }
 
-        public Uri GetMatchLink(StormReplay stormReplay) => new Uri($"{stormReplay?.ReplayId}");
-
-        public async Task<(int RankPoints, string Tier)> GetMMRAsync(StormReplay stormReplay)
+        public async Task<(int RankPoints, string Tier)> GetMMRAsync(SessionData sessionData)
         {
-            if (stormReplay == null)
-                throw new ArgumentNullException(nameof(stormReplay));
-
             try
             {
-                if (stormReplay.ReplayId.HasValue)
+                var apiKey = settings.HeroesProfileApi.ApiKey;
+
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
                 {
-                    var apiKey = settings.HeroesProfileApi.ApiKey;
+                    string dataResponse = await client.GetStringAsync(new Uri($"Replay/Data?mode=json&replayID={sessionData.ReplayId}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
 
-                    using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                    using (JsonDocument dataJson = JsonDocument.Parse(dataResponse))
                     {
-                        string dataResponse = await client.GetStringAsync(new Uri($"Replay/Data?mode=json&replayID={stormReplay.ReplayId.Value}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
+                        double mmr = (from replay in dataJson.RootElement.EnumerateObject()
+                                      from element in replay.Value.EnumerateObject()
+                                      where element.Value.ValueKind == JsonValueKind.Object
+                                      let player = element.Value
+                                      from p in player.EnumerateObject()
+                                      where p.Name.Equals(settings.HeroesProfileApi.MMRProperty)
+                                      select p.Value.GetDouble())
+                                          .OrderByDescending(x => x)
+                                          .Take(settings.HeroesProfileApi.MMRPoolSize)
+                                          .Average();
 
-                        using (JsonDocument dataJson = JsonDocument.Parse(dataResponse))
-                        {
-                            double mmr = (from replay in dataJson.RootElement.EnumerateObject()
-                                          from element in replay.Value.EnumerateObject()
-                                          where element.Value.ValueKind == JsonValueKind.Object
-                                          let player = element.Value
-                                          from p in player.EnumerateObject()
-                                          where p.Name.Equals(settings.HeroesProfileApi.MMRProperty)
-                                          select p.Value.GetDouble())
-                                              .OrderByDescending(x => x)
-                                              .Take(settings.HeroesProfileApi.MMRPoolSize)
-                                              .Average();
+                        int average = Convert.ToInt32(mmr);
 
-                            int average = Convert.ToInt32(mmr);
+                        string tier = await client.GetStringAsync(new Uri($"MMR/Tier?mmr={average}&game_type={sessionData.GameType}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
 
-                            string tier = await client.GetStringAsync(new Uri($"MMR/Tier?mmr={average}&game_type={stormReplay.GameType}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
-
-                            return (average, tier);
-                        }
+                        return (average, tier);
                     }
                 }
             }
@@ -98,7 +89,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         {
             try
             {
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.OpenApiBaseUri })
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
                 {
                     HttpResponseMessage response = await Policy
                            .Handle<Exception>()
@@ -351,7 +342,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             if (wrappedResponse?.Result?.Headers?.RetryAfter != null)
             {
                 TimeSpan retryAfter = wrappedResponse.Result.Headers.RetryAfter.Delta.Value;
-                logger.LogInformation($"Setting retry-after to {retryAfter}");
+                logger.LogWarning($"Setting retry-after to {retryAfter}");
                 context["retry-after"] = retryAfter;
             }
         }

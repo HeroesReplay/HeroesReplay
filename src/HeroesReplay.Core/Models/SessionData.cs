@@ -13,9 +13,13 @@ namespace HeroesReplay.Core.Models
         public bool IsCarriedObjectiveMap { get; }
         public TimeSpan GatesOpen { get; }
         public ITalentExtensionPayloads Payloads { get; }
+        public int? ReplayId { get; }
+        public string GameType { get; }
 
-        public SessionData(ITalentExtensionPayloads payloads, IReadOnlyDictionary<TimeSpan, Focus> players, IReadOnlyDictionary<TimeSpan, Panel> panels, TimeSpan start, TimeSpan end, bool carried)
+        public SessionData(int? replayId, string gameType, ITalentExtensionPayloads payloads, IReadOnlyDictionary<TimeSpan, Focus> players, IReadOnlyDictionary<TimeSpan, Panel> panels, TimeSpan start, TimeSpan end, bool carried)
         {
+            GameType = gameType;
+            ReplayId = replayId;
             Payloads = payloads;
             Players = players;
             Panels = panels;
