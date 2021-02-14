@@ -42,7 +42,7 @@ namespace HeroesReplay.Core.Runner
 
         private const string UnitNameLaner = "Laner";
         private const string UnitNameDefender = "Defender";
-        private const string UnitNamePayload = "Payload";        
+        private const string UnitNamePayload = "Payload";
 
         private const string HeroicTalent = "Talent";
 
@@ -94,21 +94,19 @@ namespace HeroesReplay.Core.Runner
 
         private async Task DownloadIfEmptyAsync()
         {
-            var exists = Directory.Exists(settings.HeroesDataPath);
+            logger.LogInformation("Downloading heroes-data if needed.");
+
             var release = settings.HeroesToolChest.HeroesDataReleaseUri;
 
-            if (exists && Directory.EnumerateFiles(settings.HeroesDataPath, "*.json", SearchOption.AllDirectories).Any())
+            if (Directory.Exists(settings.HeroesDataPath) && Directory.EnumerateFiles(settings.HeroesDataPath, "*.json", SearchOption.AllDirectories).Any())
             {
-                logger.LogInformation("Heroes Data exists. No need to download HeroesToolChest hero-data.");
+                logger.LogDebug("Heroes Data exists. No need to download HeroesToolChest hero-data.");
             }
             else
             {
-                logger.LogInformation($"heroes-data does not exists. Downloading files to: {settings.HeroesDataPath}");
+                logger.LogDebug($"heroes-data does not exists. Downloading files to: {settings.HeroesDataPath}");
 
-                if (!exists)
-                {
-                    Directory.CreateDirectory(settings.HeroesDataPath);
-                }
+                Directory.CreateDirectory(settings.HeroesDataPath);
 
                 using (var client = new HttpClient())
                 {
@@ -132,6 +130,7 @@ namespace HeroesReplay.Core.Runner
                                 using (var write = File.OpenWrite(Path.Combine(settings.HeroesDataPath, name)))
                                 {
                                     await data.CopyToAsync(write).ConfigureAwait(false);
+                                    logger.LogInformation("Saving heroes-data...");
                                     await write.FlushAsync().ConfigureAwait(false);
                                 }
                             }
@@ -140,6 +139,7 @@ namespace HeroesReplay.Core.Runner
                             {
                                 using (ZipArchive zip = new ZipArchive(reader))
                                 {
+                                    logger.LogInformation("Extracting heroes-data...");
                                     zip.ExtractToDirectory(settings.HeroesDataPath);
                                 }
                             }
@@ -242,8 +242,8 @@ namespace HeroesReplay.Core.Runner
                                 continue;
                             }
 
-                            if ((attributes.Contains(AttributeMapCreature) || attributes.Contains(AttributeMapBoss)) && 
-                                                                           !(name.EndsWith(UnitNameLaner) || name.EndsWith(UnitNameDefender)) && 
+                            if ((attributes.Contains(AttributeMapCreature) || attributes.Contains(AttributeMapBoss)) &&
+                                                                           !(name.EndsWith(UnitNameLaner) || name.EndsWith(UnitNameDefender)) &&
                                                                            !ignoreUnits.Any(i => name.Contains(i)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;

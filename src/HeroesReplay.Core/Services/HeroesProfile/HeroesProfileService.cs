@@ -171,7 +171,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             try
             {
-                payload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
+                payload.SetGameSessionReplayId(sessionId);
 
                 using (CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
@@ -211,7 +211,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             try
             {
-                payload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
+                payload.SetGameSessionReplayId(sessionId);
 
                 using(CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
@@ -248,7 +248,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             try
             {
-                payload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
+                payload.SetGameSessionReplayId(sessionId);
 
                 using (CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
@@ -323,7 +323,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                     {
                         foreach (var talentPayload in talentPayloads)
                         {
-                            talentPayload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
+                            talentPayload.SetGameSessionReplayId(sessionId);
 
                             foreach (var content in talentPayload.Content)
                             {

@@ -87,6 +87,8 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                                     { TwitchExtensionFormKeys.Region, player.BattleNetRegionId.ToString() },
                                     { TwitchExtensionFormKeys.Talent, talentName },
                                     { TwitchExtensionFormKeys.Hero, player.Character },
+                                    { TwitchExtensionFormKeys.HeroId, player.HeroId },
+                                    { TwitchExtensionFormKeys.HeroAttributeId, player.HeroAttributeId }
                                 }
                             }
                         });
