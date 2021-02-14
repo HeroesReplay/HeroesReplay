@@ -199,6 +199,8 @@ namespace HeroesReplay.Core.Providers
 
                            if (replays != null && replays.Any())
                            {
+                               logger.LogInformation("Finding replay that fits criteria.");
+
                                HeroesProfileReplay found = (from replay in replays
                                                             where replay.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket)
                                                             where replay.Valid == 1

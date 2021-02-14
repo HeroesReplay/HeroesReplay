@@ -23,7 +23,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
-            this.sharedFormData = new List<KeyValuePair<string, string>>()
+            sharedFormData = new List<KeyValuePair<string, string>>()
             {
                 new KeyValuePair<string, string>(TwitchExtensionFormKeys.TwitchKey, settings.TwitchExtension.ApiKey),
                 new KeyValuePair<string, string>(TwitchExtensionFormKeys.Email, settings.TwitchExtension.ApiEmail),

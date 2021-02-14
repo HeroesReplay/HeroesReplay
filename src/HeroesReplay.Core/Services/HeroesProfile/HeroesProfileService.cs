@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 
@@ -37,7 +38,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
-            this.notifyContent = new(new Dictionary<string, string>
+            notifyContent = new(new Dictionary<string, string>
             {
                 { TwitchExtensionFormKeys.TwitchKey, settings.TwitchExtension.ApiKey },
                 { TwitchExtensionFormKeys.Email, settings.TwitchExtension.ApiEmail },
@@ -95,13 +96,16 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                            .Handle<Exception>()
                            .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
                            .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
-                           .ExecuteAsync(async (context, token) => await client.GetAsync(new Uri($"Replay/Min_id?min_id={minId}", UriKind.Relative), token), new Context(), tokenProvider.Token)
+                           .ExecuteAsync(async (context, token) => await client.GetAsync(new Uri($"Replay/Min_id?min_id={minId}&api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative), token), new Context(), tokenProvider.Token)
                            .ConfigureAwait(false);
 
                     if (response.IsSuccessStatusCode)
                     {
-                        return JsonSerializer.Deserialize<IEnumerable<HeroesProfileReplay>>(await response.Content.ReadAsStringAsync())
-                                             .Where(x => x.Deleted == null || x.Deleted == "0");
+                        logger.LogInformation("Deserializing replays...");
+
+                        return JsonSerializer
+                            .Deserialize<IEnumerable<HeroesProfileReplay>>(await response.Content.ReadAsStringAsync())
+                            .Where(x => x.Deleted == null || x.Deleted == "0");
                     }
                 }
             }
@@ -113,34 +117,37 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return Enumerable.Empty<HeroesProfileReplay>();
         }
 
-        public async Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload)
+        public async Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
 
             try
             {
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
+                using (CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
-                    HttpResponseMessage response = await Policy
-                           .Handle<Exception>()
-                           .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                           .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
-                           .ExecuteAsync(async (context, token) => await client.PostAsync(CreateReplayUrl, new FormUrlEncodedContent(payload.Content.Single()), tokenProvider.Token), new Context(), tokenProvider.Token)
-                           .ConfigureAwait(false);
-
-                    if (response.IsSuccessStatusCode)
+                    using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                     {
-                        string result = await response.Content.ReadAsStringAsync();
+                        HttpResponseMessage response = await Policy
+                               .Handle<Exception>()
+                               .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                               .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                               .ExecuteAsync(async (context, token) => await client.PostAsync(CreateReplayUrl, new FormUrlEncodedContent(payload.Content.Single()), cancellationSource.Token), new Context(), tokenProvider.Token)
+                               .ConfigureAwait(false);
 
-                        if (int.TryParse(result, out _))
+                        if (response.IsSuccessStatusCode)
                         {
-                            return result;
+                            string result = await response.Content.ReadAsStringAsync();
+
+                            if (int.TryParse(result, out _))
+                            {
+                                return result;
+                            }
                         }
-                    }
-                    else
-                    {
-                        logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                        else
+                        {
+                            logger.LogError($"{response.StatusCode} ({response.ReasonPhrase})");
+                        }
                     }
                 }
             }
@@ -152,7 +159,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return null;
         }
 
-        public async Task<bool> CreatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId)
+        public async Task<bool> CreatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -166,20 +173,25 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             {
                 payload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
 
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
+                using (CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
-                    foreach (var content in payload.Content)
+                    using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                     {
-                        HttpResponseMessage response = await Policy
-                            .Handle<Exception>()
-                            .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                            .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
-                            .ExecuteAsync(async (context, token) => await client.PostAsync(CreatePlayerUrl, new FormUrlEncodedContent(content), token), new Context(), tokenProvider.Token)
-                            .ConfigureAwait(false);
+                        foreach (var content in payload.Content)
+                        {
+                            HttpResponseMessage response = await Policy
+                                .Handle<Exception>()
+                                .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                                .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                                .ExecuteAsync(async (context, token) => await client.PostAsync(CreatePlayerUrl, new FormUrlEncodedContent(content), token), new Context(), cancellationSource.Token)
+                                .ConfigureAwait(false);
 
-                        responses.Add(response);
+                            responses.Add(response);
+                        }
                     }
                 }
+
+                
             }
             catch (Exception e)
             {
@@ -189,7 +201,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return responses.All(response => response.IsSuccessStatusCode);
         }
 
-        public async Task<bool> UpdateReplayDataAsync(HeroesProfileTwitchPayload payload, string sessionId)
+        public async Task<bool> UpdateReplayDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -201,16 +213,19 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             {
                 payload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
 
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
+                using(CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
-                    HttpResponseMessage response = await Policy
-                           .Handle<Exception>()
-                           .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                           .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
-                           .ExecuteAsync(async (context, token) => await client.PostAsync(UpdateReplayUrl, new FormUrlEncodedContent(payload.Content.Single()), token), new Context(), tokenProvider.Token)
-                           .ConfigureAwait(false);
+                    using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
+                    {
+                        HttpResponseMessage response = await Policy
+                               .Handle<Exception>()
+                               .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                               .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                               .ExecuteAsync(async (context, token) => await client.PostAsync(UpdateReplayUrl, new FormUrlEncodedContent(payload.Content.Single()), token), new Context(), cancellationSource.Token)
+                               .ConfigureAwait(false);
 
-                    return response.IsSuccessStatusCode;
+                        return response.IsSuccessStatusCode;
+                    }
                 }
             }
             catch (Exception e)
@@ -221,7 +236,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return false;
         }
 
-        public async Task<bool> UpdatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId)
+        public async Task<bool> UpdatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -235,20 +250,25 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             {
                 payload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
 
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
+                using (CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
-                    foreach (var playerContent in payload.Content)
+                    using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                     {
-                        HttpResponseMessage response = await Policy
-                                 .Handle<Exception>()
-                                 .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                                 .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
-                                 .ExecuteAsync(async (context, token) => await client.PostAsync(UpdatePlayerUrl, new FormUrlEncodedContent(playerContent), token), new Context(), tokenProvider.Token)
-                                 .ConfigureAwait(false);
+                        foreach (var playerContent in payload.Content)
+                        {
+                            HttpResponseMessage response = await Policy
+                                     .Handle<Exception>()
+                                     .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                                     .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                                     .ExecuteAsync(async (context, t) => await client.PostAsync(UpdatePlayerUrl, new FormUrlEncodedContent(playerContent), t), new Context(), cancellationSource.Token)
+                                     .ConfigureAwait(false);
 
-                        responses.Add(response);
+                            responses.Add(response);
+                        }
                     }
                 }
+
+                
             }
             catch (Exception e)
             {
@@ -258,20 +278,23 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return responses.All(x => x.IsSuccessStatusCode);
         }
 
-        public async Task<bool> NotifyTwitchAsync()
+        public async Task<bool> NotifyTwitchAsync(CancellationToken token)
         {
             try
             {
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
+                using (CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
-                    HttpResponseMessage response = await Policy
-                                 .Handle<Exception>()
-                                 .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                                 .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
-                                 .ExecuteAsync(async (context, token) => await client.PostAsync(NotifyUrl, notifyContent, token), new Context(), tokenProvider.Token)
-                                 .ConfigureAwait(false);
+                    using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
+                    {
+                        HttpResponseMessage response = await Policy
+                                     .Handle<Exception>()
+                                     .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                                     .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                                     .ExecuteAsync(async (context, token) => await client.PostAsync(NotifyUrl, notifyContent, token), new Context(), cancellationSource.Token)
+                                     .ConfigureAwait(false);
 
-                    return response.IsSuccessStatusCode;
+                        return response.IsSuccessStatusCode;
+                    }
                 }
             }
             catch (Exception e)
@@ -282,7 +305,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return false;
         }
 
-        public async Task<bool> UpdatePlayerTalentsAsync(List<HeroesProfileTwitchPayload> talentPayloads, string sessionId)
+        public async Task<bool> UpdatePlayerTalentsAsync(List<HeroesProfileTwitchPayload> talentPayloads, string sessionId, CancellationToken token)
         {
             if (talentPayloads == null)
                 throw new ArgumentNullException(nameof(talentPayloads));
@@ -294,22 +317,25 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             try
             {
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
+                using (CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
-                    foreach (var talentPayload in talentPayloads)
+                    using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                     {
-                        talentPayload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
-
-                        foreach (var content in talentPayload.Content)
+                        foreach (var talentPayload in talentPayloads)
                         {
-                            HttpResponseMessage response = await Policy
-                                .Handle<Exception>()
-                                .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                                .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
-                                .ExecuteAsync(async (context, token) => await client.PostAsync(SaveTalentUrl, new FormUrlEncodedContent(content), token), new Context(), tokenProvider.Token)
-                                .ConfigureAwait(false);
+                            talentPayload.SetGameSessionReplayId(TwitchExtensionFormKeys.SessionId, sessionId);
 
-                            responses.Add(response);
+                            foreach (var content in talentPayload.Content)
+                            {
+                                HttpResponseMessage response = await Policy
+                                    .Handle<Exception>()
+                                    .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                                    .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                                    .ExecuteAsync(async (context, token) => await client.PostAsync(SaveTalentUrl, new FormUrlEncodedContent(content), token), new Context(), cancellationSource.Token)
+                                    .ConfigureAwait(false);
+
+                                responses.Add(response);
+                            }
                         }
                     }
                 }
@@ -331,14 +357,21 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 return retryAfter;
             }
 
-            var defaultTimeSpan = TimeSpan.FromSeconds(retry * 5);
-
-            logger.LogInformation($"getting default sleep duration for retry attempt {retry}: {defaultTimeSpan}");
-            return defaultTimeSpan;
+            return TimeSpan.FromSeconds(5);
         }
 
-        private void OnRetry(DelegateResult<HttpResponseMessage> wrappedResponse, TimeSpan timeSpan, Context context)
+        private void OnRetry(DelegateResult<HttpResponseMessage> wrappedResponse, TimeSpan timeSpan, int retryAttempt, Context context)
         {
+            if (wrappedResponse.Exception != null)
+            {
+                logger.LogError(wrappedResponse.Exception, "Error with Heroes Profile Service");
+            }
+
+            if(wrappedResponse.Result != null)
+            {
+                logger.LogDebug($"retry attempt {retryAttempt}: {wrappedResponse.Result.StatusCode}: {wrappedResponse.Result.ReasonPhrase}");
+            }
+
             if (wrappedResponse?.Result?.Headers?.RetryAfter != null)
             {
                 TimeSpan retryAfter = wrappedResponse.Result.Headers.RetryAfter.Delta.Value;

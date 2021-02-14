@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
@@ -14,7 +15,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         private readonly ISessionHolder sessionHolder;
         private readonly IHeroesProfileService heroesProfileService;
 
-        private SessionData Data => this.sessionHolder.SessionData;
+        private SessionData Data => sessionHolder.SessionData;
         private string SessionId { get; set; }
         public bool SessionCreated => !string.IsNullOrWhiteSpace(SessionId);
 
@@ -25,83 +26,86 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             this.heroesProfileService = heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
         }
 
-        public async Task SendCurrentTalentsAsync(TimeSpan timer)
+        public async Task SendCurrentTalentsAsync(TimeSpan timer, CancellationToken token = default)
         {
-            if (this.Data.Payloads.Create.Any())
+            if (Data.Payloads.Create.Any())
             {
-                await SendCreatePayloadsAsync().ConfigureAwait(false);
+                await SendCreatePayloadsAsync(token).ConfigureAwait(false);
             }
-            else if (this.Data.Payloads.Update.Any() && !string.IsNullOrWhiteSpace(SessionId))
+            else if (Data.Payloads.Update.Any())
             {
-                await SendUpdatePayloadsAsync().ConfigureAwait(false);
+                await SendUpdatePayloadsAsync(token).ConfigureAwait(false);
             }
             else
             {
-                await UpdateTalentsAsync(timer).ConfigureAwait(false);
+                await UpdateTalentsAsync(timer, token).ConfigureAwait(false);
             }
         }
 
-        private async Task SendCreatePayloadsAsync()
+        private async Task SendCreatePayloadsAsync(CancellationToken token = default)
         {
-            var createReplayPayload = this.Data.Payloads.Create.Find(p => p.Step == HeroesProfileTwitchExtensionStep.CreateReplayData);
+            HeroesProfileTwitchPayload createReplayPayload = Data.Payloads.Create.Find(p => p.Step == HeroesProfileTwitchExtensionStep.CreateReplayData);
 
             if (createReplayPayload != null)
             {
-                var session = await heroesProfileService.CreateReplaySessionAsync(createReplayPayload).ConfigureAwait(false);
-                var success = !string.IsNullOrWhiteSpace(session);
+                string session = await heroesProfileService.CreateReplaySessionAsync(createReplayPayload, token).ConfigureAwait(false);
+                bool success = !string.IsNullOrWhiteSpace(session);
 
-                if (success)
+                if (success && Data.Payloads.Create.Remove(createReplayPayload))
                 {
-                    this.Data.Payloads.Create.Remove(createReplayPayload);
-                    SessionId = session;
+                    logger.LogDebug($"removed create replay payload.");
+                    logger.LogDebug($"create replay session id: {SessionId}");
                 }
+
+                SessionId = session;
             }
             else
             {
-                var createPlayerPayload = this.Data.Payloads.Create.Find(p => p.Step == HeroesProfileTwitchExtensionStep.CreatePlayerData);
+                HeroesProfileTwitchPayload createPlayerPayload = Data.Payloads.Create.Find(p => p.Step == HeroesProfileTwitchExtensionStep.CreatePlayerData);
 
                 if (createPlayerPayload != null)
                 {
-                    bool success = await heroesProfileService.CreatePlayerDataAsync(createPlayerPayload, SessionId).ConfigureAwait(false);
+                    bool success = await heroesProfileService.CreatePlayerDataAsync(createPlayerPayload, SessionId, token).ConfigureAwait(false);
 
-                    if (success)
+                    if (success && Data.Payloads.Create.Remove(createPlayerPayload))
                     {
-                        this.Data.Payloads.Create.Remove(createPlayerPayload);
+                        logger.LogDebug("Removed create player payload.");
                     }
                 }
             }
         }
 
-        private async Task SendUpdatePayloadsAsync()
+        private async Task SendUpdatePayloadsAsync(CancellationToken token = default)
         {
-            var updateReplayPayload = this.Data.Payloads.Update.Find(p => p.Step == HeroesProfileTwitchExtensionStep.UpdateReplayData);
+            HeroesProfileTwitchPayload updateReplayPayload = Data.Payloads.Update.Find(p => p.Step == HeroesProfileTwitchExtensionStep.UpdateReplayData);
 
             if (updateReplayPayload != null)
             {
-                bool success = await heroesProfileService.UpdateReplayDataAsync(updateReplayPayload, SessionId).ConfigureAwait(false);
+                bool success = await heroesProfileService.UpdateReplayDataAsync(updateReplayPayload, SessionId, token).ConfigureAwait(false);
 
-                if (success)
+                if (success && Data.Payloads.Update.Remove(updateReplayPayload))
                 {
-                    this.Data.Payloads.Update.Remove(updateReplayPayload);
+                    logger.LogDebug($"removed update replay payload.");
                 }
             }
             else
             {
-                var updatePlayerPayload = this.Data.Payloads.Update.Find(p => p.Step == HeroesProfileTwitchExtensionStep.UpdatePlayerData);
+                HeroesProfileTwitchPayload updatePlayerPayload = Data.Payloads.Update.Find(p => p.Step == HeroesProfileTwitchExtensionStep.UpdatePlayerData);
 
                 if (updatePlayerPayload != null)
                 {
-                    bool success = await heroesProfileService.UpdatePlayerDataAsync(updatePlayerPayload, SessionId).ConfigureAwait(false);
+                    bool success = await heroesProfileService.UpdatePlayerDataAsync(updatePlayerPayload, SessionId, token).ConfigureAwait(false);
 
                     if (success)
                     {
-                        this.Data.Payloads.Update.Remove(updatePlayerPayload);
+                        Data.Payloads.Update.Remove(updatePlayerPayload);
+                        logger.LogDebug($"removed update player payload.");
                     }
                 }
             }
         }
 
-        private async Task UpdateTalentsAsync(TimeSpan timer)
+        private async Task UpdateTalentsAsync(TimeSpan timer, CancellationToken token = default)
         {
             foreach (TimeSpan talentTime in Data.Payloads.Talents.Keys)
             {
@@ -109,24 +113,23 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 {
                     logger.LogInformation($"Talents at {talentTime} was found during timer: {timer}");
 
-                    bool success = await heroesProfileService.UpdatePlayerTalentsAsync(Data.Payloads.Talents[talentTime], SessionId).ConfigureAwait(false);
+                    bool success = await heroesProfileService.UpdatePlayerTalentsAsync(Data.Payloads.Talents[talentTime], SessionId, token).ConfigureAwait(false);
 
-                    if (success)
+                    if (success && Data.Payloads.Talents.Remove(talentTime))
                     {
-                        if (Data.Payloads.Talents.Remove(talentTime))
-                        {
-                            logger.LogInformation($"Removed talents key: {talentTime}");
-                        }
+                        logger.LogInformation($"Removed talents key: {talentTime}");
 
-                        await heroesProfileService.NotifyTwitchAsync().ConfigureAwait(false);
+                        bool notified = await heroesProfileService.NotifyTwitchAsync(token).ConfigureAwait(false);
+
+                        if (notified)
+                        {
+                            logger.LogDebug($"Twitch notify sent");
+                        }
                     }
                 }
             }
         }
 
-        public void ClearSession()
-        {
-            SessionId = null;
-        }
+        public void ClearSession() => SessionId = null;
     }
 }

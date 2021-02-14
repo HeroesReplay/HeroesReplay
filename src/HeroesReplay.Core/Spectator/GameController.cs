@@ -107,7 +107,7 @@ namespace HeroesReplay.Core
                 .Handle<Exception>()
                 .OrResult<bool>(loaded => loaded == false)
                 .WaitAndRetryAsync(retryCount: 60, retry => settings.OCR.CheckSleepDuration)
-                .ExecuteAsync(async (t) => await IsHomeScreen().ConfigureAwait(false), this.tokenProvider.Token).ConfigureAwait(false);
+                .ExecuteAsync((token) => IsHomeScreen(), tokenProvider.Token).ConfigureAwait(false);
 
             if (!loggedIn)
             {
@@ -140,11 +140,11 @@ namespace HeroesReplay.Core
                 .Concat(settings.OCR.LoadingScreenText)
                 .Concat(new[] { stormReplay.Replay.Map });
 
-            await Policy
+            var contains = await Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
                     .WaitAndRetryAsync(retryCount: 60, sleepDurationProvider: retry => settings.OCR.CheckSleepDuration)
-                    .ExecuteAsync((t) => ContainsAnyAsync(searchTerms), this.tokenProvider.Token).ConfigureAwait(false);
+                    .ExecuteAsync((t) => ContainsAnyAsync(searchTerms), tokenProvider.Token).ConfigureAwait(false);
         }
 
         public async Task<TimeSpan?> TryGetTimerAsync()
@@ -299,9 +299,19 @@ namespace HeroesReplay.Core
                 using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(capture).ConfigureAwait(false))
                 {
                     OcrResult result = await engine.RecognizeAsync(softwareBitmap);
-                    var containsAny = words.Any(word => result.Text.Contains(word));
 
-                    if (containsAny) return true;
+                    foreach (var word in words)
+                    {
+                        if (result.Text.Contains(word))
+                        {
+                            logger.LogDebug($"{word} has been found.");
+                            return true;
+                        }
+                        else
+                        {
+                            logger.LogDebug($"{word} not found.");
+                        }
+                    }
 
                     if (settings.Capture.SaveCaptureFailureCondition)
                     {
@@ -359,15 +369,15 @@ namespace HeroesReplay.Core
         {
             try
             {
-                Policy
+                bool killed = Policy
                     .Handle<Win32Exception>()
                     .Or<InvalidOperationException>()
                     .Or<NotSupportedException>()
-                    .OrResult<bool>(result => result == true)
-                    .WaitAndRetry(retryCount: 10, sleepDurationProvider: (retry) => TimeSpan.FromSeconds(Math.Pow(2, retry)))
+                    .OrResult(false)
+                    .WaitAndRetry(retryCount: 5, sleepDurationProvider: (retry) => TimeSpan.FromSeconds(Math.Pow(2, retry)), OnRetry)
                     .Execute(() =>
                     {
-                        foreach (var process in Process.GetProcessesByName(this.settings.Process.HeroesOfTheStorm))
+                        foreach (var process in Process.GetProcessesByName(settings.Process.HeroesOfTheStorm))
                         {
                             using (process)
                             {
@@ -375,14 +385,22 @@ namespace HeroesReplay.Core
                             }
                         }
 
-                        return !Process.GetProcessesByName(this.settings.Process.HeroesOfTheStorm).Any();
+                        return !Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).Any();
                     });
 
-                logger.LogInformation("Game process has been killed.");
+                logger.Log(killed ? LogLevel.Information : LogLevel.Error, $"Game process killed: {killed}");
             }
             catch (Exception e)
             {
                 logger.LogError(e, "Could not kill game process.");
+            }
+        }
+
+        private void OnRetry(DelegateResult<bool> result, TimeSpan arg2)
+        {
+            if (result.Exception != null)
+            {
+                logger.LogError(result.Exception, "Could not kill game process.");
             }
         }
     }

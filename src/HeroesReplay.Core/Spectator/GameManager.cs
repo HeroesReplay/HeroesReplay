@@ -22,7 +22,7 @@ namespace HeroesReplay.Core
         public GameManager(AppSettings settings, ISessionCreator sessionCreator, IGameSession session, IHeroesProfileService heroesProfileService, IGameController gameController, ISessionHolder sessionHolder, IObsController obsController, IReplayDetailsWriter replayDetailsWriter)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            this.sessionCreater = sessionCreator ?? throw new ArgumentNullException(nameof(sessionCreator));
+            sessionCreater = sessionCreator ?? throw new ArgumentNullException(nameof(sessionCreator));
             this.session = session ?? throw new ArgumentNullException(nameof(session));
             this.heroesProfileService = heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
             this.gameController = gameController ?? throw new ArgumentNullException(nameof(gameController));

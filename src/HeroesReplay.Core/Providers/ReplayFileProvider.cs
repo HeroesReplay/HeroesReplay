@@ -24,7 +24,7 @@ namespace HeroesReplay.Core.Providers
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
-            this.queue = new Queue<string>(new[] { settings.Location.ReplaySourcePath });
+            queue = new Queue<string>(new[] { settings.Location.ReplaySourcePath });
         }
 
         public async Task<StormReplay> TryLoadReplayAsync()

@@ -11,6 +11,4 @@ namespace HeroesReplay.CLI.Commands
             AddCommand(new SpectateHeroesProfileApiCommand());
         }
     }
-
-    
 }

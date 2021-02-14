@@ -33,6 +33,10 @@ namespace HeroesReplay.Core
 
         private SessionData Data => sessionHolder.SessionData;
 
+        private CancellationTokenSource CancelSessionSource { get; set; }
+
+        private CancellationTokenSource LinkedTokenSource { get; set; }
+
         public GameSession(
             ILogger<GameSession> logger,
             AppSettings settings,
@@ -48,7 +52,7 @@ namespace HeroesReplay.Core
             this.talentsNotifier = talentsNotifier ?? throw new ArgumentNullException(nameof(talentsNotifier));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
 
-            this.panelTimes = new()
+            panelTimes = new()
             {
                 { Panel.Talents, settings.PanelTimes.Talents },
                 { Panel.DeathDamageRole, settings.PanelTimes.DeathDamageRole },
@@ -64,61 +68,70 @@ namespace HeroesReplay.Core
             State = State.Loading;
             Timer = default;
 
-            await Task.WhenAll(
-                Task.Run(PanelLoopAsync, Token),
-                Task.Run(FocusLoopAsync, Token),
-                Task.Run(TalentsLoopAsync, Token),
-                Task.Run(StateLoopAsync, Token)).ConfigureAwait(false);
+            using (CancelSessionSource = new CancellationTokenSource())
+            {
+                using (LinkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(CancelSessionSource.Token, Token))
+                {
+                    await Task.WhenAll(
+                        Task.Run(PanelLoopAsync, LinkedTokenSource.Token),
+                        Task.Run(FocusLoopAsync, LinkedTokenSource.Token),
+                        Task.Run(TalentsLoopAsync, LinkedTokenSource.Token),
+                        Task.Run(StateLoopAsync, LinkedTokenSource.Token)).ConfigureAwait(false);
+                }
+            }
         }
 
         private async Task TalentsLoopAsync()
         {
             if (settings.TwitchExtension.Enabled)
             {
-                while (State != State.EndDetected)
-                {
-                    Token.ThrowIfCancellationRequested();
+                talentsNotifier.ClearSession();
 
+                while (!LinkedTokenSource.IsCancellationRequested)
+                {
                     try
                     {
-                        await talentsNotifier.SendCurrentTalentsAsync(Timer).ConfigureAwait(false);
+                        await talentsNotifier.SendCurrentTalentsAsync(Timer, CancelSessionSource.Token).ConfigureAwait(false);
+                        await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
+                    }
+                    catch (TaskCanceledException e)
+                    {
+                        logger.LogWarning(e, "Talents loop was cancelled.");
                     }
                     catch (Exception e)
                     {
                         logger.LogError(e, "Could not complete Heroes Profile Talents loop");
                     }
-
-                    await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
                 }
-
-                talentsNotifier.ClearSession();
             }
         }
 
         private async Task StateLoopAsync()
         {
-            while (State != State.EndDetected)
+            while (!LinkedTokenSource.IsCancellationRequested)
             {
-                Token.ThrowIfCancellationRequested();
-
                 try
                 {
-                    var result = await TryGetOcrTimer().ConfigureAwait(false);
+                    TimeSpan? result = await TryGetOcrTimer().ConfigureAwait(false);
 
-                    State = result.EndDetected ? State.EndDetected : result.Timer.HasValue ? State.TimerDetected : State.Loading;
+                    State = CancelSessionSource.IsCancellationRequested ? State.EndDetected : result.HasValue ? State.TimerDetected : State.Loading;
 
-                    if (result.Timer.HasValue)
+                    if (result.HasValue)
                     {
-                        Timer = result.Timer.Value.Add(sessionHolder.SessionData.GatesOpen);
-                        logger.LogInformation($"{State}, UI Time: {result.Timer.Value} Replay Time: {Timer}");
+                        Timer = result.Value.Add(sessionHolder.SessionData.GatesOpen);
+                        logger.LogInformation($"{State}, UI Time: {result.Value} Replay Time: {Timer}");
                     }
+
+                    await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
+                }
+                catch(TaskCanceledException e)
+                {
+                    logger.LogWarning(e, "State loop was cancelled.");
                 }
                 catch (Exception e)
                 {
                     logger.LogError(e, "Could not complete state loop");
                 }
-
-                await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
             }
         }
 
@@ -126,25 +139,27 @@ namespace HeroesReplay.Core
         {
             int index = -1;
 
-            while (State != State.EndDetected)
+            while (!LinkedTokenSource.IsCancellationRequested)
             {
-                Token.ThrowIfCancellationRequested();
-
                 try
                 {
                     if (State == State.TimerDetected && Data.Players.TryGetValue(Timer, out Focus focus) && focus != null && focus.Index != index)
                     {
                         index = focus.Index;
-                        logger.LogInformation($"Selecting {focus.Target.Character}. Description: {focus.Description}");
+                        logger.LogDebug($"Selecting {focus.Target.Character}. Description: {focus.Description}");
                         controller.SendFocus(focus.Index);
                     }
+
+                    await Task.Delay(TimeSpan.FromSeconds(0.5)).ConfigureAwait(false);
+                }
+                catch (TaskCanceledException e)
+                {
+                    logger.LogWarning(e, "Focus loop was cancelled.");
                 }
                 catch (Exception e)
                 {
                     logger.LogError(e, "Could not complete focus loop");
                 }
-
-                await Task.Delay(TimeSpan.FromSeconds(0.5)).ConfigureAwait(false);
             }
         }
 
@@ -159,10 +174,8 @@ namespace HeroesReplay.Core
 
             bool visible = true;
 
-            while (State != State.EndDetected)
+            while (!LinkedTokenSource.IsCancellationRequested)
             {
-                Token.ThrowIfCancellationRequested();
-
                 if (State == State.TimerDetected)
                 {
                     try
@@ -215,6 +228,10 @@ namespace HeroesReplay.Core
 
                         await Task.Delay(second).ConfigureAwait(false);
                     }
+                    catch (TaskCanceledException e)
+                    {
+                        logger.LogWarning(e, "Task was cancelled.");
+                    }
                     catch (Exception e)
                     {
                         logger.LogError(e, "Could not complete panel loop");
@@ -234,26 +251,17 @@ namespace HeroesReplay.Core
             _ => Panel.Talents,
         };
 
-        const string EndDetectedKey = "EndDetected";
         const string StateKey = "State";
 
-        private async Task<(TimeSpan? Timer, bool EndDetected)> TryGetOcrTimer()
+        private async Task<TimeSpan?> TryGetOcrTimer()
         {
-            var context = new Context("Timer")
-            {
-                { EndDetectedKey, false },
-                { StateKey, State }
-            };
-
-            TimeSpan? timer = await Policy
+            return await Policy
                 .HandleResult<TimeSpan?>(result => result == null)
                 .WaitAndRetryAsync(
                         retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd,
                         sleepDurationProvider: (retry, context) => settings.Spectate.RetryTimerSleepDuration,
                         onRetry: OnRetry)
-                .ExecuteAsync((context, token) => controller.TryGetTimerAsync(), context, Token).ConfigureAwait(false);
-
-            return (Timer: timer, EndDetected: (bool)context[EndDetectedKey]);
+                .ExecuteAsync((context, token) => controller.TryGetTimerAsync(), new Context("Timer") { { StateKey, State } }, LinkedTokenSource.Token).ConfigureAwait(false);
         }
 
         private void OnRetry(DelegateResult<TimeSpan?> outcome, TimeSpan duration, int retryCount, Context context)
@@ -264,12 +272,12 @@ namespace HeroesReplay.Core
 
             if (state == State.Loading)
             {
-                logger.LogWarning($"Waiting for timer...attempt {retryCount}.");
+                logger.LogInformation($"Waiting for timer...attempt {retryCount}.");
             }
             else if (state == State.TimerDetected && isTimerNotFound && isMax)
             {
-                logger.LogWarning($"Timer could not be found after {retryCount}. Shutting down.");
-                context[EndDetectedKey] = true;
+                logger.LogWarning($"Timer could not be found after {retryCount}. Sending session cancellation.");
+                CancelSessionSource.Cancel();
             }
             else
             {

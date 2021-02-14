@@ -7,8 +7,8 @@
 
         public Map(string name, string altName)
         {
-            this.Name = name;
-            this.AltName = altName;
+            Name = name;
+            AltName = altName;
         }
     }
 }

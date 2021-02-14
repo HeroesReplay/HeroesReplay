@@ -290,10 +290,10 @@ namespace HeroesReplay.Core.Runner
                 }
             }
 
-            this.UnitGroups = new ReadOnlyDictionary<string, UnitGroup>(unitGroups);
-            this.BossUnits = new ReadOnlyCollection<string>(bossUnits.ToList());
-            this.CoreUnits = new ReadOnlyCollection<string>(coreUnits.ToList());
-            this.VehicleUnits = new ReadOnlyCollection<string>(vehicleUnits.ToList());
+            UnitGroups = new ReadOnlyDictionary<string, UnitGroup>(unitGroups);
+            BossUnits = new ReadOnlyCollection<string>(bossUnits.ToList());
+            CoreUnits = new ReadOnlyCollection<string>(coreUnits.ToList());
+            VehicleUnits = new ReadOnlyCollection<string>(vehicleUnits.ToList());
         }
 
         public UnitGroup GetUnitGroup(string name)
