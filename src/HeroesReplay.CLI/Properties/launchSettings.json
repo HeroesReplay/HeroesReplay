@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "HeroesReplay.CLI [Spectate][DIR]": {
+    "HeroesReplay.CLI: spectate directory": {
       "commandName": "Project",
       "commandLineArgs": "spectate directory",
       "environmentVariables": {
@@ -11,12 +11,12 @@
         "HEROES_REPLAY_Capture__Method": "BitBlt"
       }
     },
-    "HeroesReplay.CLI [Spectate][Heroes Profile]": {
+    "HeroesReplay.CLI: spectate heroesprofile": {
       "commandName": "Project",
       "commandLineArgs": "spectate heroesprofile",
       "environmentVariables": {
         "HEROES_REPLAY_Location__GameInstallPath": "M:\\Blizzard\\Heroes of the Storm",
-        "HEROES_REPLAY_Github__User": "",
+        "HEROES_REPLAY_Github__User": "pjmagee",
         "HEROES_REPLAY_Github__AccessToken": "",
         "HEROES_REPLAY_Capture__Method": "BitBlt",
         "HEROES_REPLAY_HeroesProfileApi__AwsAccessKey": "",
@@ -28,31 +28,39 @@
         "HEROES_REPLAY_TwitchExtension__ApiUserId": ""
       }
     },
-    "HeroesReplay.CLI [Spectate][FILE]": {
+    "HeroesReplay.CLI: spectate file": {
       "commandName": "Project",
       "commandLineArgs": "spectate file",
       "environmentVariables": {
-        "HEROES_REPLAY_Location__ReplaySourcePath": "D:\\HotsDevelopment\\replays\\2021-01-03 01.45.17 Braxis Outpost.StormReplay",
+        "HEROES_REPLAY_Location__ReplaySourcePath": "D:\\HotsDevelopment\\2021-01-13 21.06.37 Dragon Shire.StormReplay",
         "HEROES_REPLAY_Location__GameInstallPath": "M:\\Blizzard\\Heroes of the Storm",
         "HEROES_REPLAY_Github__User": "",
         "HEROES_REPLAY_OBS__Enabled": "false",
         "HEROES_REPLAY_Github__AccessToken": "",
         "HEROES_REPLAY_Capture__Method": "BitBlt",
-        "HEROES_REPLAY_Capture__SaveTimerRegion": "false",
-        "HEROES_REPLAY_HeroesProfileApi__AwsAccessKey": "",
-        "HEROES_REPLAY_HeroesProfileApi__AwsSecretKey": "",
-        "HEROES_REPLAY_HeroesProfileApi__ApiKey": ""
+        "HEROES_REPLAY_Capture__SaveTimerRegion": "false"
       }
     },
-    "HeroesReplay.CLI [Analyze][FILE]": {
+    "HeroesReplay.CLI: calculators report": {
       "commandName": "Project",
-      "commandLineArgs": "analyze file",
+      "commandLineArgs": "calculators report",
       "environmentVariables": {
-        "HEROES_REPLAY_Location__ReplaySourcePath": "D:\\HotsDevelopment\\replays\\2021-01-03 01.45.17 Braxis Outpost.StormReplay",
+        "HEROES_REPLAY_Location__ReplaySourcePath": "D:\\HotsDevelopment\\ngs_11-13-2020_Phoenix_Rising_Ruby_vs_Ceros_Crypto_Crew_Volskaya_Foundry.stormReplay",
         "HEROES_REPLAY_Location__GameInstallPath": "M:\\Blizzard\\Heroes of the Storm",
         "HEROES_REPLAY_Github__User": "",
         "HEROES_REPLAY_OBS__Enabled": "false",
-        "HEROES_REPLAY_Github__AccessToken": ""        
+        "HEROES_REPLAY_Github__AccessToken": ""
+      }
+    },
+    "HeroesReplay.CLI: twitch bot": {
+      "commandName": "Project",
+      "commandLineArgs": "twitch connect",
+      "environmentVariables": {
+        "HEROES_REPLAY_Location__ReplaySourcePath": "D:\\HotsDevelopment\\ngs_11-13-2020_Phoenix_Rising_Ruby_vs_Ceros_Crypto_Crew_Volskaya_Foundry.stormReplay",
+        "HEROES_REPLAY_Location__GameInstallPath": "M:\\Blizzard\\Heroes of the Storm",
+        "HEROES_REPLAY_Github__User": "",
+        "HEROES_REPLAY_OBS__Enabled": "false",
+        "HEROES_REPLAY_Github__AccessToken": ""
       }
     }
   }

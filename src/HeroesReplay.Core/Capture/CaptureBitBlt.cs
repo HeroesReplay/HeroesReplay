@@ -33,6 +33,7 @@ namespace HeroesReplay.Core.Processes
                             (int)TernaryRasterOperation.SRCCOPY);
 
                         source.ReleaseHdc(deviceContextSource);
+                        
                         destination.ReleaseHdc(deviceContextDestination);
                     }
 

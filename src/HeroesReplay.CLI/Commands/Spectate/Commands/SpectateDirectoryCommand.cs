@@ -21,7 +21,7 @@ namespace HeroesReplay.CLI.Commands
         {
             using (IServiceScope scope = new ServiceCollection().AddCoreServices(cancellationToken, typeof(ReplayDirectoryProvider)).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }).CreateScope())
             {
-                SaltySadism saltySadism = scope.ServiceProvider.GetRequiredService<SaltySadism>();
+                SpectateEngine saltySadism = scope.ServiceProvider.GetRequiredService<SpectateEngine>();
 
                 await saltySadism.RunAsync();
             }

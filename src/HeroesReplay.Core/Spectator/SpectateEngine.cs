@@ -10,21 +10,21 @@ using System.Threading.Tasks;
 
 namespace HeroesReplay.Core
 {
-    public class SaltySadism
+    public class SpectateEngine : ISpectateEngine
     {
-        private readonly ILogger<SaltySadism> logger;
+        private readonly ILogger<SpectateEngine> logger;
         private readonly IGameManager gameManager;
         private readonly IGameData gameData;
         private readonly IReplayProvider replayProvider;
         private readonly CancellationTokenProvider tokenProvider;
 
-        public SaltySadism(ILogger<SaltySadism> logger, IGameManager gameManager, IGameData gameData, IReplayProvider replayProvider, CancellationTokenProvider tokenProvider)
+        public SpectateEngine(ILogger<SpectateEngine> logger, IGameManager gameManager, IGameData gameData, IReplayProvider replayProvider, CancellationTokenProvider tokenProvider)
         {
-            this.logger = logger;
-            this.gameManager = gameManager;
-            this.gameData = gameData;
-            this.replayProvider = replayProvider;
-            this.tokenProvider = tokenProvider;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.gameManager = gameManager ?? throw new ArgumentNullException(nameof(gameManager));
+            this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
+            this.replayProvider = replayProvider ?? throw new ArgumentNullException(nameof(replayProvider));
+            this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         }
 
         public async Task RunAsync()
@@ -47,7 +47,7 @@ namespace HeroesReplay.Core
             catch (Exception e)
             {
                 logger.LogError(e, "There was an error in the replay consumer.");
-            }            
+            }
         }
     }
 }

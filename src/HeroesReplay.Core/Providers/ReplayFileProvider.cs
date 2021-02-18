@@ -14,12 +14,12 @@ namespace HeroesReplay.Core.Providers
 {
     public sealed class ReplayFileProvider : IReplayProvider
     {
-        private readonly ILogger<ReplayDirectoryProvider> logger;
+        private readonly ILogger<ReplayFileProvider> logger;
         private readonly AppSettings settings;
         private readonly IReplayHelper replayHelper;
         private readonly Queue<string> queue;
 
-        public ReplayFileProvider(ILogger<ReplayDirectoryProvider> logger, AppSettings settings, IReplayHelper replayHelper)
+        public ReplayFileProvider(ILogger<ReplayFileProvider> logger, AppSettings settings, IReplayHelper replayHelper)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));

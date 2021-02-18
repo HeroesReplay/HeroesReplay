@@ -1,9 +1,10 @@
 ﻿namespace HeroesReplay.Core.Configuration
 {
-    public record TwitchApiSettings
+    public record TwitchSettings
     {
         public string AccessToken { get; init; }
         public string ClientId { get; init; }
         public bool EnableTwitchClips { get; init; }
+        public string Channel { get; internal set; }
     }
 }

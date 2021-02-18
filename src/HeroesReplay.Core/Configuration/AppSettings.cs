@@ -15,7 +15,7 @@ namespace HeroesReplay.Core.Configuration
         public TrackerEventSettings TrackerEvents { get; init; }
         public WeightSettings Weights { get; init; }
         public ReplayDetailsWriterSettings ReplayDetailsWriter { get; init; }
-        public TwitchApiSettings TwitchApi { get; init; }
+        public TwitchSettings Twitch { get; init; }
         public SpectateSettings Spectate { get; init; }
         public PanelTimesSettings PanelTimes { get; init; }
         public CaptureSettings Capture { get; init; }
@@ -29,7 +29,7 @@ namespace HeroesReplay.Core.Configuration
         public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
         public string HeroesDataPath => Path.Combine(AssetsPath, "HeroesData");
         public string ReplayCachePath => Path.Combine(AssetsPath, "Replays");
-        public string AnalyzePath => Path.Combine(AssetsPath, "AnalyzeOutput");
+        public string SpectateReportPath => Path.Combine(AssetsPath, "SpectateReport");
         public string CapturesPath => Path.Combine(AssetsPath, "Captures");
         public string CurrentReplayInfoFilePath => Path.Combine(AssetsPath, StormReplay.InfoFileName);
         public static string StormReplaysAccountPath => Path.Combine(UserGameFolderPath, "Accounts");
