@@ -1,33 +1,39 @@
 ﻿using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 
 using Microsoft.Extensions.Logging;
 
+using Polly;
+
 using System;
+using System.Threading.Tasks;
 
 using TwitchLib.Client;
 using TwitchLib.Client.Models;
 using TwitchLib.PubSub;
 
-namespace HeroesReplay.Core.Twitch
+namespace HeroesReplay.Core.Services.Twitch
 {
-    public class HeroesReplayTwitchService
+    public class TwitchBot : ITwitchBot
     {
         private readonly TwitchClient client;
         private readonly AppSettings settings;
         private readonly ConnectionCredentials credentials;
         private readonly TwitchPubSub pubSub;
-        private readonly ILogger<HeroesReplayTwitchService> logger;
+        private readonly ILogger<TwitchBot> logger;
+        private readonly IReplayRequestQueue replayRequests;
 
-        public HeroesReplayTwitchService(ILogger<HeroesReplayTwitchService> logger, AppSettings settings, ConnectionCredentials credentials, TwitchPubSub pubSub, TwitchClient client)
+        public TwitchBot(ILogger<TwitchBot> logger, AppSettings settings, ConnectionCredentials credentials, TwitchPubSub pubSub, TwitchClient client, IReplayRequestQueue requestQueue)
         {
             this.logger = logger;
             this.settings = settings;
             this.credentials = credentials;
             this.pubSub = pubSub;
             this.client = client;
+            this.replayRequests = requestQueue;
         }
 
-        public void Initialize()
+        public void Connect()
         {
             client.Initialize(credentials, settings.Twitch.Channel);
             client.OnLog += Client_OnLog;
@@ -63,7 +69,23 @@ namespace HeroesReplay.Core.Twitch
 
         private void PubSub_OnRewardRedeemed(object sender, TwitchLib.PubSub.Events.OnRewardRedeemedArgs e)
         {
-            logger.LogDebug($"{e.TimeStamp}: {e.RewardId} - {e.RewardCost}");
+            Task.Run(async () =>
+            {
+                await Policy
+                    .Handle<Exception>()
+                    .RetryAsync(5, (exception, retryAttempt) => { })
+                    .ExecuteAsync(async () =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(e.Message) && int.TryParse(e.Message.Trim(), out int replayId))
+                        {
+                            await replayRequests.EnqueueRequestAsync(new ReplayRequest { Login = e.Login, ReplayId = replayId });
+                        }
+                        else
+                        {
+                            logger.LogDebug($"{e.TimeStamp}: {e.RewardId} - {e.RewardCost}");
+                        }
+                    });
+            });
         }
 
         private void Client_OnLog(object sender, TwitchLib.Client.Events.OnLogArgs e)
@@ -96,6 +118,12 @@ namespace HeroesReplay.Core.Twitch
         private void Client_OnNewSubscriber(object sender, TwitchLib.Client.Events.OnNewSubscriberArgs e)
         {
 
+        }
+
+        public void Dispose()
+        {
+            this?.client.Disconnect();
+            this?.pubSub.Disconnect();
         }
     }
 }

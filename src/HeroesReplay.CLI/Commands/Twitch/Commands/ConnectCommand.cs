@@ -3,9 +3,7 @@ using System.CommandLine.Invocation;
 using System.Threading;
 using System.Threading.Tasks;
 
-using HeroesReplay.Core;
-using HeroesReplay.Core.Providers;
-using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.Services.Twitch;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,7 +11,7 @@ namespace HeroesReplay.CLI.Commands
 {
     public class ConnectCommand : Command
     {
-        public ConnectCommand() : base("connect", $"Connect to the twitch channel for Heroes Replay.")
+        public ConnectCommand() : base("connect", $"Connect to the twitch channel for HeroesReplay.")
         {
             Handler = CommandHandler.Create<CancellationToken>(CommandAsync);
         }
@@ -24,9 +22,8 @@ namespace HeroesReplay.CLI.Commands
             {
                 using (var waiter = new ManualResetEventSlim())
                 {
-                    var twitchService = scope.ServiceProvider.GetRequiredService<HeroesReplayTwitchService>();
-                    twitchService.Initialize();
-
+                    var twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
+                    twitchBot.Connect();
                     waiter.Wait(cancellationToken);
                 }
             }

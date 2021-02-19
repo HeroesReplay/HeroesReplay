@@ -11,8 +11,8 @@ using HeroesReplay.Core.Reports;
 using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Obs;
+using HeroesReplay.Core.Services.Twitch;
 using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.Twitch;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,7 +45,8 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IConfiguration>(configuration)
                 .AddSingleton(configuration.Get<AppSettings>())
                 .AddSingleton(new CancellationTokenProvider(token))
-                .AddSingleton<HeroesReplayTwitchService>()
+                .AddSingleton<ITwitchBot, TwitchBot>()
+                .AddSingleton<IReplayRequestQueue, ReplayRequestQueue>()
                 .AddSingleton<TwitchClient>()
                 .AddSingleton<TwitchPubSub>()
                 .AddSingleton<TwitchAPI>()
@@ -93,7 +94,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<ISpectateReportWriter, SpectateReportCsvWriter>();
         }
 
-        public static IServiceCollection AddCoreServices(this IServiceCollection services, CancellationToken token, Type replayProvider)
+        public static IServiceCollection AddSpectateServices(this IServiceCollection services, CancellationToken token, Type replayProvider)
         {
             var configuration = new ConfigurationBuilder()
                     .SetBasePath(Directory.GetCurrentDirectory())
@@ -132,11 +133,12 @@ namespace HeroesReplay.CLI
                 .AddSingleton(typeof(ISessionSetter), provider => provider.GetRequiredService<SessionHolder>())
                 .AddSingleton<ISessionCreator, SessionCreator>()
                 .AddSingleton<IHeroesProfileService, HeroesProfileService>()
+                .AddSingleton<IReplayRequestQueue, ReplayRequestQueue>()
                 .AddSingleton<IHeroesProfileExtensionPayloadsBuilder, HeroesProfileExtensionPayloadsBuilder>()
                 .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
                 .AddSingleton<ITalentNotifier, TalentNotifier>()
                 .AddSingleton(typeof(IReplayProvider), replayProvider)
-                .AddSingleton<SpectateEngine>();
+                .AddSingleton<ISpectateEngine, SpectateEngine>();
         }
     }
 }

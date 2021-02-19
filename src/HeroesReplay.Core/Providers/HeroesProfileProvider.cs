@@ -8,6 +8,7 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.Twitch;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -31,6 +32,7 @@ namespace HeroesReplay.Core.Providers
         private readonly IReplayHelper replayHelper;
         private readonly ILogger<HeroesProfileProvider> logger;
         private readonly IHeroesProfileService heroesProfileService;
+        private readonly IReplayRequestQueue requestQueue;
         private int minReplayId;
 
         private int MinReplayId
@@ -39,9 +41,9 @@ namespace HeroesReplay.Core.Providers
             {
                 if (minReplayId == default)
                 {
-                    if (ReplaysDirectory.GetFiles(settings.StormReplay.WildCard).Any())
+                    if (StandardReplaysDirectory.GetFiles(settings.StormReplay.WildCard).Any())
                     {
-                        FileInfo latest = ReplaysDirectory.GetFiles(settings.StormReplay.WildCard).OrderByDescending(f => f.CreationTime).FirstOrDefault();
+                        FileInfo latest = StandardReplaysDirectory.GetFiles(settings.StormReplay.WildCard).OrderByDescending(f => f.CreationTime).FirstOrDefault();
 
                         if (replayHelper.TryGetReplayId(latest.Name, out int replayId))
                         {
@@ -59,7 +61,7 @@ namespace HeroesReplay.Core.Providers
             set => minReplayId = value;
         }
 
-        private DirectoryInfo ReplaysDirectory
+        private DirectoryInfo StandardReplaysDirectory
         {
             get
             {
@@ -69,16 +71,70 @@ namespace HeroesReplay.Core.Providers
             }
         }
 
-        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, IHeroesProfileService heroesProfileService, CancellationTokenProvider provider, IReplayHelper replayHelper, AppSettings settings)
+        private DirectoryInfo RequestedReplaysDirectory
         {
-            this.provider = provider;
-            this.replayHelper = replayHelper;
-            this.settings = settings;
-            this.logger = logger;
-            this.heroesProfileService = heroesProfileService;
+            get
+            {
+                DirectoryInfo cache = new DirectoryInfo(settings.RequestedReplayCachePath);
+                if (!cache.Exists) cache.Create();
+                return cache;
+            }
+        }
+
+        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, IReplayRequestQueue requestQueue, IHeroesProfileService heroesProfileService, CancellationTokenProvider provider, IReplayHelper replayHelper, AppSettings settings)
+        {
+            this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
+            this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.requestQueue = requestQueue ?? throw new ArgumentNullException(nameof(requestQueue));
+            this.heroesProfileService = heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
         }
 
         public async Task<StormReplay> TryLoadReplayAsync()
+        {
+            if (settings.Twitch.EnableReplayRequests)
+            {
+                ReplayRequest request = await requestQueue.GetNextRequestAsync();
+
+                if (request != null)
+                {
+                    await GetNextRequestedReplayAsync(request.ReplayId);
+                }
+            }
+
+            return await GetNextStandardReplayAsync();
+        }
+
+        private async Task<StormReplay> GetNextRequestedReplayAsync(int replayId)
+        {
+            try
+            {
+                HeroesProfileReplay replay = await GetSpecificReplayAsync(replayId).ConfigureAwait(false);
+
+                if (replay != null)
+                {
+                    FileInfo cacheStormReplay = GetFileInfo(RequestedReplaysDirectory, replay);
+
+                    if (!cacheStormReplay.Exists)
+                    {
+                        await DownloadStormReplay(replay, cacheStormReplay).ConfigureAwait(false);
+                    }
+
+                    StormReplay stormReplay = await TryLoadReplay(replay, cacheStormReplay).ConfigureAwait(false);
+
+                    return stormReplay;
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogCritical(e, "Could not provide a Replay file using HeroesProfile API.");
+            }
+
+            return null;
+        }
+
+        private async Task<StormReplay> GetNextStandardReplayAsync()
         {
             try
             {
@@ -86,7 +142,7 @@ namespace HeroesReplay.Core.Providers
 
                 if (replay != null)
                 {
-                    FileInfo cacheStormReplay = CreateFile(replay);
+                    FileInfo cacheStormReplay = GetFileInfo(StandardReplaysDirectory, replay);
 
                     if (!cacheStormReplay.Exists)
                     {
@@ -106,6 +162,61 @@ namespace HeroesReplay.Core.Providers
             catch (Exception e)
             {
                 logger.LogCritical(e, "Could not provide a Replay file using HeroesProfile API.");
+            }
+
+            return null;
+        }
+
+        private async Task<HeroesProfileReplay> GetSpecificReplayAsync(int replayId)
+        {
+            Version supportedVersion = settings.Spectate.VersionSupported;
+
+            try
+            {
+                logger.LogInformation($"Requested ReplayId: {replayId}");
+
+                return await Policy
+                       .Handle<Exception>()
+                       .WaitAndRetryAsync(5, retry => settings.HeroesProfileApi.APIRetryWaitTime)
+                       .ExecuteAsync(async token =>
+                       {
+                           IEnumerable<HeroesProfileReplay> replays = await heroesProfileService.ListReplaysAllAsync(replayId).ConfigureAwait(false);
+
+                           if (replays != null && replays.Any())
+                           {
+                               logger.LogInformation($"Finding replay that = {replayId}.");
+
+                               HeroesProfileReplay found = (from replay in replays
+                                                            where replay.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket)
+                                                            where replay.Valid == 1
+                                                            where replay.Id == replayId
+                                                            let version = Version.Parse(replay.GameVersion)
+                                                            where supportedVersion.Major == version.Major &&
+                                                                  supportedVersion.Minor == version.Minor &&
+                                                                  supportedVersion.Build == version.Build &&
+                                                                  supportedVersion.Revision == version.Revision
+                                                            select replay)
+                                         .OrderBy(x => x.Id)
+                                         .FirstOrDefault();
+
+                               if (found == null)
+                               {
+                                   logger.LogWarning($"Requested ReplayId {replayId} not found.");
+                               }
+                               else
+                               {
+                                   logger.LogInformation($"Requested ReplayId found.");
+                                   return found;
+                               }
+                           }
+
+                           return null;
+
+                       }, provider.Token).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not get the next replay file.");
             }
 
             return null;
@@ -173,9 +284,9 @@ namespace HeroesReplay.Core.Providers
             }
         }
 
-        private FileInfo CreateFile(HeroesProfileReplay replay)
+        private FileInfo GetFileInfo(DirectoryInfo directory, HeroesProfileReplay replay)
         {
-            var path = ReplaysDirectory.FullName;
+            var path = directory.FullName;
             var seperator = settings.StormReplay.Seperator;
             var name = $"{replay.Id}{seperator}{replay.GameType}{seperator}{replay.Fingerprint}{settings.StormReplay.FileExtension}";
             return new FileInfo(Path.Combine(path, name));
