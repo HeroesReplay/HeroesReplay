@@ -8,5 +8,6 @@ namespace HeroesReplay.Core.Services.Twitch
     {
         Task<ReplayRequest> GetNextRequestAsync();
         Task EnqueueRequestAsync(ReplayRequest request);
+        Task<int> GetTotalQueuedItems();
     }
 }

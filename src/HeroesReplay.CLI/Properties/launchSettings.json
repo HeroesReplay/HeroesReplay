@@ -52,15 +52,18 @@
         "HEROES_REPLAY_Github__AccessToken": ""
       }
     },
-    "HeroesReplay.CLI: twitch bot": {
+    "HeroesReplay.CLI: twitch connect": {
       "commandName": "Project",
       "commandLineArgs": "twitch connect",
       "environmentVariables": {
-        "HEROES_REPLAY_Location__ReplaySourcePath": "D:\\HotsDevelopment\\ngs_11-13-2020_Phoenix_Rising_Ruby_vs_Ceros_Crypto_Crew_Volskaya_Foundry.stormReplay",
-        "HEROES_REPLAY_Location__GameInstallPath": "M:\\Blizzard\\Heroes of the Storm",
-        "HEROES_REPLAY_Github__User": "",
-        "HEROES_REPLAY_OBS__Enabled": "false",
-        "HEROES_REPLAY_Github__AccessToken": ""
+        "HEROES_REPLAY_Twitch__Account": "",
+        "HEROES_REPLAY_Twitch__AccessToken": "",
+        "HEROES_REPLAY_Twitch__ClientId": "",
+        "HEROES_REPLAY_Twitch__RefreshToken": "",
+        "HEROES_REPLAY_Twitch__Channel": "saltysadism",
+        "HEROES_REPLAY_Twitch__EnableChatBot": "true",
+        "HEROES_REPLAY_Twitch__EnablePubSub": "true",
+        "HEROES_REPLAY_Twitch__EnableReplayRequests": "true"
       }
     }
   }

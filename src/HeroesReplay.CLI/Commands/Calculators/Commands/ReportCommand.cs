@@ -19,11 +19,14 @@ namespace HeroesReplay.CLI.Commands
 
         protected async Task CommandAsync(CancellationToken cancellationToken)
         {
-            using (IServiceScope scope = new ServiceCollection().AddReportServices(cancellationToken, typeof(ReplayFileProvider)).BuildServiceProvider().CreateScope())
+            using (ServiceProvider provider = new ServiceCollection().AddReportServices(cancellationToken, typeof(ReplayFileProvider)).BuildServiceProvider())
             {
-                var reportWriter = scope.ServiceProvider.GetRequiredService<ISpectateReportWriter>();
+                using (IServiceScope scope = provider.CreateScope())
+                {
+                    var reportWriter = scope.ServiceProvider.GetRequiredService<ISpectateReportWriter>();
 
-                await reportWriter.OutputReportAsync();
+                    await reportWriter.OutputReportAsync();
+                }
             }
         }
     }

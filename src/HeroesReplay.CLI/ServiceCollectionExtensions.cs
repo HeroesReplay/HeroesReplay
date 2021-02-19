@@ -24,6 +24,7 @@ using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
 using TwitchLib.Client;
+using TwitchLib.Client.Models;
 using TwitchLib.PubSub;
 
 using Windows.Media.Ocr;
@@ -50,6 +51,11 @@ namespace HeroesReplay.CLI
                 .AddSingleton<TwitchClient>()
                 .AddSingleton<TwitchPubSub>()
                 .AddSingleton<TwitchAPI>()
+                .AddSingleton<ConnectionCredentials>(implementationFactory: serviceProvider =>
+                {
+                    AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
+                    return new ConnectionCredentials(twitchUsername: settings.Twitch.Account, twitchOAuth: settings.Twitch.AccessToken);
+                })
                 .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
                 {
                     AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
@@ -57,7 +63,7 @@ namespace HeroesReplay.CLI
                     return new ApiSettings
                     {
                         AccessToken = settings.Twitch.AccessToken,
-                        ClientId = settings.Twitch.ClientId
+                        ClientId = settings.Twitch.ClientId,
                     };
                 });
         }

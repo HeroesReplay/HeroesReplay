@@ -6,50 +6,85 @@ using Microsoft.Extensions.Logging;
 using Polly;
 
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using TwitchLib.Api;
 using TwitchLib.Client;
 using TwitchLib.Client.Models;
 using TwitchLib.PubSub;
 
 namespace HeroesReplay.Core.Services.Twitch
 {
+    /*
+     * https://twitchtokengenerator.com/
+     */
     public class TwitchBot : ITwitchBot
     {
         private readonly TwitchClient client;
+        private readonly TwitchAPI api;
+        private readonly TwitchPubSub pubSub;
+
         private readonly AppSettings settings;
         private readonly ConnectionCredentials credentials;
-        private readonly TwitchPubSub pubSub;
+
         private readonly ILogger<TwitchBot> logger;
         private readonly IReplayRequestQueue replayRequests;
 
-        public TwitchBot(ILogger<TwitchBot> logger, AppSettings settings, ConnectionCredentials credentials, TwitchPubSub pubSub, TwitchClient client, IReplayRequestQueue requestQueue)
+        public TwitchBot(ILogger<TwitchBot> logger, AppSettings settings, ConnectionCredentials credentials, TwitchAPI api, TwitchPubSub pubSub, TwitchClient client, IReplayRequestQueue requestQueue)
         {
             this.logger = logger;
             this.settings = settings;
             this.credentials = credentials;
+            this.api = api;
             this.pubSub = pubSub;
             this.client = client;
             this.replayRequests = requestQueue;
         }
 
-        public void Connect()
+        public async Task ConnectAsync()
         {
-            client.Initialize(credentials, settings.Twitch.Channel);
-            client.OnLog += Client_OnLog;
-            client.OnJoinedChannel += Client_OnJoinedChannel;
-            client.OnMessageReceived += Client_OnMessageReceived;
-            client.OnWhisperReceived += Client_OnWhisperReceived;
-            client.OnNewSubscriber += Client_OnNewSubscriber;
-            client.OnConnected += Client_OnConnected;
-            client.Connect();
+            if (settings.Twitch.EnableChatBot)
+            {
+                client.Initialize(credentials, settings.Twitch.Channel);
+                client.OnLog += Client_OnLog;
+                client.OnJoinedChannel += Client_OnJoinedChannel;
+                client.OnMessageReceived += Client_OnMessageReceived;
+                client.OnWhisperReceived += Client_OnWhisperReceived;
+                client.OnNewSubscriber += Client_OnNewSubscriber;
+                client.OnConnected += Client_OnConnected;
+                client.OnDisconnected += Client_OnDisconnected;
+                client.Connect();
+            }
 
-            client.OnDisconnected += Client_OnDisconnected;
+            if (settings.Twitch.EnablePubSub)
+            {
+                string channelId = await GetChannelId();
 
-            pubSub.OnRewardRedeemed += PubSub_OnRewardRedeemed;
-            pubSub.OnPubSubServiceError += PubSub_OnPubSubServiceError;
-            pubSub.OnPubSubServiceClosed += PubSub_OnPubSubServiceClosed;
-            pubSub.Connect();
+                pubSub.ListenToRewards(channelId);
+                pubSub.ListenToSubscriptions(channelId);
+                pubSub.ListenToFollows(channelId);
+
+                pubSub.OnRewardRedeemed += PubSub_OnRewardRedeemed;
+                pubSub.OnPubSubServiceConnected += PubSub_OnPubSubServiceConnected;
+                pubSub.OnPubSubServiceError += PubSub_OnPubSubServiceError;
+                pubSub.OnPubSubServiceClosed += PubSub_OnPubSubServiceClosed;
+                pubSub.Connect();
+            }
+        }
+
+        private async Task<string> GetChannelId()
+        {
+            var userResponse = await api.Helix.Users.GetUsersAsync(logins: new List<string>() { this.settings.Twitch.Account });
+            var channelId = userResponse.Users[0].Id;
+            return channelId;
+        }
+
+        private void PubSub_OnPubSubServiceConnected(object sender, EventArgs e)
+        {
+            logger.LogInformation("Connected. Sending topics to subscribe to.");
+
+            pubSub.SendTopics(this.settings.Twitch.AccessToken, unlisten: false);
         }
 
         private void PubSub_OnPubSubServiceClosed(object sender, EventArgs e)
@@ -69,23 +104,26 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private void PubSub_OnRewardRedeemed(object sender, TwitchLib.PubSub.Events.OnRewardRedeemedArgs e)
         {
-            Task.Run(async () =>
+            try
             {
-                await Policy
-                    .Handle<Exception>()
-                    .RetryAsync(5, (exception, retryAttempt) => { })
-                    .ExecuteAsync(async () =>
+                if (!string.IsNullOrWhiteSpace(e.Message) && int.TryParse(e.Message.Trim(), out int replayId))
+                {
+                    Task.Run(() => replayRequests.EnqueueRequestAsync(new ReplayRequest { Login = e.Login, ReplayId = replayId })).Wait();
+
+                    if (settings.Twitch.EnableChatBot)
                     {
-                        if (!string.IsNullOrWhiteSpace(e.Message) && int.TryParse(e.Message.Trim(), out int replayId))
-                        {
-                            await replayRequests.EnqueueRequestAsync(new ReplayRequest { Login = e.Login, ReplayId = replayId });
-                        }
-                        else
-                        {
-                            logger.LogDebug($"{e.TimeStamp}: {e.RewardId} - {e.RewardCost}");
-                        }
-                    });
-            });
+                        client.SendMessage(client.GetJoinedChannel(settings.Twitch.Channel), $"{e.DisplayName} your replay request ({replayId}) has been queued. Note that you cannot revert your reward request and the spectator only supports version: {settings.Spectate.VersionSupported}.");
+                    }
+                }
+                else
+                {
+                    logger.LogDebug($"{e.TimeStamp}: {e.RewardId} - {e.RewardCost}");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Could not process reward redeemed.");
+            }
         }
 
         private void Client_OnLog(object sender, TwitchLib.Client.Events.OnLogArgs e)

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 
 using HeroesReplay.Core;
 using HeroesReplay.Core.Shared;
+
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI
@@ -11,18 +12,19 @@ namespace HeroesReplay.CLI
     {
         public static async Task Main(string[] args)
         {
-            ServiceProvider provider = new ServiceCollection()
+            using (ServiceProvider provider = new ServiceCollection()
                 .AddSingleton<CommandLineService>()
                 .AddSingleton<IAdminChecker, AdminChecker>()
-                .BuildServiceProvider();
-
-            using (IServiceScope scope = provider.CreateScope())
+                .BuildServiceProvider())
             {
-                CommandLineService commandLineService = scope.ServiceProvider.GetRequiredService<CommandLineService>();
+                using (IServiceScope scope = provider.CreateScope())
+                {
+                    CommandLineService commandLineService = scope.ServiceProvider.GetRequiredService<CommandLineService>();
 
-                Parser parser = commandLineService.GetParser();
+                    Parser parser = commandLineService.GetParser();
 
-                await parser.InvokeAsync(args);
+                    await parser.InvokeAsync(args);
+                }
             }
         }
     }

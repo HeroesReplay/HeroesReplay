@@ -14,26 +14,39 @@ namespace HeroesReplay.Core.Services.Twitch
 
         public ReplayRequestQueue(AppSettings settings)
         {
-            this.fileInfo = new FileInfo(Path.Combine(settings.AssetsPath, settings.Twitch.ReplayRequestsFileName));
+            fileInfo = new FileInfo(Path.Combine(settings.AssetsPath, settings.Twitch.ReplayRequestsFileName));
+        }
+
+        public async Task<int> GetTotalQueuedItems()
+        {
+            if (fileInfo.Exists)
+            {
+                List<ReplayRequest> requests = JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName));
+                return requests.Count;
+            }
+
+            return 0;
         }
 
         public async Task EnqueueRequestAsync(ReplayRequest request)
         {
-            using (Stream stream = this.fileInfo.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            if (!fileInfo.Exists)
             {
-                List<ReplayRequest> requests = await JsonSerializer.DeserializeAsync<List<ReplayRequest>>(stream);
+                await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<ReplayRequest>() { request }, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            else
+            {
+                List<ReplayRequest> requests = JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName));
                 requests.Add(request);
-                stream.Position = 0;
-                await JsonSerializer.SerializeAsync(stream, requests, new JsonSerializerOptions { WriteIndented = true });
-                await stream.FlushAsync();
+                await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
             }
         }
 
         public async Task<ReplayRequest> GetNextRequestAsync()
         {
-            using (Stream stream = this.fileInfo.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+            if (fileInfo.Exists)
             {
-                List<ReplayRequest> requests = await JsonSerializer.DeserializeAsync<List<ReplayRequest>>(stream);
+                List<ReplayRequest> requests = JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName));
 
                 if (requests.Count > 0)
                 {
@@ -41,9 +54,7 @@ namespace HeroesReplay.Core.Services.Twitch
 
                     if (requests.Remove(request))
                     {
-                        await JsonSerializer.SerializeAsync(stream, requests, new JsonSerializerOptions { WriteIndented = true });
-                        await stream.FlushAsync();
-
+                        await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
                         return request;
                     }
                 }

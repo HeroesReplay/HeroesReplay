@@ -14,16 +14,18 @@ namespace HeroesReplay.CLI.Commands
     {
         public SpectateFileCommand() : base("file", "The individual .StormReplay file to spectate.")
         {
-             Handler = CommandHandler.Create<CancellationToken>(CommandAsync);
+            Handler = CommandHandler.Create<CancellationToken>(CommandAsync);
         }
 
         protected async Task CommandAsync(CancellationToken cancellationToken)
         {
-            using (IServiceScope scope = new ServiceCollection().AddSpectateServices(cancellationToken, typeof(ReplayFileProvider)).BuildServiceProvider().CreateScope())
+            using (ServiceProvider provider = new ServiceCollection().AddSpectateServices(cancellationToken, typeof(ReplayFileProvider)).BuildServiceProvider())
             {
-                SpectateEngine saltySadism = scope.ServiceProvider.GetRequiredService<SpectateEngine>();
-
-                await saltySadism.RunAsync();
+                using (IServiceScope scope = provider.CreateScope())
+                {
+                    SpectateEngine saltySadism = scope.ServiceProvider.GetRequiredService<SpectateEngine>();
+                    await saltySadism.RunAsync();
+                }
             }
         }
     }

@@ -19,11 +19,13 @@ namespace HeroesReplay.CLI.Commands
 
         protected async Task CommandAsync(CancellationToken cancellationToken)
         {
-            using (IServiceScope scope = new ServiceCollection().AddSpectateServices(cancellationToken, typeof(ReplayDirectoryProvider)).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }).CreateScope())
+            using (ServiceProvider provider = new ServiceCollection().AddSpectateServices(cancellationToken, typeof(ReplayDirectoryProvider)).BuildServiceProvider())
             {
-                SpectateEngine saltySadism = scope.ServiceProvider.GetRequiredService<SpectateEngine>();
-
-                await saltySadism.RunAsync();
+                using (IServiceScope scope = provider.CreateScope())
+                {
+                    SpectateEngine saltySadism = scope.ServiceProvider.GetRequiredService<SpectateEngine>();
+                    await saltySadism.RunAsync();
+                }
             }
         }
     }

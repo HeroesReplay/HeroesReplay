@@ -18,13 +18,16 @@ namespace HeroesReplay.CLI.Commands
 
         protected async Task CommandAsync(CancellationToken cancellationToken)
         {
-            using (IServiceScope scope = new ServiceCollection().AddTwitchServices(cancellationToken).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }).CreateScope())
+            using (ServiceProvider provider = new ServiceCollection().AddTwitchServices(cancellationToken).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }))
             {
-                using (var waiter = new ManualResetEventSlim())
+                using (IServiceScope scope = provider.CreateScope())
                 {
-                    var twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
-                    twitchBot.Connect();
-                    waiter.Wait(cancellationToken);
+                    using (var waiter = new ManualResetEventSlim())
+                    {
+                        ITwitchBot twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
+                        await twitchBot.ConnectAsync();
+                        waiter.Wait(cancellationToken);
+                    }
                 }
             }
         }

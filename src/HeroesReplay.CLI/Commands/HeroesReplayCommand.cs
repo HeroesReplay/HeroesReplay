@@ -10,6 +10,7 @@ namespace HeroesReplay.CLI.Commands
         {
             AddCommand(new SpectateCommand());
             AddCommand(new ReportCommand());
+            AddCommand(new TwitchCommand());
         }
     }
 }
