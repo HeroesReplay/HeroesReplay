@@ -97,9 +97,9 @@ namespace HeroesReplay.Core.Providers
             {
                 ReplayRequest request = await requestQueue.GetNextRequestAsync();
 
-                if (request != null)
+                if (request != null && request.ReplayId.HasValue)
                 {
-                    await GetNextRequestedReplayAsync(request.ReplayId);
+                    await GetNextRequestedReplayAsync(request.ReplayId.Value);
                 }
             }
 

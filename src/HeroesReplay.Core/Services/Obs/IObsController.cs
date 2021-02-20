@@ -5,6 +5,7 @@ namespace HeroesReplay.Core.Services.Obs
 {
     public interface IObsController
     {
+        void Configure();
         Task CycleReportAsync(int replayId);
         void SwapToGameScene();
         void SwapToWaitingScene();

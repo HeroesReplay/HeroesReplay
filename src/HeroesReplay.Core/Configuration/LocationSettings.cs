@@ -3,7 +3,7 @@
     public record LocationSettings
     {
         public string BattlenetPath { get; init; }
-        public string GameInstallPath { get; init; }
-        public string ReplaySourcePath { get; init; }
+        public string ReplaySource { get; init; }
+        public string GameInstallDirectory { get; init; }
     }
 }

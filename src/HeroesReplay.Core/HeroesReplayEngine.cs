@@ -18,6 +18,7 @@ namespace HeroesReplay.Core
         private readonly ILogger<HeroesReplayEngine> logger;
         private readonly ITwitchBot twitchBot;
         private readonly IGameManager gameManager;
+        private readonly IObsController obsController;
         private readonly IGameData gameData;
         private readonly IReplayProvider replayProvider;
         private readonly CancellationTokenProvider tokenProvider;
@@ -26,14 +27,15 @@ namespace HeroesReplay.Core
             ILogger<HeroesReplayEngine> logger,
             ITwitchBot twitchBot,
             IGameManager gameManager,
+            IObsController obsController,
             IGameData gameData,
             IReplayProvider replayProvider,
-            CancellationTokenProvider tokenProvider
-            )
+            CancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.twitchBot = twitchBot ?? throw new ArgumentNullException(nameof(twitchBot));
             this.gameManager = gameManager ?? throw new ArgumentNullException(nameof(gameManager));
+            this.obsController = obsController;
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
             this.replayProvider = replayProvider ?? throw new ArgumentNullException(nameof(replayProvider));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
@@ -43,6 +45,8 @@ namespace HeroesReplay.Core
         {
             try
             {
+                await ConfigureAsync();
+
                 await Task.WhenAll(
                     Task.Run(SpectatorAsync, tokenProvider.Token),
                     Task.Run(TwitchBotAsync, tokenProvider.Token));
@@ -53,6 +57,12 @@ namespace HeroesReplay.Core
             }
         }
 
+        private async Task ConfigureAsync()
+        {
+            await gameData.LoadDataAsync();
+            obsController.Configure();
+        }
+
         private async Task TwitchBotAsync()
         {
             await twitchBot.ConnectAsync();
@@ -60,8 +70,6 @@ namespace HeroesReplay.Core
 
         private async Task SpectatorAsync()
         {
-            await gameData.LoadDataAsync().ConfigureAwait(false);
-
             while (!tokenProvider.Token.IsCancellationRequested)
             {
                 StormReplay stormReplay = await replayProvider.TryLoadReplayAsync().ConfigureAwait(false);

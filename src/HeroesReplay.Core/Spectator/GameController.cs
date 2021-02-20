@@ -69,7 +69,7 @@ namespace HeroesReplay.Core
                 throw new ArgumentNullException(nameof(stormReplay));
             }
 
-            string versionFolder = Path.Combine(settings.Location.GameInstallPath, VersionsFolder);
+            string versionFolder = Path.Combine(settings.Location.GameInstallDirectory, VersionsFolder);
             int latestBuild = Directory.EnumerateDirectories(versionFolder).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
             var requiresAuth = stormReplay.Replay.ReplayBuild == latestBuild;
 

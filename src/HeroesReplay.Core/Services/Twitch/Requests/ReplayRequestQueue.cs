@@ -37,23 +37,28 @@ namespace HeroesReplay.Core.Services.Twitch
         {
             try
             {
-                HeroesProfileReplay heroesProfileReplay = await heroesProfileService.GetReplayAsync(request.ReplayId);
+                if (request.ReplayId.HasValue)
+                {
+                    HeroesProfileReplay heroesProfileReplay = await heroesProfileService.GetReplayAsync(request.ReplayId.Value);
 
-                if (!fileInfo.Exists)
-                {
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<ReplayRequest>() { request }, new JsonSerializerOptions { WriteIndented = true }));
-                    return new ReplayRequestResponse(success: true, message: "Request has been requeued.", 1);
+                    if (!fileInfo.Exists)
+                    {
+                        await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<ReplayRequest>() { request }, new JsonSerializerOptions { WriteIndented = true }));
+                        return new ReplayRequestResponse(success: true, message: "Request has been requeued.");
+                    }
+                    else
+                    {
+                        List<ReplayRequest> requests = new List<ReplayRequest>(JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName))) { request };
+                        await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
+                        return new ReplayRequestResponse(success: true, message: "Request has been requeued.");
+                    }
                 }
-                else
-                {
-                    List<ReplayRequest> requests = new List<ReplayRequest>(JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName))) { request };
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
-                    return new ReplayRequestResponse(success: true, message: "Request has been requeued.", requests.Count);
-                }
+
+                return new ReplayRequestResponse(success: false, message: "Request not handled.");
             }
             catch (Exception e)
             {
-                return new ReplayRequestResponse(success: false, message: e.Message, null);
+                return new ReplayRequestResponse(success: false, message: e.Message);
             }
         }
 

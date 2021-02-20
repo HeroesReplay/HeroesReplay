@@ -28,7 +28,7 @@ namespace HeroesReplay.Core.Providers
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
-            queue = new Queue<string>(Directory.GetFiles(settings.Location.ReplaySourcePath, settings.StormReplay.WildCard, SearchOption.AllDirectories).OrderBy(GetCreationTime));
+            queue = new Queue<string>(Directory.GetFiles(settings.Location.ReplaySource, settings.StormReplay.WildCard, SearchOption.AllDirectories).OrderBy(GetCreationTime));
         }
 
         public async Task<StormReplay> TryLoadReplayAsync()

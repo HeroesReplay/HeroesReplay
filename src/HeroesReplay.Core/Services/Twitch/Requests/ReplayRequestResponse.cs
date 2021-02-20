@@ -4,13 +4,11 @@
     {
         public bool Success { get; }
         public string Message { get; }
-        public int? Number { get; }
 
-        public ReplayRequestResponse(bool success, string message, int? number)
+        public ReplayRequestResponse(bool success, string message)
         {
             Success = success;
             Message = message;
-            Number = number;
         }
     }
 }

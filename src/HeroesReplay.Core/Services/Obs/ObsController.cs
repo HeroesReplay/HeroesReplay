@@ -13,6 +13,7 @@ using HeroesReplay.Core.Configuration;
 using System.Linq;
 using Polly;
 using HeroesReplay.Core.Shared;
+using System.IO;
 
 namespace HeroesReplay.Core.Services.Obs
 {
@@ -31,6 +32,22 @@ namespace HeroesReplay.Core.Services.Obs
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         }
 
+        public void Configure()
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(this.settings.OBS.RecordingFolderDirectory))
+                {
+                    DirectoryInfo directory = Directory.CreateDirectory(this.settings.OBS.RecordingFolderDirectory);
+                    obs.SetRecordingFolder(directory.FullName);
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not configure OBS");
+            }
+        }
+
         public void SwapToGameScene()
         {
             Policy
@@ -43,6 +60,12 @@ namespace HeroesReplay.Core.Services.Obs
                     {
                         obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
                         obs.SetCurrentScene(settings.OBS.GameSceneName);
+
+                        if (settings.OBS.RecordSessionEnabled)
+                        {
+                            obs.StartRecording();
+                        }
+
                         obs.Disconnect();
                         return true;
                     }
@@ -66,6 +89,13 @@ namespace HeroesReplay.Core.Services.Obs
                     try
                     {
                         obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+
+                        // Stop recording before we trigger the scene with the Blizzard Soundcloud music
+                        if (settings.OBS.RecordSessionEnabled)
+                        {
+                            obs.StopRecording();
+                        }
+
                         obs.SetCurrentScene(settings.OBS.WaitingSceneName);
                         logger.LogInformation($"Set scene to: {settings.OBS.WaitingSceneName}");
                         obs.Disconnect();
