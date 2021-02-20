@@ -3,9 +3,8 @@ using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.Obs
 {
-    public interface IObsController : IDisposable
+    public interface IObsController
     {
-        void Connect();
         Task CycleReportAsync(int replayId);
         void SwapToGameScene();
         void SwapToWaitingScene();

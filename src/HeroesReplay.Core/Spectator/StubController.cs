@@ -29,12 +29,12 @@ namespace HeroesReplay.Core
         {
             var timeSpans = Enumerable.Range((int)sessionHolder.SessionData.GatesOpen.TotalSeconds, (int)stormReplay.Replay.ReplayLength.TotalSeconds).ToList();
             var total = timeSpans.Count;
-            var sections = (total / 4);
+            var sections = (total / 16);
 
-            Timers.Add(TimeSpan.FromSeconds(timeSpans[0])); // Start
-            Timers.Add(TimeSpan.FromSeconds(timeSpans[sections * 1])); // Middle
-            Timers.Add(TimeSpan.FromSeconds(timeSpans[sections * 2])); // Middle 
-            Timers.Add(TimeSpan.FromSeconds(timeSpans[sections * 3])); // End
+            for (int i = 0; i < 15; i++)
+            {
+                Timers.Add(TimeSpan.FromSeconds(timeSpans[sections * i]));
+            }
 
             return await Task.FromResult(stormReplay).ConfigureAwait(false);
         }

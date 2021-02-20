@@ -31,6 +31,11 @@ namespace HeroesReplay.Core.Services.Twitch
         private readonly ILogger<TwitchBot> logger;
         private readonly IReplayRequestQueue requestQueue;
 
+        /*
+         * If we have prediction data set, we should not allow users to request the replay id.
+         * We also need to figure out how to randomize the next replay selection process
+         * so that its not guessable for once predictions can be automated via the api.
+         */
         private OnPredictionArgs PredictionData { get; set; }
 
         private JoinedChannel JoinedChannel => client.GetJoinedChannel(settings.Twitch.Channel);
@@ -59,6 +64,7 @@ namespace HeroesReplay.Core.Services.Twitch
                 client.OnNewSubscriber += Client_OnNewSubscriber;
                 client.OnConnected += Client_OnConnected;
                 client.OnDisconnected += Client_OnDisconnected;
+                client.OnConnectionError += Client_OnConnectionError;
                 client.Connect();
             }
 
@@ -78,6 +84,11 @@ namespace HeroesReplay.Core.Services.Twitch
                 pubSub.OnPrediction += PubSub_OnPrediction;
                 pubSub.Connect();
             }
+        }
+
+        private void Client_OnConnectionError(object sender, OnConnectionErrorArgs e)
+        {
+            logger.LogError(e.Error.Message, "OnConnectionError");
         }
 
         private void PubSub_OnPrediction(object sender, OnPredictionArgs e)
@@ -103,12 +114,12 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private void PubSub_OnPubSubServiceError(object sender, OnPubSubServiceErrorArgs e)
         {
-
+            logger.LogError(e.Exception, "OnPubSubServiceError");
         }
 
         private void Client_OnDisconnected(object sender, TwitchLib.Communication.Events.OnDisconnectedEventArgs e)
         {
-
+            this.client.Connect();
         }
 
         private void PubSub_OnRewardRedeemed(object sender, OnRewardRedeemedArgs e)
@@ -121,22 +132,12 @@ namespace HeroesReplay.Core.Services.Twitch
                     {
                         Task.Run(async () =>
                         {
-                            // If successful
-                            if (await requestQueue.EnqueueRequestAsync(new ReplayRequest { Login = e.Login, ReplayId = replayId }))
+                            ReplayRequestResponse response = await requestQueue.EnqueueRequestAsync(new ReplayRequest { Login = e.Login, ReplayId = replayId });
+
+                            if (settings.Twitch.EnableChatBot)
                             {
-                                if (settings.Twitch.EnableChatBot)
-                                {
-                                    string message = $"{e.DisplayName}, your replay request ({replayId}) was added to the queue.";
-                                    client.SendMessage(JoinedChannel, message, dryRun: settings.Twitch.DryRunMode);
-                                }
-                            }
-                            else
-                            {
-                                if (settings.Twitch.EnableChatBot)
-                                {
-                                    string message = $"{e.DisplayName}, your replay request ({replayId}) was invalid.";
-                                    client.SendMessage(JoinedChannel, message, dryRun: settings.Twitch.DryRunMode);
-                                }
+                                string message = $"{e.DisplayName}, {response.Message}";
+                                client.SendMessage(JoinedChannel, message, dryRun: settings.Twitch.DryRunMode);
                             }
 
                         }).Wait();

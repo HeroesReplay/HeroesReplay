@@ -38,6 +38,7 @@ namespace HeroesReplay.CLI
             var configuration = new ConfigurationBuilder()
                   .SetBasePath(Directory.GetCurrentDirectory())
                   .AddJsonFile("appsettings.json")
+                  .AddJsonFile("appsettings.secrets.json")
                   .AddEnvironmentVariables("HEROES_REPLAY_")
                   .Build();
 
@@ -73,6 +74,7 @@ namespace HeroesReplay.CLI
             var configuration = new ConfigurationBuilder()
                     .SetBasePath(Directory.GetCurrentDirectory())
                     .AddJsonFile("appsettings.json")
+                    .AddJsonFile("appsettings.secrets.json")
                     .AddEnvironmentVariables("HEROES_REPLAY_")
                     .Build();
 
@@ -105,6 +107,7 @@ namespace HeroesReplay.CLI
             var configuration = new ConfigurationBuilder()
                     .SetBasePath(Directory.GetCurrentDirectory())
                     .AddJsonFile("appsettings.json")
+                    .AddJsonFile("appsettings.secrets.json")
                     .AddEnvironmentVariables("HEROES_REPLAY_")
                     .Build();
 

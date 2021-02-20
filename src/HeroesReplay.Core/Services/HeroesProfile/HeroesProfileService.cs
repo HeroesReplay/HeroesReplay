@@ -103,9 +103,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                     {
                         logger.LogInformation("Deserializing replays...");
 
-                        return JsonSerializer
-                            .Deserialize<IEnumerable<HeroesProfileReplay>>(await response.Content.ReadAsStringAsync())
-                            .Where(x => x.Deleted == null || x.Deleted == "0");
+                        return JsonSerializer.Deserialize<IEnumerable<HeroesProfileReplay>>(await response.Content.ReadAsStringAsync()).Where(x => x.Deleted == null);
                     }
                 }
             }
@@ -191,7 +189,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                     }
                 }
 
-                
+
             }
             catch (Exception e)
             {
@@ -213,7 +211,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             {
                 payload.SetGameSessionReplayId(sessionId);
 
-                using(CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
+                using (CancellationTokenSource cancellationSource = CancellationTokenSource.CreateLinkedTokenSource(token, tokenProvider.Token))
                 {
                     using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.TwitchBaseUri })
                     {
@@ -268,7 +266,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                     }
                 }
 
-                
+
             }
             catch (Exception e)
             {
@@ -367,7 +365,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 logger.LogError(wrappedResponse.Exception, "Error with Heroes Profile Service");
             }
 
-            if(wrappedResponse.Result != null)
+            if (wrappedResponse.Result != null)
             {
                 logger.LogDebug($"retry attempt {retryAttempt}: {wrappedResponse.Result.StatusCode}: {wrappedResponse.Result.ReasonPhrase}");
             }
@@ -378,6 +376,70 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 logger.LogWarning($"Setting retry-after to {retryAfter}");
                 context["retry-after"] = retryAfter;
             }
+        }
+
+        private Type[] knownExceptions = new Type[] { typeof(ReplayDeletedException), typeof(ReplayVersionNotSupportedException) };
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="replayId"></param>
+        /// <exception cref="ReplayDeletedException">When the replay was found but the raw asset is deleted.</exception>
+        /// <exception cref="ReplayVersionNotSupportedException">When the replay was found but the raw asset is deleted.</exception>
+        /// <returns>The replay if found or null</returns>
+        public async Task<HeroesProfileReplay> GetReplayAsync(int replayId)
+        {
+            try
+            {
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                {
+                    HttpResponseMessage response = await Policy
+                           .Handle<Exception>()
+                           .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                           .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                           .ExecuteAsync(async (context, token) => await client.GetAsync(new Uri($"Replay/Min_id?min_id={replayId}&api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative), token), new Context(), tokenProvider.Token)
+                           .ConfigureAwait(false);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        logger.LogInformation("Deserializing replays...");
+
+                        IEnumerable<HeroesProfileReplay> replays = JsonSerializer.Deserialize<IEnumerable<HeroesProfileReplay>>(await response.Content.ReadAsStringAsync());
+
+                        HeroesProfileReplay replay = replays.FirstOrDefault(replays => replays.Id == replayId);
+
+                        if (replay != null)
+                        {
+                            if (replay.Deleted != null)
+                            {
+                                throw new ReplayDeletedException($"The raw replay file is no longer available. RIP");
+                            }
+
+                            bool versionSupported = (replay.GameVersion ?? string.Empty).Equals(settings.Spectate.VersionSupported.ToString());
+
+                            if (!versionSupported)
+                            {
+                                throw new ReplayVersionNotSupportedException($"Version found: {replay.GameVersion} but expected {settings.Spectate.VersionSupported}.");
+                            }
+
+                            if (replay.Deleted == null)
+                            {
+                                return replay;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception e) when (!knownExceptions.Contains(e.GetType()))
+            {
+                throw new Exception("Could not get replay from HeroesProfile Replays", e);
+            }
+            catch (Exception e) when (knownExceptions.Contains(e.GetType()))
+            {
+                throw;
+            }
+
+            throw new Exception("Could not get replay from HeroesProfile Replays");
         }
     }
 }

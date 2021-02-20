@@ -9,6 +9,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
     {
         Task<(int RankPoints, string Tier)> GetMMRAsync(SessionData sessionData);
         Task<IEnumerable<HeroesProfileReplay>> ListReplaysAllAsync(int minId);
+        Task<HeroesProfileReplay> GetReplayAsync(int replayId);
         Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload, CancellationToken token = default);
         Task<bool> CreatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token = default);
         Task<bool> UpdatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token = default);

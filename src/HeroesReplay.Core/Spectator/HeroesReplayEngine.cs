@@ -16,33 +16,27 @@ namespace HeroesReplay.Core
     public class HeroesReplayEngine : IHeroesReplayEngine
     {
         private readonly ILogger<HeroesReplayEngine> logger;
-        private readonly AppSettings settings;
         private readonly ITwitchBot twitchBot;
         private readonly IGameManager gameManager;
         private readonly IGameData gameData;
         private readonly IReplayProvider replayProvider;
-        private readonly IObsController obsController;
         private readonly CancellationTokenProvider tokenProvider;
 
         public HeroesReplayEngine(
             ILogger<HeroesReplayEngine> logger,
-            AppSettings settings,
             ITwitchBot twitchBot,
             IGameManager gameManager,
             IGameData gameData,
             IReplayProvider replayProvider,
-            IObsController obsController,
             CancellationTokenProvider tokenProvider
             )
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.twitchBot = twitchBot ?? throw new ArgumentNullException(nameof(twitchBot));
             this.gameManager = gameManager ?? throw new ArgumentNullException(nameof(gameManager));
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
             this.replayProvider = replayProvider ?? throw new ArgumentNullException(nameof(replayProvider));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
-            this.obsController = obsController ?? throw new ArgumentNullException(nameof(obsController));
         }
 
         public async Task RunAsync()
@@ -66,23 +60,15 @@ namespace HeroesReplay.Core
 
         private async Task SpectatorAsync()
         {
-            using (obsController)
+            await gameData.LoadDataAsync().ConfigureAwait(false);
+
+            while (!tokenProvider.Token.IsCancellationRequested)
             {
-                if (settings.OBS.Enabled)
+                StormReplay stormReplay = await replayProvider.TryLoadReplayAsync().ConfigureAwait(false);
+
+                if (stormReplay != null)
                 {
-                    obsController.Connect();
-                }
-
-                await gameData.LoadDataAsync().ConfigureAwait(false);
-
-                while (!tokenProvider.Token.IsCancellationRequested)
-                {
-                    StormReplay stormReplay = await replayProvider.TryLoadReplayAsync().ConfigureAwait(false);
-
-                    if (stormReplay != null)
-                    {
-                        await gameManager.SpectateAsync(stormReplay).ConfigureAwait(false);
-                    }
+                    await gameManager.SpectateAsync(stormReplay).ConfigureAwait(false);
                 }
             }
         }

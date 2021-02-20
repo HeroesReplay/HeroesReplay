@@ -30,7 +30,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         public int? Valid { get; set; }
 
         [JsonPropertyName("deleted")]
-        public string Deleted { get; set; }
+        public int? Deleted { get; set; }
 
         [JsonPropertyName("game_type")]
         public string GameType { get; set; }
