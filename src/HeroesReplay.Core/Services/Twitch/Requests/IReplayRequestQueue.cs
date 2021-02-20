@@ -7,7 +7,7 @@ namespace HeroesReplay.Core.Services.Twitch
     public interface IReplayRequestQueue
     {
         Task<ReplayRequest> GetNextRequestAsync();
-        Task EnqueueRequestAsync(ReplayRequest request);
+        Task<bool> EnqueueRequestAsync(ReplayRequest request);
         Task<int> GetTotalQueuedItems();
     }
 }

@@ -14,6 +14,9 @@ namespace HeroesReplay.Core.Configuration
         public bool EnableTwitchClips { get; init; }
         public bool EnablePubSub { get; init; }
         public bool EnableChatBot { get; init; }
+        public bool DryRunMode { get; init; }
+
+        public string RewardTitle { get; init; }
 
         public string ReplayRequestsFileName { get; init; }
         public Uri TokenRefreshUri { get; init; }

@@ -2,14 +2,10 @@
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
-
 using Microsoft.Extensions.Logging;
-
 using Polly;
-
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -120,6 +116,7 @@ namespace HeroesReplay.Core
                     {
                         Timer = result.Value.Add(sessionHolder.SessionData.GatesOpen);
                         logger.LogInformation($"{State}, UI Time: {result.Value} Replay Time: {Timer}");
+                        sessionHolder.SessionData.Timer = Timer;
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);

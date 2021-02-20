@@ -33,6 +33,8 @@ namespace HeroesReplay.Core
         private readonly AppSettings settings;
         private readonly CaptureStrategy captureStrategy;
 
+        private readonly object controllerLock = new object();
+
         public static readonly VirtualKey[] Keys =
         {
             VirtualKey.VK_KEY_1,
@@ -326,43 +328,57 @@ namespace HeroesReplay.Core
 
         public void SendFocus(int index)
         {
-            IntPtr key = (IntPtr)Keys[index];
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, key, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_CHAR, key, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, key, IntPtr.Zero);
+            lock (controllerLock)
+            {
+                IntPtr key = (IntPtr)Keys[index];
+                SendMessage(Handle, WindowMessage.WM_KEYDOWN, key, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_CHAR, key, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_KEYUP, key, IntPtr.Zero);
+            }
         }
 
         public void CameraFollow()
         {
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
+            lock (controllerLock)
+            {
+                SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_L, IntPtr.Zero);
+            }
         }
-
 
         public void SendToggleMaximumZoom()
         {
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
+            lock (controllerLock)
+            {
+                SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_SHIFT, IntPtr.Zero);
+            }
         }
 
         public void SendToggleMediumZoom()
         {
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+            lock (controllerLock)
+            {
+                SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_CHAR, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_Z, IntPtr.Zero);
+            }
         }
 
         public void SendPanel(Panel panel)
         {
-            IntPtr Key = (IntPtr)Keys[(int)panel];
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYDOWN, Key, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, Key, IntPtr.Zero);
-            SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+            lock (controllerLock)
+            {
+                IntPtr Key = (IntPtr)Keys[(int)panel];
+                SendMessage(Handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_KEYDOWN, Key, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_KEYUP, Key, IntPtr.Zero);
+                SendMessage(Handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+            }
         }
 
         public void KillGame()

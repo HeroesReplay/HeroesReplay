@@ -7,25 +7,16 @@ namespace HeroesReplay.Core.Models
 {
     public class SessionData
     {
-        public IReadOnlyDictionary<TimeSpan, Focus> Players { get; }
-        public IReadOnlyDictionary<TimeSpan, Panel> Panels { get; }
-        public TimeSpan End { get; }
-        public bool IsCarriedObjectiveMap { get; }
-        public TimeSpan GatesOpen { get; }
-        public ITalentExtensionPayloads Payloads { get; }
-        public int? ReplayId { get; }
-        public string GameType { get; }
+        public IReadOnlyDictionary<TimeSpan, Focus> Players { get; init; }
+        public IReadOnlyDictionary<TimeSpan, Panel> Panels { get; init; }
+        public TimeSpan CoreKilled { get; init; }
+        public bool IsCarriedObjectiveMap { get; init; }
+        public TimeSpan GatesOpen { get; init; }
+        public ITalentExtensionPayloads Payloads { get; init; }
+        public int? ReplayId { get; init; }
+        public string GameType { get; init; }
+        public DateTime Loaded { get; init; }
 
-        public SessionData(int? replayId, string gameType, ITalentExtensionPayloads payloads, IReadOnlyDictionary<TimeSpan, Focus> players, IReadOnlyDictionary<TimeSpan, Panel> panels, TimeSpan start, TimeSpan end, bool carried)
-        {
-            GameType = gameType;
-            ReplayId = replayId;
-            Payloads = payloads;
-            Players = players;
-            Panels = panels;
-            End = end;
-            IsCarriedObjectiveMap = carried;
-            GatesOpen = start;
-        }
+        public TimeSpan? Timer { get; set; }
     }
 }

@@ -23,12 +23,46 @@ namespace HeroesReplay.Core.Services.Obs
         private readonly OBSWebsocket obs;
         private readonly CancellationTokenProvider tokenProvider;
 
+        private bool disposedValue;
+
         public ObsController(ILogger<ObsController> logger, AppSettings settings, OBSWebsocket obs, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.obs = obs ?? throw new ArgumentNullException(nameof(obs));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        }
+
+        public void Initialize()
+        {
+            this.obs.Disconnected += Obs_Disconnected;
+        }
+
+        private void Obs_Disconnected(object sender, EventArgs e)
+        {
+            this.Connect();
+        }
+
+        public void Connect()
+        {
+            Policy
+                .Handle<Exception>()
+                .WaitAndRetry(retryCount: 5, sleepDurationProvider: (retryAttempt) => TimeSpan.FromSeconds(5))
+                .Execute(() =>
+                {
+                    try
+                    {
+                        obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+                        logger.LogDebug($"OBS WebSocket Connected");
+                        return true;
+                    }
+                    catch (Exception e)
+                    {
+                        logger.LogError(e, $"There was an error connecting to OBS");
+                    }
+
+                    return false;
+                });
         }
 
         public void SwapToGameScene()
@@ -41,10 +75,7 @@ namespace HeroesReplay.Core.Services.Obs
                 {
                     try
                     {
-                        obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-                        obs.SetCurrentScene(settings.OBS.GameSceneName);
-                        obs.Disconnect();
-                        logger.LogDebug($"OBS WebSocket Disconnected");
+                        obs.SetCurrentScene(settings.OBS.GameSceneName);                      
                         return true;
                     }
                     catch (Exception e)
@@ -90,8 +121,6 @@ namespace HeroesReplay.Core.Services.Obs
                 .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: (retryAttempt) => TimeSpan.FromSeconds(5), onRetry: OnRetry)
                 .ExecuteAsync(async (t) =>
                 {
-                    obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-
                     var sceneList = obs.GetSceneList();
                     var sourceList = obs.GetSourcesList();
 
@@ -105,8 +134,6 @@ namespace HeroesReplay.Core.Services.Obs
                         await TryCycleSceneAsync(source).ConfigureAwait(false);
                     }
 
-                    obs.Disconnect();
-                    logger.LogInformation($"OBS WebSocket Disconnected");
                     return true;
 
                 }, tokenProvider.Token);
@@ -182,8 +209,6 @@ namespace HeroesReplay.Core.Services.Obs
 
             try
             {
-                obs.Connect(settings.OBS.WebSocketEndpoint, null);
-
                 var sourceList = obs.GetSourcesList();
 
                 try
@@ -305,8 +330,6 @@ namespace HeroesReplay.Core.Services.Obs
                 {
                     logger.LogError(e, $"Could not set the Tier from {text} for OBS.");
                 }
-
-                obs.Disconnect();
             }
             catch (Exception e)
             {
@@ -317,6 +340,38 @@ namespace HeroesReplay.Core.Services.Obs
         private void OnRetry(DelegateResult<bool> wrappedResult, TimeSpan timeSpan)
         {
 
+        }
+
+        public void Disconnect()
+        {
+            try
+            {
+                this.obs.Disconnected -= Obs_Disconnected;
+                this.obs.Disconnect();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "There was an error disposing");
+            }
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    Disconnect();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

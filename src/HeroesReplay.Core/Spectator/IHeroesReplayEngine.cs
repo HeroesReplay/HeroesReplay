@@ -2,7 +2,7 @@
 
 namespace HeroesReplay.Core
 {
-    public interface ISpectateEngine
+    public interface IHeroesReplayEngine
     {
         Task RunAsync();
     }

@@ -37,7 +37,19 @@ namespace HeroesReplay.Core
             var replayId = stormReplay.ReplayId;
             var gameType = stormReplay.GameType;
 
-            sessionSetter.SetSession(new SessionData(replayId, gameType, payloads, players, panels, start, end, carriedObjectives));
+            sessionSetter.SetSession(new SessionData
+            {
+                ReplayId = replayId,
+                GameType = gameType,
+                Payloads = payloads,
+                Players = players,
+                Panels = panels,
+                GatesOpen = start,
+                CoreKilled = end,
+                IsCarriedObjectiveMap = carriedObjectives,
+                Loaded = DateTime.Now,
+                Timer = null
+            });
 
             var ended = DateTime.Now;
             var duration = ended - started;

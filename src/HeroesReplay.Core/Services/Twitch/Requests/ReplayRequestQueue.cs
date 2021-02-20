@@ -28,17 +28,20 @@ namespace HeroesReplay.Core.Services.Twitch
             return 0;
         }
 
-        public async Task EnqueueRequestAsync(ReplayRequest request)
+        public async Task<bool> EnqueueRequestAsync(ReplayRequest request)
         {
             if (!fileInfo.Exists)
             {
+                // validate replay ID = supported version
                 await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<ReplayRequest>() { request }, new JsonSerializerOptions { WriteIndented = true }));
+                return true;
             }
             else
             {
                 List<ReplayRequest> requests = JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName));
                 requests.Add(request);
                 await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
+                return true;
             }
         }
 

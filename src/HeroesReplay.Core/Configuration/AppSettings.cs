@@ -24,6 +24,7 @@ namespace HeroesReplay.Core.Configuration
         public MapSettings Maps { get; init; }
         public ParseOptionsSettings ParseOptions { get; init; }
         public AbilityDetectionSettings AbilityDetection { get; init; }
+        public QuoteSettings Quotes { get; init; }
 
         public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
         public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");

@@ -31,7 +31,13 @@ namespace HeroesReplay.Core
             this.replayDetailsWriter = replayDetailsWriter ?? throw new ArgumentNullException(nameof(replayDetailsWriter));
         }
 
-        public async Task SetSessionAsync(StormReplay stormReplay)
+        public async Task SpectateAsync(StormReplay stormReplay)
+        {
+            await SetSessionAsync(stormReplay);
+            await SpectateSessionAsync();
+        }
+
+        private async Task SetSessionAsync(StormReplay stormReplay)
         {
             if (stormReplay == null)
                 throw new ArgumentNullException(nameof(stormReplay));
@@ -51,7 +57,7 @@ namespace HeroesReplay.Core
             await gameController.LaunchAsync(stormReplay);
         }
 
-        public async Task SpectateSessionAsync()
+        private async Task SpectateSessionAsync()
         {
             if (settings.OBS.Enabled)
             {

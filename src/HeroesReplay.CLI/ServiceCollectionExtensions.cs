@@ -134,6 +134,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IGameManager, GameManager>()
                 .AddSingleton<IReplayAnalzer, ReplayAnalyzer>()
                 .AddSingleton<IObsController, ObsController>()
+                .AddSingleton<ITwitchBot, TwitchBot>()
                 .AddSingleton<IGameSession, GameSession>()
                 .AddSingleton(typeof(ISessionHolder), provider => provider.GetRequiredService<SessionHolder>())
                 .AddSingleton(typeof(ISessionSetter), provider => provider.GetRequiredService<SessionHolder>())
@@ -144,7 +145,26 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
                 .AddSingleton<ITalentNotifier, TalentNotifier>()
                 .AddSingleton(typeof(IReplayProvider), replayProvider)
-                .AddSingleton<ISpectateEngine, SpectateEngine>();
+                .AddSingleton<IReplayRequestQueue, ReplayRequestQueue>()
+                .AddSingleton<TwitchClient>()
+                .AddSingleton<TwitchPubSub>()
+                .AddSingleton<TwitchAPI>()
+                .AddSingleton(implementationFactory: serviceProvider =>
+                {
+                    AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
+                    return new ConnectionCredentials(twitchUsername: settings.Twitch.Account, twitchOAuth: settings.Twitch.AccessToken);
+                })
+                .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
+                {
+                    AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
+
+                    return new ApiSettings
+                    {
+                        AccessToken = settings.Twitch.AccessToken,
+                        ClientId = settings.Twitch.ClientId,
+                    };
+                })
+                .AddSingleton<IHeroesReplayEngine, HeroesReplayEngine>();
         }
     }
 }

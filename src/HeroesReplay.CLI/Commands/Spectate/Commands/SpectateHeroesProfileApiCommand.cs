@@ -23,7 +23,7 @@ namespace HeroesReplay.CLI.Commands
             {
                 using (IServiceScope scope = provider.CreateScope())
                 {
-                    SpectateEngine spectator = scope.ServiceProvider.GetRequiredService<SpectateEngine>();
+                    HeroesReplayEngine spectator = scope.ServiceProvider.GetRequiredService<HeroesReplayEngine>();
                     await spectator.RunAsync();
                 }
             }
