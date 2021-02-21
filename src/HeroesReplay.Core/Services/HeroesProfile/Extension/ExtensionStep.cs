@@ -1,6 +1,6 @@
 ﻿namespace HeroesReplay.Core.Services.HeroesProfile
 {
-    public enum HeroesProfileTwitchExtensionStep
+    public enum ExtensionStep
     {
         CreateReplayData,
         CreatePlayerData,

@@ -51,7 +51,8 @@ namespace HeroesReplay.Core
 
             if (settings.OBS.Enabled && settings.HeroesProfileApi.EnableMMR && sessionHolder.SessionData.ReplayId.HasValue)
             {
-                obsController.UpdateMMRTier(await heroesProfileService.GetMMRAsync(sessionHolder.SessionData));
+                ReplayData replayData = await heroesProfileService.GetReplayDataAsync(sessionHolder.SessionData.ReplayId.Value);
+                obsController.UpdateMMRTier(replayData);
             }
 
             await gameController.LaunchAsync(stormReplay);

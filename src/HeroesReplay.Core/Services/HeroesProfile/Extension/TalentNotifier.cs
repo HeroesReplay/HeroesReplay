@@ -44,7 +44,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
         private async Task SendCreatePayloadsAsync(CancellationToken token = default)
         {
-            HeroesProfileTwitchPayload createReplayPayload = Data.Payloads.Create.Find(p => p.Step == HeroesProfileTwitchExtensionStep.CreateReplayData);
+            ExtensionPayload createReplayPayload = Data.Payloads.Create.Find(p => p.Step == ExtensionStep.CreateReplayData);
 
             if (createReplayPayload != null)
             {
@@ -61,7 +61,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             }
             else
             {
-                HeroesProfileTwitchPayload createPlayerPayload = Data.Payloads.Create.Find(p => p.Step == HeroesProfileTwitchExtensionStep.CreatePlayerData);
+                ExtensionPayload createPlayerPayload = Data.Payloads.Create.Find(p => p.Step == ExtensionStep.CreatePlayerData);
 
                 if (createPlayerPayload != null)
                 {
@@ -77,7 +77,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
         private async Task SendUpdatePayloadsAsync(CancellationToken token = default)
         {
-            HeroesProfileTwitchPayload updateReplayPayload = Data.Payloads.Update.Find(p => p.Step == HeroesProfileTwitchExtensionStep.UpdateReplayData);
+            ExtensionPayload updateReplayPayload = Data.Payloads.Update.Find(p => p.Step == ExtensionStep.UpdateReplayData);
 
             if (updateReplayPayload != null)
             {
@@ -90,7 +90,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             }
             else
             {
-                HeroesProfileTwitchPayload updatePlayerPayload = Data.Payloads.Update.Find(p => p.Step == HeroesProfileTwitchExtensionStep.UpdatePlayerData);
+                ExtensionPayload updatePlayerPayload = Data.Payloads.Update.Find(p => p.Step == ExtensionStep.UpdatePlayerData);
 
                 if (updatePlayerPayload != null)
                 {

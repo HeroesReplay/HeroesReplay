@@ -35,7 +35,7 @@ namespace HeroesReplay.Core
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.twitchBot = twitchBot ?? throw new ArgumentNullException(nameof(twitchBot));
             this.gameManager = gameManager ?? throw new ArgumentNullException(nameof(gameManager));
-            this.obsController = obsController;
+            this.obsController = obsController ?? throw new ArgumentNullException(nameof(obsController));
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
             this.replayProvider = replayProvider ?? throw new ArgumentNullException(nameof(replayProvider));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
@@ -45,7 +45,7 @@ namespace HeroesReplay.Core
         {
             try
             {
-                await ConfigureAsync();
+                await Initialize();
 
                 await Task.WhenAll(
                     Task.Run(SpectatorAsync, tokenProvider.Token),
@@ -57,7 +57,7 @@ namespace HeroesReplay.Core
             }
         }
 
-        private async Task ConfigureAsync()
+        private async Task Initialize()
         {
             await gameData.LoadDataAsync();
             obsController.Configure();
@@ -65,7 +65,7 @@ namespace HeroesReplay.Core
 
         private async Task TwitchBotAsync()
         {
-            await twitchBot.ConnectAsync();
+            await twitchBot.InitializeAsync();
         }
 
         private async Task SpectatorAsync()

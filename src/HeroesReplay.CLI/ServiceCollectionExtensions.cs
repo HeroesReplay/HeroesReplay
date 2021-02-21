@@ -20,6 +20,9 @@ using Microsoft.Extensions.Logging;
 
 using OBSWebsocketDotNet;
 
+using Polly.Caching;
+using Polly.Caching.Memory;
+
 using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
@@ -122,10 +125,12 @@ namespace HeroesReplay.CLI
             var settings = configuration.Get<AppSettings>();
 
             return services
+                .AddMemoryCache()
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
                 .AddSingleton<IConfiguration>(configuration)
                 .AddSingleton(settings)
                 .AddSingleton(new CancellationTokenProvider(token))
+                .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
                 .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
                 .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(CaptureStub), CaptureMethod.BitBlt => typeof(CaptureBitBlt), _ => typeof(CaptureBitBlt) })
                 .AddSingleton(typeof(IGameController), settings.Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
@@ -144,7 +149,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<ISessionCreator, SessionCreator>()
                 .AddSingleton<IHeroesProfileService, HeroesProfileService>()
                 .AddSingleton<IReplayRequestQueue, ReplayRequestQueue>()
-                .AddSingleton<IHeroesProfileExtensionPayloadsBuilder, HeroesProfileExtensionPayloadsBuilder>()
+                .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
                 .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
                 .AddSingleton<ITalentNotifier, TalentNotifier>()
                 .AddSingleton(typeof(IReplayProvider), replayProvider)

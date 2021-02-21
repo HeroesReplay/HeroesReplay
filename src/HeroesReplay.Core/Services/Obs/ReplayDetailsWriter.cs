@@ -43,8 +43,13 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                 logger.LogInformation($"writing replay details to: {settings.CurrentReplayInfoFilePath}");
 
-                var lines = new[] { settings.ReplayDetailsWriter.GameMode ? replay.GameType : string.Empty }.Concat(settings.ReplayDetailsWriter.Bans ? bans : Enumerable.Empty<string>())
-                    .Where(line => !string.IsNullOrWhiteSpace(line));
+                var lines = new[]
+                {
+                    settings.ReplayDetailsWriter.Requestor ? (replay.Request != null ? $"Requestor: {replay.Request.Login}" : string.Empty) : string.Empty,
+                    settings.ReplayDetailsWriter.GameMode ? replay.GameType : string.Empty
+                }
+                .Concat(settings.ReplayDetailsWriter.Bans ? bans : Enumerable.Empty<string>())
+                .Where(line => !string.IsNullOrWhiteSpace(line));
 
                 await File.WriteAllLinesAsync(settings.CurrentReplayInfoFilePath, lines, CancellationToken.None);
             }

@@ -99,18 +99,18 @@ namespace HeroesReplay.Core.Providers
 
                 if (request != null && request.ReplayId.HasValue)
                 {
-                    await GetNextRequestedReplayAsync(request.ReplayId.Value);
+                    await GetNextRequestedReplayAsync(request);
                 }
             }
 
             return await GetNextStandardReplayAsync();
         }
 
-        private async Task<StormReplay> GetNextRequestedReplayAsync(int replayId)
+        private async Task<StormReplay> GetNextRequestedReplayAsync(ReplayRequest request)
         {
             try
             {
-                HeroesProfileReplay replay = await GetSpecificReplayAsync(replayId).ConfigureAwait(false);
+                HeroesProfileReplay replay = await GetSpecificReplayAsync(request.ReplayId.Value).ConfigureAwait(false);
 
                 if (replay != null)
                 {
@@ -222,7 +222,7 @@ namespace HeroesReplay.Core.Providers
             return null;
         }
 
-        private async Task<StormReplay> TryLoadReplay(HeroesProfileReplay heroesProfileReplay, FileInfo file)
+        private async Task<StormReplay> TryLoadReplay(HeroesProfileReplay heroesProfileReplay, FileInfo file, ReplayRequest request = null)
         {
             logger.LogDebug("id: {0}, url: {1}, path: {2}", heroesProfileReplay.Id, heroesProfileReplay.Url, file.FullName);
 
@@ -244,7 +244,7 @@ namespace HeroesReplay.Core.Providers
 
             if (result != ReplayParseResult.Exception && result != ReplayParseResult.PreAlphaWipe && result != ReplayParseResult.Incomplete)
             {
-                return new StormReplay(file.FullName, replay, heroesProfileReplay.Id, heroesProfileReplay.GameType);
+                return new StormReplay(file.FullName, replay, heroesProfileReplay.Id, heroesProfileReplay.GameType, request);
             }
 
             return null;

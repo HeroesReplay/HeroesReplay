@@ -37,20 +37,48 @@ namespace HeroesReplay.Core.Services.Twitch
         {
             try
             {
+                // Replay ID Request
                 if (request.ReplayId.HasValue)
                 {
                     HeroesProfileReplay heroesProfileReplay = await heroesProfileService.GetReplayAsync(request.ReplayId.Value);
 
-                    if (!fileInfo.Exists)
+                    if (heroesProfileReplay != null)
                     {
-                        await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<ReplayRequest>() { request }, new JsonSerializerOptions { WriteIndented = true }));
-                        return new ReplayRequestResponse(success: true, message: "Request has been requeued.");
+                        request.ReplayId = heroesProfileReplay.Id;
+
+                        if (!fileInfo.Exists)
+                        {
+                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<ReplayRequest>() { request }, new JsonSerializerOptions { WriteIndented = true }));
+                            return new ReplayRequestResponse(success: true, message: $"Request has been queued. Position: {1}");
+                        }
+                        else
+                        {
+                            List<ReplayRequest> requests = new List<ReplayRequest>(JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName))) { request };
+                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
+                            return new ReplayRequestResponse(success: true, message: $"Request has been queued. Position: {requests.Count}");
+                        }
                     }
-                    else
+                }
+                else
+                {
+                    // Map Request
+                    HeroesProfileReplay heroesProfileReplay = await heroesProfileService.GetReplayAsync(mode: request.GameMode, tier: request.Tier, map: request.Map);
+
+                    if (heroesProfileReplay != null)
                     {
-                        List<ReplayRequest> requests = new List<ReplayRequest>(JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName))) { request };
-                        await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
-                        return new ReplayRequestResponse(success: true, message: "Request has been requeued.");
+                        request.ReplayId = heroesProfileReplay.Id;
+
+                        if (!fileInfo.Exists)
+                        {
+                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<ReplayRequest>() { request }, new JsonSerializerOptions { WriteIndented = true }));
+                            return new ReplayRequestResponse(success: true, message: $"Request has been queued. Position: {1}");
+                        }
+                        else
+                        {
+                            List<ReplayRequest> requests = new List<ReplayRequest>(JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName))) { request };
+                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
+                            return new ReplayRequestResponse(success: true, message: $"Request has been queued. Position: {requests.Count}");
+                        }
                     }
                 }
 

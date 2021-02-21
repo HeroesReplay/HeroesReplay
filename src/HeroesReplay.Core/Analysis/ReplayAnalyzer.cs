@@ -21,9 +21,9 @@ namespace HeroesReplay.Core
         private readonly IGameData gameData;
         private readonly ILogger<ReplayAnalyzer> logger;
         private readonly AppSettings settings;
-        private readonly IHeroesProfileExtensionPayloadsBuilder talentPayloadsBuilder;
+        private readonly IExtensionPayloadsBuilder talentPayloadsBuilder;
 
-        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, AppSettings settings, IHeroesProfileExtensionPayloadsBuilder talentPayloadsBuilder, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
+        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, AppSettings settings, IExtensionPayloadsBuilder talentPayloadsBuilder, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
         {
             this.calculators = calculators ?? throw new ArgumentNullException(nameof(calculators));
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
@@ -71,7 +71,7 @@ namespace HeroesReplay.Core
             return new ReadOnlyDictionary<TimeSpan, Panel>(panels);
         }
 
-        public ITalentExtensionPayloads GetPayloads(Replay replay)
+        public ITalentPayloads GetPayloads(Replay replay)
         {
             return talentPayloadsBuilder.CreatePayloads(replay);
         }

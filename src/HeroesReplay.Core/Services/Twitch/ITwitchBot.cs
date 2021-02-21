@@ -5,6 +5,6 @@ namespace HeroesReplay.Core.Services.Twitch
 {
     public interface ITwitchBot
     {
-        Task ConnectAsync();
+        Task InitializeAsync();
     }
 }

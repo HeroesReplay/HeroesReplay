@@ -1,4 +1,4 @@
-﻿using System;
+﻿using HeroesReplay.Core.Services.HeroesProfile;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.Obs
@@ -9,6 +9,6 @@ namespace HeroesReplay.Core.Services.Obs
         Task CycleReportAsync(int replayId);
         void SwapToGameScene();
         void SwapToWaitingScene();
-        void UpdateMMRTier((int RankPoints, string Tier) mmr);
+        void UpdateMMRTier(ReplayData replayData);
     }
 }

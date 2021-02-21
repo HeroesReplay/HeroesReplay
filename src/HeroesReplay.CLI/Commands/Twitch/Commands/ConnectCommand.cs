@@ -25,7 +25,7 @@ namespace HeroesReplay.CLI.Commands
                     using (var waiter = new ManualResetEventSlim())
                     {
                         ITwitchBot twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
-                        await twitchBot.ConnectAsync();
+                        await twitchBot.InitializeAsync();
                         waiter.Wait(cancellationToken);
                     }
                 }

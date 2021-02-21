@@ -16,6 +16,8 @@ namespace HeroesReplay.Core.Configuration
         public string S3Bucket { get; init; }
         public string S3Region { get; init; }
         public int MinReplayId { get; init; }
+        public int FallbackMaxReplayId { get; init; }
+        public int ApiMaxReturnedReplays { get; init; }
         public int MMRPoolSize { get; init; }
         public string MMRProperty { get; init; }
         public bool EnableMMR { get; init; }

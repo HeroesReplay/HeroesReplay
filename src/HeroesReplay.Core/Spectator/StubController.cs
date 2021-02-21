@@ -45,6 +45,8 @@ namespace HeroesReplay.Core
 
         public Task<TimeSpan?> TryGetTimerAsync()
         {
+            return Task.FromResult(new TimeSpan?(TimeSpan.Zero));
+
             TimeSpan? timer = null;
 
             if (Timers.Count > 0)

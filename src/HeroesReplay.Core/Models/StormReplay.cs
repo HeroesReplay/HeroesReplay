@@ -15,12 +15,19 @@ namespace HeroesReplay.Core.Models
 
         public Replay Replay { get; }
 
+        public ReplayRequest Request { get; }
+
         public StormReplay(string path, Replay replay, int? replayId, string gameType)
         {
             Replay = replay;
             Path = path;
             ReplayId = replayId;
             GameType = gameType;
+        }
+
+        public StormReplay(string path, Replay replay, int? replayId, string gameType, ReplayRequest request) : this(path, replay, replayId, gameType)
+        {
+            Request = request;
         }
     }
 }

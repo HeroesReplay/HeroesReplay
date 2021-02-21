@@ -7,14 +7,19 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 {
     public interface IHeroesProfileService
     {
-        Task<(int RankPoints, string Tier)> GetMMRAsync(SessionData sessionData);
+        Task<ReplayData> GetReplayDataAsync(int replayId);
         Task<IEnumerable<HeroesProfileReplay>> ListReplaysAllAsync(int minId);
+
+        /// <exception cref="ReplayDeletedException">When the replay was found but the raw asset is deleted.</exception>
+        /// <exception cref="ReplayVersionNotSupportedException">When the replay was found but the raw asset is deleted.</exception>
+        /// <exception cref="ReplayNotFoundException">When the replay was found but the raw asset is deleted.</exception>
         Task<HeroesProfileReplay> GetReplayAsync(int replayId);
-        Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload, CancellationToken token = default);
-        Task<bool> CreatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token = default);
-        Task<bool> UpdatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token = default);
-        Task<bool> UpdateReplayDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token = default);
-        Task<bool> UpdatePlayerTalentsAsync(List<HeroesProfileTwitchPayload> lists, string sessionId, CancellationToken token = default);
+        Task<HeroesProfileReplay> GetReplayAsync(GameMode? mode, Tier? tier = null, Map map = null);
+        Task<string> CreateReplaySessionAsync(ExtensionPayload payload, CancellationToken token = default);
+        Task<bool> CreatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
+        Task<bool> UpdatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
+        Task<bool> UpdateReplayDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
+        Task<bool> UpdatePlayerTalentsAsync(List<ExtensionPayload> lists, string sessionId, CancellationToken token = default);
         Task<bool> NotifyTwitchAsync(CancellationToken token = default);
     }
 }

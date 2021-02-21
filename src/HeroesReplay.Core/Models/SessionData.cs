@@ -12,7 +12,7 @@ namespace HeroesReplay.Core.Models
         public TimeSpan CoreKilled { get; init; }
         public bool IsCarriedObjectiveMap { get; init; }
         public TimeSpan GatesOpen { get; init; }
-        public ITalentExtensionPayloads Payloads { get; init; }
+        public ITalentPayloads Payloads { get; init; }
         public int? ReplayId { get; init; }
         public string GameType { get; init; }
         public DateTime Loaded { get; init; }

@@ -1,6 +1,6 @@
 ﻿namespace HeroesReplay.Core.Services.HeroesProfile
 {
-    public class TwitchExtensionFormKeys
+    public class ExtensionFormKeys
     {
         public const string SessionId = "replayID";
         public const string TwitchKey = "hp_twitch_key";

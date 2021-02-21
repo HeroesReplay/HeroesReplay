@@ -5,6 +5,7 @@ using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 
 using Polly;
+using Polly.Caching;
 
 using System;
 using System.Collections.Generic;
@@ -20,6 +21,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
     public class HeroesProfileService : IHeroesProfileService
     {
         private readonly ILogger<HeroesProfileService> logger;
+        private readonly IAsyncCacheProvider cacheProvider;
         private readonly CancellationTokenProvider tokenProvider;
         private readonly AppSettings settings;
 
@@ -32,58 +34,20 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
         private readonly FormUrlEncodedContent notifyContent;
 
-        public HeroesProfileService(ILogger<HeroesProfileService> logger, CancellationTokenProvider tokenProvider, AppSettings settings)
+        public HeroesProfileService(ILogger<HeroesProfileService> logger, IAsyncCacheProvider cacheProvider, CancellationTokenProvider tokenProvider, AppSettings settings)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.cacheProvider = cacheProvider ?? throw new ArgumentNullException(nameof(cacheProvider));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
             notifyContent = new(new Dictionary<string, string>
             {
-                { TwitchExtensionFormKeys.TwitchKey, settings.TwitchExtension.ApiKey },
-                { TwitchExtensionFormKeys.Email, settings.TwitchExtension.ApiEmail },
-                { TwitchExtensionFormKeys.TwitchUserName, settings.TwitchExtension.TwitchUserName },
-                { TwitchExtensionFormKeys.UserId, settings.TwitchExtension.ApiUserId }
+                { ExtensionFormKeys.TwitchKey, settings.TwitchExtension.ApiKey },
+                { ExtensionFormKeys.Email, settings.TwitchExtension.ApiEmail },
+                { ExtensionFormKeys.TwitchUserName, settings.TwitchExtension.TwitchUserName },
+                { ExtensionFormKeys.UserId, settings.TwitchExtension.ApiUserId }
             });
-        }
-
-        public async Task<(int RankPoints, string Tier)> GetMMRAsync(SessionData sessionData)
-        {
-            try
-            {
-                var apiKey = settings.HeroesProfileApi.ApiKey;
-
-                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
-                {
-                    string dataResponse = await client.GetStringAsync(new Uri($"Replay/Data?mode=json&replayID={sessionData.ReplayId}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
-
-                    using (JsonDocument dataJson = JsonDocument.Parse(dataResponse))
-                    {
-                        double mmr = (from replay in dataJson.RootElement.EnumerateObject()
-                                      from element in replay.Value.EnumerateObject()
-                                      where element.Value.ValueKind == JsonValueKind.Object
-                                      let player = element.Value
-                                      from p in player.EnumerateObject()
-                                      where p.Name.Equals(settings.HeroesProfileApi.MMRProperty)
-                                      select p.Value.GetDouble())
-                                          .OrderByDescending(x => x)
-                                          .Take(settings.HeroesProfileApi.MMRPoolSize)
-                                          .Average();
-
-                        int average = Convert.ToInt32(mmr);
-
-                        string tier = await client.GetStringAsync(new Uri($"MMR/Tier?mmr={average}&game_type={sessionData.GameType}&api_token={apiKey}", UriKind.Relative)).ConfigureAwait(false);
-
-                        return (average, tier);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogError("Could not calculate average mmr", e);
-            }
-
-            return default;
         }
 
         public async Task<IEnumerable<HeroesProfileReplay>> ListReplaysAllAsync(int minId)
@@ -115,7 +79,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return Enumerable.Empty<HeroesProfileReplay>();
         }
 
-        public async Task<string> CreateReplaySessionAsync(HeroesProfileTwitchPayload payload, CancellationToken token)
+        public async Task<string> CreateReplaySessionAsync(ExtensionPayload payload, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -157,7 +121,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return null;
         }
 
-        public async Task<bool> CreatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token)
+        public async Task<bool> CreatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -199,7 +163,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return responses.All(response => response.IsSuccessStatusCode);
         }
 
-        public async Task<bool> UpdateReplayDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token)
+        public async Task<bool> UpdateReplayDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -234,7 +198,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return false;
         }
 
-        public async Task<bool> UpdatePlayerDataAsync(HeroesProfileTwitchPayload payload, string sessionId, CancellationToken token)
+        public async Task<bool> UpdatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -303,7 +267,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return false;
         }
 
-        public async Task<bool> UpdatePlayerTalentsAsync(List<HeroesProfileTwitchPayload> talentPayloads, string sessionId, CancellationToken token)
+        public async Task<bool> UpdatePlayerTalentsAsync(List<ExtensionPayload> talentPayloads, string sessionId, CancellationToken token)
         {
             if (talentPayloads == null)
                 throw new ArgumentNullException(nameof(talentPayloads));
@@ -346,39 +310,146 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             return responses.All(response => response.IsSuccessStatusCode);
         }
 
-        private TimeSpan GetSleepDuration(int retry, Context context)
+        public async Task<HeroesProfileReplay> GetReplayAsync(GameMode? mode, Tier? tier = null, Map map = null)
         {
-            if (context.ContainsKey("retry-after"))
+            try
             {
-                var retryAfter = (TimeSpan)context["retry-after"];
-                logger.LogInformation($"getting sleep duration for retry attempt {retry}: {retryAfter}");
-                return retryAfter;
+                string gameType = (mode == null ? null : mode switch
+                {
+                    GameMode.ARAM => "ARAM",
+                    GameMode.QuickMatch => "Quick Match",
+                    GameMode.Unranked => "Unranked Draft",
+                    GameMode.StormLeague => "Storm League",
+                    _ => "Quick Match"
+                });
+
+                int maxId = await GetMaxReplayIdAsync();
+                int minId = maxId - settings.HeroesProfileApi.ApiMaxReturnedReplays;
+                var context = new Context() { { "MinReplayId", minId } };
+
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                {
+                    return await Policy
+                           .Handle<Exception>()
+                           .OrResult<HeroesProfileReplay>(replay => replay == null)
+                           .WaitAndRetryAsync(retryCount: 60, sleepDurationProvider: GetSleepDuration, onRetry: OnGetReplayRetry)
+                           .ExecuteAsync(async (context, token) =>
+                           {
+                               var minId = context["MinReplayId"];
+                               var json = await client.GetStringAsync(new Uri($"Replay/Min_id?min_id={minId}&api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative));
+                               var replays = JsonSerializer.Deserialize<IEnumerable<HeroesProfileReplay>>(json);
+
+                               replays = replays.Where(replay => replay.Deleted == null);
+                               replays = replays.Where(replay => replay.GameVersion.Equals(settings.Spectate.VersionSupported.ToString()));
+
+                               if (!string.IsNullOrWhiteSpace(gameType))
+                               {
+                                   replays = replays.Where(replay => replay.GameType.Equals(gameType, StringComparison.OrdinalIgnoreCase));
+                               }
+
+                               replays = replays.OrderBy(replay => Guid.NewGuid());
+
+                               foreach (var replay in replays.ToList())
+                               {
+                                   ReplayData data = await GetReplayDataAsync(replay.Id);
+
+                                   bool mapMatches = map == null || (data.Map.Equals(map.Name, StringComparison.OrdinalIgnoreCase) || data.Map.Equals(map.AltName, StringComparison.OrdinalIgnoreCase));
+                                   bool tierMatches = tier == null || (tier.HasValue && tier.Value == (Tier)Enum.Parse(typeof(Tier), data.Tier));
+
+                                   if (mapMatches && tierMatches)
+                                   {
+                                       logger.LogInformation($"Replay found with criteria: {replay.Id}");
+                                       return replay;
+                                   }
+                               }
+
+                               return null;
+                           },
+                           context, tokenProvider.Token);
+                }
+            }
+            catch (Exception e)
+            {
+
             }
 
-            return TimeSpan.FromSeconds(5);
+            throw new Exception("Could not get replay from HeroesProfile Replays");
         }
 
-        private void OnRetry(DelegateResult<HttpResponseMessage> wrappedResponse, TimeSpan timeSpan, int retryAttempt, Context context)
+        private void OnGetReplayRetry(DelegateResult<HeroesProfileReplay> wrappedResponse, TimeSpan timeSpan, int retryAttempt, Context context)
         {
-            if (wrappedResponse.Exception != null)
+            if (wrappedResponse.Exception == null && wrappedResponse.Result == null)
             {
-                logger.LogError(wrappedResponse.Exception, "Error with Heroes Profile Service");
-            }
-
-            if (wrappedResponse.Result != null)
-            {
-                logger.LogDebug($"retry attempt {retryAttempt}: {wrappedResponse.Result.StatusCode}: {wrappedResponse.Result.ReasonPhrase}");
-            }
-
-            if (wrappedResponse?.Result?.Headers?.RetryAfter != null)
-            {
-                TimeSpan retryAfter = wrappedResponse.Result.Headers.RetryAfter.Delta.Value;
-                logger.LogWarning($"Setting retry-after to {retryAfter}");
-                context["retry-after"] = retryAfter;
+                int newMinReplayId = ((int)context["MinReplayId"] - settings.HeroesProfileApi.ApiMaxReturnedReplays);
+                logger.LogDebug($"No criteria matched. Current MinReplayId: {context["MinReplayId"]}. Next MinReplayId: {newMinReplayId}");
+                context["MinReplayId"] = ((int)context["MinReplayId"] - settings.HeroesProfileApi.ApiMaxReturnedReplays);
             }
         }
 
-        private Type[] knownExceptions = new Type[] { typeof(ReplayDeletedException), typeof(ReplayVersionNotSupportedException) };
+        public async Task<ReplayData> GetReplayDataAsync(int replayId)
+        {
+            using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+            {
+                HttpResponseMessage response = await Policy
+                       .Handle<Exception>()
+                       .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                       .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                       .ExecuteAsync(async (context, token) => await client.GetAsync(new Uri($"Replay/Data?mode=json&replayID={replayId}&api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative), token), new Context(), tokenProvider.Token)
+                       .ConfigureAwait(false);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+
+                    using (var doc = JsonDocument.Parse(json))
+                    {
+                        string map = string.Empty;
+                        string gameType = string.Empty;
+                        Dictionary<string, float> mmr = new Dictionary<string, float>();
+
+                        foreach (var root in doc.RootElement.EnumerateObject())
+                        {
+                            foreach (var prop in root.Value.EnumerateObject())
+                            {
+                                if (prop.Name.Equals("game_map"))
+                                {
+                                    map = prop.Value.GetString();
+                                }
+
+                                if (prop.Name.Equals("game_type"))
+                                {
+                                    gameType = prop.Value.GetString();
+                                }
+
+                                if (prop.Value.ValueKind == JsonValueKind.Object && prop.Name.Contains('#'))
+                                {
+                                    var player = prop.Value.EnumerateObject();
+
+                                    foreach (var field in player)
+                                    {
+                                        if (field.Name.Equals("player_mmr"))
+                                        {
+                                            mmr[prop.Name] = field.Value.GetSingle();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        int average = Convert.ToInt32(mmr.Values.OrderByDescending(value => value).Take(settings.HeroesProfileApi.MMRPoolSize).Average());
+
+                        string tier = await Policy
+                            .Handle<Exception>()
+                            .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: (retrycount) => TimeSpan.FromSeconds(2))
+                            .ExecuteAsync(() => client.GetStringAsync(new Uri($"MMR/Tier?mmr={average}&game_type={gameType}&api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative)));
+
+                        return new ReplayData { Map = map, AverageMmr = average, ReplayId = replayId, PlayerMmrs = mmr, Tier = tier };
+                    }
+                }
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// 
@@ -386,7 +457,8 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         /// <param name="replayId"></param>
         /// <exception cref="ReplayDeletedException">When the replay was found but the raw asset is deleted.</exception>
         /// <exception cref="ReplayVersionNotSupportedException">When the replay was found but the raw asset is deleted.</exception>
-        /// <returns>The replay if found or null</returns>
+        /// <exception cref="ReplayNotFoundException">When the replay was found but the raw asset is deleted.</exception>
+        /// <returns></returns>
         public async Task<HeroesProfileReplay> GetReplayAsync(int replayId)
         {
             try
@@ -412,7 +484,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                         {
                             if (replay.Deleted != null)
                             {
-                                throw new ReplayDeletedException($"The raw replay file is no longer available. RIP");
+                                throw new ReplayDeletedException($"The raw replay file is no longer available.");
                             }
 
                             bool versionSupported = (replay.GameVersion ?? string.Empty).Equals(settings.Spectate.VersionSupported.ToString());
@@ -432,14 +504,87 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             }
             catch (Exception e) when (!knownExceptions.Contains(e.GetType()))
             {
-                throw new Exception("Could not get replay from HeroesProfile Replays", e);
+                logger.LogError(e, $"Error in retrieving replayid: {replayId}");
             }
             catch (Exception e) when (knownExceptions.Contains(e.GetType()))
             {
                 throw;
             }
 
-            throw new Exception("Could not get replay from HeroesProfile Replays");
+            throw new ReplayNotFoundException($"Could not find replay: {replayId}");
         }
+
+        private TimeSpan GetSleepDuration(int retry, Context context)
+        {
+            if (context.ContainsKey("retry-after"))
+            {
+                var retryAfter = (TimeSpan)context["retry-after"];
+                logger.LogInformation($"getting sleep duration for retry attempt {retry}: {retryAfter}");
+                return retryAfter;
+            }
+
+            return TimeSpan.FromSeconds(1);
+        }
+
+        private void OnRetry(DelegateResult<HttpResponseMessage> wrappedResponse, TimeSpan timeSpan, int retryAttempt, Context context)
+        {
+            if (wrappedResponse.Exception != null)
+            {
+                logger.LogError(wrappedResponse.Exception, "Error with Heroes Profile Service");
+            }
+
+            if (wrappedResponse.Result != null)
+            {
+                logger.LogDebug($"retry attempt {retryAttempt}: {wrappedResponse.Result.StatusCode}: {wrappedResponse.Result.ReasonPhrase}");
+            }
+
+            if (wrappedResponse?.Result?.Headers?.RetryAfter != null)
+            {
+                TimeSpan retryAfter = wrappedResponse.Result.Headers.RetryAfter.Delta.Value;
+                logger.LogWarning($"Setting retry-after to {retryAfter}");
+                context["retry-after"] = retryAfter;
+            }
+        }
+
+        private async Task<int> GetMaxReplayIdAsync()
+        {
+            try
+            {
+                using (var client = new HttpClient() { BaseAddress = settings.HeroesProfileApi.BaseUri })
+                {
+                    HttpResponseMessage response = await Policy
+                        .CacheAsync(cacheProvider.AsyncFor<HttpResponseMessage>(), TimeSpan.FromHours(12), OnCacheError)
+                        .ExecuteAsync(() => Policy
+                           .Handle<Exception>()
+                           .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
+                           .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
+                           .ExecuteAsync((context, token) => client.GetAsync(new Uri($"Replay/Max?api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative), token), new Context(), tokenProvider.Token))
+                        .ConfigureAwait(false);
+
+                    string content = await response.Content.ReadAsStringAsync();
+
+                    if (!string.IsNullOrWhiteSpace(content))
+                    {
+                        if (int.TryParse(content, out int maxId))
+                        {
+                            return maxId;
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not get max replayId from HeroesProfile API.");
+            }
+
+            return settings.HeroesProfileApi.FallbackMaxReplayId;
+        }
+
+        private void OnCacheError(Context context, string key, Exception exception)
+        {
+            logger.LogError(exception, $"Could not cache {key}");
+        }
+
+        private readonly Type[] knownExceptions = new Type[] { typeof(ReplayDeletedException), typeof(ReplayVersionNotSupportedException) };
     }
 }

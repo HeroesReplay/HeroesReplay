@@ -14,6 +14,7 @@ using System.Linq;
 using Polly;
 using HeroesReplay.Core.Shared;
 using System.IO;
+using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core.Services.Obs
 {
@@ -39,7 +40,9 @@ namespace HeroesReplay.Core.Services.Obs
                 if (!string.IsNullOrWhiteSpace(this.settings.OBS.RecordingFolderDirectory))
                 {
                     DirectoryInfo directory = Directory.CreateDirectory(this.settings.OBS.RecordingFolderDirectory);
+                    obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
                     obs.SetRecordingFolder(directory.FullName);
+                    obs.Disconnect();
                 }
             }
             catch (Exception e)
@@ -182,9 +185,9 @@ namespace HeroesReplay.Core.Services.Obs
             return false;
         }
 
-        public void UpdateMMRTier((int RankPoints, string Tier) mmr)
+        public void UpdateMMRTier(ReplayData replayData)
         {
-            var text = string.IsNullOrEmpty(mmr.Tier) ? string.Empty : mmr.Tier;
+            var text = string.IsNullOrEmpty(replayData.Tier) ? string.Empty : replayData.Tier;
             text = text.Trim().ToLower();
 
             string tier = null;
@@ -312,7 +315,7 @@ namespace HeroesReplay.Core.Services.Obs
                             try
                             {
                                 var properties = obs.GetTextGDIPlusProperties(rankPointsSource.Name);
-                                properties.Text = mmr.RankPoints.ToString();
+                                properties.Text = replayData.AverageMmr.ToString();
                                 obs.SetTextGDIPlusProperties(properties);
                                 obs.SetSourceRender(rankPointsSource.Name, visible: true, sceneName: settings.OBS.GameSceneName);
                                 logger.LogInformation($"set {rankPointsSource.Name} to visible=true");

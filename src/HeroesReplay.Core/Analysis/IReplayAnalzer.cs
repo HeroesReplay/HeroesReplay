@@ -12,7 +12,7 @@ namespace HeroesReplay.Core
     {
         IReadOnlyDictionary<TimeSpan, Focus> GetPlayers(Replay replay);
         IReadOnlyDictionary<TimeSpan, Panel> GetPanels(Replay replay);
-        ITalentExtensionPayloads GetPayloads(Replay replay);
+        ITalentPayloads GetPayloads(Replay replay);
         TimeSpan GetEnd(Replay replay);
         bool IsCarriedObjectiveMap(Replay replay);
         TimeSpan GetStart(Replay replay);
