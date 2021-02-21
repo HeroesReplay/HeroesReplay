@@ -49,9 +49,9 @@ namespace HeroesReplay.Core
                 await replayDetailsWriter.WriteDetailsAsync(stormReplay);
             }
 
-            if (settings.OBS.Enabled && settings.HeroesProfileApi.EnableMMR && sessionHolder.SessionData.ReplayId.HasValue)
+            if (settings.OBS.Enabled && settings.HeroesProfileApi.EnableMMR && sessionHolder.Current.ReplayId.HasValue)
             {
-                ReplayData replayData = await heroesProfileService.GetReplayDataAsync(sessionHolder.SessionData.ReplayId.Value);
+                ReplayData replayData = await heroesProfileService.GetReplayDataAsync(sessionHolder.Current.ReplayId.Value);
                 obsController.UpdateMMRTier(replayData);
             }
 
@@ -67,9 +67,9 @@ namespace HeroesReplay.Core
                 gameController.KillGame();
                 await replayDetailsWriter.ClearDetailsAsync();
 
-                if (sessionHolder.SessionData.ReplayId.HasValue)
+                if (sessionHolder.Current.ReplayId.HasValue)
                 {
-                    await obsController.CycleReportAsync(sessionHolder.SessionData.ReplayId.Value);
+                    await obsController.CycleReportAsync(sessionHolder.Current.ReplayId.Value);
                 }
 
                 obsController.SwapToWaitingScene();

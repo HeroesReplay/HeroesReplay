@@ -27,7 +27,7 @@ namespace HeroesReplay.Core
 
         public async Task<StormReplay> LaunchAsync(StormReplay stormReplay)
         {
-            var timeSpans = Enumerable.Range((int)sessionHolder.SessionData.GatesOpen.TotalSeconds, (int)stormReplay.Replay.ReplayLength.TotalSeconds).ToList();
+            var timeSpans = Enumerable.Range((int)sessionHolder.Current.GatesOpen.TotalSeconds, (int)stormReplay.Replay.ReplayLength.TotalSeconds).ToList();
             var total = timeSpans.Count;
             var sections = (total / 16);
 
@@ -45,7 +45,7 @@ namespace HeroesReplay.Core
 
         public Task<TimeSpan?> TryGetTimerAsync()
         {
-            return Task.FromResult(new TimeSpan?(TimeSpan.Zero));
+            // return Task.FromResult(new TimeSpan?(TimeSpan.Zero));
 
             TimeSpan? timer = null;
 

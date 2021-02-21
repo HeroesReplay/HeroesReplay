@@ -4,6 +4,7 @@ namespace HeroesReplay.Core
 {
     public interface ISessionHolder
     {
-        SessionData SessionData { get; }
+        SessionData Previous { get; }
+        SessionData Current { get; }
     }
 }

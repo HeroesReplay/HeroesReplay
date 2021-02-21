@@ -18,7 +18,6 @@ using TwitchLib.PubSub.Events;
 
 namespace HeroesReplay.Core.Services.Twitch
 {
-
     /*
      * https://twitchtokengenerator.com/
      */
@@ -35,7 +34,7 @@ namespace HeroesReplay.Core.Services.Twitch
         private readonly IReplayRequestQueue requestQueue;
         private readonly IGameData gameData;
 
-        private List<ChannelPointsMapReward> MapRewards;
+        private List<ChannelPointsReward> MapRewards;
 
         /*
          * If we have prediction data set, we should not allow users to request the replay id.
@@ -106,11 +105,18 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private void ConfigureRewards()
         {
-            var tiers = Enum.GetValues(typeof(Tier)).OfType<Tier>().ToList();
-            MapRewards = gameData.Maps
-                .SelectMany(map => tiers.Select(tier => new ChannelPointsMapReward($"{map.Name} ({tier})", map, tier)))
-                .Concat(gameData.Maps.Select(map => new ChannelPointsMapReward($"{map.Name}", map, tier: null)))
-                .ToList();
+            List<Tier> tiers = Enum.GetValues(typeof(Tier)).OfType<Tier>().ToList();
+            MapRewards = new List<ChannelPointsReward>();
+            MapRewards.AddRange(gameData.Maps.SelectMany(map => tiers.Select(tier => new ChannelPointsReward($"{map.Name} (SL {tier})", map.Name, tier, GameMode.StormLeague))));
+            MapRewards.AddRange(gameData.Maps.Select(map => new ChannelPointsReward($"{map.Name} (QM)", map.Name, tier: null, GameMode.QuickMatch)));
+            MapRewards.AddRange(gameData.Maps.Select(map => new ChannelPointsReward($"{map.Name} (Unranked)", map.Name, tier: null, GameMode.Unranked)));
+            MapRewards.Add(new ChannelPointsReward("Random (QM)", map: null, tier: null, mode: GameMode.QuickMatch));
+            MapRewards.Add(new ChannelPointsReward("Random (QM Bronze)", map: null, tier: Tier.Bronze, mode: GameMode.QuickMatch));
+            MapRewards.Add(new ChannelPointsReward("Random (QM Silver)", map: null, tier: Tier.Silver, mode: GameMode.QuickMatch));
+            MapRewards.Add(new ChannelPointsReward("Random (QM Gold)", map: null, tier: Tier.Gold, mode: GameMode.QuickMatch));
+            MapRewards.Add(new ChannelPointsReward("Random (QM Platinum)", map: null, tier: Tier.Platinum, mode: GameMode.QuickMatch));
+            MapRewards.Add(new ChannelPointsReward("Random (QM Diamond)", map: null, tier: Tier.Diamond, mode: GameMode.QuickMatch));
+            MapRewards.Add(new ChannelPointsReward("Random (QM Master)", map: null, tier: Tier.Master, mode: GameMode.QuickMatch));
         }
 
         private void Client_OnConnectionError(object sender, OnConnectionErrorArgs e)
@@ -167,7 +173,7 @@ namespace HeroesReplay.Core.Services.Twitch
                     {
                         if (settings.Twitch.EnableMapRewards)
                         {
-                            ChannelPointsMapReward channelPointsMapReward = MapRewards.Find(mapReward => mapReward.Title.Equals(e.RewardTitle, StringComparison.OrdinalIgnoreCase));
+                            ChannelPointsReward channelPointsMapReward = MapRewards.Find(mapReward => mapReward.Title.Equals(e.RewardTitle, StringComparison.OrdinalIgnoreCase));
 
                             if (channelPointsMapReward != null)
                             {
@@ -187,15 +193,8 @@ namespace HeroesReplay.Core.Services.Twitch
         {
             Task.Factory.StartNew(async () =>
             {
-                ReplayRequest request = new ReplayRequest
-                {
-                    Login = e.Login,
-                    Map = null,
-                    Tier = null,
-                    GameMode = GameMode.ARAM
-                };
-
-                ReplayRequestResponse response = await requestQueue.EnqueueRequestAsync(request);
+                RewardRequest request = new RewardRequest(e.Login, e.RewardTitle, null, null, null, GameMode.ARAM);
+                RewardResponse response = await requestQueue.EnqueueRequestAsync(request);
 
                 if (settings.Twitch.EnableChatBot)
                 {
@@ -206,19 +205,12 @@ namespace HeroesReplay.Core.Services.Twitch
             }, TaskCreationOptions.LongRunning);
         }
 
-        private void HandleMapReward(OnRewardRedeemedArgs e, ChannelPointsMapReward reward)
+        private void HandleMapReward(OnRewardRedeemedArgs e, ChannelPointsReward reward)
         {
             Task.Factory.StartNew(async () =>
             {
-                ReplayRequest request = new ReplayRequest
-                {
-                    Login = e.Login,
-                    Map = reward.Map,
-                    Tier = reward.Tier,
-                    GameMode = null
-                };
-
-                ReplayRequestResponse response = await requestQueue.EnqueueRequestAsync(request);
+                RewardRequest request = new RewardRequest(e.Login, reward.Title, null, reward.Tier, reward.Map, reward.Mode);
+                RewardResponse response = await requestQueue.EnqueueRequestAsync(request);
 
                 if (settings.Twitch.EnableChatBot)
                 {
@@ -235,7 +227,7 @@ namespace HeroesReplay.Core.Services.Twitch
             {
                 Task.Factory.StartNew(async () =>
                 {
-                    ReplayRequestResponse response = await requestQueue.EnqueueRequestAsync(new ReplayRequest { Login = e.Login, ReplayId = replayId });
+                    RewardResponse response = await requestQueue.EnqueueRequestAsync(new RewardRequest(e.Login, e.RewardTitle, replayId, null, null, null));
 
                     if (settings.Twitch.EnableChatBot)
                     {
@@ -268,11 +260,11 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
         {
-            if (e.ChatMessage.Message.Equals("!current"))
+            if (e.ChatMessage.Message.Equals("!previous"))
             {
-                if (sessionHolder.SessionData != null && sessionHolder.SessionData.ReplayId.HasValue)
+                if (sessionHolder.Previous != null && sessionHolder.Previous.ReplayId.HasValue)
                 {
-                    client.SendMessage(JoinedChannel, $"https://www.heroesprofile.com/Match/Single/?replayID={sessionHolder.SessionData.ReplayId.Value}");
+                    client.SendMessage(JoinedChannel, $"https://www.heroesprofile.com/Match/Single/?replayID={sessionHolder.Previous.ReplayId.Value}");
                 }
             }
         }
@@ -301,3 +293,4 @@ namespace HeroesReplay.Core.Services.Twitch
         }
     }
 }
+

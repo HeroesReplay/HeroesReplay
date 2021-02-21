@@ -14,7 +14,12 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         /// <exception cref="ReplayVersionNotSupportedException">When the replay was found but the raw asset is deleted.</exception>
         /// <exception cref="ReplayNotFoundException">When the replay was found but the raw asset is deleted.</exception>
         Task<HeroesProfileReplay> GetReplayAsync(int replayId);
-        Task<HeroesProfileReplay> GetReplayAsync(GameMode? mode, Tier? tier = null, Map map = null);
+
+        /// <exception cref="ReplayDeletedException">When the replay was found but the raw asset is deleted.</exception>
+        /// <exception cref="ReplayVersionNotSupportedException">When the replay was found but the raw asset is deleted.</exception>
+        /// <exception cref="ReplayNotFoundException">When the replay was found but the raw asset is deleted.</exception>
+        Task<RewardReplay> GetReplayAsync(GameMode? mode, Tier? tier = null, string map = null);
+
         Task<string> CreateReplaySessionAsync(ExtensionPayload payload, CancellationToken token = default);
         Task<bool> CreatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
         Task<bool> UpdatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);

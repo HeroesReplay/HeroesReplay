@@ -26,14 +26,14 @@ namespace HeroesReplay.Core.Services.Twitch
         {
             if (fileInfo.Exists)
             {
-                List<ReplayRequest> requests = JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName));
+                List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName));
                 return requests.Count;
             }
 
             return 0;
         }
 
-        public async Task<ReplayRequestResponse> EnqueueRequestAsync(ReplayRequest request)
+        public async Task<RewardResponse> EnqueueRequestAsync(RewardRequest request)
         {
             try
             {
@@ -44,61 +44,77 @@ namespace HeroesReplay.Core.Services.Twitch
 
                     if (heroesProfileReplay != null)
                     {
-                        request.ReplayId = heroesProfileReplay.Id;
+                        var item = new RewardQueueItem(request, null);
 
                         if (!fileInfo.Exists)
                         {
-                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<ReplayRequest>() { request }, new JsonSerializerOptions { WriteIndented = true }));
-                            return new ReplayRequestResponse(success: true, message: $"Request has been queued. Position: {1}");
+                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem>() { item }, new JsonSerializerOptions { WriteIndented = true }));
+                            return new RewardResponse(success: true, message: $"{request.ReplayId.Value} in queue ({1})");
                         }
                         else
                         {
-                            List<ReplayRequest> requests = new List<ReplayRequest>(JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName))) { request };
-                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
-                            return new ReplayRequestResponse(success: true, message: $"Request has been queued. Position: {requests.Count}");
+                            List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName))) { item };
+                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true }));
+                            return new RewardResponse(success: true, message: $"{request.ReplayId.Value} in queue ({items.Count})");
                         }
                     }
                 }
                 else
                 {
                     // Map Request
-                    HeroesProfileReplay heroesProfileReplay = await heroesProfileService.GetReplayAsync(mode: request.GameMode, tier: request.Tier, map: request.Map);
+                    RewardReplay rewardReplay = await heroesProfileService.GetReplayAsync(mode: request.GameMode, tier: request.Tier, map: request.Map);
 
-                    if (heroesProfileReplay != null)
+                    if (rewardReplay != null)
                     {
-                        request.ReplayId = heroesProfileReplay.Id;
+                        var item = new RewardQueueItem(request, rewardReplay);
 
                         if (!fileInfo.Exists)
                         {
-                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<ReplayRequest>() { request }, new JsonSerializerOptions { WriteIndented = true }));
-                            return new ReplayRequestResponse(success: true, message: $"Request has been queued. Position: {1}");
+                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem>() { item }, new JsonSerializerOptions { WriteIndented = true }));
+
+                            if (string.IsNullOrWhiteSpace(request.Map))
+                            {
+                                return new RewardResponse(success: true, message: $"Request '{request.RewardTitle}' queued: {item.Replay.Map} ({1})");
+                            }
+                            else
+                            {
+                                return new RewardResponse(success: true, message: $"Request '{request.RewardTitle}' queued ({1})");
+                            }
                         }
                         else
                         {
-                            List<ReplayRequest> requests = new List<ReplayRequest>(JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName))) { request };
-                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(requests, new JsonSerializerOptions { WriteIndented = true }));
-                            return new ReplayRequestResponse(success: true, message: $"Request has been queued. Position: {requests.Count}");
+                            List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName))) { item };
+                            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true }));
+
+                            if (string.IsNullOrWhiteSpace(request.Map))
+                            {
+                                return new RewardResponse(success: true, message: $"Request '{request.RewardTitle}' queued: {item.Replay.Map} ({items.Count})");
+                            }
+                            else
+                            {
+                                return new RewardResponse(success: true, message: $"Request '{request.RewardTitle}' queued ({items.Count})");
+                            }
                         }
                     }
                 }
 
-                return new ReplayRequestResponse(success: false, message: "Request not handled.");
+                return new RewardResponse(success: false, message: "That request is not handled.");
             }
             catch (Exception e)
             {
-                return new ReplayRequestResponse(success: false, message: e.Message);
+                return new RewardResponse(success: false, message: e.Message);
             }
         }
 
-        public async Task<ReplayRequest> GetNextRequestAsync()
+        public async Task<RewardQueueItem> GetNextRewardQueueItem()
         {
             if (fileInfo.Exists)
             {
-                List<ReplayRequest> requests = JsonSerializer.Deserialize<List<ReplayRequest>>(await File.ReadAllTextAsync(fileInfo.FullName));
+                List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName));
 
                 if (requests.Count > 0)
                 {
-                    ReplayRequest request = requests[0];
+                    RewardQueueItem request = requests[0];
 
                     if (requests.Remove(request))
                     {

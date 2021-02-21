@@ -15,7 +15,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         private readonly ISessionHolder sessionHolder;
         private readonly IHeroesProfileService heroesProfileService;
 
-        private SessionData Data => sessionHolder.SessionData;
+        private SessionData Data => sessionHolder.Current;
         private string SessionId { get; set; }
         public bool SessionCreated => !string.IsNullOrWhiteSpace(SessionId);
 

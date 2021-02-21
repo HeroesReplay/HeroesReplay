@@ -16,7 +16,6 @@ namespace HeroesReplay.Core.Models
         public int? ReplayId { get; init; }
         public string GameType { get; init; }
         public DateTime Loaded { get; init; }
-
         public TimeSpan? Timer { get; set; }
     }
 }

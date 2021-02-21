@@ -15,7 +15,7 @@ namespace HeroesReplay.Core.Models
 
         public Replay Replay { get; }
 
-        public ReplayRequest Request { get; }
+        public RewardRequest Request { get; }
 
         public StormReplay(string path, Replay replay, int? replayId, string gameType)
         {
@@ -25,7 +25,7 @@ namespace HeroesReplay.Core.Models
             GameType = gameType;
         }
 
-        public StormReplay(string path, Replay replay, int? replayId, string gameType, ReplayRequest request) : this(path, replay, replayId, gameType)
+        public StormReplay(string path, Replay replay, int? replayId, string gameType, RewardRequest request) : this(path, replay, replayId, gameType)
         {
             Request = request;
         }

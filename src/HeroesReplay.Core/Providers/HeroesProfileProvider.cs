@@ -95,22 +95,29 @@ namespace HeroesReplay.Core.Providers
         {
             if (settings.Twitch.EnableReplayRequests)
             {
-                ReplayRequest request = await requestQueue.GetNextRequestAsync();
+                RewardQueueItem item = await requestQueue.GetNextRewardQueueItem();
 
-                if (request != null && request.ReplayId.HasValue)
+                if (item != null)
                 {
-                    await GetNextRequestedReplayAsync(request);
+                    if (item.Replay != null)
+                    {
+                        await GetNextRequestedReplayAsync(item.Replay.ReplayId);
+                    }
+                    else if (item.Request != null && item.Request.ReplayId.HasValue)
+                    {
+                        await GetNextRequestedReplayAsync(item.Request.ReplayId.Value);
+                    }
                 }
             }
 
             return await GetNextStandardReplayAsync();
         }
 
-        private async Task<StormReplay> GetNextRequestedReplayAsync(ReplayRequest request)
+        private async Task<StormReplay> GetNextRequestedReplayAsync(int replayId)
         {
             try
             {
-                HeroesProfileReplay replay = await GetSpecificReplayAsync(request.ReplayId.Value).ConfigureAwait(false);
+                HeroesProfileReplay replay = await GetSpecificReplayAsync(replayId).ConfigureAwait(false);
 
                 if (replay != null)
                 {
@@ -222,7 +229,7 @@ namespace HeroesReplay.Core.Providers
             return null;
         }
 
-        private async Task<StormReplay> TryLoadReplay(HeroesProfileReplay heroesProfileReplay, FileInfo file, ReplayRequest request = null)
+        private async Task<StormReplay> TryLoadReplay(HeroesProfileReplay heroesProfileReplay, FileInfo file, RewardRequest request = null)
         {
             logger.LogDebug("id: {0}, url: {1}, path: {2}", heroesProfileReplay.Id, heroesProfileReplay.Url, file.FullName);
 

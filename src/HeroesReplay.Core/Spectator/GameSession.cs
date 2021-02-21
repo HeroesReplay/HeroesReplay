@@ -27,7 +27,7 @@ namespace HeroesReplay.Core
 
         private TimeSpan Timer { get; set; }
 
-        private SessionData Data => sessionHolder.SessionData;
+        private SessionData Data => sessionHolder.Current;
 
         private CancellationTokenSource CancelSessionSource { get; set; }
 
@@ -114,9 +114,9 @@ namespace HeroesReplay.Core
 
                     if (result.HasValue)
                     {
-                        Timer = result.Value.Add(sessionHolder.SessionData.GatesOpen);
+                        Timer = result.Value.Add(sessionHolder.Current.GatesOpen);
                         logger.LogInformation($"{State}, UI Time: {result.Value} Replay Time: {Timer}");
-                        sessionHolder.SessionData.Timer = Timer;
+                        sessionHolder.Current.Timer = Timer;
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
