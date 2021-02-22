@@ -3,6 +3,7 @@
 using Microsoft.Extensions.Logging;
 
 using System;
+using System.Threading;
 
 namespace HeroesReplay.Core
 {
@@ -48,7 +49,8 @@ namespace HeroesReplay.Core
                 CoreKilled = end,
                 IsCarriedObjectiveMap = carriedObjectives,
                 Loaded = DateTime.Now,
-                Timer = null
+                Timer = null,
+                ViewerCancelRequestSource = new CancellationTokenSource()
             });
 
             var ended = DateTime.Now;

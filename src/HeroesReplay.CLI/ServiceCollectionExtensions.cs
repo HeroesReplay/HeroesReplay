@@ -12,6 +12,7 @@ using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Obs;
 using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.Services.Twitch.RewardHandlers;
 using HeroesReplay.Core.Shared;
 
 using Microsoft.Extensions.Configuration;
@@ -26,9 +27,12 @@ using Polly.Caching.Memory;
 using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
+using TwitchLib.Api.Interfaces;
 using TwitchLib.Client;
+using TwitchLib.Client.Interfaces;
 using TwitchLib.Client.Models;
 using TwitchLib.PubSub;
+using TwitchLib.PubSub.Interfaces;
 
 using Windows.Media.Ocr;
 
@@ -36,42 +40,6 @@ namespace HeroesReplay.CLI
 {
     public static class ServiceCollectionExtensions
     {
-        public static IServiceCollection AddTwitchServices(this IServiceCollection services, CancellationToken token)
-        {
-            var configuration = new ConfigurationBuilder()
-                  .SetBasePath(Directory.GetCurrentDirectory())
-                  .AddJsonFile("appsettings.json")
-                  .AddJsonFile("appsettings.secrets.json")
-                  .AddEnvironmentVariables("HEROES_REPLAY_")
-                  .Build();
-
-            return services
-                .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
-                .AddSingleton<IConfiguration>(configuration)
-                .AddSingleton(configuration.Get<AppSettings>())
-                .AddSingleton(new CancellationTokenProvider(token))
-                .AddSingleton<ITwitchBot, TwitchBot>()
-                .AddSingleton<IReplayRequestQueue, ReplayRequestQueue>()
-                .AddSingleton<TwitchClient>()
-                .AddSingleton<TwitchPubSub>()
-                .AddSingleton<TwitchAPI>()
-                .AddSingleton<ConnectionCredentials>(implementationFactory: serviceProvider =>
-                {
-                    AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
-                    return new ConnectionCredentials(twitchUsername: settings.Twitch.Account, twitchOAuth: settings.Twitch.AccessToken);
-                })
-                .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
-                {
-                    AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
-
-                    return new ApiSettings
-                    {
-                        AccessToken = settings.Twitch.AccessToken,
-                        ClientId = settings.Twitch.ClientId,
-                    };
-                });
-        }
-
         public static IServiceCollection AddReportServices(this IServiceCollection services, CancellationToken token, Type replayProvider)
         {
             var configuration = new ConfigurationBuilder()
@@ -115,48 +83,62 @@ namespace HeroesReplay.CLI
                     .Build();
 
             var focusCalculator = typeof(IFocusCalculator);
-            var calculators = focusCalculator.Assembly.GetTypes().Where(type => type.IsClass && focusCalculator.IsAssignableFrom(type));
+            var calculatorTypes = focusCalculator.Assembly.GetTypes().Where(type => type.IsClass && focusCalculator.IsAssignableFrom(type));
 
-            foreach (var calculatorType in calculators)
+            foreach (var type in calculatorTypes)
             {
-                services.AddSingleton(focusCalculator, calculatorType);
+                services.AddSingleton(focusCalculator, type);
             }
 
-            var settings = configuration.Get<AppSettings>();
+            var rewardHandler = typeof(IRewardHandler);
+            var rewardHandlerTypes = rewardHandler.Assembly.GetTypes().Where(type => type.IsClass && rewardHandler.IsAssignableFrom(type));
+
+            foreach (var type in rewardHandlerTypes)
+            {
+                services.AddSingleton(rewardHandler, type);
+            }
+
+            var commandHandler = typeof(ICommandHandler);
+            var commandHandlerTypes = rewardHandler.Assembly.GetTypes().Where(type => type.IsClass && commandHandler.IsAssignableFrom(type));
+
+            foreach (var type in commandHandlerTypes)
+            {
+                services.AddSingleton(commandHandler, type);
+            }
 
             return services
                 .AddMemoryCache()
+                .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
                 .AddSingleton<IConfiguration>(configuration)
-                .AddSingleton(settings)
+                .AddSingleton(implementationFactory: serviceProvider => serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>())
                 .AddSingleton(new CancellationTokenProvider(token))
-                .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
                 .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
-                .AddSingleton(typeof(CaptureStrategy), settings.Capture.Method switch { CaptureMethod.None => typeof(CaptureStub), CaptureMethod.BitBlt => typeof(CaptureBitBlt), _ => typeof(CaptureBitBlt) })
-                .AddSingleton(typeof(IGameController), settings.Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
+                .AddSingleton(typeof(CaptureStrategy), configuration.Get<AppSettings>().Capture.Method switch { CaptureMethod.None => typeof(CaptureStub), CaptureMethod.BitBlt => typeof(CaptureBitBlt), _ => typeof(CaptureBitBlt) })
+                .AddSingleton(typeof(IGameController), configuration.Get<AppSettings>().Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
                 .AddSingleton<IGameData, GameData>()
                 .AddSingleton<IReplayHelper, ReplayHelper>()
-                .AddSingleton<SessionHolder>()
-                .AddSingleton<OBSWebsocket>()
                 .AddSingleton<IAbilityDetector, AbilityDetector>()
                 .AddSingleton<IGameManager, GameManager>()
                 .AddSingleton<IReplayAnalzer, ReplayAnalyzer>()
-                .AddSingleton<IObsController, ObsController>()
-                .AddSingleton<ITwitchBot, TwitchBot>()
                 .AddSingleton<IGameSession, GameSession>()
+                .AddSingleton<SessionHolder>()
+                .AddSingleton<ISessionCreator, SessionCreator>()
                 .AddSingleton(typeof(ISessionHolder), provider => provider.GetRequiredService<SessionHolder>())
                 .AddSingleton(typeof(ISessionSetter), provider => provider.GetRequiredService<SessionHolder>())
-                .AddSingleton<ISessionCreator, SessionCreator>()
                 .AddSingleton<IHeroesProfileService, HeroesProfileService>()
-                .AddSingleton<IReplayRequestQueue, ReplayRequestQueue>()
                 .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
                 .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
                 .AddSingleton<ITalentNotifier, TalentNotifier>()
                 .AddSingleton(typeof(IReplayProvider), replayProvider)
+                .AddSingleton<IOnMessageReceivedHandler, OnMessageReceivedHandler>()
+                .AddSingleton<IOnRewardRedeemedHandler, OnRewardRedeemedHandler>()
+                .AddSingleton<ISupportedRewardsHolder, SupportedRewardsHolder>()
                 .AddSingleton<IReplayRequestQueue, ReplayRequestQueue>()
-                .AddSingleton<TwitchClient>()
-                .AddSingleton<TwitchPubSub>()
-                .AddSingleton<TwitchAPI>()
+                .AddSingleton<ITwitchBot, TwitchBot>()
+                .AddSingleton<ITwitchClient, TwitchClient>()
+                .AddSingleton<ITwitchPubSub, TwitchPubSub>()
+                .AddSingleton<ITwitchAPI, TwitchAPI>()
                 .AddSingleton(implementationFactory: serviceProvider =>
                 {
                     AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
@@ -172,6 +154,8 @@ namespace HeroesReplay.CLI
                         ClientId = settings.Twitch.ClientId,
                     };
                 })
+                .AddSingleton<OBSWebsocket>()
+                .AddSingleton<IObsController, ObsController>()
                 .AddSingleton<IHeroesReplayEngine, HeroesReplayEngine>();
         }
     }

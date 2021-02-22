@@ -84,11 +84,22 @@ namespace HeroesReplay.Core.Runner
 
             using (var mapJson = JsonDocument.Parse(json))
             {
-                Maps = new ReadOnlyCollection<Map>(
-                        (from map in mapJson.RootElement.EnumerateArray()
-                         let name = map.GetProperty("name").GetString()
-                         let altName = map.GetProperty("short_name").GetString()
-                         select new Map(name, altName)).ToList());
+                /*
+                 *   {
+                        "map_id": 2,
+                        "name": "Blackheart's Bay",
+                        "short_name": "BlackheartsBay",
+                        "type": "standard",
+                        "ranked_rotation": 0,
+                        "playable": 1
+                      },*/
+                Maps = new ReadOnlyCollection<Map>((from item in mapJson.RootElement.EnumerateArray()
+                                                    select new Map(
+                                                        name: item.GetProperty("name").GetString(), 
+                                                        altName: item.GetProperty("short_name").GetString(), 
+                                                        rankedRotation: item.GetProperty("ranked_rotation").GetInt32() == 1, 
+                                                        type: item.GetProperty("type").GetString(), 
+                                                        playable: item.GetProperty("playable").GetInt32() == 1)).ToList());
             }
         }
 

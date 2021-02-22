@@ -3,16 +3,18 @@ using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core.Services.Twitch
 {
-    public class ChannelPointsReward
+    public class SupportedReward
     {
-        public string Title { get; }
+        public RewardType RewardType { get; }
+        public string RewardTitle { get; }
         public string Map { get; }
         public Tier? Tier { get; }
         public GameMode? Mode { get; }
 
-        public ChannelPointsReward(string title, string map, Tier? tier, GameMode? mode)
+        public SupportedReward(RewardType rewardType, string title, string map = null, Tier? tier = null, GameMode? mode = null)
         {
-            Title = title;
+            RewardType = rewardType;
+            RewardTitle = title;
             Map = map;
             Tier = tier;
             Mode = mode;

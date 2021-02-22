@@ -66,7 +66,7 @@ namespace HeroesReplay.Core
 
             using (CancelSessionSource = new CancellationTokenSource())
             {
-                using (LinkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(CancelSessionSource.Token, Token))
+                using (LinkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(CancelSessionSource.Token, Token, sessionHolder.Current.ViewerCancelRequestSource.Token))
                 {
                     await Task.WhenAll(
                         Task.Run(PanelLoopAsync, LinkedTokenSource.Token),

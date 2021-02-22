@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace HeroesReplay.Core.Models
 {
@@ -17,5 +18,6 @@ namespace HeroesReplay.Core.Models
         public string GameType { get; init; }
         public DateTime Loaded { get; init; }
         public TimeSpan? Timer { get; set; }
+        public CancellationTokenSource ViewerCancelRequestSource { get; set; }
     }
 }
