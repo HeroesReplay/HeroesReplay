@@ -239,6 +239,7 @@ namespace HeroesReplay.Core.Services.Twitch
             }
             else
             {
+                client.SendMessage(JoinedChannel, $"{e.DisplayName}, your request is invalid.", dryRun: settings.Twitch.DryRunMode);
                 logger.LogDebug($"{e.TimeStamp}: {e.RewardId} - {e.RewardCost}");
             }
         }

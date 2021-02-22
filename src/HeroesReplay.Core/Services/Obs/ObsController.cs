@@ -199,7 +199,7 @@ namespace HeroesReplay.Core.Services.Obs
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Could not extract Tier from {text}");
+                logger.LogInformation($"Could not extract Tier from {text}");
             }
 
             try
@@ -208,7 +208,7 @@ namespace HeroesReplay.Core.Services.Obs
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Could not extract division from {text}");
+                logger.LogInformation($"Could not extract division from {text}");
             }
 
             try

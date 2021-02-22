@@ -1,4 +1,5 @@
 ﻿using HeroesReplay.Core.Models;
+
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,7 +8,10 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 {
     public interface IHeroesProfileService
     {
+        Task<int> GetMaxReplayIdAsync();
+
         Task<ReplayData> GetReplayDataAsync(int replayId);
+
         Task<IEnumerable<HeroesProfileReplay>> ListReplaysAllAsync(int minId);
 
         /// <exception cref="ReplayDeletedException">When the replay was found but the raw asset is deleted.</exception>

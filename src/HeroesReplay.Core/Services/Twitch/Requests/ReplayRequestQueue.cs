@@ -15,11 +15,13 @@ namespace HeroesReplay.Core.Services.Twitch
     {
         private readonly FileInfo fileInfo;
         private readonly IHeroesProfileService heroesProfileService;
+        private readonly AppSettings settings;
 
         public ReplayRequestQueue(IHeroesProfileService heroesProfileService, AppSettings settings)
         {
             fileInfo = new FileInfo(Path.Combine(settings.AssetsPath, settings.Twitch.ReplayRequestsFileName));
             this.heroesProfileService = heroesProfileService;
+            this.settings = settings;
         }
 
         public async Task<int> GetTotalQueuedItems()
@@ -41,6 +43,24 @@ namespace HeroesReplay.Core.Services.Twitch
                 if (request.ReplayId.HasValue)
                 {
                     HeroesProfileReplay heroesProfileReplay = await heroesProfileService.GetReplayAsync(request.ReplayId.Value);
+
+                    if (heroesProfileReplay == null)
+                    {
+                        return new RewardResponse(success: false, message: $"Could not find: {request.ReplayId.Value}");
+                    }
+
+                    if (heroesProfileReplay != null)
+                    {
+                        if (heroesProfileReplay.Deleted != null)
+                        {
+                            return new RewardResponse(success: false, message: $"The raw file for {request.ReplayId.Value} is no longer available.");
+                        }
+
+                        if (!heroesProfileReplay.GameVersion.Equals(settings.Spectate.VersionSupported.ToString()))
+                        {
+                            return new RewardResponse(success: false, message: $"Version found: {heroesProfileReplay.GameVersion} but expected {settings.Spectate.VersionSupported}.");
+                        }
+                    }
 
                     if (heroesProfileReplay != null)
                     {
@@ -98,7 +118,7 @@ namespace HeroesReplay.Core.Services.Twitch
                     }
                 }
 
-                return new RewardResponse(success: false, message: "That request is not handled.");
+                return new RewardResponse(success: false, message: "Request failed to queue because it's not handled.");
             }
             catch (Exception e)
             {
