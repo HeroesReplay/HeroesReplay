@@ -28,6 +28,8 @@ namespace HeroesReplay.Core
 
             foreach (var unit in replay.Units.Where(unit => gameData.GetUnitGroup(unit.Name) == Unit.UnitGroup.MapObjective && gameData.VehicleUnits.Contains(unit.Name)))
             {
+                if (!unit.Positions.Any()) continue;
+
                 if (unit.PlayerControlledBy != null)
                 {
                     var startTime = unit.Positions.Select(p => p.TimeSpan).Min();

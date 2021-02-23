@@ -106,6 +106,18 @@ namespace HeroesReplay.CLI
                 services.AddSingleton(commandHandler, type);
             }
 
+            services.AddHttpClient(HeroesProfileService.ExtensionApiClient, configureClient: (serviceProvider, httpClient) =>
+            {
+                var settings = serviceProvider.GetRequiredService<AppSettings>();
+                httpClient.BaseAddress = settings.HeroesProfileApi.TwitchBaseUri;
+            });
+
+            services.AddHttpClient(HeroesProfileService.ApiClient, configureClient: (serviceProvider, httpClient) =>
+            {
+                var settings = serviceProvider.GetRequiredService<AppSettings>();
+                httpClient.BaseAddress = settings.HeroesProfileApi.BaseUri;
+            });
+
             return services
                 .AddMemoryCache()
                 .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
@@ -147,12 +159,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
                 {
                     AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
-
-                    return new ApiSettings
-                    {
-                        AccessToken = settings.Twitch.AccessToken,
-                        ClientId = settings.Twitch.ClientId,
-                    };
+                    return new ApiSettings { AccessToken = settings.Twitch.AccessToken, ClientId = settings.Twitch.ClientId };
                 })
                 .AddSingleton<OBSWebsocket>()
                 .AddSingleton<IObsController, ObsController>()

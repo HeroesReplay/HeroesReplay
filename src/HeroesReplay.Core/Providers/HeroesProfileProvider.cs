@@ -99,6 +99,8 @@ namespace HeroesReplay.Core.Providers
 
                 if (item != null)
                 {
+                    logger.LogInformation("Reward request item found, loading...");
+
                     if (item.Replay != null)
                     {
                         await GetNextRequestedReplayAsync(item.Replay.ReplayId);

@@ -92,16 +92,18 @@ namespace HeroesReplay.Core
                     {
                         if (!focusDictionary.ContainsKey(second))
                         {
-                            logger.LogInformation($"Added: {focus.Description}");
+                            logger.LogTrace($"Added: {focus.Description}");
                             focusDictionary[second] = focus;
                         }
                         else if (focusDictionary.ContainsKey(second) && focusDictionary[second].Points < focus.Points)
                         {
-                            logger.LogInformation($"Updated: {focus.Description}");
+                            logger.LogTrace($"Updated: {focus.Description}");
                             focusDictionary[second] = focus;
                         }
                     }
                 });
+
+            logger.LogInformation($"focus count: {focusDictionary.Keys.Count}");
 
             var unitDied = new List<Unit>();
 

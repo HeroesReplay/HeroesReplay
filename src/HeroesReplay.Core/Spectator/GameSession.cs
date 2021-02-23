@@ -21,7 +21,7 @@ namespace HeroesReplay.Core
         private readonly ISessionHolder sessionHolder;
         private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
-        private CancellationToken Token => tokenProvider.Token;
+        private CancellationToken ProcessToken => tokenProvider.Token;
 
         private State State { get; set; }
 
@@ -66,7 +66,7 @@ namespace HeroesReplay.Core
 
             using (CancelSessionSource = new CancellationTokenSource())
             {
-                using (LinkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(CancelSessionSource.Token, Token, sessionHolder.Current.ViewerCancelRequestSource.Token))
+                using (LinkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(CancelSessionSource.Token, ProcessToken, sessionHolder.Current.ViewerCancelRequestSource.Token))
                 {
                     await Task.WhenAll(
                         Task.Run(PanelLoopAsync, LinkedTokenSource.Token),
@@ -88,7 +88,7 @@ namespace HeroesReplay.Core
                     try
                     {
                         await talentsNotifier.SendCurrentTalentsAsync(Timer, CancelSessionSource.Token).ConfigureAwait(false);
-                        await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
+                        await Task.Delay(TimeSpan.FromSeconds(1), ProcessToken).ConfigureAwait(false);
                     }
                     catch (TaskCanceledException e)
                     {
@@ -119,7 +119,7 @@ namespace HeroesReplay.Core
                         sessionHolder.Current.Timer = Timer;
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(1), Token).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(1), ProcessToken).ConfigureAwait(false);
                 }
                 catch(TaskCanceledException e)
                 {

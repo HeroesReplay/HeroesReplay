@@ -11,6 +11,7 @@ using TwitchLib.Api.Interfaces;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Interfaces;
 using TwitchLib.Client.Models;
+using TwitchLib.Communication.Events;
 using TwitchLib.PubSub.Events;
 using TwitchLib.PubSub.Interfaces;
 
@@ -116,7 +117,7 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private void PubSub_OnPubSubServiceError(object sender, OnPubSubServiceErrorArgs e) => logger.LogError(e.Exception, "OnPubSubServiceError");
 
-        private void Client_OnDisconnected(object sender, TwitchLib.Communication.Events.OnDisconnectedEventArgs e) => client.Connect();
+        private void Client_OnDisconnected(object sender, OnDisconnectedEventArgs e) => client.Connect();
 
         private void PubSub_OnRewardRedeemed(object sender, OnRewardRedeemedArgs e) => onRewardRedeemed.Handle(e);
 
@@ -130,7 +131,7 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private void Client_OnWhisperReceived(object sender, OnWhisperReceivedArgs e)
         {
-
+            
         }
 
         private void Client_OnNewSubscriber(object sender, OnNewSubscriberArgs e)
