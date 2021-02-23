@@ -2,8 +2,11 @@
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Shared;
+
 using Microsoft.Extensions.Logging;
+
 using Polly;
+
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -121,7 +124,7 @@ namespace HeroesReplay.Core
 
                     await Task.Delay(TimeSpan.FromSeconds(1), ProcessToken).ConfigureAwait(false);
                 }
-                catch(TaskCanceledException e)
+                catch (TaskCanceledException e)
                 {
                     logger.LogWarning(e, "State loop was cancelled.");
                 }
@@ -273,7 +276,7 @@ namespace HeroesReplay.Core
             }
             else if (state == State.TimerDetected && isTimerNotFound && isMax)
             {
-                logger.LogWarning($"Timer could not be found after {retryCount}. Sending session cancellation.");
+                logger.LogInformation($"Timer could not be found after {retryCount}. Sending session cancellation.");
                 CancelSessionSource.Cancel();
             }
             else

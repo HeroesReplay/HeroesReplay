@@ -3,6 +3,7 @@ using HeroesReplay.Core.Models;
 
 using Microsoft.Extensions.Logging;
 
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -14,13 +15,15 @@ namespace HeroesReplay.Core.Services.Twitch.RewardHandlers
     public class MapRewardHandler : IRewardHandler
     {
         private readonly ILogger<MapRewardHandler> logger;
+        private readonly IRewardRequestFactory rewardRequestFactory;
         private readonly ITwitchClient twitchClient;
         private readonly IReplayRequestQueue queue;
         private readonly AppSettings settings;
 
-        public MapRewardHandler(ILogger<MapRewardHandler> logger, ITwitchClient twitchClient, IReplayRequestQueue queue, AppSettings settings)
+        public MapRewardHandler(ILogger<MapRewardHandler> logger, IRewardRequestFactory rewardRequestFactory, ITwitchClient twitchClient, IReplayRequestQueue queue, AppSettings settings)
         {
             this.logger = logger;
+            this.rewardRequestFactory = rewardRequestFactory;
             this.twitchClient = twitchClient;
             this.queue = queue;
             this.settings = settings;
@@ -55,13 +58,20 @@ namespace HeroesReplay.Core.Services.Twitch.RewardHandlers
         {
             Task.Factory.StartNew(async () =>
             {
-                logger.LogInformation($"{args.Login} has redeemed {args.RewardTitle}");
-
-                RewardResponse response = await queue.EnqueueRequestAsync(new RewardRequest(login: args.Login, rewardTitle: reward.RewardTitle, replayId: null, tier: reward.Tier, map: reward.Map, gameMode: reward.Mode));
-
-                if (settings.Twitch.EnableChatBot)
+                try
                 {
-                    twitchClient.SendMessage(settings.Twitch.Channel, $"{args.DisplayName}, {response.Message}", dryRun: settings.Twitch.DryRunMode);
+                    logger.LogInformation($"{args.Login} has redeemed {args.RewardTitle}");
+
+                    RewardResponse response = await queue.EnqueueRequestAsync(rewardRequestFactory.Create(reward, args));
+
+                    if (settings.Twitch.EnableChatBot)
+                    {
+                        twitchClient.SendMessage(settings.Twitch.Channel, $"{args.DisplayName}, {response.Message}", dryRun: settings.Twitch.DryRunMode);
+                    }
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, $"Could not queue or send twitch message for reward: {args.RedemptionId}");
                 }
 
             }, TaskCreationOptions.LongRunning);

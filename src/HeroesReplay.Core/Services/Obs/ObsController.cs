@@ -21,13 +21,16 @@ namespace HeroesReplay.Core.Services.Obs
     public class ObsController : IObsController
     {
         private readonly ILogger<ObsController> logger;
+        private readonly ISessionHolder sessionHolder;
         private readonly AppSettings settings;
         private readonly OBSWebsocket obs;
         private readonly CancellationTokenProvider tokenProvider;
 
-        public ObsController(ILogger<ObsController> logger, AppSettings settings, OBSWebsocket obs, CancellationTokenProvider tokenProvider)
+
+        public ObsController(ILogger<ObsController> logger, ISessionHolder sessionHolder, AppSettings settings, OBSWebsocket obs, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.sessionHolder = sessionHolder;
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.obs = obs ?? throw new ArgumentNullException(nameof(obs));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
@@ -37,13 +40,19 @@ namespace HeroesReplay.Core.Services.Obs
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(settings.OBS.RecordingFolderDirectory))
+                obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+
+                if (settings.OBS.StreamingEnabled)
                 {
-                    DirectoryInfo directory = Directory.CreateDirectory(settings.OBS.RecordingFolderDirectory);
-                    obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-                    obs.SetRecordingFolder(directory.FullName);
-                    obs.Disconnect();
+                    OutputStatus status = obs.GetStreamingStatus();
+
+                    if (!status.IsStreaming)
+                    {
+                        obs.StartStreaming();
+                    }
                 }
+
+                obs.Disconnect();
             }
             catch (Exception e)
             {
@@ -64,9 +73,18 @@ namespace HeroesReplay.Core.Services.Obs
                         obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
                         obs.SetCurrentScene(settings.OBS.GameSceneName);
 
-                        if (settings.OBS.RecordSessionEnabled)
+                        if (settings.OBS.RecordingEnabled)
                         {
-                            obs.StartRecording();
+                            var sessionRecording = new DirectoryInfo(settings.OBS.RecordingFolderDirectory);
+                            var outputFolder = sessionRecording.CreateSubdirectory(sessionHolder.Current.ReplayId.ToString());
+                            obs.SetRecordingFolder(outputFolder.FullName);
+
+                            OutputStatus status = obs.GetStreamingStatus();
+
+                            if (!status.IsRecording)
+                            {
+                                obs.StartRecording();
+                            }
                         }
 
                         obs.Disconnect();
@@ -81,42 +99,45 @@ namespace HeroesReplay.Core.Services.Obs
                 });
         }
 
-        public void UpdateMMRTier(ReplayData replayData)
+        public void UpdateMMRTier()
         {
-            var (tier, division) = GetTierAndDivision(replayData);
-
-            try
+            if (settings.HeroesProfileApi.EnableMMR && sessionHolder.Current.ReplayId.HasValue)
             {
-                obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-                var sourceList = obs.GetSourcesList();
-
-                TryHideDivision();
-                TryHideRatingPoints();
-                TryHideTierImage(sourceList);
+                var (tier, division) = GetTierAndDivision();
 
                 try
                 {
-                    TryShowTierImage(tier, sourceList);
+                    obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+                    var sourceList = obs.GetSourcesList();
 
-                    if (TrySetDivision(tier, division, sourceList))
+                    TryHideDivision();
+                    TryHideRatingPoints();
+                    TryHideTierImage(sourceList);
+
+                    try
                     {
-                        // Division 1 - 5 set, so we dont need to write the actual MMR value (1500 - 3000~)
+                        TryShowTierImage(tier, sourceList);
+
+                        if (TrySetDivision(tier, division, sourceList))
+                        {
+                            // Division 1 - 5 set, so we dont need to write the actual MMR value (1500 - 3000~)
+                        }
+                        else
+                        {
+                            TrySetAverageRating(sessionHolder.Current.ReplayData.AverageRating, tier, sourceList);
+                        }
                     }
-                    else
+                    catch (Exception e)
                     {
-                        TrySetAverageRating(replayData.AverageRating, tier, sourceList);
+                        logger.LogError(e, $"Could not set the Tier from {tier} for OBS.");
                     }
+
+                    obs.Disconnect();
                 }
                 catch (Exception e)
                 {
-                    logger.LogError(e, $"Could not set the Tier from {tier} for OBS.");
+                    logger.LogError(e, $"Could not update the Tier for OBS.");
                 }
-
-                obs.Disconnect();
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, $"Could not update the Tier for OBS.");
             }
         }
 
@@ -131,13 +152,6 @@ namespace HeroesReplay.Core.Services.Obs
                     try
                     {
                         obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-
-                        // Stop recording before we trigger the scene with the Blizzard Soundcloud music
-                        if (settings.OBS.RecordSessionEnabled)
-                        {
-                            obs.StopRecording();
-                        }
-
                         obs.SetCurrentScene(settings.OBS.WaitingSceneName);
                         logger.LogInformation($"Set scene to: {settings.OBS.WaitingSceneName}");
                         obs.Disconnect();
@@ -153,21 +167,33 @@ namespace HeroesReplay.Core.Services.Obs
                 });
         }
 
-        public async Task CycleReportAsync(int replayId)
+        public async Task CycleReportAsync()
         {
-            await Policy
+            if (sessionHolder.Current.ReplayId.HasValue)
+            {
+                await Policy
                 .Handle<Exception>()
                 .OrResult(false)
                 .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: (retryAttempt) => TimeSpan.FromSeconds(5), onRetry: OnRetry)
                 .ExecuteAsync(async (t) =>
                 {
+                    if (settings.OBS.RecordingEnabled)
+                    {
+                        OutputStatus status = obs.GetStreamingStatus();
+
+                        if (status.IsRecording)
+                        {
+                            obs.StopRecording();
+                        }
+                    }
+
                     obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
                     var sceneList = obs.GetSceneList();
                     var sourceList = obs.GetSourcesList();
 
                     foreach (ReportScene segment in settings.OBS.ReportScenes.Where(scene => scene.Enabled))
                     {
-                        TrySetBrowserSourceSegment(replayId, obs, sourceList, segment);
+                        TrySetBrowserSourceSegment(sourceList, segment);
                     }
 
                     foreach (ReportScene source in settings.OBS.ReportScenes.Where(scene => scene.Enabled))
@@ -180,6 +206,7 @@ namespace HeroesReplay.Core.Services.Obs
                     return true;
 
                 }, tokenProvider.Token);
+            }
         }
 
         private async Task<bool> TryCycleSceneAsync(ReportScene source)
@@ -199,9 +226,9 @@ namespace HeroesReplay.Core.Services.Obs
             return false;
         }
 
-        private bool TrySetBrowserSourceSegment(int replayId, OBSWebsocket obs, List<SourceInfo> sourceList, ReportScene segment)
+        private bool TrySetBrowserSourceSegment(List<SourceInfo> sourceList, ReportScene segment)
         {
-            var url = segment.SourceUrl.ToString().Replace("[ID]", replayId.ToString());
+            var url = segment.SourceUrl.ToString().Replace("[ID]", sessionHolder.Current.ReplayId.Value.ToString());
             var source = sourceList.Find(si => si.Name.Equals(segment.SourceName, StringComparison.OrdinalIgnoreCase));
 
             if (source != null)
@@ -224,10 +251,9 @@ namespace HeroesReplay.Core.Services.Obs
             return false;
         }
 
-        private (string tier, int division) GetTierAndDivision(ReplayData replayData)
+        private (string tier, int division) GetTierAndDivision()
         {
-            string text = (string.IsNullOrEmpty(replayData.Tier) ? string.Empty : replayData.Tier).Trim().ToLower();
-
+            string text = (string.IsNullOrEmpty(sessionHolder.Current.ReplayData.Tier) ? string.Empty : sessionHolder.Current.ReplayData.Tier).Trim().ToLower();
             string tier = string.Empty;
             int division = 0;
 
@@ -397,6 +423,19 @@ namespace HeroesReplay.Core.Services.Obs
         private void OnRetry(DelegateResult<bool> wrappedResult, TimeSpan timeSpan)
         {
             logger.LogWarning("Could not control OBS");
+        }
+
+        public void Dispose()
+        {
+            if (settings.OBS.StreamingEnabled && obs.IsConnected)
+            {
+                obs.StopStreaming();
+            }
+
+            if (settings.OBS.RecordingEnabled && obs.IsConnected)
+            {
+                obs.StopRecording();
+            }
         }
     }
 }

@@ -7,6 +7,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
     public interface IReplayDetailsWriter
     {
         Task ClearDetailsAsync();
-        Task WriteDetailsAsync(StormReplay replay);
+        Task WriteObsDetails();
+        Task WriteYouTubeDetails();
     }
 }
