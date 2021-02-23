@@ -1,5 +1,4 @@
 ﻿using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
 
 using Microsoft.Extensions.Logging;
 

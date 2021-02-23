@@ -1,5 +1,4 @@
 ﻿using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core.Services.Twitch
 {

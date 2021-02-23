@@ -60,7 +60,6 @@ namespace HeroesReplay.Core
         private async Task Initialize()
         {
             await gameData.LoadDataAsync();
-            obsController.Configure();
         }
 
         private async Task TwitchBotAsync()

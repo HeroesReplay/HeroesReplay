@@ -1,12 +1,12 @@
 using Heroes.ReplayParser;
 
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Runner;
 
 using Microsoft.Extensions.Logging;
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -48,9 +48,9 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                     var lines = new[]
                     {
-                    settings.ReplayDetailsWriter.Requestor ? (replay.Request != null ? $"Requestor: {replay.Request.Login}" : string.Empty) : string.Empty,
-                    settings.ReplayDetailsWriter.GameMode ? replay.GameType : string.Empty
-                }
+                        settings.ReplayDetailsWriter.Requestor ? (replay.Request != null ? $"Requestor: {replay.Request.Login}" : string.Empty) : string.Empty,
+                        settings.ReplayDetailsWriter.GameMode ? replay.GameType : string.Empty
+                    }
                     .Concat(settings.ReplayDetailsWriter.Bans ? bans : Enumerable.Empty<string>())
                     .Where(line => !string.IsNullOrWhiteSpace(line));
 
@@ -79,5 +79,5 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         {
             throw new NotImplementedException();
         }
-    }
+    }   
 }

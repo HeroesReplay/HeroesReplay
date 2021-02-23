@@ -1,11 +1,8 @@
-﻿using HeroesReplay.Core.Models;
-
-using System;
+﻿using System;
 using System.Text.Json.Serialization;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
 {
-
     public class HeroesProfileReplay
     {
         [JsonPropertyName("replayID")]

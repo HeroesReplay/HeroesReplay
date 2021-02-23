@@ -14,7 +14,6 @@ using System.Linq;
 using Polly;
 using HeroesReplay.Core.Shared;
 using System.IO;
-using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core.Services.Obs
 {
@@ -26,7 +25,6 @@ namespace HeroesReplay.Core.Services.Obs
         private readonly OBSWebsocket obs;
         private readonly CancellationTokenProvider tokenProvider;
 
-
         public ObsController(ILogger<ObsController> logger, ISessionHolder sessionHolder, AppSettings settings, OBSWebsocket obs, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -34,30 +32,6 @@ namespace HeroesReplay.Core.Services.Obs
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.obs = obs ?? throw new ArgumentNullException(nameof(obs));
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
-        }
-
-        public void Configure()
-        {
-            try
-            {
-                obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-
-                if (settings.OBS.StreamingEnabled)
-                {
-                    OutputStatus status = obs.GetStreamingStatus();
-
-                    if (!status.IsStreaming)
-                    {
-                        obs.StartStreaming();
-                    }
-                }
-
-                obs.Disconnect();
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Could not configure OBS");
-            }
         }
 
         public void SwapToGameScene()
@@ -112,7 +86,7 @@ namespace HeroesReplay.Core.Services.Obs
 
                     TryHideDivision();
                     TryHideRatingPoints();
-                    TryHideTierImage(sourceList);
+                    TryHideTierImages(sourceList);
 
                     try
                     {
@@ -377,7 +351,7 @@ namespace HeroesReplay.Core.Services.Obs
             return false;
         }
 
-        private bool TryHideTierImage(List<SourceInfo> sourceList)
+        private void TryHideTierImages(List<SourceInfo> sourceList)
         {
             foreach (var tierSourceName in settings.OBS.TierSources)
             {
@@ -388,8 +362,7 @@ namespace HeroesReplay.Core.Services.Obs
                     try
                     {
                         obs.SetSourceRender(imageSource.Name, visible: false, sceneName: settings.OBS.GameSceneName);
-                        logger.LogDebug($"set {imageSource.Name} to visible=false");
-                        return true;
+                        logger.LogDebug($"set {imageSource.Name} to visible=false");                        
                     }
                     catch (Exception e)
                     {
@@ -401,8 +374,6 @@ namespace HeroesReplay.Core.Services.Obs
                     logger.LogDebug($"Could not find {tierSourceName} image source.");
                 }
             }
-
-            return false;
         }
 
         private bool TryHideRatingPoints()
@@ -423,19 +394,6 @@ namespace HeroesReplay.Core.Services.Obs
         private void OnRetry(DelegateResult<bool> wrappedResult, TimeSpan timeSpan)
         {
             logger.LogWarning("Could not control OBS");
-        }
-
-        public void Dispose()
-        {
-            if (settings.OBS.StreamingEnabled && obs.IsConnected)
-            {
-                obs.StopStreaming();
-            }
-
-            if (settings.OBS.RecordingEnabled && obs.IsConnected)
-            {
-                obs.StopRecording();
-            }
         }
     }
 }

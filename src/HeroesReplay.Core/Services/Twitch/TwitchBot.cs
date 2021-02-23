@@ -140,14 +140,9 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private async Task<string> GetChannelId()
         {
-            var userResponse = await api.Helix.Users.GetUsersAsync(logins: new List<string>() { settings.Twitch.Account });
+            var userResponse = await api.Helix.Users.GetUsersAsync(logins: new List<string>() { settings.Twitch.Channel });
             var channelId = userResponse.Users[0].Id;
             return channelId;
-        }
-        public void Dispose()
-        {
-            this?.client.Disconnect();
-            this?.pubSub.Disconnect();
         }
     }
 }

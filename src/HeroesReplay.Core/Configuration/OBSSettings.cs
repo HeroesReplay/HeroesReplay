@@ -7,7 +7,6 @@ namespace HeroesReplay.Core.Configuration
     public record OBSSettings
     {
         public bool Enabled { get; init; }
-        public bool StreamingEnabled { get; init; }
         public bool RecordingEnabled { get; init; }
         public string RecordingFolderDirectory { get; init; }
         public string WebSocketEndpoint { get; init; }

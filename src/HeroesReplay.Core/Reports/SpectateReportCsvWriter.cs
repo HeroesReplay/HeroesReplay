@@ -50,8 +50,6 @@ namespace HeroesReplay.Core.Reports
                                                    .Select(WriteCsvLine)
                                                    .Prepend(string.Join(",", headers));
 
-
-
             Directory.CreateDirectory(settings.SpectateReportPath);
 
             string report = Path.Combine(settings.SpectateReportPath, Path.GetFileName(stormReplay.Path) + ".csv");

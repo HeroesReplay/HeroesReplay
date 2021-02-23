@@ -40,6 +40,11 @@ namespace HeroesReplay.CLI
 {
     public static class ServiceCollectionExtensions
     {
+        public static IServiceCollection AddYouTubeServices(this IServiceCollection services, CancellationToken token)
+        {
+            return services;
+        }
+
         public static IServiceCollection AddReportServices(this IServiceCollection services, CancellationToken token, Type replayProvider)
         {
             IConfigurationRoot configuration = GetConfiguration();

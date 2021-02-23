@@ -101,25 +101,18 @@ namespace HeroesReplay.Core.Providers
                 {
                     logger.LogInformation("Reward request item found, loading...");
 
-                    if (item.Replay != null)
-                    {
-                        return await GetNextRequestedReplayAsync(item.Replay.ReplayId);
-                    }
-                    else if (item.Request != null && item.Request.ReplayId.HasValue)
-                    {
-                        return await GetNextRequestedReplayAsync(item.Request.ReplayId.Value);
-                    }
+                    return await GetNextRequestedReplayAsync(item);
                 }
             }
 
             return await GetNextStandardReplayAsync();
         }
 
-        private async Task<StormReplay> GetNextRequestedReplayAsync(int replayId)
+        private async Task<StormReplay> GetNextRequestedReplayAsync(RewardQueueItem item)
         {
             try
             {
-                HeroesProfileReplay replay = await GetSpecificReplayAsync(replayId).ConfigureAwait(false);
+                HeroesProfileReplay replay = await GetSpecificReplayAsync(item.Replay.ReplayId).ConfigureAwait(false);
 
                 if (replay != null)
                 {
@@ -130,7 +123,7 @@ namespace HeroesReplay.Core.Providers
                         await DownloadStormReplay(replay, cacheStormReplay).ConfigureAwait(false);
                     }
 
-                    StormReplay stormReplay = await TryLoadReplay(replay, cacheStormReplay).ConfigureAwait(false);
+                    StormReplay stormReplay = await TryLoadReplay(replay, cacheStormReplay, item.Request).ConfigureAwait(false);
 
                     return stormReplay;
                 }
