@@ -66,10 +66,6 @@ namespace HeroesReplay.Core.Services.Twitch
             {
                 client.Initialize(credentials, settings.Twitch.Channel);
                 client.OnLog += Client_OnLog;
-                client.OnMessageReceived += Client_OnMessageReceived;
-                client.OnWhisperReceived += Client_OnWhisperReceived;
-                client.OnJoinedChannel += Client_OnJoinedChannel;
-                client.OnNewSubscriber += Client_OnNewSubscriber;
                 client.OnConnected += Client_OnConnected;
                 client.OnDisconnected += Client_OnDisconnected;
                 client.OnConnectionError += Client_OnConnectionError;
@@ -81,62 +77,66 @@ namespace HeroesReplay.Core.Services.Twitch
                 string channelId = await GetChannelId();
 
                 pubSub.ListenToRewards(channelId);
-                pubSub.ListenToSubscriptions(channelId);
-                pubSub.ListenToFollows(channelId);
+                pubSub.ListenToChannelExtensionBroadcast(channelId, "HeroesProfile");
 
                 pubSub.OnRewardRedeemed += PubSub_OnRewardRedeemed;
-                pubSub.OnChannelSubscription += PubSub_OnChannelSubscription;
+                pubSub.OnLog += PubSub_OnLog;
                 pubSub.OnPubSubServiceConnected += PubSub_OnPubSubServiceConnected;
                 pubSub.OnPubSubServiceError += PubSub_OnPubSubServiceError;
                 pubSub.OnPubSubServiceClosed += PubSub_OnPubSubServiceClosed;
-                pubSub.OnPrediction += PubSub_OnPrediction;
+
                 pubSub.Connect();
             }
         }
 
+        private void PubSub_OnLog(object sender, TwitchLib.PubSub.Events.OnLogArgs e)
+        {
+            logger.LogDebug($"{e.Data}");
+        }
+
         private void Client_OnConnectionError(object sender, OnConnectionErrorArgs e) => logger.LogError(e.Error.Message, "OnConnectionError");
 
-        private void PubSub_OnPrediction(object sender, OnPredictionArgs e)
-        {
-        }
-
-        private void PubSub_OnChannelSubscription(object sender, OnChannelSubscriptionArgs e)
-        {
-        }
 
         private void PubSub_OnPubSubServiceConnected(object sender, EventArgs e)
         {
             logger.LogInformation("Connected. Sending topics to subscribe to.");
+
             pubSub.SendTopics(settings.Twitch.AccessToken, unlisten: false);
         }
 
         private void PubSub_OnPubSubServiceClosed(object sender, EventArgs e)
         {
-
+            logger.LogInformation("Connected. Sending topics to subscribe to.");
         }
 
-        private void PubSub_OnPubSubServiceError(object sender, OnPubSubServiceErrorArgs e) => logger.LogError(e.Exception, "OnPubSubServiceError");
-
-        private void Client_OnDisconnected(object sender, OnDisconnectedEventArgs e) => client.Connect();
-
-        private void PubSub_OnRewardRedeemed(object sender, OnRewardRedeemedArgs e) => onRewardRedeemed.Handle(e);
-
-        private void Client_OnLog(object sender, TwitchLib.Client.Events.OnLogArgs e) => logger.LogDebug($"{e.DateTime}: {e.BotUsername} - {e.Data}");
-
-        private void Client_OnConnected(object sender, OnConnectedArgs e) => logger.LogDebug($"Connected to {e.AutoJoinChannel}");
-
-        private void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e) => logger.LogInformation($"{e.BotUsername} joined {e.Channel}");
-
-        private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e) => onMessageReceived.Handle(e);
-
-        private void Client_OnWhisperReceived(object sender, OnWhisperReceivedArgs e)
+        private void PubSub_OnPubSubServiceError(object sender, OnPubSubServiceErrorArgs e)
         {
-            
+            logger.LogError(e.Exception, "OnPubSubServiceError");
         }
 
-        private void Client_OnNewSubscriber(object sender, OnNewSubscriberArgs e)
+        private void Client_OnDisconnected(object sender, OnDisconnectedEventArgs e)
         {
+            client.Connect();
+        }
 
+        private void PubSub_OnRewardRedeemed(object sender, OnRewardRedeemedArgs e)
+        {
+            onRewardRedeemed.Handle(e);
+        }
+
+        private void Client_OnLog(object sender, TwitchLib.Client.Events.OnLogArgs e)
+        {
+            logger.LogDebug($"{e.DateTime}: {e.BotUsername} - {e.Data}");
+        }
+
+        private void Client_OnConnected(object sender, OnConnectedArgs e)
+        {
+            logger.LogDebug($"Connected to {e.AutoJoinChannel}");
+        }
+
+        private void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e)
+        {
+            logger.LogInformation($"{e.BotUsername} joined {e.Channel}");
         }
 
         private async Task<string> GetChannelId()
@@ -145,7 +145,6 @@ namespace HeroesReplay.Core.Services.Twitch
             var channelId = userResponse.Users[0].Id;
             return channelId;
         }
-
         public void Dispose()
         {
             this?.client.Disconnect();
@@ -153,4 +152,3 @@ namespace HeroesReplay.Core.Services.Twitch
         }
     }
 }
-

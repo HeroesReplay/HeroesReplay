@@ -42,12 +42,7 @@ namespace HeroesReplay.CLI
     {
         public static IServiceCollection AddReportServices(this IServiceCollection services, CancellationToken token, Type replayProvider)
         {
-            var configuration = new ConfigurationBuilder()
-                    .SetBasePath(Directory.GetCurrentDirectory())
-                    .AddJsonFile("appsettings.json")
-                    .AddJsonFile("appsettings.secrets.json")
-                    .AddEnvironmentVariables("HEROES_REPLAY_")
-                    .Build();
+            IConfigurationRoot configuration = GetConfiguration();
 
             var focusCalculator = typeof(IFocusCalculator);
             var calculators = focusCalculator.Assembly.GetTypes().Where(type => type.IsClass && focusCalculator.IsAssignableFrom(type));
@@ -75,12 +70,7 @@ namespace HeroesReplay.CLI
 
         public static IServiceCollection AddSpectateServices(this IServiceCollection services, CancellationToken token, Type replayProvider)
         {
-            var configuration = new ConfigurationBuilder()
-                    .SetBasePath(Directory.GetCurrentDirectory())
-                    .AddJsonFile("appsettings.json")
-                    .AddJsonFile("appsettings.secrets.json")
-                    .AddEnvironmentVariables("HEROES_REPLAY_")
-                    .Build();
+            IConfigurationRoot configuration = GetConfiguration();
 
             var focusCalculator = typeof(IFocusCalculator);
             var calculatorTypes = focusCalculator.Assembly.GetTypes().Where(type => type.IsClass && focusCalculator.IsAssignableFrom(type));
@@ -146,6 +136,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IOnMessageReceivedHandler, OnMessageReceivedHandler>()
                 .AddSingleton<IOnRewardRedeemedHandler, OnRewardRedeemedHandler>()
                 .AddSingleton<ISupportedRewardsHolder, SupportedRewardsHolder>()
+                .AddSingleton<IRewardRequestFactory, RewardRequestFactory>()
                 .AddSingleton<IReplayRequestQueue, ReplayRequestQueue>()
                 .AddSingleton<ITwitchBot, TwitchBot>()
                 .AddSingleton<ITwitchClient, TwitchClient>()
@@ -164,6 +155,21 @@ namespace HeroesReplay.CLI
                 .AddSingleton<OBSWebsocket>()
                 .AddSingleton<IObsController, ObsController>()
                 .AddSingleton<IHeroesReplayEngine, HeroesReplayEngine>();
+        }
+
+        private static IConfigurationRoot GetConfiguration()
+        {
+            var env = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV");
+
+            var configuration = new ConfigurationBuilder()
+                    .SetBasePath(Directory.GetCurrentDirectory())
+                    .AddJsonFile("appsettings.json")
+                    .AddJsonFile($"appsettings.{env}.json", optional: false)
+                    .AddJsonFile("appsettings.secrets.json", optional: false)
+                    .AddEnvironmentVariables("HEROES_REPLAY_")
+                    .Build();
+
+            return configuration;
         }
     }
 }

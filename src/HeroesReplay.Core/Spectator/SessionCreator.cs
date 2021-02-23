@@ -1,9 +1,11 @@
 ﻿using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.HeroesProfile;
 
 using Microsoft.Extensions.Logging;
 
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace HeroesReplay.Core
 {
@@ -12,15 +14,17 @@ namespace HeroesReplay.Core
         private readonly IReplayAnalzer replayAnalyzer;
         private readonly ISessionSetter sessionSetter;
         private readonly ILogger<SessionCreator> logger;
+        private readonly IHeroesProfileService heroesProfileService;
 
-        public SessionCreator(ILogger<SessionCreator> logger, IReplayAnalzer replayAnalyzer, ISessionSetter sessionSetter)
+        public SessionCreator(ILogger<SessionCreator> logger, IHeroesProfileService heroesProfileService, IReplayAnalzer replayAnalyzer, ISessionSetter sessionSetter)
         {
             this.replayAnalyzer = replayAnalyzer ?? throw new ArgumentNullException(nameof(replayAnalyzer));
             this.sessionSetter = sessionSetter ?? throw new ArgumentNullException(nameof(sessionSetter));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.heroesProfileService = heroesProfileService;
         }
 
-        public void Create(StormReplay stormReplay)
+        public async Task CreateAsync(StormReplay stormReplay)
         {
             if (stormReplay == null)
                 throw new ArgumentNullException(nameof(stormReplay));
@@ -38,8 +42,11 @@ namespace HeroesReplay.Core
             var replayId = stormReplay.ReplayId;
             var gameType = stormReplay.GameType;
 
+            ReplayData replayData = await heroesProfileService.GetReplayDataAsync(replayId.Value);
+
             sessionSetter.SetSession(new SessionData
             {
+                StormReplay = stormReplay,
                 ReplayId = replayId,
                 GameType = gameType,
                 Payloads = payloads,
@@ -47,6 +54,7 @@ namespace HeroesReplay.Core
                 Panels = panels,
                 GatesOpen = start,
                 CoreKilled = end,
+                ReplayData = replayData,
                 IsCarriedObjectiveMap = carriedObjectives,
                 Loaded = DateTime.Now,
                 Timer = null,

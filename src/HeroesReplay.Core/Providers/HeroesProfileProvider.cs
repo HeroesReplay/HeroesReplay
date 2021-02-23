@@ -93,7 +93,7 @@ namespace HeroesReplay.Core.Providers
 
         public async Task<StormReplay> TryLoadReplayAsync()
         {
-            if (settings.Twitch.EnableReplayRequests)
+            if (settings.Twitch.EnableRequests)
             {
                 RewardQueueItem item = await requestQueue.GetNextRewardQueueItem();
 
@@ -103,11 +103,11 @@ namespace HeroesReplay.Core.Providers
 
                     if (item.Replay != null)
                     {
-                        await GetNextRequestedReplayAsync(item.Replay.ReplayId);
+                        return await GetNextRequestedReplayAsync(item.Replay.ReplayId);
                     }
                     else if (item.Request != null && item.Request.ReplayId.HasValue)
                     {
-                        await GetNextRequestedReplayAsync(item.Request.ReplayId.Value);
+                        return await GetNextRequestedReplayAsync(item.Request.ReplayId.Value);
                     }
                 }
             }

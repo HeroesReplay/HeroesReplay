@@ -1,9 +1,11 @@
 ﻿using HeroesReplay.Core.Models;
 
+using System.Threading.Tasks;
+
 namespace HeroesReplay.Core
 {
     public interface ISessionCreator
     {
-        void Create(StormReplay stormReplay);
+        Task CreateAsync(StormReplay stormReplay);
     }
 }

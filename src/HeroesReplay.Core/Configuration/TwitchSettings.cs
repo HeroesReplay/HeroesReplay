@@ -10,18 +10,13 @@ namespace HeroesReplay.Core.Configuration
         public string RefreshToken { get; init; }
         public string Channel { get; init; }
 
-        public bool EnableReplayRequests { get; init; }
+        public bool EnableRequests { get; init; }
         public bool EnableTwitchClips { get; init; }
         public bool EnablePubSub { get; init; }
         public bool EnableChatBot { get; init; }
         public bool DryRunMode { get; init; }
 
-        public string RewardReplayId { get; init; }
-        public string RewardARAM { get; init; }
-
-        public bool EnableMapRewards { get; init; }
-
-        public string ReplayRequestsFileName { get; init; }
+        public string RequestsFileName { get; init; }
         public Uri TokenRefreshUri { get; init; }
     }
 }

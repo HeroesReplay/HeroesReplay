@@ -265,7 +265,7 @@ namespace HeroesReplay.Core
             }
             catch (Exception)
             {
-                logger.LogWarning($"Could not parse the timer: {text ?? string.Empty}");
+                logger.LogInformation($"Could not parse the timer: {text ?? string.Empty}");
             }
 
             return null;

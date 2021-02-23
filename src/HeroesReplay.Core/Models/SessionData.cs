@@ -8,6 +8,8 @@ namespace HeroesReplay.Core.Models
 {
     public class SessionData
     {
+        public StormReplay StormReplay { get; init; }
+        public ReplayData ReplayData { get; init; }
         public IReadOnlyDictionary<TimeSpan, Focus> Players { get; init; }
         public IReadOnlyDictionary<TimeSpan, Panel> Panels { get; init; }
         public TimeSpan CoreKilled { get; init; }
