@@ -77,7 +77,6 @@ namespace HeroesReplay.Core.Services.Twitch
                 string channelId = await GetChannelId();
 
                 pubSub.ListenToRewards(channelId);
-                pubSub.ListenToChannelExtensionBroadcast(channelId, "HeroesProfile");
 
                 pubSub.OnRewardRedeemed += PubSub_OnRewardRedeemed;
                 pubSub.OnLog += PubSub_OnLog;
