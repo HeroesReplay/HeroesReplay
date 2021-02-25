@@ -21,9 +21,9 @@ namespace HeroesReplay.Core.Services.Stream
         private readonly IReplayContext context;
         private readonly AppSettings settings;
         private readonly OBSWebsocket obs;
-        private readonly ConsoleTokenProvider tokenProvider;
+        private readonly ProcessCancellationTokenProvider tokenProvider;
 
-        public ObsController(ILogger<ObsController> logger, IReplayContext context, AppSettings settings, OBSWebsocket obs, ConsoleTokenProvider tokenProvider)
+        public ObsController(ILogger<ObsController> logger, IReplayContext context, AppSettings settings, OBSWebsocket obs, ProcessCancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.context = context ?? throw new ArgumentNullException(nameof(context));

@@ -18,7 +18,7 @@ namespace HeroesReplay.Core
         private readonly IGameManager manager;
         private readonly IGameData gameData;
         private readonly IReplayProvider replayProvider;
-        private readonly ConsoleTokenProvider consoleTokenProvider;
+        private readonly ProcessCancellationTokenProvider consoleTokenProvider;
 
         public Engine(
             ILogger<Engine> logger,
@@ -26,7 +26,7 @@ namespace HeroesReplay.Core
             IGameManager gameManager,
             IGameData gameData,
             IReplayProvider replayProvider,
-            ConsoleTokenProvider consoleTokenProvider)
+            ProcessCancellationTokenProvider consoleTokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.twitchBot = twitchBot ?? throw new ArgumentNullException(nameof(twitchBot));

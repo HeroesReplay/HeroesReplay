@@ -67,7 +67,7 @@ namespace HeroesReplay.CLI
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
                 .AddSingleton<IConfiguration>(configuration)
                 .AddSingleton(settings)
-                .AddSingleton(new ConsoleTokenProvider(token))
+                .AddSingleton(new ProcessCancellationTokenProvider(token))
                 .AddSingleton<IGameData, GameData>()
                 .AddSingleton<IReplayHelper, ReplayHelper>()
                 .AddSingleton<IAbilityDetector, AbilityDetector>()
@@ -111,11 +111,12 @@ namespace HeroesReplay.CLI
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
                 .AddSingleton<IConfiguration>(configuration)
                 .AddSingleton(implementationFactory: serviceProvider => serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>())
-                .AddSingleton(new ConsoleTokenProvider(token))
+                .AddSingleton(new ProcessCancellationTokenProvider(token))
                 .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
                 .AddSingleton(typeof(CaptureStrategy), configuration.Get<AppSettings>().Capture.Method switch { CaptureMethod.None => typeof(StubCapture), _ => typeof(BitBltCapture) })
                 .AddSingleton(typeof(IGameController), configuration.Get<AppSettings>().Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
                 .AddSingleton(typeof(ITalentNotifier), configuration.Get<AppSettings>().Capture.Method switch { CaptureMethod.None => typeof(StubNotifier), _ => typeof(TalentNotifier) })
+                .AddSingleton(typeof(ITwitchBot), configuration.Get<AppSettings>().Capture.Method switch { CaptureMethod.None => typeof(FakeTwitchBot), _ => typeof(TwitchBot) })
                 .AddSingleton(typeof(IReplayProvider), replayProvider)
                 .AddSingleton<IGameData, GameData>()
                 .AddSingleton<IReplayHelper, ReplayHelper>()
@@ -138,8 +139,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IRewardRequestFactory, RewardRequestFactory>()
                 .AddSingleton<IRequestQueue, ReplayRequestQueue>()
                 .AddSingleton<ITwitchExtensionService, TwitchExtensionService>()
-                .AddSingleton<ITwitchBot, TwitchBot>()
-                .AddSingleton<ITwitchClient, TwitchClient>()
+                .AddSingleton(typeof(ITwitchClient), configuration.Get<AppSettings>().Capture.Method switch { CaptureMethod.None => typeof(FakeTwitchClient), _ => typeof(TwitchClient) })
                 .AddSingleton<ITwitchPubSub, TwitchPubSub>()
                 .AddSingleton<ITwitchAPI, TwitchAPI>()
                 .AddSingleton(implementationFactory: serviceProvider =>
@@ -161,15 +161,14 @@ namespace HeroesReplay.CLI
         {
             var env = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV");
 
-            var configuration = new ConfigurationBuilder()
+            var builder = new ConfigurationBuilder()
                     .SetBasePath(Directory.GetCurrentDirectory())
                     .AddJsonFile("appsettings.json")
                     .AddJsonFile($"appsettings.{env}.json", optional: false)
                     .AddJsonFile("appsettings.secrets.json", optional: false)
-                    .AddEnvironmentVariables("HEROES_REPLAY_")
-                    .Build();
+                    .AddEnvironmentVariables("HEROES_REPLAY_");
 
-            return configuration;
+            return builder.Build();
         }
     }
 }

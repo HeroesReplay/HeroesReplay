@@ -18,7 +18,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
         private readonly FormUrlEncodedContent notifyContent;
         private readonly ILogger<TwitchExtensionService> logger;
         private readonly HttpClient httpClient;
-        private readonly ConsoleTokenProvider tokenProvider;
+        private readonly ProcessCancellationTokenProvider tokenProvider;
 
         private const string SaveReplayUrl = @"save/replay";
         private const string UpdateReplayUrl = @"update/replay/";
@@ -27,7 +27,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
         private const string SaveTalentUrl = @"save/talent";
         private const string NotifyTalentUpdate = @"notify/talent/update";
 
-        public TwitchExtensionService(ILogger<TwitchExtensionService> logger, HttpClient httpClient, ConsoleTokenProvider tokenProvider, AppSettings settings)
+        public TwitchExtensionService(ILogger<TwitchExtensionService> logger, HttpClient httpClient, ProcessCancellationTokenProvider tokenProvider, AppSettings settings)
         {
             notifyContent = new(new Dictionary<string, string>
             {

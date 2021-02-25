@@ -26,7 +26,7 @@ namespace HeroesReplay.Core.Services.Observer
         private const string VersionsFolder = "Versions";
 
         private readonly OcrEngine engine;
-        private readonly ConsoleTokenProvider tokenProvider;
+        private readonly ProcessCancellationTokenProvider tokenProvider;
         private readonly ILogger<GameController> logger;
         private readonly IReplayContext context;
         private readonly AppSettings settings;
@@ -52,7 +52,7 @@ namespace HeroesReplay.Core.Services.Observer
         private Process GameProcess => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
         private IntPtr Handle => GameProcess?.MainWindowHandle ?? IntPtr.Zero;
 
-        public GameController(ILogger<GameController> logger, IReplayContext context, AppSettings settings, CaptureStrategy captureStrategy, OcrEngine engine, ConsoleTokenProvider tokenProvider)
+        public GameController(ILogger<GameController> logger, IReplayContext context, AppSettings settings, CaptureStrategy captureStrategy, OcrEngine engine, ProcessCancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(settings));
             this.context = context;

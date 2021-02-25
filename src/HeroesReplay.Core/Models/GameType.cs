@@ -5,7 +5,7 @@ namespace HeroesReplay.Core.Models
     public enum GameType
     {
         QuickMatch,
-        Unranked,
+        UnrankedDraft,
         StormLeague,
         ARAM
     }

@@ -15,24 +15,12 @@ namespace HeroesReplay.Core.Extensions
                 GameType.ARAM => "ARAM",
                 GameType.QuickMatch => "Quick Match",
                 GameType.StormLeague => "Storm League",
-                GameType.Unranked => "Unranked Draft",
+                GameType.UnrankedDraft => "Unranked Draft",
                 _ => throw new NotImplementedException()
             };
         }
 
-        public static string GetQueryValue(this GameRank gameRank)
-        {
-            return gameRank switch
-            {
-                GameRank.Bronze => "bronze",
-                GameRank.Silver => "silver",
-                GameRank.Gold => "gold",
-                GameRank.Platinum => "platinum",
-                GameRank.Diamond => "diamond",
-                GameRank.Master => "master",
-                _ => throw new NotImplementedException()
-            };
-        }
+        public static string GetQueryValue(this GameRank gameRank) => Enum.GetName(typeof(GameRank), gameRank);
 
         public static string GetQueryValue(this GameMode gameMode) => Enum.GetName(typeof(GameMode), gameMode);
     }

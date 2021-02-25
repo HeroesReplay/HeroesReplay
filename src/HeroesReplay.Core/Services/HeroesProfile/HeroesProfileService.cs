@@ -20,7 +20,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
     public class HeroesProfileService : IHeroesProfileService
     {
         private readonly ILogger<HeroesProfileService> logger;
-        private readonly ConsoleTokenProvider tokenProvider;
+        private readonly ProcessCancellationTokenProvider tokenProvider;
         private readonly AppSettings settings;
         private readonly IAsyncCacheProvider cacheProvider;
         private readonly IAsyncPolicy<IEnumerable<HeroesProfileReplay>> replaysByFilterCachePolicy;
@@ -28,7 +28,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         private readonly IAsyncPolicy<int> maxReplayIdCachePolicy;
         private readonly HttpClient httpClient;
 
-        public HeroesProfileService(ILogger<HeroesProfileService> logger, HttpClient httpClient, IAsyncCacheProvider cacheProvider, ConsoleTokenProvider tokenProvider, AppSettings settings)
+        public HeroesProfileService(ILogger<HeroesProfileService> logger, HttpClient httpClient, IAsyncCacheProvider cacheProvider, ProcessCancellationTokenProvider tokenProvider, AppSettings settings)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.cacheProvider = cacheProvider ?? throw new ArgumentNullException(nameof(cacheProvider));
@@ -159,7 +159,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 var dictionary = new Dictionary<string, string>();
                 if (gameType != null) dictionary.Add("game_type", gameType.Value.GetQueryValue());
                 if (gameRank != null) dictionary.Add("rank", gameRank.Value.GetQueryValue());
-                if (gameMap != null) dictionary.Add("game_map", gameRank.Value.GetQueryValue());
+                if (gameMap != null) dictionary.Add("game_map", gameMap);
 
                 string filter;
 
@@ -178,7 +178,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                     IEnumerable<HeroesProfileReplay> replays = await Policy
                                .Handle<Exception>()
                                .OrResult<IEnumerable<HeroesProfileReplay>>(replays => !replays.Any())
-                               .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: GetSleepDuration, onRetry: OnFilterRetry)
+                               .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnFilterRetry)
                                .ExecuteAsync(async (Context context, CancellationToken token) =>
                                {
                                    HttpResponseMessage response = await Policy
@@ -189,7 +189,12 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                                    if (response.IsSuccessStatusCode)
                                    {
-                                       return await response.Content.ReadFromJsonAsync<IEnumerable<HeroesProfileReplay>>();
+                                       IEnumerable<HeroesProfileReplay> replays = await response.Content.ReadFromJsonAsync<IEnumerable<HeroesProfileReplay>>();
+
+                                       return replays
+                                           .Where(x => x.Deleted == null)
+                                           .Where(x => x.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket))
+                                           .Where(x => settings.Spectate.VersionSupported.Equals(x.GameVersion));
                                    }
                                    else
                                    {
@@ -198,11 +203,6 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                                }, context, token)
                                .ConfigureAwait(false);
-
-                    return replays
-                            .Where(x => x.Deleted == null)
-                            .Where(x => x.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket))
-                            .Where(x => settings.Spectate.VersionSupported.Equals(x.GameVersion));
 
                     return Enumerable.Empty<HeroesProfileReplay>();
 

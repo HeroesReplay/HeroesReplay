@@ -17,7 +17,7 @@ namespace HeroesReplay.Core.Services.Observer
         private readonly ITalentNotifier talentsNotifier;
         private readonly ILogger<Spectator> logger;
         private readonly AppSettings settings;
-        private readonly ConsoleTokenProvider consoleTokenProvider;
+        private readonly ProcessCancellationTokenProvider consoleTokenProvider;
         private readonly IReplayContext sessionHolder;
         private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
@@ -37,7 +37,7 @@ namespace HeroesReplay.Core.Services.Observer
             IReplayContext sessionHolder,
             IGameController controller,
             ITalentNotifier talentsNotifier,
-            ConsoleTokenProvider tokenProvider)
+            ProcessCancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
