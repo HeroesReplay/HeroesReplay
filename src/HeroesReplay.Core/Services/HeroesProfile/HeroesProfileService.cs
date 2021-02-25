@@ -20,7 +20,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
     public class HeroesProfileService : IHeroesProfileService
     {
         private readonly ILogger<HeroesProfileService> logger;
-        private readonly ProcessCancellationTokenProvider tokenProvider;
+        private readonly CancellationTokenProvider tokenProvider;
         private readonly AppSettings settings;
         private readonly IAsyncCacheProvider cacheProvider;
         private readonly IAsyncPolicy<IEnumerable<HeroesProfileReplay>> replaysByFilterCachePolicy;
@@ -28,7 +28,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         private readonly IAsyncPolicy<int> maxReplayIdCachePolicy;
         private readonly HttpClient httpClient;
 
-        public HeroesProfileService(ILogger<HeroesProfileService> logger, HttpClient httpClient, IAsyncCacheProvider cacheProvider, ProcessCancellationTokenProvider tokenProvider, AppSettings settings)
+        public HeroesProfileService(ILogger<HeroesProfileService> logger, HttpClient httpClient, IAsyncCacheProvider cacheProvider, CancellationTokenProvider tokenProvider, AppSettings settings)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.cacheProvider = cacheProvider ?? throw new ArgumentNullException(nameof(cacheProvider));
@@ -57,7 +57,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
             maxReplayIdCachePolicy = Policy.CacheAsync(
                 cacheProvider: this.cacheProvider.AsyncFor<int>(),
-                ttlStrategy: new ResultTtl<int>((context, replay) => new Ttl(TimeSpan.FromHours(3))),
+                ttlStrategy: new ResultTtl<int>((context, replay) => new Ttl(TimeSpan.FromHours(1))),
                 onCacheGet: OnCacheGet,
                 onCachePut: OnCachePut,
                 onCacheMiss: OnCacheMiss,
@@ -96,7 +96,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 HttpResponseMessage response = await Policy
                            .Handle<Exception>()
                            .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                           .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: this.GetSleepDuration, onRetry: this.OnRetry)
+                           .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
                            .ExecuteAsync(
                                 action: (Context context, CancellationToken token) => httpClient.GetAsync(new Uri($"Replay/Min_id?min_id={replayId}&api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative), token),
                                 context: new Context(),
@@ -114,7 +114,6 @@ namespace HeroesReplay.Core.Services.HeroesProfile
             new Context(operationKey: $"{replayId}"), tokenProvider.Token);
         }
 
-
         public async Task<int> GetMaxReplayIdAsync()
         {
             try
@@ -124,7 +123,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                     HttpResponseMessage response = await Policy
                             .Handle<Exception>()
                             .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                            .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: this.GetSleepDuration, onRetry: this.OnRetry)
+                            .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
                             .ExecuteAsync(
                                 action: (Context context, CancellationToken token) => httpClient.GetAsync(new Uri($"Replay/Max?api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative), token),
                                 context: context,
@@ -163,7 +162,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                 string filter;
 
-                using (var content = new FormUrlEncodedContent(dictionary))
+                using (FormUrlEncodedContent content = new FormUrlEncodedContent(dictionary))
                 {
                     filter = await content.ReadAsStringAsync();
                 }
@@ -178,7 +177,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                     IEnumerable<HeroesProfileReplay> replays = await Policy
                                .Handle<Exception>()
                                .OrResult<IEnumerable<HeroesProfileReplay>>(replays => !replays.Any())
-                               .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnFilterRetry)
+                               .WaitAndRetryAsync(retryCount: 20, sleepDurationProvider: (int retry, Context context) => TimeSpan.FromSeconds(1), onRetry: OnFilterRetry)
                                .ExecuteAsync(async (Context context, CancellationToken token) =>
                                {
                                    HttpResponseMessage response = await Policy
@@ -191,10 +190,12 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                                    {
                                        IEnumerable<HeroesProfileReplay> replays = await response.Content.ReadFromJsonAsync<IEnumerable<HeroesProfileReplay>>();
 
-                                       return replays
+                                       var supported = replays
                                            .Where(x => x.Deleted == null)
                                            .Where(x => x.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket))
                                            .Where(x => settings.Spectate.VersionSupported.Equals(x.GameVersion));
+
+                                       return supported;
                                    }
                                    else
                                    {
@@ -204,7 +205,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                                }, context, token)
                                .ConfigureAwait(false);
 
-                    return Enumerable.Empty<HeroesProfileReplay>();
+                    return replays;
 
                 }, new Context(operationKey: filter), tokenProvider.Token);
             }
@@ -223,7 +224,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                 HttpResponseMessage response = await Policy
                            .Handle<Exception>()
                            .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                           .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: this.GetSleepDuration, onRetry: this.OnRetry)
+                           .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
                            .ExecuteAsync((context, token) => httpClient.GetAsync(new Uri($"Replay/Min_id?min_id={minId}&api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative), token), new Context(), tokenProvider.Token)
                            .ConfigureAwait(false);
 
@@ -279,7 +280,6 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         private void OnFilterRetry(DelegateResult<IEnumerable<HeroesProfileReplay>> wrappedResponse, TimeSpan timeSpan, int retryAttempt, Context context)
         {
             logger.LogWarning($"No results found for {context.OperationKey}. MinReplayId being lowered.");
-
             context["minId"] = (int)context["minId"] - settings.HeroesProfileApi.ApiMaxReturnedReplays;
         }
     }

@@ -18,7 +18,7 @@ namespace HeroesReplay.Core.Services.Reports
         private readonly AppSettings settings;
         private readonly IReplayProvider provider;
         private readonly IReplayAnalyzer analyzer;
-        private readonly ProcessCancellationTokenProvider tokenProvider;
+        private readonly CancellationTokenProvider tokenProvider;
 
         private readonly string[] headers = new[]
         {
@@ -31,7 +31,7 @@ namespace HeroesReplay.Core.Services.Reports
             nameof(Focus.Description)
         };
 
-        public SpectateReportCsvWriter(IGameData gameData, AppSettings settings, IReplayProvider provider, IReplayAnalyzer analyzer, ProcessCancellationTokenProvider tokenProvider)
+        public SpectateReportCsvWriter(IGameData gameData, AppSettings settings, IReplayProvider provider, IReplayAnalyzer analyzer, CancellationTokenProvider tokenProvider)
         {
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));

@@ -21,7 +21,7 @@ namespace HeroesReplay.Core.Services.Providers
     public class HeroesProfileProvider : IReplayProvider
     {
         private readonly AppSettings settings;
-        private readonly ProcessCancellationTokenProvider provider;
+        private readonly CancellationTokenProvider provider;
         private readonly ILogger<HeroesProfileProvider> logger;
         private readonly IReplayLoader replayLoader;
         private readonly IReplayHelper replayHelper;
@@ -75,7 +75,14 @@ namespace HeroesReplay.Core.Services.Providers
             }
         }
 
-        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, IReplayLoader replayLoader, IReplayHelper replayHelper, IRequestQueue requestQueue, IHeroesProfileService heroesProfileService, ProcessCancellationTokenProvider provider, AppSettings settings)
+        public HeroesProfileProvider(
+            ILogger<HeroesProfileProvider> logger, 
+            IReplayLoader replayLoader, 
+            IReplayHelper replayHelper, 
+            IRequestQueue requestQueue, 
+            IHeroesProfileService heroesProfileService, 
+            CancellationTokenProvider provider, 
+            AppSettings settings)
         {
             this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));

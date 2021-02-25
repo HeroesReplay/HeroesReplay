@@ -30,24 +30,19 @@ namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards
         private readonly RewardType[] Supported = new[]
         {
             RewardType.ARAM,
-            RewardType.ARAMMap,
-            RewardType.ARAMTier,
-            RewardType.ARAMMapTier,
-
             RewardType.QM,
-            RewardType.QMMap,
-            RewardType.QMTier,
-            RewardType.QMMapTier,
-
             RewardType.UD,
-            RewardType.UDMap,
-            RewardType.UDTier,
-            RewardType.UDMapTier,
-
             RewardType.SL,
-            RewardType.SLMap,
-            RewardType.SLTier,
-            RewardType.SLMapTier
+
+            RewardType.QM | RewardType.Map,
+            RewardType.ARAM | RewardType.Map,
+            RewardType.UD | RewardType.Map,
+            RewardType.SL | RewardType.Map,
+
+            RewardType.QM | RewardType.Map | RewardType.Rank,
+            RewardType.ARAM | RewardType.Map | RewardType.Rank,
+            RewardType.UD | RewardType.Map | RewardType.Rank,
+            RewardType.SL | RewardType.Map | RewardType.Rank,
         };
 
         public IEnumerable<RewardType> Supports => Supported;
@@ -69,7 +64,7 @@ namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards
                 }
                 catch (Exception e)
                 {
-                    logger.LogError(e, $"Could not queue or send twitch message for reward: {args.RedemptionId}");
+                    logger.LogError(e, $"Could not queue reward: {reward.Title}");
                 }
 
             }, TaskCreationOptions.LongRunning);

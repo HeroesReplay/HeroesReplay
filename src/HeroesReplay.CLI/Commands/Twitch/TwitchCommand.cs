@@ -8,6 +8,7 @@ namespace HeroesReplay.CLI.Commands.Twitch
         public TwitchCommand() : base("twitch", $"")
         {
             AddCommand(new ConnectCommand());
+            AddCommand(new RewardsCommand());
         }
     }
 }

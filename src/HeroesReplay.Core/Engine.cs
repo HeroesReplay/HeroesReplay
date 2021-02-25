@@ -15,10 +15,10 @@ namespace HeroesReplay.Core
     {
         private readonly ILogger<Engine> logger;
         private readonly ITwitchBot twitchBot;
-        private readonly IGameManager manager;
+        private readonly IGameManager gameManager;
         private readonly IGameData gameData;
         private readonly IReplayProvider replayProvider;
-        private readonly ProcessCancellationTokenProvider consoleTokenProvider;
+        private readonly CancellationTokenProvider consoleTokenProvider;
 
         public Engine(
             ILogger<Engine> logger,
@@ -26,11 +26,11 @@ namespace HeroesReplay.Core
             IGameManager gameManager,
             IGameData gameData,
             IReplayProvider replayProvider,
-            ProcessCancellationTokenProvider consoleTokenProvider)
+            CancellationTokenProvider consoleTokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.twitchBot = twitchBot ?? throw new ArgumentNullException(nameof(twitchBot));
-            this.manager = gameManager ?? throw new ArgumentNullException(nameof(gameManager));
+            this.gameManager = gameManager ?? throw new ArgumentNullException(nameof(gameManager));
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
             this.replayProvider = replayProvider ?? throw new ArgumentNullException(nameof(replayProvider));
             this.consoleTokenProvider = consoleTokenProvider ?? throw new ArgumentNullException(nameof(consoleTokenProvider));
@@ -49,7 +49,7 @@ namespace HeroesReplay.Core
             }
             catch (Exception e)
             {
-                logger.LogError(e, "An unexpected error");
+                logger.LogError(e, "An unexpected error in the replay engine.");
             }
         }
 
@@ -71,7 +71,7 @@ namespace HeroesReplay.Core
 
                 if (loadedReplay != null)
                 {
-                    await manager.LaunchAndSpectate(loadedReplay);
+                    await gameManager.LaunchAndSpectate(loadedReplay);
                 }
             }
         }

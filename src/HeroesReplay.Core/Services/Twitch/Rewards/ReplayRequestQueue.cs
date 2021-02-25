@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
+
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Twitch.Rewards
@@ -17,6 +20,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
         private readonly ILogger<ReplayRequestQueue> logger;
         private readonly IHeroesProfileService heroesProfileService;
         private readonly AppSettings settings;
+        private readonly JsonSerializerOptions options;
 
         public ReplayRequestQueue(ILogger<ReplayRequestQueue> logger, IHeroesProfileService heroesProfileService, AppSettings settings)
         {
@@ -24,13 +28,14 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             this.logger = logger;
             this.heroesProfileService = heroesProfileService;
             this.settings = settings;
+            this.options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
         }
 
         public async Task<int> GetItemsInQueue()
         {
             if (fileInfo.Exists)
             {
-                List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName));
+                List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options);
                 return requests.Count;
             }
 
@@ -81,13 +86,13 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
 
                 if (!fileInfo.Exists)
                 {
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem>() { item }, new JsonSerializerOptions { WriteIndented = true }));
+                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem>() { item }, options));
                     return new RewardResponse(success: true, message: $"{request.ReplayId.Value} in queue ({1})");
                 }
                 else
                 {
-                    List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName))) { item };
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true }));
+                    List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options)) { item };
+                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, options));
                     return new RewardResponse(success: true, message: $"{request.ReplayId.Value} in queue ({items.Count})");
                 }
             }
@@ -105,7 +110,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
 
                 if (!fileInfo.Exists)
                 {
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem>() { item }, new JsonSerializerOptions { WriteIndented = true }));
+                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem>() { item }, options));
 
                     if (string.IsNullOrWhiteSpace(request.Map))
                     {
@@ -118,8 +123,8 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
                 }
                 else
                 {
-                    List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName))) { item };
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true }));
+                    List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options)) { item };
+                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, options));
 
                     if (string.IsNullOrWhiteSpace(request.Map))
                     {
@@ -141,7 +146,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
         {
             if (fileInfo.Exists)
             {
-                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName));
+                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options);
 
                 if (items.Count > 0)
                 {
@@ -149,7 +154,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
 
                     if (items.Remove(item))
                     {
-                        await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true }));
+                        await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, options));
                         logger.LogInformation($"Request: '{item.Request.RewardTitle}' removed from the queue.");
                         return item;
                     }
@@ -163,7 +168,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
         {
             if (fileInfo.Exists)
             {
-                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName));
+                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options);
 
                 var item = items.FirstOrDefault(x => x.Request.Login.Equals(login, StringComparison.OrdinalIgnoreCase));
 
@@ -180,7 +185,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
         {
             if (fileInfo.Exists)
             {
-                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName));
+                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options);
 
                 if (items.Count > 0)
                 {

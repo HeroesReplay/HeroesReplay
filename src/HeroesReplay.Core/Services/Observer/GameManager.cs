@@ -22,7 +22,7 @@ namespace HeroesReplay.Core.Services.Observer
             this.spectator = spectator ?? throw new ArgumentNullException(nameof(spectator));
             this.gameController = gameController ?? throw new ArgumentNullException(nameof(gameController));
             this.obsController = obsController ?? throw new ArgumentNullException(nameof(obsController));
-            this.detailsWriter = replayDetailsWriter ?? throw new ArgumentNullException(nameof(replayDetailsWriter));
+            detailsWriter = replayDetailsWriter ?? throw new ArgumentNullException(nameof(replayDetailsWriter));
         }
 
         public async Task LaunchAndSpectate(LoadedReplay loadedReplay)

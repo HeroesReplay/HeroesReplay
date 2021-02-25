@@ -13,13 +13,18 @@ namespace HeroesReplay.Core.Models
         public string Map { get; set; }
         public GameType? GameType { get; set; }
 
-        public RewardRequest(string login, Guid redemptionId, string rewardTitle, int? replayId, GameRank? tier, string map, GameType? gameMode)
+        public RewardRequest()
+        {
+
+        }
+
+        public RewardRequest(string login, Guid redemptionId, string rewardTitle, int? replayId, GameRank? rank, string map, GameType? gameMode)
         {
             RedemptionId = redemptionId;
             Login = login;
             RewardTitle = rewardTitle;
             ReplayId = replayId;
-            Rank = tier;
+            Rank = rank;
             Map = map;
             GameType = gameMode;
         }

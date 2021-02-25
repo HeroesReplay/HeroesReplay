@@ -7,14 +7,14 @@
         "HEROES_REPLAY_ENV": "dev"
       }
     },
-    "HeroesReplay.CLI: spectate heroesprofile": {
+    "HeroesReplay.CLI: spectate heroesprofile [client]": {
       "commandName": "Project",
       "commandLineArgs": "spectate heroesprofile",
       "environmentVariables": {
         "HEROES_REPLAY_ENV": "dev"
       }
     },
-    "HeroesReplay.CLI: spectate heroesprofile [headless]": {
+    "HeroesReplay.CLI: spectate heroesprofile [fake]": {
       "commandName": "Project",
       "commandLineArgs": "spectate heroesprofile",
       "environmentVariables": {
@@ -47,6 +47,20 @@
         "HEROES_REPLAY_Twitch__EnableChatBot": "true",
         "HEROES_REPLAY_Twitch__EnablePubSub": "true",
         "HEROES_REPLAY_Twitch__EnableReplayRequests": "true"
+      }
+    },
+    "HeroesReplay.CLI: twitch rewards generate": {
+      "commandName": "Project",
+      "commandLineArgs": "twitch rewards generate",
+      "environmentVariables": {
+        "HEROES_REPLAY_ENV": "dev"
+      }
+    },
+    "HeroesReplay.CLI: twitch rewards submit": {
+      "commandName": "Project",
+      "commandLineArgs": "twitch rewards submit",
+      "environmentVariables": {
+        "HEROES_REPLAY_ENV": "dev"
       }
     }
   }

@@ -1,5 +1,8 @@
-﻿namespace HeroesReplay.Core.Models
+﻿using System;
+
+namespace HeroesReplay.Core.Models
 {
+    [Flags]
     public enum RewardType
     {
         ReplayId,
@@ -9,19 +12,7 @@
         UD,
         SL,
 
-        ARAMMap,
-        QMMap,
-        UDMap,
-        SLMap,
-
-        ARAMTier,
-        QMTier,
-        UDTier,
-        SLTier,
-
-        ARAMMapTier,
-        QMMapTier,
-        UDMapTier,
-        SLMapTier,
+        Map,
+        Rank,
     }
 }

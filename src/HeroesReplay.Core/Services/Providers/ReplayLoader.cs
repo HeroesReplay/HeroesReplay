@@ -19,7 +19,7 @@ namespace HeroesReplay.Core.Services.Providers
             this.logger = logger;
             this.settings = settings;
 
-            this.options = new()
+            options = new()
             {
                 AllowPTR = false,
                 ShouldParseDetailedBattleLobby = settings.ParseOptions.ShouldParseEvents,

@@ -17,7 +17,7 @@ namespace HeroesReplay.Core.Services.Observer
         private readonly ITalentNotifier talentsNotifier;
         private readonly ILogger<Spectator> logger;
         private readonly AppSettings settings;
-        private readonly ProcessCancellationTokenProvider consoleTokenProvider;
+        private readonly CancellationTokenProvider consoleTokenProvider;
         private readonly IReplayContext sessionHolder;
         private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
@@ -37,14 +37,14 @@ namespace HeroesReplay.Core.Services.Observer
             IReplayContext sessionHolder,
             IGameController controller,
             ITalentNotifier talentsNotifier,
-            ProcessCancellationTokenProvider tokenProvider)
+            CancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.sessionHolder = sessionHolder ?? throw new ArgumentNullException(nameof(sessionHolder));
             this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
             this.talentsNotifier = talentsNotifier ?? throw new ArgumentNullException(nameof(talentsNotifier));
-            this.consoleTokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+            consoleTokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
 
             panelTimes = new()
             {
@@ -255,7 +255,7 @@ namespace HeroesReplay.Core.Services.Observer
                 .WaitAndRetryAsync(
                         retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd,
                         sleepDurationProvider: (retry, context) => settings.Spectate.RetryTimerSleepDuration,
-                        onRetry: this.OnRetry)
+                        onRetry: OnRetry)
                 .ExecuteAsync((context, token) => controller.TryGetTimerAsync(), new Context("Timer") { { StateKey, State } }, LinkedTokenSource.Token).ConfigureAwait(false);
         }
 

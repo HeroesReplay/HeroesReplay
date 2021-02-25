@@ -18,7 +18,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
         private readonly FormUrlEncodedContent notifyContent;
         private readonly ILogger<TwitchExtensionService> logger;
         private readonly HttpClient httpClient;
-        private readonly ProcessCancellationTokenProvider tokenProvider;
+        private readonly CancellationTokenProvider tokenProvider;
 
         private const string SaveReplayUrl = @"save/replay";
         private const string UpdateReplayUrl = @"update/replay/";
@@ -27,7 +27,11 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
         private const string SaveTalentUrl = @"save/talent";
         private const string NotifyTalentUpdate = @"notify/talent/update";
 
-        public TwitchExtensionService(ILogger<TwitchExtensionService> logger, HttpClient httpClient, ProcessCancellationTokenProvider tokenProvider, AppSettings settings)
+        public TwitchExtensionService(
+            ILogger<TwitchExtensionService> logger, 
+            HttpClient httpClient, 
+            CancellationTokenProvider tokenProvider, 
+            AppSettings settings)
         {
             notifyContent = new(new Dictionary<string, string>
             {
@@ -40,7 +44,6 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
             this.logger = logger;
             this.httpClient = httpClient;
             this.tokenProvider = tokenProvider;
-
             this.httpClient.BaseAddress = settings.HeroesProfileApi.TwitchBaseUri;
         }
 
@@ -56,7 +59,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
                     HttpResponseMessage response = await Policy
                                .Handle<Exception>()
                                .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                               .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: this.GetSleepDuration, onRetry: this.OnRetry)
+                               .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
                                .ExecuteAsync(async (context, token) => await httpClient.PostAsync(SaveReplayUrl, new FormUrlEncodedContent(payload.Content.Single()), cancellationSource.Token), new Context(), tokenProvider.Token)
                                .ConfigureAwait(false);
 
@@ -108,7 +111,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
                         HttpResponseMessage response = await Policy
                             .Handle<Exception>()
                             .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                            .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: this.GetSleepDuration, onRetry: this.OnRetry)
+                            .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
                             .ExecuteAsync(async (context, token) => await httpClient.PostAsync(SavePlayerUrl, new FormUrlEncodedContent(content), token), new Context(), cancellationSource.Token)
                             .ConfigureAwait(false);
 
@@ -145,7 +148,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
                     HttpResponseMessage response = await Policy
                                .Handle<Exception>()
                                .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                               .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: this.GetSleepDuration, onRetry: this.OnRetry)
+                               .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
                                .ExecuteAsync(async (context, token) => await httpClient.PostAsync(UpdateReplayUrl, new FormUrlEncodedContent(payload.Content.Single()), token), new Context(), cancellationSource.Token)
                                .ConfigureAwait(false);
 
@@ -185,7 +188,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
                         HttpResponseMessage response = await Policy
                                  .Handle<Exception>()
                                  .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                                 .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: this.GetSleepDuration, onRetry: this.OnRetry)
+                                 .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
                                  .ExecuteAsync(async (context, t) => await httpClient.PostAsync(UpdatePlayerUrl, new FormUrlEncodedContent(playerContent), t), new Context(), cancellationSource.Token)
                                  .ConfigureAwait(false);
 
@@ -228,7 +231,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
                             HttpResponseMessage response = await Policy
                                 .Handle<Exception>()
                                 .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                                .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: this.GetSleepDuration, onRetry: this.OnRetry)
+                                .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
                                 .ExecuteAsync(async (context, token) => await httpClient.PostAsync(SaveTalentUrl, new FormUrlEncodedContent(content), token), new Context(), cancellationSource.Token)
                                 .ConfigureAwait(false);
 
@@ -258,7 +261,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
                     HttpResponseMessage response = await Policy
                                      .Handle<Exception>()
                                      .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                                     .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: this.GetSleepDuration, onRetry: this.OnRetry)
+                                     .WaitAndRetryAsync(retryCount: 5, sleepDurationProvider: GetSleepDuration, onRetry: OnRetry)
                                      .ExecuteAsync(async (context, token) => await httpClient.PostAsync(NotifyTalentUpdate, notifyContent, token), new Context(), cancellationSource.Token)
                                      .ConfigureAwait(false);
 

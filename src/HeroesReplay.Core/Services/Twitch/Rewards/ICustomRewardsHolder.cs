@@ -4,7 +4,7 @@ using TwitchLib.PubSub.Events;
 
 namespace HeroesReplay.Core.Services.Twitch.Rewards
 {
-    public interface ISupportedRewardsHolder
+    public interface ICustomRewardsHolder
     {
         public List<SupportedReward> Rewards { get; }
         public bool TryGetReward(OnRewardRedeemedArgs args, out SupportedReward reward);

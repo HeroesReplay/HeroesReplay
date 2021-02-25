@@ -1,9 +1,13 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Twitch.Rewards;
+
+using Microsoft.Extensions.Logging;
+
 using TwitchLib.Client.Interfaces;
 using TwitchLib.Client.Models;
 
@@ -11,19 +15,21 @@ namespace HeroesReplay.Core.Services.Twitch.ChatMessages
 {
     public class RequestsCommandHandler : IMessageHandler
     {
+        private readonly ILogger<RequestsCommandHandler> logger;
         private readonly ITwitchClient twitchClient;
         private readonly AppSettings settings;
         private readonly IRequestQueue requestQueue;
-        private readonly Regex regex = new Regex("(?<command>!requests)\\s(?<position>\\d)\\z");
+        private readonly Regex regex = new Regex("(?<command>!requests)\\s(?<position>\\d)\\z", RegexOptions.Compiled);
 
-        public RequestsCommandHandler(ITwitchClient twitchClient, AppSettings settings, IRequestQueue requestQueue)
+        public RequestsCommandHandler(ILogger<RequestsCommandHandler> logger, ITwitchClient twitchClient, AppSettings settings, IRequestQueue requestQueue)
         {
+            this.logger = logger;
             this.twitchClient = twitchClient;
             this.settings = settings;
             this.requestQueue = requestQueue;
         }
 
-        public bool CanHandle(ChatMessage chatMessage) => chatMessage.Message.StartsWith("!requests");
+        public bool CanHandle(ChatMessage chatMessage) => !string.IsNullOrWhiteSpace(chatMessage.Message) && chatMessage.Message.StartsWith("!requests");
 
         public void Execute(ChatMessage chatMessage)
         {
@@ -42,11 +48,11 @@ namespace HeroesReplay.Core.Services.Twitch.ChatMessages
 
                         if (response != null)
                         {
-                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, your next request is at position {response.Value.Position}", settings.Twitch.DryRunMode);
+                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, your next request is at position {response.Value.Position}.", settings.Twitch.DryRunMode);
                         }
                         else
                         {
-                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, you have nothing in the queue.", settings.Twitch.DryRunMode);
+                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, you have nothing in the queue", settings.Twitch.DryRunMode);
                         }
                     }
                     else if (regex.IsMatch(chatMessage.Message))
@@ -66,7 +72,8 @@ namespace HeroesReplay.Core.Services.Twitch.ChatMessages
                 }
                 catch (Exception e)
                 {
-                    twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, sorry I could not process your request.", settings.Twitch.DryRunMode);
+                    logger.LogError(e, "Could not process user request");
+                    twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, sorry I could not process your request", settings.Twitch.DryRunMode);
                 }
             });
         }

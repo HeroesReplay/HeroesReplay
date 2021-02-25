@@ -43,5 +43,10 @@ namespace HeroesReplay.Core.Models
 
         [JsonPropertyName("rank")]
         public string Rank { get; set; }
+
+        public HeroesProfileReplay()
+        {
+
+        }
     }
 }

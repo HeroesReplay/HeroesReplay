@@ -2,11 +2,11 @@
 
 namespace HeroesReplay.Core.Services.Shared
 {
-    public class ProcessCancellationTokenProvider
+    public class CancellationTokenProvider
     {
         public CancellationToken Token { get; set; }
 
-        public ProcessCancellationTokenProvider(CancellationToken token = default)
+        public CancellationTokenProvider(CancellationToken token = default)
         {
             Token = token;
         }

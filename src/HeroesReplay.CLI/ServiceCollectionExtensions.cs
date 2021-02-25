@@ -67,7 +67,7 @@ namespace HeroesReplay.CLI
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
                 .AddSingleton<IConfiguration>(configuration)
                 .AddSingleton(settings)
-                .AddSingleton(new ProcessCancellationTokenProvider(token))
+                .AddSingleton(new CancellationTokenProvider(token))
                 .AddSingleton<IGameData, GameData>()
                 .AddSingleton<IReplayHelper, ReplayHelper>()
                 .AddSingleton<IAbilityDetector, AbilityDetector>()
@@ -75,6 +75,28 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
                 .AddSingleton(typeof(IReplayProvider), replayProvider)
                 .AddSingleton<ISpectateReportWriter, SpectateReportCsvWriter>();
+        }
+
+        public static IServiceCollection AddTwitchServices(this IServiceCollection services, CancellationToken token)
+        {
+            IConfigurationRoot configuration = GetConfiguration();
+
+            return services
+                .AddMemoryCache()
+                .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
+                .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
+                .AddSingleton<IConfiguration>(configuration)
+                .AddSingleton(implementationFactory: serviceProvider => serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>())
+                .AddSingleton(new CancellationTokenProvider(token))
+                .AddSingleton<ITwitchRewardsManager, TwitchRewardsManager>()
+                .AddSingleton<IGameData, GameData>()
+                .AddSingleton<ITwitchAPI, TwitchAPI>()
+                .AddSingleton<IApiSettings>(implementationFactory: serviceProvider =>
+                {
+                    AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
+                    return new ApiSettings { AccessToken = settings.Twitch.AccessToken, ClientId = settings.Twitch.ClientId };
+                })
+                .AddSingleton<ICustomRewardsHolder, SupportedRewardsHolder>();
         }
 
         public static IServiceCollection AddSpectateServices(this IServiceCollection services, CancellationToken token, Type replayProvider)
@@ -111,7 +133,7 @@ namespace HeroesReplay.CLI
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "Heroes Replay"))
                 .AddSingleton<IConfiguration>(configuration)
                 .AddSingleton(implementationFactory: serviceProvider => serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>())
-                .AddSingleton(new ProcessCancellationTokenProvider(token))
+                .AddSingleton(new CancellationTokenProvider(token))
                 .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
                 .AddSingleton(typeof(CaptureStrategy), configuration.Get<AppSettings>().Capture.Method switch { CaptureMethod.None => typeof(StubCapture), _ => typeof(BitBltCapture) })
                 .AddSingleton(typeof(IGameController), configuration.Get<AppSettings>().Capture.Method switch { CaptureMethod.None => typeof(StubController), _ => typeof(GameController) })
@@ -135,7 +157,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
                 .AddSingleton<IOnMessageHandler, OnMessageReceivedHandler>()
                 .AddSingleton<IOnRewardHandler, OnRewardRedeemedHandler>()
-                .AddSingleton<ISupportedRewardsHolder, SupportedRewardsHolder>()
+                .AddSingleton<ICustomRewardsHolder, SupportedRewardsHolder>()
                 .AddSingleton<IRewardRequestFactory, RewardRequestFactory>()
                 .AddSingleton<IRequestQueue, ReplayRequestQueue>()
                 .AddSingleton<ITwitchExtensionService, TwitchExtensionService>()

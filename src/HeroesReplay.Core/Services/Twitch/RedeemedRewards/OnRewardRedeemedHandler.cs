@@ -10,11 +10,11 @@ namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards
 {
     public class OnRewardRedeemedHandler : IOnRewardHandler
     {
-        private readonly ISupportedRewardsHolder rewards;
+        private readonly ICustomRewardsHolder rewards;
         private readonly ILogger<OnRewardRedeemedHandler> logger;
         public readonly IEnumerable<IRewardHandler> handlers;
 
-        public OnRewardRedeemedHandler(ILogger<OnRewardRedeemedHandler> logger, IEnumerable<IRewardHandler> handlers, ISupportedRewardsHolder rewards)
+        public OnRewardRedeemedHandler(ILogger<OnRewardRedeemedHandler> logger, IEnumerable<IRewardHandler> handlers, ICustomRewardsHolder rewards)
         {
             this.logger = logger;
             this.handlers = handlers;

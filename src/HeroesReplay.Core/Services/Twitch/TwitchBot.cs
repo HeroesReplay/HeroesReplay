@@ -83,7 +83,7 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
         {
-            this.onMessageHandler.Handle(e);
+            onMessageHandler.Handle(e);
         }
 
         private void PubSub_OnLog(object sender, TwitchLib.PubSub.Events.OnLogArgs e)

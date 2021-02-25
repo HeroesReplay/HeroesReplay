@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
-
     public class TalentNotifier : ITalentNotifier
     {
         private readonly ILogger<TalentNotifier> logger;
@@ -19,10 +18,10 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
 
         private string SessionId { get; set; }
 
-        public TalentNotifier(ILogger<TalentNotifier> logger, IReplayContext sessionHolder, ITwitchExtensionService extensionService)
+        public TalentNotifier(ILogger<TalentNotifier> logger, IReplayContext context, ITwitchExtensionService extensionService)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            this.context = sessionHolder ?? throw new ArgumentNullException(nameof(sessionHolder));
+            this.context = context ?? throw new ArgumentNullException(nameof(context));
             this.extensionService = extensionService ?? throw new ArgumentNullException(nameof(extensionService));
         }
 

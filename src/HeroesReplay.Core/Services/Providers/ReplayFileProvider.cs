@@ -23,7 +23,7 @@ namespace HeroesReplay.Core.Services.Providers
             this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
-            this.fileInfo = new FileInfo(settings.Location.ReplaySource);
+            fileInfo = new FileInfo(settings.Location.ReplaySource);
         }
 
         public async Task<LoadedReplay> TryLoadNextReplayAsync()
