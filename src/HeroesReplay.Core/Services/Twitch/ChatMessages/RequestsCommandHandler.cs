@@ -39,41 +39,58 @@ namespace HeroesReplay.Core.Services.Twitch.ChatMessages
                 {
                     if (chatMessage.Message.Equals("!requests"))
                     {
-                        var queueLength = await requestQueue.GetItemsInQueue();
-                        twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, requests in queue: {queueLength}", settings.Twitch.DryRunMode);
+                        var count = await requestQueue.GetItemsInQueue();
+                        twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, requests in queue: {count}", settings.Twitch.DryRunMode);
                     }
                     else if (chatMessage.Message.Equals("!requests me"))
                     {
-                        (RewardQueueItem, int Position)? response = await requestQueue.FindNextByLoginAsync(chatMessage.Username);
+                        var response = await requestQueue.FindNextByLoginAsync(chatMessage.Username);
 
                         if (response != null)
                         {
-                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, your next request is at position {response.Value.Position}.", settings.Twitch.DryRunMode);
+                            var (item, position) = response.Value;
+                            var replay = item.HeroesProfileReplay;
+                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, your next request is {replay.Map} ({replay.Rank}) position: {position}.", settings.Twitch.DryRunMode);
                         }
                         else
                         {
-                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, you have nothing in the queue", settings.Twitch.DryRunMode);
+                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, you have nothing in the queue. Spend some sadism bruh.", settings.Twitch.DryRunMode);
+                        }
+                    }
+                    else if (chatMessage.Message.Equals("!requests remove"))
+                    {
+                        var response = await requestQueue.RemoveItemAsync(chatMessage.Username);
+
+                        if (response != null)
+                        {
+                            var (item, position) = response.Value;
+                            var replay = item.HeroesProfileReplay;
+                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, you have removed your request {replay.Map} ({replay.Rank}) from the queue at position: {position}.", settings.Twitch.DryRunMode);
+                        }
+                        else
+                        {
+                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, you have nothing in the queue to remove.", settings.Twitch.DryRunMode);
                         }
                     }
                     else if (regex.IsMatch(chatMessage.Message))
                     {
-                        var position = regex.Match(chatMessage.Message).Groups["position"].Value;
-                        var queueItem = await requestQueue.FindByIndexAsync(int.Parse(position));
+                        var position = int.Parse(regex.Match(chatMessage.Message).Groups["position"].Value);
+                        var item = await requestQueue.FindByIndexAsync(position);
 
-                        if (queueItem == null)
+                        if (item != null)
                         {
-                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, there is no request at position {position}", settings.Twitch.DryRunMode);
+                            var replay = item.HeroesProfileReplay;
+                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, request at position {position} is {replay.Map} ({replay.Rank})", settings.Twitch.DryRunMode);
                         }
                         else
                         {
-                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, next up: {queueItem.HeroesProfileReplay.Map} ({queueItem.HeroesProfileReplay.Rank})", settings.Twitch.DryRunMode);
+                            twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, there is no request at position {position}", settings.Twitch.DryRunMode);
                         }
                     }
                 }
                 catch (Exception e)
                 {
                     logger.LogError(e, "Could not process user request");
-                    twitchClient.SendMessage(settings.Twitch.Channel, $"{chatMessage.Username}, sorry I could not process your request", settings.Twitch.DryRunMode);
                 }
             });
         }
