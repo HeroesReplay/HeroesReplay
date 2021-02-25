@@ -2,6 +2,8 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Linq;
+using HeroesReplay.Core.Services.Analysis;
+using HeroesReplay.Core.Services.Analysis.Calculators;
 using Xunit;
 
 namespace HeroesReplay.Tests

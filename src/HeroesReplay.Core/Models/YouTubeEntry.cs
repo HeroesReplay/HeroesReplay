@@ -1,10 +1,10 @@
-﻿namespace HeroesReplay.Core.Services.Twitch
+﻿namespace HeroesReplay.Core.Models
 {
     public class YouTubeEntry
     {
-        public string Title { get; init; }
-        public string[] DescriptionLines { get; init; }
-        public string[] Tags { get; init; }
+        public string Title { get; set; }
+        public string[] DescriptionLines { get; set; }
+        public string[] Tags { get; set; }
 
         /*
          *  {
@@ -18,7 +18,7 @@
               }
             },
         */
-        public string CategoryId { get; init; }
-        public string PrivacyStatus { get; init; } // unlisted, private, public
+        public string CategoryId { get; set; }
+        public string PrivacyStatus { get; set; } // unlisted, private, public
     }
 }

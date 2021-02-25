@@ -1,13 +1,11 @@
-﻿
-using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
-namespace HeroesReplay.Core.Services.HeroesProfile
+namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
     public class ExtensionPayload
     {
-        public ExtensionStep Step { get; init; }
-        public List<Dictionary<string, string>> Content { get; init; }
+        public ExtensionStep Step { get; set; }
+        public List<Dictionary<string, string>> Content { get; set; }
 
         public ExtensionPayload SetGameSessionReplayId(string replayId)
         {

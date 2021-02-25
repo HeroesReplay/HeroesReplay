@@ -6,11 +6,11 @@ namespace HeroesReplay.Core.Models
 {
     public class Focus
     {
-        public Type Calculator { get; init; }
-        public Unit Unit { get; init; }
-        public Player Target { get; init; }
-        public float Points { get; init; }
-        public string Description { get; init; }
+        public Type Calculator { get; set; }
+        public Unit Unit { get; set; }
+        public Player Target { get; set; }
+        public float Points { get; set; }
+        public string Description { get; set; }
 
         public Focus(Type calculator, Unit unit, Player target, float points, string description, int index = 0)
         {

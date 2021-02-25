@@ -1,10 +1,10 @@
 ﻿namespace HeroesReplay.Core.Configuration
 {
-    public record StormReplaySettings
+    public class StormReplaySettings
     {
-        public string InfoFileName { get; init; }
-        public string WildCard { get; init; }
-        public string FileExtension { get; init; }
-        public string Seperator { get; init; }
+        public string InfoFileName { get; set; }
+        public string WildCard { get; set; }
+        public string FileExtension { get; set; }
+        public string Seperator { get; set; }
     }
 }

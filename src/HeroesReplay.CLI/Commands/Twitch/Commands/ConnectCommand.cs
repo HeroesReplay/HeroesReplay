@@ -2,14 +2,12 @@
 using System.CommandLine.Invocation;
 using System.Threading;
 using System.Threading.Tasks;
-
-using HeroesReplay.Core.Providers;
-using HeroesReplay.Core.Runner;
+using HeroesReplay.Core.Services.Data;
+using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Twitch;
-
 using Microsoft.Extensions.DependencyInjection;
 
-namespace HeroesReplay.CLI.Commands
+namespace HeroesReplay.CLI.Commands.Twitch.Commands
 {
     public class ConnectCommand : Command
     {

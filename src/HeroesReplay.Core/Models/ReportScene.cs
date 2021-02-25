@@ -2,12 +2,12 @@
 
 namespace HeroesReplay.Core.Models
 {
-    public record ReportScene 
+    public class ReportScene 
     {
-        public bool Enabled { get; init; }
-        public string SceneName { get; init; }
-        public Uri SourceUrl { get; init; }
-        public string SourceName { get; init; }
-        public TimeSpan DisplayTime { get; init; }
+        public bool Enabled { get; set; }
+        public string SceneName { get; set; }
+        public Uri SourceUrl { get; set; }
+        public string SourceName { get; set; }
+        public TimeSpan DisplayTime { get; set; }
     }
 }

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Extensions
 {
     public static class EnumerableExtensions
     {

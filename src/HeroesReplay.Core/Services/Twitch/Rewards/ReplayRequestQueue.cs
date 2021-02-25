@@ -1,17 +1,15 @@
-﻿using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.HeroesProfile;
-
-using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.HeroesProfile;
+using Microsoft.Extensions.Logging;
 
-namespace HeroesReplay.Core.Services.Twitch
+namespace HeroesReplay.Core.Services.Twitch.Rewards
 {
     public class ReplayRequestQueue : IRequestQueue
     {

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Drawing;
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Extensions
 {
     public static class BitmapExtensions
     {

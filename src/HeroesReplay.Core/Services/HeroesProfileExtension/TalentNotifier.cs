@@ -1,13 +1,12 @@
-﻿using HeroesReplay.Core.Models;
-
-using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Observer;
+using Microsoft.Extensions.Logging;
 
-namespace HeroesReplay.Core.Services.HeroesProfile
+namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
 
     public class TalentNotifier : ITalentNotifier
@@ -19,7 +18,6 @@ namespace HeroesReplay.Core.Services.HeroesProfile
         private SessionData Data => context.Current;
 
         private string SessionId { get; set; }
-        public bool SessionCreated => !string.IsNullOrWhiteSpace(SessionId);
 
         public TalentNotifier(ILogger<TalentNotifier> logger, IReplayContext sessionHolder, ITwitchExtensionService extensionService)
         {

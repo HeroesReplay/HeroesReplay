@@ -1,6 +1,4 @@
-﻿using HeroesReplay.Core.Models;
-
-namespace HeroesReplay.Core.Providers
+﻿namespace HeroesReplay.Core.Services.Providers
 {
     public interface IReplayHelper
     {

@@ -1,11 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
-
+using HeroesReplay.Core.Services.Twitch.ChatMessages;
+using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Events;
 
-namespace HeroesReplay.Core.Services.Twitch.RewardHandlers
+namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards
 {
     public class OnMessageReceivedHandler : IOnMessageHandler
     {

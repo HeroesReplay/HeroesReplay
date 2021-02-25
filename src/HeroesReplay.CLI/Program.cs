@@ -2,8 +2,7 @@
 using System.Threading.Tasks;
 
 using HeroesReplay.Core;
-using HeroesReplay.Core.Shared;
-
+using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI

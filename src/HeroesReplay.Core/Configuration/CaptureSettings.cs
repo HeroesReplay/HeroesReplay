@@ -1,11 +1,11 @@
-﻿using HeroesReplay.Core.Processes;
+﻿using HeroesReplay.Core.Models;
 
 namespace HeroesReplay.Core.Configuration
 {
-    public record CaptureSettings
+    public class CaptureSettings
     {
-        public CaptureMethod Method { get; init; }
-        public bool SaveTimerRegion { get; init; }
-        public bool SaveCaptureFailureCondition { get; init; }
+        public CaptureMethod Method { get; set; }
+        public bool SaveTimerRegion { get; set; }
+        public bool SaveCaptureFailureCondition { get; set; }
     }
 }

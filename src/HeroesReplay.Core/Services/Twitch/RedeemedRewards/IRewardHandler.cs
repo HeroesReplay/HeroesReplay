@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
-
+using HeroesReplay.Core.Models;
 using TwitchLib.PubSub.Events;
 
-namespace HeroesReplay.Core.Services.Twitch.RewardHandlers
+namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards
 {
     public interface IRewardHandler
     {

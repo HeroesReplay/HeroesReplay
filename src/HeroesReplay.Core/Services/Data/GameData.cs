@@ -1,9 +1,4 @@
-﻿using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.HeroesProfile;
-
-using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -14,10 +9,12 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using Microsoft.Extensions.Logging;
 using static Heroes.ReplayParser.Unit;
 
-namespace HeroesReplay.Core.Runner
+namespace HeroesReplay.Core.Services.Data
 {
     public class GameData : IGameData
     {

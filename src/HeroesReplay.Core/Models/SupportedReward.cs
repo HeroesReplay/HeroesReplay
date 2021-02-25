@@ -1,6 +1,4 @@
-﻿using HeroesReplay.Core.Models;
-
-namespace HeroesReplay.Core.Services.Twitch
+﻿namespace HeroesReplay.Core.Models
 {
     public class SupportedReward
     {

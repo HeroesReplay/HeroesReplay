@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Text.Json.Serialization;
 
-namespace HeroesReplay.Core.Services.HeroesProfile
+namespace HeroesReplay.Core.Models
 {
     public class HeroesProfileReplay
     {

@@ -1,6 +1,10 @@
 ﻿using System;
 
-namespace HeroesReplay.Core.Models
+using Heroes.ReplayParser;
+
+using HeroesReplay.Core.Models;
+
+namespace HeroesReplay.Core.Extensions
 {
     public static class EnumExtensions
     {
@@ -29,5 +33,7 @@ namespace HeroesReplay.Core.Models
                 _ => throw new NotImplementedException()
             };
         }
+
+        public static string GetQueryValue(this GameMode gameMode) => Enum.GetName(typeof(GameMode), gameMode);
     }
 }

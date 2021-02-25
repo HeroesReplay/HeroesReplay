@@ -1,7 +1,6 @@
-using HeroesReplay.Core.Shared;
 using System.Security.Principal;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Shared
 {
     public class AdminChecker : IAdminChecker
     {

@@ -5,16 +5,8 @@ using System.Threading;
 
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Processes;
-using HeroesReplay.Core.Providers;
-using HeroesReplay.Core.Reports;
-using HeroesReplay.Core.Runner;
 using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.Obs;
 using HeroesReplay.Core.Services.Twitch;
-using HeroesReplay.Core.Services.Twitch.RewardHandlers;
-using HeroesReplay.Core.Shared;
-
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -35,6 +27,18 @@ using TwitchLib.PubSub;
 using TwitchLib.PubSub.Interfaces;
 
 using Windows.Media.Ocr;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Analysis;
+using HeroesReplay.Core.Services.Data;
+using HeroesReplay.Core.Services.HeroesProfileExtension;
+using HeroesReplay.Core.Services.Observer;
+using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Services.Reports;
+using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Services.Stream;
+using HeroesReplay.Core.Services.Twitch.ChatMessages;
+using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
+using HeroesReplay.Core.Services.Twitch.Rewards;
 
 namespace HeroesReplay.CLI
 {

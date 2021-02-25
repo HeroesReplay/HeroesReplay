@@ -1,9 +1,6 @@
-﻿
-using TwitchLib.Client.Events;
-using TwitchLib.Client.Interfaces;
-using TwitchLib.Client.Models;
+﻿using TwitchLib.Client.Models;
 
-namespace HeroesReplay.Core.Services.Twitch.RewardHandlers
+namespace HeroesReplay.Core.Services.Twitch.ChatMessages
 {
     public interface IMessageHandler
     {

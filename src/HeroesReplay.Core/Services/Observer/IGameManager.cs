@@ -1,8 +1,7 @@
-﻿using HeroesReplay.Core.Models;
+﻿using System.Threading.Tasks;
+using HeroesReplay.Core.Models;
 
-using System.Threading.Tasks;
-
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Observer
 {
     public interface IGameManager
     {

@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
+using HeroesReplay.CLI.Commands.Calculators.Commands;
 
-namespace HeroesReplay.CLI.Commands.Analyze
+namespace HeroesReplay.CLI.Commands.Calculators
 {
     public class CalculatorsCommand : Command
     {

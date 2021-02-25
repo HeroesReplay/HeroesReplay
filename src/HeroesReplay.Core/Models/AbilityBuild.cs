@@ -1,9 +1,9 @@
 ﻿namespace HeroesReplay.Core.Models
 {
-    public record AbilityBuild
+    public class AbilityBuild
     {
-        public int AbilityLink { get; init; }
-        public int? GreaterEqualBuild { get; init; }
-        public int? LessThanBuild { get; init; }
+        public int AbilityLink { get; set; }
+        public int? GreaterEqualBuild { get; set; }
+        public int? LessThanBuild { get; set; }
     }
 }

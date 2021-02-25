@@ -1,12 +1,9 @@
-﻿using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-
+﻿using System;
+using System.IO;
+using HeroesReplay.Core.Configuration;
 using Microsoft.Extensions.Logging;
 
-using System;
-using System.IO;
-
-namespace HeroesReplay.Core.Providers
+namespace HeroesReplay.Core.Services.Providers
 {
     public class ReplayHelper : IReplayHelper
     {

@@ -5,26 +5,26 @@ namespace HeroesReplay.Core.Configuration
 {
     public class AppSettings
     {
-        public ProcessSettings Process { get; init; }
-        public HeroesToolChestSettings HeroesToolChest { get; init; }
-        public GithubSettings Github { get; init; }
-        public OBSSettings OBS { get; init; }
-        public StormReplaySettings StormReplay { get; init; }
-        public HeroesProfileApiSettings HeroesProfileApi { get; init; }
-        public HeroesProfileTwitchExtensionSettings TwitchExtension { get; init; }
-        public TrackerEventSettings TrackerEvents { get; init; }
-        public WeightSettings Weights { get; init; }
-        public ReplayDetailsWriterSettings ReplayDetailsWriter { get; init; }
-        public TwitchSettings Twitch { get; init; }
-        public SpectateSettings Spectate { get; init; }
-        public PanelTimesSettings PanelTimes { get; init; }
-        public CaptureSettings Capture { get; init; }
-        public LocationSettings Location { get; init; }
-        public OCRSettings OCR { get; init; }
-        public MapSettings Maps { get; init; }
-        public ParseOptionsSettings ParseOptions { get; init; }
-        public AbilityDetectionSettings AbilityDetection { get; init; }
-        public QuoteSettings Quotes { get; init; }
+        public ProcessSettings Process { get; set; }
+        public HeroesToolChestSettings HeroesToolChest { get; set; }
+        public GithubSettings Github { get; set; }
+        public OBSSettings OBS { get; set; }
+        public StormReplaySettings StormReplay { get; set; }
+        public HeroesProfileApiSettings HeroesProfileApi { get; set; }
+        public HeroesProfileTwitchExtensionSettings TwitchExtension { get; set; }
+        public TrackerEventSettings TrackerEvents { get; set; }
+        public WeightSettings Weights { get; set; }
+        public ReplayDetailsWriterSettings ReplayDetailsWriter { get; set; }
+        public TwitchSettings Twitch { get; set; }
+        public SpectateSettings Spectate { get; set; }
+        public PanelTimesSettings PanelTimes { get; set; }
+        public CaptureSettings Capture { get; set; }
+        public LocationSettings Location { get; set; }
+        public OCRSettings OCR { get; set; }
+        public MapSettings Maps { get; set; }
+        public ParseOptionsSettings ParseOptions { get; set; }
+        public AbilityDetectionSettings AbilityDetection { get; set; }
+        public QuoteSettings Quotes { get; set; }
 
         public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
         public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");

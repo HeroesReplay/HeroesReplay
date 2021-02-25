@@ -1,14 +1,12 @@
-﻿using Heroes.ReplayParser;
-
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Runner;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Heroes.ReplayParser;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Data;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class NearBossCalculator // : IFocusCalculator
     {

@@ -4,20 +4,20 @@ using System.Collections.Generic;
 
 namespace HeroesReplay.Core.Configuration
 {
-    public record HeroesProfileApiSettings
+    public class HeroesProfileApiSettings
     {
-        public Uri BaseUri { get; init; }
-        public Uri TwitchBaseUri { get; init; }
-        public string ApiKey { get; init; }
-        public string AwsAccessKey { get; init; }
-        public string AwsSecretKey { get; init; }
-        public IEnumerable<string> GameTypes { get; init; }
-        public string S3Bucket { get; init; }
-        public string S3Region { get; init; }
-        public int MinReplayId { get; init; }
-        public int FallbackMaxReplayId { get; init; }
-        public int ApiMaxReturnedReplays { get; init; }
-        public bool EnableMMR { get; init; }
-        public TimeSpan APIRetryWaitTime { get; init; }
+        public Uri BaseUri { get; set; }
+        public Uri TwitchBaseUri { get; set; }
+        public string ApiKey { get; set; }
+        public string AwsAccessKey { get; set; }
+        public string AwsSecretKey { get; set; }
+        public IEnumerable<string> GameTypes { get; set; }
+        public string S3Bucket { get; set; }
+        public string S3Region { get; set; }
+        public int MinReplayId { get; set; }
+        public int FallbackMaxReplayId { get; set; }
+        public int ApiMaxReturnedReplays { get; set; }
+        public bool EnableMMR { get; set; }
+        public TimeSpan APIRetryWaitTime { get; set; }
     }
 }

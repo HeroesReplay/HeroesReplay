@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Services.Obs
+namespace HeroesReplay.Core.Services.Stream
 {
     public interface IObsController
     {

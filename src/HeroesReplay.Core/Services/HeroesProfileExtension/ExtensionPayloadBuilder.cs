@@ -1,14 +1,11 @@
-﻿using Heroes.ReplayParser;
-
-using HeroesReplay.Core.Configuration;
-
-using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Heroes.ReplayParser;
+using HeroesReplay.Core.Configuration;
+using Microsoft.Extensions.Logging;
 
-namespace HeroesReplay.Core.Services.HeroesProfile
+namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
     public class ExtensionPayloadBuilder : IExtensionPayloadsBuilder
     {

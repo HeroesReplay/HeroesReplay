@@ -1,8 +1,7 @@
-﻿using Heroes.ReplayParser;
+﻿using System.Threading.Tasks;
+using Heroes.ReplayParser;
 
-using System.Threading.Tasks;
-
-namespace HeroesReplay.Core.Providers
+namespace HeroesReplay.Core.Services.Providers
 {
     public interface IReplayLoader
     {

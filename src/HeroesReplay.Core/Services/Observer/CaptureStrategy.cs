@@ -1,11 +1,9 @@
-﻿using Microsoft.Extensions.Logging;
-
+﻿using System;
+using System.Drawing;
+using Microsoft.Extensions.Logging;
 using PInvoke;
 
-using System;
-using System.Drawing;
-
-namespace HeroesReplay.Core.Processes
+namespace HeroesReplay.Core.Services.Observer
 {
     public abstract class CaptureStrategy
     {

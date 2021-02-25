@@ -1,6 +1,6 @@
-﻿using HeroesReplay.Core.Services.HeroesProfile;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using HeroesReplay.Core.Services.HeroesProfileExtension;
 
 namespace HeroesReplay.Core.Models
 {
@@ -13,7 +13,6 @@ namespace HeroesReplay.Core.Models
         public bool IsCarriedObjectiveMap { get; set; }
         public TimeSpan GatesOpen { get; set; }
         public ITalentPayloads Payloads { get; set; }
-        public string GameType { get; set; }
         public DateTime Timeloaded { get; set; }
         public TimeSpan? Timer { get; set; }
     }

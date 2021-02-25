@@ -1,15 +1,12 @@
-﻿using Heroes.ReplayParser;
-
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-
-using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.IO;
 using System.Threading.Tasks;
+using Heroes.ReplayParser;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using Microsoft.Extensions.Logging;
 
-namespace HeroesReplay.Core.Providers
+namespace HeroesReplay.Core.Services.Providers
 {
 
     public sealed class ReplayFileProvider : IReplayProvider

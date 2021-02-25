@@ -1,8 +1,7 @@
-﻿using HeroesReplay.Core.Models;
+﻿using System.Threading.Tasks;
+using HeroesReplay.Core.Models;
 
-using System.Threading.Tasks;
-
-namespace HeroesReplay.Core.Providers
+namespace HeroesReplay.Core.Services.Providers
 {
     public interface IReplayProvider
     {

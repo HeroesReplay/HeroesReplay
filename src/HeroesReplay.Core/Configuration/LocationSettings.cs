@@ -1,9 +1,9 @@
 ﻿namespace HeroesReplay.Core.Configuration
 {
-    public record LocationSettings
+    public class LocationSettings
     {
-        public string BattlenetPath { get; init; }
-        public string ReplaySource { get; init; }
-        public string GameInstallDirectory { get; init; }
+        public string BattlenetPath { get; set; }
+        public string ReplaySource { get; set; }
+        public string GameInstallDirectory { get; set; }
     }
 }

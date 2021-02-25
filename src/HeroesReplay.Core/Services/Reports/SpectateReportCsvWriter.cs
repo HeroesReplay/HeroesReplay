@@ -1,16 +1,16 @@
-﻿using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Providers;
-using HeroesReplay.Core.Runner;
-using HeroesReplay.Core.Shared;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Analysis;
+using HeroesReplay.Core.Services.Data;
+using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Services.Shared;
 
-namespace HeroesReplay.Core.Reports
+namespace HeroesReplay.Core.Services.Reports
 {
     public class SpectateReportCsvWriter : ISpectateReportWriter
     {

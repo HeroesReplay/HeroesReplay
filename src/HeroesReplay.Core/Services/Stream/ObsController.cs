@@ -1,21 +1,19 @@
-﻿using HeroesReplay.Core.Models;
-using Microsoft.Extensions.Logging;
-
-using Newtonsoft.Json.Linq;
-
-using OBSWebsocketDotNet;
-using OBSWebsocketDotNet.Types;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using System.Linq;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Observer;
+using HeroesReplay.Core.Services.Shared;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
+using OBSWebsocketDotNet;
+using OBSWebsocketDotNet.Types;
 using Polly;
-using HeroesReplay.Core.Shared;
-using System.IO;
 
-namespace HeroesReplay.Core.Services.Obs
+namespace HeroesReplay.Core.Services.Stream
 {
     public class ObsController : IObsController
     {

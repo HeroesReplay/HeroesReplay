@@ -1,13 +1,11 @@
-﻿using HeroesReplay.Core.Models;
-
-using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Models;
+using Microsoft.Extensions.Logging;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Observer
 {
     public sealed class StubController : IGameController
     {

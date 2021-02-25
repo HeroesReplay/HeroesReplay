@@ -1,12 +1,11 @@
 ﻿using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Twitch.RewardHandlers;
-
 using Microsoft.Extensions.Logging;
 
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-
+using HeroesReplay.Core.Services.Twitch.ChatMessages;
+using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
 using TwitchLib.Api.Interfaces;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Interfaces;

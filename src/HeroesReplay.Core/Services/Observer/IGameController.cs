@@ -1,9 +1,8 @@
-﻿using HeroesReplay.Core.Models;
-
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Observer
 {
     public interface IGameController
     {

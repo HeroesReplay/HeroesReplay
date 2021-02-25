@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Reports
+namespace HeroesReplay.Core.Services.Reports
 {
     public interface ISpectateReportWriter
     {

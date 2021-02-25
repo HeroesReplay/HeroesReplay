@@ -1,8 +1,6 @@
-﻿using HeroesReplay.Core.Models;
+﻿using System.Threading.Tasks;
 
-using System.Threading.Tasks;
-
-namespace HeroesReplay.Core.Services.HeroesProfile
+namespace HeroesReplay.Core.Services.Stream
 {
     public interface IReplayDetailsWriter
     {

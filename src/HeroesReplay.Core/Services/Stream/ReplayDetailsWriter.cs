@@ -1,18 +1,16 @@
-using Heroes.ReplayParser;
-
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Runner;
-
-using Microsoft.Extensions.Logging;
-
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Heroes.ReplayParser;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Services.Data;
+using HeroesReplay.Core.Services.Observer;
+using Microsoft.Extensions.Logging;
 
-namespace HeroesReplay.Core.Services.HeroesProfile
+namespace HeroesReplay.Core.Services.Stream
 {
     public class ReplayDetailsWriter : IReplayDetailsWriter
     {

@@ -1,11 +1,12 @@
-﻿
+﻿using System;
+
+using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Analysis;
 
 using Microsoft.Extensions.Logging;
 
-using System;
-
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Observer
 {
     public class ReplayContext : IReplayContext, IReplayContextSetter
     {

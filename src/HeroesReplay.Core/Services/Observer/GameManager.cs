@@ -1,12 +1,10 @@
-﻿using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.Obs;
-
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Stream;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Observer
 {
     public class GameManager : IGameManager
     {

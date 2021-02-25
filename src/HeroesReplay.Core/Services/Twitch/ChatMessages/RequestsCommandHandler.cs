@@ -1,14 +1,13 @@
-﻿using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-
-using System;
+﻿using System;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Twitch.Rewards;
 using TwitchLib.Client.Interfaces;
 using TwitchLib.Client.Models;
 
-namespace HeroesReplay.Core.Services.Twitch.RewardHandlers
+namespace HeroesReplay.Core.Services.Twitch.ChatMessages
 {
     public class RequestsCommandHandler : IMessageHandler
     {

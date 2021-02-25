@@ -2,8 +2,8 @@
 
 namespace HeroesReplay.Core.Configuration
 {
-    public record MapSettings
+    public class MapSettings
     {
-        public IEnumerable<string> CarriedObjectives { get; init; }
+        public IEnumerable<string> CarriedObjectives { get; set; }
     }
 }

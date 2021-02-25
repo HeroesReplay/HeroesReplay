@@ -6,7 +6,7 @@ using System.CommandLine.Parsing;
 using System.CommandLine.Rendering;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands;
-using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Services.Shared;
 
 namespace HeroesReplay.CLI
 {

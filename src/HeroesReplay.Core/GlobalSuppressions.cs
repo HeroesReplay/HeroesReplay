@@ -4,6 +4,7 @@
 // a specific target and scoped to a namespace, type, member, etc.
 
 using System.Diagnostics.CodeAnalysis;
+// ReSharper disable CheckNamespace
 
 [assembly: SuppressMessage("Design", "CA1031:Do not catch general exception types")]
 

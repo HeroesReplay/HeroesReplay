@@ -1,19 +1,17 @@
-﻿using Heroes.ReplayParser;
-
-using HeroesReplay.Core.Runner;
-using HeroesReplay.Core.Models;
-
-using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Analysis.Calculators;
+using HeroesReplay.Core.Services.Data;
+using HeroesReplay.Core.Services.HeroesProfileExtension;
+using Microsoft.Extensions.Logging;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Analysis
 {
     public class ReplayAnalyzer : IReplayAnalyzer
     {

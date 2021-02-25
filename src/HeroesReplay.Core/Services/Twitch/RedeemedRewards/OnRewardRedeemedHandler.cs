@@ -1,13 +1,12 @@
-﻿
-using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Twitch.Rewards;
+using Microsoft.Extensions.Logging;
 using TwitchLib.PubSub.Events;
 
-namespace HeroesReplay.Core.Services.Twitch.RewardHandlers
+namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards
 {
     public class OnRewardRedeemedHandler : IOnRewardHandler
     {

@@ -2,13 +2,11 @@
 using System.CommandLine.Invocation;
 using System.Threading;
 using System.Threading.Tasks;
-
-using HeroesReplay.Core.Providers;
-using HeroesReplay.Core.Reports;
-
+using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Services.Reports;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace HeroesReplay.CLI.Commands
+namespace HeroesReplay.CLI.Commands.Calculators.Commands
 {
     public class ReportCommand : Command
     {

@@ -1,12 +1,12 @@
 ﻿namespace HeroesReplay.Core.Configuration
 {
-    public record ParseOptionsSettings
+    public class ParseOptionsSettings
     {
-        public bool ShouldParseEvents { get; init; }
-        public bool ShouldParseMouseEvents { get; init; }
-        public bool ShouldParseMessageEvents { get; init; }
-        public bool ShouldParseStatistics { get; init; }
-        public bool ShouldParseUnits { get; init; }
-        public bool ShouldParseDetailedBattleLobby { get; init; }
+        public bool ShouldParseEvents { get; set; }
+        public bool ShouldParseMouseEvents { get; set; }
+        public bool ShouldParseMessageEvents { get; set; }
+        public bool ShouldParseStatistics { get; set; }
+        public bool ShouldParseUnits { get; set; }
+        public bool ShouldParseDetailedBattleLobby { get; set; }
     }
 }

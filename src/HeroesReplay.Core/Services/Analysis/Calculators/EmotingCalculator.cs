@@ -1,14 +1,12 @@
-﻿using Heroes.ReplayParser;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
-
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class EmotingCalculator : IFocusCalculator
     {

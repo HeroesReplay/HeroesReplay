@@ -1,4 +1,4 @@
-﻿namespace HeroesReplay.Core.Processes
+﻿namespace HeroesReplay.Core.Models
 {
     public enum CaptureMethod
     {

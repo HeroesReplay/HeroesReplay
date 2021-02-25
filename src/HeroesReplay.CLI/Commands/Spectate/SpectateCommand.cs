@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
+using HeroesReplay.CLI.Commands.Spectate.Commands;
 
-namespace HeroesReplay.CLI.Commands
+namespace HeroesReplay.CLI.Commands.Spectate
 {
     public class SpectateCommand : Command
     {

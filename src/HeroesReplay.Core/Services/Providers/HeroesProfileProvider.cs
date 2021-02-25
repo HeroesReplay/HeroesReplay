@@ -1,29 +1,22 @@
-﻿using Amazon;
-using Amazon.Runtime;
-using Amazon.S3;
-using Amazon.S3.Model;
-
-using Heroes.ReplayParser;
-
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.Twitch;
-using HeroesReplay.Core.Shared;
-
-using Microsoft.Extensions.Logging;
-
-using Polly;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Amazon;
+using Amazon.Runtime;
+using Amazon.S3;
+using Amazon.S3.Model;
+using Heroes.ReplayParser;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Services.Twitch.Rewards;
+using Microsoft.Extensions.Logging;
+using Polly;
 
-using static Heroes.ReplayParser.DataParser;
-
-namespace HeroesReplay.Core.Providers
+namespace HeroesReplay.Core.Services.Providers
 {
     public class HeroesProfileProvider : IReplayProvider
     {
@@ -187,17 +180,17 @@ namespace HeroesReplay.Core.Providers
                 GetObjectRequest request = new GetObjectRequest
                 {
                     RequestPayer = RequestPayer.Requester,
-                    BucketName = replay.Url.Host.Split('.')[0],
+                    BucketName = settings.HeroesProfileApi.S3Bucket,
                     Key = replay.Url.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped)
                 };
 
                 using (GetObjectResponse response = await s3Client.GetObjectAsync(request, provider.Token).ConfigureAwait(false))
                 {
-                    using (MemoryStream memoryStream = new MemoryStream())
+                    await using (MemoryStream memoryStream = new MemoryStream())
                     {
                         await response.ResponseStream.CopyToAsync(memoryStream, provider.Token).ConfigureAwait(false);
 
-                        using (var stream = fileInfo.OpenWrite())
+                        await using (var stream = fileInfo.OpenWrite())
                         {
                             await stream.WriteAsync(memoryStream.ToArray(), provider.Token).ConfigureAwait(false);
                             await stream.FlushAsync(provider.Token).ConfigureAwait(false);
@@ -212,19 +205,18 @@ namespace HeroesReplay.Core.Providers
         private FileInfo GetFileInfo(DirectoryInfo directory, HeroesProfileReplay replay)
         {
             var path = directory.FullName;
-            var seperator = settings.StormReplay.Seperator;
 
             var segments = new string[]
             {
                 $"{replay.Id}",
                 replay.GameType,
-                replay.Rank,
+                replay.Rank ?? "Unknown",
                 replay.Map,
                 replay.Fingerprint,
                 settings.StormReplay.FileExtension
             };
 
-            var name = string.Join(seperator, segments);
+            var name = string.Join(settings.StormReplay.Seperator, segments);
             return new FileInfo(Path.Combine(path, name));
         }
 

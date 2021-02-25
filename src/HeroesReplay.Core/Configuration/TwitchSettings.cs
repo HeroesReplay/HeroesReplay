@@ -2,21 +2,21 @@
 
 namespace HeroesReplay.Core.Configuration
 {
-    public record TwitchSettings
+    public class TwitchSettings
     {
-        public string Account { get; init; }
-        public string AccessToken { get; init; }
-        public string ClientId { get; init; }
-        public string RefreshToken { get; init; }
-        public string Channel { get; init; }
+        public string Account { get; set; }
+        public string AccessToken { get; set; }
+        public string ClientId { get; set; }
+        public string RefreshToken { get; set; }
+        public string Channel { get; set; }
 
-        public bool EnableRequests { get; init; }
-        public bool EnableTwitchClips { get; init; }
-        public bool EnablePubSub { get; init; }
-        public bool EnableChatBot { get; init; }
-        public bool DryRunMode { get; init; }
+        public bool EnableRequests { get; set; }
+        public bool EnableTwitchClips { get; set; }
+        public bool EnablePubSub { get; set; }
+        public bool EnableChatBot { get; set; }
+        public bool DryRunMode { get; set; }
 
-        public string RequestsFileName { get; init; }
-        public Uri TokenRefreshUri { get; init; }
+        public string RequestsFileName { get; set; }
+        public Uri TokenRefreshUri { get; set; }
     }
 }

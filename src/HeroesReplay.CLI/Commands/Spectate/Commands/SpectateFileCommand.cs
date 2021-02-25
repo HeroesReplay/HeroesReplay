@@ -2,13 +2,11 @@
 using System.CommandLine.Invocation;
 using System.Threading;
 using System.Threading.Tasks;
-
 using HeroesReplay.Core;
-using HeroesReplay.Core.Providers;
-
+using HeroesReplay.Core.Services.Providers;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace HeroesReplay.CLI.Commands
+namespace HeroesReplay.CLI.Commands.Spectate.Commands
 {
     public class SpectateFileCommand : Command
     {

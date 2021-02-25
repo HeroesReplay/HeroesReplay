@@ -1,7 +1,5 @@
 ﻿using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Shared;
-
 using Microsoft.Extensions.Logging;
 
 using Polly;
@@ -14,6 +12,8 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Extensions;
+using HeroesReplay.Core.Services.Shared;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
 {

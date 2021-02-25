@@ -1,6 +1,6 @@
 ﻿using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Observer
 {
     public interface IReplayContextSetter
     {

@@ -1,18 +1,15 @@
-﻿using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Shared;
-
-using Microsoft.Extensions.Logging;
-
-using Polly;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Services.Shared;
+using Microsoft.Extensions.Logging;
+using Polly;
 
-namespace HeroesReplay.Core.Services.HeroesProfile
+namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
     public class TwitchExtensionService : ITwitchExtensionService
     {

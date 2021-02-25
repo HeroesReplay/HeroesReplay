@@ -2,9 +2,9 @@
 
 namespace HeroesReplay.Core.Models
 {
-    public record AbilityDetection
+    public class AbilityDetection
     {
-        public int? CmdIndex { get; init; }
-        public IEnumerable<AbilityBuild> AbilityBuilds { get; init; }
+        public int? CmdIndex { get; set; }
+        public IEnumerable<AbilityBuild> AbilityBuilds { get; set; }
     }
 }

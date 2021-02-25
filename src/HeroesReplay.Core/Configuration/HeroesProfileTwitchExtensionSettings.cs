@@ -1,11 +1,11 @@
 ﻿namespace HeroesReplay.Core.Configuration
 {
-    public record HeroesProfileTwitchExtensionSettings
+    public class HeroesProfileTwitchExtensionSettings
     {
-        public bool Enabled { get; init; }
-        public string ApiKey { get; init; }
-        public string ApiEmail { get; init; }
-        public string TwitchUserName { get; init; }
-        public string ApiUserId { get; init; }
+        public bool Enabled { get; set; }
+        public string ApiKey { get; set; }
+        public string ApiEmail { get; set; }
+        public string TwitchUserName { get; set; }
+        public string ApiUserId { get; set; }
     }
 }

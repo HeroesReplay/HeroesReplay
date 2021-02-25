@@ -4,15 +4,15 @@ using System.Collections.Generic;
 
 namespace HeroesReplay.Core.Configuration
 {
-    public record OBSSettings
+    public class OBSSettings
     {
-        public bool Enabled { get; init; }
-        public bool RecordingEnabled { get; init; }
-        public string RecordingFolderDirectory { get; init; }
-        public string WebSocketEndpoint { get; init; }
-        public string GameSceneName { get; init; }
-        public string WaitingSceneName { get; init; }
-        public IEnumerable<ReportScene> ReportScenes { get; init; }
-        public IEnumerable<string> RankImagesSourceNames { get; init; }
+        public bool Enabled { get; set; }
+        public bool RecordingEnabled { get; set; }
+        public string RecordingFolderDirectory { get; set; }
+        public string WebSocketEndpoint { get; set; }
+        public string GameSceneName { get; set; }
+        public string WaitingSceneName { get; set; }
+        public IEnumerable<ReportScene> ReportScenes { get; set; }
+        public IEnumerable<string> RankImagesSourceNames { get; set; }
     }
 }

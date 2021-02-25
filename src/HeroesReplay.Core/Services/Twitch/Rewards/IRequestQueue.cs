@@ -1,8 +1,7 @@
-﻿using HeroesReplay.Core.Models;
+﻿using System.Threading.Tasks;
+using HeroesReplay.Core.Models;
 
-using System.Threading.Tasks;
-
-namespace HeroesReplay.Core.Services.Twitch
+namespace HeroesReplay.Core.Services.Twitch.Rewards
 {
     public interface IRequestQueue
     {

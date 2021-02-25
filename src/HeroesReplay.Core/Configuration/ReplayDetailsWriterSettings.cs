@@ -1,10 +1,10 @@
 ﻿namespace HeroesReplay.Core.Configuration
 {
-    public record ReplayDetailsWriterSettings
+    public class ReplayDetailsWriterSettings
     {
-        public bool Enabled { get; init; }
-        public bool Bans { get; init; }
-        public bool GameType { get; init; }
-        public bool Requestor { get; init; }
+        public bool Enabled { get; set; }
+        public bool Bans { get; set; }
+        public bool GameType { get; set; }
+        public bool Requestor { get; set; }
     }
 }

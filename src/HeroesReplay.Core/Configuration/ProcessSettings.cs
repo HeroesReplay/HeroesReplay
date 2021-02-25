@@ -1,9 +1,9 @@
 ﻿namespace HeroesReplay.Core.Configuration
 {
-    public record ProcessSettings
+    public class ProcessSettings
     {
-        public string Battlenet { get; init; }
-        public string HeroesOfTheStorm { get; init; }
-        public bool ForceLaunch { get; init; }
+        public string Battlenet { get; set; }
+        public string HeroesOfTheStorm { get; set; }
+        public bool ForceLaunch { get; set; }
     }
 }

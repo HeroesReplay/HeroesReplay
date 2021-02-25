@@ -1,7 +1,7 @@
 ﻿
 using TwitchLib.Client.Events;
 
-namespace HeroesReplay.Core.Services.Twitch.RewardHandlers
+namespace HeroesReplay.Core.Services.Twitch.ChatMessages
 {
     public interface IOnMessageHandler
     {

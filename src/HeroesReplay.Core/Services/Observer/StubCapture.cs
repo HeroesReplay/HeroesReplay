@@ -1,9 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Drawing;
+using Microsoft.Extensions.Logging;
 
-namespace HeroesReplay.Core.Processes
+namespace HeroesReplay.Core.Services.Observer
 {
     public class StubCapture : CaptureStrategy
     {

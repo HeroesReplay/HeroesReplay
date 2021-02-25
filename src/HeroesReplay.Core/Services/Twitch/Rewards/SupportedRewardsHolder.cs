@@ -1,13 +1,11 @@
-﻿using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Runner;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Data;
 using TwitchLib.PubSub.Events;
 
-namespace HeroesReplay.Core.Services.Twitch
+namespace HeroesReplay.Core.Services.Twitch.Rewards
 {
     public class SupportedRewardsHolder : ISupportedRewardsHolder
     {

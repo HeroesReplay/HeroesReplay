@@ -1,11 +1,10 @@
-﻿using Heroes.ReplayParser;
+﻿using System;
+using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 
 using HeroesReplay.Core.Models;
 
-using System;
-
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Analysis
 {
     public class AbilityDetector : IAbilityDetector
     {

@@ -1,6 +1,4 @@
-﻿using Heroes.ReplayParser;
-
-namespace HeroesReplay.Core.Services.HeroesProfile
+﻿namespace HeroesReplay.Core.Models
 {
     public class Map
     {

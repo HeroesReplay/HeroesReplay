@@ -1,6 +1,6 @@
 ﻿using System.Threading;
 
-namespace HeroesReplay.Core.Shared
+namespace HeroesReplay.Core.Services.Shared
 {
     public class ConsoleTokenProvider
     {

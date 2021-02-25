@@ -1,9 +1,8 @@
-﻿
-using System.Collections.Generic;
-
+﻿using System.Collections.Generic;
+using HeroesReplay.Core.Models;
 using TwitchLib.PubSub.Events;
 
-namespace HeroesReplay.Core.Services.Twitch
+namespace HeroesReplay.Core.Services.Twitch.Rewards
 {
     public interface ISupportedRewardsHolder
     {

@@ -2,10 +2,9 @@
 using System.CommandLine.Invocation;
 using System.Threading;
 using System.Threading.Tasks;
-
 using Microsoft.Extensions.DependencyInjection;
 
-namespace HeroesReplay.CLI.Commands
+namespace HeroesReplay.CLI.Commands.YouTube.Commands
 {
     public class UploaderCommand : Command
     {

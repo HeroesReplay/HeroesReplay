@@ -1,10 +1,9 @@
-﻿using HeroesReplay.Core.Services.HeroesProfile;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-
+using HeroesReplay.Core.Models;
 using static Heroes.ReplayParser.Unit;
 
-namespace HeroesReplay.Core.Runner
+namespace HeroesReplay.Core.Services.Data
 {
     public interface IGameData
     {

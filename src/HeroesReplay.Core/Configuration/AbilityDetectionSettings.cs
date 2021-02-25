@@ -2,10 +2,10 @@
 
 namespace HeroesReplay.Core.Configuration
 {
-    public record AbilityDetectionSettings
+    public class AbilityDetectionSettings
     {
-        public AbilityDetection Taunt { get; init; }
-        public AbilityDetection Dance { get; init; }
-        public AbilityDetection Hearth { get; init; }
+        public AbilityDetection Taunt { get; set; }
+        public AbilityDetection Dance { get; set; }
+        public AbilityDetection Hearth { get; set; }
     }
 }

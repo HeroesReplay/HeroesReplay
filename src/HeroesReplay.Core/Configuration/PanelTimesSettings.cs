@@ -2,12 +2,12 @@
 
 namespace HeroesReplay.Core.Configuration
 {
-    public record PanelTimesSettings
+    public class PanelTimesSettings
     {
-        public TimeSpan Talents { get; init; }
-        public TimeSpan DeathDamageRole { get; init; }
-        public TimeSpan KillsDeathsAssists { get; init; }
-        public TimeSpan Experience { get; init; }
-        public TimeSpan CarriedObjectives { get; init; }
+        public TimeSpan Talents { get; set; }
+        public TimeSpan DeathDamageRole { get; set; }
+        public TimeSpan KillsDeathsAssists { get; set; }
+        public TimeSpan Experience { get; set; }
+        public TimeSpan CarriedObjectives { get; set; }
     }
 }

@@ -1,11 +1,9 @@
-﻿using Heroes.ReplayParser;
-
+﻿using System;
+using System.Collections.Generic;
+using Heroes.ReplayParser;
 using HeroesReplay.Core.Models;
 
-using System;
-using System.Collections.Generic;
-
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Analysis
 {
     public interface IFocusCalculator
     {

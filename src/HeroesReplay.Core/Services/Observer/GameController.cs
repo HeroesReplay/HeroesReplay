@@ -1,11 +1,6 @@
-﻿using Heroes.ReplayParser;
-using HeroesReplay.Core.Processes;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.Logging;
-using Polly;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -15,12 +10,15 @@ using System.Threading.Tasks;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
-
-using static PInvoke.User32;
 using HeroesReplay.Core.Configuration;
-using System.ComponentModel;
+using HeroesReplay.Core.Extensions;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Shared;
+using Microsoft.Extensions.Logging;
+using Polly;
+using static PInvoke.User32;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core.Services.Observer
 {
     public class GameController : IGameController
     {
@@ -148,11 +146,9 @@ namespace HeroesReplay.Core
 
         public async Task<TimeSpan?> TryGetTimerAsync()
         {
-            if (Handle == IntPtr.Zero) return null;
-
             try
             {
-                using (var timerBitmap = GetNegativeOffsetTimer())
+                using (Bitmap timerBitmap = GetNegativeOffsetTimer())
                 {
                     if (timerBitmap == null) return null;
 

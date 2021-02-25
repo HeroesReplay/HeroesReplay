@@ -1,9 +1,13 @@
-﻿using Microsoft.Extensions.Logging;
-using PInvoke;
-using System;
+﻿using System;
 using System.Drawing;
 
-namespace HeroesReplay.Core.Processes
+using HeroesReplay.Core.Models;
+
+using Microsoft.Extensions.Logging;
+
+using PInvoke;
+
+namespace HeroesReplay.Core.Services.Observer
 {
     public class BitBltCapture : CaptureStrategy
     {
@@ -14,6 +18,8 @@ namespace HeroesReplay.Core.Processes
 
         public override Bitmap Capture(IntPtr handle, Rectangle? region = null)
         {
+            if (handle == IntPtr.Zero) return null;
+
             try
             {
                 Rectangle bounds = region ?? GetDimensions(handle);
@@ -33,7 +39,7 @@ namespace HeroesReplay.Core.Processes
                             (int)TernaryRasterOperation.SRCCOPY);
 
                         source.ReleaseHdc(deviceContextSource);
-                        
+
                         destination.ReleaseHdc(deviceContextDestination);
                     }
 
@@ -43,8 +49,9 @@ namespace HeroesReplay.Core.Processes
             catch (Exception)
             {
                 Logger.LogWarning($"Could not capture handle: {handle}");
-                throw;
             }
+
+            return null;
         }
     }
 }
