@@ -30,15 +30,8 @@ namespace HeroesReplay.Core.Services.Twitch
         private readonly ConnectionCredentials credentials;
         private readonly ILogger<TwitchBot> logger;
 
-        private readonly IOnRewardRedeemedHandler onRewardRedeemed;
-        private readonly IOnMessageReceivedHandler onMessageReceived;
-
-        /*
-         * If we have prediction data set, we should not allow users to request the replay id.
-         * We also need to figure out how to randomize the next replay selection process
-         * so that its not guessable for once predictions can be automated via the api.
-         */
-        // private OnPredictionArgs PredictionData { get; set; }
+        private readonly IOnRewardHandler onRewardHandler;
+        private readonly IOnMessageHandler onMessageHandler;
 
         public TwitchBot(
             ILogger<TwitchBot> logger,
@@ -47,8 +40,8 @@ namespace HeroesReplay.Core.Services.Twitch
             ITwitchAPI api,
             ITwitchPubSub pubSub,
             ITwitchClient client,
-            IOnRewardRedeemedHandler rewardRedeemedHandler,
-            IOnMessageReceivedHandler onMessageReceivedHandler)
+            IOnRewardHandler onRewardHandler,
+            IOnMessageHandler onMessageHandler)
         {
             this.logger = logger;
             this.settings = settings;
@@ -56,8 +49,8 @@ namespace HeroesReplay.Core.Services.Twitch
             this.api = api;
             this.pubSub = pubSub;
             this.client = client;
-            this.onRewardRedeemed = rewardRedeemedHandler;
-            this.onMessageReceived = onMessageReceivedHandler;
+            this.onRewardHandler = onRewardHandler;
+            this.onMessageHandler = onMessageHandler;
         }
 
         public async Task InitializeAsync()
@@ -66,6 +59,7 @@ namespace HeroesReplay.Core.Services.Twitch
             {
                 client.Initialize(credentials, settings.Twitch.Channel);
                 client.OnLog += Client_OnLog;
+                client.OnMessageReceived += Client_OnMessageReceived;
                 client.OnConnected += Client_OnConnected;
                 client.OnDisconnected += Client_OnDisconnected;
                 client.OnConnectionError += Client_OnConnectionError;
@@ -86,6 +80,11 @@ namespace HeroesReplay.Core.Services.Twitch
 
                 pubSub.Connect();
             }
+        }
+
+        private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
+        {
+            this.onMessageHandler.Handle(e);
         }
 
         private void PubSub_OnLog(object sender, TwitchLib.PubSub.Events.OnLogArgs e)
@@ -120,7 +119,7 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private void PubSub_OnRewardRedeemed(object sender, OnRewardRedeemedArgs e)
         {
-            onRewardRedeemed.Handle(e);
+            onRewardHandler.Handle(e);
         }
 
         private void Client_OnLog(object sender, TwitchLib.Client.Events.OnLogArgs e)

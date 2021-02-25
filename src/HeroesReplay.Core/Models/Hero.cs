@@ -3,17 +3,14 @@
     public class Hero
     {
         public string Name { get; }
-        public string AltName { get; }
-        public HeroType HeroType { get; }
+        public string UnitId { get; }
+        public string HyperlinkId { get; }
 
-        public Hero(string name, string altName, HeroType heroType)
+        public Hero(string name, string unitId, string hyperLinkId)
         {
             Name = name;
-            AltName = altName;
-            HeroType = heroType;
+            UnitId = unitId;
+            HyperlinkId = hyperLinkId;
         }
-
-        public bool IsMelee => HeroType == HeroType.Melee;
-        public bool IsRanged => HeroType == HeroType.Ranged;
     }
 }

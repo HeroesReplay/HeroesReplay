@@ -5,11 +5,11 @@ namespace HeroesReplay.Core.Models
     public class RewardQueueItem
     {
         public RewardRequest Request { get; }
-        public RewardReplay Replay { get; }
+        public HeroesProfileReplay HeroesProfileReplay { get; }
 
-        public RewardQueueItem(RewardRequest request, RewardReplay replay)
+        public RewardQueueItem(RewardRequest request, HeroesProfileReplay replay)
         {
-            Replay = replay;
+            HeroesProfileReplay = replay;
             Request = request;
         }
     }

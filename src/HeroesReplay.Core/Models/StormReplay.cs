@@ -1,33 +1,20 @@
 ﻿using Heroes.ReplayParser;
 
+using HeroesReplay.Core.Services.HeroesProfile;
+
+using System.IO;
+
 namespace HeroesReplay.Core.Models
 {
     /// <summary>
     /// The StormReplay is a wrapper which links a raw replay file on disk to an in-memory parsed version of that file
     /// </summary>
-    public class StormReplay
+    public class LoadedReplay
     {
-        public string Path { get; }
-
-        public int? ReplayId { get; }
-
-        public string GameType { get; }
-
-        public Replay Replay { get; }
-
-        public RewardRequest Request { get; }
-
-        public StormReplay(string path, Replay replay, int? replayId, string gameType)
-        {
-            Replay = replay;
-            Path = path;
-            ReplayId = replayId;
-            GameType = gameType;
-        }
-
-        public StormReplay(string path, Replay replay, int? replayId, string gameType, RewardRequest request) : this(path, replay, replayId, gameType)
-        {
-            Request = request;
-        }
+        public int? ReplayId { get; set; }
+        public Replay Replay { get; set; }
+        public FileInfo FileInfo { get; set; }
+        public HeroesProfileReplay HeroesProfileReplay { get; set; }
+        public RewardQueueItem RewardQueueItem { get; set; }
     }
 }

@@ -23,7 +23,7 @@ namespace HeroesReplay.CLI.Commands
             {
                 using (IServiceScope scope = provider.CreateScope())
                 {
-                    IHeroesReplayEngine engine = scope.ServiceProvider.GetRequiredService<IHeroesReplayEngine>();
+                    IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
                     await engine.RunAsync();
                 }
             }

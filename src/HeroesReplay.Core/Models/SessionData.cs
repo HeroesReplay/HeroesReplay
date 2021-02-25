@@ -1,25 +1,20 @@
 ﻿using HeroesReplay.Core.Services.HeroesProfile;
-
 using System;
 using System.Collections.Generic;
-using System.Threading;
 
 namespace HeroesReplay.Core.Models
 {
     public class SessionData
     {
-        public StormReplay StormReplay { get; init; }
-        public ReplayData ReplayData { get; init; }
-        public IReadOnlyDictionary<TimeSpan, Focus> Players { get; init; }
-        public IReadOnlyDictionary<TimeSpan, Panel> Panels { get; init; }
-        public TimeSpan CoreKilled { get; init; }
-        public bool IsCarriedObjectiveMap { get; init; }
-        public TimeSpan GatesOpen { get; init; }
-        public ITalentPayloads Payloads { get; init; }
-        public int? ReplayId { get; init; }
-        public string GameType { get; init; }
-        public DateTime Loaded { get; init; }
+        public LoadedReplay LoadedReplay { get; set; }
+        public IReadOnlyDictionary<TimeSpan, Focus> Players { get; set; }
+        public IReadOnlyDictionary<TimeSpan, Panel> Panels { get; set; }
+        public TimeSpan CoreKilled { get; set; }
+        public bool IsCarriedObjectiveMap { get; set; }
+        public TimeSpan GatesOpen { get; set; }
+        public ITalentPayloads Payloads { get; set; }
+        public string GameType { get; set; }
+        public DateTime Timeloaded { get; set; }
         public TimeSpan? Timer { get; set; }
-        public CancellationTokenSource ViewerCancelRequestSource { get; set; }
     }
 }

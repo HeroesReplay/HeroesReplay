@@ -2,27 +2,26 @@
 {
     public enum RewardType
     {
-        SkipCurrent,
-        ReplayId, // 500
+        ReplayId,
 
-        QM, // 500
-        SL, // 500
-        UD,  // 500
-        ARAM, // 500
+        ARAM,
+        QM,
+        UD,
+        SL,
 
-        QMMap, // 1000
-        UDMap, // 1000
-        SLMap, // 1000
-        ARAMMap, // 1000
+        ARAMMap,
+        QMMap,
+        UDMap,
+        SLMap,
 
-        QMTier, // 1500 
-        UDTier,  // 1500
-        SLTier, // 1500
-        ARAMTier, // 1500
+        ARAMTier,
+        QMTier,
+        UDTier,
+        SLTier,
 
-        QMMapTier, // 2000
-        UDMapTier, // 2000
-        SLMapTier, // 2000
-        ARAMMapTier, // 2000
+        ARAMMapTier,
+        QMMapTier,
+        UDMapTier,
+        SLMapTier,
     }
 }

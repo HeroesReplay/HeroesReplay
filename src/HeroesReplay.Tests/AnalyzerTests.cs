@@ -9,7 +9,7 @@ namespace HeroesReplay.Tests
     public class AnalyzerTests : IClassFixture<ReplayFixture>
     {
         private readonly ReplayFixture fixture;
-        private readonly IReplayAnalzer replayAnalzer;
+        private readonly IReplayAnalyzer replayAnalzer;
 
         public AnalyzerTests(ReplayFixture fixture)
         {

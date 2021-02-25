@@ -7,7 +7,6 @@ namespace HeroesReplay.Core.Configuration
     public record HeroesProfileApiSettings
     {
         public Uri BaseUri { get; init; }
-        public Uri OpenApiBaseUri { get; init; }
         public Uri TwitchBaseUri { get; init; }
         public string ApiKey { get; init; }
         public string AwsAccessKey { get; init; }
@@ -18,8 +17,6 @@ namespace HeroesReplay.Core.Configuration
         public int MinReplayId { get; init; }
         public int FallbackMaxReplayId { get; init; }
         public int ApiMaxReturnedReplays { get; init; }
-        public int MMRPoolSize { get; init; }
-        public string MMRProperty { get; init; }
         public bool EnableMMR { get; init; }
         public TimeSpan APIRetryWaitTime { get; init; }
     }

@@ -1,7 +1,6 @@
 ﻿using HeroesReplay.Core.Models;
 
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.HeroesProfile
@@ -9,15 +8,8 @@ namespace HeroesReplay.Core.Services.HeroesProfile
     public interface IHeroesProfileService
     {
         Task<int> GetMaxReplayIdAsync();
-        Task<ReplayData> GetReplayDataAsync(int replayId);
-        Task<IEnumerable<HeroesProfileReplay>> ListReplaysAllAsync(int minId);
-        Task<HeroesProfileReplay> GetReplayAsync(int replayId);
-        Task<RewardReplay> GetReplayAsync(GameMode? mode, Tier? tier = null, string map = null);
-        Task<string> CreateReplaySessionAsync(ExtensionPayload payload, CancellationToken token = default);
-        Task<bool> CreatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
-        Task<bool> UpdatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
-        Task<bool> UpdateReplayDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
-        Task<bool> UpdatePlayerTalentsAsync(List<ExtensionPayload> lists, string sessionId, CancellationToken token = default);
-        Task<bool> NotifyTwitchAsync(CancellationToken token = default);
+        Task<IEnumerable<HeroesProfileReplay>> GetReplaysByFilters(GameType? gameType = null, GameRank? gameRank = null, string gameMap = null);
+        Task<HeroesProfileReplay> GetReplayByIdAsync(int replayId);
+        Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId);
     }
 }

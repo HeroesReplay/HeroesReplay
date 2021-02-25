@@ -23,8 +23,8 @@ namespace HeroesReplay.CLI.Commands
             {
                 using (IServiceScope scope = provider.CreateScope())
                 {
-                    HeroesReplayEngine saltySadism = scope.ServiceProvider.GetRequiredService<HeroesReplayEngine>();
-                    await saltySadism.RunAsync();
+                    IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
+                    await engine.RunAsync();
                 }
             }
         }
