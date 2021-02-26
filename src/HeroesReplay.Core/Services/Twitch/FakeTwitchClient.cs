@@ -1,8 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
-
+using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Interfaces;
 using TwitchLib.Client.Models;
@@ -42,7 +40,7 @@ namespace HeroesReplay.Core.Services.Twitch
         public event EventHandler<OnIncorrectLoginArgs> OnIncorrectLogin;
         public event EventHandler<OnJoinedChannelArgs> OnJoinedChannel;
         public event EventHandler<OnLeftChannelArgs> OnLeftChannel;
-        public event EventHandler<TwitchLib.Client.Events.OnLogArgs> OnLog;
+        public event EventHandler<OnLogArgs> OnLog;
         public event EventHandler<OnMessageReceivedArgs> OnMessageReceived;
         public event EventHandler<OnMessageSentArgs> OnMessageSent;
         public event EventHandler<OnModeratorJoinedArgs> OnModeratorJoined;

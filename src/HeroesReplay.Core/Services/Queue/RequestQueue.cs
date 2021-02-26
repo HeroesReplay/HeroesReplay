@@ -6,32 +6,32 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
-
+using HeroesReplay.Core.Services.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 
-namespace HeroesReplay.Core.Services.Twitch.Rewards
+namespace HeroesReplay.Core.Services.Queue
 {
-    public class ReplayRequestQueue : IRequestQueue, IDisposable
+    public class RequestQueue : IRequestQueue, IDisposable
     {
         private readonly FileInfo fileInfo;
-        private readonly ILogger<ReplayRequestQueue> logger;
+        private readonly ILogger<RequestQueue> logger;
         private readonly IHeroesProfileService heroesProfileService;
         private readonly AppSettings settings;
         private readonly JsonSerializerOptions options;
+        private readonly SemaphoreSlim semaphoreSlim;
 
-        private readonly static ReaderWriterLockSlim locker = new ReaderWriterLockSlim();
-
-        public ReplayRequestQueue(ILogger<ReplayRequestQueue> logger, IHeroesProfileService heroesProfileService, AppSettings settings)
+        public RequestQueue(ILogger<RequestQueue> logger, IHeroesProfileService heroesProfileService, AppSettings settings)
         {
-            fileInfo = new FileInfo(Path.Combine(settings.AssetsPath, settings.Twitch.RequestsFileName));
             this.logger = logger;
             this.heroesProfileService = heroesProfileService;
             this.settings = settings;
-            this.options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
+
+            fileInfo = new FileInfo(Path.Combine(settings.AssetsPath, settings.Twitch.RequestsFileName));
+            options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
+            semaphoreSlim = new SemaphoreSlim(1, maxCount: 1);
         }
 
         public async Task<int> GetItemsInQueue()
@@ -40,13 +40,14 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             {
                 try
                 {
-                    locker.EnterReadLock();
+                    await semaphoreSlim.WaitAsync();
                     List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options);
+                    semaphoreSlim.Release();
                     return requests.Count;
                 }
                 finally
                 {
-                    locker.ExitReadLock();
+                    semaphoreSlim.Release();
                 }
             }
 
@@ -57,7 +58,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
         {
             try
             {
-                locker.EnterWriteLock();
+                await semaphoreSlim.WaitAsync();
 
                 if (request.ReplayId.HasValue)
                 {
@@ -75,7 +76,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             }
             finally
             {
-                locker.ExitWriteLock();
+                semaphoreSlim.Release();
             }
         }
 
@@ -87,32 +88,28 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             {
                 return new RewardResponse(success: false, message: $"could not find replay with id {request.ReplayId.Value}");
             }
-            else
+
+            if (replay.Deleted != null)
             {
-                if (replay.Deleted != null)
-                {
-                    return new RewardResponse(success: false, message: $"the raw file for replay id {request.ReplayId.Value} is no longer available.");
-                }
-
-                if (!replay.GameVersion.Equals(settings.Spectate.VersionSupported))
-                {
-                    return new RewardResponse(success: false, message: $"the version found '{replay.GameVersion}' does not match the supported version '{settings.Spectate.VersionSupported}'");
-                }
-
-                RewardQueueItem item = new RewardQueueItem(request, replay);
-
-                if (!fileInfo.Exists)
-                {
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem>() { item }, options));
-                    return new RewardResponse(success: true, message: $"{request.ReplayId.Value} - {replay.Map} ({replay.Rank}) has been queued. ({1})");
-                }
-                else
-                {
-                    List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options)) { item };
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, options));
-                    return new RewardResponse(success: true, message: $"{request.ReplayId.Value} - {replay.Map} ({replay.Rank}) has been queued. ({items.Count})");
-                }
+                return new RewardResponse(success: false, message: $"the raw file for replay id {request.ReplayId.Value} is no longer available.");
             }
+
+            if (!replay.GameVersion.Equals(settings.Spectate.VersionSupported))
+            {
+                return new RewardResponse(success: false, message: $"the version found '{replay.GameVersion}' does not match the supported version '{settings.Spectate.VersionSupported}'");
+            }
+
+            RewardQueueItem item = new RewardQueueItem(request, replay);
+
+            if (!fileInfo.Exists)
+            {
+                await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem> { item }, options));
+                return new RewardResponse(success: true, message: $"{request.ReplayId.Value} - {replay.Map} ({replay.Rank}) has been queued. ({1})");
+            }
+
+            List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options)) { item };
+            await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, options));
+            return new RewardResponse(success: true, message: $"{request.ReplayId.Value} - {replay.Map} ({replay.Rank}) has been queued. ({items.Count})");
         }
 
         private async Task<RewardResponse> QueueByRewardFilterAsync(RewardRequest request)
@@ -127,20 +124,16 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
 
                 if (!fileInfo.Exists)
                 {
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem>() { item }, options));
+                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(new List<RewardQueueItem> { item }, options));
                     return new RewardResponse(success: true, message: $"'{request.RewardTitle}' - {replay.Map} ({replay.Rank}) has been queued ({1})");
                 }
-                else
-                {
-                    List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options)) { item };
-                    await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, options));
-                    return new RewardResponse(success: true, message: $"'{request.RewardTitle}' - {replay.Map} ({replay.Rank}) has been queued ({items.Count})");
-                }
+
+                List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options)) { item };
+                await File.WriteAllTextAsync(fileInfo.FullName, JsonSerializer.Serialize(items, options));
+                return new RewardResponse(success: true, message: $"'{request.RewardTitle}' - {replay.Map} ({replay.Rank}) has been queued ({items.Count})");
             }
-            else
-            {
-                return new RewardResponse(success: false, message: "Request failed to queue because the given reward criteria could not be found");
-            }
+
+            return new RewardResponse(success: false, message: "Request failed to queue because the given reward criteria could not be found");
         }
 
         public async Task<RewardQueueItem> DequeueItemAsync()
@@ -149,7 +142,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             {
                 try
                 {
-                    locker.EnterWriteLock();
+                    await semaphoreSlim.WaitAsync();
                     List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options);
 
                     if (items.Count > 0)
@@ -166,7 +159,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
                 }
                 finally
                 {
-                    locker.ExitWriteLock();
+                    semaphoreSlim.Release();
                 }
             }
 
@@ -179,7 +172,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             {
                 try
                 {
-                    locker.EnterWriteLock();
+                    await semaphoreSlim.WaitAsync();
                     List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options);
 
                     if (items.Count > 0)
@@ -201,7 +194,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
                 }
                 finally
                 {
-                    locker.ExitWriteLock();
+                    semaphoreSlim.Release();
                 }
             }
 
@@ -214,7 +207,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             {
                 try
                 {
-                    locker.EnterReadLock();
+                    await semaphoreSlim.WaitAsync();
 
                     List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options);
 
@@ -227,7 +220,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
                 }
                 finally
                 {
-                    locker.ExitReadLock();
+                    semaphoreSlim.Release();
                 }
             }
 
@@ -240,7 +233,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             {
                 try
                 {
-                    locker.EnterReadLock();
+                    await semaphoreSlim.WaitAsync();
 
                     List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(fileInfo.FullName), options);
 
@@ -256,7 +249,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
                 }
                 finally
                 {
-                    locker.ExitReadLock();
+                    semaphoreSlim.Release();
                 }
             }
 
@@ -267,7 +260,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
         {
             try
             {
-                locker.Dispose();
+                semaphoreSlim.Dispose();
             }
             catch
             {

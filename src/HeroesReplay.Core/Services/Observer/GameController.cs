@@ -25,7 +25,7 @@ namespace HeroesReplay.Core.Services.Observer
         private const string ExplorerProcess = "explorer.exe";
         private const string VersionsFolder = "Versions";
 
-        private readonly OcrEngine engine;
+        private readonly OcrEngine ocrEngine;
         private readonly CancellationTokenProvider tokenProvider;
         private readonly ILogger<GameController> logger;
         private readonly IReplayContext context;
@@ -55,10 +55,10 @@ namespace HeroesReplay.Core.Services.Observer
         public GameController(ILogger<GameController> logger, IReplayContext context, AppSettings settings, CaptureStrategy captureStrategy, OcrEngine engine, CancellationTokenProvider tokenProvider)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(settings));
-            this.context = context;
+            this.context = context ?? throw new ArgumentNullException(nameof(context));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.captureStrategy = captureStrategy ?? throw new ArgumentNullException(nameof(settings));
-            this.engine = engine ?? throw new ArgumentNullException(nameof(settings)); ;
+            this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(settings)); ;
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(settings));
         }
 
@@ -174,7 +174,7 @@ namespace HeroesReplay.Core.Services.Observer
             {
                 using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized).ConfigureAwait(false))
                 {
-                    OcrResult ocrResult = await engine.RecognizeAsync(softwareBitmap);
+                    OcrResult ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap);
                     TimeSpan? timer = TryParseTimeSpan(ocrResult.Text);
 
                     if (timer.HasValue) return timer;
@@ -293,7 +293,7 @@ namespace HeroesReplay.Core.Services.Observer
             {
                 using (SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(capture).ConfigureAwait(false))
                 {
-                    OcrResult result = await engine.RecognizeAsync(softwareBitmap);
+                    OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
 
                     foreach (var word in words)
                     {

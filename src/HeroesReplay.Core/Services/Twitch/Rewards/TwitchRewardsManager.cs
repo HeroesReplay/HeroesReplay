@@ -5,12 +5,9 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
-
 using Microsoft.Extensions.Logging;
-
 using TwitchLib.Api.Helix.Models.ChannelPoints.CreateCustomReward;
 using TwitchLib.Api.Helix.Models.ChannelPoints.UpdateCustomReward;
 using TwitchLib.Api.Interfaces;
@@ -32,7 +29,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             this.twitchApi = twitchApi;
             this.rewardsHolder = rewardsHolder;
             this.settings = settings;
-            this.options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
+            options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
         }
 
         public async Task CreateOrUpdateAsync()
@@ -57,31 +54,38 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
 
                     if (customReward != null)
                     {
-                        UpdateCustomRewardResponse response = await twitchApi.Helix.ChannelPoints.UpdateCustomReward(broadcasterId, customReward.Id, new UpdateCustomRewardRequest()
+                        UpdateCustomRewardResponse response = await twitchApi.Helix.ChannelPoints.UpdateCustomReward(broadcasterId, customReward.Id, new UpdateCustomRewardRequest
                         {
                             Title = supportedReward.Title,
-                            //BackgroundColor = supportedReward.BackgroundColor,
-                            //ShouldRedemptionsSkipRequestQueue = supportedReward.ShouldRedemptionsSkipRequestQueue,
+                            BackgroundColor = customReward.BackgroundColor,
+                            ShouldRedemptionsSkipRequestQueue = supportedReward.ShouldRedemptionsSkipRequestQueue,
                             IsUserInputRequired = supportedReward.IsUserInputRequired,
                             Prompt = supportedReward.Prompt,
                             Cost = supportedReward.Cost,
-                            IsEnabled = false
-                        }, accessToken: settings.Twitch.AccessToken);
+                            IsEnabled = customReward.IsEnabled,
+                            IsMaxPerStreamEnabled = false,
+                            IsMaxPerUserPerStreamEnabled = false,
+                            IsGlobalCooldownEnabled = true,
+                            GlobalCooldownSeconds = Convert.ToInt32(TimeSpan.FromHours(1).TotalSeconds),
+
+
+                        }, settings.Twitch.AccessToken);
 
                         updateList.Add(response);
                     }
                     else
                     {
-                        CreateCustomRewardsResponse response = await twitchApi.Helix.ChannelPoints.CreateCustomRewards(broadcasterId, new CreateCustomRewardsRequest()
+                        CreateCustomRewardsResponse response = await twitchApi.Helix.ChannelPoints.CreateCustomRewards(broadcasterId, new CreateCustomRewardsRequest
                         {
                             Title = supportedReward.Title,
-                            //BackgroundColor = supportedReward.BackgroundColor,
-                            //ShouldRedemptionsSkipRequestQueue = supportedReward.ShouldRedemptionsSkipRequestQueue,
-                            IsUserInputRequired = supportedReward.IsUserInputRequired,
                             Prompt = supportedReward.Prompt,
+                            ShouldRedemptionsSkipRequestQueue = supportedReward.ShouldRedemptionsSkipRequestQueue,
+                            IsUserInputRequired = supportedReward.IsUserInputRequired,
                             Cost = supportedReward.Cost,
-                            IsEnabled = false
-                        }, accessToken: settings.Twitch.AccessToken);
+                            IsGlobalCooldownEnabled = true,
+                            GlobalCooldownSeconds = Convert.ToInt32(TimeSpan.FromHours(1).TotalSeconds),
+                            IsEnabled = true
+                        }, settings.Twitch.AccessToken);
 
                         createList.Add(response);
                     }
@@ -101,7 +105,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
 
         private async Task<string> GetChannelId()
         {
-            var userResponse = await twitchApi.Helix.Users.GetUsersAsync(logins: new List<string>() { settings.Twitch.Channel });
+            var userResponse = await twitchApi.Helix.Users.GetUsersAsync(logins: new List<string> { settings.Twitch.Channel });
             var channelId = userResponse.Users[0].Id;
             return channelId;
         }

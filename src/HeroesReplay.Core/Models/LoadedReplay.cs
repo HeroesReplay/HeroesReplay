@@ -1,7 +1,4 @@
 ﻿using Heroes.ReplayParser;
-
-using HeroesReplay.Core.Services.HeroesProfile;
-
 using System.IO;
 
 namespace HeroesReplay.Core.Models

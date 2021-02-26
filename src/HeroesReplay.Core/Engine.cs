@@ -1,13 +1,12 @@
-﻿using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Twitch;
-using Microsoft.Extensions.Logging;
-
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Services.Twitch;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core
 {

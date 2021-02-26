@@ -14,8 +14,11 @@
 
         public SupportedReward(RewardType rewardType, string title, string map = null, GameType? mode = null, int cost = 0)
         {
-            Prompt = rewardType.HasFlag(RewardType.Rank) ? "Enter a rank without a division" : null;
+            Prompt = rewardType == RewardType.ReplayId ? "Enter a heroes profile ReplayId for the current version of the game" :
+                     rewardType.HasFlag(RewardType.Rank) ? "Enter a rank without a division" : null;
+
             IsUserInputRequired = rewardType.HasFlag(RewardType.Rank) || rewardType == RewardType.ReplayId;
+            ShouldRedemptionsSkipRequestQueue = false;
             RewardType = rewardType;
             Title = title;
             Map = map;

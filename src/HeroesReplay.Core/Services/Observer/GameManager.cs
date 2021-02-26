@@ -13,7 +13,7 @@ namespace HeroesReplay.Core.Services.Observer
         private readonly ISpectator spectator;
         private readonly IGameController gameController;
         private readonly IObsController obsController;
-        private readonly IReplayDetailsWriter detailsWriter;
+        private readonly IReplayDetailsWriter replayDetailsWriter;
 
         public GameManager(AppSettings settings, IReplayContextSetter contextSetter, ISpectator spectator, IGameController gameController, IObsController obsController, IReplayDetailsWriter replayDetailsWriter)
         {
@@ -22,7 +22,7 @@ namespace HeroesReplay.Core.Services.Observer
             this.spectator = spectator ?? throw new ArgumentNullException(nameof(spectator));
             this.gameController = gameController ?? throw new ArgumentNullException(nameof(gameController));
             this.obsController = obsController ?? throw new ArgumentNullException(nameof(obsController));
-            detailsWriter = replayDetailsWriter ?? throw new ArgumentNullException(nameof(replayDetailsWriter));
+            this.replayDetailsWriter = replayDetailsWriter ?? throw new ArgumentNullException(nameof(replayDetailsWriter));
         }
 
         public async Task LaunchAndSpectate(LoadedReplay loadedReplay)
@@ -33,12 +33,12 @@ namespace HeroesReplay.Core.Services.Observer
 
             if (settings.OBS.Enabled)
             {
-                await detailsWriter.WriteFileForObs();
+                await replayDetailsWriter.WriteFileForObs();
                 obsController.SetRankImage();
                 obsController.SwapToGameScene();
                 await spectator.SpectateAsync();
                 gameController.Kill();
-                await detailsWriter.ClearFileForObs();
+                await replayDetailsWriter.ClearFileForObs();
                 await obsController.CycleReportAsync();
                 obsController.SwapToWaitingScene();
             }
@@ -46,7 +46,7 @@ namespace HeroesReplay.Core.Services.Observer
             {
                 await spectator.SpectateAsync();
                 gameController.Kill();
-                await detailsWriter.ClearFileForObs();
+                await replayDetailsWriter.ClearFileForObs();
             }
         }
     }

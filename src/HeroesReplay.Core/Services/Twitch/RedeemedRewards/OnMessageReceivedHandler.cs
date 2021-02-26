@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using HeroesReplay.Core.Services.Twitch.ChatMessages;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Events;
@@ -25,7 +26,7 @@ namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards
                 {
                     if (handler.CanHandle(args.ChatMessage))
                     {
-                        handler.Execute(args.ChatMessage);
+                        Task.Run(() => handler.Execute(args.ChatMessage));
                     }
                 }
                 catch (Exception e)
