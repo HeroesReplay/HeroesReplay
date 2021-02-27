@@ -59,9 +59,10 @@ namespace HeroesReplay.Core.Services.Twitch
                 foreach (var message in messages)
                 {
                     onMessageHandler.Handle(new OnMessageReceivedArgs() { ChatMessage = message });
+                    
+                    logger.LogDebug("waiting to send messages...");
+                    await Task.Delay(TimeSpan.FromSeconds(2));
                 }
-
-                await Task.Delay(TimeSpan.FromSeconds(10));
             }
         }
 
@@ -87,6 +88,7 @@ namespace HeroesReplay.Core.Services.Twitch
                         Message = message
                     });
 
+                    logger.LogDebug("waiting to send reward deemed...");
                     await Task.Delay(TimeSpan.FromSeconds(10));
                 }
             }

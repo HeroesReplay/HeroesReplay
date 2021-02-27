@@ -105,7 +105,7 @@ namespace HeroesReplay.Core.Services.HeroesProfile
 
                 if (response.IsSuccessStatusCode)
                 {
-                    IEnumerable<HeroesProfileReplay> replays = await response.Content.ReadFromJsonAsync<IEnumerable<HeroesProfileReplay>>();
+                    IEnumerable<HeroesProfileReplay> replays = await response.Content.ReadFromJsonAsync<IEnumerable<HeroesProfileReplay>>(cancellationToken: token);
                     return replays.FirstOrDefault(replays => replays.Id == replayId);
                 }
 
@@ -184,11 +184,11 @@ namespace HeroesReplay.Core.Services.HeroesProfile
                                         .Handle<Exception>()
                                         .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
                                         .WaitAndRetryAsync(retryCount: 10, sleepDurationProvider: GetSleepDuration, OnRetry)
-                                        .ExecuteAsync((context, token) => httpClient.GetAsync(new Uri($"Replay/Min_id?min_id={context["minId"]}&{context.OperationKey}&api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative)), context, token);
+                                        .ExecuteAsync((context, token) => httpClient.GetAsync(new Uri($"Replay/Min_id?min_id={context["minId"]}&{context.OperationKey}&api_token={settings.HeroesProfileApi.ApiKey}", UriKind.Relative), token), context, token);
 
                                    if (response.IsSuccessStatusCode)
                                    {
-                                       IEnumerable<HeroesProfileReplay> replays = await response.Content.ReadFromJsonAsync<IEnumerable<HeroesProfileReplay>>();
+                                       IEnumerable<HeroesProfileReplay> replays = await response.Content.ReadFromJsonAsync<IEnumerable<HeroesProfileReplay>>(cancellationToken: token);
 
                                        var supported = replays
                                            .Where(x => x.Deleted == null)

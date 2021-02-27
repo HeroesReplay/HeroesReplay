@@ -46,9 +46,9 @@ namespace HeroesReplay.Core.Services.Observer
                     return bitmap;
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                Logger.LogWarning($"Could not capture handle: {handle}");
+                Logger.LogWarning(e, $"Could not capture handle: {handle}");
             }
 
             return null;

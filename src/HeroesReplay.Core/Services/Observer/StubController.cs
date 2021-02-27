@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
 using HeroesReplay.Core.Models;
+
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Observer
@@ -22,7 +24,7 @@ namespace HeroesReplay.Core.Services.Observer
 
         public void Kill() { }
 
-        public async Task LaunchAsync()
+        public Task LaunchAsync()
         {
             var timeSpans = Enumerable.Range((int)context.Current.GatesOpen.TotalSeconds, (int)context.Current.LoadedReplay.Replay.ReplayLength.TotalSeconds).ToList();
             var total = timeSpans.Count;
@@ -32,6 +34,8 @@ namespace HeroesReplay.Core.Services.Observer
             {
                 Timers.Add(TimeSpan.FromSeconds(timeSpans[sections * i]));
             }
+
+            return Task.CompletedTask;
         }
 
         public void SendFocus(int player) => logger.LogInformation($"Selected player {player}");

@@ -16,7 +16,10 @@ namespace HeroesReplay.Core.Configuration
         public bool EnableChatBot { get; set; }
         public bool DryRunMode { get; set; }
 
-        public string RequestsFileName { get; set; }
+        public string QueueFileName { get; set; }
+        public string FailedFileName { get; set; }
+
         public Uri TokenRefreshUri { get; set; }
+
     }
 }
