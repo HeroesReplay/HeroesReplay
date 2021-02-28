@@ -27,18 +27,18 @@
     {
         private readonly ILogger<YouTubeUploader> logger;
         private readonly AppSettings settings;
-        private readonly CancellationTokenSource tokenSource;
+        private readonly CancellationTokenSource cancellationTokenSource;
 
-        public YouTubeUploader(ILogger<YouTubeUploader> logger, AppSettings settings, CancellationTokenSource tokenSource)
+        public YouTubeUploader(ILogger<YouTubeUploader> logger, AppSettings settings, CancellationTokenSource cancellationTokenSource)
         {
             this.logger = logger;
             this.settings = settings;
-            this.tokenSource = tokenSource;
+            this.cancellationTokenSource = cancellationTokenSource;
         }
 
         private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
         {
-            await Task.Factory.StartNew(() => ProcessRecording(e.FullPath), tokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Current);
+            await Task.Factory.StartNew(() => ProcessRecording(e.FullPath), cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Current);
         }
 
         public async Task ListenAsync()
@@ -52,7 +52,7 @@
                     using (var waiter = new ManualResetEventSlim())
                     {
                         logger.LogInformation("File system watcher listening for mp4 files...");
-                        waiter.Wait(tokenSource.Token);
+                        waiter.Wait(cancellationTokenSource.Token);
                     }
 
                     recordingWatcher.Created -= FileSystemWatcher_Created;
@@ -71,11 +71,11 @@
                 {
                     YouTubeEntry entry = JsonSerializer.Deserialize<YouTubeEntry>(await File.ReadAllTextAsync(entryFile.FullName));
 
-                    GoogleCredential credential;
+                    UserCredential credential;
 
                     using (var stream = new FileStream(Path.Combine(settings.Location.DataDirectory, "client_secrets.json"), FileMode.Open, FileAccess.Read))
                     {
-                        credential = GoogleCredential.FromStream(stream).CreateScoped(YouTubeService.Scope.YoutubeUpload).CreateWithUser(settings.YouTube.UserId);
+                        credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(GoogleClientSecrets.Load(stream).Secrets, new[] { YouTubeService.Scope.YoutubeUpload }, settings.YouTube.ChannelId, CancellationToken.None);
                     }
 
                     var youtubeService = new YouTubeService(new BaseClientService.Initializer()
@@ -85,27 +85,30 @@
                         ApplicationName = Assembly.GetExecutingAssembly().GetName().Name
                     });
 
-                    var video = new Video
+                    using (youtubeService)
                     {
-                        Snippet = new VideoSnippet
+                        var video = new Video
                         {
-                            Title = entry.Title,
-                            Description = string.Join(Environment.NewLine, entry.DescriptionLines),
-                            Tags = entry.Tags,
-                            CategoryId = entry.CategoryId
-                        },
-                        Status = new VideoStatus
-                        {
-                            PrivacyStatus = entry.PrivacyStatus
-                        }
-                    };
+                            Snippet = new VideoSnippet
+                            {
+                                Title = entry.Title,
+                                Description = string.Join(Environment.NewLine, entry.DescriptionLines),
+                                Tags = entry.Tags,
+                                CategoryId = entry.CategoryId
+                            },
+                            Status = new VideoStatus
+                            {
+                                PrivacyStatus = entry.PrivacyStatus
+                            }
+                        };
 
-                    using (var fileStream = recording.OpenRead())
-                    {
-                        var videosInsertRequest = youtubeService.Videos.Insert(video, "snippet,status", fileStream, "video/*");
-                        videosInsertRequest.ProgressChanged += videosInsertRequest_ProgressChanged;
-                        videosInsertRequest.ResponseReceived += videosInsertRequest_ResponseReceived;
-                        await videosInsertRequest.UploadAsync();
+                        using (var fileStream = recording.OpenRead())
+                        {
+                            var videosInsertRequest = youtubeService.Videos.Insert(video, "snippet,status", fileStream, "video/*");
+                            videosInsertRequest.ProgressChanged += videosInsertRequest_ProgressChanged;
+                            videosInsertRequest.ResponseReceived += videosInsertRequest_ResponseReceived;
+                            await videosInsertRequest.UploadAsync(cancellationTokenSource.Token);
+                        }
                     }
                 }
             }
