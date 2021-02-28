@@ -36,10 +36,12 @@ using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Queue;
 using HeroesReplay.Core.Services.Reports;
 using HeroesReplay.Core.Services.Shared;
-using HeroesReplay.Core.Services.Stream;
 using HeroesReplay.Core.Services.Twitch.ChatMessages;
 using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
 using HeroesReplay.Core.Services.Twitch.Rewards;
+using HeroesReplay.Core.Services.Context;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.Services.YouTube;
 
 namespace HeroesReplay.CLI
 {
@@ -54,9 +56,9 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
                 .AddLogging(builder => builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole().AddEventLog(config => config.SourceName = "HeroesReplay.YouTubeService"))
                 .AddSingleton<IConfiguration>(configuration)
-                .AddSingleton(serviceProvider =>
-                    serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>())
-                .AddSingleton(new CancellationTokenProvider(token))
+                .AddSingleton<IYouTubeUploader, YouTubeUploader>()
+                .AddSingleton(serviceProvider => serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>())
+                .AddSingleton(CancellationTokenSource.CreateLinkedTokenSource(token))
                 .AddSingleton<IConfiguration>(configuration);
         }
 
@@ -83,7 +85,7 @@ namespace HeroesReplay.CLI
                 .AddSingleton<IReplayHelper, ReplayHelper>()
                 .AddSingleton<IAbilityDetector, AbilityDetector>()
                 .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
-                .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
+                .AddSingleton<IContextFileManager, ContextFileManager>()
                 .AddSingleton(typeof(IReplayProvider), replayProvider)
                 .AddSingleton<ISpectateReportWriter, SpectateReportCsvWriter>();
         }
@@ -195,7 +197,7 @@ namespace HeroesReplay.CLI
                 .AddHttpClient<HeroesProfileService>().Services
                 .AddSingleton<IHeroesProfileService, HeroesProfileService>()
                 .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
-                .AddSingleton<IReplayDetailsWriter, ReplayDetailsWriter>()
+                .AddSingleton<IContextFileManager, ContextFileManager>()
                 .AddSingleton<IOnMessageHandler, OnMessageReceivedHandler>()
                 .AddSingleton<IOnRewardHandler, OnRewardRedeemedHandler>()
                 .AddSingleton<ICustomRewardsHolder, SupportedRewardsHolder>()

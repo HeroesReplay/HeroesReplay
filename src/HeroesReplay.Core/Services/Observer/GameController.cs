@@ -1,25 +1,28 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Windows.Graphics.Imaging;
-using Windows.Media.Ocr;
-using Windows.Storage.Streams;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Extensions;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Shared;
-using Microsoft.Extensions.Logging;
-using Polly;
-using static PInvoke.User32;
+﻿
 
 namespace HeroesReplay.Core.Services.Observer
 {
+    using System;
+    using System.Collections.Generic;
+    using System.ComponentModel;
+    using System.Diagnostics;
+    using System.Drawing;
+    using System.Drawing.Imaging;
+    using System.IO;
+    using System.Linq;
+    using System.Threading.Tasks;
+    using Windows.Graphics.Imaging;
+    using Windows.Media.Ocr;
+    using Windows.Storage.Streams;
+    using HeroesReplay.Core.Configuration;
+    using HeroesReplay.Core.Extensions;
+    using HeroesReplay.Core.Models;
+    using HeroesReplay.Core.Services.Shared;
+    using Microsoft.Extensions.Logging;
+    using Polly;
+    using static PInvoke.User32;
+    using HeroesReplay.Core.Services.Context;
+
     public class GameController : IGameController
     {
         private const string ExplorerProcess = "explorer.exe";

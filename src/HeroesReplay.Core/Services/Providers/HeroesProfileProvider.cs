@@ -3,17 +3,22 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+
 using Amazon;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
+
 using Heroes.ReplayParser;
+
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Twitch.Rewards;
+
 using Microsoft.Extensions.Logging;
+
 using Polly;
 
 namespace HeroesReplay.Core.Services.Providers
@@ -37,7 +42,10 @@ namespace HeroesReplay.Core.Services.Providers
                 {
                     if (StandardDirectory.GetFiles(settings.StormReplay.WildCard).Any())
                     {
-                        FileInfo latest = StandardDirectory.GetFiles(settings.StormReplay.WildCard).OrderByDescending(f => f.CreationTime).FirstOrDefault();
+                        FileInfo latest = StandardDirectory
+                            .GetFiles(settings.StormReplay.WildCard)
+                            .OrderByDescending(f => int.Parse(Path.GetFileName(f.FullName).Split(settings.StormReplay.Seperator)[0]))
+                            .FirstOrDefault();
 
                         if (replayHelper.TryGetReplayId(latest.Name, out int replayId))
                         {
@@ -59,7 +67,7 @@ namespace HeroesReplay.Core.Services.Providers
         {
             get
             {
-                DirectoryInfo directoryInfo = new DirectoryInfo(settings.ReplayCachePath);
+                DirectoryInfo directoryInfo = new DirectoryInfo(settings.StandardReplayCachePath);
                 if (!directoryInfo.Exists) directoryInfo.Create();
                 return directoryInfo;
             }
@@ -76,12 +84,12 @@ namespace HeroesReplay.Core.Services.Providers
         }
 
         public HeroesProfileProvider(
-            ILogger<HeroesProfileProvider> logger, 
-            IReplayLoader replayLoader, 
-            IReplayHelper replayHelper, 
-            IRequestQueue requestQueue, 
-            IHeroesProfileService heroesProfileService, 
-            CancellationTokenProvider provider, 
+            ILogger<HeroesProfileProvider> logger,
+            IReplayLoader replayLoader,
+            IReplayHelper replayHelper,
+            IRequestQueue requestQueue,
+            IHeroesProfileService heroesProfileService,
+            CancellationTokenProvider provider,
             AppSettings settings)
         {
             this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
@@ -123,6 +131,8 @@ namespace HeroesReplay.Core.Services.Providers
                         await DownloadReplayAsync(item.HeroesProfileReplay, fileInfo).ConfigureAwait(false);
                     }
 
+                    fileInfo.Refresh();
+
                     Replay replay = await replayLoader.LoadAsync(fileInfo.FullName).ConfigureAwait(false);
 
                     return new LoadedReplay
@@ -157,6 +167,8 @@ namespace HeroesReplay.Core.Services.Providers
                     {
                         await DownloadReplayAsync(heroesProfileReplay, fileInfo).ConfigureAwait(false);
                     }
+
+                    fileInfo.Refresh();
 
                     Replay replay = await replayLoader.LoadAsync(fileInfo.FullName).ConfigureAwait(false);
 

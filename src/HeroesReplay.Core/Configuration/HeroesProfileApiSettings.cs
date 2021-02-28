@@ -19,5 +19,7 @@ namespace HeroesReplay.Core.Configuration
         public int ApiMaxReturnedReplays { get; set; }
         public bool EnableMMR { get; set; }
         public TimeSpan APIRetryWaitTime { get; set; }
+        public string StandardCacheDirectoryName { get; set; }
+        public string RequestsCacheDirectoryName { get; set; }
     }
 }

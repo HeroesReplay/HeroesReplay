@@ -1,14 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
-using HeroesReplay.Core.Models;
-
-using Microsoft.Extensions.Logging;
+﻿
 
 namespace HeroesReplay.Core.Services.Observer
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Threading.Tasks;
+
+    using HeroesReplay.Core.Models;
+    using HeroesReplay.Core.Services.Context;
+
+    using Microsoft.Extensions.Logging;
+
     public sealed class StubController : IGameController
     {
         private readonly ILogger<StubController> logger;

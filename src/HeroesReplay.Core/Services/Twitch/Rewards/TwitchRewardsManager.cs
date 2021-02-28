@@ -20,7 +20,6 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
         private readonly ITwitchAPI twitchApi;
         private readonly ICustomRewardsHolder rewardsHolder;
         private readonly AppSettings settings;
-
         private readonly JsonSerializerOptions options;
 
         public TwitchRewardsManager(ILogger<TwitchRewardsManager> logger, ITwitchAPI twitchApi, ICustomRewardsHolder rewardsHolder, AppSettings settings)
@@ -99,7 +98,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
 
         public async Task GenerateAsync()
         {
-            var path = Path.Combine(settings.AssetsPath, "custom-rewards.json");
+            var path = Path.Combine(settings.Location.DataDirectory, "custom-rewards.json");
             await File.WriteAllTextAsync(path, JsonSerializer.Serialize<IEnumerable<SupportedReward>>(rewardsHolder.Rewards, options));
         }
 

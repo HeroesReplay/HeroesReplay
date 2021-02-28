@@ -3,12 +3,15 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+
 using Heroes.ReplayParser;
+
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Analysis.Calculators;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.HeroesProfileExtension;
+
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Analysis
@@ -20,6 +23,7 @@ namespace HeroesReplay.Core.Services.Analysis
         private readonly ILogger<ReplayAnalyzer> logger;
         private readonly AppSettings settings;
         private readonly IExtensionPayloadsBuilder payloadsBuilder;
+
 
         public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, AppSettings settings, IExtensionPayloadsBuilder payloadsBuilder, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
         {
@@ -182,5 +186,31 @@ namespace HeroesReplay.Core.Services.Analysis
 
         public bool GetIsCarriedObjective(Replay replay) => replay != null && (settings.Maps.CarriedObjectives.Contains(replay.Map) ||
                                                                                settings.Maps.CarriedObjectives.Contains(replay.MapAlternativeName));
+
+        public IReadOnlyDictionary<int, IReadOnlyCollection<string>> GetTeamBans(Replay replay)
+        {
+            Dictionary<int, IReadOnlyCollection<string>> teamBans = new Dictionary<int, IReadOnlyCollection<string>>
+            {
+                [0] = new ReadOnlyCollection<string>((from ban in replay.TeamHeroBans[0]
+                                                      from hero in gameData.Heroes
+                                                      where !string.IsNullOrWhiteSpace(ban)
+                                                      where ban.Equals(hero.Name, StringComparison.OrdinalIgnoreCase) ||
+                                                            ban.Equals(hero.UnitId, StringComparison.OrdinalIgnoreCase) ||
+                                                            ban.Equals(hero.AttributeId, StringComparison.OrdinalIgnoreCase) ||
+                                                            ban.Equals(hero.HyperlinkId, StringComparison.OrdinalIgnoreCase)
+                                                      select $"{hero.HyperlinkId}").ToList()),
+
+                [1] = new ReadOnlyCollection<string>((from ban in replay.TeamHeroBans[1]
+                                                      from hero in gameData.Heroes
+                                                      where !string.IsNullOrWhiteSpace(ban)
+                                                      where ban.Equals(hero.Name, StringComparison.OrdinalIgnoreCase) ||
+                                                            ban.Equals(hero.UnitId, StringComparison.OrdinalIgnoreCase) ||
+                                                            ban.Equals(hero.AttributeId, StringComparison.OrdinalIgnoreCase) ||
+                                                            ban.Equals(hero.HyperlinkId, StringComparison.OrdinalIgnoreCase)
+                                                      select $"{hero.HyperlinkId}").ToList())
+            };
+
+            return teamBans;
+        }
     }
 }

@@ -25,15 +25,15 @@ namespace HeroesReplay.Core.Configuration
         public ParseOptionsSettings ParseOptions { get; set; }
         public AbilityDetectionSettings AbilityDetection { get; set; }
         public QuoteSettings Quotes { get; set; }
-
+        public YouTubeSettings YouTube { get; set; }
         public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
         public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
-        public string HeroesDataPath => Path.Combine(AssetsPath, "HeroesData");
-        public string ReplayCachePath => Path.Combine(AssetsPath, "Replays");
-        public string RequestedReplayCachePath => Path.Combine(AssetsPath, "RequestedReplays");
-        public string SpectateReportPath => Path.Combine(AssetsPath, "SpectateReport");
-        public string CapturesPath => Path.Combine(AssetsPath, "Captures");
-        public string CurrentReplayInfoFilePath => Path.Combine(AssetsPath, StormReplay.InfoFileName);
+        public string ContextsDirectory => Path.Combine(Location.DataDirectory, "Contexts");
+        public string HeroesDataPath => Path.Combine(Location.DataDirectory, "HeroesData");
+        public string StandardReplayCachePath => Path.Combine(Location.DataDirectory, HeroesProfileApi.StandardCacheDirectoryName);
+        public string RequestedReplayCachePath => Path.Combine(Location.DataDirectory, HeroesProfileApi.RequestsCacheDirectoryName);
+        public string SpectateReportPath => Path.Combine(Location.DataDirectory, "SpectateReport");
+        public string CapturesPath => Path.Combine(Location.DataDirectory, "Capture");
         public static string StormReplaysAccountPath => Path.Combine(UserGameFolderPath, "Accounts");
         public static string UserStormInterfacePath => Path.Combine(UserGameFolderPath, "Interfaces");
         public static string UserGameFolderPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Heroes of the Storm");

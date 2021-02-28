@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+
 using Heroes.ReplayParser;
+
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfileExtension;
 
@@ -14,5 +16,6 @@ namespace HeroesReplay.Core.Services.Analysis
         TimeSpan GetEnd(Replay replay);
         bool GetIsCarriedObjective(Replay replay);
         TimeSpan GetStart(Replay replay);
+        IReadOnlyDictionary<int, IReadOnlyCollection<string>> GetTeamBans(Replay replay);
     }
 }

@@ -33,8 +33,9 @@ namespace HeroesReplay.Core.Services.Queue
             this.heroesProfileService = heroesProfileService;
             this.settings = settings;
 
-            queueFile = new FileInfo(Path.Combine(settings.AssetsPath, settings.Twitch.QueueFileName));
-            failedFile = new FileInfo(Path.Combine(settings.AssetsPath, settings.Twitch.FailedFileName));
+            queueFile = new FileInfo(Path.Combine(settings.Location.DataDirectory, settings.Twitch.QueueFileName));
+            failedFile = new FileInfo(Path.Combine(settings.Location.DataDirectory, settings.Twitch.FailedFileName));
+
             options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
             successSemaphore = new SemaphoreSlim(1, maxCount: 1);
             failedSemaphore = new SemaphoreSlim(1, maxCount: 1);
@@ -129,19 +130,24 @@ namespace HeroesReplay.Core.Services.Queue
 
         private async Task AddToFailedRequestsAsync(RewardQueueItem item)
         {
-            await failedSemaphore.WaitAsync();
-
-            if (failedFile.Exists)
+            try
             {
-                List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(failedFile.FullName), options)) { item };
-                await File.WriteAllTextAsync(failedFile.FullName, JsonSerializer.Serialize(items, options));
-            }
-            else
-            {
-                await File.WriteAllTextAsync(failedFile.FullName, JsonSerializer.Serialize(new List<RewardQueueItem> { item }, options));
-            }
+                await failedSemaphore.WaitAsync();
 
-            failedSemaphore.Release();
+                if (failedFile.Exists)
+                {
+                    List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(failedFile.FullName), options)) { item };
+                    await File.WriteAllTextAsync(failedFile.FullName, JsonSerializer.Serialize(items, options));
+                }
+                else
+                {
+                    await File.WriteAllTextAsync(failedFile.FullName, JsonSerializer.Serialize(new List<RewardQueueItem> { item }, options));
+                }
+            }
+            finally
+            {
+                failedSemaphore.Release();
+            }
         }
 
         private async Task<RewardResponse> QueueByRewardFilterAsync(RewardRequest request)

@@ -1,16 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Shared;
-using Microsoft.Extensions.Logging;
-using Polly;
-
-namespace HeroesReplay.Core.Services.HeroesProfileExtension
+﻿namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Net.Http;
+    using System.Threading;
+    using System.Threading.Tasks;
+
+    using HeroesReplay.Core.Configuration;
+    using HeroesReplay.Core.Services.Shared;
+
+    using Microsoft.Extensions.Logging;
+
+    using Polly;
     public class TwitchExtensionService : ITwitchExtensionService
     {
         public const string ExtensionApiClient = nameof(ExtensionApiClient);

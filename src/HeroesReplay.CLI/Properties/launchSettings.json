@@ -62,6 +62,13 @@
       "environmentVariables": {
         "HEROES_REPLAY_ENV": "dev"
       }
+    },
+    "HeroesReplay.CLI: youtube uploader": {
+      "commandName": "Project",
+      "commandLineArgs": "youtube uploader",
+      "environmentVariables": {
+        "HEROES_REPLAY_ENV": "dev"
+      }
     }
   }
 }

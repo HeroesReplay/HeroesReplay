@@ -1,16 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.HeroesProfileExtension;
-using HeroesReplay.Core.Services.Shared;
-using Microsoft.Extensions.Logging;
-using Polly;
-
-namespace HeroesReplay.Core.Services.Observer
+﻿namespace HeroesReplay.Core.Services.Observer
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Threading;
+    using System.Threading.Tasks;
+
+    using HeroesReplay.Core.Configuration;
+    using HeroesReplay.Core.Models;
+    using HeroesReplay.Core.Services.Context;
+    using HeroesReplay.Core.Services.HeroesProfileExtension;
+    using HeroesReplay.Core.Services.Shared;
+
+    using Microsoft.Extensions.Logging;
+
+    using Polly;
     public class Spectator : ISpectator
     {
         private readonly IGameController controller;
@@ -18,14 +21,14 @@ namespace HeroesReplay.Core.Services.Observer
         private readonly ILogger<Spectator> logger;
         private readonly AppSettings settings;
         private readonly CancellationTokenProvider consoleTokenProvider;
-        private readonly IReplayContext sessionHolder;
+        private readonly IReplayContext context;
         private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
         private State State { get; set; }
 
         private TimeSpan Timer { get; set; }
 
-        private SessionData Data => sessionHolder.Current;
+        private ContextData Data => context.Current;
 
         private CancellationTokenSource CancelSessionSource { get; set; }
 
@@ -41,7 +44,7 @@ namespace HeroesReplay.Core.Services.Observer
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            this.sessionHolder = sessionHolder ?? throw new ArgumentNullException(nameof(sessionHolder));
+            this.context = sessionHolder ?? throw new ArgumentNullException(nameof(sessionHolder));
             this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
             this.talentsNotifier = talentsNotifier ?? throw new ArgumentNullException(nameof(talentsNotifier));
             consoleTokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
@@ -112,9 +115,9 @@ namespace HeroesReplay.Core.Services.Observer
 
                     if (result.HasValue)
                     {
-                        Timer = result.Value.Add(sessionHolder.Current.GatesOpen);
+                        Timer = result.Value.Add(context.Current.GatesOpen);
                         logger.LogInformation($"{State}, UI Time: {result.Value} Replay Time: {Timer}");
-                        sessionHolder.Current.Timer = Timer;
+                        context.Current.Timer = Timer;
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(1), consoleTokenProvider.Token).ConfigureAwait(false);

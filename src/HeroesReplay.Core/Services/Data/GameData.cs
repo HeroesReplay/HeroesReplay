@@ -9,9 +9,12 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+
 using Microsoft.Extensions.Logging;
+
 using static Heroes.ReplayParser.Unit;
 
 namespace HeroesReplay.Core.Services.Data
@@ -75,7 +78,7 @@ namespace HeroesReplay.Core.Services.Data
                 {
                     if (hero.Value.ValueKind == JsonValueKind.Object)
                     {
-                        heroes.Add(new Hero(hero.Name, hero.Value.GetProperty("unitId").GetString(), hero.Value.GetProperty("hyperlinkId").GetString()));
+                        heroes.Add(new Hero(hero.Name, hero.Value.GetProperty("unitId").GetString(), hero.Value.GetProperty("hyperlinkId").GetString(), hero.Value.GetProperty("attributeId").GetString()));
                     }
                 }
             }

@@ -16,7 +16,7 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
             }
             else
             {
-                if (reward.RewardType.HasFlag(RewardType.Rank) && Enum.TryParse(args.Message, out GameRank rank))
+                if (reward.RewardType.HasFlag(RewardType.Rank) && Enum.TryParse(args.Message, ignoreCase: true, out GameRank rank))
                 {
                     return new RewardRequest(args.Login, args.RedemptionId, reward.Title, replayId: null, rank: rank, reward.Map, reward.Mode);
                 }

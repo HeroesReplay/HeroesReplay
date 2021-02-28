@@ -79,18 +79,18 @@ namespace HeroesReplay.Core.Services.Twitch
                     if (reward.RewardType.HasFlag(RewardType.Rank))
                         message = Enum.GetName(typeof(GameRank), Enum.GetValues(typeof(GameRank)).Cast<GameRank>().OrderBy(x => Guid.NewGuid()).First());
 
-                    onRewardHandler.Handle(new OnRewardRedeemedArgs()
-                    {
-                        RedemptionId = Guid.NewGuid(),
-                        Login = "delegate_",
-                        DisplayName = "Delegate_",
-                        RewardTitle = reward.Title,
-                        Message = message
-                    });
-
-                    logger.LogDebug("waiting to send reward deemed...");
-                    await Task.Delay(TimeSpan.FromSeconds(10));
+                    //onRewardHandler.Handle(new OnRewardRedeemedArgs()
+                    //{
+                    //    RedemptionId = Guid.NewGuid(),
+                    //    Login = "delegate_",
+                    //    DisplayName = "Delegate_",
+                    //    RewardTitle = reward.Title,
+                    //    Message = message
+                    //});
                 }
+
+                logger.LogDebug("waiting to send reward deemed...");
+                await Task.Delay(TimeSpan.FromSeconds(10));
             }
         }
     }

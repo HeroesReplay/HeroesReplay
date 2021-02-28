@@ -1,20 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Observer;
-using HeroesReplay.Core.Services.Shared;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
-using OBSWebsocketDotNet;
-using OBSWebsocketDotNet.Types;
-using Polly;
-
-namespace HeroesReplay.Core.Services.Stream
+﻿namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware
 {
+    using Microsoft.Extensions.Logging;
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+    using System.Threading.Tasks;
+
+    using HeroesReplay.Core.Configuration;
+    using HeroesReplay.Core.Models;
+    using HeroesReplay.Core.Services.Context;
+    using HeroesReplay.Core.Services.Shared;
+    using Newtonsoft.Json.Linq;
+
+    using OBSWebsocketDotNet;
+    using OBSWebsocketDotNet.Types;
+
+    using Polly;
+
     public class ObsController : IObsController
     {
         private readonly ILogger<ObsController> logger;
@@ -32,6 +35,107 @@ namespace HeroesReplay.Core.Services.Stream
             this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         }
 
+        public void ConfigureFromContext()
+        {
+            try
+            {
+                obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+                SetRankImage();
+                SetCurrentReplayTextSource();
+
+                if (settings.OBS.RecordingEnabled)
+                {
+                    obs.SetRecordingFolder(context.Current.Directory.FullName);
+                }
+
+                obs.Disconnect();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, $"Could not configure OBS from context.");
+            }
+        }
+
+        private void SetCurrentReplayTextSource()
+        {
+            try
+            {
+                List<SourceInfo> sourceList = obs.GetSourcesList();
+                SourceInfo replayInfo = sourceList.Find(source => source.Name.Equals(settings.OBS.InfoSourceName));
+
+                if (replayInfo != null)
+                {
+                    SourceSettings sourceSettings = obs.GetSourceSettings(replayInfo.Name);
+                    sourceSettings.sourceSettings["read_from_file"] = true;
+                    sourceSettings.sourceSettings["file"] = Path.Combine(context.Current.Directory.FullName, settings.OBS.InfoFileName);
+                    obs.SetSourceSettings(replayInfo.Name, sourceSettings.sourceSettings);
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, $"Could not update the Tier for OBS.");
+            }
+        }
+
+        public void StartRecording()
+        {
+            Policy
+                .Handle<Exception>()
+                .WaitAndRetry(retryCount: 5, sleepDurationProvider: (retryAttempt) => TimeSpan.FromSeconds(1))
+                .Execute(() =>
+                {
+                    try
+                    {
+                        if (settings.OBS.RecordingEnabled)
+                        {
+                            obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+                            OutputStatus status = obs.GetStreamingStatus();
+
+                            if (!status.IsRecording)
+                            {
+                                obs.StartRecording();
+                            }
+
+                            obs.Disconnect();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        logger.LogError(e, $"There was an setting the game scene");
+                    }
+                });
+        }
+
+        public void StopRecording()
+        {
+            Policy
+                .Handle<Exception>()
+                .WaitAndRetry(retryCount: 5, sleepDurationProvider: (retryAttempt) => TimeSpan.FromSeconds(1))
+                .Execute(() =>
+                {
+                    try
+                    {
+                        if (settings.OBS.RecordingEnabled)
+                        {
+                            obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
+
+                            OutputStatus status = obs.GetStreamingStatus();
+
+                            if (status.IsRecording)
+                            {
+                                obs.StopRecording();
+                            }
+
+                            obs.Disconnect();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        logger.LogError(e, $"There was an setting the game scene");
+                    }
+                });
+        }
+
         public void SwapToGameScene()
         {
             Policy
@@ -44,21 +148,6 @@ namespace HeroesReplay.Core.Services.Stream
                     {
                         obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
                         obs.SetCurrentScene(settings.OBS.GameSceneName);
-
-                        if (settings.OBS.RecordingEnabled)
-                        {
-                            var sessionRecording = new DirectoryInfo(settings.OBS.RecordingFolderDirectory);
-                            var outputFolder = sessionRecording.CreateSubdirectory(context.Current.LoadedReplay.ReplayId.Value.ToString());
-                            obs.SetRecordingFolder(outputFolder.FullName);
-
-                            OutputStatus status = obs.GetStreamingStatus();
-
-                            if (!status.IsRecording)
-                            {
-                                obs.StartRecording();
-                            }
-                        }
-
                         obs.Disconnect();
                         return true;
                     }
@@ -71,17 +160,19 @@ namespace HeroesReplay.Core.Services.Stream
                 });
         }
 
+        /// <summary>
+        /// Sets the correct image source [bronze-image, silver-image, gold-image, platinum-image, diamond-image, master-image]
+        /// </summary>
         public void SetRankImage()
         {
             if (settings.HeroesProfileApi.EnableMMR)
             {
                 try
                 {
-                    obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
                     List<SourceInfo> sourceList = obs.GetSourcesList();
                     HideRankImages(sourceList);
                     ShowRankImage(sourceList);
-                    obs.Disconnect();
+
                 }
                 catch (Exception e)
                 {
@@ -126,17 +217,6 @@ namespace HeroesReplay.Core.Services.Stream
                 .ExecuteAsync(async (t) =>
                 {
                     obs.Connect(settings.OBS.WebSocketEndpoint, password: null);
-
-                    if (settings.OBS.RecordingEnabled)
-                    {
-                        OutputStatus status = obs.GetStreamingStatus();
-
-                        if (status.IsRecording)
-                        {
-                            obs.StopRecording();
-                        }
-                    }
-
                     var sceneList = obs.GetSceneList();
                     var sourceList = obs.GetSourcesList();
 

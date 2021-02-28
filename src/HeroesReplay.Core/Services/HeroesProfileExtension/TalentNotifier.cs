@@ -1,20 +1,23 @@
-﻿using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Observer;
-using Microsoft.Extensions.Logging;
+﻿
 
 namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
+    using System;
+    using System.Linq;
+    using System.Threading;
+    using System.Threading.Tasks;
+
+    using HeroesReplay.Core.Models;
+    using HeroesReplay.Core.Services.Context;
+
+    using Microsoft.Extensions.Logging;
     public class TalentNotifier : ITalentNotifier
     {
         private readonly ILogger<TalentNotifier> logger;
         private readonly IReplayContext context;
         private readonly ITwitchExtensionService extensionService;
 
-        private SessionData Data => context.Current;
+        private ContextData Data => context.Current;
 
         private string SessionId { get; set; }
 
