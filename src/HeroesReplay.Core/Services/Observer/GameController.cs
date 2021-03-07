@@ -1,6 +1,4 @@
-﻿
-
-namespace HeroesReplay.Core.Services.Observer
+﻿namespace HeroesReplay.Core.Services.Observer
 {
     using System;
     using System.Collections.Generic;

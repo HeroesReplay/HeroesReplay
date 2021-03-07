@@ -11,5 +11,6 @@ namespace HeroesReplay.Core.Models
         public string Map { get; set; }
         public string TeamBans { get; set; }
         public string GameType { get; set; }
+        public string Version { get; set; }
     }
 }

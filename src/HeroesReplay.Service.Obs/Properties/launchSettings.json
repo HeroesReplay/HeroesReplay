@@ -3,7 +3,7 @@
     "HeroesReplay.Service.Obs": {
       "commandName": "Project",
       "environmentVariables": {
-        "DOTNET_ENVIRONMENT": "Development"
+        "DOTNET_ENVIRONMENT": "Staging"
       }
     }
   }

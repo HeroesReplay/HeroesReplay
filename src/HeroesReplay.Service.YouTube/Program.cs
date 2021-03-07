@@ -22,18 +22,13 @@ namespace HeroesReplay.Service.YouTube
         {
             using (var cts = new CancellationTokenSource())
             {
-                Console.CancelKeyPress += (s, e) => { e.Cancel = false; cts.Cancel(); };
-
                 IHostBuilder builder = Host
                     .CreateDefaultBuilder()
                     .ConfigureServices(services => services.AddSingleton(cts))
                     .ConfigureServices(ConfigureServices)
                     .ConfigureAppConfiguration(ConfigureAppConfig);
 
-                using (IHost host = builder.Build())
-                {
-                    await host.RunAsync();
-                }
+                await builder.RunConsoleAsync(cts.Token);
             }
         }
 

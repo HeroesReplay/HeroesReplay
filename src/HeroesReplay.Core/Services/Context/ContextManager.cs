@@ -80,12 +80,14 @@ namespace HeroesReplay.Core.Services.Context
             {
                 ObsEntry entry = new ObsEntry
                 {
+                    ReplayId = context.Current.LoadedReplay.ReplayId?.ToString(),
                     Map = context.Current.LoadedReplay.HeroesProfileReplay.Map,
                     GameType = context.Current.LoadedReplay.HeroesProfileReplay.GameType,
                     Rank = context.Current.LoadedReplay.HeroesProfileReplay.Rank,
                     TwitchLogin = context.Current.LoadedReplay.RewardQueueItem?.Request?.Login,
                     TeamBans = GetTeamBans(),
-                    RecordingDirectory = context.Current.Directory.FullName
+                    RecordingDirectory = context.Current.Directory.FullName,
+                    Version = context.Current.LoadedReplay.Replay.ReplayVersion
                 };
 
                 string file = Path.Combine(context.Current.Directory.FullName, settings.Value.Obs.EntryFileName);
@@ -142,35 +144,32 @@ namespace HeroesReplay.Core.Services.Context
 
         private async Task WriteYoutubeEntryAsync()
         {
-            if (settings.Value.YouTube.Enabled)
+            try
             {
-                try
-                {
-                    var heroesProfileReplay = context.Current.LoadedReplay.HeroesProfileReplay;
+                var heroesProfileReplay = context.Current.LoadedReplay.HeroesProfileReplay;
 
-                    var entry = new YouTubeEntry()
+                var entry = new YouTubeEntry()
+                {
+                    Title = string.Join(" - ", new[] { $"{heroesProfileReplay.Id}", heroesProfileReplay.Map, heroesProfileReplay.GameType ?? string.Empty, heroesProfileReplay.Rank }),
+                    PrivacyStatus = "public",
+                    CategoryId = settings.Value.YouTube.CategoryId,
+                    DescriptionLines = new[] { $"Twitch: http://twitch.tv/saltysadism", $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={heroesProfileReplay.Id}" },
+                    Tags = new[]
                     {
-                        Title = string.Join(" - ", new[] { $"{heroesProfileReplay.Id}", heroesProfileReplay.Map, heroesProfileReplay.GameType ?? string.Empty, heroesProfileReplay.Rank }),
-                        PrivacyStatus = "public",
-                        CategoryId = settings.Value.YouTube.CategoryId,
-                        DescriptionLines = new[] { $"Twitch: http://twitch.tv/saltysadism", $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={heroesProfileReplay.Id}" },
-                        Tags = new[]
-                        {
                             heroesProfileReplay.GameType,
                             heroesProfileReplay.Map,
                             heroesProfileReplay.Rank
                         }.Where(line => !string.IsNullOrWhiteSpace(line)).ToArray()
-                    };
+                };
 
-                    string file = Path.Combine(context.Current.Directory.FullName, settings.Value.YouTube.EntryFileName);
-                    string json = JsonSerializer.Serialize(entry, new JsonSerializerOptions { WriteIndented = true });
+                string file = Path.Combine(context.Current.Directory.FullName, settings.Value.YouTube.EntryFileName);
+                string json = JsonSerializer.Serialize(entry, new JsonSerializerOptions { WriteIndented = true });
 
-                    await File.WriteAllTextAsync(file, json);
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "Could not write youtube info file.");
-                }
+                await File.WriteAllTextAsync(file, json);
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not write youtube info file.");
             }
         }
     }

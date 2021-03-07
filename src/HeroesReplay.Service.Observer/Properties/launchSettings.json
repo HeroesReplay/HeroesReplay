@@ -3,7 +3,7 @@
     "HeroesReplay.Service.Observer": {
       "commandName": "Project",
       "environmentVariables": {
-        "DOTNET_ENVIRONMENT": "Development"
+        "DOTNET_ENVIRONMENT": "Staging"
       }
     }
   }

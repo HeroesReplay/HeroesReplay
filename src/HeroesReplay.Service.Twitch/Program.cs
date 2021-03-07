@@ -55,7 +55,7 @@ namespace HeroesReplay.Service.Twitch
                         await data.LoadDataAsync();
                     }
 
-                    await host.RunAsync();
+                    await host.RunAsync(cts.Token);
                 }
             }
         }

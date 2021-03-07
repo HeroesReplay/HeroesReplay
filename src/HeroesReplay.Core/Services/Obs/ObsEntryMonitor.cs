@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,13 +14,6 @@ using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware
 {
-    /// <summary>
-    /// Listens for obs-entry.json files so it knows:
-    /// 1. When to swap the game process
-    /// 2. Configure obs overlay text/images
-    /// 3. The report summary information to show at the end
-    /// 4. Going back to the waiting screen until the next obs-entry.json file is picked up
-    /// </summary>
     public class ObsEntryMonitor : IObsEntryMonitor
     {
         private readonly ILogger<ObsEntryMonitor> logger;
@@ -26,11 +21,13 @@ namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware
         private readonly IObsController obsController;
         private readonly CancellationTokenSource cts;
 
+        private CancellationTokenSource cancelSessionSource;
+
         public ObsEntryMonitor(ILogger<ObsEntryMonitor> logger, IOptions<AppSettings> settings, IObsController obsController, CancellationTokenSource cts)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            this.obsController = obsController;
+            this.obsController = obsController ?? throw new ArgumentNullException(nameof(obsController));
             this.cts = cts ?? throw new ArgumentNullException(nameof(cts));
         }
 
@@ -44,8 +41,15 @@ namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware
 
                     using (var waiter = new ManualResetEventSlim())
                     {
-                        logger.LogInformation("File system watcher listening for obs-entry files...");
-                        waiter.Wait(cts.Token);
+                        try
+                        {
+                            logger.LogInformation("File system watcher listening for obs-entry files...");
+                            waiter.Wait(cts.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            logger.LogInformation("File system watcher cancelling...");
+                        }
                     }
 
                     obsEntryWatcher.Created -= FileSystemWatcher_Created;
@@ -55,7 +59,23 @@ namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware
 
         private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
         {
-            await Task.Factory.StartNew(() => ControlSession(e.FullPath), cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Current);
+            cancelSessionSource?.Cancel();
+            using (var sessionTokenSource = new CancellationTokenSource())
+            {
+                cancelSessionSource = CancellationTokenSource.CreateLinkedTokenSource(sessionTokenSource.Token, cts.Token);
+                await Task.Run(() => ControlSession(e.FullPath), cancelSessionSource.Token);
+            }
+        }
+
+        private bool IsLaunched(ObsEntry obsEntry)
+        {
+            return Process.GetProcessesByName(settings.Value.Process.HeroesOfTheStorm).Any(process =>
+            {
+                using (process)
+                {
+                    return !string.IsNullOrWhiteSpace(process.MainWindowTitle) && process.MainModule.FileVersionInfo.FileVersion == obsEntry.Version;
+                }
+            });
         }
 
         private async Task ControlSession(string obsEntryFullPath)
@@ -64,21 +84,67 @@ namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware
             {
                 ObsEntry obsEntry = JsonSerializer.Deserialize<ObsEntry>(await File.ReadAllTextAsync(obsEntryFullPath));
 
-                // 1 Set Session
-                this.obsController.SetSession(obsEntry);
+                obsController.SetSession(obsEntry);
+
+                await WaitForLaunch(obsEntry);
 
                 obsController.SwapToGameScene();
-                obsController.StartRecording();
 
-                // 3 Cycle Report
+                if (settings.Value.Obs.RecordingEnabled)
+                {
+                    obsController.StartRecording();
+                }
+
+                await WaitForExit(obsEntry);
+
+                if (settings.Value.Obs.RecordingEnabled)
+                {
+                    obsController.StopRecording();
+                }
+
                 await obsController.CycleReportAsync();
-
-                // 4 Loading Screen
                 obsController.SwapToWaitingScene();
+            }
+            catch (OperationCanceledException)
+            {
+                logger.LogInformation("The OBS control session has been cancelled.");
             }
             catch (Exception e)
             {
                 logger.LogError(e, $"Could not upload {obsEntryFullPath}");
+            }
+        }
+
+        private async Task WaitForLaunch(ObsEntry obsEntry)
+        {
+            while (!IsLaunched(obsEntry))
+            {
+                logger.LogInformation($"Waiting for {obsEntry.Version}...");
+                await Task.Delay(2000);
+            }
+        }
+
+        private async Task WaitForExit(ObsEntry obsEntry)
+        {
+            Process process = null;
+
+            try
+            {
+                while (process == null)
+                {
+                    process = Process.GetProcessesByName(settings.Value.Process.HeroesOfTheStorm).FirstOrDefault(p => p.MainModule.FileVersionInfo.FileVersion == obsEntry.Version);
+
+                    if (process == null)
+                    {
+                        await Task.Delay(1000);
+                    }
+                }
+
+                process.WaitForExit();
+            }
+            finally
+            {
+                process?.Dispose();
             }
         }
     }

@@ -58,8 +58,8 @@ namespace HeroesReplay.Core.Services.Twitch
             if (settings.Value.Twitch.EnableChatBot)
             {
                 client.Initialize(credentials, settings.Value.Twitch.Channel);
+                UnWireChatEvents();
                 WireChatEvents();
-
             }
 
             if (settings.Value.Twitch.EnablePubSub)
@@ -67,18 +67,28 @@ namespace HeroesReplay.Core.Services.Twitch
                 string channelId = await GetChannelId();
 
                 pubSub.ListenToRewards(channelId);
-                WirePubSub();
+                UnWirePubSubEvents();
+                WirePubSubEvents();
                 pubSub.Connect();
             }
         }
 
-        private void WirePubSub()
+        private void WirePubSubEvents()
         {
             pubSub.OnRewardRedeemed += PubSub_OnRewardRedeemed;
             pubSub.OnLog += PubSub_OnLog;
             pubSub.OnPubSubServiceConnected += PubSub_OnPubSubServiceConnected;
             pubSub.OnPubSubServiceError += PubSub_OnPubSubServiceError;
             pubSub.OnPubSubServiceClosed += PubSub_OnPubSubServiceClosed;
+        }
+
+        private void UnWirePubSubEvents()
+        {
+            pubSub.OnRewardRedeemed -= PubSub_OnRewardRedeemed;
+            pubSub.OnLog -= PubSub_OnLog;
+            pubSub.OnPubSubServiceConnected -= PubSub_OnPubSubServiceConnected;
+            pubSub.OnPubSubServiceError -= PubSub_OnPubSubServiceError;
+            pubSub.OnPubSubServiceClosed -= PubSub_OnPubSubServiceClosed;
         }
 
         private void WireChatEvents()
@@ -88,6 +98,15 @@ namespace HeroesReplay.Core.Services.Twitch
             client.OnConnected += Client_OnConnected;
             client.OnDisconnected += Client_OnDisconnected;
             client.OnConnectionError += Client_OnConnectionError;
+        }
+
+        private void UnWireChatEvents()
+        {
+            client.OnLog -= Client_OnLog;
+            client.OnMessageReceived -= Client_OnMessageReceived;
+            client.OnConnected -= Client_OnConnected;
+            client.OnDisconnected -= Client_OnDisconnected;
+            client.OnConnectionError -= Client_OnConnectionError;
         }
 
         private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)

@@ -26,6 +26,7 @@ namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware
 
         public void SetSession(ObsEntry obsEntry)
         {
+            logger.LogInformation($"Set obs session for: {obsEntry.ReplayId}");
             this.obsEntry = obsEntry;
         }
 

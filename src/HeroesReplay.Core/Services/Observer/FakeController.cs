@@ -12,14 +12,14 @@ namespace HeroesReplay.Core.Services.Observer
 
     using Microsoft.Extensions.Logging;
 
-    public sealed class StubController : IGameController
+    public sealed class FakeController : IGameController
     {
-        private readonly ILogger<StubController> logger;
+        private readonly ILogger<FakeController> logger;
         private readonly IReplayContext context;
 
         private List<TimeSpan?> Timers { get; set; } = new();
 
-        public StubController(ILogger<StubController> logger, IReplayContext context)
+        public FakeController(ILogger<FakeController> logger, IReplayContext context)
         {
             this.logger = logger;
             this.context = context;

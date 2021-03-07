@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,18 +19,13 @@ namespace HeroesReplay.Service.Obs
         {
             using (var cts = new CancellationTokenSource())
             {
-                Console.CancelKeyPress += (s, e) => { e.Cancel = false; cts.Cancel(); };
-
                 IHostBuilder builder = Host
                    .CreateDefaultBuilder()
                    .ConfigureServices(services => services.AddSingleton(cts))
                    .ConfigureServices(ConfigureServices)
                    .ConfigureAppConfiguration(ConfigureAppConfig);
 
-                using (IHost host = builder.Build())
-                {
-                    await host.RunAsync();
-                }
+                await builder.RunConsoleAsync(cts.Token);
             }
         }
 
@@ -53,28 +45,27 @@ namespace HeroesReplay.Service.Obs
                 services
                    .AddSingleton<IObsController, FakeObsController>();
             }
-            else
+            else if (context.HostingEnvironment.IsStaging())
+            {
+                services
+                  .AddSingleton<OBSWebsocket>()
+                  .AddSingleton<IObsController, ObsController>();
+            }
+            else if (context.HostingEnvironment.IsProduction())
             {
                 services
                     .AddSingleton<OBSWebsocket>()
                     .AddSingleton<IObsController, ObsController>();
             }
 
+            services.AddSingleton<IObsEntryMonitor, ObsEntryMonitor>();
             services.AddHostedService<ObsService>();
         }
 
         public static void PostConfigure(AppSettings appSettings)
         {
             appSettings.CurrentDirectory = Directory.GetCurrentDirectory();
-            appSettings.AssetsPath = Path.Combine(appSettings.CurrentDirectory, "Assets");
             appSettings.ContextsDirectory = Path.Combine(appSettings.Location.DataDirectory, "Contexts");
-            appSettings.HeroesDataPath = Path.Combine(appSettings.Location.DataDirectory, "HeroesData");
-            appSettings.StandardReplayCachePath = Path.Combine(appSettings.Location.DataDirectory, appSettings.HeroesProfileApi.StandardCacheDirectoryName);
-            appSettings.RequestedReplayCachePath = Path.Combine(appSettings.Location.DataDirectory, appSettings.HeroesProfileApi.RequestsCacheDirectoryName);
-            appSettings.SpectateReportPath = Path.Combine(appSettings.Location.DataDirectory, "SpectateReport");
-            appSettings.CapturesPath = Path.Combine(appSettings.Location.DataDirectory, "Capture");
-            appSettings.StormReplaysAccountPath = Path.Combine(appSettings.UserGameFolderPath, "Accounts");
-            appSettings.UserStormInterfacePath = Path.Combine(appSettings.UserGameFolderPath, "Interfaces");
         }
     }
 }

@@ -14,7 +14,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Core", "Heroes
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Service.Twitch", "HeroesReplay.Service.Twitch\HeroesReplay.Service.Twitch.csproj", "{4E2BB420-9159-4951-8C8D-970B751D10B5}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Service.Observer", "HeroesReplay.Service.Observer\HeroesReplay.Service.Observer.csproj", "{F88C3996-A5E7-4D94-A581-20ED4BC8D789}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Service.Spectator", "HeroesReplay.Service.Observer\HeroesReplay.Service.Spectator.csproj", "{F88C3996-A5E7-4D94-A581-20ED4BC8D789}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Service.YouTube", "HeroesReplay.Service.YouTube\HeroesReplay.Service.YouTube.csproj", "{A21808C2-048A-4AE6-B1A8-3F524F093BFD}"
 EndProject

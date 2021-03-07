@@ -11,13 +11,13 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core
 {
-    public class ObserverService : BackgroundService
+    public class SpectatorService : BackgroundService
     {
-        private readonly ILogger<ObserverService> logger;
+        private readonly ILogger<SpectatorService> logger;
         private readonly IGameManager gameManager;
         private readonly IReplayProvider replayProvider;
 
-        public ObserverService(ILogger<ObserverService> logger, IGameManager gameManager, IReplayProvider replayProvider, CancellationTokenSource cts) : base(cts)
+        public SpectatorService(ILogger<SpectatorService> logger, IGameManager gameManager, IReplayProvider replayProvider, CancellationTokenSource cts) : base(cts)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.gameManager = gameManager ?? throw new ArgumentNullException(nameof(gameManager));
@@ -33,7 +33,7 @@ namespace HeroesReplay.Core
                 if (loadedReplay != null)
                 {
                     await gameManager.LaunchAndSpectate(loadedReplay);
-                    await Task.Delay(TimeSpan.FromMinutes(1.5), stoppingToken);
+                    await Task.Delay(TimeSpan.FromMinutes(0.5), stoppingToken);
                 }
             }
         }

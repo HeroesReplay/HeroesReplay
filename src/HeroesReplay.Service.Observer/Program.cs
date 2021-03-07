@@ -55,7 +55,7 @@ namespace HeroesReplay.Service.Observer
                         await data.LoadDataAsync();
                     }
 
-                    await host.RunAsync();
+                    await host.RunAsync(cts.Token);
                 }
             }
         }
@@ -80,10 +80,20 @@ namespace HeroesReplay.Service.Observer
             {
                 services
                    .AddSingleton<CaptureStrategy, StubCapture>()
-                   .AddSingleton<IGameController, StubController>()
+                   .AddSingleton<IGameController, FakeController>()
                    .AddSingleton<ITalentNotifier, StubNotifier>();
             }
-            else
+            else if (context.HostingEnvironment.IsStaging())
+            {
+                services.AddHttpClient<TwitchExtensionService>();
+
+                services
+                    .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
+                    .AddSingleton<CaptureStrategy, BitBltCapture>()
+                    .AddSingleton<IGameController, GameController>()
+                    .AddSingleton<ITalentNotifier, StubNotifier>();
+            }
+            else if (context.HostingEnvironment.IsProduction())
             {
                 services.AddHttpClient<TwitchExtensionService>();
 
@@ -115,7 +125,7 @@ namespace HeroesReplay.Service.Observer
                 .AddSingleton<IRequestQueueDequeuer, RequestQueueDequeuer>()
                 .AddSingleton<OBSWebsocket>()
                 .AddSingleton<IObsController, ObsController>()
-                .AddHostedService<ObserverService>();
+                .AddHostedService<SpectatorService>();
         }
 
         public static void PostConfigure(AppSettings appSettings)

@@ -1,14 +1,14 @@
-﻿using System;
-using System.Drawing;
-
-using HeroesReplay.Core.Models;
-
-using Microsoft.Extensions.Logging;
-
-using PInvoke;
-
-namespace HeroesReplay.Core.Services.Observer
+﻿namespace HeroesReplay.Core.Services.Observer
 {
+    using System;
+    using System.Drawing;
+
+    using HeroesReplay.Core.Models;
+
+    using Microsoft.Extensions.Logging;
+
+    using PInvoke;
+
     public class BitBltCapture : CaptureStrategy
     {
         public BitBltCapture(ILogger<BitBltCapture> logger) : base(logger)

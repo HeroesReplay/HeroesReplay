@@ -34,7 +34,7 @@
             this.obsOptions = settings.Value.Obs;
         }
 
-        private void SetCurrentReplayTextSource(ObsEntry obsEntry)
+        private void SetObsEntryText(ObsEntry obsEntry)
         {
             try
             {
@@ -45,13 +45,11 @@
                 {
                     SourceSettings sourceSettings = obs.GetSourceSettings(replayInfo.Name);
                     sourceSettings.sourceSettings["read_from_file"] = false;
-
-                    // Set the lines
                     sourceSettings.sourceSettings["text"] = string.Join(Environment.NewLine, new[]
                     {
                         !string.IsNullOrWhiteSpace(obsEntry.TwitchLogin) ? $"Requestor: {obsEntry.TwitchLogin}" : string.Empty,
-                        !string.IsNullOrWhiteSpace(obsEntry.GameType) ? $"{obsEntry.GameType}" : string.Empty
-
+                        !string.IsNullOrWhiteSpace(obsEntry.GameType) ? $"{obsEntry.GameType}" : string.Empty,
+                        obsEntry.TeamBans,
                     }.Where(line => !string.IsNullOrWhiteSpace(line)));
 
                     obs.SetSourceSettings(replayInfo.Name, sourceSettings.sourceSettings);
@@ -72,22 +70,19 @@
                 {
                     try
                     {
-                        if (settings.Value.Obs.RecordingEnabled)
+                        obs.Connect(settings.Value.Obs.WebSocketEndpoint, password: null);
+                        OutputStatus status = obs.GetStreamingStatus();
+
+                        if (!status.IsRecording)
                         {
-                            obs.Connect(settings.Value.Obs.WebSocketEndpoint, password: null);
-                            OutputStatus status = obs.GetStreamingStatus();
-
-                            if (!status.IsRecording)
-                            {
-                                obs.StartRecording();
-                            }
-
-                            obs.Disconnect();
+                            obs.StartRecording();
                         }
+
+                        obs.Disconnect();
                     }
                     catch (Exception e)
                     {
-                        logger.LogError(e, $"There was an setting the game scene");
+                        logger.LogError(e, $"There was an error starting the recording.");
                     }
                 });
         }
@@ -101,23 +96,20 @@
                 {
                     try
                     {
-                        if (settings.Value.Obs.RecordingEnabled)
+                        obs.Connect(settings.Value.Obs.WebSocketEndpoint, password: null);
+
+                        OutputStatus status = obs.GetStreamingStatus();
+
+                        if (status.IsRecording)
                         {
-                            obs.Connect(settings.Value.Obs.WebSocketEndpoint, password: null);
-
-                            OutputStatus status = obs.GetStreamingStatus();
-
-                            if (status.IsRecording)
-                            {
-                                obs.StopRecording();
-                            }
-
-                            obs.Disconnect();
+                            obs.StopRecording();
                         }
+
+                        obs.Disconnect();
                     }
                     catch (Exception e)
                     {
-                        logger.LogError(e, $"There was an setting the game scene");
+                        logger.LogError(e, $"There was an error stopping the recording.");
                     }
                 });
         }
@@ -140,10 +132,12 @@
         /// </summary>
         private void SetRankImage(ObsEntry obsEntry)
         {
-            if (settings.Value.HeroesProfileApi.EnableMMR)
+            List<SourceInfo> sourceList = obs.GetSourcesList();
+
+            HideRankImages(sourceList);
+
+            if (!string.IsNullOrWhiteSpace(obsEntry.Rank))
             {
-                List<SourceInfo> sourceList = obs.GetSourcesList();
-                HideRankImages(sourceList);
                 ShowRankImage(sourceList, obsEntry);
             }
         }
@@ -248,7 +242,7 @@
             {
                 obs.Connect(obsOptions.WebSocketEndpoint, password: null);
                 SetRankImage(obsEntry);
-                SetCurrentReplayTextSource(obsEntry);
+                SetObsEntryText(obsEntry);
 
                 List<SourceInfo> sourceList = obs.GetSourcesList();
 

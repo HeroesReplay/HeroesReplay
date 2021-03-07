@@ -16,7 +16,6 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Queue;
-using HeroesReplay.Core.Services.Twitch.Rewards;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -82,16 +81,12 @@ namespace HeroesReplay.Core.Services.Providers
 
         public async Task<LoadedReplay> TryLoadNextReplayAsync()
         {
-            if (settings.Value.Twitch.EnableRequests)
+            RewardQueueItem item = await queue.DequeueItemAsync();
+
+            if (item != null)
             {
-                RewardQueueItem item = await queue.DequeueItemAsync();
-
-                if (item != null)
-                {
-                    logger.LogInformation("Reward request item found, loading...");
-
-                    return await GetNextRequestedReplayAsync(item);
-                }
+                logger.LogInformation("Reward request item found, loading...");
+                return await GetNextRequestedReplayAsync(item);
             }
 
             return await GetNextStandardReplayAsync();
