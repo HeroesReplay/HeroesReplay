@@ -2,23 +2,25 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.Providers;
-using HeroesReplay.Core.Services.Shared;
+
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.Reports
 {
     public class SpectateReportCsvWriter : ISpectateReportWriter
     {
         private readonly IGameData gameData;
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> options;
         private readonly IReplayProvider provider;
         private readonly IReplayAnalyzer analyzer;
-        private readonly CancellationTokenProvider tokenProvider;
+        private readonly CancellationTokenSource tokenSource;
 
         private readonly string[] headers = new[]
         {
@@ -31,13 +33,13 @@ namespace HeroesReplay.Core.Services.Reports
             nameof(Focus.Description)
         };
 
-        public SpectateReportCsvWriter(IGameData gameData, AppSettings settings, IReplayProvider provider, IReplayAnalyzer analyzer, CancellationTokenProvider tokenProvider)
+        public SpectateReportCsvWriter(IGameData gameData, IOptions<AppSettings> options, IReplayProvider provider, IReplayAnalyzer analyzer, CancellationTokenSource tokenSource)
         {
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.options = options ?? throw new ArgumentNullException(nameof(options));
             this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
             this.analyzer = analyzer ?? throw new ArgumentNullException(nameof(analyzer));
-            this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+            this.tokenSource = tokenSource ?? throw new ArgumentNullException(nameof(tokenSource));
         }
 
         public async Task OutputReportAsync()
@@ -50,11 +52,11 @@ namespace HeroesReplay.Core.Services.Reports
                                                    .Select(WriteCsvLine)
                                                    .Prepend(string.Join(",", headers));
 
-            Directory.CreateDirectory(settings.SpectateReportPath);
+            Directory.CreateDirectory(options.Value.SpectateReportPath);
 
-            string report = Path.Combine(settings.SpectateReportPath, Path.GetFileName(loadedReplay.FileInfo.FullName) + ".csv");
+            string report = Path.Combine(options.Value.SpectateReportPath, Path.GetFileName(loadedReplay.FileInfo.FullName) + ".csv");
 
-            await File.WriteAllLinesAsync(report, lines, tokenProvider.Token);
+            await File.WriteAllLinesAsync(report, lines, tokenSource.Token);
         }
 
         private static string WriteCsvLine(KeyValuePair<TimeSpan, Focus> result)

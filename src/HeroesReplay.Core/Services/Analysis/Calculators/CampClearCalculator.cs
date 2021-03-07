@@ -6,14 +6,16 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 
+using Microsoft.Extensions.Options;
+
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class CampClearCalculator : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly IGameData gameData;
 
-        public CampClearCalculator(AppSettings settings, IGameData gameData)
+        public CampClearCalculator(IOptions<AppSettings> settings, IGameData gameData)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
@@ -30,7 +32,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                 {
                     // no point focusing if they're so far away
                     // for example an azmodan Dunk or long range ability is going to look weird
-                    bool isNearMercs = unit.PlayerKilledBy.HeroUnits.SelectMany(u => u.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(unit.PointDied) < settings.Spectate.MaxDistanceToClear)).Any();
+                    bool isNearMercs = unit.PlayerKilledBy.HeroUnits.SelectMany(u => u.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(unit.PointDied) < settings.Value.Spectate.MaxDistanceToClear)).Any();
 
                     if (isNearMercs)
                     {
@@ -38,7 +40,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                         GetType(),
                         unit,
                         unit.PlayerKilledBy,
-                        settings.Weights.CampClear,
+                        settings.Value.Weights.CampClear,
                         $"{unit.PlayerKilledBy.Character} kills {unit.Name}");
                     }
                 }

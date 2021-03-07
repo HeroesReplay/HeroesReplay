@@ -5,6 +5,7 @@ using System.Linq;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Analysis.Calculators;
 using Xunit;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Tests
 {
@@ -16,7 +17,8 @@ namespace HeroesReplay.Tests
         public AnalyzerTests(ReplayFixture fixture)
         {
             this.fixture = fixture;
-            var settings = new AppSettings { Weights = new WeightSettings() { } };
+            var settings = Options.Create(new AppSettings { Weights = new WeightOptions() { } });
+            
             replayAnalzer = new ReplayAnalyzer(new NullLogger<ReplayAnalyzer>(), settings, null, new[] { new KillCalculator(settings) }, null);
         }
 

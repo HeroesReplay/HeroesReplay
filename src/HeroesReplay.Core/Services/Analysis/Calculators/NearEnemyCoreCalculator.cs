@@ -6,14 +6,16 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 
+using Microsoft.Extensions.Options;
+
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class NearEnemyCoreCalculator : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly IGameData gameData;
 
-        public NearEnemyCoreCalculator(AppSettings settings, IGameData gameData)
+        public NearEnemyCoreCalculator(IOptions<AppSettings> settings, IGameData gameData)
         {
             this.settings = settings;
             this.gameData = gameData;
@@ -28,7 +30,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
             {
                 foreach (Unit core in replay.Units.Where(u => u.Team != heroUnit.Team && gameData.CoreUnits.Any(core => u.Name.Equals(core, StringComparison.OrdinalIgnoreCase))))
                 {
-                    var nearCore = heroUnit.Positions.Any(p => p.TimeSpan == now && p.Point.DistanceTo(core.PointBorn) <= settings.Spectate.MaxDistanceToCore);
+                    var nearCore = heroUnit.Positions.Any(p => p.TimeSpan == now && p.Point.DistanceTo(core.PointBorn) <= settings.Value.Spectate.MaxDistanceToCore);
 
                     if (nearCore)
                     {
@@ -36,7 +38,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                             GetType(),
                             heroUnit,
                             heroUnit.PlayerControlledBy,
-                            settings.Weights.NearEnemyCore,
+                            settings.Value.Weights.NearEnemyCore,
                             $"{heroUnit.PlayerControlledBy.Character} near enemy core: {core.Name}.");
                     }
                 }

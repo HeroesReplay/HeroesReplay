@@ -1,5 +1,6 @@
 ﻿namespace HeroesReplay.Core.Models
 {
+
     public class YouTubeEntry
     {
         public string Title { get; set; }

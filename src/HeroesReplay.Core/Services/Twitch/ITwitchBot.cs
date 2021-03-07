@@ -5,6 +5,7 @@ namespace HeroesReplay.Core.Services.Twitch
 {
     public interface ITwitchBot
     {
-        Task InitializeAsync();
+        Task StartAsync();
+        Task StopAsync();
     }
 }

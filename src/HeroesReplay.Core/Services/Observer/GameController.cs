@@ -17,11 +17,12 @@ namespace HeroesReplay.Core.Services.Observer
     using HeroesReplay.Core.Configuration;
     using HeroesReplay.Core.Extensions;
     using HeroesReplay.Core.Models;
-    using HeroesReplay.Core.Services.Shared;
     using Microsoft.Extensions.Logging;
     using Polly;
     using static PInvoke.User32;
     using HeroesReplay.Core.Services.Context;
+    using System.Threading;
+    using Microsoft.Extensions.Options;
 
     public class GameController : IGameController
     {
@@ -29,10 +30,10 @@ namespace HeroesReplay.Core.Services.Observer
         private const string VersionsFolder = "Versions";
 
         private readonly OcrEngine ocrEngine;
-        private readonly CancellationTokenProvider tokenProvider;
+        private readonly CancellationTokenSource cts;
         private readonly ILogger<GameController> logger;
         private readonly IReplayContext context;
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly CaptureStrategy captureStrategy;
 
         private readonly object controllerLock = new object();
@@ -52,24 +53,24 @@ namespace HeroesReplay.Core.Services.Observer
         };
 
         private bool IsLaunched => GameProcess != null;
-        private Process GameProcess => Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
+        private Process GameProcess => Process.GetProcessesByName(settings.Value.Process.HeroesOfTheStorm).FirstOrDefault(x => !string.IsNullOrEmpty(x.MainWindowTitle));
         private IntPtr Handle => GameProcess?.MainWindowHandle ?? IntPtr.Zero;
 
-        public GameController(ILogger<GameController> logger, IReplayContext context, AppSettings settings, CaptureStrategy captureStrategy, OcrEngine engine, CancellationTokenProvider tokenProvider)
+        public GameController(ILogger<GameController> logger, IReplayContext context, IOptions<AppSettings> settings, CaptureStrategy captureStrategy, OcrEngine engine, CancellationTokenSource cts)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(settings));
             this.context = context ?? throw new ArgumentNullException(nameof(context));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.captureStrategy = captureStrategy ?? throw new ArgumentNullException(nameof(settings));
             this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(settings)); ;
-            this.tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(settings));
+            this.cts = cts ?? throw new ArgumentNullException(nameof(settings));
         }
 
         public async Task LaunchAsync()
         {
             var replay = context.Current.LoadedReplay.Replay;
 
-            string versionFolder = Path.Combine(settings.Location.GameInstallDirectory, VersionsFolder);
+            string versionFolder = Path.Combine(settings.Value.Location.GameInstallDirectory, VersionsFolder);
             int latestBuild = Directory.EnumerateDirectories(versionFolder).Select(x => x).Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty))).Max();
             var requiresAuth = replay.ReplayBuild == latestBuild;
 
@@ -96,18 +97,16 @@ namespace HeroesReplay.Core.Services.Observer
         {
             logger.LogInformation("Launching battlenet because this replay is the latest build and requires auth.");
 
-            using (Process process = Process.Start(new ProcessStartInfo(settings.Location.BattlenetPath, $"--exec=\"launch Hero\"")))
+            using (Process process = Process.Start(new ProcessStartInfo(settings.Value.Location.BattlenetPath, $"--exec=\"launch Hero\"")))
             {
-                process.WaitForExit();
                 logger.LogInformation("Heroes of the Storm launched from Battlenet.");
             }
 
-            // Wait for home screen before launching replay
             var loggedIn = await Policy
                 .Handle<Exception>()
                 .OrResult<bool>(loaded => loaded == false)
-                .WaitAndRetryAsync(retryCount: 60, retry => settings.OCR.CheckSleepDuration)
-                .ExecuteAsync((token) => IsHomeScreen(), tokenProvider.Token).ConfigureAwait(false);
+                .WaitAndRetryAsync(retryCount: 60, retry => settings.Value.Ocr.CheckSleepDuration, OnKillRetry)
+                .ExecuteAsync((token) => IsHomeScreen(), cts.Token).ConfigureAwait(false);
 
             if (!loggedIn)
             {
@@ -130,21 +129,21 @@ namespace HeroesReplay.Core.Services.Observer
                 Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetry(retryCount: 150, sleepDurationProvider: retry => settings.OCR.CheckSleepDuration)
+                    .WaitAndRetry(retryCount: 150, sleepDurationProvider: retry => settings.Value.Ocr.CheckSleepDuration)
                     .Execute(() => IsMatchingClientVersion());
             }
 
             var searchTerms = context.Current.LoadedReplay.Replay.Players
                 .Select(x => x.Name)
                 .Concat(context.Current.LoadedReplay.Replay.Players.Select(x => x.Character))
-                .Concat(settings.OCR.LoadingScreenText)
+                .Concat(settings.Value.Ocr.LoadingScreenText)
                 .Concat(new[] { context.Current.LoadedReplay.Replay.Map });
 
             var contains = await Policy
                     .Handle<Exception>()
                     .OrResult<bool>(result => result == false)
-                    .WaitAndRetryAsync(retryCount: 60, sleepDurationProvider: retry => settings.OCR.CheckSleepDuration)
-                    .ExecuteAsync((t) => ContainsAnyAsync(searchTerms), tokenProvider.Token).ConfigureAwait(false);
+                    .WaitAndRetryAsync(retryCount: 60, sleepDurationProvider: retry => settings.Value.Ocr.CheckSleepDuration)
+                    .ExecuteAsync((t) => ContainsAnyAsync(searchTerms), cts.Token).ConfigureAwait(false);
         }
 
         public async Task<TimeSpan?> TryGetTimerAsync()
@@ -155,9 +154,9 @@ namespace HeroesReplay.Core.Services.Observer
                 {
                     if (timerBitmap == null) return null;
 
-                    if (settings.Capture.SaveTimerRegion)
+                    if (settings.Value.Capture.SaveTimerRegion)
                     {
-                        timerBitmap.Save(Path.Combine(settings.CapturesPath, "timer-" + Guid.NewGuid().ToString() + ".bmp"));
+                        timerBitmap.Save(Path.Combine(settings.Value.CapturesPath, "timer-" + Guid.NewGuid().ToString() + ".bmp"));
                     }
 
                     return await ConvertBitmapTimerToTimeSpan(timerBitmap).ConfigureAwait(false);
@@ -181,10 +180,10 @@ namespace HeroesReplay.Core.Services.Observer
                     TimeSpan? timer = TryParseTimeSpan(ocrResult.Text);
 
                     if (timer.HasValue) return timer;
-                    else if (settings.Capture.SaveCaptureFailureCondition)
+                    else if (settings.Value.Capture.SaveCaptureFailureCondition)
                     {
-                        Directory.CreateDirectory(settings.CapturesPath);
-                        resized.Save(Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
+                        Directory.CreateDirectory(settings.Value.CapturesPath);
+                        resized.Save(Path.Combine(settings.Value.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
                     }
 
                     return null;
@@ -242,19 +241,19 @@ namespace HeroesReplay.Core.Services.Observer
             try
             {
                 string time = new string(SanitizeOcrTimer(text));
-                string[] segments = time.Split(settings.OCR.TimerSeperator);
+                string[] segments = time.Split(settings.Value.Ocr.TimerSeperator);
 
-                if (segments.Length == settings.OCR.TimerHours)
+                if (segments.Length == settings.Value.Ocr.TimerHours)
                 {
-                    return time.ParseTimerHours(settings.OCR.TimeSpanFormatHours);
+                    return time.ParseTimerHours(settings.Value.Ocr.TimeSpanFormatHours);
                 }
-                else if (segments.Length == settings.OCR.TimerMinutes && segments[0].StartsWith(settings.OCR.TimerNegativePrefix))
+                else if (segments.Length == settings.Value.Ocr.TimerMinutes && segments[0].StartsWith(settings.Value.Ocr.TimerNegativePrefix))
                 {
-                    return time.ParseNegativeTimerMinutes(settings.OCR.TimeSpanFormatMatchStart);
+                    return time.ParseNegativeTimerMinutes(settings.Value.Ocr.TimeSpanFormatMatchStart);
                 }
-                else if (segments.Length == settings.OCR.TimerMinutes)
+                else if (segments.Length == settings.Value.Ocr.TimerMinutes)
                 {
-                    return time.ParsePositiveTimerMinutes(settings.OCR.TimerSeperator);
+                    return time.ParsePositiveTimerMinutes(settings.Value.Ocr.TimerSeperator);
                 }
 
                 throw new Exception($"Unhandled segments: {segments.Length}");
@@ -286,7 +285,7 @@ namespace HeroesReplay.Core.Services.Observer
                 .ToArray();
         }
 
-        private async Task<bool> IsHomeScreen() => IsLaunched && await ContainsAnyAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
+        private async Task<bool> IsHomeScreen() => IsLaunched && await ContainsAnyAsync(settings.Value.Ocr.HomeScreenText).ConfigureAwait(false);
 
         private async Task<bool> IsReplay() => IsLaunched && (await TryGetTimerAsync().ConfigureAwait(false)) != null;
 
@@ -311,10 +310,10 @@ namespace HeroesReplay.Core.Services.Observer
                         }
                     }
 
-                    if (settings.Capture.SaveCaptureFailureCondition)
+                    if (settings.Value.Capture.SaveCaptureFailureCondition)
                     {
-                        Directory.CreateDirectory(settings.CapturesPath);
-                        capture.Save(Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
+                        Directory.CreateDirectory(settings.Value.CapturesPath);
+                        capture.Save(Path.Combine(settings.Value.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
                     }
                 }
             }
@@ -386,18 +385,23 @@ namespace HeroesReplay.Core.Services.Observer
                     .Or<InvalidOperationException>()
                     .Or<NotSupportedException>()
                     .OrResult(false)
-                    .WaitAndRetry(retryCount: 5, sleepDurationProvider: (retry) => TimeSpan.FromSeconds(Math.Pow(2, retry)), OnRetry)
+                    .WaitAndRetry(retryCount: 5, sleepDurationProvider: (retry) => TimeSpan.FromSeconds(Math.Pow(2, retry)), OnKillRetry)
                     .Execute(() =>
                     {
-                        foreach (var process in Process.GetProcessesByName(settings.Process.HeroesOfTheStorm))
+                        foreach (var process in Process.GetProcessesByName(settings.Value.Process.HeroesOfTheStorm))
                         {
                             using (process)
                             {
+
+                                // TODO:
+                                // 1. Try to close window + select 'Leave'
+                                // 2. Check if process is exited
+                                // 3. If not exited, force kill the process.
                                 process.Kill();
                             }
                         }
 
-                        return !Process.GetProcessesByName(settings.Process.HeroesOfTheStorm).Any();
+                        return !Process.GetProcessesByName(settings.Value.Process.HeroesOfTheStorm).Any();
                     });
 
                 logger.Log(killed ? LogLevel.Information : LogLevel.Error, $"Game process killed: {killed}");
@@ -408,7 +412,7 @@ namespace HeroesReplay.Core.Services.Observer
             }
         }
 
-        private void OnRetry(DelegateResult<bool> result, TimeSpan arg2)
+        private void OnKillRetry(DelegateResult<bool> result, TimeSpan arg2)
         {
             if (result.Exception != null)
             {

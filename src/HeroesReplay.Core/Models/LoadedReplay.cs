@@ -1,5 +1,6 @@
 ﻿using Heroes.ReplayParser;
 using System.IO;
+using System.Text.Json.Serialization;
 
 namespace HeroesReplay.Core.Models
 {
@@ -9,8 +10,13 @@ namespace HeroesReplay.Core.Models
     public class LoadedReplay
     {
         public int? ReplayId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.Always)]
         public Replay Replay { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.Always)]
         public FileInfo FileInfo { get; set; }
+
         public HeroesProfileReplay HeroesProfileReplay { get; set; }
         public RewardQueueItem RewardQueueItem { get; set; }
     }

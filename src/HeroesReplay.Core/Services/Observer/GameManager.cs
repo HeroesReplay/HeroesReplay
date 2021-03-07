@@ -6,46 +6,32 @@ using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 
+using Microsoft.Extensions.Options;
+
 namespace HeroesReplay.Core.Services.Observer
 {
     public class GameManager : IGameManager
     {
-        private readonly AppSettings settings;
-        private readonly IReplayContextSetter contextSetter;
+        private readonly IOptions<AppSettings> settings;
         private readonly ISpectator spectator;
         private readonly IGameController gameController;
-        private readonly IObsController obsController;
+        private readonly IContextManager contextManager;
 
-        public GameManager(AppSettings settings, IReplayContextSetter contextSetter, ISpectator spectator, IGameController gameController, IObsController obsController)
+        public GameManager(IOptions<AppSettings> settings, IContextManager contextManager, ISpectator spectator, IGameController gameController)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            this.contextSetter = contextSetter ?? throw new ArgumentNullException(nameof(contextSetter));
+            this.contextManager = contextManager ?? throw new ArgumentNullException(nameof(contextManager));
             this.spectator = spectator ?? throw new ArgumentNullException(nameof(spectator));
             this.gameController = gameController ?? throw new ArgumentNullException(nameof(gameController));
-            this.obsController = obsController ?? throw new ArgumentNullException(nameof(obsController));
         }
 
         public async Task LaunchAndSpectate(LoadedReplay loadedReplay)
         {
-            await contextSetter.SetContextAsync(loadedReplay);
+            await contextManager.SetContextAsync(loadedReplay);
             await gameController.LaunchAsync();
 
-            if (settings.OBS.Enabled)
-            {
-                obsController.ConfigureFromContext();
-                obsController.SwapToGameScene();
-                obsController.StartRecording();
-                await spectator.SpectateAsync();
-                obsController.StopRecording();
-                gameController.Kill();
-                await obsController.CycleReportAsync();
-                obsController.SwapToWaitingScene();
-            }
-            else
-            {
-                await spectator.SpectateAsync();
-                gameController.Kill();
-            }
+            await spectator.SpectateAsync();
+            gameController.Kill();
         }
     }
 }

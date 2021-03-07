@@ -13,6 +13,7 @@ using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.Queue
 {
@@ -21,21 +22,20 @@ namespace HeroesReplay.Core.Services.Queue
         private readonly FileInfo queueFile;
         private readonly FileInfo failedFile;
         private readonly ILogger<RequestQueue> logger;
-        private readonly IHeroesProfileService heroesProfileService;
-        private readonly AppSettings settings;
+        private readonly IHeroesProfileService hpService;
+        private readonly IOptions<AppSettings> settings;
         private readonly JsonSerializerOptions options;
         private readonly SemaphoreSlim successSemaphore;
         private readonly SemaphoreSlim failedSemaphore;
 
-        public RequestQueue(ILogger<RequestQueue> logger, IHeroesProfileService heroesProfileService, AppSettings settings)
+        public RequestQueue(ILogger<RequestQueue> logger, IHeroesProfileService hpService, IOptions<AppSettings> settings)
         {
-            this.logger = logger;
-            this.heroesProfileService = heroesProfileService;
-            this.settings = settings;
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.hpService = hpService ?? throw new ArgumentNullException(nameof(hpService));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
-            queueFile = new FileInfo(Path.Combine(settings.Location.DataDirectory, settings.Twitch.QueueFileName));
-            failedFile = new FileInfo(Path.Combine(settings.Location.DataDirectory, settings.Twitch.FailedFileName));
-
+            queueFile = new FileInfo(Path.Combine(settings.Value.Location.DataDirectory, settings.Value.Queue.SuccessFileName));
+            failedFile = new FileInfo(Path.Combine(settings.Value.Location.DataDirectory, settings.Value.Queue.FailedFileName));
             options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
             successSemaphore = new SemaphoreSlim(1, maxCount: 1);
             failedSemaphore = new SemaphoreSlim(1, maxCount: 1);
@@ -49,7 +49,6 @@ namespace HeroesReplay.Core.Services.Queue
                 {
                     await successSemaphore.WaitAsync();
                     List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(queueFile.FullName), options);
-                    successSemaphore.Release();
                     return requests.Count;
                 }
                 finally
@@ -89,7 +88,7 @@ namespace HeroesReplay.Core.Services.Queue
 
         private async Task<RewardResponse> QueueByReplayIdAsync(RewardRequest request)
         {
-            HeroesProfileReplay replay = await heroesProfileService.GetReplayByIdAsync(request.ReplayId.Value);
+            HeroesProfileReplay replay = await hpService.GetReplayByIdAsync(request.ReplayId.Value);
 
             if (replay == null)
             {
@@ -103,10 +102,10 @@ namespace HeroesReplay.Core.Services.Queue
                 return new RewardResponse(success: false, message: $"the raw file for replay id {request.ReplayId.Value} is no longer available.");
             }
 
-            if (!replay.GameVersion.Equals(settings.Spectate.VersionSupported))
+            if (!replay.GameVersion.Equals(settings.Value.Spectate.VersionSupported))
             {
                 await AddToFailedRequestsAsync(new RewardQueueItem(request, replay));
-                return new RewardResponse(success: false, message: $"the version found '{replay.GameVersion}' does not match the supported version '{settings.Spectate.VersionSupported}'");
+                return new RewardResponse(success: false, message: $"the version found '{replay.GameVersion}' does not match the supported version '{settings.Value.Spectate.VersionSupported}'");
             }
 
             int position = await QueueReplayId(new RewardQueueItem(request, replay));
@@ -152,7 +151,7 @@ namespace HeroesReplay.Core.Services.Queue
 
         private async Task<RewardResponse> QueueByRewardFilterAsync(RewardRequest request)
         {
-            IEnumerable<HeroesProfileReplay> replays = await heroesProfileService.GetReplaysByFilters(request.GameType, request.Rank, request.Map);
+            IEnumerable<HeroesProfileReplay> replays = await hpService.GetReplaysByFilters(request.GameType, request.Rank, request.Map);
             HeroesProfileReplay replay = replays.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
 
             if (replay != null)
@@ -165,40 +164,6 @@ namespace HeroesReplay.Core.Services.Queue
                 await AddToFailedRequestsAsync(new RewardQueueItem(request, replay));
                 return new RewardResponse(success: false, message: "Request failed to queue because the given reward criteria could not be found");
             }
-        }
-
-        public async Task<RewardQueueItem> DequeueItemAsync()
-        {
-            if (queueFile.Exists)
-            {
-                try
-                {
-                    await successSemaphore.WaitAsync();
-                    List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(queueFile.FullName), options);
-
-                    if (items.Count > 0)
-                    {
-                        RewardQueueItem item = items[0];
-
-                        if (items.Remove(item))
-                        {
-                            await File.WriteAllTextAsync(queueFile.FullName, JsonSerializer.Serialize(items, options));
-                            logger.LogInformation($"Request: '{item.Request.RewardTitle}' removed from the queue.");
-                            return item;
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "Could not dequeue item");
-                }
-                finally
-                {
-                    successSemaphore.Release();
-                }
-            }
-
-            return null;
         }
 
         public async Task<(RewardQueueItem Item, int Position)?> RemoveItemAsync(string login)

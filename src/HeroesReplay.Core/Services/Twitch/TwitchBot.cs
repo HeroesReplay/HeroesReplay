@@ -13,6 +13,7 @@ using TwitchLib.Client.Models;
 using TwitchLib.Communication.Events;
 using TwitchLib.PubSub.Events;
 using TwitchLib.PubSub.Interfaces;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.Twitch
 {
@@ -25,7 +26,7 @@ namespace HeroesReplay.Core.Services.Twitch
         private readonly ITwitchAPI api;
         private readonly ITwitchPubSub pubSub;
 
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly ConnectionCredentials credentials;
         private readonly ILogger<TwitchBot> logger;
 
@@ -34,7 +35,7 @@ namespace HeroesReplay.Core.Services.Twitch
 
         public TwitchBot(
             ILogger<TwitchBot> logger,
-            AppSettings settings,
+            IOptions<AppSettings> settings,
             ConnectionCredentials credentials,
             ITwitchAPI api,
             ITwitchPubSub pubSub,
@@ -54,31 +55,39 @@ namespace HeroesReplay.Core.Services.Twitch
 
         public async Task InitializeAsync()
         {
-            if (settings.Twitch.EnableChatBot)
+            if (settings.Value.Twitch.EnableChatBot)
             {
-                client.Initialize(credentials, settings.Twitch.Channel);
-                client.OnLog += Client_OnLog;
-                client.OnMessageReceived += Client_OnMessageReceived;
-                client.OnConnected += Client_OnConnected;
-                client.OnDisconnected += Client_OnDisconnected;
-                client.OnConnectionError += Client_OnConnectionError;
-                client.Connect();
+                client.Initialize(credentials, settings.Value.Twitch.Channel);
+                WireChatEvents();
+
             }
 
-            if (settings.Twitch.EnablePubSub)
+            if (settings.Value.Twitch.EnablePubSub)
             {
                 string channelId = await GetChannelId();
 
                 pubSub.ListenToRewards(channelId);
-
-                pubSub.OnRewardRedeemed += PubSub_OnRewardRedeemed;
-                pubSub.OnLog += PubSub_OnLog;
-                pubSub.OnPubSubServiceConnected += PubSub_OnPubSubServiceConnected;
-                pubSub.OnPubSubServiceError += PubSub_OnPubSubServiceError;
-                pubSub.OnPubSubServiceClosed += PubSub_OnPubSubServiceClosed;
-
+                WirePubSub();
                 pubSub.Connect();
             }
+        }
+
+        private void WirePubSub()
+        {
+            pubSub.OnRewardRedeemed += PubSub_OnRewardRedeemed;
+            pubSub.OnLog += PubSub_OnLog;
+            pubSub.OnPubSubServiceConnected += PubSub_OnPubSubServiceConnected;
+            pubSub.OnPubSubServiceError += PubSub_OnPubSubServiceError;
+            pubSub.OnPubSubServiceClosed += PubSub_OnPubSubServiceClosed;
+        }
+
+        private void WireChatEvents()
+        {
+            client.OnLog += Client_OnLog;
+            client.OnMessageReceived += Client_OnMessageReceived;
+            client.OnConnected += Client_OnConnected;
+            client.OnDisconnected += Client_OnDisconnected;
+            client.OnConnectionError += Client_OnConnectionError;
         }
 
         private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
@@ -98,7 +107,7 @@ namespace HeroesReplay.Core.Services.Twitch
         {
             logger.LogInformation("Connected. Sending topics to subscribe to.");
 
-            pubSub.SendTopics(settings.Twitch.AccessToken, unlisten: false);
+            pubSub.SendTopics(settings.Value.Twitch.AccessToken, unlisten: false);
         }
 
         private void PubSub_OnPubSubServiceClosed(object sender, EventArgs e)
@@ -138,9 +147,27 @@ namespace HeroesReplay.Core.Services.Twitch
 
         private async Task<string> GetChannelId()
         {
-            var userResponse = await api.Helix.Users.GetUsersAsync(logins: new List<string>() { settings.Twitch.Channel });
+            var userResponse = await api.Helix.Users.GetUsersAsync(logins: new List<string>() { settings.Value.Twitch.Channel });
             var channelId = userResponse.Users[0].Id;
             return channelId;
+        }
+
+        public async Task StartAsync()
+        {
+            await InitializeAsync();
+        }
+
+        public async Task StopAsync()
+        {
+            if (settings.Value.Twitch.EnableChatBot)
+            {
+                this.client.Disconnect();
+            }
+
+            if (settings.Value.Twitch.EnablePubSub)
+            {
+                this.pubSub.Disconnect();
+            }
         }
     }
 }

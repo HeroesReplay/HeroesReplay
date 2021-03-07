@@ -4,14 +4,15 @@ using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class NearEnemyCalculator : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
 
-        public NearEnemyCalculator(AppSettings settings)
+        public NearEnemyCalculator(IOptions<AppSettings> settings)
         {
             this.settings = settings;
         }
@@ -40,19 +41,19 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                         {
                             var distance = teamTwoPos.Point.DistanceTo(teamOnePos.Point);
 
-                            if (distance <= settings.Spectate.MaxDistanceToEnemy)
+                            if (distance <= settings.Value.Spectate.MaxDistanceToEnemy)
                             {
                                 var heroes = new[] { teamOneUnit, teamTwoUnit };
                                 Unit target = heroes.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
                                 Unit enemy = heroes.Except(new[] { target }).FirstOrDefault();
 
-                                float prioritiseCloserHero = Convert.ToSingle(distance) / settings.Weights.NearEnemyHeroDistanceDivisor;
+                                float prioritiseCloserHero = Convert.ToSingle(distance) / settings.Value.Weights.NearEnemyHeroDistanceDivisor;
 
                                 yield return new Focus(
                                     GetType(),
                                     target,
                                     target.PlayerControlledBy,
-                                    settings.Weights.NearEnemyHero + settings.Weights.NearEnemyHeroOffset - prioritiseCloserHero,
+                                    settings.Value.Weights.NearEnemyHero + settings.Value.Weights.NearEnemyHeroOffset - prioritiseCloserHero,
                                     $"{target.PlayerControlledBy.Character} is in proximity of {enemy.PlayerControlledBy.Character} ({distance})");
                             }
                         }

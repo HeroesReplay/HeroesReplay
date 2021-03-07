@@ -21,11 +21,6 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards
 
         private List<SupportedReward> GetRewards()
         {
-
-            //List<GameRank> tiers = Enum.GetValues(typeof(GameRank))
-            //                           .OfType<GameRank>()
-            //                           .ToList();
-
             var rewards = new List<SupportedReward>();
 
             var rankedMaps = gameData.Maps.Where(m => m.Playable && m.RankedRotation);

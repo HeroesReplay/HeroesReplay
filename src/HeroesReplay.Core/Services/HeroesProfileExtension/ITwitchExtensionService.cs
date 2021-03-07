@@ -6,11 +6,11 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
     public interface ITwitchExtensionService
     {
-        Task<string> CreateReplaySessionAsync(ExtensionPayload payload, CancellationToken token = default);
-        Task<bool> CreatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
-        Task<bool> UpdatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
-        Task<bool> UpdateReplayDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token = default);
-        Task<bool> UpdatePlayerTalentsAsync(List<ExtensionPayload> lists, string sessionId, CancellationToken token = default);
+        Task<string> CreateReplaySessionAsync(TalentsPayload payload, CancellationToken token = default);
+        Task<bool> CreatePlayerDataAsync(TalentsPayload payload, string sessionId, CancellationToken token = default);
+        Task<bool> UpdatePlayerDataAsync(TalentsPayload payload, string sessionId, CancellationToken token = default);
+        Task<bool> UpdateReplayDataAsync(TalentsPayload payload, string sessionId, CancellationToken token = default);
+        Task<bool> UpdatePlayerTalentsAsync(List<TalentsPayload> lists, string sessionId, CancellationToken token = default);
         Task<bool> NotifyTwitchAsync(CancellationToken token = default);
     }
 }

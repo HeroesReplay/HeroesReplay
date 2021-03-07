@@ -1,29 +1,32 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
+
 using Heroes.ReplayParser;
+
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.Providers
 {
-
     public sealed class ReplayFileProvider : IReplayProvider
     {
         private readonly ILogger<ReplayFileProvider> logger;
         private readonly IReplayLoader loader;
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly IReplayHelper replayHelper;
         private readonly FileInfo fileInfo;
 
-        public ReplayFileProvider(ILogger<ReplayFileProvider> logger, IReplayLoader loader, AppSettings settings, IReplayHelper replayHelper)
+        public ReplayFileProvider(ILogger<ReplayFileProvider> logger, IReplayLoader loader, IOptions<AppSettings> settings, IReplayHelper replayHelper)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
-            fileInfo = new FileInfo(settings.Location.ReplaySource);
+            fileInfo = new FileInfo(settings.Value.Location.ReplaySource);
         }
 
         public async Task<LoadedReplay> TryLoadNextReplayAsync()

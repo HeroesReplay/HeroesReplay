@@ -2,15 +2,16 @@
 using System.IO;
 using HeroesReplay.Core.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.Providers
 {
     public class ReplayHelper : IReplayHelper
     {
         private readonly ILogger<ReplayHelper> logger;
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
 
-        public ReplayHelper(ILogger<ReplayHelper> logger, AppSettings settings)
+        public ReplayHelper(ILogger<ReplayHelper> logger, IOptions<AppSettings> settings)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -22,7 +23,7 @@ namespace HeroesReplay.Core.Services.Providers
 
             try
             {
-                replayId = int.Parse(Path.GetFileName(path).Split(settings.StormReplay.Seperator)[0]);
+                replayId = int.Parse(Path.GetFileName(path).Split(settings.Value.StormReplay.Seperator)[0]);
                 return true;
             }
             catch (Exception)

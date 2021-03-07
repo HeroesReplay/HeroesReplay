@@ -1,4 +1,5 @@
-﻿using System;
+﻿
+using System;
 using System.Globalization;
 
 namespace HeroesReplay.Core.Extensions

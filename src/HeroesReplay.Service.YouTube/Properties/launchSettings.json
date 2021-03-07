@@ -1,0 +1,10 @@
+﻿{
+  "profiles": {
+    "HeroesReplay.Service.YouTube": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

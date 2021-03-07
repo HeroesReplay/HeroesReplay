@@ -8,6 +8,7 @@ using TwitchLib.Communication.Events;
 
 namespace HeroesReplay.Core.Services.Twitch
 {
+    
     public class FakeTwitchClient : ITwitchClient
     {
         private readonly ILogger<FakeTwitchBot> logger;

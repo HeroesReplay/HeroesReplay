@@ -8,9 +8,10 @@
     using System.Threading.Tasks;
 
     using HeroesReplay.Core.Configuration;
-    using HeroesReplay.Core.Services.Shared;
+    using HeroesReplay.Core.Extensions;
 
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
 
     using Polly;
     public class TwitchExtensionService : ITwitchExtensionService
@@ -20,7 +21,8 @@
         private readonly FormUrlEncodedContent notifyContent;
         private readonly ILogger<TwitchExtensionService> logger;
         private readonly HttpClient httpClient;
-        private readonly CancellationTokenProvider tokenProvider;
+        private readonly CancellationTokenSource tokenProvider;
+        private readonly IOptions<AppSettings> settings;
 
         private const string SaveReplayUrl = @"save/replay";
         private const string UpdateReplayUrl = @"update/replay/";
@@ -29,27 +31,24 @@
         private const string SaveTalentUrl = @"save/talent";
         private const string NotifyTalentUpdate = @"notify/talent/update";
 
-        public TwitchExtensionService(
-            ILogger<TwitchExtensionService> logger, 
-            HttpClient httpClient, 
-            CancellationTokenProvider tokenProvider, 
-            AppSettings settings)
+        public TwitchExtensionService(ILogger<TwitchExtensionService> logger, HttpClient httpClient, CancellationTokenSource tokenProvider, IOptions<AppSettings> settings)
         {
-            notifyContent = new(new Dictionary<string, string>
-            {
-                { ExtensionFormKeys.TwitchKey, settings.TwitchExtension.ApiKey },
-                { ExtensionFormKeys.Email, settings.TwitchExtension.ApiEmail },
-                { ExtensionFormKeys.TwitchUserName, settings.TwitchExtension.TwitchUserName },
-                { ExtensionFormKeys.UserId, settings.TwitchExtension.ApiUserId }
-            });
-
+            this.settings = settings;
             this.logger = logger;
             this.httpClient = httpClient;
             this.tokenProvider = tokenProvider;
-            this.httpClient.BaseAddress = settings.HeroesProfileApi.TwitchBaseUri;
+            this.httpClient.BaseAddress = settings.Value.HeroesProfileApi.TwitchBaseUri;
+
+            notifyContent = new(new Dictionary<string, string>
+            {
+                { FormKeys.TwitchKey, settings.Value.TwitchExtension.ApiKey },
+                { FormKeys.Email, settings.Value.TwitchExtension.ApiEmail },
+                { FormKeys.TwitchUserName, settings.Value.TwitchExtension.TwitchUserName },
+                { FormKeys.UserId, settings.Value.TwitchExtension.ApiUserId }
+            });
         }
 
-        public async Task<string> CreateReplaySessionAsync(ExtensionPayload payload, CancellationToken token)
+        public async Task<string> CreateReplaySessionAsync(TalentsPayload payload, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -92,7 +91,7 @@
             return null;
         }
 
-        public async Task<bool> CreatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token)
+        public async Task<bool> CreatePlayerDataAsync(TalentsPayload payload, string sessionId, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -133,7 +132,7 @@
             return responses.All(response => response.IsSuccessStatusCode);
         }
 
-        public async Task<bool> UpdateReplayDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token)
+        public async Task<bool> UpdateReplayDataAsync(TalentsPayload payload, string sessionId, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -169,7 +168,7 @@
             return false;
         }
 
-        public async Task<bool> UpdatePlayerDataAsync(ExtensionPayload payload, string sessionId, CancellationToken token)
+        public async Task<bool> UpdatePlayerDataAsync(TalentsPayload payload, string sessionId, CancellationToken token)
         {
             if (payload == null)
                 throw new ArgumentNullException(nameof(payload));
@@ -210,7 +209,7 @@
             return responses.All(x => x.IsSuccessStatusCode);
         }
 
-        public async Task<bool> UpdatePlayerTalentsAsync(List<ExtensionPayload> talentPayloads, string sessionId, CancellationToken token)
+        public async Task<bool> UpdatePlayerTalentsAsync(List<TalentsPayload> talentPayloads, string sessionId, CancellationToken token)
         {
             if (talentPayloads == null)
                 throw new ArgumentNullException(nameof(talentPayloads));

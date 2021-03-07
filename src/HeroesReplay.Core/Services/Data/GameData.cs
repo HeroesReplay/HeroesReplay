@@ -14,6 +14,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using static Heroes.ReplayParser.Unit;
 
@@ -47,7 +48,7 @@ namespace HeroesReplay.Core.Services.Data
         private const string HeroicTalent = "Talent";
 
         private readonly ILogger<GameData> logger;
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
 
         public IReadOnlyDictionary<string, UnitGroup> UnitGroups { get; private set; }
         public IReadOnlyList<Map> Maps { get; private set; }
@@ -56,7 +57,7 @@ namespace HeroesReplay.Core.Services.Data
         public IReadOnlyCollection<string> BossUnits { get; private set; }
         public IReadOnlyCollection<string> VehicleUnits { get; private set; }
 
-        public GameData(ILogger<GameData> logger, AppSettings settings)
+        public GameData(ILogger<GameData> logger, IOptions<AppSettings> settings)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -65,7 +66,7 @@ namespace HeroesReplay.Core.Services.Data
         private async Task LoadHeroesAsync()
         {
             var file = Directory
-               .GetFiles(settings.HeroesDataPath, "herodata_*.json", SearchOption.AllDirectories)
+               .GetFiles(settings.Value.HeroesDataPath, "herodata_*.json", SearchOption.AllDirectories)
                .OrderByDescending(x => int.Parse(Path.GetFileName(x).Split('_')[1])).FirstOrDefault();
 
             var heroData = await File.ReadAllTextAsync(file);
@@ -88,7 +89,7 @@ namespace HeroesReplay.Core.Services.Data
 
         private async Task LoadMapsAsync()
         {
-            var json = await File.ReadAllTextAsync(Path.Combine(settings.AssetsPath, "Maps.json")).ConfigureAwait(false);
+            var json = await File.ReadAllTextAsync(Path.Combine(settings.Value.AssetsPath, "Maps.json")).ConfigureAwait(false);
 
             using (var mapJson = JsonDocument.Parse(json))
             {
@@ -106,21 +107,21 @@ namespace HeroesReplay.Core.Services.Data
         {
             logger.LogInformation("Downloading heroes-data if needed.");
 
-            var release = settings.HeroesToolChest.HeroesDataReleaseUri;
+            var release = settings.Value.HeroesToolChest.HeroesDataReleaseUri;
 
-            if (Directory.Exists(settings.HeroesDataPath) && Directory.EnumerateFiles(settings.HeroesDataPath, "*.json", SearchOption.AllDirectories).Any())
+            if (Directory.Exists(settings.Value.HeroesDataPath) && Directory.EnumerateFiles(settings.Value.HeroesDataPath, "*.json", SearchOption.AllDirectories).Any())
             {
                 logger.LogDebug("Heroes Data exists. No need to download HeroesToolChest hero-data.");
             }
             else
             {
-                logger.LogDebug($"heroes-data does not exists. Downloading files to: {settings.HeroesDataPath}");
+                logger.LogDebug($"heroes-data does not exists. Downloading files to: {settings.Value.HeroesDataPath}");
 
-                Directory.CreateDirectory(settings.HeroesDataPath);
+                Directory.CreateDirectory(settings.Value.HeroesDataPath);
 
                 using (var client = new HttpClient())
                 {
-                    var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{settings.Github.User}:{settings.Github.AccessToken}"));
+                    var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{settings.Value.Github.User}:{settings.Value.Github.AccessToken}"));
 
                     client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("HeroesReplay", "1.0"));
                     client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", base64);
@@ -137,7 +138,7 @@ namespace HeroesReplay.Core.Services.Data
 
                             using (var data = await client.GetStreamAsync(new Uri(uri)).ConfigureAwait(false))
                             {
-                                using (var write = File.OpenWrite(Path.Combine(settings.HeroesDataPath, name)))
+                                using (var write = File.OpenWrite(Path.Combine(settings.Value.HeroesDataPath, name)))
                                 {
                                     await data.CopyToAsync(write).ConfigureAwait(false);
                                     logger.LogInformation("Saving heroes-data...");
@@ -145,12 +146,12 @@ namespace HeroesReplay.Core.Services.Data
                                 }
                             }
 
-                            using (var reader = File.OpenRead(Path.Combine(settings.HeroesDataPath, name)))
+                            using (var reader = File.OpenRead(Path.Combine(settings.Value.HeroesDataPath, name)))
                             {
                                 using (ZipArchive zip = new ZipArchive(reader))
                                 {
                                     logger.LogInformation("Extracting heroes-data...");
-                                    zip.ExtractToDirectory(settings.HeroesDataPath);
+                                    zip.ExtractToDirectory(settings.Value.HeroesDataPath);
                                 }
                             }
                         }
@@ -165,13 +166,13 @@ namespace HeroesReplay.Core.Services.Data
         private async Task LoadUnitsAsync()
         {
             var unitGroups = new Dictionary<string, UnitGroup>();
-            var ignoreUnits = settings.HeroesToolChest.IgnoreUnits.ToList();
+            var ignoreUnits = settings.Value.HeroesToolChest.IgnoreUnits.ToList();
             var bossUnits = new HashSet<string>();
             var coreUnits = new HashSet<string>();
             var vehicleUnits = new HashSet<string>();
 
             var files = Directory
-                .GetFiles(settings.HeroesDataPath, "*.json", SearchOption.AllDirectories)
+                .GetFiles(settings.Value.HeroesDataPath, "*.json", SearchOption.AllDirectories)
                 .Where(x => x.Contains(HeroData) || x.Contains(UnitData))
                 .OrderByDescending(x => x.Contains(HeroData))
                 .ThenBy(x => x.Contains(UnitData));
@@ -182,11 +183,11 @@ namespace HeroesReplay.Core.Services.Data
                 {
                     foreach (var o in document.RootElement.EnumerateObject())
                     {
-                        if (o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement core) && settings.HeroesToolChest.CoreScalingLinkId.Equals(core.GetString()))
+                        if (o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement core) && settings.Value.HeroesToolChest.CoreScalingLinkId.Equals(core.GetString()))
                         {
                             coreUnits.Add(o.Name.Contains(ObjectNameSeperator) ? o.Name.Split(ObjectNameSeperator)[1] : o.Name);
                         }
-                        else if (o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement vehicle) && settings.HeroesToolChest.VehicleScalingLinkIds.Contains(vehicle.GetString()))
+                        else if (o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement vehicle) && settings.Value.HeroesToolChest.VehicleScalingLinkIds.Contains(vehicle.GetString()))
                         {
                             vehicleUnits.Add(o.Name.Contains(ObjectNameSeperator) ? o.Name.Split(ObjectNameSeperator)[1] : o.Name);
                         }
@@ -246,7 +247,7 @@ namespace HeroesReplay.Core.Services.Data
                                 continue;
                             }
 
-                            if (settings.HeroesToolChest.ObjectiveContains.Any(unitName => name.Contains(unitName)))
+                            if (settings.Value.HeroesToolChest.ObjectiveContains.Any(unitName => name.Contains(unitName)))
                             {
                                 unitGroups[name] = UnitGroup.MapObjective;
                                 continue;

@@ -9,9 +9,9 @@
     using HeroesReplay.Core.Models;
     using HeroesReplay.Core.Services.Context;
     using HeroesReplay.Core.Services.HeroesProfileExtension;
-    using HeroesReplay.Core.Services.Shared;
 
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
 
     using Polly;
     public class Spectator : ISpectator
@@ -19,9 +19,9 @@
         private readonly IGameController controller;
         private readonly ITalentNotifier talentsNotifier;
         private readonly ILogger<Spectator> logger;
-        private readonly AppSettings settings;
-        private readonly CancellationTokenProvider consoleTokenProvider;
+        private readonly IOptions<AppSettings> settings;
         private readonly IReplayContext context;
+        private readonly CancellationTokenSource cts;
         private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
         private State State { get; set; }
@@ -34,28 +34,22 @@
 
         private CancellationTokenSource LinkedTokenSource { get; set; }
 
-        public Spectator(
-            ILogger<Spectator> logger,
-            AppSettings settings,
-            IReplayContext sessionHolder,
-            IGameController controller,
-            ITalentNotifier talentsNotifier,
-            CancellationTokenProvider tokenProvider)
+        public Spectator(ILogger<Spectator> logger, IOptions<AppSettings> settings, IReplayContext sessionHolder, IGameController controller, ITalentNotifier talentsNotifier, CancellationTokenSource cts)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.context = sessionHolder ?? throw new ArgumentNullException(nameof(sessionHolder));
             this.controller = controller ?? throw new ArgumentNullException(nameof(controller));
             this.talentsNotifier = talentsNotifier ?? throw new ArgumentNullException(nameof(talentsNotifier));
-            consoleTokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+            this.cts = cts ?? throw new ArgumentNullException(nameof(cts));
 
             panelTimes = new()
             {
-                { Panel.Talents, settings.PanelTimes.Talents },
-                { Panel.DeathDamageRole, settings.PanelTimes.DeathDamageRole },
-                { Panel.KillsDeathsAssists, settings.PanelTimes.KillsDeathsAssists },
-                { Panel.Experience, settings.PanelTimes.Experience },
-                { Panel.CarriedObjectives, settings.PanelTimes.CarriedObjectives },
+                { Panel.Talents, settings.Value.PanelTimes.Talents },
+                { Panel.DeathDamageRole, settings.Value.PanelTimes.DeathDamageRole },
+                { Panel.KillsDeathsAssists, settings.Value.PanelTimes.KillsDeathsAssists },
+                { Panel.Experience, settings.Value.PanelTimes.Experience },
+                { Panel.CarriedObjectives, settings.Value.PanelTimes.CarriedObjectives },
                 { Panel.None, TimeSpan.Zero }
             };
         }
@@ -67,7 +61,7 @@
 
             using (CancelSessionSource = new CancellationTokenSource())
             {
-                using (LinkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(CancelSessionSource.Token, consoleTokenProvider.Token))
+                using (LinkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(CancelSessionSource.Token, cts.Token))
                 {
                     await Task.WhenAll(
                         Task.Run(PanelLoopAsync, LinkedTokenSource.Token),
@@ -80,7 +74,7 @@
 
         private async Task TalentsLoopAsync()
         {
-            if (settings.TwitchExtension.Enabled)
+            if (settings.Value.TwitchExtension.Enabled)
             {
                 talentsNotifier.ClearSession();
 
@@ -89,7 +83,7 @@
                     try
                     {
                         await talentsNotifier.SendCurrentTalentsAsync(Timer, CancelSessionSource.Token).ConfigureAwait(false);
-                        await Task.Delay(TimeSpan.FromSeconds(1), consoleTokenProvider.Token).ConfigureAwait(false);
+                        await Task.Delay(TimeSpan.FromSeconds(1), cts.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
@@ -120,7 +114,7 @@
                         context.Current.Timer = Timer;
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(1), consoleTokenProvider.Token).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(1), cts.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -178,7 +172,7 @@
                 {
                     try
                     {
-                        if (Timer < settings.Spectate.TalentsPanelStartTime)
+                        if (Timer < settings.Value.Spectate.TalentsPanelStartTime)
                         {
                             next = Panel.Talents;
                         }
@@ -189,12 +183,12 @@
                             if (current != Panel.Talents)
                                 next = panel; // It's not important enough to show KDA over Talents
                         }
-                        else if (timeHidden >= settings.Spectate.PanelDownTime)
+                        else if (timeHidden >= settings.Value.Spectate.PanelDownTime)
                         {
                             next = GetNextPanel(current);
                         }
 
-                        bool shouldHide = Timer > settings.Spectate.TalentsPanelStartTime &&
+                        bool shouldHide = Timer > settings.Value.Spectate.TalentsPanelStartTime &&
                                           current != Panel.None &&
                                           timeShown >= panelTimes[current];
 
@@ -207,7 +201,7 @@
                         }
 
                         bool shouldShow = current == Panel.None ||
-                                          timeHidden >= settings.Spectate.PanelDownTime ||
+                                          timeHidden >= settings.Value.Spectate.PanelDownTime ||
                                           next != current;
 
                         if (shouldShow)
@@ -256,8 +250,8 @@
             return await Policy
                 .HandleResult<TimeSpan?>(result => result == null)
                 .WaitAndRetryAsync(
-                        retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd,
-                        sleepDurationProvider: (retry, context) => settings.Spectate.RetryTimerSleepDuration,
+                        retryCount: settings.Value.Spectate.RetryTimerCountBeforeForceEnd,
+                        sleepDurationProvider: (retry, context) => settings.Value.Spectate.RetryTimerSleepDuration,
                         onRetry: OnRetry)
                 .ExecuteAsync((context, token) => controller.TryGetTimerAsync(), new Context("Timer") { { StateKey, State } }, LinkedTokenSource.Token).ConfigureAwait(false);
         }
@@ -265,7 +259,7 @@
         private void OnRetry(DelegateResult<TimeSpan?> outcome, TimeSpan duration, int retryCount, Context context)
         {
             var state = (State)context[StateKey];
-            var isMax = retryCount >= settings.Spectate.RetryTimerCountBeforeForceEnd;
+            var isMax = retryCount >= settings.Value.Spectate.RetryTimerCountBeforeForceEnd;
             var isTimerNotFound = outcome.Result == null;
 
             if (state == State.Loading)

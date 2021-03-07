@@ -10,6 +10,7 @@
     using HeroesReplay.Core.Models;
 
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Options;
 
     using System;
     using System.IO;
@@ -26,33 +27,28 @@
     public class YouTubeUploader : IYouTubeUploader
     {
         private readonly ILogger<YouTubeUploader> logger;
-        private readonly AppSettings settings;
-        private readonly CancellationTokenSource cancellationTokenSource;
+        private readonly IOptions<AppSettings> settings;
+        private readonly CancellationTokenSource cts;
 
-        public YouTubeUploader(ILogger<YouTubeUploader> logger, AppSettings settings, CancellationTokenSource cancellationTokenSource)
+        public YouTubeUploader(ILogger<YouTubeUploader> logger, IOptions<AppSettings> settings, CancellationTokenSource cts)
         {
-            this.logger = logger;
-            this.settings = settings;
-            this.cancellationTokenSource = cancellationTokenSource;
-        }
-
-        private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
-        {
-            await Task.Factory.StartNew(() => ProcessRecording(e.FullPath), cancellationTokenSource.Token, TaskCreationOptions.LongRunning, TaskScheduler.Current);
-        }
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.cts = cts ?? throw new ArgumentNullException(nameof(cts));
+        }        
 
         public async Task ListenAsync()
         {
             await Task.Run(() =>
             {
-                using (var recordingWatcher = new FileSystemWatcher(settings.ContextsDirectory, "*.mp4") { EnableRaisingEvents = true, IncludeSubdirectories = true })
+                using (var recordingWatcher = new FileSystemWatcher(settings.Value.ContextsDirectory, "*.mp4") { EnableRaisingEvents = true, IncludeSubdirectories = true })
                 {
                     recordingWatcher.Created += FileSystemWatcher_Created;
 
                     using (var waiter = new ManualResetEventSlim())
                     {
                         logger.LogInformation("File system watcher listening for mp4 files...");
-                        waiter.Wait(cancellationTokenSource.Token);
+                        waiter.Wait(cts.Token);
                     }
 
                     recordingWatcher.Created -= FileSystemWatcher_Created;
@@ -60,12 +56,17 @@
             });
         }
 
-        public async Task ProcessRecording(string recordingPath)
+        private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
+        {
+            await Task.Factory.StartNew(() => ProcessRecording(e.FullPath), cts.Token, TaskCreationOptions.LongRunning, TaskScheduler.Current);
+        }
+
+        private async Task ProcessRecording(string recordingPath)
         {
             try
             {
                 var recording = new FileInfo(recordingPath);
-                var entryFile = recording.Directory.GetFiles("*.json", SearchOption.TopDirectoryOnly).FirstOrDefault(file => file.Name.Equals(settings.YouTube.EntryFileName, StringComparison.OrdinalIgnoreCase));
+                var entryFile = recording.Directory.GetFiles("*.json", SearchOption.TopDirectoryOnly).FirstOrDefault(file => file.Name.Equals(settings.Value.YouTube.EntryFileName, StringComparison.OrdinalIgnoreCase));
 
                 if (entryFile != null && entryFile.Exists)
                 {
@@ -73,15 +74,17 @@
 
                     UserCredential credential;
 
-                    using (var stream = new FileStream(Path.Combine(settings.Location.DataDirectory, "client_secrets.json"), FileMode.Open, FileAccess.Read))
+                    string secretsFile = Path.Combine(settings.Value.Location.DataDirectory, settings.Value.YouTube.SecretsFileName);
+
+                    using (var stream = new FileStream(secretsFile, FileMode.Open, FileAccess.Read))
                     {
-                        credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(GoogleClientSecrets.Load(stream).Secrets, new[] { YouTubeService.Scope.YoutubeUpload }, settings.YouTube.ChannelId, CancellationToken.None);
+                        credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(GoogleClientSecrets.Load(stream).Secrets, new[] { YouTubeService.Scope.YoutubeUpload }, settings.Value.YouTube.ChannelId, CancellationToken.None);
                     }
 
                     var youtubeService = new YouTubeService(new BaseClientService.Initializer()
                     {
                         HttpClientInitializer = credential,
-                        ApiKey = settings.YouTube.ApiKey,
+                        ApiKey = settings.Value.YouTube.ApiKey,
                         ApplicationName = Assembly.GetExecutingAssembly().GetName().Name
                     });
 
@@ -105,9 +108,9 @@
                         using (var fileStream = recording.OpenRead())
                         {
                             var videosInsertRequest = youtubeService.Videos.Insert(video, "snippet,status", fileStream, "video/*");
-                            videosInsertRequest.ProgressChanged += videosInsertRequest_ProgressChanged;
-                            videosInsertRequest.ResponseReceived += videosInsertRequest_ResponseReceived;
-                            await videosInsertRequest.UploadAsync(cancellationTokenSource.Token);
+                            videosInsertRequest.ProgressChanged += VideosInsertRequest_ProgressChanged;
+                            videosInsertRequest.ResponseReceived += VideosInsertRequest_ResponseReceived;
+                            await videosInsertRequest.UploadAsync(cts.Token);
                         }
                     }
                 }
@@ -118,12 +121,12 @@
             }
         }
 
-        private void videosInsertRequest_ResponseReceived(Video video)
+        private void VideosInsertRequest_ResponseReceived(Video video)
         {
             logger.LogInformation("video response recieved");
         }
 
-        private void videosInsertRequest_ProgressChanged(IUploadProgress progress)
+        private void VideosInsertRequest_ProgressChanged(IUploadProgress progress)
         {
             if (progress.Exception != null)
             {

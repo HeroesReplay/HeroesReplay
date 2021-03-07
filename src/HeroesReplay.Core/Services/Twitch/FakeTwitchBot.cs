@@ -7,42 +7,53 @@ using HeroesReplay.Core.Services.Twitch.ChatMessages;
 using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Models;
-using TwitchLib.PubSub.Events;
-using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 using HeroesReplay.Core.Models;
 using System.Linq;
+using System.Threading;
+using TwitchLib.PubSub.Events;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.Twitch
 {
     public class FakeTwitchBot : ITwitchBot
     {
         private readonly ILogger<FakeTwitchBot> logger;
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly IOnRewardHandler onRewardHandler;
         private readonly IOnMessageHandler onMessageHandler;
         private readonly ICustomRewardsHolder rewardsHolder;
-        private readonly CancellationTokenProvider tokenProvider;
+        private readonly CancellationTokenSource cts;
 
         public FakeTwitchBot(
             ILogger<FakeTwitchBot> logger,
-            AppSettings settings,
+            IOptions<AppSettings> settings,
             IOnRewardHandler onRewardHandler,
             IOnMessageHandler onMessageHandler,
             ICustomRewardsHolder rewardsHolder,
-            CancellationTokenProvider tokenProvider)
+            CancellationTokenSource cts)
         {
             this.logger = logger;
             this.settings = settings;
             this.onRewardHandler = onRewardHandler;
             this.onMessageHandler = onMessageHandler;
             this.rewardsHolder = rewardsHolder;
-            this.tokenProvider = tokenProvider;
+            this.cts = cts;
         }
 
         public async Task InitializeAsync()
         {
             await Task.WhenAll(Task.Run(TriggerOnRewardHandler), Task.Run(TriggerOnMessageHandler));
+        }
+
+        public async Task StartAsync()
+        {
+            await InitializeAsync();
+        }
+
+        public Task StopAsync()
+        {
+            return Task.CompletedTask;
         }
 
         private async Task TriggerOnMessageHandler()
@@ -54,21 +65,21 @@ namespace HeroesReplay.Core.Services.Twitch
                 new ChatMessage(null, "userId", "delegate_", "Delegate_", "colorHex", System.Drawing.Color.Transparent, null, "!requests me", TwitchLib.Client.Enums.UserType.Viewer, "SaltySadism", "id", false, 0, "roomId", false, false, false, false, false, false, false, TwitchLib.Client.Enums.Noisy.NotSet, null, null, null, null, 0, 0),new ChatMessage(null, "userId", "userName", "displayName", "colorHex", System.Drawing.Color.Transparent, null, "message", TwitchLib.Client.Enums.UserType.Viewer, "SaltySadism", "id", false, 0, "roomId", false, false, false, false, false, false, false, TwitchLib.Client.Enums.Noisy.NotSet, null, null, null, null, 0, 0)
             };
 
-            while (!tokenProvider.Token.IsCancellationRequested)
+            while (!cts.Token.IsCancellationRequested)
             {
                 foreach (var message in messages)
                 {
                     onMessageHandler.Handle(new OnMessageReceivedArgs() { ChatMessage = message });
-                    
+
                     logger.LogDebug("waiting to send messages...");
-                    await Task.Delay(TimeSpan.FromSeconds(2));
+                    await Task.Delay(TimeSpan.FromSeconds(10));
                 }
             }
         }
 
         private async Task TriggerOnRewardHandler()
         {
-            while (!tokenProvider.Token.IsCancellationRequested)
+            while (!cts.Token.IsCancellationRequested)
             {
                 foreach (var reward in rewardsHolder.Rewards)
                 {
@@ -79,14 +90,16 @@ namespace HeroesReplay.Core.Services.Twitch
                     if (reward.RewardType.HasFlag(RewardType.Rank))
                         message = Enum.GetName(typeof(GameRank), Enum.GetValues(typeof(GameRank)).Cast<GameRank>().OrderBy(x => Guid.NewGuid()).First());
 
-                    //onRewardHandler.Handle(new OnRewardRedeemedArgs()
-                    //{
-                    //    RedemptionId = Guid.NewGuid(),
-                    //    Login = "delegate_",
-                    //    DisplayName = "Delegate_",
-                    //    RewardTitle = reward.Title,
-                    //    Message = message
-                    //});
+                    onRewardHandler.Handle(new OnRewardRedeemedArgs()
+                    {
+                        RedemptionId = Guid.NewGuid(),
+                        Login = "delegate_",
+                        DisplayName = "Delegate_",
+                        RewardTitle = reward.Title,
+                        Message = message
+                    });
+
+                    await Task.Delay(TimeSpan.FromSeconds(10));
                 }
 
                 logger.LogDebug("waiting to send reward deemed...");

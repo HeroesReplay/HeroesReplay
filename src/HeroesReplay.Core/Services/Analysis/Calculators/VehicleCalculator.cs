@@ -6,14 +6,16 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 
+using Microsoft.Extensions.Options;
+
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class VehicleCalculator : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly IGameData gameData;
 
-        public VehicleCalculator(AppSettings settings, IGameData gameData)
+        public VehicleCalculator(IOptions<AppSettings> settings, IGameData gameData)
         {
             this.settings = settings;
             this.gameData = gameData;
@@ -39,7 +41,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                         GetType(),
                         unit,
                         unit.PlayerControlledBy,
-                        settings.Weights.MapObjective,
+                        settings.Value.Weights.MapObjective,
                         $"{unit.PlayerControlledBy.Character} is inside {unit.Name} (MapObjective).");
                     }
                 }
@@ -69,7 +71,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                             calculator: GetType(),
                                 unit: unit,
                                 target: target,
-                                points: settings.Weights.MapObjective,
+                                points: settings.Value.Weights.MapObjective,
                                 description: $"{target.Character} is inside {unit.Name} (MapObjective) [{unit.OwnerChangeEvents.IndexOf(currentEvent)}]");
                         }
                     }

@@ -6,14 +6,16 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 
+using Microsoft.Extensions.Options;
+
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class NearBossCalculator // : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly IGameData gameData;
 
-        public NearBossCalculator(AppSettings settings, IGameData gameData)
+        public NearBossCalculator(IOptions<AppSettings> settings, IGameData gameData)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
@@ -31,7 +33,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                     bool isNearBoss = heroUnit.Positions
                            .Where(p => p.TimeSpan == now)
                            .Any(playerPos => bossUnit.Positions.Any(bossPos => playerPos.TimeSpan == bossPos.TimeSpan && 
-                                                                               playerPos.Point.DistanceTo(bossPos.Point) < settings.Spectate.MaxDistanceToBoss));
+                                                                               playerPos.Point.DistanceTo(bossPos.Point) < settings.Value.Spectate.MaxDistanceToBoss));
 
                     if (isNearBoss)
                     {
@@ -39,7 +41,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                         GetType(),
                         heroUnit,
                         heroUnit.PlayerControlledBy,
-                        settings.Weights.CaptureBeacon,
+                        settings.Value.Weights.CaptureBeacon,
                         $"{heroUnit.PlayerControlledBy.Character} near {bossUnit.Name} (Boss)");
                     }
                 }

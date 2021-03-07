@@ -5,15 +5,22 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 
+using Microsoft.Extensions.Options;
+
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class KillCalculator : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly WeightOptions weightOptions;
+        private readonly SpectateOptions spectateOptions;
 
-        public KillCalculator(AppSettings settings)
+        public KillCalculator(IOptions<AppSettings> settings)
         {
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            if (settings == null)
+                throw new ArgumentNullException(nameof(settings));
+
+            this.weightOptions = settings.Value.Weights;
+            this.spectateOptions = settings.Value.Spectate;
         }
 
         public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
@@ -27,14 +34,14 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
 
             foreach (IGrouping<Player, Unit> killer in killers)
             {
-                float weight = settings.Weights.PlayerKill + Convert.ToSingle(killer.Count());
+                float weight = weightOptions.PlayerKill + Convert.ToSingle(killer.Count());
 
                 foreach (Unit unit in killer)
                 {
                     var shouldFocusUnitDied = unit.PlayerKilledBy.HeroUnits
                         .SelectMany(p => p.Positions)
                         .Where(p => p.TimeSpan.Add(TimeSpan.FromSeconds(2)) >= now && p.TimeSpan.Subtract(TimeSpan.FromSeconds(2)) <= now)
-                        .Any(p => p.Point.DistanceTo(unit.PointDied) > settings.Spectate.MaxDistanceToEnemyKill);
+                        .Any(p => p.Point.DistanceTo(unit.PointDied) > spectateOptions.MaxDistanceToEnemyKill);
 
                     // Abathur mines, Fenix Beam, Tyrande W etc etc etc
                     if (shouldFocusUnitDied)

@@ -1,6 +1,4 @@
-﻿
-
-namespace HeroesReplay.Core.Services.HeroesProfileExtension
+﻿namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
     using System;
     using System.Linq;
@@ -46,7 +44,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
 
         private async Task SendCreatePayloadsAsync(CancellationToken token = default)
         {
-            ExtensionPayload createReplayPayload = Data.Payloads.Create.Find(p => p.Step == ExtensionStep.CreateReplayData);
+            TalentsPayload createReplayPayload = Data.Payloads.Create.Find(p => p.Step == ExtensionStep.CreateReplayData);
 
             if (createReplayPayload != null)
             {
@@ -63,7 +61,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
             }
             else
             {
-                ExtensionPayload createPlayerPayload = Data.Payloads.Create.Find(p => p.Step == ExtensionStep.CreatePlayerData);
+                TalentsPayload createPlayerPayload = Data.Payloads.Create.Find(p => p.Step == ExtensionStep.CreatePlayerData);
 
                 if (createPlayerPayload != null)
                 {
@@ -79,7 +77,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
 
         private async Task SendUpdatePayloadsAsync(CancellationToken token = default)
         {
-            ExtensionPayload updateReplayPayload = Data.Payloads.Update.Find(p => p.Step == ExtensionStep.UpdateReplayData);
+            TalentsPayload updateReplayPayload = Data.Payloads.Update.Find(p => p.Step == ExtensionStep.UpdateReplayData);
 
             if (updateReplayPayload != null)
             {
@@ -92,7 +90,7 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
             }
             else
             {
-                ExtensionPayload updatePlayerPayload = Data.Payloads.Update.Find(p => p.Step == ExtensionStep.UpdatePlayerData);
+                TalentsPayload updatePlayerPayload = Data.Payloads.Update.Find(p => p.Step == ExtensionStep.UpdatePlayerData);
 
                 if (updatePlayerPayload != null)
                 {

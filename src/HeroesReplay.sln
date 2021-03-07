@@ -8,11 +8,17 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.CLI", "HeroesReplay.CLI\HeroesReplay.CLI.csproj", "{E60B8B1F-265F-4419-9215-832793EFC7F7}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Tests", "HeroesReplay.Tests\HeroesReplay.Tests.csproj", "{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Core", "HeroesReplay.Core\HeroesReplay.Core.csproj", "{1F3B79A5-1AAE-4F1E-A2AD-2D0D30BA4351}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Service.Twitch", "HeroesReplay.Service.Twitch\HeroesReplay.Service.Twitch.csproj", "{4E2BB420-9159-4951-8C8D-970B751D10B5}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Service.Observer", "HeroesReplay.Service.Observer\HeroesReplay.Service.Observer.csproj", "{F88C3996-A5E7-4D94-A581-20ED4BC8D789}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HeroesReplay.Service.YouTube", "HeroesReplay.Service.YouTube\HeroesReplay.Service.YouTube.csproj", "{A21808C2-048A-4AE6-B1A8-3F524F093BFD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HeroesReplay.Service.Obs", "HeroesReplay.Service.Obs\HeroesReplay.Service.Obs.csproj", "{F05C3505-B2E3-4CA3-BAF8-A133BEBE114C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -20,10 +26,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{E60B8B1F-265F-4419-9215-832793EFC7F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E60B8B1F-265F-4419-9215-832793EFC7F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E60B8B1F-265F-4419-9215-832793EFC7F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E60B8B1F-265F-4419-9215-832793EFC7F7}.Release|Any CPU.Build.0 = Release|Any CPU
 		{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{83BE0499-92AE-4EF2-88D3-6AAE21755AB0}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -32,6 +34,22 @@ Global
 		{1F3B79A5-1AAE-4F1E-A2AD-2D0D30BA4351}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1F3B79A5-1AAE-4F1E-A2AD-2D0D30BA4351}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1F3B79A5-1AAE-4F1E-A2AD-2D0D30BA4351}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4E2BB420-9159-4951-8C8D-970B751D10B5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4E2BB420-9159-4951-8C8D-970B751D10B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4E2BB420-9159-4951-8C8D-970B751D10B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4E2BB420-9159-4951-8C8D-970B751D10B5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F88C3996-A5E7-4D94-A581-20ED4BC8D789}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F88C3996-A5E7-4D94-A581-20ED4BC8D789}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F88C3996-A5E7-4D94-A581-20ED4BC8D789}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F88C3996-A5E7-4D94-A581-20ED4BC8D789}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A21808C2-048A-4AE6-B1A8-3F524F093BFD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A21808C2-048A-4AE6-B1A8-3F524F093BFD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A21808C2-048A-4AE6-B1A8-3F524F093BFD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A21808C2-048A-4AE6-B1A8-3F524F093BFD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F05C3505-B2E3-4CA3-BAF8-A133BEBE114C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F05C3505-B2E3-4CA3-BAF8-A133BEBE114C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F05C3505-B2E3-4CA3-BAF8-A133BEBE114C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F05C3505-B2E3-4CA3-BAF8-A133BEBE114C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

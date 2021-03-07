@@ -5,13 +5,15 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 
+using Microsoft.Extensions.Options;
+
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class RoamingCalculator : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
 
-        public RoamingCalculator(AppSettings settings)
+        public RoamingCalculator(IOptions<AppSettings> settings)
         {
             this.settings = settings;
         }
@@ -27,13 +29,13 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
             {
                 Point spawn = heroUnit.PlayerControlledBy.HeroUnits[0].PointBorn;
 
-                foreach (var position in heroUnit.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(spawn) > settings.Spectate.MinDistanceToSpawn))
+                foreach (var position in heroUnit.Positions.Where(p => p.TimeSpan == now && p.Point.DistanceTo(spawn) > settings.Value.Spectate.MinDistanceToSpawn))
                 {
                     yield return new Focus(
                         GetType(), 
                         heroUnit, 
                         heroUnit.PlayerControlledBy,
-                        settings.Weights.Roaming,
+                        settings.Value.Weights.Roaming,
                         $"{heroUnit.PlayerControlledBy.Character} is roaming");
                 }
             }

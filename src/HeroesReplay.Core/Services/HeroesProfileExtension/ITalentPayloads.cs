@@ -5,8 +5,8 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension
 {
     public interface ITalentPayloads
     {
-        List<ExtensionPayload> Create { get; }
-        List<ExtensionPayload> Update { get; }
-        Dictionary<TimeSpan, List<ExtensionPayload>> Talents { get; }
+        List<TalentsPayload> Create { get; }
+        List<TalentsPayload> Update { get; }
+        Dictionary<TimeSpan, List<TalentsPayload>> Talents { get; }
     }
 }

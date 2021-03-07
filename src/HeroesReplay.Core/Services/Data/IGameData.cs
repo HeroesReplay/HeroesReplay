@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
+
 using HeroesReplay.Core.Models;
+
 using static Heroes.ReplayParser.Unit;
 
 namespace HeroesReplay.Core.Services.Data
@@ -13,7 +15,7 @@ namespace HeroesReplay.Core.Services.Data
 
         IReadOnlyCollection<string> CoreUnits { get; }
 
-        IReadOnlyCollection<string> BossUnits { get; }        
+        IReadOnlyCollection<string> BossUnits { get; }
 
         IReadOnlyCollection<string> VehicleUnits { get; }
 

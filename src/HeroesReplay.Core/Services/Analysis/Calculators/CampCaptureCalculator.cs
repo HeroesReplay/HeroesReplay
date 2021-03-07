@@ -7,14 +7,16 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 
+using Microsoft.Extensions.Options;
+
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class CampCaptureCalculator : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly IGameData gameData;
 
-        public CampCaptureCalculator(AppSettings settings, IGameData gameData)
+        public CampCaptureCalculator(IOptions<AppSettings> settings, IGameData gameData)
         {
             this.settings = settings;
             this.gameData = gameData;
@@ -30,7 +32,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                                                                              trackerEvent.TimeSpan.Subtract(TimeSpan.FromSeconds(1)) < now)
                                                                           ) &&
                                                                     trackerEvent.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent &&
-                                                                    trackerEvent.Data.dictionary[0].blobText == settings.TrackerEvents.JungleCampCapture);
+                                                                    trackerEvent.Data.dictionary[0].blobText == settings.Value.TrackerEvents.JungleCampCapture);
 
             foreach (TrackerEvent capture in campCaptures)
             {
@@ -50,7 +52,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                         GetType(),
                         unit,
                         unit.PlayerKilledBy,
-                        settings.Weights.CampCapture,
+                        settings.Value.Weights.CampCapture,
                         $"{unit.PlayerKilledBy.Character} captured {unit.Name} (CampCaptures)");
                     }
                 }

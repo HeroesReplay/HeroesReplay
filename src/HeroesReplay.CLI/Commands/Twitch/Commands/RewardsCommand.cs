@@ -26,13 +26,13 @@ namespace HeroesReplay.CLI.Commands.Twitch.Commands
                 {
                     using (var waiter = new ManualResetEventSlim())
                     {
-                        // Initialize data
                         var gameData = scope.ServiceProvider.GetRequiredService<IGameData>();
                         await gameData.LoadDataAsync();
 
                         ITwitchBot twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
-                        await twitchBot.InitializeAsync();
+                        await twitchBot.StartAsync();
                         waiter.Wait(cancellationToken);
+                        await twitchBot.StopAsync();
                     }
                 }
             }

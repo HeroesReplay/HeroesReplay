@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "HeroesReplay.Service.Twitch": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

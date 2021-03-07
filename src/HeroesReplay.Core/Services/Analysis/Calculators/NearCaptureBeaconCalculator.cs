@@ -1,18 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Heroes.ReplayParser;
+
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
 
     public class NearCaptureBeaconCalculator : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
 
-        public NearCaptureBeaconCalculator(AppSettings settings)
+        public NearCaptureBeaconCalculator(IOptions<AppSettings> settings)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
@@ -26,10 +30,10 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
             {
                 foreach (var captureUnit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero &&
                                                                        unit.TimeSpanDied == null &&
-                                                                       settings.HeroesToolChest.CaptureContains.Any(captureName => unit.Name.Contains(captureName))))
+                                                                       settings.Value.HeroesToolChest.CaptureContains.Any(captureName => unit.Name.Contains(captureName))))
                 {
                     var positions = heroUnit.Positions.Where(p => p.TimeSpan == now &&
-                                                                  p.Point.DistanceTo(captureUnit.PointBorn) < settings.Spectate.MaxDistanceToOwnerChange);
+                                                                  p.Point.DistanceTo(captureUnit.PointBorn) < settings.Value.Spectate.MaxDistanceToOwnerChange);
 
                     /*
                      * This needs to be broken down into seperate capture beacon calculators:
@@ -47,7 +51,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                             GetType(),
                             heroUnit,
                             heroUnit.PlayerControlledBy,
-                            settings.Weights.CaptureBeacon,
+                            settings.Value.Weights.CaptureBeacon,
                             $"{heroUnit.PlayerControlledBy.Character} near {captureUnit.Name} (CaptureBeacons)");
                     }
                 }

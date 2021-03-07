@@ -6,14 +6,16 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 
+using Microsoft.Extensions.Options;
+
 namespace HeroesReplay.Core.Services.Analysis.Calculators
 {
     public class DeathCalculator : IFocusCalculator
     {
-        private readonly AppSettings settings;
+        private readonly IOptions<AppSettings> settings;
         private readonly IGameData gameData;
 
-        public DeathCalculator(AppSettings settings, IGameData gameData)
+        public DeathCalculator(IOptions<AppSettings> settings, IGameData gameData)
         {
             this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
@@ -30,7 +32,7 @@ namespace HeroesReplay.Core.Services.Analysis.Calculators
                     GetType(),
                     unit, 
                     unit.PlayerControlledBy, 
-                    settings.Weights.PlayerDeath,
+                    settings.Value.Weights.PlayerDeath,
                     $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name}");
             }
         }

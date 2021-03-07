@@ -20,4 +20,5 @@ namespace HeroesReplay.Core.Models
         public DirectoryInfo Directory { get; set; }
         public IReadOnlyDictionary<int, IReadOnlyCollection<string>> TeamBans { get; set; }
     }
+
 }

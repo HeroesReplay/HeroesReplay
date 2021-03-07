@@ -13,6 +13,7 @@ using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.HeroesProfileExtension;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace HeroesReplay.Core.Services.Analysis
 {
@@ -21,11 +22,11 @@ namespace HeroesReplay.Core.Services.Analysis
         private readonly IEnumerable<IFocusCalculator> calculators;
         private readonly IGameData gameData;
         private readonly ILogger<ReplayAnalyzer> logger;
-        private readonly AppSettings settings;
-        private readonly IExtensionPayloadsBuilder payloadsBuilder;
+        private readonly IOptions<AppSettings> settings;
+        private readonly IPayloadsBuilder payloadsBuilder;
 
 
-        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, AppSettings settings, IExtensionPayloadsBuilder payloadsBuilder, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
+        public ReplayAnalyzer(ILogger<ReplayAnalyzer> logger, IOptions<AppSettings> settings, IPayloadsBuilder payloadsBuilder, IEnumerable<IFocusCalculator> calculators, IGameData gameData)
         {
             this.calculators = calculators ?? throw new ArgumentNullException(nameof(calculators));
             this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
@@ -50,7 +51,7 @@ namespace HeroesReplay.Core.Services.Analysis
 
             IDictionary<TimeSpan, Panel> panels = new SortedDictionary<TimeSpan, Panel>();
 
-            if (settings.ParseOptions.ShouldParseUnits)
+            if (settings.Value.Parser.ShouldParseUnits)
             {
                 foreach (var deathTime in replay.Players.SelectMany(x => x.HeroUnits).Where(u => u.TimeSpanDied.HasValue).GroupBy(x => x.TimeSpanDied.GetValueOrDefault()))
                 {
@@ -58,11 +59,11 @@ namespace HeroesReplay.Core.Services.Analysis
                 }
             }
 
-            if (settings.ParseOptions.ShouldParseStatistics)
+            if (settings.Value.Parser.ShouldParseStatistics)
             {
                 var padding = TimeSpan.FromSeconds(1);
 
-                foreach (var talentTime in replay.TeamLevels.SelectMany(x => x).Where(x => settings.Spectate.TalentLevels.Contains(x.Key)).Select(x => x.Value))
+                foreach (var talentTime in replay.TeamLevels.SelectMany(x => x).Where(x => settings.Value.Spectate.TalentLevels.Contains(x.Key)).Select(x => x.Value))
                 {
                     panels[talentTime.Subtract(padding)] = Panel.Talents;
                     panels[talentTime] = Panel.Talents;
@@ -121,7 +122,7 @@ namespace HeroesReplay.Core.Services.Analysis
                     continue;
                 }
 
-                for (int second = 1; second < settings.Spectate.PastDeathContextTime.TotalSeconds; second++)
+                for (int second = 1; second < settings.Value.Spectate.PastDeathContextTime.TotalSeconds; second++)
                 {
                     var pastTime = currentTime.Subtract(TimeSpan.FromSeconds(second));
 
@@ -141,7 +142,7 @@ namespace HeroesReplay.Core.Services.Analysis
                 }
 
                 // Reduce jarring VX when the focus swaps after a kill
-                for (int second = 1; second < settings.Spectate.PresentDeathContextTime.TotalSeconds; second++)
+                for (int second = 1; second < settings.Value.Spectate.PresentDeathContextTime.TotalSeconds; second++)
                 {
                     var futureTime = currentTime.Add(TimeSpan.FromSeconds(second));
 
@@ -181,11 +182,11 @@ namespace HeroesReplay.Core.Services.Analysis
             if (replay == null)
                 throw new ArgumentNullException(nameof(replay));
 
-            return replay.TrackerEvents.First(x => x.Data.dictionary[0].blobText == settings.TrackerEvents.GatesOpen).TimeSpan;
+            return replay.TrackerEvents.First(x => x.Data.dictionary[0].blobText == settings.Value.TrackerEvents.GatesOpen).TimeSpan;
         }
 
-        public bool GetIsCarriedObjective(Replay replay) => replay != null && (settings.Maps.CarriedObjectives.Contains(replay.Map) ||
-                                                                               settings.Maps.CarriedObjectives.Contains(replay.MapAlternativeName));
+        public bool GetIsCarriedObjective(Replay replay) => replay != null && (settings.Value.Maps.CarriedObjectives.Contains(replay.Map) ||
+                                                                               settings.Value.Maps.CarriedObjectives.Contains(replay.MapAlternativeName));
 
         public IReadOnlyDictionary<int, IReadOnlyCollection<string>> GetTeamBans(Replay replay)
         {
