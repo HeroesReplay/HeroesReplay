@@ -1,36 +1,25 @@
-
-using Heroes.ReplayParser;
-
-using HeroesReplay.Core;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Analysis;
-using HeroesReplay.Core.Services.Context;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.HeroesProfileExtension;
-using HeroesReplay.Core.Services.Observer;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-using HeroesReplay.Core.Services.Providers;
-using HeroesReplay.Core.Services.Queue;
-
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-
-using OBSWebsocketDotNet;
-
-using Polly.Caching;
-using Polly.Caching.Memory;
-
 using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-
 using Windows.Media.Ocr;
+using HeroesReplay.Core.Services.Analyzer;
+using HeroesReplay.Core.Services.Data;
+using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Services.Queue;
+using HeroesReplay.Service.Spectator.Core;
+using HeroesReplay.Service.Spectator.Core.Context;
+using HeroesReplay.Service.Spectator.Core.HeroesProfileExtension;
+using HeroesReplay.Service.Spectator.Core.Observer;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Polly.Caching;
+using Polly.Caching.Memory;
 
-namespace HeroesReplay.Service.Observer
+namespace HeroesReplay.Service.Spectator
 {
     public class Program
     {
@@ -116,27 +105,21 @@ namespace HeroesReplay.Service.Observer
                 .AddSingleton<IAbilityDetector, AbilityDetector>()
                 .AddSingleton<IGameManager, GameManager>()
                 .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
-                .AddSingleton<ISpectator, Spectator>()
+                .AddSingleton<ISpectator, Core.Observer.Spectator>()
                 .AddSingleton<IReplayLoader, ReplayLoader>()
                 .AddSingleton<IReplayContext, ReplayContext>()
                 .AddSingleton<IHeroesProfileService, HeroesProfileService>()
                 .AddSingleton<IPayloadsBuilder, PayloadsBuilder>()
                 .AddSingleton<IContextManager, ContextManager>()
                 .AddSingleton<IRequestQueueDequeuer, RequestQueueDequeuer>()
-                .AddSingleton<OBSWebsocket>()
-                .AddSingleton<IObsController, ObsController>()
                 .AddHostedService<SpectatorService>();
         }
 
         public static void PostConfigure(AppSettings appSettings)
         {
             appSettings.CurrentDirectory = Directory.GetCurrentDirectory();
-            appSettings.AssetsPath = Path.Combine(appSettings.CurrentDirectory, "Assets");
-            appSettings.ContextsDirectory = Path.Combine(appSettings.Location.DataDirectory, "Contexts");
-            appSettings.HeroesDataPath = Path.Combine(appSettings.Location.DataDirectory, "HeroesData");
             appSettings.StandardReplayCachePath = Path.Combine(appSettings.Location.DataDirectory, appSettings.HeroesProfileApi.StandardCacheDirectoryName);
             appSettings.RequestedReplayCachePath = Path.Combine(appSettings.Location.DataDirectory, appSettings.HeroesProfileApi.RequestsCacheDirectoryName);
-            appSettings.SpectateReportPath = Path.Combine(appSettings.Location.DataDirectory, "SpectateReport");
             appSettings.CapturesPath = Path.Combine(appSettings.Location.DataDirectory, "Capture");
             appSettings.StormReplaysAccountPath = Path.Combine(appSettings.UserGameFolderPath, "Accounts");
             appSettings.UserStormInterfacePath = Path.Combine(appSettings.UserGameFolderPath, "Interfaces");

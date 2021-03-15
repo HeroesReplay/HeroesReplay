@@ -3,8 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-
+using HeroesReplay.Service.Obs.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -37,8 +36,6 @@ namespace HeroesReplay.Service.Obs
         private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
         {
             services.AddOptions();
-            services.Configure<AppSettings>(context.Configuration);
-            services.PostConfigure<AppSettings>(PostConfigure);
 
             if (context.HostingEnvironment.IsDevelopment())
             {
@@ -60,12 +57,6 @@ namespace HeroesReplay.Service.Obs
 
             services.AddSingleton<IObsEntryMonitor, ObsEntryMonitor>();
             services.AddHostedService<ObsService>();
-        }
-
-        public static void PostConfigure(AppSettings appSettings)
-        {
-            appSettings.CurrentDirectory = Directory.GetCurrentDirectory();
-            appSettings.ContextsDirectory = Path.Combine(appSettings.Location.DataDirectory, "Contexts");
         }
     }
 }

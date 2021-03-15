@@ -16,17 +16,18 @@ namespace HeroesReplay.Core.Services.Providers
     {
         private readonly ILogger<ReplayFileProvider> logger;
         private readonly IReplayLoader loader;
-        private readonly IOptions<AppSettings> settings;
+        private readonly LocationOptions locationOptions;
         private readonly IReplayHelper replayHelper;
         private readonly FileInfo fileInfo;
 
-        public ReplayFileProvider(ILogger<ReplayFileProvider> logger, IReplayLoader loader, IOptions<AppSettings> settings, IReplayHelper replayHelper)
+        public ReplayFileProvider(ILogger<ReplayFileProvider> logger, IReplayLoader loader, IOptions<LocationOptions> options, IReplayHelper replayHelper)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
-            fileInfo = new FileInfo(settings.Value.Location.ReplaySource);
+
+            this.locationOptions = options.Value;
+            fileInfo = new FileInfo(locationOptions.ReplaySource);
         }
 
         public async Task<LoadedReplay> TryLoadNextReplayAsync()

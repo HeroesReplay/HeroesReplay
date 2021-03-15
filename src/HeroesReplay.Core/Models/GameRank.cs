@@ -2,6 +2,7 @@
 {
     public enum GameRank
     {
+        Woood,
         Bronze,
         Silver,
         Gold,

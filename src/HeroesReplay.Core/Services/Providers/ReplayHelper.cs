@@ -9,12 +9,12 @@ namespace HeroesReplay.Core.Services.Providers
     public class ReplayHelper : IReplayHelper
     {
         private readonly ILogger<ReplayHelper> logger;
-        private readonly IOptions<AppSettings> settings;
+        private readonly StormReplayOptions stormReplayOptions;
 
-        public ReplayHelper(ILogger<ReplayHelper> logger, IOptions<AppSettings> settings)
+        public ReplayHelper(ILogger<ReplayHelper> logger, IOptions<StormReplayOptions> stormReplayOptions)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.stormReplayOptions = stormReplayOptions.Value;
         }
 
         public bool TryGetReplayId(string path, out int replayId)
@@ -23,7 +23,7 @@ namespace HeroesReplay.Core.Services.Providers
 
             try
             {
-                replayId = int.Parse(Path.GetFileName(path).Split(settings.Value.StormReplay.Seperator)[0]);
+                replayId = int.Parse(Path.GetFileName(path).Split(stormReplayOptions.Seperator)[0]);
                 return true;
             }
             catch (Exception)

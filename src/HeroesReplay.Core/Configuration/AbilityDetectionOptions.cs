@@ -1,4 +1,5 @@
 ﻿using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Analyzer;
 
 namespace HeroesReplay.Core.Configuration
 {

@@ -9,12 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Services\HeroesProfileExtension\NewFolder\**" />
-    <EmbeddedResource Remove="Services\HeroesProfileExtension\NewFolder\**" />
-    <None Remove="Services\HeroesProfileExtension\NewFolder\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Remove="Assets\Maps.json" />
   </ItemGroup>
 

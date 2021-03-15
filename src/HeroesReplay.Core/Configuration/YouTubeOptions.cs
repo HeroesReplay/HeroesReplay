@@ -9,7 +9,6 @@ namespace HeroesReplay.Core.Configuration
         public string ChannelId { get; set; }
         public string EntryFileName { get; set; }
         public string CategoryId { get; set; }
-
         public string SecretsFileName { get; set; }
     }
 }

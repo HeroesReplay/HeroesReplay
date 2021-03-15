@@ -26,14 +26,38 @@ namespace HeroesReplay.Core.Services.Providers
 {
     public class HeroesProfileProvider : IReplayProvider
     {
-        private readonly IOptions<AppSettings> settings;
         private readonly CancellationTokenSource cts;
         private readonly ILogger<HeroesProfileProvider> logger;
+        private readonly LocationOptions locationOptions;
+        private readonly HeroesProfileApiOptions hpApiOptions;
+        private readonly StormReplayOptions stormReplayOptions;
         private readonly IReplayLoader loader;
         private readonly IReplayHelper helper;
         private readonly IHeroesProfileService hpService;
         private readonly IRequestQueueDequeuer queue;
         private int minReplayId;
+
+        public HeroesProfileProvider(
+            ILogger<HeroesProfileProvider> logger, 
+            IOptions<StormReplayOptions> stormReplayOptions, 
+            IOptions<HeroesProfileApiOptions> hpApiOptions,
+            IOptions<LocationOptions> locationOptions,
+            IReplayLoader loader, 
+            IReplayHelper helper, 
+            IRequestQueueDequeuer queue, 
+            IHeroesProfileService hpService, 
+            CancellationTokenSource cts)
+        {
+            this.cts = cts ?? throw new ArgumentNullException(nameof(cts));
+            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
+            this.helper = helper ?? throw new ArgumentNullException(nameof(helper));
+            this.queue = queue ?? throw new ArgumentNullException(nameof(queue));
+            this.hpService = hpService ?? throw new ArgumentNullException(nameof(hpService));
+            this.locationOptions = locationOptions.Value;
+            this.stormReplayOptions = stormReplayOptions.Value;
+            this.hpApiOptions = hpApiOptions.Value;
+        }
 
         private int MinReplayId
         {
@@ -41,11 +65,11 @@ namespace HeroesReplay.Core.Services.Providers
             {
                 if (minReplayId == default)
                 {
-                    if (StandardDirectory.GetFiles(settings.Value.StormReplay.WildCard).Any())
+                    if (StandardDirectory.GetFiles(stormReplayOptions.WildCard).Any())
                     {
                         FileInfo latest = StandardDirectory
-                            .GetFiles(settings.Value.StormReplay.WildCard)
-                            .OrderByDescending(f => int.Parse(Path.GetFileName(f.FullName).Split(settings.Value.StormReplay.Seperator)[0]))
+                            .GetFiles(stormReplayOptions.WildCard)
+                            .OrderByDescending(f => int.Parse(Path.GetFileName(f.FullName).Split(stormReplayOptions.Seperator)[0]))
                             .FirstOrDefault();
 
                         if (helper.TryGetReplayId(latest.Name, out int replayId))
@@ -55,7 +79,7 @@ namespace HeroesReplay.Core.Services.Providers
                     }
                     else
                     {
-                        MinReplayId = settings.Value.HeroesProfileApi.MinReplayId;
+                        MinReplayId = hpApiOptions.MinReplayId;
                     }
                 }
 
@@ -64,20 +88,9 @@ namespace HeroesReplay.Core.Services.Providers
             set => minReplayId = value;
         }
 
-        private DirectoryInfo StandardDirectory => Directory.CreateDirectory(settings.Value.StandardReplayCachePath);
+        private DirectoryInfo StandardDirectory => Directory.CreateDirectory(Path.Combine(locationOptions.DataDirectory, locationOptions.StandardReplaysFolder));
 
-        private DirectoryInfo RequestsDirectory => Directory.CreateDirectory(settings.Value.RequestedReplayCachePath);
-
-        public HeroesProfileProvider(ILogger<HeroesProfileProvider> logger, IOptions<AppSettings> settings, IReplayLoader loader, IReplayHelper helper, IRequestQueueDequeuer queue, IHeroesProfileService hpService, CancellationTokenSource cts)
-        {
-            this.cts = cts ?? throw new ArgumentNullException(nameof(cts));
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
-            this.helper = helper ?? throw new ArgumentNullException(nameof(helper));
-            this.queue = queue ?? throw new ArgumentNullException(nameof(queue));
-            this.hpService = hpService ?? throw new ArgumentNullException(nameof(hpService));
-        }
+        private DirectoryInfo RequestsDirectory => Directory.CreateDirectory(Path.Combine(locationOptions.DataDirectory, locationOptions.RequestedReplaysFolder));
 
         public async Task<LoadedReplay> TryLoadNextReplayAsync()
         {
@@ -166,14 +179,14 @@ namespace HeroesReplay.Core.Services.Providers
 
         private async Task DownloadReplayAsync(HeroesProfileReplay replay, FileInfo fileInfo)
         {
-            var credentials = new BasicAWSCredentials(settings.Value.HeroesProfileApi.AwsAccessKey, settings.Value.HeroesProfileApi.AwsSecretKey);
+            var credentials = new BasicAWSCredentials(hpApiOptions.AwsAccessKey, hpApiOptions.AwsSecretKey);
 
-            using (AmazonS3Client s3Client = new AmazonS3Client(credentials, RegionEndpoint.GetBySystemName(settings.Value.HeroesProfileApi.S3Region)))
+            using (AmazonS3Client s3Client = new(credentials, RegionEndpoint.GetBySystemName(hpApiOptions.S3Region)))
             {
-                GetObjectRequest request = new GetObjectRequest
+                GetObjectRequest request = new()
                 {
                     RequestPayer = RequestPayer.Requester,
-                    BucketName = settings.Value.HeroesProfileApi.S3Bucket,
+                    BucketName = hpApiOptions.S3Bucket,
                     Key = replay.Url.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped)
                 };
 
@@ -189,7 +202,7 @@ namespace HeroesReplay.Core.Services.Providers
                             await stream.FlushAsync(cts.Token).ConfigureAwait(false);
                         }
 
-                        logger.LogInformation($"downloaded heroesprofile replay.");
+                        logger.LogInformation($"downloaded HeroesProfile replay.");
                     }
                 }
             }
@@ -206,10 +219,10 @@ namespace HeroesReplay.Core.Services.Providers
                 replay.Rank ?? "Unknown",
                 replay.Map,
                 replay.Fingerprint,
-                settings.Value.StormReplay.FileExtension
+                stormReplayOptions.FileExtension
             };
 
-            var name = string.Join(settings.Value.StormReplay.Seperator, segments);
+            var name = string.Join(stormReplayOptions.Seperator, segments);
             return new FileInfo(Path.Combine(path, name));
         }
 
@@ -220,7 +233,7 @@ namespace HeroesReplay.Core.Services.Providers
                 return await Policy
                        .Handle<Exception>()
                        .OrResult<HeroesProfileReplay>(replay => replay == null)
-                       .WaitAndRetryAsync(60, retry => settings.Value.HeroesProfileApi.APIRetryWaitTime)
+                       .WaitAndRetryAsync(60, retry => hpApiOptions.APIRetryWaitTime)
                        .ExecuteAsync(async token =>
                        {
                            IEnumerable<HeroesProfileReplay> replays = await hpService.GetReplaysByMinId(MinReplayId).ConfigureAwait(false);
@@ -230,7 +243,7 @@ namespace HeroesReplay.Core.Services.Providers
                                logger.LogInformation("Finding replay that fits criteria.");
 
                                HeroesProfileReplay found = replays
-                                        .Where(r => r.Id > MinReplayId && r.Rank != null && settings.Value.HeroesProfileApi.GameTypes.Contains(r.GameType, StringComparer.CurrentCultureIgnoreCase))
+                                        .Where(r => r.Id > MinReplayId && r.Rank != null && hpApiOptions.GameTypes.Contains(r.GameType, StringComparer.CurrentCultureIgnoreCase))
                                         .OrderBy(x => x.Id)
                                         .FirstOrDefault();
 

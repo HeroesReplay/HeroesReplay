@@ -2,11 +2,6 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Queue;
-using HeroesReplay.Core.Services.Twitch;
-using HeroesReplay.Core.Services.Twitch.ChatMessages;
-using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
-using HeroesReplay.Core.Services.Twitch.Rewards;
-
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,7 +14,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-
+using HeroesReplay.Service.Twitch.Core;
+using HeroesReplay.Service.Twitch.Core.Bot;
+using HeroesReplay.Service.Twitch.Core.ChatMessages;
+using HeroesReplay.Service.Twitch.Core.RedeemedRewards;
+using HeroesReplay.Service.Twitch.Core.Rewards;
 using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
@@ -63,7 +62,6 @@ namespace HeroesReplay.Service.Twitch
         private static void ConfigureServices(HostBuilderContext context, IServiceCollection services)
         {
             services.AddOptions();
-            services.Configure<AppSettings>(context.Configuration);
 
             IEnumerable<Type> types = AppDomain.CurrentDomain.GetAssemblies().SelectMany(assembly => assembly.GetTypes());
 

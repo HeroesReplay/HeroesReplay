@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 
@@ -18,17 +17,19 @@ namespace HeroesReplay.Core.Services.Queue
     {
         private readonly FileInfo queueFile;
         private readonly ILogger<RequestQueueDequeuer> logger;
-        private readonly IOptions<AppSettings> settings;
+        private readonly LocationOptions locationOptions;
+        private readonly QueueOptions queueOptions;
         private readonly JsonSerializerOptions options;
         private readonly SemaphoreSlim semaphore;
 
-        public RequestQueueDequeuer(ILogger<RequestQueueDequeuer> logger, IOptions<AppSettings> settings)
+        public RequestQueueDequeuer(ILogger<RequestQueueDequeuer> logger, IOptions<QueueOptions> queueOptions, IOptions<LocationOptions> locationOptions)
         {
             this.logger = logger;
-            this.settings = settings;
+            this.locationOptions = locationOptions.Value;
+            this.queueOptions = queueOptions.Value;
 
             semaphore = new SemaphoreSlim(1, maxCount: 1);
-            queueFile = new FileInfo(Path.Combine(settings.Value.Location.DataDirectory, settings.Value.Queue.SuccessFileName));
+            queueFile = new FileInfo(Path.Combine(this.locationOptions.DataDirectory, this.queueOptions.SuccessFileName));
             options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
         }
 

@@ -10,8 +10,6 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.Twitch.Rewards;
-
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -23,19 +21,28 @@ namespace HeroesReplay.Core.Services.Queue
         private readonly FileInfo failedFile;
         private readonly ILogger<RequestQueue> logger;
         private readonly IHeroesProfileService hpService;
-        private readonly IOptions<AppSettings> settings;
+        private readonly QueueOptions queueOptions;
+        private readonly SpectateOptions spectateOptions;
+        private readonly LocationOptions locationOptions;
         private readonly JsonSerializerOptions options;
         private readonly SemaphoreSlim successSemaphore;
         private readonly SemaphoreSlim failedSemaphore;
 
-        public RequestQueue(ILogger<RequestQueue> logger, IHeroesProfileService hpService, IOptions<AppSettings> settings)
+        public RequestQueue(
+            ILogger<RequestQueue> logger, 
+            IHeroesProfileService hpService, 
+            IOptions<QueueOptions> queueOptions,
+            IOptions<SpectateOptions> spectateOptions,
+            IOptions<LocationOptions> locationOptions)
         {
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             this.hpService = hpService ?? throw new ArgumentNullException(nameof(hpService));
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.queueOptions = queueOptions.Value;
+            this.spectateOptions = spectateOptions.Value;
+            this.locationOptions = locationOptions.Value;
 
-            queueFile = new FileInfo(Path.Combine(settings.Value.Location.DataDirectory, settings.Value.Queue.SuccessFileName));
-            failedFile = new FileInfo(Path.Combine(settings.Value.Location.DataDirectory, settings.Value.Queue.FailedFileName));
+            queueFile = new FileInfo(Path.Combine(this.locationOptions.DataDirectory, this.queueOptions.SuccessFileName));
+            failedFile = new FileInfo(Path.Combine(this.locationOptions.DataDirectory, this.queueOptions.FailedFileName));
             options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
             successSemaphore = new SemaphoreSlim(1, maxCount: 1);
             failedSemaphore = new SemaphoreSlim(1, maxCount: 1);
@@ -102,10 +109,10 @@ namespace HeroesReplay.Core.Services.Queue
                 return new RewardResponse(success: false, message: $"the raw file for replay id {request.ReplayId.Value} is no longer available.");
             }
 
-            if (!replay.GameVersion.Equals(settings.Value.Spectate.VersionSupported))
+            if (!spectateOptions.VersionsSupported.Contains(replay.GameVersion))
             {
                 await AddToFailedRequestsAsync(new RewardQueueItem(request, replay));
-                return new RewardResponse(success: false, message: $"the version found '{replay.GameVersion}' does not match the supported version '{settings.Value.Spectate.VersionSupported}'");
+                return new RewardResponse(success: false, message: $"the version found '{replay.GameVersion}' does not match the supported versions.");
             }
 
             int position = await QueueReplayId(new RewardQueueItem(request, replay));
