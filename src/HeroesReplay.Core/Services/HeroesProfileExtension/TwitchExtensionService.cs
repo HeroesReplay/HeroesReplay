@@ -27,7 +27,7 @@
         private const string SavePlayerUrl = @"save/player";
         private const string UpdatePlayerUrl = @"update/player";
         private const string SaveTalentUrl = @"save/talent";
-        private const string NotifyTalentUpdate = @"notify/talent/update";
+        private const string NotifyTalentUpdate = @"notify/custom";
 
         public TwitchExtensionService(
             ILogger<TwitchExtensionService> logger, 
