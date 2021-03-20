@@ -33,12 +33,12 @@ namespace HeroesReplay.Core.Services.Queue
             this.heroesProfileService = heroesProfileService;
             this.settings = settings;
 
-            queueFile = new FileInfo(Path.Combine(settings.Location.DataDirectory, settings.Twitch.QueueFileName));
-            failedFile = new FileInfo(Path.Combine(settings.Location.DataDirectory, settings.Twitch.FailedFileName));
+            queueFile = new (Path.Combine(settings.Location.DataDirectory, settings.Twitch.QueueFileName));
+            failedFile = new (Path.Combine(settings.Location.DataDirectory, settings.Twitch.FailedFileName));
 
             options = new JsonSerializerOptions { WriteIndented = true, Converters = { new JsonStringEnumConverter(allowIntegerValues: true) } };
-            successSemaphore = new SemaphoreSlim(1, maxCount: 1);
-            failedSemaphore = new SemaphoreSlim(1, maxCount: 1);
+            successSemaphore = new (1, maxCount: 1);
+            failedSemaphore = new (1, maxCount: 1);
         }
 
         public async Task<int> GetItemsInQueue()
@@ -93,23 +93,23 @@ namespace HeroesReplay.Core.Services.Queue
 
             if (replay == null)
             {
-                await AddToFailedRequestsAsync(new RewardQueueItem(request, replay));
+                await AddToFailedRequestsAsync(new (request, replay));
                 return new RewardResponse(success: false, message: $"could not find replay with id {request.ReplayId.Value}");
             }
 
             if (replay.Deleted != null)
             {
-                await AddToFailedRequestsAsync(new RewardQueueItem(request, replay));
+                await AddToFailedRequestsAsync(new (request, replay));
                 return new RewardResponse(success: false, message: $"the raw file for replay id {request.ReplayId.Value} is no longer available.");
             }
 
-            if (!replay.GameVersion.Equals(settings.Spectate.VersionSupported))
+            if (!settings.Spectate.VersionsSupported.Contains(replay.GameVersion))
             {
-                await AddToFailedRequestsAsync(new RewardQueueItem(request, replay));
-                return new RewardResponse(success: false, message: $"the version found '{replay.GameVersion}' does not match the supported version '{settings.Spectate.VersionSupported}'");
+                await AddToFailedRequestsAsync(new (request, replay));
+                return new RewardResponse(success: false, message: $"the version found '{replay.GameVersion}' does not match the supported versions.");
             }
 
-            int position = await QueueReplayId(new RewardQueueItem(request, replay));
+            int position = await QueueReplayId(new (request, replay));
             return new RewardResponse(success: true, message: $"{replay.Id} - {replay.Map} ({replay.Rank}) has been queued. ({position})");
         }
 
@@ -122,7 +122,7 @@ namespace HeroesReplay.Core.Services.Queue
             }
             else
             {
-                List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(queueFile.FullName), options)) { item };
+                List<RewardQueueItem> items = new (JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(queueFile.FullName), options)) { item };
                 await File.WriteAllTextAsync(queueFile.FullName, JsonSerializer.Serialize(items, options));
                 return items.Count;
             }
@@ -136,7 +136,7 @@ namespace HeroesReplay.Core.Services.Queue
 
                 if (failedFile.Exists)
                 {
-                    List<RewardQueueItem> items = new List<RewardQueueItem>(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(failedFile.FullName), options)) { item };
+                    List<RewardQueueItem> items = new(JsonSerializer.Deserialize<List<RewardQueueItem>>(await File.ReadAllTextAsync(failedFile.FullName), options)) { item };
                     await File.WriteAllTextAsync(failedFile.FullName, JsonSerializer.Serialize(items, options));
                 }
                 else
@@ -157,12 +157,12 @@ namespace HeroesReplay.Core.Services.Queue
 
             if (replay != null)
             {
-                int position = await QueueReplayId(new RewardQueueItem(request, replay));
+                int position = await QueueReplayId(new (request, replay));
                 return new RewardResponse(success: true, message: $"'{request.RewardTitle}' - {replay.Map} ({replay.Rank}) has been queued ({position})");
             }
             else
             {
-                await AddToFailedRequestsAsync(new RewardQueueItem(request, replay));
+                await AddToFailedRequestsAsync(new (request, replay));
                 return new RewardResponse(success: false, message: "Request failed to queue because the given reward criteria could not be found");
             }
         }

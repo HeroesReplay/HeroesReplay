@@ -6,7 +6,7 @@ namespace HeroesReplay.Core.Configuration
 {
     public class SpectateSettings
     {
-        public string VersionSupported { get; set; }
+        public IEnumerable<string> VersionsSupported { get; set; }
         public int MinDistanceToSpawn { get; set; }
         public int MaxDistanceToCore { get; set; }
         public int MaxDistanceToEnemy { get; set; }

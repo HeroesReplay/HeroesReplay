@@ -191,7 +191,7 @@
                                        var supported = replays
                                            .Where(x => x.Deleted == null)
                                            .Where(x => x.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket))
-                                           .Where(x => settings.Spectate.VersionSupported.Equals(x.GameVersion));
+                                           .Where(x => settings.Spectate.VersionsSupported.Contains(x.GameVersion));
 
                                        return supported;
                                    }
@@ -232,7 +232,7 @@
 
                     return replays.Where(x => x.Deleted == null)
                         .Where(x => x.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket))
-                        .Where(x => settings.Spectate.VersionSupported.Equals(x.GameVersion));
+                        .Where(x => settings.Spectate.VersionsSupported.Contains(x.GameVersion));
                 }
             }
             catch (Exception e)
