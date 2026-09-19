@@ -302,17 +302,17 @@ public class GameController : IGameController
             return null;
         }
 
-        const int MIN_HEIGHT_FOR_OCR_TO_WORK = 50;
         Rectangle dimensions = captureStrategy.GetDimensions(handle);
-        var width = dimensions.Width;
-        var column = dimensions.Width / 50;
-        var start = width / 2 - column;
-        var end = column * 2;
+        int width = dimensions.Width;
+        int cropWidth = Math.Max(240, width / 8);
+        int cropHeight = 80;
+        int start = Math.Max(0, (width - cropWidth) / 2);
+        if (start + cropWidth > width)
+        {
+            cropWidth = width - start;
+        }
 
-        return captureStrategy.Capture(
-            handle,
-            new Rectangle(start, 0, end, MIN_HEIGHT_FOR_OCR_TO_WORK)
-        );
+        return captureStrategy.Capture(handle, new Rectangle(start, 0, cropWidth, cropHeight));
     }
 
     private bool IsMatchingClientVersion()

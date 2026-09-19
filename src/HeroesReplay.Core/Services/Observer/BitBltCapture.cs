@@ -9,7 +9,7 @@ namespace HeroesReplay.Core.Services.Observer;
 
 public class BitBltCapture : CaptureStrategy
 {
-    private const uint PwRenderFullContent = 0x00000002;
+    private const int CaptureBlt = 0x40000000;
 
     public BitBltCapture(ILogger<BitBltCapture> logger)
         : base(logger) { }
@@ -27,44 +27,48 @@ public class BitBltCapture : CaptureStrategy
             return null;
         }
 
-        Bitmap bitBlt = CaptureWithBitBlt(handle, bounds);
-        if (bitBlt != null && !IsMostlyBlack(bitBlt))
+        Bitmap bitmap = CaptureClient(handle, bounds);
+        if (bitmap != null && IsMostlyBlack(bitmap))
         {
-            return bitBlt;
+            Logger.LogWarning(
+                "BitBlt of client {Bounds} was empty/black. Keep the game windowed and uncovered.",
+                bounds
+            );
         }
 
-        bitBlt?.Dispose();
-        Logger.LogDebug("BitBlt of {Bounds} was empty/black; using PrintWindow.", bounds);
-        return CaptureWithPrintWindow(handle, bounds);
+        return bitmap;
     }
 
-    private Bitmap CaptureWithBitBlt(IntPtr handle, Rectangle bounds)
+    private Bitmap CaptureClient(IntPtr handle, Rectangle bounds)
     {
         Bitmap bitmap = null;
-        Graphics source = null;
         Graphics destination = null;
-        IntPtr deviceContextSource = IntPtr.Zero;
-        IntPtr deviceContextDestination = IntPtr.Zero;
+        IntPtr desktop = IntPtr.Zero;
+        IntPtr destDc = IntPtr.Zero;
 
         try
         {
-            source = Graphics.FromHwnd(handle);
-            bitmap = new Bitmap(bounds.Width, bounds.Height, source);
-            destination = Graphics.FromImage(bitmap);
+            var origin = new POINT { X = bounds.Left, Y = bounds.Top };
+            if (!NativeMethods.ClientToScreen(handle, ref origin))
+            {
+                return null;
+            }
 
-            deviceContextSource = source.GetHdc();
-            deviceContextDestination = destination.GetHdc();
+            bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+            destination = Graphics.FromImage(bitmap);
+            destDc = destination.GetHdc();
+            desktop = NativeMethods.GetDC(IntPtr.Zero);
 
             bool copied = NativeMethods.BitBlt(
-                deviceContextDestination,
+                destDc,
                 0,
                 0,
                 bounds.Width,
                 bounds.Height,
-                deviceContextSource,
-                bounds.Left,
-                bounds.Top,
-                (int)TernaryRasterOperation.SRCCOPY
+                desktop,
+                origin.X,
+                origin.Y,
+                (int)TernaryRasterOperation.SRCCOPY | CaptureBlt
             );
 
             if (!copied)
@@ -83,58 +87,18 @@ public class BitBltCapture : CaptureStrategy
         }
         finally
         {
-            if (deviceContextSource != IntPtr.Zero)
+            if (destDc != IntPtr.Zero && destination != null)
             {
-                source.ReleaseHdc(deviceContextSource);
+                destination.ReleaseHdc(destDc);
             }
 
-            if (deviceContextDestination != IntPtr.Zero)
+            if (desktop != IntPtr.Zero)
             {
-                destination.ReleaseHdc(deviceContextDestination);
+                NativeMethods.ReleaseDC(IntPtr.Zero, desktop);
             }
 
             destination?.Dispose();
-            source?.Dispose();
         }
-    }
-
-    private Bitmap CaptureWithPrintWindow(IntPtr handle, Rectangle bounds)
-    {
-        Rectangle client = GetDimensions(handle);
-        if (client.Width <= 0 || client.Height <= 0)
-        {
-            return null;
-        }
-
-        using Bitmap full = new Bitmap(client.Width, client.Height, PixelFormat.Format32bppArgb);
-        using (Graphics graphics = Graphics.FromImage(full))
-        {
-            IntPtr hdc = graphics.GetHdc();
-            try
-            {
-                if (!NativeMethods.PrintWindow(handle, hdc, PwRenderFullContent))
-                {
-                    return null;
-                }
-            }
-            finally
-            {
-                graphics.ReleaseHdc(hdc);
-            }
-        }
-
-        Rectangle crop = Rectangle.Intersect(bounds, new Rectangle(0, 0, full.Width, full.Height));
-        if (crop.Width <= 0 || crop.Height <= 0)
-        {
-            return null;
-        }
-
-        if (crop.Width == full.Width && crop.Height == full.Height && crop.X == 0 && crop.Y == 0)
-        {
-            return (Bitmap)full.Clone();
-        }
-
-        return full.Clone(crop, full.PixelFormat);
     }
 
     private static bool IsMostlyBlack(Bitmap bitmap)
@@ -171,10 +135,23 @@ public class BitBltCapture : CaptureStrategy
         }
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
     private static class NativeMethods
     {
         [DllImport("user32.dll")]
-        public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
+        public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetDC(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
 
         [DllImport("gdi32.dll", SetLastError = true)]
         public static extern bool BitBlt(

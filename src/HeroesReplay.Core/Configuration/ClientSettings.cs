@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace HeroesReplay.Core.Configuration;
 
 /// <summary>
-/// Heroes of the Storm client preset required for BitBlt/PrintWindow OCR and AhliObs panel hotkeys.
+/// Heroes of the Storm client preset required for BitBlt OCR and AhliObs panel hotkeys.
 /// Written into Documents\Heroes of the Storm\Variables.txt.
 /// displaymode 0 = windowed, 1 = fullscreen, 2 = borderless.
 /// windowstate 1 = normal (not maximized).
