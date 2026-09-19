@@ -166,15 +166,20 @@ public class Spectator : ISpectator
             try
             {
                 TimeSpan? result;
+                bool fromOcr = false;
                 if (softwareClock == null)
                 {
                     result = await TryGetOcrTimer().ConfigureAwait(false);
-                    if (!result.HasValue)
+                    if (result.HasValue)
+                    {
+                        fromOcr = true;
+                    }
+                    else
                     {
                         softwareClock = Stopwatch.StartNew();
                         result = TimeSpan.Zero;
                         logger.LogWarning(
-                            "Timer OCR unavailable; spectating from a software clock starting at 0:00."
+                            "Timer OCR unavailable; spectating from a software clock at replay 0:00 (not UI time + gates)."
                         );
                     }
                 }
@@ -191,8 +196,16 @@ public class Spectator : ISpectator
 
                 if (result.HasValue)
                 {
-                    Timer = result.Value.Add(context.Current.GatesOpen);
-                    logger.LogInformation($"{State}, UI Time: {result.Value} Replay Time: {Timer}");
+                    // OCR reads the in-game clock (0:00 at gates). CoreKilled is replay time.
+                    // The software clock starts at spectate/replay 0:00 — do not add GatesOpen again.
+                    Timer = fromOcr ? result.Value.Add(context.Current.GatesOpen) : result.Value;
+                    logger.LogInformation(
+                        "{State}, {Source} {Raw} Replay Time: {Timer}",
+                        State,
+                        fromOcr ? "UI Time:" : "software:",
+                        result.Value,
+                        Timer
+                    );
                     context.Current.Timer = Timer;
 
                     if (firstTimer)
@@ -201,11 +214,8 @@ public class Spectator : ISpectator
                             "heroesreplay.timer.detected",
                             sessionActivity
                         );
-                        detected?.SetTag(
-                            "timer.source",
-                            softwareClock == null ? "ocr" : "software"
-                        );
-                        detected?.SetTag("timer.ui", result.Value.ToString());
+                        detected?.SetTag("timer.source", fromOcr ? "ocr" : "software");
+                        detected?.SetTag("timer.raw", result.Value.ToString());
                         detected?.SetTag("timer.replay", Timer.ToString());
                     }
 
