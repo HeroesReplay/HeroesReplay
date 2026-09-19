@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Waiting music</title>
+    <style>
+      :root {
+        --color: #f4d27a;
+        --muted: #c8b48a;
+        --bg: transparent;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--color);
+        font-family: Bahnschrift, "Segoe UI", sans-serif;
+        overflow: hidden;
+        user-select: none;
+      }
+      #app {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
+        padding: 8px;
+      }
+      #label {
+        font-size: clamp(11px, 4.5vw, 18px);
+        letter-spacing: 0.22em;
+        color: var(--muted);
+        margin-bottom: 0.35em;
+      }
+      #title {
+        font-size: clamp(14px, 6vw, 28px);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #status {
+        margin-top: 0.4em;
+        font-size: clamp(11px, 3.5vw, 14px);
+        color: var(--muted);
+      }
+      audio {
+        width: min(92%, 520px);
+        margin-top: 10px;
+      }
+      @media (max-height: 140px) {
+        #label,
+        audio {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="label">WAITING MUSIC</div>
+      <div id="title">No track loaded</div>
+      <div id="status"></div>
+      <audio id="player" controls loop playsinline></audio>
+    </div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(location.search);
+        var src = params.get("src") || "track.mp3";
+        var autostart = params.get("autostart") !== "0";
+        var title = params.get("title");
+        var player = document.getElementById("player");
+        var titleEl = document.getElementById("title");
+        var statusEl = document.getElementById("status");
+
+        function fileName(path) {
+          try {
+            return decodeURIComponent(path.split("/").pop().split("\\").pop());
+          } catch (e) {
+            return path;
+          }
+        }
+
+        player.src = src;
+        titleEl.textContent = title || fileName(src);
+        player.volume = Math.min(1, Math.max(0, parseFloat(params.get("volume") || "1") || 1));
+
+        player.addEventListener("playing", function () {
+          statusEl.textContent = "playing · OBS mixer owns this channel";
+        });
+        player.addEventListener("pause", function () {
+          statusEl.textContent = "paused";
+        });
+        player.addEventListener("error", function () {
+          statusEl.textContent =
+            "missing " + src + " — put an mp3 next to this page as track.mp3";
+        });
+
+        if (autostart) {
+          var play = player.play();
+          if (play && play.catch) {
+            play.catch(function () {
+              statusEl.textContent = "autoplay blocked — Interact and press play";
+            });
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>
