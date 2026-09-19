@@ -18,6 +18,7 @@ public class CliHelpTests
         Assert.Contains(root.Subcommands, c => c.Name == "spectate");
         Assert.Contains(root.Subcommands, c => c.Name == "calculators");
         Assert.Contains(root.Subcommands, c => c.Name == "mcp");
+        Assert.Contains(root.Subcommands, c => c.Name == "client");
     }
 
     [Fact]
@@ -31,5 +32,17 @@ public class CliHelpTests
         Assert.Contains(check.Subcommands, c => c.Name == "heroesprofile");
         Assert.Contains(check.Subcommands, c => c.Name == "obs");
         Assert.Contains(check.Subcommands, c => c.Name == "twitch");
+        Assert.Contains(check.Subcommands, c => c.Name == "client");
+    }
+
+    [Fact]
+    public void ClientHelp_HasConfigureAndStatus()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("client --help");
+        Assert.Empty(result.Errors);
+        Command client = root.Subcommands.Single(c => c.Name == "client");
+        Assert.Contains(client.Subcommands, c => c.Name == "configure");
+        Assert.Contains(client.Subcommands, c => c.Name == "status");
     }
 }

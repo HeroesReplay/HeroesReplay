@@ -20,6 +20,7 @@ public class AppSettings
     public PanelTimesSettings PanelTimes { get; set; }
     public CaptureSettings Capture { get; set; }
     public LocationSettings Location { get; set; }
+    public ClientSettings Client { get; set; }
     public OCRSettings OCR { get; set; }
     public MapSettings Maps { get; set; }
     public ParseOptionsSettings ParseOptions { get; set; }

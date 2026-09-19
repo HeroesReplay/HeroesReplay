@@ -65,8 +65,10 @@ dotnet run --no-launch-profile -- --help
 | `calculators report --file <path>` | Write a spectator report |
 | `twitch connect` / `twitch rewards …` | Chat bot and channel-point rewards |
 | `youtube uploader` | Upload OBS recordings |
-| `check` | Config + Heroes Profile + OBS + Twitch (continues on failure) |
-| `check config` / `check heroesprofile` / `check obs` / `check twitch` | One integration at a time |
+| `client configure` | Windowed 1080p + AhliObs in `Documents\Heroes of the Storm` (Variables.txt + StormInterface). Quit the game first. |
+| `client status` / `check client` | Verify that preset |
+| `check` | Config + Heroes Profile + OBS + Twitch + client (continues on failure) |
+| `check config` / `check heroesprofile` / `check obs` / `check twitch` / `check client` | One integration at a time |
 | `mcp` | Stdio MCP server for agents (`get_spectator_status`, checks). Pair with a running `spectate` process. |
 
 Grok picks up the server from `.grok/config.toml` (`mcp_servers.heroesreplay`). Status snapshot: `%LOCALAPPDATA%\HeroesReplay\status.json`.

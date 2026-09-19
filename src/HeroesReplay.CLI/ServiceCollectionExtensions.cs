@@ -7,6 +7,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Analysis.Calculators;
+using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.HeroesProfile;
@@ -118,6 +119,7 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
+            .AddSingleton<StormClientConfigurator>()
             .AddSingleton(new CancellationTokenProvider(token))
             .AddHttpClient<IHeroesProfileService, HeroesProfileService>()
             .Services.AddSingleton<OBSWebsocket>()
@@ -142,6 +144,13 @@ public static class ServiceCollectionExtensions
             );
         SecretResolver.Apply(settings);
         return settings;
+    }
+
+    public static IServiceCollection AddClientServices(this IServiceCollection services)
+    {
+        IConfigurationRoot configuration = GetConfiguration();
+        AppSettings settings = BindSettings(configuration);
+        return services.AddSingleton(settings).AddSingleton<StormClientConfigurator>();
     }
 
     public static IServiceCollection AddFocusCalculators(this IServiceCollection services)
@@ -395,13 +404,14 @@ public static class ServiceCollectionExtensions
         var builder = new ConfigurationBuilder()
             .SetBasePath(basePath)
             .AddJsonFile("appsettings.json")
-            .AddJsonFile("appsettings.secrets.json", optional: true)
-            .AddEnvironmentVariables("HEROES_REPLAY_");
+            .AddJsonFile("appsettings.secrets.json", optional: true);
 
         if (!string.IsNullOrWhiteSpace(env))
         {
             builder.AddJsonFile($"appsettings.{env}.json", optional: true);
         }
+
+        builder.AddEnvironmentVariables("HEROES_REPLAY_");
 
         return builder.Build();
     }

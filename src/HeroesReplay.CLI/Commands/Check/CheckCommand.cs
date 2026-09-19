@@ -4,6 +4,7 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Configuration;
@@ -36,6 +37,13 @@ public class CheckCommand : Command
         );
         Subcommands.Add(
             Build("twitch", "Call Helix GetUsers for the configured channel.", CheckTwitchAsync)
+        );
+        Subcommands.Add(
+            Build(
+                "client",
+                "Verify windowed 1080p and AhliObs in Heroes of the Storm Variables.txt.",
+                CheckClientAsync
+            )
         );
 
         SetAction(
@@ -72,6 +80,7 @@ public class CheckCommand : Command
             await CheckHeroesProfileAsync(cancellationToken),
             await CheckObsAsync(cancellationToken),
             await CheckTwitchAsync(cancellationToken),
+            await CheckClientAsync(cancellationToken),
         };
 
         bool ok = true;
@@ -245,6 +254,32 @@ public class CheckCommand : Command
         catch (Exception e)
         {
             return Fail("twitch", e);
+        }
+    }
+
+    public static Task<CheckResult> CheckClientAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var provider = CreateProvider(cancellationToken);
+            StormClientConfigurator configurator =
+                provider.GetRequiredService<StormClientConfigurator>();
+            ClientStatusResult status = configurator.GetStatus();
+            string extra = status.HotSRunning ? " HotS is running." : string.Empty;
+            if (status.MatchesPreset)
+            {
+                return Task.FromResult(
+                    new CheckResult("client", true, $"Windowed 1080p + AhliObs match.{extra}")
+                );
+            }
+
+            return Task.FromResult(
+                new CheckResult("client", false, string.Join("; ", status.Mismatches) + extra)
+            );
+        }
+        catch (Exception e)
+        {
+            return Task.FromResult(Fail("client", e));
         }
     }
 

@@ -20,3 +20,12 @@ replayinterface=AhliObs 0.75
 ```
 
 Restart Heroes of the Storm after copying so the dropdown picks it up.
+
+From the CLI (preferred):
+
+```powershell
+heroesreplay client configure
+heroesreplay client status
+```
+
+That also sets windowed 1080p (`displaymode=0`, 1920×1080) which capture/OCR needs. Quit the game before `configure`; HotS rewrites `Variables.txt` on exit.

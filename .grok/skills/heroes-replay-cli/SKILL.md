@@ -1,7 +1,7 @@
 ---
 name: heroes-replay-cli
 description: >
-  heroesreplay CLI: spectate, calculators, check, twitch, youtube, secrets, op://.
+  heroesreplay CLI: spectate, calculators, check, client, twitch, youtube, secrets, op://.
   Use when adding or changing commands, validating integrations, running the exe,
   or /heroes-replay-cli.
 ---
@@ -29,6 +29,9 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check heroesprofile` | `Replay/Max` with the resolved API key |
 | `check obs` | obs-websocket 5 Identify + `GetVersion` |
 | `check twitch` | Helix `GetUsers` for configured channel |
+| `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
+| `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). |
+| `client status` | Report preset mismatches |
 | `twitch connect` | Chat bot; blocks |
 | `twitch rewards generate\|submit` | Helix custom rewards |
 | `youtube uploader` | Upload OBS recordings |

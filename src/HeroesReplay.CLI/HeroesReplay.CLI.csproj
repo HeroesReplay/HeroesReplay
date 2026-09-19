@@ -44,5 +44,9 @@
         <None Update="Assets\Maps.json">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+        <None Include="..\..\obs\interfaces\AhliObs 0.75.StormInterface">
+            <Link>Assets\Interfaces\AhliObs 0.75.StormInterface</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 </Project>
