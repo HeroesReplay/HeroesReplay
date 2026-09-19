@@ -365,8 +365,49 @@ public class GameController : IGameController
             .ToArray();
     }
 
-    private async Task<bool> IsHomeScreen() =>
-        IsLaunched() && await ContainsAnyAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
+    private async Task<bool> IsHomeScreen()
+    {
+        if (!IsGameProcessRunning())
+        {
+            return false;
+        }
+
+        if (await ContainsAnyAsync(settings.OCR.HomeScreenText).ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        logger.LogInformation(
+            "Heroes of the Storm process is running; continuing without home-screen OCR."
+        );
+        return true;
+    }
+
+    private bool IsGameProcessRunning()
+    {
+        Process[] processes = Process.GetProcessesByName(settings.Process.HeroesOfTheStorm);
+        try
+        {
+            return processes.Any(process =>
+            {
+                try
+                {
+                    return !process.HasExited;
+                }
+                catch (InvalidOperationException)
+                {
+                    return false;
+                }
+            });
+        }
+        finally
+        {
+            foreach (Process process in processes)
+            {
+                process.Dispose();
+            }
+        }
+    }
 
     private async Task<bool> IsReplay() =>
         IsLaunched() && (await TryGetTimerAsync().ConfigureAwait(false)) != null;
@@ -453,6 +494,29 @@ public class GameController : IGameController
             SendMessage(handle, WindowMessage.WM_KEYDOWN, Key, IntPtr.Zero);
             SendMessage(handle, WindowMessage.WM_KEYUP, Key, IntPtr.Zero);
             SendMessage(handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+        }
+    }
+
+    public void HideReplayTimeline()
+    {
+        lock (controllerLock)
+        {
+            if (!TryGetGameHandle(out IntPtr handle))
+            {
+                logger.LogWarning("Could not hide replay timeline; no game window.");
+                return;
+            }
+
+            SendMessage(
+                handle,
+                WindowMessage.WM_KEYDOWN,
+                (IntPtr)VirtualKey.VK_CONTROL,
+                IntPtr.Zero
+            );
+            SendMessage(handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
+            SendMessage(handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
+            SendMessage(handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+            logger.LogInformation("Sent Ctrl+T to hide the replay timeline.");
         }
     }
 
@@ -565,11 +629,7 @@ public class GameController : IGameController
         {
             foreach (var candidate in all)
             {
-                if (
-                    cachedProcess == null
-                    && !string.IsNullOrEmpty(candidate.MainWindowTitle)
-                    && candidate.MainWindowHandle != IntPtr.Zero
-                )
+                if (cachedProcess == null && !candidate.HasExited)
                 {
                     cachedProcess = candidate;
                     cachedHandle = candidate.MainWindowHandle;

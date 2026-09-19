@@ -41,6 +41,8 @@ public sealed class StubController : IGameController
 
     public void SendPanel(Panel panel) => logger.LogInformation("Selected panel {Panel}", panel);
 
+    public void HideReplayTimeline() => logger.LogInformation("Hide replay timeline (Ctrl+T)");
+
     public Task<TimeSpan?> TryGetTimerAsync()
     {
         if (timers.Count == 0)
