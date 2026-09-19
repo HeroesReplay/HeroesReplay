@@ -69,7 +69,7 @@ public class ContextFileManager : IContextFileManager
             {
                 Replay replay = contextData.LoadedReplay.Replay;
                 string requestor = contextData.LoadedReplay.RewardQueueItem?.Request?.Login;
-                string gameType = contextData.LoadedReplay.HeroesProfileReplay.GameType;
+                string gameType = contextData.LoadedReplay.HeroesProfileReplay?.GameType;
                 IEnumerable<string> bans = Enumerable.Empty<string>();
 
                 if (contextData.TeamBans.Values.Any(teamBans => teamBans.Any()))
