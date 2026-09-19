@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -45,9 +47,11 @@ public sealed class ReplayFileProvider : IReplayProvider
 
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
     {
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
         while (remaining.Count > 0)
         {
             FileInfo fileInfo = remaining.Dequeue();
+            activity?.SetTag("replay.path", fileInfo.FullName);
             if (!fileInfo.Exists)
             {
                 logger.LogWarning("Replay file not found: {Path}", fileInfo.FullName);
@@ -61,6 +65,13 @@ public sealed class ReplayFileProvider : IReplayProvider
             }
 
             replayHelper.TryGetReplayId(fileInfo.FullName, out int replayId);
+            HeroesReplayTelemetry.TagReplay(
+                activity,
+                fileInfo.FullName,
+                replay.Map,
+                replayId,
+                replay.ReplayVersion
+            );
             return new LoadedReplay
             {
                 FileInfo = fileInfo,
@@ -71,6 +82,7 @@ public sealed class ReplayFileProvider : IReplayProvider
             };
         }
 
+        activity?.SetTag("replay.empty", true);
         return null;
     }
 

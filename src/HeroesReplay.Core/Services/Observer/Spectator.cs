@@ -42,6 +42,8 @@ public class Spectator : ISpectator
 
     private CancellationTokenSource LinkedTokenSource { get; set; }
 
+    private Activity sessionActivity;
+
     public Spectator(
         ILogger<Spectator> logger,
         AppSettings settings,
@@ -78,8 +80,14 @@ public class Spectator : ISpectator
 
     public async Task SpectateAsync()
     {
-        using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
-            "heroesreplay.session"
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.session");
+        sessionActivity = activity;
+        HeroesReplayTelemetry.TagReplay(
+            activity,
+            Data?.LoadedReplay?.FileInfo?.FullName,
+            Data?.LoadedReplay?.Replay?.Map,
+            Data?.LoadedReplay?.ReplayId,
+            Data?.LoadedReplay?.Replay?.ReplayVersion
         );
         State = State.Loading;
         Timer = default;
@@ -162,6 +170,7 @@ public class Spectator : ISpectator
                     result = TimeSpan.FromSeconds(Math.Floor(softwareClock.Elapsed.TotalSeconds));
                 }
 
+                bool firstTimer = State != State.TimerDetected && result.HasValue;
                 State =
                     CancelSessionSource.IsCancellationRequested ? State.EndDetected
                     : result.HasValue ? State.TimerDetected
@@ -173,8 +182,26 @@ public class Spectator : ISpectator
                     logger.LogInformation($"{State}, UI Time: {result.Value} Replay Time: {Timer}");
                     context.Current.Timer = Timer;
 
+                    if (firstTimer)
+                    {
+                        using Activity detected = HeroesReplayTelemetry.StartSpan(
+                            "heroesreplay.timer.detected",
+                            sessionActivity
+                        );
+                        detected?.SetTag(
+                            "timer.source",
+                            softwareClock == null ? "ocr" : "software"
+                        );
+                        detected?.SetTag("timer.ui", result.Value.ToString());
+                        detected?.SetTag("timer.replay", Timer.ToString());
+                    }
+
                     if (!replayViewConfigured)
                     {
+                        using Activity view = HeroesReplayTelemetry.StartSpan(
+                            "heroesreplay.view.configure",
+                            sessionActivity
+                        );
                         controller.HideReplayTimeline();
                         controller.ZoomOut();
                         replayViewConfigured = true;
@@ -230,6 +257,17 @@ public class Spectator : ISpectator
                         focus.Index,
                         focus.Description
                     );
+                    using Activity swap = HeroesReplayTelemetry.StartSpan(
+                        "heroesreplay.focus.swap",
+                        sessionActivity
+                    );
+                    swap?.SetTag("focus.index", focus.Index);
+                    swap?.SetTag("focus.hero", focus.Target?.Character);
+                    swap?.SetTag("focus.player", focus.Target?.Name);
+                    swap?.SetTag("focus.calculator", focus.Calculator?.Name);
+                    swap?.SetTag("focus.points", focus.Points);
+                    swap?.SetTag("focus.description", focus.Description);
+                    swap?.SetTag("timer.replay", Timer.ToString());
                     controller.SendFocus(focus.Index);
                     statusStore.Patch(status =>
                     {
@@ -286,6 +324,12 @@ public class Spectator : ISpectator
                     && (next != current || timeShown >= shownLimit)
                 )
                 {
+                    using Activity hide = HeroesReplayTelemetry.StartSpan(
+                        "heroesreplay.panel.hide",
+                        sessionActivity
+                    );
+                    hide?.SetTag("panel", current.ToString());
+                    hide?.SetTag("panel.chat_requested", chatRequested);
                     controller.SendPanel(current);
                     if (chatRequested)
                     {
@@ -303,6 +347,12 @@ public class Spectator : ISpectator
 
                 if (!visible && next != Panel.None)
                 {
+                    using Activity show = HeroesReplayTelemetry.StartSpan(
+                        "heroesreplay.panel.show",
+                        sessionActivity
+                    );
+                    show?.SetTag("panel", next.ToString());
+                    show?.SetTag("panel.chat_requested", chatRequested);
                     controller.SendPanel(next);
                     visible = true;
                     timeShown = TimeSpan.Zero;

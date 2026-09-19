@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
@@ -61,6 +62,7 @@ public class Engine : IEngine
 
     private async Task Initialize()
     {
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.initialize");
         await gameData.LoadDataAsync();
     }
 
@@ -73,13 +75,23 @@ public class Engine : IEngine
     {
         while (!consoleTokenProvider.Token.IsCancellationRequested)
         {
+            using Activity replayActivity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay");
             LoadedReplay loadedReplay = await replayProvider.TryLoadNextReplayAsync();
 
             if (loadedReplay != null)
             {
+                HeroesReplayTelemetry.TagReplay(
+                    replayActivity,
+                    loadedReplay.FileInfo?.FullName,
+                    loadedReplay.Replay?.Map,
+                    loadedReplay.ReplayId,
+                    loadedReplay.Replay?.ReplayVersion
+                );
                 await gameManager.LaunchAndSpectate(loadedReplay);
                 continue;
             }
+
+            replayActivity?.SetTag("replay.empty", true);
 
             if (!replayProvider.ContinuesWhenEmpty)
             {

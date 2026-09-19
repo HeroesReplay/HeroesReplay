@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -9,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -438,9 +440,12 @@ public class GameData : IGameData
 
     public async Task LoadDataAsync()
     {
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.data.load");
         await DownloadIfEmptyAsync().ConfigureAwait(false);
         await LoadUnitsAsync().ConfigureAwait(false);
         await LoadMapsAsync().ConfigureAwait(false);
         await LoadHeroesAsync().ConfigureAwait(false);
+        activity?.SetTag("data.heroes", Heroes?.Count ?? 0);
+        activity?.SetTag("data.maps", Maps?.Count ?? 0);
     }
 }

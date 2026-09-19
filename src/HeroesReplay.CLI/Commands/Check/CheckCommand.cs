@@ -146,7 +146,7 @@ public class CheckCommand : Command
             }
 
             IHeroesProfileService api = provider.GetRequiredService<IHeroesProfileService>();
-            using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
+            using Activity activity = HeroesReplayTelemetry.StartSpan(
                 "heroesreplay.check.heroesprofile"
             );
             int maxId = await api.GetMaxReplayIdAsync();

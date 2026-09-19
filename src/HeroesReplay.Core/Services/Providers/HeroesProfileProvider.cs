@@ -109,6 +109,8 @@ public class HeroesProfileProvider : IReplayProvider
 
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
     {
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
+        LoadedReplay loaded;
         if (settings.Twitch.EnableRequests)
         {
             RewardQueueItem item = await requestQueue.DequeueItemAsync();
@@ -116,12 +118,34 @@ public class HeroesProfileProvider : IReplayProvider
             if (item != null)
             {
                 logger.LogInformation("Reward request item found, loading...");
-
-                return await GetNextRequestedReplayAsync(item);
+                activity?.SetTag("replay.source", "request");
+                loaded = await GetNextRequestedReplayAsync(item);
+                TagLoaded(activity, loaded);
+                return loaded;
             }
         }
 
-        return await GetNextStandardReplayAsync();
+        activity?.SetTag("replay.source", "heroesprofile");
+        loaded = await GetNextStandardReplayAsync();
+        TagLoaded(activity, loaded);
+        return loaded;
+    }
+
+    private static void TagLoaded(Activity activity, LoadedReplay loaded)
+    {
+        if (loaded == null)
+        {
+            activity?.SetTag("replay.empty", true);
+            return;
+        }
+
+        HeroesReplayTelemetry.TagReplay(
+            activity,
+            loaded.FileInfo?.FullName,
+            loaded.Replay?.Map,
+            loaded.ReplayId,
+            loaded.Replay?.ReplayVersion
+        );
     }
 
     private async Task<LoadedReplay> GetNextRequestedReplayAsync(RewardQueueItem item)

@@ -69,13 +69,14 @@ public class GameManager : IGameManager
 
         try
         {
-            using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
-                "heroesreplay.spectate"
+            using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.spectate");
+            HeroesReplayTelemetry.TagReplay(
+                activity,
+                loadedReplay?.FileInfo?.FullName,
+                loadedReplay?.Replay?.Map,
+                loadedReplay?.ReplayId,
+                loadedReplay?.Replay?.ReplayVersion
             );
-            activity?.SetTag("replay.path", loadedReplay?.FileInfo?.FullName);
-            activity?.SetTag("replay.map", loadedReplay?.Replay?.Map);
-            activity?.SetTag("replay.version", loadedReplay?.Replay?.ReplayVersion);
-            activity?.SetTag("replay.id", loadedReplay?.ReplayId);
 
             EnsureWindowedClient();
             await gameController.LaunchAsync();
@@ -125,7 +126,10 @@ public class GameManager : IGameManager
 
     private void EnsureWindowedClient()
     {
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.client.configure");
         ClientStatusResult status = clientConfigurator.GetStatus();
+        activity?.SetTag("client.matches_preset", status.MatchesPreset);
+        activity?.SetTag("client.hots_running", status.HotSRunning);
         if (status.MatchesPreset)
         {
             logger.LogInformation("Heroes client already windowed 1080p with AhliObs.");

@@ -75,10 +75,15 @@ public class GameController : IGameController
 
     public async Task LaunchAsync()
     {
-        using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
-            "heroesreplay.launch"
-        );
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.launch");
         var replay = context.Current.LoadedReplay.Replay;
+        HeroesReplayTelemetry.TagReplay(
+            activity,
+            context.Current.LoadedReplay.FileInfo?.FullName,
+            replay?.Map,
+            context.Current.LoadedReplay.ReplayId,
+            replay?.ReplayVersion
+        );
 
         string versionFolder = Path.Combine(settings.Location.GameInstallDirectory, VersionsFolder);
         int latestBuild = Directory
@@ -109,8 +114,10 @@ public class GameController : IGameController
 
     private async Task LaunchGameFromBattlenet()
     {
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.launch.battlenet");
         for (int attempt = 1; attempt <= MaxBattlenetLaunchAttempts; attempt++)
         {
+            activity?.SetTag("launch.attempt", attempt);
             logger.LogInformation(
                 "Launching battlenet because this replay is the latest build and requires auth. Attempt {Attempt}/{Max}.",
                 attempt,
@@ -163,6 +170,8 @@ public class GameController : IGameController
 
     private async Task LaunchAndWait()
     {
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.launch.replay");
+        activity?.SetTag("replay.path", context.Current.LoadedReplay.FileInfo?.FullName);
         using (
             Process.Start(
                 new ProcessStartInfo
