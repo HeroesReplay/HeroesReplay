@@ -23,6 +23,8 @@ Channel-point methods are `*Async`: `GetCustomRewardAsync`, `CreateCustomRewards
 
 Chat (`TwitchClient`) and Helix remain fine.
 
+`!stats` (during `spectate`, chatbot enabled) shows the Ahli Death/Damage/Role panel for `Spectate:StatsPanelShowDuration` (default 10s) with `StatsPanelCooldown` (default 2 minutes). Do not auto-cycle KDA/XP/stats panels; talents stay automatic.
+
 ## CLI
 
 ```powershell

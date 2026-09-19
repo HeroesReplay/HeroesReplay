@@ -11,6 +11,7 @@ Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Mod
 3. Launch Heroes of the Storm (Battle.net when the replay is the latest client build), wait for the in-game timer (WinRT OCR + BitBlt).
 4. Send spectator hotkeys (`1`–`0`, Ctrl+panels) as the OCR timer advances.
 5. Optionally control **OBS Studio 28+** (obs-websocket **5**, default `ws://127.0.0.1:4455`): game scene, recording folder, rank images, post-game report scenes.
+6. Chat `!stats` shows the observer stats panel for 10 seconds (2 minute cooldown). Talents still open automatically.
 
 ## Requirements
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
@@ -23,11 +24,14 @@ public class Spectator : ISpectator
     private readonly CancellationTokenProvider consoleTokenProvider;
     private readonly IReplayContext context;
     private readonly SpectatorStatusStore statusStore;
+    private readonly IStatsPanelController statsPanel;
     private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
     private State State { get; set; }
 
     private TimeSpan Timer { get; set; }
+
+    private Stopwatch softwareClock;
 
     private ContextData Data => context.Current;
 
@@ -42,7 +46,8 @@ public class Spectator : ISpectator
         IGameController controller,
         ITalentNotifier talentsNotifier,
         CancellationTokenProvider tokenProvider,
-        SpectatorStatusStore statusStore
+        SpectatorStatusStore statusStore,
+        IStatsPanelController statsPanel
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -54,6 +59,7 @@ public class Spectator : ISpectator
         consoleTokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
+        this.statsPanel = statsPanel ?? throw new ArgumentNullException(nameof(statsPanel));
 
         panelTimes = new()
         {
@@ -130,7 +136,23 @@ public class Spectator : ISpectator
         {
             try
             {
-                TimeSpan? result = await TryGetOcrTimer().ConfigureAwait(false);
+                TimeSpan? result;
+                if (softwareClock == null)
+                {
+                    result = await TryGetOcrTimer().ConfigureAwait(false);
+                    if (!result.HasValue)
+                    {
+                        softwareClock = Stopwatch.StartNew();
+                        result = TimeSpan.Zero;
+                        logger.LogWarning(
+                            "Timer OCR unavailable; spectating from a software clock starting at 0:00."
+                        );
+                    }
+                }
+                else
+                {
+                    result = TimeSpan.FromSeconds(Math.Floor(softwareClock.Elapsed.TotalSeconds));
+                }
 
                 State =
                     CancelSessionSource.IsCancellationRequested ? State.EndDetected
@@ -187,8 +209,11 @@ public class Spectator : ISpectator
                 )
                 {
                     index = focus.Index;
-                    logger.LogDebug(
-                        $"Selecting {focus.Target.Character}. Description: {focus.Description}"
+                    logger.LogInformation(
+                        "Selecting {Hero} slot {Index}. {Description}",
+                        focus.Target.Character,
+                        focus.Index,
+                        focus.Description
                     );
                     controller.SendFocus(focus.Index);
                     statusStore.Patch(status =>
@@ -219,84 +244,98 @@ public class Spectator : ISpectator
     private async Task PanelLoopAsync()
     {
         Panel current = Panel.None;
-        Panel next = Panel.None;
-
         TimeSpan second = TimeSpan.FromSeconds(1);
-        TimeSpan timeHidden = TimeSpan.Zero;
         TimeSpan timeShown = TimeSpan.Zero;
-
-        bool visible = true;
+        bool visible = false;
 
         while (!LinkedTokenSource.IsCancellationRequested)
         {
-            if (State == State.TimerDetected)
-            {
-                try
-                {
-                    if (Timer < settings.Spectate.TalentsPanelStartTime)
-                    {
-                        next = Panel.Talents;
-                    }
-                    else if (Data.Panels.TryGetValue(Timer, out Panel panel) && panel != current)
-                    {
-                        logger.LogDebug($"Data panels timer match found at: {Timer}");
-
-                        if (current != Panel.Talents)
-                            next = panel; // It's not important enough to show KDA over Talents
-                    }
-                    else if (timeHidden >= settings.Spectate.PanelDownTime)
-                    {
-                        next = GetNextPanel(current);
-                    }
-
-                    bool shouldHide =
-                        Timer > settings.Spectate.TalentsPanelStartTime
-                        && current != Panel.None
-                        && timeShown >= panelTimes[current];
-
-                    if (shouldHide)
-                    {
-                        controller.SendPanel(current);
-                        visible = false;
-                        timeHidden = TimeSpan.Zero;
-                        timeShown = TimeSpan.Zero;
-                    }
-
-                    bool shouldShow =
-                        current == Panel.None
-                        || timeHidden >= settings.Spectate.PanelDownTime
-                        || next != current;
-
-                    if (shouldShow)
-                    {
-                        controller.SendPanel(next);
-                        visible = true;
-                        timeShown = TimeSpan.Zero;
-                        timeHidden = TimeSpan.Zero;
-                        current = next;
-                    }
-
-                    timeShown = timeShown.Add(visible ? second : TimeSpan.Zero);
-                    timeHidden = timeHidden.Add(visible ? TimeSpan.Zero : second);
-
-                    logger.LogDebug(
-                        $"{Enum.GetName(typeof(Panel), current)}"
-                            + (visible ? $" shown for: {timeShown}" : $" hidden for: {timeHidden}")
-                    );
-
-                    await Task.Delay(second).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) { }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "Could not complete panel loop");
-                }
-            }
-            else
+            if (State != State.TimerDetected)
             {
                 await Task.Delay(second).ConfigureAwait(false);
+                continue;
+            }
+
+            try
+            {
+                Panel next = ChoosePanel(current, visible);
+
+                TimeSpan shownLimit =
+                    current == Panel.DeathDamageRole
+                        ? statsPanel.ShowDuration
+                        : panelTimes.GetValueOrDefault(current, TimeSpan.FromSeconds(30));
+
+                if (
+                    visible
+                    && current != Panel.None
+                    && (next != current || timeShown >= shownLimit)
+                )
+                {
+                    controller.SendPanel(current);
+                    if (current == Panel.DeathDamageRole)
+                    {
+                        statsPanel.MarkHidden();
+                    }
+
+                    visible = false;
+                    timeShown = TimeSpan.Zero;
+                    if (next == current)
+                    {
+                        current = Panel.None;
+                    }
+                }
+
+                if (!visible && next != Panel.None)
+                {
+                    controller.SendPanel(next);
+                    visible = true;
+                    timeShown = TimeSpan.Zero;
+                    current = next;
+                }
+
+                if (visible)
+                {
+                    timeShown = timeShown.Add(second);
+                }
+
+                await Task.Delay(second).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not complete panel loop");
             }
         }
+    }
+
+    private Panel ChoosePanel(Panel current, bool visible)
+    {
+        if (statsPanel.TryConsume(out string requestedBy))
+        {
+            logger.LogInformation(
+                "Showing stats panel for  {Duration}s ({User}).",
+                (int)statsPanel.ShowDuration.TotalSeconds,
+                requestedBy
+            );
+            return Panel.DeathDamageRole;
+        }
+
+        if (visible && current == Panel.DeathDamageRole)
+        {
+            return Panel.DeathDamageRole;
+        }
+
+        if (Timer < settings.Spectate.TalentsPanelStartTime)
+        {
+            return Panel.Talents;
+        }
+
+        if (Data.Panels.TryGetValue(Timer, out Panel timed) && timed == Panel.Talents)
+        {
+            return Panel.Talents;
+        }
+
+        return Panel.None;
     }
 
     private void PublishStatus()
@@ -315,20 +354,6 @@ public class Spectator : ISpectator
             status.ReplayId = data?.LoadedReplay?.ReplayId;
         });
     }
-
-    private Panel GetNextPanel(Panel current) =>
-        current switch
-        {
-            Panel.None => Panel.Talents,
-            Panel.Talents => Panel.DeathDamageRole,
-            Panel.KillsDeathsAssists => Data.IsCarriedObjectiveMap
-                ? Panel.CarriedObjectives
-                : Panel.DeathDamageRole,
-            Panel.CarriedObjectives => Panel.DeathDamageRole,
-            Panel.DeathDamageRole => Panel.Experience,
-            Panel.Experience => Panel.Talents,
-            _ => Panel.Talents,
-        };
 
     const string StateKey = "State";
 

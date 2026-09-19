@@ -21,6 +21,8 @@ public class SpectateSettings
     public TimeSpan EndScreenTime { get; set; }
     public TimeSpan PanelDownTime { get; set; }
     public TimeSpan TalentsPanelStartTime { get; set; }
+    public TimeSpan StatsPanelShowDuration { get; set; }
+    public TimeSpan StatsPanelCooldown { get; set; }
     public TimeSpan WaitingTime { get; set; }
 
     public TimeSpan PastDeathContextTime { get; set; }
