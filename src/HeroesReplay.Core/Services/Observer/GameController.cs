@@ -137,6 +137,14 @@ public class GameController : IGameController
                 return;
             }
 
+            if (IsGameProcessRunning())
+            {
+                logger.LogWarning(
+                    "Home-screen OCR did not find PLAY/COLLECTION/LOOT/WATCH, but the game window is running. Continuing."
+                );
+                return;
+            }
+
             logger.LogInformation(
                 "The game was launched, but we did not end up on the home screen. Killing game."
             );
@@ -366,23 +374,9 @@ public class GameController : IGameController
             .ToArray();
     }
 
-    private async Task<bool> IsHomeScreen()
-    {
-        if (!IsGameProcessRunning())
-        {
-            return false;
-        }
-
-        if (await ContainsAnyAsync(settings.OCR.HomeScreenText).ConfigureAwait(false))
-        {
-            return true;
-        }
-
-        logger.LogInformation(
-            "Heroes of the Storm process is running; continuing without home-screen OCR."
-        );
-        return true;
-    }
+    private async Task<bool> IsHomeScreen() =>
+        IsGameProcessRunning()
+        && await ContainsAnyAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
 
     private bool IsGameProcessRunning()
     {
@@ -433,17 +427,19 @@ public class GameController : IGameController
             )
             {
                 OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
+                logger.LogInformation(
+                    "Window OCR ({Width}x{Height}): {Text}",
+                    capture.Width,
+                    capture.Height,
+                    string.IsNullOrWhiteSpace(result.Text) ? "(empty)" : result.Text
+                );
 
                 foreach (var word in words)
                 {
-                    if (result.Text.Contains(word))
+                    if (result.Text.Contains(word, StringComparison.OrdinalIgnoreCase))
                     {
-                        logger.LogDebug($"{word} has been found.");
+                        logger.LogInformation("{Word} has been found.", word);
                         return true;
-                    }
-                    else
-                    {
-                        logger.LogDebug($"{word} not found.");
                     }
                 }
 
