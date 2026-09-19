@@ -12,7 +12,7 @@ public class HeroesProfileReplay
     public int? HotsApiReplayId { get; set; }
 
     [JsonPropertyName("region")]
-    public string Region { get; set; }
+    public int? Region { get; set; }
 
     [JsonPropertyName("url")]
     public Uri Url { get; set; }
