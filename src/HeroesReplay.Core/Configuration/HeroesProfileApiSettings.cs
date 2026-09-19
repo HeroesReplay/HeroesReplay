@@ -45,8 +45,37 @@ public class HeroesProfileApiSettings
 
         IEnumerable<string> allowed = GameTypes ?? Enumerable.Empty<string>();
         if (!allowed.Any())
-            return string.Equals(gameType, "Storm League", StringComparison.OrdinalIgnoreCase);
+        {
+            return IsStormLeague(gameType);
+        }
 
-        return allowed.Contains(gameType, StringComparer.OrdinalIgnoreCase);
+        return allowed.Any(a => GameTypesEqual(a, gameType));
+    }
+
+    private static bool IsStormLeague(string gameType) => GameTypesEqual("Storm League", gameType);
+
+    private static bool GameTypesEqual(string expected, string actual)
+    {
+        if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        string a = NormalizeGameType(expected);
+        string b = NormalizeGameType(actual);
+        return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeGameType(string gameType)
+    {
+        if (
+            string.Equals(gameType, "sl", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(gameType, "Storm League", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return "sl";
+        }
+
+        return gameType;
     }
 }

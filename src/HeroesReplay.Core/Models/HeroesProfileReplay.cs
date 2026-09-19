@@ -51,5 +51,11 @@ public class HeroesProfileReplay
     [JsonPropertyName("league_tier")]
     public int? LeagueTier { get; set; }
 
+    [JsonPropertyName("game_date")]
+    public string GameDate { get; set; }
+
+    [JsonPropertyName("downloadable")]
+    public bool? Downloadable { get; set; }
+
     public HeroesProfileReplay() { }
 }

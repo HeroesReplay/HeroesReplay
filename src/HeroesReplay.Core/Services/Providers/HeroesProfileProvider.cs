@@ -236,10 +236,18 @@ public class HeroesProfileProvider : IReplayProvider
 
         Uri downloadUri = new Uri(
             settings.HeroesProfileApi.BaseUri,
-            $"Replay/Download?replayID={replay.Id}&api_token={settings.HeroesProfileApi.ApiKey}"
+            $"download/replay?replayID={replay.Id}"
         );
 
         using HttpClient httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        if (!string.IsNullOrWhiteSpace(settings.HeroesProfileApi.ApiKey))
+        {
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue(
+                    "Bearer",
+                    settings.HeroesProfileApi.ApiKey
+                );
+        }
         using HttpResponseMessage response = await httpClient
             .GetAsync(downloadUri, provider.Token)
             .ConfigureAwait(false);
@@ -299,11 +307,7 @@ public class HeroesProfileProvider : IReplayProvider
                             HeroesProfileReplay found = replays
                                 .Where(r =>
                                     r.Id > MinReplayId
-                                    && r.Rank != null
-                                    && settings.HeroesProfileApi.GameTypes.Contains(
-                                        r.GameType,
-                                        StringComparer.CurrentCultureIgnoreCase
-                                    )
+                                    && settings.HeroesProfileApi.IsAllowedGameType(r.GameType)
                                 )
                                 .OrderBy(x => x.Id)
                                 .FirstOrDefault();

@@ -36,4 +36,21 @@ public class HeroesProfileReplayJsonTests
 
         Assert.Equal(1, replays[0].Region);
     }
+
+    [Fact]
+    public void V1ReplayPage_Deserializes()
+    {
+        const string json = """
+            {"replays":[{"replayID":65267632,"region":1,"fingerprint":"abc","game_type":"Storm League","game_version":"2.55.17.98025","game_map":"Haunted Mines","game_date":"2026-09-19 00:00:00","parsed":1,"deleted":0,"downloadable":true}],"next_after":65267632,"max_replay_id":65287216}
+            """;
+
+        var page = JsonSerializer.Deserialize<HeroesProfileReplayPage>(json);
+
+        Assert.NotNull(page);
+        Assert.Equal(65287216, page.MaxReplayId);
+        Assert.Equal(65267632, page.NextAfter);
+        Assert.True(page.Replays[0].Downloadable);
+        Assert.Equal(0, page.Replays[0].Deleted);
+        Assert.Equal("Haunted Mines", page.Replays[0].Map);
+    }
 }

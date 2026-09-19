@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,6 +46,13 @@ public class HeroesProfileService : IHeroesProfileService
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         this.httpClient.BaseAddress = settings.HeroesProfileApi.BaseUri;
+        if (!string.IsNullOrWhiteSpace(settings.HeroesProfileApi.ApiKey))
+        {
+            this.httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                settings.HeroesProfileApi.ApiKey
+            );
+        }
 
         replayCachePolicy = Policy.CacheAsync(
             cacheProvider: this.cacheProvider.AsyncFor<HeroesProfileReplay>(),
@@ -127,7 +135,7 @@ public class HeroesProfileService : IHeroesProfileService
                         action: (PollyContext context, CancellationToken token) =>
                             httpClient.GetAsync(
                                 new Uri(
-                                    $"Replay/Min_id?min_id={replayId}&api_token={settings.HeroesProfileApi.ApiKey}",
+                                    BuildReplaysPath(replayId - 1, gameType: null),
                                     UriKind.Relative
                                 ),
                                 token
@@ -139,11 +147,11 @@ public class HeroesProfileService : IHeroesProfileService
 
                 if (response.IsSuccessStatusCode)
                 {
-                    IEnumerable<HeroesProfileReplay> replays =
-                        await response.Content.ReadFromJsonAsync<IEnumerable<HeroesProfileReplay>>(
+                    HeroesProfileReplayPage page =
+                        await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>(
                             cancellationToken: token
                         );
-                    return replays.FirstOrDefault(replays => replays.Id == replayId);
+                    return page?.Replays?.FirstOrDefault(r => r.Id == replayId);
                 }
 
                 return null;
@@ -172,7 +180,10 @@ public class HeroesProfileService : IHeroesProfileService
                             action: (PollyContext context, CancellationToken token) =>
                                 httpClient.GetAsync(
                                     new Uri(
-                                        $"Replay/Max?api_token={settings.HeroesProfileApi.ApiKey}",
+                                        BuildReplaysPath(
+                                            after: 0,
+                                            settings.HeroesProfileApi.GameTypes?.FirstOrDefault()
+                                        ),
                                         UriKind.Relative
                                     ),
                                     token
@@ -183,14 +194,13 @@ public class HeroesProfileService : IHeroesProfileService
 
                     if (response.IsSuccessStatusCode)
                     {
-                        string content = await response.Content.ReadAsStringAsync();
-
-                        if (
-                            !string.IsNullOrWhiteSpace(content)
-                            && int.TryParse(content, out int maxId)
-                        )
+                        HeroesProfileReplayPage page =
+                            await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>(
+                                cancellationToken: token
+                            );
+                        if (page != null && page.MaxReplayId > 0)
                         {
-                            return maxId;
+                            return page.MaxReplayId;
                         }
                     }
 
@@ -263,7 +273,12 @@ public class HeroesProfileService : IHeroesProfileService
                                         (context, token) =>
                                             httpClient.GetAsync(
                                                 new Uri(
-                                                    $"Replay/Min_id?min_id={context["minId"]}&{context.OperationKey}&api_token={settings.HeroesProfileApi.ApiKey}",
+                                                    BuildReplaysPath(
+                                                        (int)context["minId"],
+                                                        gameType?.GetQueryValue()
+                                                            ?? settings.HeroesProfileApi.GameTypes?.FirstOrDefault(),
+                                                        gameMap
+                                                    ),
                                                     UriKind.Relative
                                                 ),
                                                 token
@@ -274,26 +289,11 @@ public class HeroesProfileService : IHeroesProfileService
 
                                 if (response.IsSuccessStatusCode)
                                 {
-                                    IEnumerable<HeroesProfileReplay> replays =
-                                        await response.Content.ReadFromJsonAsync<
-                                            IEnumerable<HeroesProfileReplay>
-                                        >(cancellationToken: token);
-
-                                    var supported = replays
-                                        .Where(x => x.Deleted == null)
-                                        .Where(x =>
-                                            settings.HeroesProfileApi.IsAllowedGameType(x.GameType)
-                                        )
-                                        .Where(x =>
-                                            settings.HeroesProfileApi.MatchesReplayUrl(x.Url)
-                                        )
-                                        .Where(x =>
-                                            settings.Spectate.VersionsSupported.Contains(
-                                                x.GameVersion
-                                            )
+                                    HeroesProfileReplayPage page =
+                                        await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>(
+                                            cancellationToken: token
                                         );
-
-                                    return supported;
+                                    return FilterListed(page?.Replays);
                                 }
                                 else
                                 {
@@ -334,7 +334,13 @@ public class HeroesProfileService : IHeroesProfileService
                 .ExecuteAsync(
                     (context, token) =>
                         httpClient.GetAsync(
-                            new Uri(BuildMinIdPath(minId), UriKind.Relative),
+                            new Uri(
+                                BuildReplaysPath(
+                                    minId,
+                                    settings.HeroesProfileApi.GameTypes?.FirstOrDefault()
+                                ),
+                                UriKind.Relative
+                            ),
                             token
                         ),
                     new PollyContext(),
@@ -344,15 +350,9 @@ public class HeroesProfileService : IHeroesProfileService
 
             if (response.IsSuccessStatusCode)
             {
-                IEnumerable<HeroesProfileReplay> replays = await response.Content.ReadFromJsonAsync<
-                    IEnumerable<HeroesProfileReplay>
-                >();
-
-                return replays
-                    .Where(x => x.Deleted == null)
-                    .Where(x => settings.HeroesProfileApi.IsAllowedGameType(x.GameType))
-                    .Where(x => settings.HeroesProfileApi.MatchesReplayUrl(x.Url))
-                    .Where(x => settings.Spectate.VersionsSupported.Contains(x.GameVersion));
+                HeroesProfileReplayPage page =
+                    await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>();
+                return FilterListed(page?.Replays);
             }
         }
         catch (Exception e)
@@ -363,16 +363,43 @@ public class HeroesProfileService : IHeroesProfileService
         return Enumerable.Empty<HeroesProfileReplay>();
     }
 
-    private string BuildMinIdPath(int minId)
+    private string BuildReplaysPath(int? after, string gameType, string gameMap = null)
     {
-        string path = $"Replay/Min_id?min_id={minId}&api_token={settings.HeroesProfileApi.ApiKey}";
-        string gameType = settings.HeroesProfileApi.GameTypes?.FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(gameType))
+        var parts = new List<string>();
+        if (after.HasValue && after.Value > 0)
         {
-            path += "&game_type=" + Uri.EscapeDataString(gameType);
+            parts.Add("after=" + after.Value);
         }
 
-        return path;
+        if (!string.IsNullOrWhiteSpace(gameType))
+        {
+            parts.Add("game_type=" + Uri.EscapeDataString(gameType));
+        }
+
+        if (!string.IsNullOrWhiteSpace(gameMap))
+        {
+            parts.Add("game_map=" + Uri.EscapeDataString(gameMap));
+        }
+
+        return parts.Count == 0 ? "replays" : "replays?" + string.Join("&", parts);
+    }
+
+    private IEnumerable<HeroesProfileReplay> FilterListed(IEnumerable<HeroesProfileReplay> replays)
+    {
+        if (replays == null)
+        {
+            return Enumerable.Empty<HeroesProfileReplay>();
+        }
+
+        IEnumerable<string> versions = settings.Spectate?.VersionsSupported;
+        return replays
+            .Where(x => x.Deleted is not > 0)
+            .Where(x => settings.HeroesProfileApi.IsAllowedGameType(x.GameType))
+            .Where(x =>
+                x.Downloadable == true
+                || (x.Downloadable != false && settings.HeroesProfileApi.MatchesReplayUrl(x.Url))
+            )
+            .Where(x => versions == null || !versions.Any() || versions.Contains(x.GameVersion));
     }
 
     private TimeSpan GetSleepDuration(int retry, PollyContext context)
