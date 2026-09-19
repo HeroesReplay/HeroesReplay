@@ -239,6 +239,7 @@ public class HeroesProfileProvider : IReplayProvider
             await file.FlushAsync(provider.Token).ConfigureAwait(false);
         }
 
+        fileInfo.Refresh();
         logger.LogInformation(
             "Downloaded Heroes Profile replay {ReplayId} ({Bytes} bytes).",
             replay.Id,
