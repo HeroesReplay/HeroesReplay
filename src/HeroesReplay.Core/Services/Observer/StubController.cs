@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
@@ -13,12 +14,18 @@ public sealed class StubController : IGameController
     private readonly ILogger<StubController> logger;
     private readonly IReplayContext context;
     private readonly Queue<TimeSpan?> timers = new();
+    private Stopwatch replayOpened;
 
     public StubController(ILogger<StubController> logger, IReplayContext context)
     {
         this.logger = logger;
         this.context = context;
     }
+
+    public TimeSpan? ReplayOpenElapsed =>
+        replayOpened != null && replayOpened.IsRunning
+            ? TimeSpan.FromSeconds(Math.Floor(replayOpened.Elapsed.TotalSeconds))
+            : null;
 
     public void Kill() { }
 
@@ -34,6 +41,7 @@ public sealed class StubController : IGameController
             timers.Enqueue(TimeSpan.FromSeconds(second));
         }
 
+        replayOpened = Stopwatch.StartNew();
         return Task.CompletedTask;
     }
 

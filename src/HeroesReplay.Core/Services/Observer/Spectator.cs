@@ -11,8 +11,6 @@ using HeroesReplay.Core.Services.HeroesProfileExtension;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Status;
 using Microsoft.Extensions.Logging;
-using Polly;
-using PollyContext = Polly.Context;
 
 namespace HeroesReplay.Core.Services.Observer;
 
@@ -180,25 +178,35 @@ public class Spectator : ISpectator
             {
                 TimeSpan? result;
                 bool fromOcr = false;
-                if (softwareClock == null)
+                TimeSpan? ocr = await controller.TryGetTimerAsync().ConfigureAwait(false);
+                if (ocr.HasValue)
                 {
-                    result = await TryGetOcrTimer().ConfigureAwait(false);
-                    if (result.HasValue)
-                    {
-                        fromOcr = true;
-                    }
-                    else
-                    {
-                        softwareClock = Stopwatch.StartNew();
-                        result = TimeSpan.Zero;
-                        logger.LogWarning(
-                            "Timer OCR unavailable; spectating from a software clock at replay 0:00 (not UI time + gates)."
-                        );
-                    }
+                    fromOcr = true;
+                    result = ocr;
+                    softwareClock = null;
                 }
                 else
                 {
-                    result = TimeSpan.FromSeconds(Math.Floor(softwareClock.Elapsed.TotalSeconds));
+                    TimeSpan? sinceOpen = controller.ReplayOpenElapsed;
+                    if (sinceOpen.HasValue)
+                    {
+                        result = sinceOpen;
+                    }
+                    else
+                    {
+                        softwareClock ??= Stopwatch.StartNew();
+                        result = TimeSpan.FromSeconds(
+                            Math.Floor(softwareClock.Elapsed.TotalSeconds)
+                        );
+                    }
+
+                    if (State != State.TimerDetected)
+                    {
+                        logger.LogWarning(
+                            "Timer OCR unavailable; using elapsed since the replay was opened ({Elapsed}).",
+                            result
+                        );
+                    }
                 }
 
                 bool firstTimer = State != State.TimerDetected && result.HasValue;
@@ -458,67 +466,5 @@ public class Spectator : ISpectator
             status.ReplayVersion = data?.LoadedReplay?.Replay?.ReplayVersion;
             status.ReplayId = data?.LoadedReplay?.ReplayId;
         });
-    }
-
-    const string StateKey = "State";
-
-    private async Task<TimeSpan?> TryGetOcrTimer()
-    {
-        return await Policy
-            .HandleResult<TimeSpan?>(result => result == null)
-            .WaitAndRetryAsync(
-                retryCount: settings.Spectate.RetryTimerCountBeforeForceEnd,
-                sleepDurationProvider: (retry, context) =>
-                    settings.Spectate.RetryTimerSleepDuration,
-                onRetry: OnRetry
-            )
-            .ExecuteAsync(
-                (context, token) => controller.TryGetTimerAsync(),
-                new PollyContext("Timer") { { StateKey, State } },
-                LinkedTokenSource.Token
-            )
-            .ConfigureAwait(false);
-    }
-
-    private void OnRetry(
-        DelegateResult<TimeSpan?> outcome,
-        TimeSpan duration,
-        int retryCount,
-        PollyContext context
-    )
-    {
-        var state = (State)context[StateKey];
-        var isMax = retryCount >= settings.Spectate.RetryTimerCountBeforeForceEnd;
-        var isTimerNotFound = outcome.Result == null;
-
-        if (state == State.Loading)
-        {
-            logger.LogInformation($"Waiting for timer...attempt {retryCount}.");
-        }
-        else if (state == State.TimerDetected && isTimerNotFound && isMax)
-        {
-            bool pastEnd = SessionEndTime > TimeSpan.Zero && Timer >= SessionEndTime;
-            if (pastEnd || Data.CoreKilled == TimeSpan.Zero)
-            {
-                logger.LogInformation(
-                    $"Timer could not be found after {retryCount}. Sending session cancellation."
-                );
-                CancelSessionSource.Cancel();
-            }
-            else
-            {
-                logger.LogWarning(
-                    "Timer OCR failed but replay end {CoreKilled} has not been reached (timer {Timer}).",
-                    Data.CoreKilled,
-                    Timer
-                );
-            }
-        }
-        else
-        {
-            logger.LogWarning(
-                $"Timer failed. Waiting {duration} before next retry. Retry attempt {retryCount}"
-            );
-        }
     }
 }

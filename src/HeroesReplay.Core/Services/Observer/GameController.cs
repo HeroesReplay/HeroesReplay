@@ -39,6 +39,7 @@ public class GameController : IGameController
     private readonly object controllerLock = new object();
     private Process cachedProcess;
     private IntPtr cachedHandle;
+    private Stopwatch replayOpened;
 
     public static readonly VirtualKey[] Keys =
     {
@@ -73,6 +74,11 @@ public class GameController : IGameController
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
     }
 
+    public TimeSpan? ReplayOpenElapsed =>
+        replayOpened != null && replayOpened.IsRunning
+            ? TimeSpan.FromSeconds(Math.Floor(replayOpened.Elapsed.TotalSeconds))
+            : null;
+
     public async Task LaunchAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.launch");
@@ -96,6 +102,7 @@ public class GameController : IGameController
         if (IsLaunched() && await IsReplay().ConfigureAwait(false))
         {
             logger.LogInformation("Client already in a replay (timer visible). Skipping launch.");
+            replayOpened ??= Stopwatch.StartNew();
             return;
         }
 
@@ -104,6 +111,7 @@ public class GameController : IGameController
             logger.LogInformation(
                 "Client is running and not on the home screen; attaching without waiting for loading OCR."
             );
+            replayOpened ??= Stopwatch.StartNew();
             return;
         }
 
@@ -191,6 +199,8 @@ public class GameController : IGameController
                 }
             )
         ) { }
+
+        replayOpened = Stopwatch.StartNew();
 
         bool versionMatched = Policy
             .Handle<Exception>()
