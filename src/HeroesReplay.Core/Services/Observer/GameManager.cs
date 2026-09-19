@@ -69,8 +69,6 @@ public class GameManager : IGameManager
         {
             EnsureWindowedClient();
             await gameController.LaunchAsync();
-            await Task.Delay(TimeSpan.FromSeconds(2));
-            gameController.HideReplayTimeline();
 
             if (settings.OBS.Enabled)
             {

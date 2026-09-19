@@ -11,5 +11,6 @@ public interface IGameController
     void SendFocus(int player);
     void SendPanel(Panel panel);
     void HideReplayTimeline();
+    void ZoomOut();
     void Kill();
 }

@@ -33,6 +33,8 @@ public class Spectator : ISpectator
 
     private Stopwatch softwareClock;
 
+    private bool replayViewConfigured;
+
     private ContextData Data => context.Current;
 
     private CancellationTokenSource CancelSessionSource { get; set; }
@@ -76,6 +78,7 @@ public class Spectator : ISpectator
     {
         State = State.Loading;
         Timer = default;
+        replayViewConfigured = false;
         PublishStatus();
 
         using (CancelSessionSource = new CancellationTokenSource())
@@ -164,6 +167,13 @@ public class Spectator : ISpectator
                     Timer = result.Value.Add(context.Current.GatesOpen);
                     logger.LogInformation($"{State}, UI Time: {result.Value} Replay Time: {Timer}");
                     context.Current.Timer = Timer;
+
+                    if (!replayViewConfigured)
+                    {
+                        controller.HideReplayTimeline();
+                        controller.ZoomOut();
+                        replayViewConfigured = true;
+                    }
 
                     if (
                         context.Current.CoreKilled > TimeSpan.Zero

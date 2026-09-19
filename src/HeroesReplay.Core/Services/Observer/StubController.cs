@@ -43,6 +43,8 @@ public sealed class StubController : IGameController
 
     public void HideReplayTimeline() => logger.LogInformation("Hide replay timeline (Ctrl+T)");
 
+    public void ZoomOut() => logger.LogInformation("Zoom out (Ctrl+Z)");
+
     public Task<TimeSpan?> TryGetTimerAsync()
     {
         if (timers.Count == 0)

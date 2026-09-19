@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
@@ -499,25 +500,43 @@ public class GameController : IGameController
 
     public void HideReplayTimeline()
     {
+        SendControlKey(VirtualKey.VK_T, "hide replay timeline (Ctrl+T)");
+    }
+
+    public void ZoomOut()
+    {
+        SendControlKey(VirtualKey.VK_Z, "zoom out (Ctrl+Z)");
+    }
+
+    private void SendControlKey(VirtualKey key, string description)
+    {
         lock (controllerLock)
         {
             if (!TryGetGameHandle(out IntPtr handle))
             {
-                logger.LogWarning("Could not hide replay timeline; no game window.");
+                logger.LogWarning("Could not {Description}; no game window.", description);
                 return;
             }
 
-            SendMessage(
-                handle,
-                WindowMessage.WM_KEYDOWN,
-                (IntPtr)VirtualKey.VK_CONTROL,
-                IntPtr.Zero
-            );
-            SendMessage(handle, WindowMessage.WM_KEYDOWN, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
-            SendMessage(handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_T, IntPtr.Zero);
-            SendMessage(handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
-            logger.LogInformation("Sent Ctrl+T to hide the replay timeline.");
+            SetForegroundWindow(handle);
+            const uint keyUp = 0x0002;
+            NativeMethods.keybd_event((byte)VirtualKey.VK_CONTROL, 0, 0, UIntPtr.Zero);
+            NativeMethods.keybd_event((byte)key, 0, 0, UIntPtr.Zero);
+            NativeMethods.keybd_event((byte)key, 0, keyUp, UIntPtr.Zero);
+            NativeMethods.keybd_event((byte)VirtualKey.VK_CONTROL, 0, keyUp, UIntPtr.Zero);
+            logger.LogInformation("Sent {Description}.", description);
         }
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("user32.dll")]
+        public static extern void keybd_event(
+            byte bVk,
+            byte bScan,
+            uint dwFlags,
+            UIntPtr dwExtraInfo
+        );
     }
 
     public void Kill()
