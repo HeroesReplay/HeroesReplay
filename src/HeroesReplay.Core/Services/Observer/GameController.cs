@@ -95,9 +95,19 @@ public class GameController : IGameController
 
         if (IsLaunched() && await IsReplay().ConfigureAwait(false))
         {
+            logger.LogInformation("Client already in a replay (timer visible). Skipping launch.");
             return;
         }
-        else if (IsLaunched() && await IsHomeScreen().ConfigureAwait(false))
+
+        if (IsLaunched() && !await IsHomeScreen().ConfigureAwait(false))
+        {
+            logger.LogInformation(
+                "Client is running and not on the home screen; attaching without waiting for loading OCR."
+            );
+            return;
+        }
+
+        if (IsLaunched() && await IsHomeScreen().ConfigureAwait(false))
         {
             await LaunchAndWait().ConfigureAwait(false);
         }
@@ -209,7 +219,12 @@ public class GameController : IGameController
                 retryCount: 60,
                 sleepDurationProvider: retry => settings.OCR.CheckSleepDuration
             )
-            .ExecuteAsync((t) => ContainsAnyAsync(searchTerms), tokenProvider.Token)
+            .ExecuteAsync(
+                async (t) =>
+                    await ContainsAnyAsync(searchTerms).ConfigureAwait(false)
+                    || await IsReplay().ConfigureAwait(false),
+                tokenProvider.Token
+            )
             .ConfigureAwait(false);
     }
 
