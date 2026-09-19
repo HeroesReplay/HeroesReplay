@@ -471,40 +471,29 @@ public class GameController : IGameController
 
     public void SendFocus(int index)
     {
-        lock (controllerLock)
+        if (index < 0 || index >= Keys.Length)
         {
-            if (!TryGetGameHandle(out IntPtr handle))
-            {
-                return;
-            }
-
-            IntPtr key = (IntPtr)Keys[index];
-            SendMessage(handle, WindowMessage.WM_KEYDOWN, key, IntPtr.Zero);
-            SendMessage(handle, WindowMessage.WM_CHAR, key, IntPtr.Zero);
-            SendMessage(handle, WindowMessage.WM_KEYUP, key, IntPtr.Zero);
+            logger.LogWarning("Focus index {Index} is out of range.", index);
+            return;
         }
+
+        SendChord($"focus slot {index} ({Keys[index]})", Keys[index]);
     }
 
     public void SendPanel(Panel panel)
     {
-        lock (controllerLock)
+        int panelIndex = (int)panel;
+        if (panelIndex < 0 || panelIndex >= Keys.Length)
         {
-            if (!TryGetGameHandle(out IntPtr handle))
-            {
-                return;
-            }
-
-            IntPtr Key = (IntPtr)Keys[(int)panel];
-            SendMessage(
-                handle,
-                WindowMessage.WM_KEYDOWN,
-                (IntPtr)VirtualKey.VK_CONTROL,
-                IntPtr.Zero
-            );
-            SendMessage(handle, WindowMessage.WM_KEYDOWN, Key, IntPtr.Zero);
-            SendMessage(handle, WindowMessage.WM_KEYUP, Key, IntPtr.Zero);
-            SendMessage(handle, WindowMessage.WM_KEYUP, (IntPtr)VirtualKey.VK_CONTROL, IntPtr.Zero);
+            logger.LogWarning("Panel {Panel} is out of range.", panel);
+            return;
         }
+
+        SendChord(
+            $"panel {panel} (Ctrl+{panelIndex + 1})",
+            VirtualKey.VK_CONTROL,
+            Keys[panelIndex]
+        );
     }
 
     public void HideReplayTimeline()
