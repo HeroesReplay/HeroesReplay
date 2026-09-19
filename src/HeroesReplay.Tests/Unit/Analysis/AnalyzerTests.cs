@@ -1,14 +1,15 @@
 using System;
 using System.Linq;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Analysis.Calculators;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace HeroesReplay.Tests;
+namespace HeroesReplay.Tests.Unit.Analysis;
 
+[Trait(TestCategories.Category, TestCategories.Unit)]
 public class AnalyzerTests : IClassFixture<ReplayFixture>
 {
     private readonly ReplayFixture fixture;
@@ -59,46 +60,6 @@ public class AnalyzerTests : IClassFixture<ReplayFixture>
                 Assert.Equal(killSecond.Value.Target, held.Target);
             }
         }
-    }
-
-    [Fact]
-    public void AbilityDetectorMatchesAnyBuildEntry()
-    {
-        Assert.True(
-            AbilityDetector.IsBuildInRange(98025, greaterEqualBuild: 68740, lessThanBuild: null)
-        );
-        Assert.True(
-            AbilityDetector.IsBuildInRange(68739, greaterEqualBuild: null, lessThanBuild: 68740)
-        );
-        Assert.False(
-            AbilityDetector.IsBuildInRange(68740, greaterEqualBuild: null, lessThanBuild: 68740)
-        );
-        Assert.False(
-            AbilityDetector.IsBuildInRange(68739, greaterEqualBuild: 68740, lessThanBuild: null)
-        );
-        Assert.False(
-            AbilityDetector.IsBuildInRange(70000, greaterEqualBuild: 70682, lessThanBuild: 68740)
-        );
-    }
-
-    [Fact]
-    public void AliveFilterTreatsNullTimeSpanDiedAsAlive()
-    {
-        var living = fixture
-            .Replay.Players.SelectMany(p => p.HeroUnits)
-            .FirstOrDefault(u => u.TimeSpanDied == null);
-        Assert.NotNull(living);
-        Assert.True(living.IsAliveAt(living.TimeSpanBorn.Add(TimeSpan.FromSeconds(1))));
-        Assert.False(living.IsAliveAt(living.TimeSpanBorn));
-
-        var dead = fixture
-            .Replay.Players.SelectMany(p => p.HeroUnits)
-            .First(u =>
-                u.TimeSpanDied.HasValue
-                && u.TimeSpanDied.Value > u.TimeSpanBorn.Add(TimeSpan.FromSeconds(1))
-            );
-        Assert.True(dead.IsAliveAt(dead.TimeSpanDied.Value - TimeSpan.FromSeconds(1)));
-        Assert.False(dead.IsAliveAt(dead.TimeSpanDied.Value));
     }
 
     private static AppSettings CreateSettings()

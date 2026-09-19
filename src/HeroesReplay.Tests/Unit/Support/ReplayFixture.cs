@@ -1,7 +1,7 @@
 using System.IO;
 using Heroes.ReplayParser;
 
-namespace HeroesReplay.Tests;
+namespace HeroesReplay.Tests.Unit.Support;
 
 public class ReplayFixture
 {

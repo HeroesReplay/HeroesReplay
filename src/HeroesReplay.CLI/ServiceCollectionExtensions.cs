@@ -62,7 +62,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton<IYouTubeUploader, YouTubeUploader>()
             .AddSingleton(serviceProvider =>
-                serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>()
+                BindSettings(serviceProvider.GetRequiredService<IConfiguration>())
             )
             .AddSingleton(CancellationTokenSource.CreateLinkedTokenSource(token))
             .AddSingleton<IConfiguration>(configuration);
@@ -78,7 +78,7 @@ public static class ServiceCollectionExtensions
         IConfigurationRoot configuration = GetConfiguration();
         services.AddSingleton(replayPath ?? new ReplayPathOptions());
 
-        var settings = configuration.Get<AppSettings>();
+        var settings = BindSettings(configuration);
 
         return services
             .AddLogging(builder =>
@@ -99,6 +99,48 @@ public static class ServiceCollectionExtensions
             .AddSingleton(typeof(IReplayProvider), replayProvider)
             .AddSingleton<ISpectateReportWriter, SpectateReportCsvWriter>()
             .AddFocusCalculators();
+    }
+
+    public static IServiceCollection AddCheckServices(
+        this IServiceCollection services,
+        CancellationToken token
+    )
+    {
+        IConfigurationRoot configuration = GetConfiguration();
+        AppSettings settings = BindSettings(configuration);
+
+        return services
+            .AddMemoryCache()
+            .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
+            .AddLogging(builder =>
+                builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole()
+            )
+            .AddSingleton<IConfiguration>(configuration)
+            .AddSingleton(settings)
+            .AddSingleton(new CancellationTokenProvider(token))
+            .AddHttpClient<IHeroesProfileService, HeroesProfileService>()
+            .Services.AddSingleton<OBSWebsocket>()
+            .AddSingleton<ITwitchAPI, TwitchAPI>()
+            .AddSingleton<IApiSettings>(serviceProvider =>
+            {
+                AppSettings bound = serviceProvider.GetRequiredService<AppSettings>();
+                return new ApiSettings
+                {
+                    AccessToken = bound.Twitch?.AccessToken,
+                    ClientId = bound.Twitch?.ClientId,
+                };
+            });
+    }
+
+    public static AppSettings BindSettings(IConfiguration configuration)
+    {
+        AppSettings settings =
+            configuration.Get<AppSettings>()
+            ?? throw new InvalidOperationException(
+                "Could not bind AppSettings from configuration."
+            );
+        SecretResolver.Apply(settings);
+        return settings;
     }
 
     public static IServiceCollection AddFocusCalculators(this IServiceCollection services)
@@ -126,6 +168,7 @@ public static class ServiceCollectionExtensions
     )
     {
         IConfigurationRoot configuration = GetConfiguration();
+        AppSettings settings = BindSettings(configuration);
 
         var rewardHandler = typeof(IRewardHandler);
         var rewardHandlerTypes = rewardHandler
@@ -150,9 +193,7 @@ public static class ServiceCollectionExtensions
         return services
             .AddMemoryCache()
             .AddSingleton<IConfiguration>(configuration)
-            .AddSingleton(serviceProvider =>
-                serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>()
-            )
+            .AddSingleton(settings)
             .AddSingleton(new CancellationTokenProvider(token))
             .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
@@ -162,12 +203,10 @@ public static class ServiceCollectionExtensions
                     .AddEventLog(config => config.SourceName = "HeroesReplay.TwitchService")
             )
             .AddSingleton<IConfiguration>(configuration)
-            .AddSingleton(serviceProvider =>
-                serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>()
-            )
+            .AddSingleton(settings)
             .AddSingleton(
                 typeof(ITwitchBot),
-                configuration.Get<AppSettings>().Capture.Method switch
+                settings.Capture.Method switch
                 {
                     CaptureMethod.None => typeof(FakeTwitchBot),
                     _ => typeof(TwitchBot),
@@ -175,7 +214,7 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton(
                 typeof(ITwitchClient),
-                configuration.Get<AppSettings>().Capture.Method switch
+                settings.Capture.Method switch
                 {
                     CaptureMethod.None => typeof(FakeTwitchClient),
                     _ => typeof(TwitchClient),
@@ -217,6 +256,7 @@ public static class ServiceCollectionExtensions
     )
     {
         IConfigurationRoot configuration = GetConfiguration();
+        AppSettings settings = BindSettings(configuration);
         services.AddSingleton(replayPath ?? new ReplayPathOptions());
 
         var rewardHandler = typeof(IRewardHandler);
@@ -249,14 +289,12 @@ public static class ServiceCollectionExtensions
                     .AddEventLog(config => config.SourceName = "HeroesReplay.SpectatorService")
             )
             .AddSingleton<IConfiguration>(configuration)
-            .AddSingleton(serviceProvider =>
-                serviceProvider.GetRequiredService<IConfiguration>().Get<AppSettings>()
-            )
+            .AddSingleton(settings)
             .AddSingleton(new CancellationTokenProvider(token))
             .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
             .AddSingleton(
                 typeof(CaptureStrategy),
-                configuration.Get<AppSettings>().Capture.Method switch
+                settings.Capture.Method switch
                 {
                     CaptureMethod.None => typeof(StubCapture),
                     _ => typeof(BitBltCapture),
@@ -264,7 +302,7 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton(
                 typeof(IGameController),
-                configuration.Get<AppSettings>().Capture.Method switch
+                settings.Capture.Method switch
                 {
                     CaptureMethod.None => typeof(StubController),
                     _ => typeof(GameController),
@@ -272,7 +310,7 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton(
                 typeof(ITalentNotifier),
-                configuration.Get<AppSettings>().Capture.Method switch
+                settings.Capture.Method switch
                 {
                     CaptureMethod.None => typeof(StubNotifier),
                     _ => typeof(TalentNotifier),
@@ -280,7 +318,7 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton(
                 typeof(ITwitchBot),
-                configuration.Get<AppSettings>().Capture.Method switch
+                settings.Capture.Method switch
                 {
                     CaptureMethod.None => typeof(FakeTwitchBot),
                     _ => typeof(TwitchBot),
@@ -312,7 +350,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<ITwitchExtensionService, TwitchExtensionService>()
             .AddSingleton(
                 typeof(ITwitchClient),
-                configuration.Get<AppSettings>().Capture.Method switch
+                settings.Capture.Method switch
                 {
                     CaptureMethod.None => typeof(FakeTwitchClient),
                     _ => typeof(TwitchClient),
@@ -346,9 +384,14 @@ public static class ServiceCollectionExtensions
     private static IConfigurationRoot GetConfiguration()
     {
         var env = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV");
+        string basePath = Directory.GetCurrentDirectory();
+        if (!File.Exists(Path.Combine(basePath, "appsettings.json")))
+        {
+            basePath = AppContext.BaseDirectory;
+        }
 
         var builder = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
+            .SetBasePath(basePath)
             .AddJsonFile("appsettings.json")
             .AddJsonFile("appsettings.secrets.json", optional: true)
             .AddEnvironmentVariables("HEROES_REPLAY_");

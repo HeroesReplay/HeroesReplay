@@ -22,6 +22,17 @@ dotnet build heroes-replay.slnx
 dotnet test heroes-replay.slnx
 ```
 
+`dotnet test` is **Unit only**. Integration and smoke are opt-in:
+
+```powershell
+dotnet test heroes-replay.slnx -p:TestCategory=Integration
+dotnet test heroes-replay.slnx -p:TestCategory=Smoke
+```
+
+Heroes Profile integration uses `HEROES_REPLAY_HeroesProfileApi__ApiKey` or `op read op://Private/Heroes Profile API/password`. Never commit the resolved token.
+
+CLI connectivity: `dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check`
+
 ## Hard rules
 
 - Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. WinRT OCR and BitBlt need the Windows TFM.
