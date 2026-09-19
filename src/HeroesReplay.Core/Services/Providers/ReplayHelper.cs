@@ -22,7 +22,8 @@ public class ReplayHelper : IReplayHelper
 
         try
         {
-            replayId = int.Parse(Path.GetFileName(path).Split(settings.StormReplay.Seperator)[0]);
+            string name = Path.GetFileNameWithoutExtension(path);
+            replayId = int.Parse(name.Split(settings.StormReplay.Seperator)[0]);
             return true;
         }
         catch (Exception)

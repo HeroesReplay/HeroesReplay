@@ -35,23 +35,21 @@ public class HeroesProfileProvider : IReplayProvider
         {
             if (minReplayId == default)
             {
-                if (StandardDirectory.GetFiles(settings.StormReplay.WildCard).Any())
-                {
-                    FileInfo latest = StandardDirectory
-                        .GetFiles(settings.StormReplay.WildCard)
-                        .OrderByDescending(f =>
-                            int.Parse(
-                                Path.GetFileName(f.FullName).Split(settings.StormReplay.Seperator)[
-                                    0
-                                ]
-                            )
-                        )
-                        .FirstOrDefault();
-
-                    if (replayHelper.TryGetReplayId(latest.Name, out int replayId))
+                FileInfo latest = StandardDirectory
+                    .GetFiles(settings.StormReplay.WildCard)
+                    .Select(file =>
                     {
-                        MinReplayId = replayId;
-                    }
+                        bool parsed = replayHelper.TryGetReplayId(file.Name, out int id);
+                        return (file, parsed, id);
+                    })
+                    .Where(item => item.parsed)
+                    .OrderByDescending(item => item.id)
+                    .Select(item => item.file)
+                    .FirstOrDefault();
+
+                if (latest != null && replayHelper.TryGetReplayId(latest.Name, out int replayId))
+                {
+                    MinReplayId = replayId;
                 }
                 else
                 {
