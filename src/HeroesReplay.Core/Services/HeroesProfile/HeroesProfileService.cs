@@ -276,9 +276,7 @@ public class HeroesProfileService : IHeroesProfileService
                                     var supported = replays
                                         .Where(x => x.Deleted == null)
                                         .Where(x =>
-                                            settings.HeroesProfileApi.IsAllowedGameType(
-                                                x.GameType
-                                            )
+                                            settings.HeroesProfileApi.IsAllowedGameType(x.GameType)
                                         )
                                         .Where(x =>
                                             settings.HeroesProfileApi.MatchesReplayUrl(x.Url)

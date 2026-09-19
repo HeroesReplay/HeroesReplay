@@ -2,11 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
-using Amazon;
-using Amazon.Runtime;
-using Amazon.S3;
-using Amazon.S3.Model;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
@@ -205,49 +202,29 @@ public class HeroesProfileProvider : IReplayProvider
 
     private async Task DownloadReplayAsync(HeroesProfileReplay replay, FileInfo fileInfo)
     {
-        var credentials = new BasicAWSCredentials(
-            settings.HeroesProfileApi.AwsAccessKey,
-            settings.HeroesProfileApi.AwsSecretKey
+        Uri downloadUri = new Uri(
+            settings.HeroesProfileApi.BaseUri,
+            $"Replay/Download?replayID={replay.Id}&api_token={settings.HeroesProfileApi.ApiKey}"
         );
 
-        using (
-            AmazonS3Client s3Client = new AmazonS3Client(
-                credentials,
-                RegionEndpoint.GetBySystemName(settings.HeroesProfileApi.S3Region)
-            )
-        )
+        using HttpClient httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+        using HttpResponseMessage response = await httpClient
+            .GetAsync(downloadUri, provider.Token)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        await using (Stream network = await response.Content.ReadAsStreamAsync(provider.Token))
+        await using (FileStream file = fileInfo.OpenWrite())
         {
-            GetObjectRequest request = new GetObjectRequest
-            {
-                RequestPayer = RequestPayer.Requester,
-                BucketName = settings.HeroesProfileApi.S3Bucket,
-                Key = replay.Url.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped),
-            };
-
-            using (
-                GetObjectResponse response = await s3Client
-                    .GetObjectAsync(request, provider.Token)
-                    .ConfigureAwait(false)
-            )
-            {
-                await using (MemoryStream memoryStream = new MemoryStream())
-                {
-                    await response
-                        .ResponseStream.CopyToAsync(memoryStream, provider.Token)
-                        .ConfigureAwait(false);
-
-                    await using (var stream = fileInfo.OpenWrite())
-                    {
-                        await stream
-                            .WriteAsync(memoryStream.ToArray(), provider.Token)
-                            .ConfigureAwait(false);
-                        await stream.FlushAsync(provider.Token).ConfigureAwait(false);
-                    }
-
-                    logger.LogInformation($"downloaded heroesprofile replay.");
-                }
-            }
+            await network.CopyToAsync(file, provider.Token).ConfigureAwait(false);
+            await file.FlushAsync(provider.Token).ConfigureAwait(false);
         }
+
+        logger.LogInformation(
+            "Downloaded Heroes Profile replay {ReplayId} ({Bytes} bytes).",
+            replay.Id,
+            fileInfo.Length
+        );
     }
 
     private FileInfo GetFileInfo(DirectoryInfo directory, HeroesProfileReplay replay)

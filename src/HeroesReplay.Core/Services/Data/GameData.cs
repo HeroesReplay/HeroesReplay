@@ -138,17 +138,26 @@ public class GameData : IGameData
 
             using (var client = new HttpClient())
             {
-                var base64 = Convert.ToBase64String(
-                    Encoding.UTF8.GetBytes($"{settings.Github.User}:{settings.Github.AccessToken}")
-                );
-
                 client.DefaultRequestHeaders.UserAgent.Add(
                     new ProductInfoHeaderValue("HeroesReplay", "1.0")
                 );
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                    "Basic",
-                    base64
-                );
+
+                if (
+                    settings.Github != null
+                    && !string.IsNullOrWhiteSpace(settings.Github.User)
+                    && !string.IsNullOrWhiteSpace(settings.Github.AccessToken)
+                )
+                {
+                    var base64 = Convert.ToBase64String(
+                        Encoding.UTF8.GetBytes(
+                            $"{settings.Github.User}:{settings.Github.AccessToken}"
+                        )
+                    );
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                        "Basic",
+                        base64
+                    );
+                }
 
                 var response = await client.GetAsync(release).ConfigureAwait(false);
                 var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
