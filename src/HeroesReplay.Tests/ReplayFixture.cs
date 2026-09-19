@@ -1,19 +1,28 @@
-﻿using Heroes.ReplayParser;
-
 using System.IO;
+using Heroes.ReplayParser;
 
-namespace HeroesReplay.Tests
+namespace HeroesReplay.Tests;
+
+public class ReplayFixture
 {
-    public class ReplayFixture
-    {
-        public Replay Replay { get; }
+    public Replay Replay { get; }
 
-        public ReplayFixture()
+    public ReplayFixture()
+    {
+        var bytes = File.ReadAllBytes(
+            Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "Assets",
+                "hour-long-replay-provided-by-mgatner.StormReplay"
+            )
+        );
+        var parseOptions = new ParseOptions
         {
-            var bytes = File.ReadAllBytes(Path.Combine(Directory.GetCurrentDirectory(), "Assets", "hour-long-replay-provided-by-mgatner.StormReplay"));
-            var parseOptions = new ParseOptions { ShouldParseEvents = true, ShouldParseUnits = true, ShouldParseStatistics = true };
-            var result = DataParser.ParseReplay(bytes, parseOptions);
-            Replay = result.Item2;
-        }
+            ShouldParseEvents = true,
+            ShouldParseUnits = true,
+            ShouldParseStatistics = true,
+        };
+        var result = DataParser.ParseReplay(bytes, parseOptions);
+        Replay = result.Item2;
     }
 }

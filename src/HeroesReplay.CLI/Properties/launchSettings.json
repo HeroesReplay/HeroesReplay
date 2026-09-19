@@ -1,5 +1,19 @@
 {
   "profiles": {
+    "HeroesReplay.CLI": {
+      "commandName": "Project",
+      "commandLineArgs": "--help",
+      "environmentVariables": {
+        "HEROES_REPLAY_ENV": "dev"
+      }
+    },
+    "HeroesReplay.CLI: calculators coordinates": {
+      "commandName": "Project",
+      "commandLineArgs": "calculators coordinates",
+      "environmentVariables": {
+        "HEROES_REPLAY_ENV": "dev"
+      }
+    },
     "HeroesReplay.CLI: spectate directory": {
       "commandName": "Project",
       "commandLineArgs": "spectate directory",

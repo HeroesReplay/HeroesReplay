@@ -1,9 +1,8 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
-namespace HeroesReplay.Core.Configuration
+namespace HeroesReplay.Core.Configuration;
+
+public class MapSettings
 {
-    public class MapSettings
-    {
-        public IEnumerable<string> CarriedObjectives { get; set; }
-    }
+    public IEnumerable<string> CarriedObjectives { get; set; }
 }

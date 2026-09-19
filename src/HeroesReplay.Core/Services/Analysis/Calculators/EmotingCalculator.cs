@@ -1,67 +1,128 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Linq;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Extensions;
 
-namespace HeroesReplay.Core.Services.Analysis.Calculators
+namespace HeroesReplay.Core.Services.Analysis.Calculators;
+
+public class EmotingCalculator : IFocusCalculator
 {
-    public class EmotingCalculator : IFocusCalculator
-    {
-        private readonly AppSettings settings;
-        private readonly IAbilityDetector abilityDetector;
+    private readonly AppSettings settings;
+    private readonly IAbilityDetector abilityDetector;
 
-        public EmotingCalculator(AppSettings settings, IAbilityDetector abilityDetector)
+    public EmotingCalculator(AppSettings settings, IAbilityDetector abilityDetector)
+    {
+        this.settings = settings;
+        this.abilityDetector = abilityDetector;
+    }
+
+    public void Contribute(ReplayTimeline timeline)
+    {
+        if (timeline == null)
         {
-            this.settings = settings;
-            this.abilityDetector = abilityDetector;
+            throw new ArgumentNullException(nameof(timeline));
         }
 
-        // https://github.com/ebshimizu/hots-parser/blob/master/parser.js#L2185
-        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
+        Replay replay = timeline.Replay;
+
+        for (int second = 0; second < timeline.TotalSeconds; second++)
         {
-            if (replay == null)
-                throw new ArgumentNullException(nameof(replay));
-
-            IEnumerable<GameEvent> gameEvents = replay.GameEvents.Where(e => e.TimeSpan == now && e.eventType == GameEventType.CCmdEvent);
-
-            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => abilityDetector.IsAbility(replay, e, settings.AbilityDetection.Hearth)).GroupBy(e => e.player))
+            var commands = timeline
+                .GameEventsAt(second)
+                .Where(e => e.eventType == GameEventType.CCmdEvent)
+                .ToList();
+            if (commands.Count == 0)
             {
-                var bsteps = events.GroupBy(cmd => cmd.TimeSpan).Where(g => g.Count() > 3);
+                continue;
+            }
 
-                if (bsteps.Any())
+            OfferAbility(
+                timeline,
+                replay,
+                commands,
+                second,
+                settings.AbilityDetection.Hearth,
+                settings.Weights.BStep,
+                "bstepping",
+                requireRepeat: true
+            );
+            OfferAbility(
+                timeline,
+                replay,
+                commands,
+                second,
+                settings.AbilityDetection.Taunt,
+                settings.Weights.Taunt,
+                "taunting",
+                requireRepeat: false
+            );
+            OfferAbility(
+                timeline,
+                replay,
+                commands,
+                second,
+                settings.AbilityDetection.Dance,
+                settings.Weights.Dance,
+                "dancing",
+                requireRepeat: false
+            );
+        }
+    }
+
+    private void OfferAbility(
+        ReplayTimeline timeline,
+        Replay replay,
+        System.Collections.Generic.List<GameEvent> commands,
+        int second,
+        Models.AbilityDetection detection,
+        float weight,
+        string verb,
+        bool requireRepeat
+    )
+    {
+        foreach (
+            IGrouping<Player, GameEvent> events in commands
+                .Where(e => abilityDetector.IsAbility(replay, e, detection))
+                .GroupBy(e => e.player)
+        )
+        {
+            if (events.Key == null)
+            {
+                continue;
+            }
+
+            if (requireRepeat && events.Count() <= 3)
+            {
+                continue;
+            }
+
+            Unit heroUnit = null;
+            foreach (
+                Unit unit in events.Key.HeroUnits ?? new System.Collections.Generic.List<Unit>()
+            )
+            {
+                if (timeline.TryGetPoint(unit, second, out _))
                 {
-                    var bstepCount = bsteps.Max(x => x.Key);
-                    yield return new Focus(
-                        GetType(),
-                        events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)),
-                        events.Key,
-                        settings.Weights.BStep,
-                        $"{events.Key.Character} bstepping");
+                    heroUnit = unit;
+                    break;
                 }
             }
 
-            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => abilityDetector.IsAbility(replay, e, settings.AbilityDetection.Taunt)).GroupBy(e => e.player))
+            if (heroUnit == null)
             {
-                yield return new Focus(
-                    GetType(),
-                    events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)),
-                    events.Key,
-                    settings.Weights.Taunt,
-                    $"{events.Key.Character} taunting");
+                continue;
             }
 
-            foreach (IGrouping<Player, GameEvent> events in gameEvents.Where(e => abilityDetector.IsAbility(replay, e, settings.AbilityDetection.Dance)).GroupBy(e => e.player))
-            {
-                yield return new Focus(
-                    GetType(), 
-                    events.Key.HeroUnits.FirstOrDefault(u => u.Positions.Any(p => p.TimeSpan == now)),
-                    events.Key,
-                    settings.Weights.Dance,
-                    $"{events.Key.Character} dancing");
-            }
+            timeline.Offer(
+                TimeSpan.FromSeconds(second),
+                GetType(),
+                heroUnit,
+                events.Key,
+                weight,
+                $"{events.Key.Character} {verb}"
+            );
         }
     }
 }

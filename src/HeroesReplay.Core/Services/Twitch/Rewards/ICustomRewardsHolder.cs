@@ -1,12 +1,11 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using HeroesReplay.Core.Models;
 using TwitchLib.PubSub.Events;
 
-namespace HeroesReplay.Core.Services.Twitch.Rewards
+namespace HeroesReplay.Core.Services.Twitch.Rewards;
+
+public interface ICustomRewardsHolder
 {
-    public interface ICustomRewardsHolder
-    {
-        public List<SupportedReward> Rewards { get; }
-        public bool TryGetReward(OnRewardRedeemedArgs args, out SupportedReward reward);
-    }
+    public List<SupportedReward> Rewards { get; }
+    public bool TryGetReward(OnRewardRedeemedArgs args, out SupportedReward reward);
 }

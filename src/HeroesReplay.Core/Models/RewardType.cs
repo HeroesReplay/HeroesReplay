@@ -1,18 +1,17 @@
-﻿using System;
+using System;
 
-namespace HeroesReplay.Core.Models
+namespace HeroesReplay.Core.Models;
+
+[Flags]
+public enum RewardType
 {
-    [Flags]
-    public enum RewardType
-    {
-        ReplayId,
+    ReplayId,
 
-        ARAM,
-        QM,
-        UD,
-        SL,
+    ARAM,
+    QM,
+    UD,
+    SL,
 
-        Map,
-        Rank,
-    }
+    Map,
+    Rank,
 }

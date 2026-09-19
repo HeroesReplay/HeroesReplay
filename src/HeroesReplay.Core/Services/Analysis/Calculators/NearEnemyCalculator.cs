@@ -1,64 +1,112 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Analysis.Calculators
+namespace HeroesReplay.Core.Services.Analysis.Calculators;
+
+public class NearEnemyCalculator : IFocusCalculator
 {
-    public class NearEnemyCalculator : IFocusCalculator
-    {
-        private readonly AppSettings settings;
+    private readonly AppSettings settings;
 
-        public NearEnemyCalculator(AppSettings settings)
+    public NearEnemyCalculator(AppSettings settings)
+    {
+        this.settings = settings;
+    }
+
+    public void Contribute(ReplayTimeline timeline)
+    {
+        if (timeline == null)
         {
-            this.settings = settings;
+            throw new ArgumentNullException(nameof(timeline));
         }
 
-        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
+        Player[] players = timeline.Replay.Players ?? Array.Empty<Player>();
+        var teamZero = new List<Unit>(5);
+        var teamOne = new List<Unit>(5);
+
+        for (int second = 0; second < timeline.TotalSeconds; second++)
         {
-            if (replay == null)
-                throw new ArgumentNullException(nameof(replay));
+            teamZero.Clear();
+            teamOne.Clear();
 
-            List<IGrouping<int, Unit>> teams = replay.Players
-                .SelectMany(x => x.HeroUnits)
-                .Where(unit => unit.Team != null && unit.TimeSpanBorn < now && (unit.TimeSpanDied == null || unit.TimeSpanDied > now))
-                .GroupBy(x => x.Team.GetValueOrDefault()).ToList();
-
-            if (teams.Count != 2) yield break;
-
-            var units = new List<(Unit teamOneUnit, Unit teamTwoUnit, double Distance)>();
-
-            foreach (var teamOneUnit in teams[0])
+            foreach (Unit unit in timeline.AliveHeroesAt(second))
             {
-                foreach (var teamTwoUnit in teams[1])
+                if (unit.Team == 0)
                 {
-                    foreach (var teamTwoPos in teamTwoUnit.Positions.Where(p => p.TimeSpan == now))
+                    teamZero.Add(unit);
+                }
+                else if (unit.Team == 1)
+                {
+                    teamOne.Add(unit);
+                }
+            }
+
+            if (teamZero.Count == 0 || teamOne.Count == 0)
+            {
+                continue;
+            }
+
+            TimeSpan now = TimeSpan.FromSeconds(second);
+
+            foreach (Unit teamOneUnit in teamZero)
+            {
+                if (!timeline.TryGetPoint(teamOneUnit, second, out Point teamOnePoint))
+                {
+                    continue;
+                }
+
+                foreach (Unit teamTwoUnit in teamOne)
+                {
+                    if (!timeline.TryGetPoint(teamTwoUnit, second, out Point teamTwoPoint))
                     {
-                        foreach (var teamOnePos in teamOneUnit.Positions.Where(p => p.TimeSpan == now))
-                        {
-                            var distance = teamTwoPos.Point.DistanceTo(teamOnePos.Point);
-
-                            if (distance <= settings.Spectate.MaxDistanceToEnemy)
-                            {
-                                var heroes = new[] { teamOneUnit, teamTwoUnit };
-                                Unit target = heroes.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
-                                Unit enemy = heroes.Except(new[] { target }).FirstOrDefault();
-
-                                float prioritiseCloserHero = Convert.ToSingle(distance) / settings.Weights.NearEnemyHeroDistanceDivisor;
-
-                                yield return new Focus(
-                                    GetType(),
-                                    target,
-                                    target.PlayerControlledBy,
-                                    settings.Weights.NearEnemyHero + settings.Weights.NearEnemyHeroOffset - prioritiseCloserHero,
-                                    $"{target.PlayerControlledBy.Character} is in proximity of {enemy.PlayerControlledBy.Character} ({distance})");
-                            }
-                        }
+                        continue;
                     }
+
+                    double distance = teamTwoPoint.DistanceTo(teamOnePoint);
+                    if (distance > settings.Spectate.MaxDistanceToEnemy)
+                    {
+                        continue;
+                    }
+
+                    Unit target = PreferStableHero(teamOneUnit, teamTwoUnit, players);
+                    Unit enemy = target == teamOneUnit ? teamTwoUnit : teamOneUnit;
+                    if (target.PlayerControlledBy == null || enemy.PlayerControlledBy == null)
+                    {
+                        continue;
+                    }
+
+                    float closer =
+                        Convert.ToSingle(distance) / settings.Weights.NearEnemyHeroDistanceDivisor;
+                    timeline.Offer(
+                        now,
+                        GetType(),
+                        target,
+                        target.PlayerControlledBy,
+                        settings.Weights.NearEnemyHero
+                            + settings.Weights.NearEnemyHeroOffset
+                            - closer,
+                        $"{target.PlayerControlledBy.Character} is in proximity of {enemy.PlayerControlledBy.Character} ({distance})"
+                    );
                 }
             }
         }
+    }
+
+    private static Unit PreferStableHero(Unit left, Unit right, Player[] players)
+    {
+        int leftIndex = Array.IndexOf(players, left.PlayerControlledBy);
+        int rightIndex = Array.IndexOf(players, right.PlayerControlledBy);
+        if (leftIndex < 0)
+        {
+            leftIndex = int.MaxValue;
+        }
+
+        if (rightIndex < 0)
+        {
+            rightIndex = int.MaxValue;
+        }
+
+        return leftIndex <= rightIndex ? left : right;
     }
 }

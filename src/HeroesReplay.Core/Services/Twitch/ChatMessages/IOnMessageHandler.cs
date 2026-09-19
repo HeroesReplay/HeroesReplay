@@ -1,10 +1,8 @@
-﻿
 using TwitchLib.Client.Events;
 
-namespace HeroesReplay.Core.Services.Twitch.ChatMessages
+namespace HeroesReplay.Core.Services.Twitch.ChatMessages;
+
+public interface IOnMessageHandler
 {
-    public interface IOnMessageHandler
-    {
-        void Handle(OnMessageReceivedArgs args);
-    }
+    void Handle(OnMessageReceivedArgs args);
 }

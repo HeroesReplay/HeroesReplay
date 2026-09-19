@@ -1,10 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
-namespace HeroesReplay.Core.Models
+namespace HeroesReplay.Core.Models;
+
+public class AbilityDetection
 {
-    public class AbilityDetection
-    {
-        public int? CmdIndex { get; set; }
-        public IEnumerable<AbilityBuild> AbilityBuilds { get; set; }
-    }
+    public int? CmdIndex { get; set; }
+    public IEnumerable<AbilityBuild> AbilityBuilds { get; set; }
 }

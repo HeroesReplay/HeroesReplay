@@ -1,7 +1,6 @@
-﻿namespace HeroesReplay.Core.Services.Shared
+namespace HeroesReplay.Core.Services.Shared;
+
+public interface IAdminChecker
 {
-    public interface IAdminChecker
-    {
-        bool IsAdministrator();
-    }
+    bool IsAdministrator();
 }

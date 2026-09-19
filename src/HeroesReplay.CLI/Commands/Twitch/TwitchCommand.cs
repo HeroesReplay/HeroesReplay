@@ -1,14 +1,14 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using HeroesReplay.CLI.Commands.Twitch.Commands;
 
-namespace HeroesReplay.CLI.Commands.Twitch
+namespace HeroesReplay.CLI.Commands.Twitch;
+
+public class TwitchCommand : Command
 {
-    public class TwitchCommand : Command
+    public TwitchCommand()
+        : base("twitch", "Twitch bot, rewards, and chat integration.")
     {
-        public TwitchCommand() : base("twitch", $"")
-        {
-            AddCommand(new ConnectCommand());
-            AddCommand(new RewardsCommand());
-        }
+        Subcommands.Add(new ConnectCommand());
+        Subcommands.Add(new RewardsCommand());
     }
 }

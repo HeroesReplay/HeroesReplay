@@ -1,7 +1,6 @@
-﻿namespace HeroesReplay.Core.Models
+namespace HeroesReplay.Core.Models;
+
+public enum TernaryRasterOperation
 {
-    public enum TernaryRasterOperation
-    {
-        SRCCOPY = 0x00CC0020
-    }
+    SRCCOPY = 0x00CC0020,
 }

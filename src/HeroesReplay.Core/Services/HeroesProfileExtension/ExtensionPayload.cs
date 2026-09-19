@@ -1,21 +1,20 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
-namespace HeroesReplay.Core.Services.HeroesProfileExtension
+namespace HeroesReplay.Core.Services.HeroesProfileExtension;
+
+public class ExtensionPayload
 {
-    public class ExtensionPayload
+    public ExtensionStep Step { get; set; }
+    public List<Dictionary<string, string>> Content { get; set; }
+
+    public ExtensionPayload SetGameSessionReplayId(string replayId)
     {
-        public ExtensionStep Step { get; set; }
-        public List<Dictionary<string, string>> Content { get; set; }
-
-        public ExtensionPayload SetGameSessionReplayId(string replayId)
+        foreach (var dictionary in Content)
         {
-            foreach (var dictionary in Content)
-            {
-                if (dictionary.ContainsKey(ExtensionFormKeys.SessionId))
-                    dictionary[ExtensionFormKeys.SessionId] = replayId;
-            }
-
-            return this;
+            if (dictionary.ContainsKey(ExtensionFormKeys.SessionId))
+                dictionary[ExtensionFormKeys.SessionId] = replayId;
         }
+
+        return this;
     }
 }

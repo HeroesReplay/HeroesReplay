@@ -1,26 +1,25 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
 using static Heroes.ReplayParser.Unit;
 
-namespace HeroesReplay.Core.Services.Data
+namespace HeroesReplay.Core.Services.Data;
+
+public interface IGameData
 {
-    public interface IGameData
-    {
-        IReadOnlyDictionary<string, UnitGroup> UnitGroups { get; }
+    IReadOnlyDictionary<string, UnitGroup> UnitGroups { get; }
 
-        IReadOnlyList<Hero> Heroes { get; }
+    IReadOnlyList<Hero> Heroes { get; }
 
-        IReadOnlyCollection<string> CoreUnits { get; }
+    IReadOnlyCollection<string> CoreUnits { get; }
 
-        IReadOnlyCollection<string> BossUnits { get; }        
+    IReadOnlyCollection<string> BossUnits { get; }
 
-        IReadOnlyCollection<string> VehicleUnits { get; }
+    IReadOnlyCollection<string> VehicleUnits { get; }
 
-        UnitGroup GetUnitGroup(string unitName);
+    UnitGroup GetUnitGroup(string unitName);
 
-        IReadOnlyList<Map> Maps { get; }
+    IReadOnlyList<Map> Maps { get; }
 
-        Task LoadDataAsync();
-    }
+    Task LoadDataAsync();
 }

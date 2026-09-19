@@ -1,12 +1,11 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
-namespace HeroesReplay.Core.Models
+namespace HeroesReplay.Core.Models;
+
+public enum GameType
 {
-    public enum GameType
-    {
-        QuickMatch,
-        UnrankedDraft,
-        StormLeague,
-        ARAM
-    }
+    QuickMatch,
+    UnrankedDraft,
+    StormLeague,
+    ARAM,
 }

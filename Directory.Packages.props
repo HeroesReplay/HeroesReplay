@@ -1,0 +1,45 @@
+<Project>
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    <ItemGroup>
+        <!-- .NET 10 LTS -->
+        <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
+        <PackageVersion
+            Include="Microsoft.Extensions.Configuration.EnvironmentVariables"
+            Version="10.0.12"
+        />
+        <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
+        <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+        <PackageVersion
+            Include="Microsoft.Extensions.FileProviders.Abstractions"
+            Version="10.0.12"
+        />
+        <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
+        <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+        <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.12" />
+        <PackageVersion Include="Microsoft.Extensions.Logging.EventLog" Version="10.0.12" />
+        <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.12" />
+        <PackageVersion Include="System.Drawing.Common" Version="10.0.12" />
+        <PackageVersion Include="System.Net.Http.Json" Version="10.0.12" />
+
+        <PackageVersion Include="System.CommandLine" Version="2.0.12" />
+
+        <PackageVersion Include="AWSSDK.Core" Version="4.0.102.6" />
+        <PackageVersion Include="AWSSDK.S3" Version="4.0.103.3" />
+        <PackageVersion Include="Google.Apis.YouTube.v3" Version="1.76.0.4262" />
+        <PackageVersion Include="Heroes.ReplayParser" Version="1.2.18" />
+        <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+        <PackageVersion Include="obs-websocket-dotnet" Version="5.7.0" />
+        <PackageVersion Include="PInvoke.User32" Version="0.7.124" />
+        <PackageVersion Include="Polly" Version="7.2.4" />
+        <PackageVersion Include="Polly.Caching.Memory" Version="3.0.2" />
+        <PackageVersion Include="TwitchLib" Version="3.5.3" />
+
+        <PackageVersion Include="FluentAssertions" Version="8.11.0" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+        <PackageVersion Include="xunit" Version="2.9.3" />
+        <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+        <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    </ItemGroup>
+</Project>

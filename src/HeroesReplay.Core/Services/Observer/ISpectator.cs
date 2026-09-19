@@ -1,9 +1,8 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Services.Observer
+namespace HeroesReplay.Core.Services.Observer;
+
+public interface ISpectator
 {
-    public interface ISpectator
-    {
-        Task SpectateAsync();
-    }
+    Task SpectateAsync();
 }

@@ -1,41 +1,13 @@
-﻿using System.CommandLine;
-using System.Threading;
-using System.Threading.Tasks;
+using System.CommandLine;
 
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Twitch;
-using HeroesReplay.Core.Services.Twitch.Rewards;
+namespace HeroesReplay.CLI.Commands.Twitch.Commands;
 
-using Microsoft.Extensions.DependencyInjection;
-
-namespace HeroesReplay.CLI.Commands.Twitch.Commands
+public class RewardsCommand : Command
 {
-    public class RewardsCommand : Command
+    public RewardsCommand()
+        : base("rewards", "Creates or updates the custom rewards for the channel")
     {
-        public RewardsCommand() : base("rewards", $"Creates or updates the custom rewards for the channel")
-        {
-            AddCommand(new GenerateCommand());
-            AddCommand(new SubmitCommand());
-        }
-
-        protected async Task CommandAsync(CancellationToken cancellationToken)
-        {
-            using (ServiceProvider provider = new ServiceCollection().AddTwitchServices(cancellationToken).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }))
-            {
-                using (IServiceScope scope = provider.CreateScope())
-                {
-                    using (var waiter = new ManualResetEventSlim())
-                    {
-                        // Initialize data
-                        var gameData = scope.ServiceProvider.GetRequiredService<IGameData>();
-                        await gameData.LoadDataAsync();
-
-                        ITwitchBot twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
-                        await twitchBot.InitializeAsync();
-                        waiter.Wait(cancellationToken);
-                    }
-                }
-            }
-        }
+        Subcommands.Add(new GenerateCommand());
+        Subcommands.Add(new SubmitCommand());
     }
 }

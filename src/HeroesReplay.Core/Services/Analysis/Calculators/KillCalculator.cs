@@ -1,52 +1,76 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Extensions;
 
-namespace HeroesReplay.Core.Services.Analysis.Calculators
+namespace HeroesReplay.Core.Services.Analysis.Calculators;
+
+public class KillCalculator : IFocusCalculator
 {
-    public class KillCalculator : IFocusCalculator
-    {
-        private readonly AppSettings settings;
+    private readonly AppSettings settings;
 
-        public KillCalculator(AppSettings settings)
+    public KillCalculator(AppSettings settings)
+    {
+        this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    }
+
+    public void Contribute(ReplayTimeline timeline)
+    {
+        if (timeline == null)
         {
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            throw new ArgumentNullException(nameof(timeline));
         }
 
-        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
+        var kills = new List<Unit>();
+        var counts = new Dictionary<(Player Killer, int Second), int>();
+
+        foreach (Unit unit in timeline.HeroUnits)
         {
-            if (replay == null)
-                throw new ArgumentNullException(nameof(replay));
-
-            var killers = replay.Players.SelectMany(x => x.HeroUnits)
-                .Where(u => u.TimeSpanDied == now && u.PlayerKilledBy != null)
-                .GroupBy(heroUnit => heroUnit.PlayerKilledBy);
-
-            foreach (IGrouping<Player, Unit> killer in killers)
+            if (!unit.TimeSpanDied.HasValue || unit.PlayerKilledBy == null)
             {
-                float weight = settings.Weights.PlayerKill + Convert.ToSingle(killer.Count());
+                continue;
+            }
 
-                foreach (Unit unit in killer)
+            int second = unit.TimeSpanDied.Value.FloorSeconds();
+            var key = (unit.PlayerKilledBy, second);
+            counts.TryGetValue(key, out int count);
+            counts[key] = count + 1;
+            kills.Add(unit);
+        }
+
+        foreach (Unit unit in kills)
+        {
+            int second = unit.TimeSpanDied.Value.FloorSeconds();
+            float weight = settings.Weights.PlayerKill + counts[(unit.PlayerKilledBy, second)];
+            bool longRange = false;
+
+            foreach (Unit killerUnit in unit.PlayerKilledBy.HeroUnits ?? new List<Unit>())
+            {
+                if (!timeline.TryGetPoint(killerUnit, second, out Point killerPoint))
                 {
-                    var shouldFocusUnitDied = unit.PlayerKilledBy.HeroUnits
-                        .SelectMany(p => p.Positions)
-                        .Where(p => p.TimeSpan.Add(TimeSpan.FromSeconds(2)) >= now && p.TimeSpan.Subtract(TimeSpan.FromSeconds(2)) <= now)
-                        .Any(p => p.Point.DistanceTo(unit.PointDied) > settings.Spectate.MaxDistanceToEnemyKill);
+                    continue;
+                }
 
-                    // Abathur mines, Fenix Beam, Tyrande W etc etc etc
-                    if (shouldFocusUnitDied)
-                    {
-                        yield return new Focus(GetType(), unit, unit.PlayerControlledBy, weight, $"{killer.Key.Character} kills {unit.PlayerControlledBy.Character}");
-                    }
-                    else
-                    {
-                        yield return new Focus(GetType(), unit, unit.PlayerKilledBy, weight, $"{killer.Key.Character} kills {unit.PlayerControlledBy.Character}");
-                    }
+                if (
+                    killerPoint.DistanceTo(unit.PointDied)
+                    > settings.Spectate.MaxDistanceToEnemyKill
+                )
+                {
+                    longRange = true;
+                    break;
                 }
             }
+
+            Player target = longRange ? unit.PlayerControlledBy : unit.PlayerKilledBy;
+            timeline.Offer(
+                unit.TimeSpanDied.Value,
+                GetType(),
+                unit,
+                target,
+                weight,
+                $"{unit.PlayerKilledBy.Character} kills {unit.PlayerControlledBy?.Character}"
+            );
         }
     }
 }

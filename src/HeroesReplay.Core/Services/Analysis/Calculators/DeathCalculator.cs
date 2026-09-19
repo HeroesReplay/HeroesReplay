@@ -1,38 +1,53 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 
-namespace HeroesReplay.Core.Services.Analysis.Calculators
-{
-    public class DeathCalculator : IFocusCalculator
-    {
-        private readonly AppSettings settings;
-        private readonly IGameData gameData;
+namespace HeroesReplay.Core.Services.Analysis.Calculators;
 
-        public DeathCalculator(AppSettings settings, IGameData gameData)
+public class DeathCalculator : IFocusCalculator
+{
+    private readonly AppSettings settings;
+    private readonly IGameData gameData;
+
+    public DeathCalculator(AppSettings settings, IGameData gameData)
+    {
+        this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
+    }
+
+    public void Contribute(ReplayTimeline timeline)
+    {
+        if (timeline == null)
         {
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
+            throw new ArgumentNullException(nameof(timeline));
         }
 
-        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
+        foreach (Unit unit in timeline.Replay.Units)
         {
-            if (replay == null) 
-                throw new ArgumentNullException(nameof(replay));
-
-            foreach (var unit in replay.Units.Where(u => gameData.GetUnitGroup(u.Name) == Unit.UnitGroup.Hero && u.TimeSpanDied == now && (u.PlayerKilledBy == null || u.PlayerKilledBy == u.PlayerControlledBy) && u.PlayerControlledBy != null))
+            if (!unit.TimeSpanDied.HasValue || unit.PlayerControlledBy == null)
             {
-                yield return new Focus(
-                    GetType(),
-                    unit, 
-                    unit.PlayerControlledBy, 
-                    settings.Weights.PlayerDeath,
-                    $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name}");
+                continue;
             }
+
+            if (gameData.GetUnitGroup(unit.Name) != Unit.UnitGroup.Hero)
+            {
+                continue;
+            }
+
+            if (unit.PlayerKilledBy != null && unit.PlayerKilledBy != unit.PlayerControlledBy)
+            {
+                continue;
+            }
+
+            timeline.Offer(
+                unit.TimeSpanDied.Value,
+                GetType(),
+                unit,
+                unit.PlayerControlledBy,
+                settings.Weights.PlayerDeath,
+                $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name}"
+            );
         }
     }
 }

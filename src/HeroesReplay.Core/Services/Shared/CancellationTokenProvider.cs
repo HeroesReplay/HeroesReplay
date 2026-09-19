@@ -1,14 +1,13 @@
-﻿using System.Threading;
+using System.Threading;
 
-namespace HeroesReplay.Core.Services.Shared
+namespace HeroesReplay.Core.Services.Shared;
+
+public class CancellationTokenProvider
 {
-    public class CancellationTokenProvider
-    {
-        public CancellationToken Token { get; set; }
+    public CancellationToken Token { get; set; }
 
-        public CancellationTokenProvider(CancellationToken token = default)
-        {
-            Token = token;
-        }
+    public CancellationTokenProvider(CancellationToken token = default)
+    {
+        Token = token;
     }
 }

@@ -1,61 +1,74 @@
-﻿using System;
+using System;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
-
 using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Analysis
+namespace HeroesReplay.Core.Services.Analysis;
+
+public class AbilityDetector : IAbilityDetector
 {
-    public class AbilityDetector : IAbilityDetector
+    public bool IsAbility(Replay replay, GameEvent gameEvent, AbilityDetection abilityDetection)
     {
-        public bool IsAbility(Replay replay, GameEvent gameEvent, AbilityDetection abilityDetection)
+        if (abilityDetection == null || gameEvent == null || replay == null)
         {
-            if (abilityDetection == null) return false;
-            if (gameEvent == null) return false;
-            if (replay == null) return false;
-
-            int abilityLink = GetAbilityLink(gameEvent.data);
-
-            if (abilityDetection.CmdIndex.HasValue)
-            {
-                if (abilityDetection.CmdIndex.Value != GetAbilityCmdIndex(gameEvent.data))
-                {
-                    return false;
-                }
-            }
-
-            foreach (var abilityBuild in abilityDetection.AbilityBuilds)
-            {
-                if (abilityLink != abilityBuild.AbilityLink) return false;
-
-                if (abilityBuild.GreaterEqualBuild.HasValue && abilityBuild.LessThanBuild.HasValue)
-                {
-                    if (abilityBuild.GreaterEqualBuild.Value >= replay.ReplayBuild && abilityBuild.LessThanBuild.Value < replay.ReplayBuild)
-                    {
-                        return true;
-                    }
-                }
-                else if (abilityBuild.GreaterEqualBuild.HasValue && !abilityBuild.LessThanBuild.HasValue)
-                {
-                    if (abilityBuild.GreaterEqualBuild.Value >= replay.ReplayBuild)
-                    {
-                        return true;
-                    }
-                }
-                else if (abilityBuild.LessThanBuild.HasValue && !abilityBuild.GreaterEqualBuild.HasValue)
-                {
-                    if (abilityBuild.LessThanBuild.Value < replay.ReplayBuild)
-                    {
-                        return true;
-                    }
-                }
-            }
-
             return false;
         }
 
-        private static int GetAbilityLink(TrackerEventStructure structure) => Convert.ToInt32(structure?.array[1]?.array[0]?.unsignedInt.GetValueOrDefault());
+        int abilityLink = GetAbilityLink(gameEvent.data);
 
-        private static int GetAbilityCmdIndex(TrackerEventStructure trackerEvent) => Convert.ToInt32(trackerEvent.array[1]?.array[1]?.unsignedInt.GetValueOrDefault());
+        if (
+            abilityDetection.CmdIndex.HasValue
+            && abilityDetection.CmdIndex.Value != GetAbilityCmdIndex(gameEvent.data)
+        )
+        {
+            return false;
+        }
+
+        if (abilityDetection.AbilityBuilds == null)
+        {
+            return false;
+        }
+
+        foreach (AbilityBuild abilityBuild in abilityDetection.AbilityBuilds)
+        {
+            if (abilityLink != abilityBuild.AbilityLink)
+            {
+                continue;
+            }
+
+            if (
+                IsBuildInRange(
+                    replay.ReplayBuild,
+                    abilityBuild.GreaterEqualBuild,
+                    abilityBuild.LessThanBuild
+                )
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
+
+    public static bool IsBuildInRange(int replayBuild, int? greaterEqualBuild, int? lessThanBuild)
+    {
+        if (greaterEqualBuild.HasValue && replayBuild < greaterEqualBuild.Value)
+        {
+            return false;
+        }
+
+        if (lessThanBuild.HasValue && replayBuild >= lessThanBuild.Value)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static int GetAbilityLink(TrackerEventStructure structure) =>
+        Convert.ToInt32(structure?.array[1]?.array[0]?.unsignedInt.GetValueOrDefault());
+
+    private static int GetAbilityCmdIndex(TrackerEventStructure trackerEvent) =>
+        Convert.ToInt32(trackerEvent.array[1]?.array[1]?.unsignedInt.GetValueOrDefault());
 }

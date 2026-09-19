@@ -1,11 +1,10 @@
-﻿using Heroes.ReplayParser;
+using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Analysis
+namespace HeroesReplay.Core.Services.Analysis;
+
+public interface IAbilityDetector
 {
-    public interface IAbilityDetector
-    {
-        bool IsAbility(Replay replay, GameEvent gameEvent, AbilityDetection abilityDetection);
-    }
+    bool IsAbility(Replay replay, GameEvent gameEvent, AbilityDetection abilityDetection);
 }

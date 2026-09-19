@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Services.Twitch
+namespace HeroesReplay.Core.Services.Twitch;
+
+public interface ITwitchBot
 {
-    public interface ITwitchBot
-    {
-        Task InitializeAsync();
-    }
+    Task InitializeAsync();
 }

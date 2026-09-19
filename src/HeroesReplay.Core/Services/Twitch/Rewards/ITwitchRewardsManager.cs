@@ -1,10 +1,9 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Services.Twitch.Rewards
+namespace HeroesReplay.Core.Services.Twitch.Rewards;
+
+public interface ITwitchRewardsManager
 {
-    public interface ITwitchRewardsManager
-    {
-        Task CreateOrUpdateAsync();
-        Task GenerateAsync();
-    }
+    Task CreateOrUpdateAsync();
+    Task GenerateAsync();
 }

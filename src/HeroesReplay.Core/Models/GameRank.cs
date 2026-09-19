@@ -1,12 +1,11 @@
-﻿namespace HeroesReplay.Core.Models
+namespace HeroesReplay.Core.Models;
+
+public enum GameRank
 {
-    public enum GameRank
-    {
-        Bronze,
-        Silver,
-        Gold,
-        Platinum,
-        Diamond,
-        Master
-    }
+    Bronze,
+    Silver,
+    Gold,
+    Platinum,
+    Diamond,
+    Master,
 }
