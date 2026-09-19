@@ -2,6 +2,7 @@
     <Folder Name="/src/">
         <Project Path="src/HeroesReplay.CLI/HeroesReplay.CLI.csproj" />
         <Project Path="src/HeroesReplay.Core/HeroesReplay.Core.csproj" />
+        <Project Path="src/HeroesReplay.HeroesProfile.Client/HeroesReplay.HeroesProfile.Client.csproj" />
         <Project Path="src/HeroesReplay.Tests/HeroesReplay.Tests.csproj" />
     </Folder>
 </Solution>

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core;
@@ -234,40 +233,11 @@ public class HeroesProfileProvider : IReplayProvider
         activity?.SetTag("replay.id", replay.Id);
         activity?.SetTag("replay.map", replay.Map);
 
-        Uri downloadUri;
-        using HttpClient httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-        if (settings.HeroesProfileApi.UseExternalV1)
-        {
-            downloadUri = new Uri(
-                settings.HeroesProfileApi.ExternalV1BaseUri
-                    ?? new Uri("https://www.heroesprofile.com/api/external/v1/"),
-                $"download/replay?replayID={replay.Id}"
-            );
-            if (!string.IsNullOrWhiteSpace(settings.HeroesProfileApi.ApiKey))
-            {
-                httpClient.DefaultRequestHeaders.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer",
-                        settings.HeroesProfileApi.ApiKey
-                    );
-            }
-        }
-        else
-        {
-            downloadUri = new Uri(
-                settings.HeroesProfileApi.BaseUri,
-                $"Replay/Download?replayID={replay.Id}&api_token={settings.HeroesProfileApi.ApiKey}"
-            );
-        }
-        using HttpResponseMessage response = await httpClient
-            .GetAsync(downloadUri, provider.Token)
-            .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-
-        await using (Stream network = await response.Content.ReadAsStreamAsync(provider.Token))
         await using (FileStream file = fileInfo.OpenWrite())
         {
-            await network.CopyToAsync(file, provider.Token).ConfigureAwait(false);
+            await heroesProfileService
+                .DownloadReplayAsync(replay.Id, file, provider.Token)
+                .ConfigureAwait(false);
             await file.FlushAsync(provider.Token).ConfigureAwait(false);
         }
 

@@ -1,0 +1,39 @@
+{
+  "descriptionHash": "B14976E0322586CA98BA5C12725C8D4E3AED235BB9D8A2C68F2F8F03A38F0A18C15DE13CF8232B5EA58B2DE0DFD907027F88AAC390CB3817F8CD1FF186D38FF9",
+  "descriptionLocation": "https://raw.githubusercontent.com/Heroes-Profile/heroesprofile/refs/heads/develop/public/spec/heroesprofile-v1.json",
+  "lockFileVersion": "1.0.0",
+  "kiotaVersion": "1.29.0",
+  "clientClassName": "HeroesProfileClient",
+  "typeAccessModifier": "Public",
+  "clientNamespaceName": "HeroesReplay.HeroesProfile.Client",
+  "language": "CSharp",
+  "usesBackingStore": false,
+  "excludeBackwardCompatible": true,
+  "includeAdditionalData": true,
+  "disableSSLValidation": false,
+  "serializers": [
+    "Microsoft.Kiota.Serialization.Json.JsonSerializationWriterFactory",
+    "Microsoft.Kiota.Serialization.Text.TextSerializationWriterFactory",
+    "Microsoft.Kiota.Serialization.Form.FormSerializationWriterFactory",
+    "Microsoft.Kiota.Serialization.Multipart.MultipartSerializationWriterFactory"
+  ],
+  "deserializers": [
+    "Microsoft.Kiota.Serialization.Json.JsonParseNodeFactory",
+    "Microsoft.Kiota.Serialization.Text.TextParseNodeFactory",
+    "Microsoft.Kiota.Serialization.Form.FormParseNodeFactory"
+  ],
+  "structuredMimeTypes": [
+    "application/json",
+    "text/plain;q=0.9",
+    "application/x-www-form-urlencoded;q=0.2",
+    "multipart/form-data;q=0.1"
+  ],
+  "includePatterns": [
+    "/replays",
+    "/replays/**",
+    "/download/replay",
+    "/replay/{replayID}"
+  ],
+  "excludePatterns": [],
+  "disabledValidationRules": []
+}

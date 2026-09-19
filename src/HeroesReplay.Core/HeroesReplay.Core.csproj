@@ -23,4 +23,8 @@
         <PackageReference Include="Polly.Caching.Memory" />
         <PackageReference Include="TwitchLib" />
     </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\HeroesReplay.HeroesProfile.Client\HeroesReplay.HeroesProfile.Client.csproj" />
+    </ItemGroup>
 </Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <EnableNETAnalyzers>false</EnableNETAnalyzers>
+        <NoWarn>$(NoWarn);CS1591;CS8618;CS8632</NoWarn>
+        <RootNamespace>HeroesReplay.HeroesProfile.Client</RootNamespace>
+        <Description>
+            Kiota-generated Heroes Profile external v1 client. Regenerate with
+            tools/generate-heroesprofile-client.ps1.
+        </Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Kiota.Bundle" />
+    </ItemGroup>
+</Project>

@@ -106,6 +106,7 @@ public class CheckCommand : Command
             {
                 $"Heroes Profile API key: {SecretResolver.Describe(settings.HeroesProfileApi?.ApiKey)}",
                 $"Heroes Profile base URI: {settings.HeroesProfileApi?.BaseUri}",
+                $"Heroes Profile v1 (Kiota): {settings.HeroesProfileApi?.UseExternalV1}",
                 $"OBS endpoint: {settings.OBS?.WebSocketEndpoint}",
                 $"OBS password: {SecretResolver.Describe(settings.OBS?.WebSocketPassword)}",
                 $"Twitch channel: {NullToMissing(settings.Twitch?.Channel)}",
@@ -152,12 +153,15 @@ public class CheckCommand : Command
             int maxId = await api.GetMaxReplayIdAsync();
             activity?.SetTag("heroesprofile.max_id", maxId);
             bool ok = maxId > 0 && maxId != settings.HeroesProfileApi.FallbackMaxReplayId;
+            string source = settings.HeroesProfileApi.UseExternalV1
+                ? "GET /replays max_replay_id"
+                : "Replay/Max";
             return new CheckResult(
                 "heroesprofile",
                 ok,
                 ok
-                    ? $"Replay/Max returned {maxId}."
-                    : $"Replay/Max returned {maxId} (fallback {settings.HeroesProfileApi.FallbackMaxReplayId}). Check the API key."
+                    ? $"{source} returned {maxId}."
+                    : $"{source} returned {maxId} (fallback {settings.HeroesProfileApi.FallbackMaxReplayId}). Check the API key."
             );
         }
         catch (Exception e)

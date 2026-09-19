@@ -37,6 +37,7 @@
         <PackageVersion Include="AWSSDK.S3" Version="4.0.103.3" />
         <PackageVersion Include="Google.Apis.YouTube.v3" Version="1.76.0.4262" />
         <PackageVersion Include="Heroes.ReplayParser" Version="1.2.18" />
+        <PackageVersion Include="Microsoft.Kiota.Bundle" Version="1.22.2" />
         <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageVersion Include="obs-websocket-dotnet" Version="5.7.0" />
         <PackageVersion Include="PInvoke.User32" Version="0.7.124" />

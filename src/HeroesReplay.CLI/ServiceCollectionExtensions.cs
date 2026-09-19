@@ -24,6 +24,7 @@ using HeroesReplay.Core.Services.Twitch.ChatMessages;
 using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.HeroesProfile.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -124,6 +125,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton(settings)
             .AddSingleton<StormClientConfigurator>()
             .AddSingleton(new CancellationTokenProvider(token))
+            .AddHeroesProfileKiotaClient()
             .AddHttpClient<IHeroesProfileService, HeroesProfileService>()
             .Services.AddSingleton<OBSWebsocket>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
@@ -242,6 +244,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<ITwitchRewardsManager, TwitchRewardsManager>()
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
+            .AddHeroesProfileKiotaClient()
             .AddHttpClient<HeroesProfileService>()
             .Services.AddSingleton<IHeroesProfileService, HeroesProfileService>()
             .AddSingleton<ITwitchPubSub, TwitchPubSub>()
@@ -359,7 +362,8 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton<IReplayContext>(provider => provider.GetRequiredService<ReplayContext>())
             .AddHttpClient<TwitchExtensionService>()
-            .Services.AddHttpClient<HeroesProfileService>()
+            .Services.AddHeroesProfileKiotaClient()
+            .AddHttpClient<HeroesProfileService>()
             .Services.AddSingleton<IHeroesProfileService, HeroesProfileService>()
             .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
             .AddSingleton<IContextFileManager, ContextFileManager>()
@@ -401,6 +405,15 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IEngine, Engine>()
             .AddSingleton<SpectatorStatusStore>()
             .AddFocusCalculators();
+    }
+
+    private static IServiceCollection AddHeroesProfileKiotaClient(this IServiceCollection services)
+    {
+        return services.AddSingleton(sp =>
+        {
+            HeroesProfileApiSettings api = sp.GetRequiredService<AppSettings>().HeroesProfileApi;
+            return HeroesProfileClientFactory.Create(api.ApiKey, api.ExternalV1BaseUri);
+        });
     }
 
     private static IConfigurationRoot GetConfiguration()

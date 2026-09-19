@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
 
@@ -14,4 +16,5 @@ public interface IHeroesProfileService
     );
     Task<HeroesProfileReplay> GetReplayByIdAsync(int replayId);
     Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId);
+    Task DownloadReplayAsync(int replayId, Stream destination, CancellationToken cancellationToken);
 }

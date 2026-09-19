@@ -28,6 +28,7 @@
     <ItemGroup>
         <ProjectReference Include="..\HeroesReplay.CLI\HeroesReplay.CLI.csproj" />
         <ProjectReference Include="..\HeroesReplay.Core\HeroesReplay.Core.csproj" />
+        <ProjectReference Include="..\HeroesReplay.HeroesProfile.Client\HeroesReplay.HeroesProfile.Client.csproj" />
     </ItemGroup>
 
     <ItemGroup>

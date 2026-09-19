@@ -10,7 +10,7 @@ description: >
 ## Layout
 
 - Solution: repo-root `heroes-replay.slnx` only (no `.sln`).
-- TFM: `net10.0-windows10.0.19041.0` for CLI, Core, Tests.
+- TFM: `net10.0-windows10.0.19041.0` for CLI, Core, Tests. `HeroesReplay.HeroesProfile.Client` is `net10.0` (Kiota, no Windows APIs).
 - Versions: `Directory.Packages.props`. SDK features: `Directory.Build.props`.
 - Format: local tool `csharpier` 1.3.x. Config `.csharpierrc.json`.
 

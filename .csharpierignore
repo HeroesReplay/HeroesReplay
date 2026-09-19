@@ -3,3 +3,4 @@
 **/artifacts/**
 **/*.g.cs
 **/*.Designer.cs
+src/HeroesReplay.HeroesProfile.Client/Generated/**
