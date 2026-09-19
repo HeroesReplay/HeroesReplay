@@ -342,6 +342,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IGameManager, GameManager>()
             .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
             .AddSingleton<IStatsPanelController, StatsPanelController>()
+            .AddSingleton<StormClientConfigurator>()
             .AddSingleton<ISpectator, Spectator>()
             .AddSingleton<IReplayLoader, ReplayLoader>()
             .AddSingleton<ReplayContext>()

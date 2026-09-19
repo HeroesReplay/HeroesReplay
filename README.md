@@ -8,14 +8,14 @@ Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Mod
 
 1. Load a local `.StormReplay`, a directory of them, or download Storm League games from Heroes Profile (S3).
 2. Build a **focus timeline**: kills, proximity, camps, objectives, structures, emotes. Weights live in `appsettings.json`.
-3. Launch Heroes of the Storm (Battle.net when the replay is the latest client build), wait for the in-game timer (WinRT OCR + BitBlt).
+3. Launch Heroes of the Storm (Battle.net when the replay is the latest client build), wait for the in-game timer (WinRT OCR + **BitBlt** of the windowed client).
 4. Send spectator hotkeys (`1`–`0`, Ctrl+panels) as the OCR timer advances. After load, send **Ctrl+T** once so the replay timeline is hidden.
 5. Optionally control **OBS Studio 28+** (obs-websocket **5**, default `ws://127.0.0.1:4455`): game scene, recording folder, rank images, post-game report scenes.
 6. Chat `!stats` shows the observer stats panel for 10 seconds (2 minute cooldown). Talents still open automatically.
 
 ## Requirements
 
-- Windows 10/11 (OCR, BitBlt, process control)
+- Windows 10/11 (OCR, **BitBlt**, process control). The client must be **windowed 1080p** (`heroesreplay client configure`). Fullscreen D3D11 is not supported.
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Heroes of the Storm + Battle.net
 - Optional: OBS Studio 28+ with **Tools → WebSocket Server Settings** enabled (port **4455**)

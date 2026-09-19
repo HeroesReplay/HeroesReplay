@@ -30,7 +30,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check obs` | obs-websocket 5 Identify + `GetVersion` |
 | `check twitch` | Helix `GetUsers` for configured channel |
 | `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
-| `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). |
+| `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). Spectate applies this automatically if the game is not running. Capture is GDI BitBlt; windowed 1080p is required. |
 | `client status` | Report preset mismatches |
 | `twitch connect` | Chat bot; blocks |
 | `twitch rewards generate\|submit` | Helix custom rewards |

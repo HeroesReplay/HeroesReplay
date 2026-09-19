@@ -2,9 +2,11 @@ using System;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Status;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Observer;
 
@@ -17,6 +19,8 @@ public class GameManager : IGameManager
     private readonly IObsController obsController;
     private readonly IReplayContext context;
     private readonly SpectatorStatusStore statusStore;
+    private readonly StormClientConfigurator clientConfigurator;
+    private readonly ILogger<GameManager> logger;
 
     public GameManager(
         AppSettings settings,
@@ -25,7 +29,9 @@ public class GameManager : IGameManager
         IGameController gameController,
         IObsController obsController,
         IReplayContext context,
-        SpectatorStatusStore statusStore
+        SpectatorStatusStore statusStore,
+        StormClientConfigurator clientConfigurator,
+        ILogger<GameManager> logger
     )
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -38,6 +44,9 @@ public class GameManager : IGameManager
             obsController ?? throw new ArgumentNullException(nameof(obsController));
         this.context = context ?? throw new ArgumentNullException(nameof(context));
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
+        this.clientConfigurator =
+            clientConfigurator ?? throw new ArgumentNullException(nameof(clientConfigurator));
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task LaunchAndSpectate(LoadedReplay loadedReplay)
@@ -58,6 +67,7 @@ public class GameManager : IGameManager
 
         try
         {
+            EnsureWindowedClient();
             await gameController.LaunchAsync();
             await Task.Delay(TimeSpan.FromSeconds(2));
             gameController.HideReplayTimeline();
@@ -103,5 +113,31 @@ public class GameManager : IGameManager
                 obsController.EndSession();
             }
         }
+    }
+
+    private void EnsureWindowedClient()
+    {
+        ClientStatusResult status = clientConfigurator.GetStatus();
+        if (status.MatchesPreset)
+        {
+            logger.LogInformation("Heroes client already windowed 1080p with AhliObs.");
+            return;
+        }
+
+        if (status.HotSRunning)
+        {
+            logger.LogWarning(
+                "Heroes client is not windowed 1080p / AhliObs ({Mismatches}). Quit the game and run `heroesreplay client configure`, then relaunch windowed.",
+                string.Join("; ", status.Mismatches)
+            );
+            return;
+        }
+
+        ClientConfigureResult result = clientConfigurator.Configure();
+        logger.LogInformation(
+            "Applied windowed 1080p + AhliObs to {Variables}. Interface copied: {Copied}.",
+            result.VariablesPath,
+            result.InterfaceCopied
+        );
     }
 }

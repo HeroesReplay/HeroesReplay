@@ -1,6 +1,5 @@
 using System;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using HeroesReplay.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -9,8 +8,6 @@ namespace HeroesReplay.Core.Services.Observer;
 
 public class BitBltCapture : CaptureStrategy
 {
-    private const uint PwRenderFullContent = 0x00000002;
-
     public BitBltCapture(ILogger<BitBltCapture> logger)
         : base(logger) { }
 
@@ -19,61 +16,6 @@ public class BitBltCapture : CaptureStrategy
         if (handle == IntPtr.Zero)
             return null;
 
-        try
-        {
-            Rectangle client = GetDimensions(handle);
-            if (client.Width <= 0 || client.Height <= 0)
-            {
-                return null;
-            }
-
-            using Bitmap full = new Bitmap(
-                client.Width,
-                client.Height,
-                PixelFormat.Format32bppArgb
-            );
-            using (Graphics graphics = Graphics.FromImage(full))
-            {
-                IntPtr hdc = graphics.GetHdc();
-                try
-                {
-                    if (!NativeMethods.PrintWindow(handle, hdc, PwRenderFullContent))
-                    {
-                        Logger.LogDebug("PrintWindow failed for handle {Handle}", handle);
-                        return CaptureWithBitBlt(handle, region ?? client);
-                    }
-                }
-                finally
-                {
-                    graphics.ReleaseHdc(hdc);
-                }
-            }
-
-            if (region == null)
-            {
-                return (Bitmap)full.Clone();
-            }
-
-            Rectangle crop = Rectangle.Intersect(
-                region.Value,
-                new Rectangle(0, 0, full.Width, full.Height)
-            );
-            if (crop.Width <= 0 || crop.Height <= 0)
-            {
-                return null;
-            }
-
-            return full.Clone(crop, full.PixelFormat);
-        }
-        catch (Exception e)
-        {
-            Logger.LogWarning(e, "Could not capture handle: {Handle}", handle);
-            return CaptureWithBitBlt(handle, region);
-        }
-    }
-
-    private Bitmap CaptureWithBitBlt(IntPtr handle, Rectangle? region)
-    {
         Bitmap bitmap = null;
         Graphics source = null;
         Graphics destination = null;
@@ -110,6 +52,7 @@ public class BitBltCapture : CaptureStrategy
             if (!copied)
             {
                 bitmap.Dispose();
+                bitmap = null;
                 return null;
             }
 
@@ -117,7 +60,7 @@ public class BitBltCapture : CaptureStrategy
         }
         catch (Exception e)
         {
-            Logger.LogWarning(e, "BitBlt fallback failed for handle: {Handle}", handle);
+            Logger.LogWarning(e, "Could not capture handle: {Handle}", handle);
             bitmap?.Dispose();
             return null;
         }
@@ -140,9 +83,6 @@ public class BitBltCapture : CaptureStrategy
 
     private static class NativeMethods
     {
-        [DllImport("user32.dll")]
-        public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
-
         [DllImport("gdi32.dll", SetLastError = true)]
         public static extern bool BitBlt(
             IntPtr hdcDest,
