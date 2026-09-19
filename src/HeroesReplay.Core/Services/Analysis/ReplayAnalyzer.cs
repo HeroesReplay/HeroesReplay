@@ -68,19 +68,7 @@ public class ReplayAnalyzer : IReplayAnalyzer
             return GetEnd(replay);
         }
 
-        TimeSpan? marker = null;
-
-        if (settings.TrackerEvents.UseScoreResultEvent)
-        {
-            TrackerEvent score = replay.TrackerEvents.LastOrDefault(e =>
-                e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.ScoreResultEvent
-            );
-            if (score != null)
-            {
-                marker = score.TimeSpan;
-            }
-        }
-
+        TimeSpan? votes = null;
         if (settings.TrackerEvents.EndOfGameStatEvents != null)
         {
             foreach (string name in settings.TrackerEvents.EndOfGameStatEvents)
@@ -96,14 +84,30 @@ public class ReplayAnalyzer : IReplayAnalyzer
                     && e.Data.dictionary.TryGetValue(0, out TrackerEventStructure key)
                     && key.blobText == name
                 );
-                if (last != null && (marker == null || last.TimeSpan > marker))
+                if (last != null && (votes == null || last.TimeSpan > votes))
                 {
-                    marker = last.TimeSpan;
+                    votes = last.TimeSpan;
                 }
             }
         }
 
-        return marker ?? GetEnd(replay);
+        if (votes.HasValue)
+        {
+            return votes.Value;
+        }
+
+        if (settings.TrackerEvents.UseScoreResultEvent)
+        {
+            TrackerEvent score = replay.TrackerEvents.LastOrDefault(e =>
+                e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.ScoreResultEvent
+            );
+            if (score != null)
+            {
+                return score.TimeSpan;
+            }
+        }
+
+        return GetEnd(replay);
     }
 
     public IReadOnlyDictionary<TimeSpan, Panel> GetPanels(Replay replay)

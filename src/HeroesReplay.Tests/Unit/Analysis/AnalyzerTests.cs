@@ -64,7 +64,7 @@ public class AnalyzerTests : IClassFixture<ReplayFixture>
     }
 
     [Fact]
-    public void GetSessionEnd_UsesLatestConfiguredEndOfGameTrackerEvent()
+    public void GetSessionEnd_PrefersLastUpVotesThenScoreResult()
     {
         var settings = CreateSettings();
         settings.TrackerEvents = new TrackerEventSettings
@@ -86,19 +86,14 @@ public class AnalyzerTests : IClassFixture<ReplayFixture>
             e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.ScoreResultEvent
         );
 
-        TimeSpan expected = TimeSpan.Zero;
-        if (score != null)
-        {
-            expected = score.TimeSpan;
-        }
-
-        if (lastVote != null && lastVote.TimeSpan > expected)
-        {
-            expected = lastVote.TimeSpan;
-        }
+        TimeSpan expected = lastVote?.TimeSpan ?? score?.TimeSpan ?? TimeSpan.Zero;
 
         Assert.True(expected > TimeSpan.Zero);
         Assert.Equal(expected, sessionEnd);
+        if (lastVote != null && score != null)
+        {
+            Assert.Equal(lastVote.TimeSpan, sessionEnd);
+        }
     }
 
     private static AppSettings CreateSettings()
