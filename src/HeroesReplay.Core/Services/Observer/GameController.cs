@@ -9,6 +9,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Models;
@@ -74,6 +75,9 @@ public class GameController : IGameController
 
     public async Task LaunchAsync()
     {
+        using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
+            "heroesreplay.launch"
+        );
         var replay = context.Current.LoadedReplay.Replay;
 
         string versionFolder = Path.Combine(settings.Location.GameInstallDirectory, VersionsFolder);

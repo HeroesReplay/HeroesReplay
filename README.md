@@ -42,6 +42,20 @@ dotnet test heroes-replay.slnx --filter Category=Integration
 
 Copy `src/HeroesReplay.CLI/appsettings.secrets.example.json` to `appsettings.secrets.json`. The Heroes Profile key can be a 1Password reference (`op://…`); the CLI resolves it with `op read` when you are signed in.
 
+## Observability (optional Aspire Dashboard)
+
+Traces, metrics, and logs go to OTLP `http://127.0.0.1:4317` (override with `OTEL_EXPORTER_OTLP_ENDPOINT`). Standalone Aspire Dashboard is a Docker container — no full Aspire apphost required.
+
+```powershell
+heroesreplay otel up
+# UI: http://127.0.0.1:18888
+heroesreplay check heroesprofile
+heroesreplay spectate file --file C:\heroesreplay\Replays\65277396.StormReplay
+heroesreplay otel down
+```
+
+Compose file: `deploy/aspire/docker-compose.yml` (also copied to `Assets/aspire/` next to the exe). Set `OpenTelemetry:Enabled` to `false` to disable export.
+
 Format / lint (CSharpier):
 
 ```powershell

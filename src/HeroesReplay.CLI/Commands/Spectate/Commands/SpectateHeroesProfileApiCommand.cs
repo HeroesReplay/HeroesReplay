@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Services.Providers;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +28,7 @@ public class SpectateHeroesProfileApiCommand : Command
     {
         using ServiceProvider provider = new ServiceCollection()
             .AddSpectateServices(cancellationToken, typeof(HeroesProfileProvider))
-            .BuildServiceProvider();
+            .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
         await engine.RunAsync();

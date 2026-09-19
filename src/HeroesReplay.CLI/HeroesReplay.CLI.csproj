@@ -22,6 +22,11 @@
         <PackageReference Include="System.CommandLine" />
         <PackageReference Include="Microsoft.Extensions.Hosting" />
         <PackageReference Include="ModelContextProtocol" />
+        <PackageReference Include="OpenTelemetry" />
+        <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
     </ItemGroup>
 
     <ItemGroup>
@@ -46,6 +51,10 @@
         </None>
         <None Include="..\..\obs\interfaces\AhliObs 0.75.StormInterface">
             <Link>Assets\Interfaces\AhliObs 0.75.StormInterface</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Include="..\..\deploy\aspire\docker-compose.yml">
+            <Link>Assets\aspire\docker-compose.yml</Link>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>

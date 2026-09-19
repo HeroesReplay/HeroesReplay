@@ -1,5 +1,7 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Client;
@@ -67,6 +69,14 @@ public class GameManager : IGameManager
 
         try
         {
+            using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
+                "heroesreplay.spectate"
+            );
+            activity?.SetTag("replay.path", loadedReplay?.FileInfo?.FullName);
+            activity?.SetTag("replay.map", loadedReplay?.Replay?.Map);
+            activity?.SetTag("replay.version", loadedReplay?.Replay?.ReplayVersion);
+            activity?.SetTag("replay.id", loadedReplay?.ReplayId);
+
             EnsureWindowedClient();
             await gameController.LaunchAsync();
 

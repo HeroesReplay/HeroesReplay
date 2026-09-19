@@ -1,6 +1,7 @@
 using System;
 using System.CommandLine;
 using System.Threading.Tasks;
+using HeroesReplay.CLI;
 using HeroesReplay.Core.Services.Client;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -100,6 +101,6 @@ public class ClientCommand : Command
 
     private static ServiceProvider CreateProvider()
     {
-        return new ServiceCollection().AddClientServices().BuildServiceProvider();
+        return new ServiceCollection().AddClientServices().BuildHeroesReplayProvider();
     }
 }

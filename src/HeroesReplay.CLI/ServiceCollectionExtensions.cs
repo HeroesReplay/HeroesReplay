@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         IConfigurationRoot configuration = GetConfiguration();
 
         return services
+            .AddHeroesReplayOpenTelemetry(configuration)
             .AddMemoryCache()
             .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
@@ -83,6 +84,7 @@ public static class ServiceCollectionExtensions
         var settings = BindSettings(configuration);
 
         return services
+            .AddHeroesReplayOpenTelemetry(configuration)
             .AddLogging(builder =>
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
@@ -112,6 +114,7 @@ public static class ServiceCollectionExtensions
         AppSettings settings = BindSettings(configuration);
 
         return services
+            .AddHeroesReplayOpenTelemetry(configuration)
             .AddMemoryCache()
             .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
@@ -150,7 +153,10 @@ public static class ServiceCollectionExtensions
     {
         IConfigurationRoot configuration = GetConfiguration();
         AppSettings settings = BindSettings(configuration);
-        return services.AddSingleton(settings).AddSingleton<StormClientConfigurator>();
+        return services
+            .AddHeroesReplayOpenTelemetry(configuration)
+            .AddSingleton(settings)
+            .AddSingleton<StormClientConfigurator>();
     }
 
     public static IServiceCollection AddFocusCalculators(this IServiceCollection services)
@@ -201,6 +207,7 @@ public static class ServiceCollectionExtensions
         }
 
         return services
+            .AddHeroesReplayOpenTelemetry(configuration)
             .AddMemoryCache()
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
@@ -291,6 +298,7 @@ public static class ServiceCollectionExtensions
         }
 
         return services
+            .AddHeroesReplayOpenTelemetry(configuration)
             .AddMemoryCache()
             .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>

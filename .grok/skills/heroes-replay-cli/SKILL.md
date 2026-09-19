@@ -1,7 +1,7 @@
 ---
 name: heroes-replay-cli
 description: >
-  heroesreplay CLI: spectate, calculators, check, client, twitch, youtube, secrets, op://.
+  heroesreplay CLI: spectate, calculators, check, client, otel, twitch, youtube, secrets, op://.
   Use when adding or changing commands, validating integrations, running the exe,
   or /heroes-replay-cli.
 ---
@@ -32,6 +32,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
 | `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). Spectate applies this automatically if the game is not running. Capture is GDI BitBlt; windowed 1080p is required. |
 | `client status` | Report preset mismatches |
+| `otel up` / `otel down` / `otel status` | Optional Aspire Dashboard via Docker Compose (`deploy/aspire/docker-compose.yml`). UI http://127.0.0.1:18888, OTLP gRPC :4317. |
 | `twitch connect` | Chat bot; blocks |
 | `twitch rewards generate\|submit` | Helix custom rewards |
 | `youtube uploader` | Upload OBS recordings |

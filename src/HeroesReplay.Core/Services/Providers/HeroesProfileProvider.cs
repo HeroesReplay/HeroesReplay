@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
@@ -202,6 +204,12 @@ public class HeroesProfileProvider : IReplayProvider
 
     private async Task DownloadReplayAsync(HeroesProfileReplay replay, FileInfo fileInfo)
     {
+        using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
+            "heroesreplay.replay.download"
+        );
+        activity?.SetTag("replay.id", replay.Id);
+        activity?.SetTag("replay.map", replay.Map);
+
         Uri downloadUri = new Uri(
             settings.HeroesProfileApi.BaseUri,
             $"Replay/Download?replayID={replay.Id}&api_token={settings.HeroesProfileApi.ApiKey}"

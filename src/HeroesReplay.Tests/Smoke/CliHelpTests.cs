@@ -19,6 +19,7 @@ public class CliHelpTests
         Assert.Contains(root.Subcommands, c => c.Name == "calculators");
         Assert.Contains(root.Subcommands, c => c.Name == "mcp");
         Assert.Contains(root.Subcommands, c => c.Name == "client");
+        Assert.Contains(root.Subcommands, c => c.Name == "otel");
     }
 
     [Fact]
@@ -44,5 +45,17 @@ public class CliHelpTests
         Command client = root.Subcommands.Single(c => c.Name == "client");
         Assert.Contains(client.Subcommands, c => c.Name == "configure");
         Assert.Contains(client.Subcommands, c => c.Name == "status");
+    }
+
+    [Fact]
+    public void OtelHelp_HasUpDownStatus()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("otel --help");
+        Assert.Empty(result.Errors);
+        Command otel = root.Subcommands.Single(c => c.Name == "otel");
+        Assert.Contains(otel.Subcommands, c => c.Name == "up");
+        Assert.Contains(otel.Subcommands, c => c.Name == "down");
+        Assert.Contains(otel.Subcommands, c => c.Name == "status");
     }
 }

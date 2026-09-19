@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Context;
@@ -77,6 +78,9 @@ public class Spectator : ISpectator
 
     public async Task SpectateAsync()
     {
+        using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
+            "heroesreplay.session"
+        );
         State = State.Loading;
         Timer = default;
         replayViewConfigured = false;

@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.HeroesProfile;
@@ -143,7 +146,11 @@ public class CheckCommand : Command
             }
 
             IHeroesProfileService api = provider.GetRequiredService<IHeroesProfileService>();
+            using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
+                "heroesreplay.check.heroesprofile"
+            );
             int maxId = await api.GetMaxReplayIdAsync();
+            activity?.SetTag("heroesprofile.max_id", maxId);
             bool ok = maxId > 0 && maxId != settings.HeroesProfileApi.FallbackMaxReplayId;
             return new CheckResult(
                 "heroesprofile",
@@ -287,9 +294,7 @@ public class CheckCommand : Command
     {
         return new ServiceCollection()
             .AddCheckServices(cancellationToken)
-            .BuildServiceProvider(
-                new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
-            );
+            .BuildHeroesReplayProvider();
     }
 
     private static void Write(CheckResult result)

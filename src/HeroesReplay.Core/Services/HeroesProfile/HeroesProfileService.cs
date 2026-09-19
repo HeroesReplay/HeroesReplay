@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Models;
@@ -106,6 +108,10 @@ public class HeroesProfileService : IHeroesProfileService
 
     public async Task<HeroesProfileReplay> GetReplayByIdAsync(int replayId)
     {
+        using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
+            "heroesreplay.heroesprofile.get_by_id"
+        );
+        activity?.SetTag("replay.id", replayId);
         return await replayCachePolicy.ExecuteAsync(
             async (context, token) =>
             {

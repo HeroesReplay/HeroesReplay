@@ -27,6 +27,12 @@
         <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
         <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
 
+        <PackageVersion Include="OpenTelemetry" Version="1.18.0" />
+        <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+        <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+        <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.14.0" />
+        <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.14.0" />
+
         <PackageVersion Include="AWSSDK.Core" Version="4.0.102.6" />
         <PackageVersion Include="AWSSDK.S3" Version="4.0.103.3" />
         <PackageVersion Include="Google.Apis.YouTube.v3" Version="1.76.0.4262" />
