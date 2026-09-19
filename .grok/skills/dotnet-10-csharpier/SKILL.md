@@ -22,6 +22,8 @@ dotnet csharpier format src
 dotnet csharpier check src
 dotnet build heroes-replay.slnx
 dotnet test heroes-replay.slnx
+dotnet test heroes-replay.slnx -p:TestCategory=Integration
+dotnet test heroes-replay.slnx -p:TestCategory=Smoke
 dotnet build heroes-replay.slnx -p:CSharpierCheck=true
 ```
 

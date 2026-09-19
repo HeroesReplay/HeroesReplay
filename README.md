@@ -30,6 +30,17 @@ dotnet build heroes-replay.slnx
 dotnet test heroes-replay.slnx
 ```
 
+Tests are split by `Category` trait. **`dotnet test` runs Unit only.**
+
+```powershell
+dotnet test heroes-replay.slnx                              # Unit (every change)
+dotnet test heroes-replay.slnx -p:TestCategory=Integration  # Heroes Profile API (needs op/env)
+dotnet test heroes-replay.slnx -p:TestCategory=Smoke        # CLI help / command surface
+dotnet test heroes-replay.slnx --filter Category=Integration
+```
+
+Copy `src/HeroesReplay.CLI/appsettings.secrets.example.json` to `appsettings.secrets.json`. The Heroes Profile key can be a 1Password reference (`op://…`); the CLI resolves it with `op read` when you are signed in.
+
 Format / lint (CSharpier):
 
 ```powershell
@@ -54,6 +65,8 @@ dotnet run --no-launch-profile -- --help
 | `calculators report --file <path>` | Write a spectator report |
 | `twitch connect` / `twitch rewards …` | Chat bot and channel-point rewards |
 | `youtube uploader` | Upload OBS recordings |
+| `check` | Config + Heroes Profile + OBS + Twitch (continues on failure) |
+| `check config` / `check heroesprofile` / `check obs` / `check twitch` | One integration at a time |
 
 Secrets go in `src/HeroesReplay.CLI/appsettings.secrets.json` (not committed). Environment variables use the prefix `HEROES_REPLAY_`. Set `HEROES_REPLAY_ENV` to `dev` or `prod` to layer `appsettings.{env}.json`.
 

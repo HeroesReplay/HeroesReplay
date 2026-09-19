@@ -5,10 +5,13 @@
         <AssemblyName>heroesreplay.tests</AssemblyName>
         <UseWindowsForms>true</UseWindowsForms>
         <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+        <TestCategory Condition="'$(TestCategory)' == ''">Unit</TestCategory>
+        <VSTestTestCaseFilter>Category=$(TestCategory)</VSTestTestCaseFilter>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="FluentAssertions" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" />
         <PackageReference Include="xunit" />
@@ -23,11 +26,15 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\HeroesReplay.CLI\HeroesReplay.CLI.csproj" />
         <ProjectReference Include="..\HeroesReplay.Core\HeroesReplay.Core.csproj" />
     </ItemGroup>
 
     <ItemGroup>
         <None Update="Assets\**\*">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Include="..\HeroesReplay.CLI\appsettings.json" Link="appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>
