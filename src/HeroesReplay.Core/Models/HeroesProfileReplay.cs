@@ -12,6 +12,7 @@ public class HeroesProfileReplay
     public int? HotsApiReplayId { get; set; }
 
     [JsonPropertyName("region")]
+    [JsonConverter(typeof(FlexibleJsonInt32Converter))]
     public int? Region { get; set; }
 
     [JsonPropertyName("url")]
@@ -43,6 +44,12 @@ public class HeroesProfileReplay
 
     [JsonPropertyName("rank")]
     public string Rank { get; set; }
+
+    [JsonPropertyName("avg_mmr")]
+    public double? AverageMmr { get; set; }
+
+    [JsonPropertyName("league_tier")]
+    public int? LeagueTier { get; set; }
 
     public HeroesProfileReplay() { }
 }

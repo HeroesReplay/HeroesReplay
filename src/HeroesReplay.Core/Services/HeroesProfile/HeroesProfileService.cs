@@ -334,10 +334,7 @@ public class HeroesProfileService : IHeroesProfileService
                 .ExecuteAsync(
                     (context, token) =>
                         httpClient.GetAsync(
-                            new Uri(
-                                $"Replay/Min_id?min_id={minId}&api_token={settings.HeroesProfileApi.ApiKey}",
-                                UriKind.Relative
-                            ),
+                            new Uri(BuildMinIdPath(minId), UriKind.Relative),
                             token
                         ),
                     new PollyContext(),
@@ -364,6 +361,18 @@ public class HeroesProfileService : IHeroesProfileService
         }
 
         return Enumerable.Empty<HeroesProfileReplay>();
+    }
+
+    private string BuildMinIdPath(int minId)
+    {
+        string path = $"Replay/Min_id?min_id={minId}&api_token={settings.HeroesProfileApi.ApiKey}";
+        string gameType = settings.HeroesProfileApi.GameTypes?.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(gameType))
+        {
+            path += "&game_type=" + Uri.EscapeDataString(gameType);
+        }
+
+        return path;
     }
 
     private TimeSpan GetSleepDuration(int retry, PollyContext context)

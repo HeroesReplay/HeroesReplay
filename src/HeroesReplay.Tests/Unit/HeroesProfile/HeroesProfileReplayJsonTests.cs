@@ -24,4 +24,16 @@ public class HeroesProfileReplayJsonTests
         Assert.Equal("Haunted Mines", replays[0].Map);
         Assert.Equal("Gold", replays[0].Rank);
     }
+
+    [Fact]
+    public void MinIdPayload_DeserializesDocExampleStringRegion()
+    {
+        const string json = """
+            [{"replayID":1,"region":"US","url":"http://heroesprofile.s3.amazonaws.com/x.StormReplay","fingerprint":"x","parsed":1,"valid":1,"deleted":null,"game_type":"ARAM","game_version":"2.53.0.83086","game_map":"Lost Cavern","rank":"Diamond"}]
+            """;
+
+        var replays = JsonSerializer.Deserialize<HeroesProfileReplay[]>(json);
+
+        Assert.Equal(1, replays[0].Region);
+    }
 }
