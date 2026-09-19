@@ -62,4 +62,35 @@ public static class StormVariablesEditor
 
         return builder.ToString();
     }
+
+    /// <summary>
+    /// HotS Options dropdown is "AhliObs 0.75". The file is "AhliObs 0.75.StormInterface".
+    /// Storing the filename with suffix makes the client look for a double-extension and fall back to Default.
+    /// </summary>
+    public static bool InterfaceNameEquals(string expected, string actual)
+    {
+        if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrEmpty(expected) || string.IsNullOrEmpty(actual))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            StripStormInterface(expected),
+            StripStormInterface(actual),
+            StringComparison.OrdinalIgnoreCase
+        );
+    }
+
+    public static string StripStormInterface(string name)
+    {
+        const string suffix = ".StormInterface";
+        return name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+            ? name[..^suffix.Length]
+            : name;
+    }
 }

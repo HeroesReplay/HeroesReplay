@@ -136,12 +136,25 @@ public sealed class StormClientConfigurator
         {
             if (
                 !actual.TryGetValue(pair.Key, out string value)
-                || !string.Equals(value, pair.Value, StringComparison.Ordinal)
+                || !ValuesEqual(pair.Key, pair.Value, value)
             )
             {
                 mismatches.Add($"{path}: {pair.Key}={value ?? "(missing)"} (want {pair.Value})");
             }
         }
+    }
+
+    private static bool ValuesEqual(string key, string expected, string actual)
+    {
+        if (
+            key.Equals("observerinterface", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("replayinterface", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return StormVariablesEditor.InterfaceNameEquals(expected, actual);
+        }
+
+        return string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string[] EnumerateAccountVariables(string gameFolder)

@@ -28,8 +28,8 @@ public class StormVariablesEditorTests
             ["windowwidth"] = "1920",
             ["windowheight"] = "1080",
             ["windowstate"] = "1",
-            ["observerinterface"] = "AhliObs 0.75.StormInterface",
-            ["replayinterface"] = "AhliObs 0.75.StormInterface",
+            ["observerinterface"] = "AhliObs 0.75",
+            ["replayinterface"] = "AhliObs 0.75",
         };
 
         string result = StormVariablesEditor.Apply(existing, updates);
@@ -41,8 +41,29 @@ public class StormVariablesEditorTests
         Assert.Equal("1920", parsed["windowwidth"]);
         Assert.Equal("1080", parsed["windowheight"]);
         Assert.Equal("1", parsed["windowstate"]);
-        Assert.Equal("AhliObs 0.75.StormInterface", parsed["observerinterface"]);
-        Assert.Equal("AhliObs 0.75.StormInterface", parsed["replayinterface"]);
+        Assert.Equal("AhliObs 0.75", parsed["observerinterface"]);
+        Assert.Equal("AhliObs 0.75", parsed["replayinterface"]);
         Assert.Equal("Direct3D11", parsed["GraphicsApi"]);
+    }
+
+    [Theory]
+    [InlineData("AhliObs 0.75", "AhliObs 0.75")]
+    [InlineData("AhliObs 0.75", "AhliObs 0.75.StormInterface")]
+    [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75")]
+    [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75.StormInterface")]
+    public void InterfaceNameEquals_TreatsDropdownAndFilenameAsTheSame(
+        string expected,
+        string actual
+    )
+    {
+        Assert.True(StormVariablesEditor.InterfaceNameEquals(expected, actual));
+    }
+
+    [Fact]
+    public void InterfaceNameEquals_DoesNotMatchADifferentInterface()
+    {
+        Assert.False(StormVariablesEditor.InterfaceNameEquals("AhliObs 0.75", "SpazzoObsv40"));
+        Assert.False(StormVariablesEditor.InterfaceNameEquals("AhliObs 0.75", ""));
+        Assert.False(StormVariablesEditor.InterfaceNameEquals("AhliObs 0.75", null));
     }
 }

@@ -16,8 +16,8 @@ public class ClientSettings
     public string WindowWidth { get; set; } = "1920";
     public string WindowHeight { get; set; } = "1080";
     public string WindowState { get; set; } = "1";
-    public string ObserverInterface { get; set; } = "AhliObs 0.75.StormInterface";
-    public string ReplayInterface { get; set; } = "AhliObs 0.75.StormInterface";
+    public string ObserverInterface { get; set; } = "AhliObs 0.75";
+    public string ReplayInterface { get; set; } = "AhliObs 0.75";
     public string InterfaceFileName { get; set; } = "AhliObs 0.75.StormInterface";
 
     public IReadOnlyDictionary<string, string> DisplayPreset =>
