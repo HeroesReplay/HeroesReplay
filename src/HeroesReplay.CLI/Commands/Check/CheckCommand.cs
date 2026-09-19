@@ -84,7 +84,7 @@ public class CheckCommand : Command
         return ok ? 0 : 1;
     }
 
-    internal static async Task<CheckResult> CheckConfigAsync(CancellationToken cancellationToken)
+    public static async Task<CheckResult> CheckConfigAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -116,7 +116,7 @@ public class CheckCommand : Command
         }
     }
 
-    internal static async Task<CheckResult> CheckHeroesProfileAsync(
+    public static async Task<CheckResult> CheckHeroesProfileAsync(
         CancellationToken cancellationToken
     )
     {
@@ -150,7 +150,7 @@ public class CheckCommand : Command
         }
     }
 
-    internal static async Task<CheckResult> CheckObsAsync(CancellationToken cancellationToken)
+    public static async Task<CheckResult> CheckObsAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -208,7 +208,7 @@ public class CheckCommand : Command
         }
     }
 
-    internal static async Task<CheckResult> CheckTwitchAsync(CancellationToken cancellationToken)
+    public static async Task<CheckResult> CheckTwitchAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -269,5 +269,5 @@ public class CheckCommand : Command
     private static string NullToMissing(string value) =>
         string.IsNullOrWhiteSpace(value) ? "missing" : value;
 
-    internal sealed record CheckResult(string Name, bool Ok, string Detail);
+    public sealed record CheckResult(string Name, bool Ok, string Detail);
 }

@@ -15,6 +15,7 @@ public class HeroesReplayCommand : RootCommand
         Subcommands.Add(new SpectateCommand());
         Subcommands.Add(new CalculatorsCommand());
         Subcommands.Add(new CheckCommand());
+        Subcommands.Add(new McpCommand());
         Subcommands.Add(new TwitchCommand());
         Subcommands.Add(new YouTubeCommand());
     }

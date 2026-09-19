@@ -17,6 +17,7 @@ using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Queue;
 using HeroesReplay.Core.Services.Reports;
 using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Services.Status;
 using HeroesReplay.Core.Services.Twitch;
 using HeroesReplay.Core.Services.Twitch.ChatMessages;
 using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
@@ -378,6 +379,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<OBSWebsocket>()
             .AddSingleton<IObsController, ObsController>()
             .AddSingleton<IEngine, Engine>()
+            .AddSingleton<SpectatorStatusStore>()
             .AddFocusCalculators();
     }
 

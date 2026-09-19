@@ -2,7 +2,7 @@
 name: twitch-integration
 description: >
   TwitchLib chat, Helix API, and channel-point rewards used by HeroesReplay.
-  Use when changing TwitchBot, rewards, FakeTwitchClient, or /twitch-integration.
+  Use when changing TwitchBot, rewards, FakeTwitchClient, check twitch, or /twitch-integration.
 ---
 
 # Twitch integration
@@ -25,4 +25,11 @@ Chat (`TwitchClient`) and Helix remain fine.
 
 ## CLI
 
-`twitch connect` keeps the process alive. `twitch rewards generate|submit` uses Helix against the channel in settings.
+```powershell
+dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check twitch
+dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch connect
+dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards generate
+dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards submit
+```
+
+`check twitch` is Helix `GetUsers` only (needs AccessToken + ClientId). `twitch connect` blocks. Command map: skill `heroes-replay-cli`.

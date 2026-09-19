@@ -67,6 +67,9 @@ dotnet run --no-launch-profile -- --help
 | `youtube uploader` | Upload OBS recordings |
 | `check` | Config + Heroes Profile + OBS + Twitch (continues on failure) |
 | `check config` / `check heroesprofile` / `check obs` / `check twitch` | One integration at a time |
+| `mcp` | Stdio MCP server for agents (`get_spectator_status`, checks). Pair with a running `spectate` process. |
+
+Grok picks up the server from `.grok/config.toml` (`mcp_servers.heroesreplay`). Status snapshot: `%LOCALAPPDATA%\HeroesReplay\status.json`.
 
 Secrets go in `src/HeroesReplay.CLI/appsettings.secrets.json` (not committed). Environment variables use the prefix `HEROES_REPLAY_`. Set `HEROES_REPLAY_ENV` to `dev` or `prod` to layer `appsettings.{env}.json`.
 

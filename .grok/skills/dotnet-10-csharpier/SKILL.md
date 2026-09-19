@@ -1,8 +1,8 @@
 ---
 name: dotnet-10-csharpier
 description: >
-  .NET 10 LTS, heroes-replay.slnx, central packages, CSharpier, Windows TFM.
-  Use when changing csproj, Directory.Build.*, formatting, or running /dotnet-10-csharpier.
+  .NET 10 LTS, heroes-replay.slnx, CSharpier, Windows TFM, test categories.
+  Use when changing csproj, Directory.Build.*, formatting, tests, or /dotnet-10-csharpier.
 ---
 
 # .NET 10 + CSharpier
@@ -37,3 +37,7 @@ dotnet build heroes-replay.slnx -p:CSharpierCheck=true
 ## Packages
 
 Stay on .NET 10 LTS lines (`Microsoft.Extensions.*` 10.0.x). Skip CommandLine 3 / Extensions 11 prereleases. Polly stays 7.x until cache policies are rewritten.
+
+## CLI
+
+How to invoke `heroesreplay` (spectate, check, calculators): skill `heroes-replay-cli`. After a CLI change, run Smoke tests and the matching `check` subcommand.

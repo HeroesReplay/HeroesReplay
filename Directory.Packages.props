@@ -24,6 +24,8 @@
         <PackageVersion Include="System.Net.Http.Json" Version="10.0.12" />
 
         <PackageVersion Include="System.CommandLine" Version="2.0.12" />
+        <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+        <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
 
         <PackageVersion Include="AWSSDK.Core" Version="4.0.102.6" />
         <PackageVersion Include="AWSSDK.S3" Version="4.0.103.3" />

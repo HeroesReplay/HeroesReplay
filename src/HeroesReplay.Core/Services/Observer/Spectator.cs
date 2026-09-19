@@ -7,6 +7,7 @@ using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.HeroesProfileExtension;
 using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Services.Status;
 using Microsoft.Extensions.Logging;
 using Polly;
 using PollyContext = Polly.Context;
@@ -21,6 +22,7 @@ public class Spectator : ISpectator
     private readonly AppSettings settings;
     private readonly CancellationTokenProvider consoleTokenProvider;
     private readonly IReplayContext context;
+    private readonly SpectatorStatusStore statusStore;
     private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
     private State State { get; set; }
@@ -39,7 +41,8 @@ public class Spectator : ISpectator
         IReplayContext sessionHolder,
         IGameController controller,
         ITalentNotifier talentsNotifier,
-        CancellationTokenProvider tokenProvider
+        CancellationTokenProvider tokenProvider,
+        SpectatorStatusStore statusStore
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -50,6 +53,7 @@ public class Spectator : ISpectator
             talentsNotifier ?? throw new ArgumentNullException(nameof(talentsNotifier));
         consoleTokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
 
         panelTimes = new()
         {
@@ -66,6 +70,7 @@ public class Spectator : ISpectator
     {
         State = State.Loading;
         Timer = default;
+        PublishStatus();
 
         using (CancelSessionSource = new CancellationTokenSource())
         {
@@ -76,13 +81,20 @@ public class Spectator : ISpectator
                 )
             )
             {
-                await Task.WhenAll(
-                        Task.Run(PanelLoopAsync, LinkedTokenSource.Token),
-                        Task.Run(FocusLoopAsync, LinkedTokenSource.Token),
-                        Task.Run(TalentsLoopAsync, LinkedTokenSource.Token),
-                        Task.Run(StateLoopAsync, LinkedTokenSource.Token)
-                    )
-                    .ConfigureAwait(false);
+                try
+                {
+                    await Task.WhenAll(
+                            Task.Run(PanelLoopAsync, LinkedTokenSource.Token),
+                            Task.Run(FocusLoopAsync, LinkedTokenSource.Token),
+                            Task.Run(TalentsLoopAsync, LinkedTokenSource.Token),
+                            Task.Run(StateLoopAsync, LinkedTokenSource.Token)
+                        )
+                        .ConfigureAwait(false);
+                }
+                finally
+                {
+                    statusStore.MarkIdle("EndDetected");
+                }
             }
         }
     }
@@ -145,6 +157,8 @@ public class Spectator : ISpectator
                     }
                 }
 
+                PublishStatus();
+
                 await Task.Delay(TimeSpan.FromSeconds(1), LinkedTokenSource.Token)
                     .ConfigureAwait(false);
             }
@@ -177,6 +191,18 @@ public class Spectator : ISpectator
                         $"Selecting {focus.Target.Character}. Description: {focus.Description}"
                     );
                     controller.SendFocus(focus.Index);
+                    statusStore.Patch(status =>
+                    {
+                        status.Focus = new SpectatorFocusStatus
+                        {
+                            Index = focus.Index,
+                            Hero = focus.Target?.Character,
+                            Player = focus.Target?.Name,
+                            Calculator = focus.Calculator?.Name,
+                            Points = focus.Points,
+                            Description = focus.Description,
+                        };
+                    });
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(0.5), LinkedTokenSource.Token)
@@ -271,6 +297,23 @@ public class Spectator : ISpectator
                 await Task.Delay(second).ConfigureAwait(false);
             }
         }
+    }
+
+    private void PublishStatus()
+    {
+        ContextData data = Data;
+        statusStore.Patch(status =>
+        {
+            status.SpectatorRunning = true;
+            status.Phase = State.ToString();
+            status.Timer = Timer == default ? null : Timer.ToString();
+            status.GatesOpen = data?.GatesOpen.ToString();
+            status.CoreKilled = data?.CoreKilled.ToString();
+            status.Map = data?.LoadedReplay?.Replay?.Map;
+            status.ReplayPath = data?.LoadedReplay?.FileInfo?.FullName;
+            status.ReplayVersion = data?.LoadedReplay?.Replay?.ReplayVersion;
+            status.ReplayId = data?.LoadedReplay?.ReplayId;
+        });
     }
 
     private Panel GetNextPanel(Panel current) =>
