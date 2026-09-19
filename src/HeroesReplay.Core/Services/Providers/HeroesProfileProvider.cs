@@ -234,19 +234,30 @@ public class HeroesProfileProvider : IReplayProvider
         activity?.SetTag("replay.id", replay.Id);
         activity?.SetTag("replay.map", replay.Map);
 
-        Uri downloadUri = new Uri(
-            settings.HeroesProfileApi.BaseUri,
-            $"download/replay?replayID={replay.Id}"
-        );
-
+        Uri downloadUri;
         using HttpClient httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-        if (!string.IsNullOrWhiteSpace(settings.HeroesProfileApi.ApiKey))
+        if (settings.HeroesProfileApi.UseExternalV1)
         {
-            httpClient.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue(
-                    "Bearer",
-                    settings.HeroesProfileApi.ApiKey
-                );
+            downloadUri = new Uri(
+                settings.HeroesProfileApi.ExternalV1BaseUri
+                    ?? new Uri("https://www.heroesprofile.com/api/external/v1/"),
+                $"download/replay?replayID={replay.Id}"
+            );
+            if (!string.IsNullOrWhiteSpace(settings.HeroesProfileApi.ApiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue(
+                        "Bearer",
+                        settings.HeroesProfileApi.ApiKey
+                    );
+            }
+        }
+        else
+        {
+            downloadUri = new Uri(
+                settings.HeroesProfileApi.BaseUri,
+                $"Replay/Download?replayID={replay.Id}&api_token={settings.HeroesProfileApi.ApiKey}"
+            );
         }
         using HttpResponseMessage response = await httpClient
             .GetAsync(downloadUri, provider.Token)

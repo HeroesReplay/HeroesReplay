@@ -7,6 +7,8 @@ namespace HeroesReplay.Core.Configuration;
 public class HeroesProfileApiSettings
 {
     public Uri BaseUri { get; set; }
+    public Uri ExternalV1BaseUri { get; set; }
+    public bool UseExternalV1 { get; set; }
     public Uri TwitchBaseUri { get; set; }
     public string ApiKey { get; set; }
     public string AwsAccessKey { get; set; }

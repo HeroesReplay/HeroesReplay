@@ -45,8 +45,11 @@ public class HeroesProfileService : IHeroesProfileService
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        this.httpClient.BaseAddress = settings.HeroesProfileApi.BaseUri;
-        if (!string.IsNullOrWhiteSpace(settings.HeroesProfileApi.ApiKey))
+        this.httpClient.BaseAddress = ReplayApiBase;
+        if (
+            settings.HeroesProfileApi.UseExternalV1
+            && !string.IsNullOrWhiteSpace(settings.HeroesProfileApi.ApiKey)
+        )
         {
             this.httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Bearer",
@@ -135,7 +138,7 @@ public class HeroesProfileService : IHeroesProfileService
                         action: (PollyContext context, CancellationToken token) =>
                             httpClient.GetAsync(
                                 new Uri(
-                                    BuildReplaysPath(replayId - 1, gameType: null),
+                                    BuildListPath(replayId - 1, gameType: null),
                                     UriKind.Relative
                                 ),
                                 token
@@ -147,11 +150,11 @@ public class HeroesProfileService : IHeroesProfileService
 
                 if (response.IsSuccessStatusCode)
                 {
-                    HeroesProfileReplayPage page =
-                        await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>(
-                            cancellationToken: token
-                        );
-                    return page?.Replays?.FirstOrDefault(r => r.Id == replayId);
+                    IEnumerable<HeroesProfileReplay> replays = await ReadReplayListAsync(
+                        response,
+                        token
+                    );
+                    return replays.FirstOrDefault(r => r.Id == replayId);
                 }
 
                 return null;
@@ -179,13 +182,7 @@ public class HeroesProfileService : IHeroesProfileService
                         .ExecuteAsync(
                             action: (PollyContext context, CancellationToken token) =>
                                 httpClient.GetAsync(
-                                    new Uri(
-                                        BuildReplaysPath(
-                                            after: 0,
-                                            settings.HeroesProfileApi.GameTypes?.FirstOrDefault()
-                                        ),
-                                        UriKind.Relative
-                                    ),
+                                    new Uri(BuildMaxPath(), UriKind.Relative),
                                     token
                                 ),
                             context: context,
@@ -194,13 +191,27 @@ public class HeroesProfileService : IHeroesProfileService
 
                     if (response.IsSuccessStatusCode)
                     {
-                        HeroesProfileReplayPage page =
-                            await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>(
-                                cancellationToken: token
-                            );
-                        if (page != null && page.MaxReplayId > 0)
+                        if (settings.HeroesProfileApi.UseExternalV1)
                         {
-                            return page.MaxReplayId;
+                            HeroesProfileReplayPage page =
+                                await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>(
+                                    cancellationToken: token
+                                );
+                            if (page != null && page.MaxReplayId > 0)
+                            {
+                                return page.MaxReplayId;
+                            }
+                        }
+                        else
+                        {
+                            string content = await response.Content.ReadAsStringAsync(token);
+                            if (
+                                !string.IsNullOrWhiteSpace(content)
+                                && int.TryParse(content.Trim(), out int maxId)
+                            )
+                            {
+                                return maxId;
+                            }
                         }
                     }
 
@@ -273,7 +284,7 @@ public class HeroesProfileService : IHeroesProfileService
                                         (context, token) =>
                                             httpClient.GetAsync(
                                                 new Uri(
-                                                    BuildReplaysPath(
+                                                    BuildListPath(
                                                         (int)context["minId"],
                                                         gameType?.GetQueryValue()
                                                             ?? settings.HeroesProfileApi.GameTypes?.FirstOrDefault(),
@@ -289,11 +300,7 @@ public class HeroesProfileService : IHeroesProfileService
 
                                 if (response.IsSuccessStatusCode)
                                 {
-                                    HeroesProfileReplayPage page =
-                                        await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>(
-                                            cancellationToken: token
-                                        );
-                                    return FilterListed(page?.Replays);
+                                    return FilterListed(await ReadReplayListAsync(response, token));
                                 }
                                 else
                                 {
@@ -335,7 +342,7 @@ public class HeroesProfileService : IHeroesProfileService
                     (context, token) =>
                         httpClient.GetAsync(
                             new Uri(
-                                BuildReplaysPath(
+                                BuildListPath(
                                     minId,
                                     settings.HeroesProfileApi.GameTypes?.FirstOrDefault()
                                 ),
@@ -350,9 +357,7 @@ public class HeroesProfileService : IHeroesProfileService
 
             if (response.IsSuccessStatusCode)
             {
-                HeroesProfileReplayPage page =
-                    await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>();
-                return FilterListed(page?.Replays);
+                return FilterListed(await ReadReplayListAsync(response, tokenProvider.Token));
             }
         }
         catch (Exception e)
@@ -361,6 +366,64 @@ public class HeroesProfileService : IHeroesProfileService
         }
 
         return Enumerable.Empty<HeroesProfileReplay>();
+    }
+
+    private Uri ReplayApiBase =>
+        settings.HeroesProfileApi.UseExternalV1
+            ? settings.HeroesProfileApi.ExternalV1BaseUri
+                ?? new Uri("https://www.heroesprofile.com/api/external/v1/")
+            : settings.HeroesProfileApi.BaseUri;
+
+    private string BuildMaxPath()
+    {
+        if (settings.HeroesProfileApi.UseExternalV1)
+        {
+            return BuildReplaysPath(0, settings.HeroesProfileApi.GameTypes?.FirstOrDefault());
+        }
+
+        return $"Replay/Max?api_token={settings.HeroesProfileApi.ApiKey}";
+    }
+
+    private string BuildListPath(int? after, string gameType, string gameMap = null)
+    {
+        if (settings.HeroesProfileApi.UseExternalV1)
+        {
+            return BuildReplaysPath(after, gameType, gameMap);
+        }
+
+        int minId = after.GetValueOrDefault();
+        string path = $"Replay/Min_id?min_id={minId}&api_token={settings.HeroesProfileApi.ApiKey}";
+        if (!string.IsNullOrWhiteSpace(gameType))
+        {
+            path += "&game_type=" + Uri.EscapeDataString(gameType);
+        }
+
+        if (!string.IsNullOrWhiteSpace(gameMap))
+        {
+            path += "&game_map=" + Uri.EscapeDataString(gameMap);
+        }
+
+        return path;
+    }
+
+    private async Task<IEnumerable<HeroesProfileReplay>> ReadReplayListAsync(
+        HttpResponseMessage response,
+        CancellationToken token
+    )
+    {
+        if (settings.HeroesProfileApi.UseExternalV1)
+        {
+            HeroesProfileReplayPage page =
+                await response.Content.ReadFromJsonAsync<HeroesProfileReplayPage>(
+                    cancellationToken: token
+                );
+            return page?.Replays ?? Enumerable.Empty<HeroesProfileReplay>();
+        }
+
+        IEnumerable<HeroesProfileReplay> list = await response.Content.ReadFromJsonAsync<
+            IEnumerable<HeroesProfileReplay>
+        >(cancellationToken: token);
+        return list ?? Enumerable.Empty<HeroesProfileReplay>();
     }
 
     private string BuildReplaysPath(int? after, string gameType, string gameMap = null)

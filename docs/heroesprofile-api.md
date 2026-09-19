@@ -17,4 +17,4 @@ Auth: `Authorization: Bearer <key>` (same key as the old `api_token`).
 
 `region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable` instead of a GCS/S3 `url`. Skip when `downloadable` is false or `deleted` is non-zero.
 
-The legacy host `https://api.heroesprofile.com/api/` (`Replay/Min_id`, `Replay/Max`, `?api_token=`) still exists for old keys; this project talks to v1.
+This project still uses the legacy host by default (`HeroesProfileApi:UseExternalV1` = false) because current keys return **401** on v1. Set `UseExternalV1` to true and `ExternalV1BaseUri` when you have a Bearer key from [heroesprofile.com/Api](https://www.heroesprofile.com/Api).
