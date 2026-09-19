@@ -5,6 +5,7 @@ using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Services.Status;
 using HeroesReplay.Core.Services.Twitch;
 using Microsoft.Extensions.Logging;
 
@@ -18,6 +19,7 @@ public class Engine : IEngine
     private readonly IGameData gameData;
     private readonly IReplayProvider replayProvider;
     private readonly CancellationTokenProvider consoleTokenProvider;
+    private readonly SpectatorStatusStore statusStore;
 
     public Engine(
         ILogger<Engine> logger,
@@ -25,7 +27,8 @@ public class Engine : IEngine
         IGameManager gameManager,
         IGameData gameData,
         IReplayProvider replayProvider,
-        CancellationTokenProvider consoleTokenProvider
+        CancellationTokenProvider consoleTokenProvider,
+        SpectatorStatusStore statusStore
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -36,6 +39,7 @@ public class Engine : IEngine
             replayProvider ?? throw new ArgumentNullException(nameof(replayProvider));
         this.consoleTokenProvider =
             consoleTokenProvider ?? throw new ArgumentNullException(nameof(consoleTokenProvider));
+        this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
     }
 
     public async Task RunAsync()
@@ -79,9 +83,11 @@ public class Engine : IEngine
 
             if (!replayProvider.ContinuesWhenEmpty)
             {
+                statusStore.MarkIdle();
                 break;
             }
 
+            statusStore.MarkIdle();
             await Task.Delay(TimeSpan.FromSeconds(5), consoleTokenProvider.Token);
         }
     }

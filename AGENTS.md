@@ -10,7 +10,7 @@ Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `Her
 
 ## Before editing
 
-1. Load the matching **repo skill** under `.grok/skills/` (dotnet, OBS, Twitch).
+1. Load the matching **repo skill** under `.grok/skills/` (dotnet, CLI, OBS, Twitch).
 2. Prefer official **dotnet/skills** plugins for generic .NET work (see below).
 3. Format with CSharpier. Do not hand-format.
 
@@ -31,7 +31,7 @@ dotnet test heroes-replay.slnx -p:TestCategory=Smoke
 
 Heroes Profile integration uses `HEROES_REPLAY_HeroesProfileApi__ApiKey` or `op read op://Private/Heroes Profile API/password`. Never commit the resolved token.
 
-CLI connectivity: `dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check`
+CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
 
 ## Hard rules
 
@@ -48,19 +48,21 @@ CLI connectivity: `dotnet run --project src/HeroesReplay.CLI --no-launch-profile
 
 ## Verification
 
-- Analysis changes: `dotnet test` plus `dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- calculators coordinates` when replay format is in play.
-- OBS changes: keep scene/source names configurable; wait for `IsIdentified` before requests.
-- Twitch: PubSub reward topics are obsolete; do not add new ListenToRewards usage. Prefer Helix `*Async` APIs.
+- Analysis changes: `dotnet test` plus `calculators coordinates` when replay format is in play.
+- OBS changes: `check obs`; keep scene/source names configurable; wait for `IsIdentified`.
+- Twitch: `check twitch`. PubSub reward topics are obsolete; do not add new ListenToRewards usage.
+- CLI command changes: Smoke tests + `--help` on the new command.
 
 ## Repo skills (this tree)
 
 | Skill | Use when |
 | --- | --- |
-| `.grok/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, analyzers |
-| `.grok/skills/obs-websocket-v5` | OBS Studio control, scenes, recording |
-| `.grok/skills/twitch-integration` | TwitchLib client/API, rewards, chat |
+| `.grok/skills/heroes-replay-cli` | spectate, check, calculators, secrets, `op://` |
+| `.grok/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, test categories |
+| `.grok/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
+| `.grok/skills/twitch-integration` | TwitchLib, rewards, `check twitch` |
 
-Slash: `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`.
+Slash: `/heroes-replay-cli`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`.
 
 ## External skills worth installing
 

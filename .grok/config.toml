@@ -1,0 +1,12 @@
+[mcp_servers.heroesreplay]
+command = "dotnet"
+args = [
+  "run",
+  "--project",
+  "src/HeroesReplay.CLI/HeroesReplay.CLI.csproj",
+  "--no-launch-profile",
+  "--",
+  "mcp",
+]
+startup_timeout_sec = 60
+enabled = true

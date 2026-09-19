@@ -17,6 +17,7 @@ public class CliHelpTests
         Assert.Contains(root.Subcommands, c => c.Name == "check");
         Assert.Contains(root.Subcommands, c => c.Name == "spectate");
         Assert.Contains(root.Subcommands, c => c.Name == "calculators");
+        Assert.Contains(root.Subcommands, c => c.Name == "mcp");
     }
 
     [Fact]

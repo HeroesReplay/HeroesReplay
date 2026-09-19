@@ -2,7 +2,7 @@
 name: obs-websocket-v5
 description: >
   OBS Studio 28+ obs-websocket 5 control for HeroesReplay (obs-websocket-dotnet 5.7).
-  Use when changing ObsController, OBS settings, scenes, recording, or /obs-websocket-v5.
+  Use when changing ObsController, OBS settings, scenes, recording, check obs, or /obs-websocket-v5.
 ---
 
 # OBS websocket 5
@@ -35,3 +35,11 @@ Do not connect, send one request, disconnect. Polly retries belong on **requests
 | `SetRecordingFolder` | `SetRecordDirectory` |
 
 Scene and source names stay in `appsettings` (`GameSceneName`, `WaitingSceneName`, `InfoSourceName`, `RankImagesSourceNames`, `ReportScenes`).
+
+## Verify
+
+```powershell
+dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check obs
+```
+
+Expect Identify on `WebSocketEndpoint` (default `ws://127.0.0.1:4455`) and a printed OBS/websocket version. Full CLI map: skill `heroes-replay-cli`.

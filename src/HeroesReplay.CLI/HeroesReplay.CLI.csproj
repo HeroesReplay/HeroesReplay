@@ -20,6 +20,8 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Console" />
         <PackageReference Include="Microsoft.Extensions.Logging.EventLog" />
         <PackageReference Include="System.CommandLine" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" />
+        <PackageReference Include="ModelContextProtocol" />
     </ItemGroup>
 
     <ItemGroup>
