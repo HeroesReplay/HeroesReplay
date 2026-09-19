@@ -2312,11 +2312,11 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "height": 100,
+                "height": 240,
                 "restart_when_active": true,
                 "shutdown": true,
-                "url": "https://streamerific.com/tools/stream-countdown?m=3&s=15&textAlign=center&t=+&fontSize=&textColor=%23ffffff&backgroundColor=",
-                "width": 225
+                "url": "file:///C:/heroesreplay/HeroesReplay/obs/countdown/index.html?m=5&s=0&autostart=1",
+                "width": 720
             },
             "sync": 0,
             "versioned_id": "browser_source",

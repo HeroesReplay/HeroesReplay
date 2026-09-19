@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stream countdown</title>
+    <style>
+      :root {
+        --color: #f4d27a;
+        --muted: #c8b48a;
+        --bg: transparent;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--color);
+        font-family: Bahnschrift, "Segoe UI", sans-serif;
+        overflow: hidden;
+        user-select: none;
+      }
+      #app {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
+      }
+      #title {
+        font-size: clamp(14px, 5.2vw, 42px);
+        letter-spacing: 0.28em;
+        font-weight: 600;
+        color: var(--muted);
+        margin-bottom: 0.15em;
+      }
+      #clock {
+        font-variant-numeric: tabular-nums;
+        font-size: clamp(42px, 22vw, 220px);
+        font-weight: 600;
+        line-height: 0.95;
+        letter-spacing: 0.04em;
+      }
+      #clock.done {
+        letter-spacing: 0.18em;
+      }
+      #hint {
+        margin-top: 0.4em;
+        font-size: clamp(11px, 2.2vw, 16px);
+        color: var(--muted);
+        opacity: 0.8;
+        letter-spacing: 0.08em;
+      }
+      @media (max-height: 140px) {
+        #title,
+        #hint {
+          display: none;
+        }
+      }
+      #bar {
+        display: none;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        gap: 8px;
+        justify-content: center;
+        padding: 8px;
+        background: rgba(0, 0, 0, 0.55);
+      }
+      body.show-controls #bar {
+        display: flex;
+      }
+      #bar button {
+        background: #1b1b1b;
+        color: var(--color);
+        border: 1px solid #6a5428;
+        padding: 6px 12px;
+        font: inherit;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="title"></div>
+      <div id="clock">00:00</div>
+      <div id="hint"></div>
+    </div>
+    <div id="bar">
+      <button type="button" id="toggle">Start</button>
+      <button type="button" id="reset">Reset</button>
+      <button type="button" id="plus">+30s</button>
+      <button type="button" id="minus">-30s</button>
+    </div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(location.search);
+        var minutes = Math.max(0, parseInt(params.get("m") || "5", 10) || 0);
+        var extra = Math.max(0, parseInt(params.get("s") || "0", 10) || 0);
+        var totalMs = (minutes * 60 + extra) * 1000;
+        if (totalMs <= 0) totalMs = 5 * 60 * 1000;
+        var title = params.get("title") || "STREAM STARTING";
+        var endText = params.get("end") || "LIVE";
+        var autostart = params.get("autostart") !== "0";
+        var color = params.get("color");
+        var bg = params.get("bg");
+        var showControls = params.get("controls") === "1";
+
+        if (color) document.documentElement.style.setProperty("--color", color);
+        if (bg) document.documentElement.style.setProperty("--bg", bg);
+        if (showControls) document.body.classList.add("show-controls");
+
+        var titleEl = document.getElementById("title");
+        var clockEl = document.getElementById("clock");
+        var hintEl = document.getElementById("hint");
+        var toggleEl = document.getElementById("toggle");
+        titleEl.textContent = title;
+
+        var remaining = totalMs;
+        var running = false;
+        var last = 0;
+        var done = false;
+        var raf = 0;
+
+        function pad(n) {
+          return n < 10 ? "0" + n : String(n);
+        }
+
+        function format(ms) {
+          var s = Math.max(0, Math.ceil(ms / 1000));
+          var m = Math.floor(s / 60);
+          s = s % 60;
+          return pad(m) + ":" + pad(s);
+        }
+
+        function render() {
+          if (done) {
+            clockEl.textContent = endText;
+            clockEl.classList.add("done");
+            hintEl.textContent = "";
+            toggleEl.textContent = "Reset";
+            return;
+          }
+          clockEl.classList.remove("done");
+          clockEl.textContent = format(remaining);
+          hintEl.textContent = running ? "" : "paused · space to start";
+          toggleEl.textContent = running ? "Pause" : "Start";
+        }
+
+        function tick(now) {
+          if (running) {
+            remaining -= now - last;
+            last = now;
+            if (remaining <= 0) {
+              remaining = 0;
+              running = false;
+              done = true;
+            }
+          }
+          render();
+          raf = requestAnimationFrame(tick);
+        }
+
+        function start() {
+          if (done) return;
+          running = true;
+          last = performance.now();
+        }
+
+        function pause() {
+          running = false;
+        }
+
+        function reset() {
+          remaining = totalMs;
+          done = false;
+          running = autostart;
+          last = performance.now();
+          render();
+        }
+
+        function nudge(deltaMs) {
+          if (done) return;
+          remaining = Math.max(0, remaining + deltaMs);
+          render();
+        }
+
+        document.getElementById("toggle").onclick = function () {
+          if (done) {
+            reset();
+            return;
+          }
+          if (running) pause();
+          else start();
+          render();
+        };
+        document.getElementById("reset").onclick = reset;
+        document.getElementById("plus").onclick = function () {
+          nudge(30000);
+        };
+        document.getElementById("minus").onclick = function () {
+          nudge(-30000);
+        };
+
+        document.addEventListener("keydown", function (e) {
+          if (e.code === "Space") {
+            e.preventDefault();
+            document.getElementById("toggle").click();
+          } else if (e.key === "r" || e.key === "R") {
+            reset();
+          } else if (e.key === "+" || e.key === "=") {
+            nudge(30000);
+          } else if (e.key === "-" || e.key === "_") {
+            nudge(-30000);
+          } else if (e.key === "c" || e.key === "C") {
+            document.body.classList.toggle("show-controls");
+          }
+        });
+
+        if (autostart) start();
+        render();
+        raf = requestAnimationFrame(tick);
+      })();
+    </script>
+  </body>
+</html>
