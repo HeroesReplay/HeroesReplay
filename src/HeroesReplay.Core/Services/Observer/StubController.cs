@@ -41,7 +41,8 @@ public sealed class StubController : IGameController
 
     public void SendPanel(Panel panel) => logger.LogInformation("Selected panel {Panel}", panel);
 
-    public void HideReplayTimeline() => logger.LogInformation("Hide replay timeline (Ctrl+T)");
+    public void HideReplayTimeline() =>
+        logger.LogInformation("Hide replay control panel (Ctrl+Shift+O)");
 
     public void ZoomOut() => logger.LogInformation("Zoom out (Ctrl+Z)");
 

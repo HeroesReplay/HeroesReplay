@@ -500,15 +500,20 @@ public class GameController : IGameController
 
     public void HideReplayTimeline()
     {
-        SendControlKey(VirtualKey.VK_T, "hide replay timeline (Ctrl+T)");
+        SendChord(
+            "hide replay control panel (Ctrl+Shift+O)",
+            VirtualKey.VK_CONTROL,
+            VirtualKey.VK_SHIFT,
+            VirtualKey.VK_O
+        );
     }
 
     public void ZoomOut()
     {
-        SendControlKey(VirtualKey.VK_Z, "zoom out (Ctrl+Z)");
+        SendChord("zoom out (Ctrl+Z)", VirtualKey.VK_CONTROL, VirtualKey.VK_Z);
     }
 
-    private void SendControlKey(VirtualKey key, string description)
+    private void SendChord(string description, params VirtualKey[] keys)
     {
         lock (controllerLock)
         {
@@ -520,10 +525,16 @@ public class GameController : IGameController
 
             SetForegroundWindow(handle);
             const uint keyUp = 0x0002;
-            NativeMethods.keybd_event((byte)VirtualKey.VK_CONTROL, 0, 0, UIntPtr.Zero);
-            NativeMethods.keybd_event((byte)key, 0, 0, UIntPtr.Zero);
-            NativeMethods.keybd_event((byte)key, 0, keyUp, UIntPtr.Zero);
-            NativeMethods.keybd_event((byte)VirtualKey.VK_CONTROL, 0, keyUp, UIntPtr.Zero);
+            foreach (VirtualKey key in keys)
+            {
+                NativeMethods.keybd_event((byte)key, 0, 0, UIntPtr.Zero);
+            }
+
+            for (int i = keys.Length - 1; i >= 0; i--)
+            {
+                NativeMethods.keybd_event((byte)keys[i], 0, keyUp, UIntPtr.Zero);
+            }
+
             logger.LogInformation("Sent {Description}.", description);
         }
     }
