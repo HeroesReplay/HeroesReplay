@@ -26,7 +26,6 @@ dotnet test heroes-replay.slnx
 
 ```powershell
 dotnet test heroes-replay.slnx -p:TestCategory=Integration
-dotnet test heroes-replay.slnx -p:TestCategory=Functional
 dotnet test heroes-replay.slnx -p:TestCategory=Smoke
 ```
 
