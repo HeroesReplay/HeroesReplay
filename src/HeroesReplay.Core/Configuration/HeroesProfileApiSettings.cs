@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HeroesReplay.Core.Configuration;
 
@@ -13,6 +14,7 @@ public class HeroesProfileApiSettings
     public IEnumerable<string> GameTypes { get; set; }
     public string S3Bucket { get; set; }
     public string S3Region { get; set; }
+    public IEnumerable<string> ReplayUrlHostContains { get; set; }
     public int MinReplayId { get; set; }
     public int FallbackMaxReplayId { get; set; }
     public int ApiMaxReturnedReplays { get; set; }
@@ -20,4 +22,31 @@ public class HeroesProfileApiSettings
     public TimeSpan APIRetryWaitTime { get; set; }
     public string StandardCacheDirectoryName { get; set; }
     public string RequestsCacheDirectoryName { get; set; }
+
+    public bool MatchesReplayUrl(Uri url)
+    {
+        if (url == null)
+            return false;
+
+        IEnumerable<string> needles = (ReplayUrlHostContains ?? Enumerable.Empty<string>())
+            .Append(S3Bucket)
+            .Where(n => !string.IsNullOrWhiteSpace(n));
+
+        return needles.Any(n =>
+            url.Host.Contains(n, StringComparison.OrdinalIgnoreCase)
+            || url.AbsolutePath.Contains(n, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
+    public bool IsAllowedGameType(string gameType)
+    {
+        if (string.IsNullOrWhiteSpace(gameType))
+            return false;
+
+        IEnumerable<string> allowed = GameTypes ?? Enumerable.Empty<string>();
+        if (!allowed.Any())
+            return string.Equals(gameType, "Storm League", StringComparison.OrdinalIgnoreCase);
+
+        return allowed.Contains(gameType, StringComparer.OrdinalIgnoreCase);
+    }
 }

@@ -40,14 +40,6 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
             new SupportedReward(RewardType.SL, "Random (SL)", mode: GameType.StormLeague, cost: 250)
         );
         rewards.Add(
-            new SupportedReward(
-                RewardType.UD,
-                "Random (UD)",
-                mode: GameType.UnrankedDraft,
-                cost: 250
-            )
-        );
-        rewards.Add(
             new SupportedReward(RewardType.ARAM, "Random (ARAM)", mode: GameType.ARAM, cost: 250)
         );
 
@@ -70,15 +62,6 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
             ))
         );
         rewards.AddRange(
-            unrankedMaps.Select(map => new SupportedReward(
-                RewardType.UD | RewardType.Map,
-                $"{map.Name} (UD)",
-                map.Name,
-                GameType.UnrankedDraft,
-                500
-            ))
-        );
-        rewards.AddRange(
             aramMaps.Select(map => new SupportedReward(
                 RewardType.ARAM | RewardType.Map,
                 $"{map.Name} (ARAM)",
@@ -90,7 +73,6 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
 
         // rewards.Add(new SupportedReward(RewardType.QM | RewardType.Rank, $"Rank (QM)", mode: GameType.QuickMatch, cost: 750));
         // rewards.Add(new SupportedReward(RewardType.SL | RewardType.Rank, $"Rank (SL)", mode: GameType.StormLeague, cost: 750));
-        // rewards.Add(new SupportedReward(RewardType.UD | RewardType.Rank, $"Rank (UD)", mode: GameType.UnrankedDraft, cost: 750));
         // rewards.Add(new SupportedReward(RewardType.ARAM | RewardType.Rank, $"Rank (ARAM)", mode: GameType.ARAM, cost: 750));
 
         rewards.AddRange(
@@ -108,15 +90,6 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                 $"{map.Name} (Rank SL)",
                 map.Name,
                 GameType.StormLeague,
-                1000
-            ))
-        );
-        rewards.AddRange(
-            unrankedMaps.Select(map => new SupportedReward(
-                RewardType.UD | RewardType.Map | RewardType.Rank,
-                $"{map.Name} (Rank UD)",
-                map.Name,
-                GameType.UnrankedDraft,
                 1000
             ))
         );

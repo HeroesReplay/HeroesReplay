@@ -37,15 +37,12 @@ public class MapRewardHandler : IRewardHandler
     {
         RewardType.ARAM,
         RewardType.QM,
-        RewardType.UD,
         RewardType.SL,
         RewardType.QM | RewardType.Map,
         RewardType.ARAM | RewardType.Map,
-        RewardType.UD | RewardType.Map,
         RewardType.SL | RewardType.Map,
         RewardType.QM | RewardType.Map | RewardType.Rank,
         RewardType.ARAM | RewardType.Map | RewardType.Rank,
-        RewardType.UD | RewardType.Map | RewardType.Rank,
         RewardType.SL | RewardType.Map | RewardType.Rank,
     };
 

@@ -276,7 +276,12 @@ public class HeroesProfileService : IHeroesProfileService
                                     var supported = replays
                                         .Where(x => x.Deleted == null)
                                         .Where(x =>
-                                            x.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket)
+                                            settings.HeroesProfileApi.IsAllowedGameType(
+                                                x.GameType
+                                            )
+                                        )
+                                        .Where(x =>
+                                            settings.HeroesProfileApi.MatchesReplayUrl(x.Url)
                                         )
                                         .Where(x =>
                                             settings.Spectate.VersionsSupported.Contains(
@@ -344,7 +349,8 @@ public class HeroesProfileService : IHeroesProfileService
 
                 return replays
                     .Where(x => x.Deleted == null)
-                    .Where(x => x.Url.Host.Contains(settings.HeroesProfileApi.S3Bucket))
+                    .Where(x => settings.HeroesProfileApi.IsAllowedGameType(x.GameType))
+                    .Where(x => settings.HeroesProfileApi.MatchesReplayUrl(x.Url))
                     .Where(x => settings.Spectate.VersionsSupported.Contains(x.GameVersion));
             }
         }
