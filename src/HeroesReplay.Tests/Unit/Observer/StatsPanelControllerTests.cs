@@ -1,17 +1,18 @@
 using System;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Observer;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Observer;
 
 [Trait(TestCategories.Category, TestCategories.Unit)]
-public class StatsPanelControllerTests
+public class ObserverPanelRequestsTests
 {
     [Fact]
-    public void TryRequest_AcceptsThenCooldownUntilExpiry()
+    public void TryRequest_StatsAndTalentsHaveIndependentCooldowns()
     {
-        var controller = new StatsPanelController(
+        var controller = new ObserverPanelRequests(
             new AppSettings
             {
                 Spectate = new SpectateSettings
@@ -22,17 +23,27 @@ public class StatsPanelControllerTests
             }
         );
 
-        StatsPanelTryResult first = controller.TryRequest("alice");
-        Assert.Equal(StatsPanelTryStatus.Accepted, first.Status);
-        Assert.True(controller.TryConsume(out string user));
+        Assert.Equal(
+            ObserverPanelTryStatus.Accepted,
+            controller.TryRequest(Panel.DeathDamageRole, "alice").Status
+        );
+        Assert.True(controller.TryConsume(out Panel panel, out string user));
+        Assert.Equal(Panel.DeathDamageRole, panel);
         Assert.Equal("alice", user);
 
-        StatsPanelTryResult second = controller.TryRequest("bob");
-        Assert.Equal(StatsPanelTryStatus.AlreadyVisible, second.Status);
+        Assert.Equal(
+            ObserverPanelTryStatus.AlreadyVisible,
+            controller.TryRequest(Panel.DeathDamageRole, "bob").Status
+        );
+        Assert.Equal(
+            ObserverPanelTryStatus.Accepted,
+            controller.TryRequest(Panel.Talents, "bob").Status
+        );
 
-        controller.MarkHidden();
-        StatsPanelTryResult third = controller.TryRequest("bob");
-        Assert.Equal(StatsPanelTryStatus.Cooldown, third.Status);
-        Assert.True(third.CooldownRemaining > TimeSpan.FromMinutes(1));
+        controller.MarkHidden(Panel.DeathDamageRole);
+        Assert.Equal(
+            ObserverPanelTryStatus.Cooldown,
+            controller.TryRequest(Panel.DeathDamageRole, "bob").Status
+        );
     }
 }

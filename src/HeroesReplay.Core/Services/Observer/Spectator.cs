@@ -24,7 +24,7 @@ public class Spectator : ISpectator
     private readonly CancellationTokenProvider consoleTokenProvider;
     private readonly IReplayContext context;
     private readonly SpectatorStatusStore statusStore;
-    private readonly IStatsPanelController statsPanel;
+    private readonly IObserverPanelRequests panelRequests;
     private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
     private State State { get; set; }
@@ -49,7 +49,7 @@ public class Spectator : ISpectator
         ITalentNotifier talentsNotifier,
         CancellationTokenProvider tokenProvider,
         SpectatorStatusStore statusStore,
-        IStatsPanelController statsPanel
+        IObserverPanelRequests panelRequests
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -61,7 +61,8 @@ public class Spectator : ISpectator
         consoleTokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
-        this.statsPanel = statsPanel ?? throw new ArgumentNullException(nameof(statsPanel));
+        this.panelRequests =
+            panelRequests ?? throw new ArgumentNullException(nameof(panelRequests));
 
         panelTimes = new()
         {
@@ -257,6 +258,7 @@ public class Spectator : ISpectator
         TimeSpan second = TimeSpan.FromSeconds(1);
         TimeSpan timeShown = TimeSpan.Zero;
         bool visible = false;
+        bool chatRequested = false;
 
         while (!LinkedTokenSource.IsCancellationRequested)
         {
@@ -268,12 +270,11 @@ public class Spectator : ISpectator
 
             try
             {
-                Panel next = ChoosePanel(current, visible);
+                Panel next = ChoosePanel(current, visible, ref chatRequested);
 
-                TimeSpan shownLimit =
-                    current == Panel.DeathDamageRole
-                        ? statsPanel.ShowDuration
-                        : panelTimes.GetValueOrDefault(current, TimeSpan.FromSeconds(30));
+                TimeSpan shownLimit = chatRequested
+                    ? panelRequests.ShowDuration
+                    : panelTimes.GetValueOrDefault(current, TimeSpan.FromSeconds(30));
 
                 if (
                     visible
@@ -282,9 +283,10 @@ public class Spectator : ISpectator
                 )
                 {
                     controller.SendPanel(current);
-                    if (current == Panel.DeathDamageRole)
+                    if (chatRequested)
                     {
-                        statsPanel.MarkHidden();
+                        panelRequests.MarkHidden(current);
+                        chatRequested = false;
                     }
 
                     visible = false;
@@ -318,21 +320,23 @@ public class Spectator : ISpectator
         }
     }
 
-    private Panel ChoosePanel(Panel current, bool visible)
+    private Panel ChoosePanel(Panel current, bool visible, ref bool chatRequested)
     {
-        if (statsPanel.TryConsume(out string requestedBy))
+        if (panelRequests.TryConsume(out Panel requested, out string requestedBy))
         {
             logger.LogInformation(
-                "Showing stats panel for  {Duration}s ({User}).",
-                (int)statsPanel.ShowDuration.TotalSeconds,
+                "Showing {Panel} for {Duration}s ({User}).",
+                requested,
+                (int)panelRequests.ShowDuration.TotalSeconds,
                 requestedBy
             );
-            return Panel.DeathDamageRole;
+            chatRequested = true;
+            return requested;
         }
 
-        if (visible && current == Panel.DeathDamageRole)
+        if (visible && chatRequested && current is Panel.DeathDamageRole or Panel.Talents)
         {
-            return Panel.DeathDamageRole;
+            return current;
         }
 
         if (Timer < settings.Spectate.TalentsPanelStartTime)

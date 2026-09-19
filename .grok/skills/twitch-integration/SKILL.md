@@ -23,7 +23,10 @@ Channel-point methods are `*Async`: `GetCustomRewardAsync`, `CreateCustomRewards
 
 Chat (`TwitchClient`) and Helix remain fine.
 
-`!stats` (during `spectate`, chatbot enabled) shows the Ahli Death/Damage/Role panel for `Spectate:StatsPanelShowDuration` (default 10s) with `StatsPanelCooldown` (default 2 minutes). Do not auto-cycle KDA/XP/stats panels; talents stay automatic.
+Chat (during `spectate`, chatbot enabled), matching Icy Veins observer hotkeys:
+- `!talents` → Ctrl+1 talent panel
+- `!stats` → Ctrl+2 stats panel
+Each shows for `Spectate:StatsPanelShowDuration` (default 10s) with `StatsPanelCooldown` (default 2 minutes, independent per panel). Do not auto-cycle KDA/XP/stats; talents still open automatically at talent times.
 
 ## CLI
 

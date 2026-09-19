@@ -204,7 +204,7 @@ public static class ServiceCollectionExtensions
             .AddMemoryCache()
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
-            .AddSingleton<IStatsPanelController, StatsPanelController>()
+            .AddSingleton<IObserverPanelRequests, ObserverPanelRequests>()
             .AddSingleton(new CancellationTokenProvider(token))
             .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
@@ -341,7 +341,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IAbilityDetector, AbilityDetector>()
             .AddSingleton<IGameManager, GameManager>()
             .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
-            .AddSingleton<IStatsPanelController, StatsPanelController>()
+            .AddSingleton<IObserverPanelRequests, ObserverPanelRequests>()
             .AddSingleton<StormClientConfigurator>()
             .AddSingleton<ISpectator, Spectator>()
             .AddSingleton<IReplayLoader, ReplayLoader>()
