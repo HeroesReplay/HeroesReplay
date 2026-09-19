@@ -82,12 +82,25 @@ public class Spectator : ISpectator
     {
         get
         {
-            if (Data == null || Data.CoreKilled <= TimeSpan.Zero)
+            if (Data == null)
             {
                 return TimeSpan.Zero;
             }
 
-            return Data.CoreKilled + settings.Spectate.EndScreenTime;
+            TimeSpan marker = Data.SessionEnd > TimeSpan.Zero ? Data.SessionEnd : Data.CoreKilled;
+            if (marker <= TimeSpan.Zero)
+            {
+                return TimeSpan.Zero;
+            }
+
+            TimeSpan withHold = marker + settings.Spectate.EndScreenTime;
+            TimeSpan length = Data.LoadedReplay?.Replay?.ReplayLength ?? TimeSpan.Zero;
+            if (length > TimeSpan.Zero && withHold > length)
+            {
+                return length;
+            }
+
+            return withHold;
         }
     }
 
@@ -234,9 +247,10 @@ public class Spectator : ISpectator
                     if (sessionEnd > TimeSpan.Zero && Timer >= sessionEnd)
                     {
                         logger.LogInformation(
-                            "Core destroyed at {CoreKilled}; end screen until {SessionEnd} (timer {Timer}).",
-                            context.Current.CoreKilled,
+                            "Ending session at {SessionEnd} (core {CoreKilled}, tracker {TrackerEnd}, timer {Timer}).",
                             sessionEnd,
+                            context.Current.CoreKilled,
+                            context.Current.SessionEnd,
                             Timer
                         );
                         CancelSessionSource.Cancel();
@@ -438,6 +452,7 @@ public class Spectator : ISpectator
             status.Timer = Timer == default ? null : Timer.ToString();
             status.GatesOpen = data?.GatesOpen.ToString();
             status.CoreKilled = data?.CoreKilled.ToString();
+            status.SessionEnd = SessionEndTime > TimeSpan.Zero ? SessionEndTime.ToString() : null;
             status.Map = data?.LoadedReplay?.Replay?.Map;
             status.ReplayPath = data?.LoadedReplay?.FileInfo?.FullName;
             status.ReplayVersion = data?.LoadedReplay?.Replay?.ReplayVersion;

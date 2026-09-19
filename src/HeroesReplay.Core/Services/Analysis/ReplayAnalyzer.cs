@@ -56,6 +56,56 @@ public class ReplayAnalyzer : IReplayAnalyzer
             .Min();
     }
 
+    public TimeSpan GetSessionEnd(Replay replay)
+    {
+        if (replay == null)
+        {
+            throw new ArgumentNullException(nameof(replay));
+        }
+
+        if (replay.TrackerEvents == null || settings.TrackerEvents == null)
+        {
+            return GetEnd(replay);
+        }
+
+        TimeSpan? marker = null;
+
+        if (settings.TrackerEvents.UseScoreResultEvent)
+        {
+            TrackerEvent score = replay.TrackerEvents.LastOrDefault(e =>
+                e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.ScoreResultEvent
+            );
+            if (score != null)
+            {
+                marker = score.TimeSpan;
+            }
+        }
+
+        if (settings.TrackerEvents.EndOfGameStatEvents != null)
+        {
+            foreach (string name in settings.TrackerEvents.EndOfGameStatEvents)
+            {
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                TrackerEvent last = replay.TrackerEvents.LastOrDefault(e =>
+                    e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent
+                    && e.Data?.dictionary != null
+                    && e.Data.dictionary.TryGetValue(0, out TrackerEventStructure key)
+                    && key.blobText == name
+                );
+                if (last != null && (marker == null || last.TimeSpan > marker))
+                {
+                    marker = last.TimeSpan;
+                }
+            }
+        }
+
+        return marker ?? GetEnd(replay);
+    }
+
     public IReadOnlyDictionary<TimeSpan, Panel> GetPanels(Replay replay)
     {
         if (replay == null)

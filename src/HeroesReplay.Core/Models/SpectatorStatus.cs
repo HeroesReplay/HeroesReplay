@@ -11,6 +11,7 @@ public sealed class SpectatorStatus
     public string Timer { get; set; }
     public string GatesOpen { get; set; }
     public string CoreKilled { get; set; }
+    public string SessionEnd { get; set; }
     public string Map { get; set; }
     public string ReplayPath { get; set; }
     public string ReplayVersion { get; set; }

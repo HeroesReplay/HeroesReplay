@@ -11,6 +11,7 @@ public class ContextData
     public IReadOnlyDictionary<TimeSpan, Focus> Players { get; set; }
     public IReadOnlyDictionary<TimeSpan, Panel> Panels { get; set; }
     public TimeSpan CoreKilled { get; set; }
+    public TimeSpan SessionEnd { get; set; }
     public bool IsCarriedObjectiveMap { get; set; }
     public TimeSpan GatesOpen { get; set; }
     public ITalentPayloads Payloads { get; set; }

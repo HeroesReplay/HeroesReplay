@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Analysis.Calculators;
@@ -60,6 +61,44 @@ public class AnalyzerTests : IClassFixture<ReplayFixture>
                 Assert.Equal(killSecond.Value.Target, held.Target);
             }
         }
+    }
+
+    [Fact]
+    public void GetSessionEnd_UsesLatestConfiguredEndOfGameTrackerEvent()
+    {
+        var settings = CreateSettings();
+        settings.TrackerEvents = new TrackerEventSettings
+        {
+            GatesOpen = "GatesOpen",
+            EndOfGameStatEvents = new[] { "EndOfGameUpVotesCollected" },
+            UseScoreResultEvent = true,
+        };
+        var analyzer = CreateAnalyzer(settings);
+
+        TimeSpan sessionEnd = analyzer.GetSessionEnd(fixture.Replay);
+
+        TrackerEvent lastVote = fixture.Replay.TrackerEvents?.LastOrDefault(e =>
+            e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.StatGameEvent
+            && e.Data?.dictionary != null
+            && e.Data.dictionary[0].blobText == "EndOfGameUpVotesCollected"
+        );
+        TrackerEvent score = fixture.Replay.TrackerEvents?.LastOrDefault(e =>
+            e.TrackerEventType == ReplayTrackerEvents.TrackerEventType.ScoreResultEvent
+        );
+
+        TimeSpan expected = TimeSpan.Zero;
+        if (score != null)
+        {
+            expected = score.TimeSpan;
+        }
+
+        if (lastVote != null && lastVote.TimeSpan > expected)
+        {
+            expected = lastVote.TimeSpan;
+        }
+
+        Assert.True(expected > TimeSpan.Zero);
+        Assert.Equal(expected, sessionEnd);
     }
 
     private static AppSettings CreateSettings()

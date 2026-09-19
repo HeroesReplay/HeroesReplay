@@ -56,6 +56,7 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
         var players = replayAnalyzer.GetPlayers(replay);
         var panels = replayAnalyzer.GetPanels(replay);
         var end = replayAnalyzer.GetEnd(replay);
+        var sessionEnd = replayAnalyzer.GetSessionEnd(replay);
         var isCarried = replayAnalyzer.GetIsCarriedObjective(replay);
         var start = replayAnalyzer.GetStart(replay);
         var payloads = replayAnalyzer.GetPayloads(replay);
@@ -63,6 +64,7 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
         activity?.SetTag("replay.player_focus_points", players?.Count ?? 0);
         activity?.SetTag("replay.gates_open", start.ToString());
         activity?.SetTag("replay.core_killed", end.ToString());
+        activity?.SetTag("replay.session_end", sessionEnd.ToString());
         var directory = Directory
             .CreateDirectory(settings.ContextsDirectory)
             .CreateSubdirectory($"{loadedReplay.ReplayId}");
@@ -75,6 +77,7 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
             Panels = panels,
             GatesOpen = start,
             CoreKilled = end,
+            SessionEnd = sessionEnd,
             IsCarriedObjectiveMap = isCarried,
             Timeloaded = DateTime.Now,
             Directory = directory,
