@@ -1,9 +1,8 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 
-namespace HeroesReplay.Core
+namespace HeroesReplay.Core;
+
+public interface IEngine
 {
-    public interface IEngine
-    {
-        Task RunAsync();
-    }
+    Task RunAsync();
 }

@@ -1,9 +1,8 @@
-﻿using Heroes.ReplayParser;
+using Heroes.ReplayParser;
 
-namespace HeroesReplay.Core.Services.HeroesProfileExtension
+namespace HeroesReplay.Core.Services.HeroesProfileExtension;
+
+public interface IExtensionPayloadsBuilder
 {
-    public interface IExtensionPayloadsBuilder
-    {
-        TalentPayloads CreatePayloads(Replay replay);
-    }
+    TalentPayloads CreatePayloads(Replay replay);
 }

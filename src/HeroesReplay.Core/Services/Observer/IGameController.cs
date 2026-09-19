@@ -1,18 +1,14 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Observer
+namespace HeroesReplay.Core.Services.Observer;
+
+public interface IGameController
 {
-    public interface IGameController
-    {
-        Task LaunchAsync();
-        Task<TimeSpan?> TryGetTimerAsync();
-        void SendFocus(int player);
-        void SendPanel(Panel panel);
-        void Kill();
-        void SendToggleMaximumZoom();
-        void CameraFollow();
-        void SendToggleMediumZoom();
-    }
+    Task LaunchAsync();
+    Task<TimeSpan?> TryGetTimerAsync();
+    void SendFocus(int player);
+    void SendPanel(Panel panel);
+    void Kill();
 }

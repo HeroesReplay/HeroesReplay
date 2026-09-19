@@ -1,14 +1,15 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware
+namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+
+public interface IObsController
 {
-    public interface IObsController
-    {
-        void ConfigureFromContext();
-        Task CycleReportAsync();
-        void SwapToGameScene();
-        void SwapToWaitingScene();
-        void StartRecording();
-        void StopRecording();
-    }
+    void BeginSession();
+    void EndSession();
+    void ConfigureFromContext();
+    Task CycleReportAsync();
+    void SwapToGameScene();
+    void SwapToWaitingScene();
+    void StartRecording();
+    void StopRecording();
 }

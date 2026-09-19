@@ -1,10 +1,9 @@
-﻿using TwitchLib.Client.Models;
+using TwitchLib.Client.Models;
 
-namespace HeroesReplay.Core.Services.Twitch.ChatMessages
+namespace HeroesReplay.Core.Services.Twitch.ChatMessages;
+
+public interface IMessageHandler
 {
-    public interface IMessageHandler
-    {
-        bool CanHandle(ChatMessage chatMessage);
-        void Execute(ChatMessage chatMessage);
-    }
+    bool CanHandle(ChatMessage chatMessage);
+    void Execute(ChatMessage chatMessage);
 }

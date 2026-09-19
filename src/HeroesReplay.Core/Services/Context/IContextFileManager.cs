@@ -1,11 +1,9 @@
-﻿using HeroesReplay.Core.Models;
-
 using System.Threading.Tasks;
+using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Context
+namespace HeroesReplay.Core.Services.Context;
+
+public interface IContextFileManager
 {
-    public interface IContextFileManager
-    {
-        Task WriteContextFilesAsync(ContextData contextData);
-    }
+    Task WriteContextFilesAsync(ContextData contextData);
 }

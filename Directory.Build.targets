@@ -1,0 +1,13 @@
+<Project>
+    <Target
+        Name="CSharpierCheck"
+        AfterTargets="Build"
+        Condition="'$(CSharpierCheck)' == 'true' AND '$(DesignTimeBuild)' != 'true'"
+    >
+        <Exec
+            Command="dotnet csharpier check ."
+            WorkingDirectory="$(MSBuildThisFileDirectory)"
+            IgnoreExitCode="false"
+        />
+    </Target>
+</Project>

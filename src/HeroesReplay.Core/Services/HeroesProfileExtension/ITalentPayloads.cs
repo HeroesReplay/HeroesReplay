@@ -1,12 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
-namespace HeroesReplay.Core.Services.HeroesProfileExtension
+namespace HeroesReplay.Core.Services.HeroesProfileExtension;
+
+public interface ITalentPayloads
 {
-    public interface ITalentPayloads
-    {
-        List<ExtensionPayload> Create { get; }
-        List<ExtensionPayload> Update { get; }
-        Dictionary<TimeSpan, List<ExtensionPayload>> Talents { get; }
-    }
+    List<ExtensionPayload> Create { get; }
+    List<ExtensionPayload> Update { get; }
+    Dictionary<TimeSpan, List<ExtensionPayload>> Talents { get; }
 }

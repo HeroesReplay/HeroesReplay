@@ -1,55 +1,80 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Extensions;
 
-namespace HeroesReplay.Core.Services.Analysis.Calculators
+namespace HeroesReplay.Core.Services.Analysis.Calculators;
+
+public class NearCaptureBeaconCalculator : IFocusCalculator
 {
+    private readonly AppSettings settings;
 
-    public class NearCaptureBeaconCalculator : IFocusCalculator
+    public NearCaptureBeaconCalculator(AppSettings settings)
     {
-        private readonly AppSettings settings;
+        this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    }
 
-        public NearCaptureBeaconCalculator(AppSettings settings)
+    public void Contribute(ReplayTimeline timeline)
+    {
+        if (timeline == null)
         {
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            throw new ArgumentNullException(nameof(timeline));
         }
 
-        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
+        var beacons = new List<Unit>();
+        foreach (Unit unit in timeline.Replay.Units)
         {
-            if (replay == null)
-                throw new ArgumentNullException(nameof(replay));
-
-            foreach (var heroUnit in replay.Players.SelectMany(x => x.HeroUnits).Where(u => u.TimeSpanBorn < now && u.TimeSpanDied > now))
+            if (unit.TimeSpanBorn != TimeSpan.Zero || unit.TimeSpanDied != null)
             {
-                foreach (var captureUnit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero &&
-                                                                       unit.TimeSpanDied == null &&
-                                                                       settings.HeroesToolChest.CaptureContains.Any(captureName => unit.Name.Contains(captureName))))
+                continue;
+            }
+
+            if (!settings.HeroesToolChest.CaptureContains.Any(name => unit.Name.Contains(name)))
+            {
+                continue;
+            }
+
+            beacons.Add(unit);
+        }
+
+        if (beacons.Count == 0)
+        {
+            return;
+        }
+
+        for (int second = 0; second < timeline.TotalSeconds; second++)
+        {
+            TimeSpan now = TimeSpan.FromSeconds(second);
+            foreach (Unit heroUnit in timeline.AliveHeroesAt(second))
+            {
+                if (
+                    !timeline.TryGetPoint(heroUnit, second, out Point point)
+                    || heroUnit.PlayerControlledBy == null
+                )
                 {
-                    var positions = heroUnit.Positions.Where(p => p.TimeSpan == now &&
-                                                                  p.Point.DistanceTo(captureUnit.PointBorn) < settings.Spectate.MaxDistanceToOwnerChange);
+                    continue;
+                }
 
-                    /*
-                     * This needs to be broken down into seperate capture beacon calculators:
-                     * Someone going near a capture beacon can be irrelevant:
-                     * - Are there defender mercs at the beacon? Its a merc camp
-                     * - What 'type' of capture beacon? 
-                     * - Is it the volskaya capture 'slab' objective? (interest)
-                     * - Is it the dragon shire or braxis 'capture points'? (interest)
-                     * - Is it an 'empty' merc camp? (no interest)
-                     */
-
-                    foreach (var position in positions)
+                foreach (Unit beacon in beacons)
+                {
+                    if (
+                        point.DistanceTo(beacon.PointBorn)
+                        >= settings.Spectate.MaxDistanceToOwnerChange
+                    )
                     {
-                        yield return new Focus(
-                            GetType(),
-                            heroUnit,
-                            heroUnit.PlayerControlledBy,
-                            settings.Weights.CaptureBeacon,
-                            $"{heroUnit.PlayerControlledBy.Character} near {captureUnit.Name} (CaptureBeacons)");
+                        continue;
                     }
+
+                    timeline.Offer(
+                        now,
+                        GetType(),
+                        heroUnit,
+                        heroUnit.PlayerControlledBy,
+                        settings.Weights.CaptureBeacon,
+                        $"{heroUnit.PlayerControlledBy.Character} near {beacon.Name} (CaptureBeacons)"
+                    );
                 }
             }
         }

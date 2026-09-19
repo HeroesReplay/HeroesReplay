@@ -1,9 +1,8 @@
-﻿namespace HeroesReplay.Core.Configuration
+namespace HeroesReplay.Core.Configuration;
+
+public class TrackerEventSettings
 {
-    public class TrackerEventSettings
-    {
-        public string GatesOpen { get; set; }
-        public string TalentChosen { get; set; }
-        public string JungleCampCapture { get; set; }
-    }
+    public string GatesOpen { get; set; }
+    public string TalentChosen { get; set; }
+    public string JungleCampCapture { get; set; }
 }

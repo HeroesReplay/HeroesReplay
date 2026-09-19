@@ -1,54 +1,84 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 
-namespace HeroesReplay.Core.Services.Analysis.Calculators
+namespace HeroesReplay.Core.Services.Analysis.Calculators;
+
+public class DestroyingStructureCalculator : IFocusCalculator
 {
-    public class DestroyingStructureCalculator : IFocusCalculator
+    private const string TownWallUnit = "TownWall";
+    private const string TownGateUnit = "TownGate";
+    private const string TownCannonUnit = "TownCannon";
+    private const string TownMoonwellUnit = "TownMoonwell";
+    private const string TownHallFortKeepUnit = "TownTownHall";
+
+    private readonly AppSettings settings;
+    private readonly IGameData gameData;
+
+    public DestroyingStructureCalculator(AppSettings settings, IGameData gameData)
     {
-        private const string TownWallUnit = "TownWall";
-        private const string TownGateUnit = "TownGate";
-        private const string TownCannonUnit = "TownCannon";
-        private const string TownMoonwellUnit = "TownMoonwell";
-        private const string TownHallFortKeepUnit = "TownTownHall";
+        this.settings = settings;
+        this.gameData = gameData;
+    }
 
-        private readonly AppSettings settings;
-        private readonly IGameData gameData;
-
-        public DestroyingStructureCalculator(AppSettings settings, IGameData gameData)
+    public void Contribute(ReplayTimeline timeline)
+    {
+        if (timeline == null)
         {
-            this.settings = settings;
-            this.gameData = gameData;
+            throw new ArgumentNullException(nameof(timeline));
         }
-        public IEnumerable<Focus> GetFocusPlayers(TimeSpan now, Replay replay)
+
+        foreach (Unit unit in timeline.Replay.Units)
         {
-            if (replay == null) 
-                throw new ArgumentNullException(nameof(replay));
-
-            foreach (var unit in replay.Units.Where(unit => unit.TimeSpanBorn == TimeSpan.Zero && unit.TimeSpanDied == now && gameData.GetUnitGroup(unit.Name) == Unit.UnitGroup.Structures && unit.PlayerKilledBy != null))
+            if (
+                unit.TimeSpanBorn != TimeSpan.Zero
+                || !unit.TimeSpanDied.HasValue
+                || unit.PlayerKilledBy == null
+            )
             {
-                var weighting = unit.Name switch
-                {
-                    string name when name.StartsWith(TownWallUnit) => settings.Weights.TownWall,
-                    string name when name.StartsWith(TownGateUnit) => settings.Weights.TownGate,
-                    string name when name.StartsWith(TownCannonUnit) => settings.Weights.TownCannon,
-                    string name when name.StartsWith(TownMoonwellUnit) => settings.Weights.TownMoonWell,
-                    string name when name.StartsWith(TownHallFortKeepUnit) => settings.Weights.TownTownHall,
-                    string name when gameData.CoreUnits.Any(core => name.Equals(core)) => settings.Weights.Core,
-                    _ => settings.Weights.Structure
-                };
+                continue;
+            }
 
-                yield return new Focus(
-                    GetType(), 
-                    unit,
-                    unit.PlayerKilledBy,
-                    weighting, 
-                    $"{unit.PlayerKilledBy.Character} destroyed {unit.Name}");
+            if (gameData.GetUnitGroup(unit.Name) != Unit.UnitGroup.Structures)
+            {
+                continue;
+            }
+
+            float weighting = unit.Name switch
+            {
+                string name when name.StartsWith(TownWallUnit) => settings.Weights.TownWall,
+                string name when name.StartsWith(TownGateUnit) => settings.Weights.TownGate,
+                string name when name.StartsWith(TownCannonUnit) => settings.Weights.TownCannon,
+                string name when name.StartsWith(TownMoonwellUnit) => settings.Weights.TownMoonWell,
+                string name when name.StartsWith(TownHallFortKeepUnit) => settings
+                    .Weights
+                    .TownTownHall,
+                string name when IsCore(name) => settings.Weights.Core,
+                _ => settings.Weights.Structure,
+            };
+
+            timeline.Offer(
+                unit.TimeSpanDied.Value,
+                GetType(),
+                unit,
+                unit.PlayerKilledBy,
+                weighting,
+                $"{unit.PlayerKilledBy.Character} destroyed {unit.Name}"
+            );
+        }
+    }
+
+    private bool IsCore(string name)
+    {
+        foreach (string core in gameData.CoreUnits)
+        {
+            if (name.Equals(core, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
             }
         }
+
+        return false;
     }
 }

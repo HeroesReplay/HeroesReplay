@@ -1,16 +1,17 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Providers
+namespace HeroesReplay.Core.Services.Providers;
+
+public interface IReplayProvider
 {
-    public interface IReplayProvider
-    {
-        /// <summary>
-        /// Attemps to the load the next available replay.
-        /// </summary>
-        /// <returns>
-        /// LoadedReplay or Null
-        /// </returns>
-        Task<LoadedReplay> TryLoadNextReplayAsync();
-    }
+    /// <summary>
+    /// Attemps to the load the next available replay.
+    /// </summary>
+    /// <returns>
+    /// LoadedReplay or Null
+    /// </returns>
+    Task<LoadedReplay> TryLoadNextReplayAsync();
+
+    bool ContinuesWhenEmpty { get; }
 }

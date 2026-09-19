@@ -1,13 +1,13 @@
-﻿using System.CommandLine;
+using System.CommandLine;
 using HeroesReplay.CLI.Commands.YouTube.Commands;
 
-namespace HeroesReplay.CLI.Commands.YouTube
+namespace HeroesReplay.CLI.Commands.YouTube;
+
+public class YouTubeCommand : Command
 {
-    public class YouTubeCommand : Command
+    public YouTubeCommand()
+        : base("youtube", "YouTube upload helpers for OBS recordings.")
     {
-        public YouTubeCommand() : base("youtube", $"")
-        {
-            AddCommand(new UploaderCommand());
-        }
+        Subcommands.Add(new UploaderCommand());
     }
 }

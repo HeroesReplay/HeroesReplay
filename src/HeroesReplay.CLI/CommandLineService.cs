@@ -1,67 +1,55 @@
-﻿using System;
-using System.CommandLine.Builder;
-using System.CommandLine.Invocation;
-using System.CommandLine.IO;
-using System.CommandLine.Parsing;
-using System.CommandLine.Rendering;
+using System;
+using System.CommandLine;
+using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands;
 using HeroesReplay.Core.Services.Shared;
 
-namespace HeroesReplay.CLI
+namespace HeroesReplay.CLI;
+
+public class CommandLineService
 {
-    public class CommandLineService
+    private readonly IAdminChecker adminChecker;
+
+    public CommandLineService(IAdminChecker adminChecker)
     {
-        private readonly IAdminChecker adminChecker;
+        this.adminChecker = adminChecker;
+    }
 
-        public CommandLineService(IAdminChecker adminChecker)
+    public async Task<int> InvokeAsync(string[] args)
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult parseResult = root.Parse(args);
+
+        if (Environment.OSVersion.Platform != PlatformID.Win32NT)
         {
-            this.adminChecker = adminChecker;
+            Console.Error.WriteLine("Windows is the only supported OS.");
+            return 1;
         }
 
-        public Parser GetParser()
+        if (RequiresAdministrator(parseResult) && !adminChecker.IsAdministrator())
         {
-            return new CommandLineBuilder(new HeroesReplayCommand())
-                .UseMiddleware(CheckAdminMiddlewareAsync)
-                .UseMiddleware(CheckOsRequirementAsync)
-                .UseParseErrorReporting()
-                .CancelOnProcessTermination()
-                .UseVersionOption()
-                .UseHelp()
-                .UseTypoCorrections()
-                .UseSuggestDirective()
-                .UseExceptionHandler(OnException)
-                .UseAnsiTerminalWhenAvailable()
-                .Build();
+            Console.Error.WriteLine("You must be running this application as an administrator.");
+            return 1;
         }
 
-        private void OnException(Exception exception, InvocationContext context)
-        {
-            context.Console.Error.WriteLine(exception.Message);
-        }
+        return await parseResult.InvokeAsync();
+    }
 
-        private async Task CheckOsRequirementAsync(InvocationContext context, Func<InvocationContext, Task> next)
+    private static bool RequiresAdministrator(ParseResult parseResult)
+    {
+        for (
+            Command command = parseResult.CommandResult.Command;
+            command != null;
+            command = command.Parents.OfType<Command>().FirstOrDefault()
+        )
         {
-            if (Environment.OSVersion.Platform != PlatformID.Win32NT)
+            if (string.Equals(command.Name, "spectate", StringComparison.OrdinalIgnoreCase))
             {
-                context.Console.Out.WriteLine("Windows is the only supported OS.");
-            }
-            else
-            {
-                await next(context);
+                return true;
             }
         }
 
-        private async Task CheckAdminMiddlewareAsync(InvocationContext context, Func<InvocationContext, Task> next)
-        {
-            if (context.ParseResult.CommandResult.Command.Parents[0].Name.Equals("spectate") && !adminChecker.IsAdministrator())
-            {
-                context.Console.Out.WriteLine("You must be running this application as an administrator.");
-            }
-            else
-            {
-                await next(context);
-            }
-        }
+        return false;
     }
 }

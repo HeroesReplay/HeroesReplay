@@ -348,3 +348,20 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# Secrets and local credentials
+**/appsettings.secrets.json
+.env
+.env.*
+
+# User replay dumps (keep the fixture under Tests/Assets)
+testdata/replays/
+*.StormReplay
+!src/HeroesReplay.Tests/Assets/*.StormReplay
+
+# Large media not needed in git
+*.mp4
+*.pdn
+
+# Tooling
+.csharpiercache/

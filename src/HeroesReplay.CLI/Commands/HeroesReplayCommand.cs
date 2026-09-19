@@ -1,20 +1,19 @@
-﻿using System.CommandLine;
-
+using System.CommandLine;
 using HeroesReplay.CLI.Commands.Calculators;
 using HeroesReplay.CLI.Commands.Spectate;
 using HeroesReplay.CLI.Commands.Twitch;
 using HeroesReplay.CLI.Commands.YouTube;
 
-namespace HeroesReplay.CLI.Commands
+namespace HeroesReplay.CLI.Commands;
+
+public class HeroesReplayCommand : RootCommand
 {
-    public class HeroesReplayCommand : RootCommand
+    public HeroesReplayCommand()
+        : base("The HeroesReplay CLI")
     {
-        public HeroesReplayCommand() : base("The HeroesReplay CLI")
-        {
-            AddCommand(new SpectateCommand());
-            AddCommand(new CalculatorsCommand());
-            AddCommand(new TwitchCommand());
-            AddCommand(new YouTubeCommand());
-        }
+        Subcommands.Add(new SpectateCommand());
+        Subcommands.Add(new CalculatorsCommand());
+        Subcommands.Add(new TwitchCommand());
+        Subcommands.Add(new YouTubeCommand());
     }
 }

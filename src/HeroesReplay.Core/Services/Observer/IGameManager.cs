@@ -1,10 +1,9 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Observer
+namespace HeroesReplay.Core.Services.Observer;
+
+public interface IGameManager
 {
-    public interface IGameManager
-    {
-        Task LaunchAndSpectate(LoadedReplay loadedReplay);
-    }
+    Task LaunchAndSpectate(LoadedReplay loadedReplay);
 }

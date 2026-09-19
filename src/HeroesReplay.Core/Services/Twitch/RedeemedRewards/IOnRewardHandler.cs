@@ -1,9 +1,8 @@
-﻿using TwitchLib.PubSub.Events;
+using TwitchLib.PubSub.Events;
 
-namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards
+namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards;
+
+public interface IOnRewardHandler
 {
-    public interface IOnRewardHandler
-    {
-        void Handle(OnRewardRedeemedArgs args);
-    }
+    void Handle(OnRewardRedeemedArgs args);
 }

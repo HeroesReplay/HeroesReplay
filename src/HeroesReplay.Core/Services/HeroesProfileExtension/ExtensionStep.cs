@@ -1,11 +1,10 @@
-﻿namespace HeroesReplay.Core.Services.HeroesProfileExtension
+namespace HeroesReplay.Core.Services.HeroesProfileExtension;
+
+public enum ExtensionStep
 {
-    public enum ExtensionStep
-    {
-        CreateReplayData,
-        CreatePlayerData,
-        UpdatePlayerData,
-        UpdateReplayData,
-        SaveTalentData
-    }
+    CreateReplayData,
+    CreatePlayerData,
+    UpdatePlayerData,
+    UpdateReplayData,
+    SaveTalentData,
 }

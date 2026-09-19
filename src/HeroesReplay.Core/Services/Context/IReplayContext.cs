@@ -1,10 +1,9 @@
-﻿using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Context
+namespace HeroesReplay.Core.Services.Context;
+
+public interface IReplayContext
 {
-    public interface IReplayContext
-    {
-        ContextData Previous { get; }
-        ContextData Current { get; }
-    }
+    ContextData Previous { get; }
+    ContextData Current { get; }
 }

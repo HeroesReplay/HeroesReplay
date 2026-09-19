@@ -1,11 +1,9 @@
-﻿using HeroesReplay.Core.Models;
-
 using System.Threading.Tasks;
+using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Context
+namespace HeroesReplay.Core.Services.Context;
+
+public interface IReplayContextSetter
 {
-    public interface IReplayContextSetter
-    {
-        Task SetContextAsync(LoadedReplay stormReplay);
-    }
+    Task SetContextAsync(LoadedReplay stormReplay);
 }

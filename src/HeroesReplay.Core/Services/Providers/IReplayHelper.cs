@@ -1,7 +1,6 @@
-﻿namespace HeroesReplay.Core.Services.Providers
+namespace HeroesReplay.Core.Services.Providers;
+
+public interface IReplayHelper
 {
-    public interface IReplayHelper
-    {
-        bool TryGetReplayId(string path, out int replayId);
-    }
+    bool TryGetReplayId(string path, out int replayId);
 }

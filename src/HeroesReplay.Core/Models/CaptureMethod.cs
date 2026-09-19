@@ -1,15 +1,14 @@
-﻿namespace HeroesReplay.Core.Models
-{
-    public enum CaptureMethod
-    {
-        /// <summary>
-        /// This best method without needing to hook. 
-        /// </summary>
-        BitBlt = 1,
+namespace HeroesReplay.Core.Models;
 
-        /// <summary>
-        /// Stub the entire capture process.
-        /// </summary>
-        None = 3
-    }
+public enum CaptureMethod
+{
+    /// <summary>
+    /// This best method without needing to hook.
+    /// </summary>
+    BitBlt = 1,
+
+    /// <summary>
+    /// Stub the entire capture process.
+    /// </summary>
+    None = 3,
 }

@@ -1,42 +1,39 @@
-﻿using System.CommandLine;
-using System.CommandLine.Invocation;
+using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
-
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Twitch;
-
 using Microsoft.Extensions.DependencyInjection;
 
-namespace HeroesReplay.CLI.Commands.Twitch.Commands
+namespace HeroesReplay.CLI.Commands.Twitch.Commands;
+
+public class ConnectCommand : Command
 {
-
-    public class ConnectCommand : Command
+    public ConnectCommand()
+        : base("connect", "Connect to the twitch channel for HeroesReplay.")
     {
-        public ConnectCommand() : base("connect", $"Connect to the twitch channel for HeroesReplay.")
-        {
-            Handler = CommandHandler.Create<CancellationToken>(CommandAsync);
-        }
-
-        protected async Task CommandAsync(CancellationToken cancellationToken)
-        {
-            using (ServiceProvider provider = new ServiceCollection().AddSpectateServices(cancellationToken, typeof(HeroesProfileProvider)).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }))
+        SetAction(
+            async (parseResult, cancellationToken) =>
             {
-                using (IServiceScope scope = provider.CreateScope())
-                {
-                    using (var waiter = new ManualResetEventSlim())
-                    {
-                        // Initialize data
-                        var gameData = scope.ServiceProvider.GetRequiredService<IGameData>();
-                        await gameData.LoadDataAsync();
-
-                        ITwitchBot twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
-                        await twitchBot.InitializeAsync();
-                        waiter.Wait(cancellationToken);
-                    }
-                }
+                await CommandAsync(cancellationToken);
             }
-        }
+        );
+    }
+
+    protected async Task CommandAsync(CancellationToken cancellationToken)
+    {
+        using ServiceProvider provider = new ServiceCollection()
+            .AddSpectateServices(cancellationToken, typeof(HeroesProfileProvider))
+            .BuildServiceProvider(
+                new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
+            );
+        using IServiceScope scope = provider.CreateScope();
+        using var waiter = new ManualResetEventSlim();
+        IGameData gameData = scope.ServiceProvider.GetRequiredService<IGameData>();
+        await gameData.LoadDataAsync();
+        ITwitchBot twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
+        await twitchBot.InitializeAsync();
+        waiter.Wait(cancellationToken);
     }
 }

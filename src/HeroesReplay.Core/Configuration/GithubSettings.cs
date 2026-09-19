@@ -1,8 +1,7 @@
-﻿namespace HeroesReplay.Core.Configuration
+namespace HeroesReplay.Core.Configuration;
+
+public class GithubSettings
 {
-    public class GithubSettings
-    {
-        public string User { get; set; }
-        public string AccessToken { get; set; }
-    }
+    public string User { get; set; }
+    public string AccessToken { get; set; }
 }

@@ -1,16 +1,14 @@
-﻿using System.Threading.Tasks;
-
+using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
 
-namespace HeroesReplay.Core.Services.Twitch.Rewards
+namespace HeroesReplay.Core.Services.Twitch.Rewards;
+
+public interface IRequestQueue
 {
-    public interface IRequestQueue
-    {
-        Task<RewardQueueItem> DequeueItemAsync();
-        Task<RewardResponse> EnqueueItemAsync(RewardRequest request);
-        Task<int> GetItemsInQueue();
-        Task<RewardQueueItem> FindByIndexAsync(int index);
-        Task<(RewardQueueItem Item, int Position)?> RemoveItemAsync(string login);
-        Task<(RewardQueueItem Item, int Position)?> FindNextByLoginAsync(string login);
-    }
+    Task<RewardQueueItem> DequeueItemAsync();
+    Task<RewardResponse> EnqueueItemAsync(RewardRequest request);
+    Task<int> GetItemsInQueue();
+    Task<RewardQueueItem> FindByIndexAsync(int index);
+    Task<(RewardQueueItem Item, int Position)?> RemoveItemAsync(string login);
+    Task<(RewardQueueItem Item, int Position)?> FindNextByLoginAsync(string login);
 }

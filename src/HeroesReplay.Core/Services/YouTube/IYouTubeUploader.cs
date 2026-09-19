@@ -1,9 +1,8 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 
-namespace HeroesReplay.Core.Services.YouTube
+namespace HeroesReplay.Core.Services.YouTube;
+
+public interface IYouTubeUploader
 {
-    public interface IYouTubeUploader
-    {
-        Task ListenAsync();
-    }
+    Task ListenAsync();
 }

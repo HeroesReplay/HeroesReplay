@@ -9,7 +9,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/HeroesReplay.CLI.exe",
+            "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/net10.0-windows10.0.19041.0/heroesreplay.exe",
             "args": ["--launch=true"],
             "env": {
                 "HEROES_REPLAY_AWS_ACCESS_KEY": "",
@@ -24,7 +24,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/netcoreapp3.1/HeroesReplay.CLI.exe",
+            "program": "${workspaceFolder}/src/HeroesReplay.CLI/bin/Debug/net10.0-windows10.0.19041.0/heroesreplay.exe",
             "args": [
                 "directory|file|hotsapi",
                 "--launch=",
