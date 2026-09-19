@@ -28,8 +28,8 @@ public class StormVariablesEditorTests
             ["windowwidth"] = "1920",
             ["windowheight"] = "1080",
             ["windowstate"] = "1",
-            ["observerinterface"] = "AhliObs 0.75",
-            ["replayinterface"] = "AhliObs 0.75",
+            ["observerinterface"] = "AhliObs 0.75.StormInterface",
+            ["replayinterface"] = "AhliObs 0.75.StormInterface",
         };
 
         string result = StormVariablesEditor.Apply(existing, updates);
@@ -41,8 +41,8 @@ public class StormVariablesEditorTests
         Assert.Equal("1920", parsed["windowwidth"]);
         Assert.Equal("1080", parsed["windowheight"]);
         Assert.Equal("1", parsed["windowstate"]);
-        Assert.Equal("AhliObs 0.75", parsed["observerinterface"]);
-        Assert.Equal("AhliObs 0.75", parsed["replayinterface"]);
+        Assert.Equal("AhliObs 0.75.StormInterface", parsed["observerinterface"]);
+        Assert.Equal("AhliObs 0.75.StormInterface", parsed["replayinterface"]);
         Assert.Equal("Direct3D11", parsed["GraphicsApi"]);
     }
 }

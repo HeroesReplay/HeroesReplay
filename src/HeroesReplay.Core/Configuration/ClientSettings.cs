@@ -16,11 +16,11 @@ public class ClientSettings
     public string WindowWidth { get; set; } = "1920";
     public string WindowHeight { get; set; } = "1080";
     public string WindowState { get; set; } = "1";
-    public string ObserverInterface { get; set; } = "AhliObs 0.75";
-    public string ReplayInterface { get; set; } = "AhliObs 0.75";
+    public string ObserverInterface { get; set; } = "AhliObs 0.75.StormInterface";
+    public string ReplayInterface { get; set; } = "AhliObs 0.75.StormInterface";
     public string InterfaceFileName { get; set; } = "AhliObs 0.75.StormInterface";
 
-    public IReadOnlyDictionary<string, string> VariablesPreset =>
+    public IReadOnlyDictionary<string, string> DisplayPreset =>
         new Dictionary<string, string>
         {
             ["displaymode"] = DisplayMode,
@@ -29,7 +29,26 @@ public class ClientSettings
             ["windowwidth"] = WindowWidth,
             ["windowheight"] = WindowHeight,
             ["windowstate"] = WindowState,
+        };
+
+    public IReadOnlyDictionary<string, string> InterfacePreset =>
+        new Dictionary<string, string>
+        {
             ["observerinterface"] = ObserverInterface,
             ["replayinterface"] = ReplayInterface,
         };
+
+    public IReadOnlyDictionary<string, string> VariablesPreset
+    {
+        get
+        {
+            var merged = new Dictionary<string, string>(DisplayPreset);
+            foreach (KeyValuePair<string, string> pair in InterfacePreset)
+            {
+                merged[pair.Key] = pair.Value;
+            }
+
+            return merged;
+        }
+    }
 }

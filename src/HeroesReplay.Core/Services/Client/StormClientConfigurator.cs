@@ -38,11 +38,11 @@ public sealed class StormClientConfigurator
         }
 
         string variablesPath = Path.Combine(gameFolder, "Variables.txt");
-        string existing = File.Exists(variablesPath)
-            ? File.ReadAllText(variablesPath)
-            : string.Empty;
-        string updated = StormVariablesEditor.Apply(existing, client.VariablesPreset);
-        File.WriteAllText(variablesPath, updated);
+        ApplyVariables(variablesPath, client.VariablesPreset);
+        foreach (string accountVariables in EnumerateAccountVariables(gameFolder))
+        {
+            ApplyVariables(accountVariables, client.InterfacePreset);
+        }
 
         bool hotSRunning = IsHeroesRunning();
         var warnings = new List<string>();
@@ -76,20 +76,23 @@ public sealed class StormClientConfigurator
             settings.Client
             ?? throw new InvalidOperationException("Client settings are not bound.");
 
-        string variablesPath = Path.Combine(AppSettings.UserGameFolderPath, "Variables.txt");
-        Dictionary<string, string> actual = File.Exists(variablesPath)
-            ? StormVariablesEditor.Parse(File.ReadAllText(variablesPath))
-            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
+        string gameFolder = AppSettings.UserGameFolderPath;
+        string variablesPath = Path.Combine(gameFolder, "Variables.txt");
         var mismatches = new List<string>();
-        foreach (KeyValuePair<string, string> pair in client.VariablesPreset)
+        CollectMismatches(variablesPath, client.VariablesPreset, mismatches);
+
+        string[] accountFiles = EnumerateAccountVariables(gameFolder);
+        if (accountFiles.Length == 0)
         {
-            if (
-                !actual.TryGetValue(pair.Key, out string value)
-                || !string.Equals(value, pair.Value, StringComparison.Ordinal)
-            )
+            mismatches.Add(
+                "No Accounts\\*\\Variables.txt yet; log into Battle.net once so HotS creates the account file."
+            );
+        }
+        else
+        {
+            foreach (string accountVariables in accountFiles)
             {
-                mismatches.Add($"{pair.Key}={value ?? "(missing)"} (want {pair.Value})");
+                CollectMismatches(accountVariables, client.InterfacePreset, mismatches);
             }
         }
 
@@ -110,6 +113,46 @@ public sealed class StormClientConfigurator
             mismatches,
             IsHeroesRunning()
         );
+    }
+
+    private static void ApplyVariables(string path, IReadOnlyDictionary<string, string> updates)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        string existing = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+        File.WriteAllText(path, StormVariablesEditor.Apply(existing, updates));
+    }
+
+    private static void CollectMismatches(
+        string path,
+        IReadOnlyDictionary<string, string> expected,
+        List<string> mismatches
+    )
+    {
+        Dictionary<string, string> actual = File.Exists(path)
+            ? StormVariablesEditor.Parse(File.ReadAllText(path))
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (KeyValuePair<string, string> pair in expected)
+        {
+            if (
+                !actual.TryGetValue(pair.Key, out string value)
+                || !string.Equals(value, pair.Value, StringComparison.Ordinal)
+            )
+            {
+                mismatches.Add($"{path}: {pair.Key}={value ?? "(missing)"} (want {pair.Value})");
+            }
+        }
+    }
+
+    private static string[] EnumerateAccountVariables(string gameFolder)
+    {
+        string accounts = Path.Combine(gameFolder, "Accounts");
+        if (!Directory.Exists(accounts))
+        {
+            return Array.Empty<string>();
+        }
+
+        return Directory.GetFiles(accounts, "Variables.txt", SearchOption.AllDirectories);
     }
 
     public static string FindInterfaceFile(string fileName)
