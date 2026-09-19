@@ -78,6 +78,19 @@ public class Spectator : ISpectator
         };
     }
 
+    private TimeSpan SessionEndTime
+    {
+        get
+        {
+            if (Data == null || Data.CoreKilled <= TimeSpan.Zero)
+            {
+                return TimeSpan.Zero;
+            }
+
+            return Data.CoreKilled + settings.Spectate.EndScreenTime;
+        }
+    }
+
     public async Task SpectateAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.session");
@@ -207,14 +220,13 @@ public class Spectator : ISpectator
                         replayViewConfigured = true;
                     }
 
-                    if (
-                        context.Current.CoreKilled > TimeSpan.Zero
-                        && Timer >= context.Current.CoreKilled
-                    )
+                    TimeSpan sessionEnd = SessionEndTime;
+                    if (sessionEnd > TimeSpan.Zero && Timer >= sessionEnd)
                     {
                         logger.LogInformation(
-                            "Core destroyed at {CoreKilled}; ending session (timer {Timer}).",
+                            "Core destroyed at {CoreKilled}; end screen until {SessionEnd} (timer {Timer}).",
                             context.Current.CoreKilled,
+                            sessionEnd,
                             Timer
                         );
                         CancelSessionSource.Cancel();
@@ -460,7 +472,7 @@ public class Spectator : ISpectator
         }
         else if (state == State.TimerDetected && isTimerNotFound && isMax)
         {
-            bool pastEnd = Data.CoreKilled > TimeSpan.Zero && Timer >= Data.CoreKilled;
+            bool pastEnd = SessionEndTime > TimeSpan.Zero && Timer >= SessionEndTime;
             if (pastEnd || Data.CoreKilled == TimeSpan.Zero)
             {
                 logger.LogInformation(
