@@ -47,7 +47,8 @@ public class ContextFileManager : IContextFileManager
                     Path.Combine(
                         contextData.Directory.FullName,
                         contextData.LoadedReplay.FileInfo.Name
-                    )
+                    ),
+                    overwrite: true
                 );
             }
             else
