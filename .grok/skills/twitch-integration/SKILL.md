@@ -11,7 +11,7 @@ description: >
 
 - Metapackage `TwitchLib` 3.5.x (`TwitchLib.Client` ~3.3, `TwitchLib.Api` Helix).
 - Dry-run: `CaptureMethod.None` still swaps in `FakeTwitchClient` / `FakeTwitchBot`. Keep the fake implementing the current `ITwitchClient` surface.
-- Credentials: `appsettings.secrets.json` (`Twitch:AccessToken`, `ClientId`, `Account`). Never commit it.
+- Credentials: `appsettings.secrets.json` (`Twitch:AccessToken`, `ClientId`, `Account`). Fill with skill `op-service-account` / `tools/fill-secrets-from-op.ps1`. Never commit it. Predictions need `channel:manage:predictions` on that access token (`check twitch` reports it).
 
 ## Helix
 

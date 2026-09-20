@@ -29,9 +29,23 @@ dotnet test heroes-replay.slnx -p:TestCategory=Integration
 dotnet test heroes-replay.slnx -p:TestCategory=Smoke
 ```
 
-Secrets: skill `op-service-account` (`OP_SERVICE_ACCOUNT` → `op` CLI). Never commit or print resolved tokens.
+Secrets: skill `op-service-account`. On a new clone, set user env `OP_SERVICE_ACCOUNT` then `pwsh -File tools/fill-secrets-from-op.ps1`. Never commit or print resolved tokens.
 
 CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
+
+## Environments
+
+| | **dev** | **live** |
+| --- | --- | --- |
+| Hostname | `ASA-SERVER` | `DESKTOP-8SJE72` |
+| Role | Development VM (Unraid guest). Lighter GPU: Intel Arc A310. Keep QXL/VNC. | 24/7 Twitch stream box (`saltysadism`). |
+| Repo | `C:\heroesreplay\HeroesReplay` | Same git remote; pull/rebuild on this machine. |
+| Stream | Do not treat as the 24/7 channel. OBS/Twitch here is for testing. | Production ingest. Do not experiment on the live stream. |
+| Upgrades | Safe to stop spectate, rebuild, reboot the guest (not Unraid/Tower). | Schedule **downtime** before pull, rebuild, client/OBS upgrades, or reboots. |
+
+Detect with `hostname`. If `DESKTOP-8SJE72`, ask before stopping `heroesreplay` / HotS / OBS, and do not start a Twitch stream from a test build. If `ASA-SERVER`, do not SSH to Unraid (`Tower` / 192.168.1.102), do not bind the host 3090/iGPU, and do not reboot Tower.
+
+New machine bootstrap (either host): skill `op-service-account`.
 
 ## Hard rules
 
@@ -58,11 +72,12 @@ CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents
 | Skill | Use when |
 | --- | --- |
 | `.grok/skills/heroes-replay-cli` | spectate, check, calculators, secrets, `op://` |
+| `.grok/skills/op-service-account` | `OP_SERVICE_ACCOUNT`, fill secrets on a new clone |
 | `.grok/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, test categories |
 | `.grok/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
-| `.grok/skills/twitch-integration` | TwitchLib, rewards, `check twitch` |
+| `.grok/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
 
-Slash: `/heroes-replay-cli`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`.
+Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`.
 
 ## External skills worth installing
 
