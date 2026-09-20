@@ -546,31 +546,9 @@ public class GameController : IGameController
                 return;
             }
 
-            SetForegroundWindow(handle);
-            const uint keyUp = 0x0002;
-            foreach (VirtualKey key in keys)
-            {
-                NativeMethods.keybd_event((byte)key, 0, 0, UIntPtr.Zero);
-            }
-
-            for (int i = keys.Length - 1; i >= 0; i--)
-            {
-                NativeMethods.keybd_event((byte)keys[i], 0, keyUp, UIntPtr.Zero);
-            }
-
-            logger.LogInformation("Sent {Description}.", description);
+            GameWindowInput.SendKeys(handle, keys, logger);
+            logger.LogInformation("Sent {Description} to hwnd {Handle}.", description, handle);
         }
-    }
-
-    private static class NativeMethods
-    {
-        [DllImport("user32.dll")]
-        public static extern void keybd_event(
-            byte bVk,
-            byte bScan,
-            uint dwFlags,
-            UIntPtr dwExtraInfo
-        );
     }
 
     public void Kill()
@@ -660,16 +638,34 @@ public class GameController : IGameController
     private bool TryGetGameHandle(out IntPtr handle)
     {
         handle = IntPtr.Zero;
+        int minWidth = 1280;
+        int minHeight = 720;
+        if (int.TryParse(settings.Client?.Width, out int configuredWidth) && configuredWidth > 0)
+        {
+            minWidth = Math.Min(minWidth, configuredWidth);
+        }
+
+        if (int.TryParse(settings.Client?.Height, out int configuredHeight) && configuredHeight > 0)
+        {
+            minHeight = Math.Min(minHeight, configuredHeight);
+        }
 
         if (cachedProcess != null)
         {
             try
             {
-                if (!cachedProcess.HasExited && cachedProcess.MainWindowHandle != IntPtr.Zero)
+                if (!cachedProcess.HasExited)
                 {
-                    handle = cachedProcess.MainWindowHandle;
-                    cachedHandle = handle;
-                    return true;
+                    handle = GameWindowInput.FindLargestVisibleWindow(
+                        cachedProcess.Id,
+                        minWidth,
+                        minHeight
+                    );
+                    if (handle != IntPtr.Zero)
+                    {
+                        cachedHandle = handle;
+                        return true;
+                    }
                 }
             }
             catch (InvalidOperationException) { }
@@ -685,8 +681,12 @@ public class GameController : IGameController
                 if (cachedProcess == null && !candidate.HasExited)
                 {
                     cachedProcess = candidate;
-                    cachedHandle = candidate.MainWindowHandle;
-                    handle = cachedHandle;
+                    handle = GameWindowInput.FindLargestVisibleWindow(
+                        candidate.Id,
+                        minWidth,
+                        minHeight
+                    );
+                    cachedHandle = handle;
                 }
                 else
                 {
@@ -694,7 +694,7 @@ public class GameController : IGameController
                 }
             }
 
-            return cachedProcess != null;
+            return handle != IntPtr.Zero;
         }
         catch
         {
