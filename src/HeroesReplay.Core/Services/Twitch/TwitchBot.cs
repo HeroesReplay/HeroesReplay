@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Twitch.ChatMessages;
 using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,12 @@ public class TwitchBot : ITwitchBot
 
     private readonly IOnRewardHandler onRewardHandler;
     private readonly IOnMessageHandler onMessageHandler;
+    private readonly CancellationTokenProvider tokenProvider;
+    private int chatBackoffSeconds = 1;
+    private int pubSubBackoffSeconds = 1;
+    private bool chatReconnecting;
+    private bool pubSubReconnecting;
+    private readonly object reconnectLock = new object();
 
     public TwitchBot(
         ILogger<TwitchBot> logger,
@@ -39,7 +46,8 @@ public class TwitchBot : ITwitchBot
         ITwitchPubSub pubSub,
         ITwitchClient client,
         IOnRewardHandler onRewardHandler,
-        IOnMessageHandler onMessageHandler
+        IOnMessageHandler onMessageHandler,
+        CancellationTokenProvider tokenProvider
     )
     {
         this.logger = logger;
@@ -50,6 +58,7 @@ public class TwitchBot : ITwitchBot
         this.client = client;
         this.onRewardHandler = onRewardHandler;
         this.onMessageHandler = onMessageHandler;
+        this.tokenProvider = tokenProvider;
     }
 
     public async Task InitializeAsync()
@@ -62,6 +71,8 @@ public class TwitchBot : ITwitchBot
             client.OnConnected += Client_OnConnected;
             client.OnDisconnected += Client_OnDisconnected;
             client.OnConnectionError += Client_OnConnectionError;
+            client.OnJoinedChannel += Client_OnJoinedChannel;
+            client.OnReconnected += Client_OnReconnected;
             client.Connect();
         }
 
@@ -96,24 +107,122 @@ public class TwitchBot : ITwitchBot
 
     private void PubSub_OnPubSubServiceConnected(object sender, EventArgs e)
     {
-        logger.LogInformation("Connected. Sending topics to subscribe to.");
-
+        pubSubBackoffSeconds = 1;
+        logger.LogInformation("Twitch PubSub connected. Sending topics.");
         pubSub.SendTopics(settings.Twitch.AccessToken, unlisten: false);
     }
 
     private void PubSub_OnPubSubServiceClosed(object sender, EventArgs e)
     {
-        logger.LogInformation("Connected. Sending topics to subscribe to.");
+        logger.LogWarning("Twitch PubSub closed. Reconnecting.");
+        _ = ReconnectPubSubAsync();
     }
 
     private void PubSub_OnPubSubServiceError(object sender, OnPubSubServiceErrorArgs e)
     {
         logger.LogError(e.Exception, "OnPubSubServiceError");
+        _ = ReconnectPubSubAsync();
     }
 
     private void Client_OnDisconnected(object sender, OnDisconnectedEventArgs e)
     {
-        client.Connect();
+        logger.LogWarning("Twitch chat disconnected. Reconnecting.");
+        _ = ReconnectChatAsync();
+    }
+
+    private void Client_OnReconnected(object sender, OnReconnectedEventArgs e)
+    {
+        chatBackoffSeconds = 1;
+        logger.LogInformation("Twitch chat reconnected.");
+        EnsureJoined();
+    }
+
+    private async Task ReconnectChatAsync()
+    {
+        lock (reconnectLock)
+        {
+            if (chatReconnecting || !settings.Twitch.EnableChatBot)
+            {
+                return;
+            }
+
+            chatReconnecting = true;
+        }
+
+        try
+        {
+            int delay = chatBackoffSeconds;
+            chatBackoffSeconds = Math.Min(30, chatBackoffSeconds * 2);
+            await Task.Delay(TimeSpan.FromSeconds(delay), tokenProvider.Token)
+                .ConfigureAwait(false);
+            if (!client.IsConnected)
+            {
+                client.Connect();
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Twitch chat reconnect failed.");
+        }
+        finally
+        {
+            lock (reconnectLock)
+            {
+                chatReconnecting = false;
+            }
+        }
+    }
+
+    private async Task ReconnectPubSubAsync()
+    {
+        lock (reconnectLock)
+        {
+            if (pubSubReconnecting || !settings.Twitch.EnablePubSub)
+            {
+                return;
+            }
+
+            pubSubReconnecting = true;
+        }
+
+        try
+        {
+            int delay = pubSubBackoffSeconds;
+            pubSubBackoffSeconds = Math.Min(30, pubSubBackoffSeconds * 2);
+            await Task.Delay(TimeSpan.FromSeconds(delay), tokenProvider.Token)
+                .ConfigureAwait(false);
+            pubSub.Connect();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Twitch PubSub reconnect failed.");
+        }
+        finally
+        {
+            lock (reconnectLock)
+            {
+                pubSubReconnecting = false;
+            }
+        }
+    }
+
+    private void EnsureJoined()
+    {
+        if (string.IsNullOrWhiteSpace(settings.Twitch.Channel) || !client.IsConnected)
+        {
+            return;
+        }
+
+        try
+        {
+            client.JoinChannel(settings.Twitch.Channel);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not join {Channel}.", settings.Twitch.Channel);
+        }
     }
 
     private void PubSub_OnRewardRedeemed(object sender, OnRewardRedeemedArgs e)
@@ -128,7 +237,9 @@ public class TwitchBot : ITwitchBot
 
     private void Client_OnConnected(object sender, OnConnectedArgs e)
     {
-        logger.LogDebug($"Connected to {e.AutoJoinChannel}");
+        chatBackoffSeconds = 1;
+        logger.LogInformation("Twitch chat connected ({Channel}).", e.AutoJoinChannel);
+        EnsureJoined();
     }
 
     private void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e)

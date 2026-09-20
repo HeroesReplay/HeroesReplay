@@ -45,20 +45,17 @@ public class TwitchRewardsManager : ITwitchRewardsManager
         var broadcasterId = await GetChannelId();
 
         var rewards = await twitchApi.Helix.ChannelPoints.GetCustomRewardAsync(broadcasterId);
+        var existing =
+            rewards?.Data ?? Array.Empty<TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward>();
 
         var updateList = new List<UpdateCustomRewardResponse>();
         var createList = new List<CreateCustomRewardsResponse>();
-
-        foreach (var reward in rewards.Data)
-        {
-            await twitchApi.Helix.ChannelPoints.DeleteCustomRewardAsync(broadcasterId, reward.Id);
-        }
 
         foreach (SupportedReward supportedReward in rewardsHolder.Rewards)
         {
             try
             {
-                var customReward = rewards.Data.FirstOrDefault(customReward =>
+                var customReward = existing.FirstOrDefault(customReward =>
                     customReward.Title.Equals(supportedReward.Title)
                 );
 
@@ -117,9 +114,32 @@ public class TwitchRewardsManager : ITwitchRewardsManager
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"Could not create or update: {supportedReward.Title}");
+                logger.LogWarning(
+                    e,
+                    "Could not create or update '{Title}'. Helix only edits rewards created with this Client-Id.",
+                    supportedReward.Title
+                );
             }
         }
+
+        logger.LogInformation(
+            "Channel rewards: created {Created}, updated {Updated}, catalog {Catalog}.",
+            createList.Count,
+            updateList.Count,
+            rewardsHolder.Rewards.Count
+        );
+    }
+
+    public async Task<IReadOnlyList<string>> ListRemoteTitlesAsync()
+    {
+        var broadcasterId = await GetChannelId();
+        var rewards = await twitchApi.Helix.ChannelPoints.GetCustomRewardAsync(broadcasterId);
+        if (rewards?.Data == null)
+        {
+            return Array.Empty<string>();
+        }
+
+        return rewards.Data.Select(r => r.Title).ToArray();
     }
 
     public async Task GenerateAsync()

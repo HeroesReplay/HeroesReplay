@@ -267,7 +267,11 @@ public static class ServiceCollectionExtensions
                     ClientId = settings.Twitch.ClientId,
                 };
             })
-            .AddSingleton<ICustomRewardsHolder, SupportedRewardsHolder>();
+            .AddSingleton<ICustomRewardsHolder, SupportedRewardsHolder>()
+            .AddSingleton<IOnRewardHandler, OnRewardRedeemedHandler>()
+            .AddSingleton<IOnMessageHandler, OnMessageReceivedHandler>()
+            .AddSingleton<IRewardRequestFactory, RewardRequestFactory>()
+            .AddSingleton<IRequestQueue, RequestQueue>();
     }
 
     public static IServiceCollection AddSpectateServices(

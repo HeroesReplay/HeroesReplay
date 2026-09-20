@@ -9,5 +9,7 @@ public class RewardsCommand : Command
     {
         Subcommands.Add(new GenerateCommand());
         Subcommands.Add(new SubmitCommand());
+        Subcommands.Add(new ListCommand());
+        Subcommands.Add(new TestCommand());
     }
 }

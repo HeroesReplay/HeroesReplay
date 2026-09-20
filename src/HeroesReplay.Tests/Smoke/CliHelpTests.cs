@@ -68,5 +68,8 @@ public class CliHelpTests
         Command twitch = root.Subcommands.Single(c => c.Name == "twitch");
         Command predictions = twitch.Subcommands.Single(c => c.Name == "predictions");
         Assert.Contains(predictions.Subcommands, c => c.Name == "test");
+        Command rewards = twitch.Subcommands.Single(c => c.Name == "rewards");
+        Assert.Contains(rewards.Subcommands, c => c.Name == "list");
+        Assert.Contains(rewards.Subcommands, c => c.Name == "test");
     }
 }

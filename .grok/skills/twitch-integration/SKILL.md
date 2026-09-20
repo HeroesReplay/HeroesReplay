@@ -23,6 +23,12 @@ Helix Predictions (Blue/Red who-wins): `CreatePredictionAsync` when the match cl
 
 `ITwitchPubSub.ListenToRewards` / `OnRewardRedeemed` are obsolete (undocumented topic). Do not add new listeners. New redemption work should target **EventSub** (`channel.channel_points_custom_reward_redemption.add`), not PubSub.
 
+Run `twitch rewards *` from the CLI output directory (so `Assets/Maps.json` loads) or `dotnet run --project src/HeroesReplay.CLI --no-launch-profile` with cwd the repo if Maps.json is copied.
+
+Chat reconnects with backoff on disconnect and rejoins the channel. PubSub reconnects on close/error. `Client_OnDisconnected` must not call `Connect()` in a tight loop.
+
+Helix can only **update** channel-point rewards created with the same Client-Id as the current token. Older twitchtokengenerator rewards 403 on PATCH; titles still match for PubSub redemptions. `twitch rewards test --title` runs the handler locally without a viewer redeem.
+
 Chat (`TwitchClient`) and Helix remain fine.
 
 Chat (during `spectate`, chatbot enabled), matching Icy Veins observer hotkeys:
@@ -37,6 +43,8 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check twitch
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch connect
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards generate
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards submit
+dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards list
+dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards test --title "Random (SL)"
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch predictions test --outcome Blue
 ```
 
