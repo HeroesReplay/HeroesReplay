@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
@@ -96,6 +97,7 @@ public class CheckCommand : Command
                 $"Heroes Profile base URI: {settings.HeroesProfileApi?.BaseUri}",
                 $"OBS endpoint: {settings.OBS?.WebSocketEndpoint}",
                 $"OBS password: {SecretResolver.Describe(settings.OBS?.WebSocketPassword)}",
+                $"OBS report scenes enabled: {DescribeReportScenes(settings)}",
                 $"Twitch channel: {NullToMissing(settings.Twitch?.Channel)}",
                 $"Twitch access token: {SecretResolver.Describe(settings.Twitch?.AccessToken)}",
                 $"Twitch client id: {SecretResolver.Describe(settings.Twitch?.ClientId)}",
@@ -268,6 +270,15 @@ public class CheckCommand : Command
 
     private static string NullToMissing(string value) =>
         string.IsNullOrWhiteSpace(value) ? "missing" : value;
+
+    private static string DescribeReportScenes(AppSettings settings)
+    {
+        IReadOnlyList<string> names = (settings.OBS?.ReportScenes ?? [])
+            .Where(scene => scene.Enabled)
+            .Select(scene => scene.SceneName)
+            .ToList();
+        return names.Count == 0 ? "none" : string.Join(", ", names);
+    }
 
     public sealed record CheckResult(string Name, bool Ok, string Detail);
 }

@@ -11,6 +11,12 @@ public class HeroesToolChestSettings
 
     public IEnumerable<string> ObjectiveContains { get; set; }
 
+    public IEnumerable<string> BossContains { get; set; }
+
+    public IEnumerable<string> CampContains { get; set; }
+
+    public IEnumerable<string> VehicleContains { get; set; }
+
     public IEnumerable<string> CaptureContains { get; set; }
 
     public string CoreScalingLinkId { get; set; }

@@ -122,8 +122,13 @@ public class ReplayAnalyzer : IReplayAnalyzer
         }
 
         timeline.ApplyDeathContext(settings.Spectate);
+        timeline.HoldSelectionAcrossEmptySeconds();
         IReadOnlyDictionary<TimeSpan, Focus> result = timeline.ToDictionary();
-        logger.LogInformation("focus count: {Count}", result.Count);
+        logger.LogInformation(
+            "Focus timeline: {Seconds} second(s), {Swaps} camera swap(s).",
+            result.Count,
+            CountSwaps(result)
+        );
         return result;
     }
 
@@ -154,6 +159,22 @@ public class ReplayAnalyzer : IReplayAnalyzer
             [0] = ResolveBans(replay.TeamHeroBans[0]),
             [1] = ResolveBans(replay.TeamHeroBans[1]),
         };
+    }
+
+    private static int CountSwaps(IReadOnlyDictionary<TimeSpan, Focus> timeline)
+    {
+        int swaps = 0;
+        int lastIndex = int.MinValue;
+        foreach (Focus focus in timeline.Values)
+        {
+            if (focus.Index != lastIndex)
+            {
+                swaps++;
+                lastIndex = focus.Index;
+            }
+        }
+
+        return swaps;
     }
 
     private IReadOnlyCollection<string> ResolveBans(IEnumerable<string> bans)

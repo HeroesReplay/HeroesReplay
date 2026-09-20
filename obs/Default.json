@@ -353,12 +353,12 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
+                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "fps_custom": false,
                 "height": 1080,
                 "restart_when_active": false,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880929#experience-over-time",
+                "url": "https://www.heroesprofile.com/Match/Single/33880929#experience-over-time",
                 "width": 1920
             },
             "sync": 0,
@@ -568,11 +568,11 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
+                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "height": 1800,
                 "restart_when_active": false,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880929#team-1-advanced-stats",
+                "url": "https://www.heroesprofile.com/Match/Single/33880929#team-1-advanced-stats",
                 "width": 1920
             },
             "sync": 0,
@@ -639,7 +639,7 @@
                 "height": 1080,
                 "restart_when_active": false,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880929#talents",
+                "url": "https://www.heroesprofile.com/Match/Single/33880929#talents",
                 "width": 1920
             },
             "sync": 0,
@@ -728,12 +728,12 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
+                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "height": 1800,
                 "reroute_audio": false,
                 "restart_when_active": false,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880929#team-2-advanced-stats",
+                "url": "https://www.heroesprofile.com/Match/Single/33880929#team-2-advanced-stats",
                 "width": 1920
             },
             "sync": 0,
@@ -823,11 +823,11 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
+                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "height": 1300,
                 "restart_when_active": false,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880929#match-scores",
+                "url": "https://www.heroesprofile.com/Match/Single/33880929#match-scores",
                 "width": 1920
             },
             "sync": 0,
@@ -1378,11 +1378,11 @@
             "push-to-talk": false,
             "push-to-talk-delay": 0,
             "settings": {
-                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
+                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
                 "height": 600,
                 "restart_when_active": false,
                 "shutdown": true,
-                "url": "https://www.heroesprofile.com/Match/Single/?replayID=33880929#summary",
+                "url": "https://www.heroesprofile.com/Match/Single/33880929#summary",
                 "width": 1920
             },
             "sync": 0,

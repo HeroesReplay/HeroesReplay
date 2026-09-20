@@ -227,6 +227,9 @@ public class ObsController : IObsController
     {
         if (!context.Current.LoadedReplay.ReplayId.HasValue)
         {
+            logger.LogInformation(
+                "Skipping Heroes Profile report scenes because the replay has no Heroes Profile id."
+            );
             return;
         }
 
@@ -302,6 +305,7 @@ public class ObsController : IObsController
                 InputSettings sourceSettings = obs.GetInputSettings(source.InputName);
                 JObject browserSettings = sourceSettings.Settings;
                 browserSettings["url"] = url;
+                ApplyReportBrowserCss(browserSettings);
                 obs.SetInputSettings(source.InputName, browserSettings);
                 return true;
             }
@@ -312,6 +316,25 @@ public class ObsController : IObsController
         }
 
         return false;
+    }
+
+    private void ApplyReportBrowserCss(JObject browserSettings)
+    {
+        string extra = settings.OBS.ReportBrowserCss;
+        if (string.IsNullOrWhiteSpace(extra))
+        {
+            return;
+        }
+
+        string current = browserSettings["css"]?.ToString() ?? string.Empty;
+        if (current.Contains(extra, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        browserSettings["css"] = string.IsNullOrWhiteSpace(current)
+            ? extra
+            : current + "\n" + extra;
     }
 
     private bool ShowRankImage()

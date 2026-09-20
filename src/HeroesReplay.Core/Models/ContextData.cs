@@ -18,4 +18,16 @@ public class ContextData
     public TimeSpan? Timer { get; set; }
     public DirectoryInfo Directory { get; set; }
     public IReadOnlyDictionary<int, IReadOnlyCollection<string>> TeamBans { get; set; }
+
+    public bool TryGetFocus(TimeSpan timer, out Focus focus)
+    {
+        focus = null;
+        if (Players == null)
+        {
+            return false;
+        }
+
+        TimeSpan key = TimeSpan.FromSeconds(Math.Floor(timer.TotalSeconds));
+        return Players.TryGetValue(key, out focus) && focus != null;
+    }
 }

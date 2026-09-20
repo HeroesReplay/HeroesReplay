@@ -10,7 +10,7 @@ Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Mod
 2. Build a **focus timeline**: kills, proximity, camps, objectives, structures, emotes. Weights live in `appsettings.json`.
 3. Launch Heroes of the Storm (Battle.net when the replay is the latest client build), wait for the in-game timer (WinRT OCR + BitBlt).
 4. Send spectator hotkeys (`1`–`0`, Ctrl+panels) as the OCR timer advances.
-5. Optionally control **OBS Studio 28+** (obs-websocket **5**, default `ws://127.0.0.1:4455`): game scene, recording folder, rank images, post-game report scenes.
+5. Optionally control **OBS Studio 28+** (obs-websocket **5**, default `ws://127.0.0.1:4455`): game scene, recording folder, rank images, post-game Heroes Profile report scenes (`summary`, `match-scores`, `talents`, `experience`, team stats).
 
 ## Requirements
 

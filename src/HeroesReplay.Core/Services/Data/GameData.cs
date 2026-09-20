@@ -91,26 +91,23 @@ public class GameData : IGameData
         Heroes = new ReadOnlyCollection<Hero>(heroes);
     }
 
-    private async Task LoadMapsAsync()
+    private Task LoadMapsAsync()
     {
-        var json = await File.ReadAllTextAsync(Path.Combine(settings.AssetsPath, "Maps.json"))
-            .ConfigureAwait(false);
+        IEnumerable<MapDefinition> catalog = settings.Maps?.Catalog ?? Array.Empty<MapDefinition>();
 
-        using (var mapJson = JsonDocument.Parse(json))
-        {
-            Maps = new ReadOnlyCollection<Map>(
-                (
-                    from item in mapJson.RootElement.EnumerateArray()
-                    select new Map(
-                        name: item.GetProperty("name").GetString(),
-                        altName: item.GetProperty("short_name").GetString(),
-                        rankedRotation: item.GetProperty("ranked_rotation").GetInt32() == 1,
-                        type: item.GetProperty("type").GetString(),
-                        playable: item.GetProperty("playable").GetInt32() == 1
-                    )
-                ).ToList()
-            );
-        }
+        Maps = new ReadOnlyCollection<Map>(
+            catalog
+                .Select(item => new Map(
+                    item.Name,
+                    item.ShortName,
+                    item.RankedRotation,
+                    item.Type,
+                    item.Playable
+                ))
+                .ToList()
+        );
+
+        return Task.CompletedTask;
     }
 
     private async Task DownloadIfEmptyAsync()
@@ -297,6 +294,35 @@ public class GameData : IGameData
                             );
 
                         if (
+                            !ignoreUnits.Any(i => name.Contains(i))
+                            && MatchesAny(name, settings.HeroesToolChest.BossContains)
+                        )
+                        {
+                            bossUnits.Add(name);
+                            unitGroups[name] = UnitGroup.MercenaryCamp;
+                            continue;
+                        }
+
+                        if (
+                            !ignoreUnits.Any(i => name.Contains(i))
+                            && MatchesAny(name, settings.HeroesToolChest.CampContains)
+                        )
+                        {
+                            unitGroups[name] = UnitGroup.MercenaryCamp;
+                            continue;
+                        }
+
+                        if (
+                            !ignoreUnits.Any(i => name.Contains(i))
+                            && MatchesAny(name, settings.HeroesToolChest.VehicleContains)
+                        )
+                        {
+                            vehicleUnits.Add(name);
+                            unitGroups[name] = UnitGroup.MapObjective;
+                            continue;
+                        }
+
+                        if (
                             attributes.Contains(AttributeMapBoss)
                             && name.EndsWith(UnitNameDefender)
                             && !ignoreUnits.Any(i => name.Contains(i))
@@ -425,6 +451,27 @@ public class GameData : IGameData
             throw new ArgumentNullException(nameof(name));
 
         return UnitGroups.ContainsKey(name) ? UnitGroups[name] : UnitGroup.Unknown;
+    }
+
+    private static bool MatchesAny(string name, IEnumerable<string> tokens)
+    {
+        if (string.IsNullOrWhiteSpace(name) || tokens == null)
+        {
+            return false;
+        }
+
+        foreach (string token in tokens)
+        {
+            if (
+                !string.IsNullOrWhiteSpace(token)
+                && name.Contains(token, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public async Task LoadDataAsync()

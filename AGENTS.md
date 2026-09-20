@@ -38,6 +38,7 @@ CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents
 - Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. WinRT OCR and BitBlt need the Windows TFM.
 - File-scoped namespaces, usings outside the namespace, `using` declarations where they reduce nesting.
 - Calculators implement `IFocusCalculator.Contribute(ReplayTimeline)`. Do not bring back `GetFocusPlayers(TimeSpan, Replay)` × PLINQ.
+- Focus pipeline: parse replay → calculators offer weighted events → hold last winner across empty seconds → spectator looks up by OCR game timer until core kill. Do not recompute calculators in the live loop.
 - Living units: `unit.IsAliveAt(now)` (`TimeSpanDied == null` means alive).
 - OBS: websocket **5**, port **4455**, **one connection per replay** (`BeginSession` / `EndSession`). Do not connect-disconnect per request.
 - Cache the Heroes of the Storm HWND after launch; do not `GetProcessesByName` on every keystroke.
