@@ -27,6 +27,8 @@ public class SpectateSettings
 
     public TimeSpan PastDeathContextTime { get; set; }
     public TimeSpan PresentDeathContextTime { get; set; }
+    public TimeSpan KillStreakWindow { get; set; }
+    public TimeSpan KillStreakHoldTime { get; set; }
 
     public IEnumerable<int> TalentLevels { get; set; }
 }

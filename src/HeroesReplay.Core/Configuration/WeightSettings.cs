@@ -31,6 +31,8 @@ public class WeightSettings
 
     public float PlayerDeath { get; set; }
     public float PlayerKill { get; set; }
+    public float KillStreakBonus { get; set; }
+    public float PentaKill { get; set; }
 
     public float Core { get; set; }
 }

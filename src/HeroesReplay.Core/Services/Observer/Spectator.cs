@@ -300,11 +300,9 @@ public class Spectator : ISpectator
         {
             try
             {
-                TimeSpan key = TimeSpan.FromSeconds(Math.Floor(Timer.TotalSeconds));
                 if (
                     State == State.TimerDetected
-                    && Data.Players.TryGetValue(key, out Focus focus)
-                    && focus != null
+                    && Data.TryGetFocus(Timer, out Focus focus)
                     && focus.Index != index
                 )
                 {

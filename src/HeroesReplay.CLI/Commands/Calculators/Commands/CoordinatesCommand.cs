@@ -192,6 +192,8 @@ public class CoordinatesCommand : Command
             Weights = new WeightSettings
             {
                 PlayerKill = 10,
+                KillStreakBonus = 1.5f,
+                PentaKill = 16,
                 NearEnemyHero = 8,
                 NearEnemyHeroOffset = 0.09f,
                 NearEnemyHeroDistanceDivisor = 10000,
@@ -204,6 +206,8 @@ public class CoordinatesCommand : Command
                 MinDistanceToSpawn = 40,
                 PastDeathContextTime = TimeSpan.FromSeconds(6),
                 PresentDeathContextTime = TimeSpan.FromSeconds(3),
+                KillStreakWindow = TimeSpan.FromSeconds(12),
+                KillStreakHoldTime = TimeSpan.FromSeconds(5),
             },
         };
 

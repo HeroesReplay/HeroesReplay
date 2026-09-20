@@ -135,6 +135,29 @@ public sealed class ReplayTimeline
         }
     }
 
+    public void OfferRange(
+        TimeSpan start,
+        TimeSpan end,
+        Type calculator,
+        Unit unit,
+        Player target,
+        float points,
+        string description
+    )
+    {
+        int startSecond = start.FloorSeconds();
+        int endSecond = end.FloorSeconds();
+        if (endSecond < startSecond)
+        {
+            return;
+        }
+
+        for (int second = startSecond; second <= endSecond && second < TotalSeconds; second++)
+        {
+            Offer(TimeSpan.FromSeconds(second), calculator, unit, target, points, description);
+        }
+    }
+
     public void ApplyDeathContext(SpectateSettings spectate)
     {
         if (spectate == null)
@@ -201,6 +224,22 @@ public sealed class ReplayTimeline
                 {
                     slots[t] = focus;
                 }
+            }
+        }
+    }
+
+    public void HoldSelectionAcrossEmptySeconds()
+    {
+        Focus last = null;
+        for (int second = 0; second < TotalSeconds; second++)
+        {
+            if (slots[second] != null)
+            {
+                last = slots[second];
+            }
+            else if (last != null)
+            {
+                slots[second] = last;
             }
         }
     }

@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Extensions;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Analysis.Calculators;
 using HeroesReplay.Tests.Unit.Support;
@@ -96,6 +99,83 @@ public class AnalyzerTests : IClassFixture<ReplayFixture>
         }
     }
 
+    [Fact]
+    public void FocusTimeline_IsContiguousFromFirstSelectionToEnd()
+    {
+        var settings = CreateSettings();
+        var analyzer = CreateAnalyzer(settings, new KillCalculator(settings));
+
+        var results = analyzer.GetPlayers(fixture.Replay);
+        Assert.NotEmpty(results);
+
+        var times = results.Keys.OrderBy(t => t).ToList();
+        TimeSpan expected = times[0];
+        foreach (TimeSpan time in times)
+        {
+            Assert.Equal(expected, time);
+            expected = expected.Add(TimeSpan.FromSeconds(1));
+        }
+
+        int lastIndex = int.MinValue;
+        int swaps = 0;
+        foreach (TimeSpan time in times)
+        {
+            Focus focus = results[time];
+            if (focus.Index != lastIndex)
+            {
+                swaps++;
+                lastIndex = focus.Index;
+            }
+        }
+
+        Assert.True(swaps >= 1);
+        Assert.True(swaps < times.Count);
+    }
+
+    [Fact]
+    public void KillStreak_HoldsKillerAcrossSpacedKills()
+    {
+        var settings = CreateSettings();
+        var analyzer = CreateAnalyzer(settings, new KillCalculator(settings));
+        var results = analyzer.GetPlayers(fixture.Replay);
+
+        var streak = fixture
+            .Replay.Players.SelectMany(player =>
+                player.HeroUnits ?? new List<Heroes.ReplayParser.Unit>()
+            )
+            .Where(unit => unit.TimeSpanDied.HasValue && unit.PlayerKilledBy != null)
+            .GroupBy(unit => unit.PlayerKilledBy)
+            .Select(group =>
+            {
+                var seconds = group
+                    .Select(unit => unit.TimeSpanDied.Value.FloorSeconds())
+                    .OrderBy(second => second)
+                    .ToList();
+                KillStreak best = KillStreaks
+                    .Group(seconds, (int)settings.Spectate.KillStreakWindow.TotalSeconds)
+                    .OrderByDescending(item => item.Kills)
+                    .ThenByDescending(item => item.EndSecond - item.StartSecond)
+                    .First();
+                return (Killer: group.Key, Streak: best);
+            })
+            .OrderByDescending(item => item.Streak.Kills)
+            .ThenByDescending(item => item.Streak.EndSecond - item.Streak.StartSecond)
+            .First();
+
+        Assert.True(streak.Streak.Kills >= 2, "expected a multi-kill streak in the sample replay.");
+
+        int hold = (int)settings.Spectate.KillStreakHoldTime.TotalSeconds;
+        TimeSpan start = TimeSpan.FromSeconds(streak.Streak.StartSecond);
+        TimeSpan end = TimeSpan.FromSeconds(streak.Streak.EndSecond + hold);
+        for (TimeSpan time = start; time <= end; time = time.Add(TimeSpan.FromSeconds(1)))
+        {
+            Assert.True(results.TryGetValue(time, out Focus focus), $"missing focus at {time}");
+            Assert.Equal(streak.Killer, focus.Target);
+            Assert.Equal(typeof(KillCalculator), focus.Calculator);
+            Assert.True(focus.Points > settings.Weights.PlayerKill);
+        }
+    }
+
     private static AppSettings CreateSettings()
     {
         return new AppSettings
@@ -103,6 +183,8 @@ public class AnalyzerTests : IClassFixture<ReplayFixture>
             Weights = new WeightSettings
             {
                 PlayerKill = 10,
+                KillStreakBonus = 1.5f,
+                PentaKill = 16,
                 NearEnemyHero = 8,
                 NearEnemyHeroOffset = 0.09f,
                 NearEnemyHeroDistanceDivisor = 10000,
@@ -115,6 +197,8 @@ public class AnalyzerTests : IClassFixture<ReplayFixture>
                 MinDistanceToSpawn = 40,
                 PastDeathContextTime = TimeSpan.FromSeconds(6),
                 PresentDeathContextTime = TimeSpan.FromSeconds(3),
+                KillStreakWindow = TimeSpan.FromSeconds(12),
+                KillStreakHoldTime = TimeSpan.FromSeconds(5),
             },
             ParseOptions = new ParseOptionsSettings
             {
