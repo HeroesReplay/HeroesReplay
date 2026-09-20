@@ -17,7 +17,7 @@ if (-not $env:OP_SERVICE_ACCOUNT_TOKEN) {
     throw 'Set user environment variable OP_SERVICE_ACCOUNT to the 1Password service-account token (ops_...).'
 }
 
-$who = op whoami
+$who = (op whoami | Out-String)
 if ($who -notmatch 'SERVICE_ACCOUNT') {
     throw "op whoami is not SERVICE_ACCOUNT. Check OP_SERVICE_ACCOUNT. Output:$who"
 }
