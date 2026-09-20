@@ -521,16 +521,6 @@ public class GameController : IGameController
         );
     }
 
-    public void HideReplayTimeline()
-    {
-        SendChord(
-            "hide replay control panel (Ctrl+Shift+O)",
-            VirtualKey.VK_CONTROL,
-            VirtualKey.VK_SHIFT,
-            VirtualKey.VK_O
-        );
-    }
-
     public void ZoomOut()
     {
         SendChord("zoom out (Ctrl+Z)", VirtualKey.VK_CONTROL, VirtualKey.VK_Z);

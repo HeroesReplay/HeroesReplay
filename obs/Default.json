@@ -156,7 +156,7 @@
                 "fps_custom": false,
                 "shutdown": true,
                 "restart_when_active": false,
-                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }"
+                "css": "#CybotCookiebotDialog,\n#CybotCookiebotDialogBodyUnderlay,\n#CookiebotWidget,\n[id^=\"CybotCookiebot\"],\n[class*=\"Cookiebot\"],\n.fc-consent-root,\n.fc-dialog-overlay,\nfooter-popup-disclaimer,\n.disclaimer,\n.footer-wrapper,\n#main-menu,\n.main-navigation-wrapper,\nnav,\n.alt-acct-nav,\nhorizontal-banner-ad,\nrich-media-ad,\ndynamic-banner-ad,\ntakeover-ad,\n#horizontal-banner-ad-container,\n#rich-media-placement,\n#takeover-ad-container,\n[id^=\"dynamic-banner-ad-container\"],\n[id^=\"dynamic-square-ad-container\"],\n.vm-placement,\n[class^=\"vm-\"],\n[class*=\" vm-\"],\n[data-display-type],\niframe,\n.bg-teal.px-20.py-4,\n#hotsapi-alert,\n.flyout-menu {\n  display: none !important;\n}\nhtml, body {\n  background-color: #0b0e14 !important;\n  margin: 0px auto !important;\n  overflow: hidden !important;\n}\n#app { min-height: 0 !important; }\n.bg-lighten:has(h2),\n.p-10:has(h2),\n.max-w-\\[1500px\\].my-5 {\n  display: none !important;\n}"
             },
             "mixers": 255,
             "sync": 0,
@@ -303,7 +303,7 @@
                 "height": 1800,
                 "shutdown": true,
                 "restart_when_active": false,
-                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }"
+                "css": "#CybotCookiebotDialog,\n#CybotCookiebotDialogBodyUnderlay,\n#CookiebotWidget,\n[id^=\"CybotCookiebot\"],\n[class*=\"Cookiebot\"],\n.fc-consent-root,\n.fc-dialog-overlay,\nfooter-popup-disclaimer,\n.disclaimer,\n.footer-wrapper,\n#main-menu,\n.main-navigation-wrapper,\nnav,\n.alt-acct-nav,\nhorizontal-banner-ad,\nrich-media-ad,\ndynamic-banner-ad,\ntakeover-ad,\n#horizontal-banner-ad-container,\n#rich-media-placement,\n#takeover-ad-container,\n[id^=\"dynamic-banner-ad-container\"],\n[id^=\"dynamic-square-ad-container\"],\n.vm-placement,\n[class^=\"vm-\"],\n[class*=\" vm-\"],\n[data-display-type],\niframe,\n.bg-teal.px-20.py-4,\n#hotsapi-alert,\n.flyout-menu {\n  display: none !important;\n}\nhtml, body {\n  background-color: #0b0e14 !important;\n  margin: 0px auto !important;\n  overflow: hidden !important;\n}\n#app { min-height: 0 !important; }\n.bg-lighten:has(h2),\n.p-10:has(h2),\n.max-w-\\[1500px\\].my-5 ~ .max-w-\\[1500px\\].my-5 {\n  display: none !important;\n}"
             },
             "mixers": 255,
             "sync": 0,
@@ -395,11 +395,11 @@
             "settings": {
                 "url": "https://www.heroesprofile.com/Match/Single/-1#talents",
                 "width": 1920,
-                "height": 1080,
+                "height": 3600,
                 "fps_custom": false,
                 "shutdown": true,
                 "restart_when_active": false,
-                "css": "div#hotsapi-alert { display: none }\n.flyout-menu { display: none; }\nbody { margin: 0px auto; overflow: hidden; }"
+                "css": "#CybotCookiebotDialog,\n#CybotCookiebotDialogBodyUnderlay,\n#CookiebotWidget,\n[id^=\"CybotCookiebot\"],\n[class*=\"Cookiebot\"],\n.fc-consent-root,\n.fc-dialog-overlay,\nfooter-popup-disclaimer,\n.disclaimer,\n.footer-wrapper,\n#main-menu,\n.main-navigation-wrapper,\nnav,\n.alt-acct-nav,\nhorizontal-banner-ad,\nrich-media-ad,\ndynamic-banner-ad,\ntakeover-ad,\n#horizontal-banner-ad-container,\n#rich-media-placement,\n#takeover-ad-container,\n[id^=\"dynamic-banner-ad-container\"],\n[id^=\"dynamic-square-ad-container\"],\n.vm-placement,\n[class^=\"vm-\"],\n[class*=\" vm-\"],\n[data-display-type],\niframe,\n.bg-teal.px-20.py-4,\n#hotsapi-alert,\n.flyout-menu {\n  display: none !important;\n}\nhtml, body {\n  background-color: #0b0e14 !important;\n  margin: 0px auto !important;\n  overflow: hidden !important;\n}\n#app { min-height: 0 !important; }\n.bg-lighten:has(h2),\n.max-w-\\[1500px\\].my-5 {\n  display: none !important;\n}\nsingle-match > *:not(.p-10) {\n  display: none !important;\n}\n.w-full.mb-10 { margin-bottom: 12px !important; }\nh2.text-3xl { padding-top: 8px !important; padding-bottom: 8px !important; }"
             },
             "mixers": 255,
             "sync": 0,
@@ -426,15 +426,44 @@
             "filters": [
                 {
                     "prev_ver": 537001986,
+                    "name": "Scroll",
+                    "uuid": "c4e8a91b-7d2f-4e6a-b3c1-9f0a2d5e8b47",
+                    "id": "scroll_filter",
+                    "versioned_id": "scroll_filter",
+                    "settings": {
+                        "limit_cy": true,
+                        "speed_y": 55.0,
+                        "cy": 1080,
+                        "loop": true
+                    },
+                    "mixers": 0,
+                    "sync": 0,
+                    "flags": 0,
+                    "volume": 1.0,
+                    "balance": 0.5,
+                    "enabled": true,
+                    "muted": false,
+                    "push-to-mute": false,
+                    "push-to-mute-delay": 0,
+                    "push-to-talk": false,
+                    "push-to-talk-delay": 0,
+                    "hotkeys": {},
+                    "deinterlace_mode": 0,
+                    "deinterlace_field_order": 0,
+                    "monitoring_type": 0,
+                    "private_settings": {}
+                },
+                {
+                    "prev_ver": 537001986,
                     "name": "Crop/Pad",
                     "uuid": "84df3b60-e915-4a6d-926f-4f7ce6b2f10f",
                     "id": "crop_filter",
                     "versioned_id": "crop_filter",
                     "settings": {
-                        "bottom": 400,
-                        "left": 175,
-                        "right": 320,
-                        "top": 50,
+                        "bottom": 0,
+                        "left": 80,
+                        "right": 80,
+                        "top": 0,
                         "relative": true
                     },
                     "mixers": 0,
@@ -468,7 +497,7 @@
                 "height": 1800,
                 "shutdown": true,
                 "restart_when_active": false,
-                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }",
+                "css": "#CybotCookiebotDialog,\n#CybotCookiebotDialogBodyUnderlay,\n#CookiebotWidget,\n[id^=\"CybotCookiebot\"],\n[class*=\"Cookiebot\"],\n.fc-consent-root,\n.fc-dialog-overlay,\nfooter-popup-disclaimer,\n.disclaimer,\n.footer-wrapper,\n#main-menu,\n.main-navigation-wrapper,\nnav,\n.alt-acct-nav,\nhorizontal-banner-ad,\nrich-media-ad,\ndynamic-banner-ad,\ntakeover-ad,\n#horizontal-banner-ad-container,\n#rich-media-placement,\n#takeover-ad-container,\n[id^=\"dynamic-banner-ad-container\"],\n[id^=\"dynamic-square-ad-container\"],\n.vm-placement,\n[class^=\"vm-\"],\n[class*=\" vm-\"],\n[data-display-type],\niframe,\n.bg-teal.px-20.py-4,\n#hotsapi-alert,\n.flyout-menu {\n  display: none !important;\n}\nhtml, body {\n  background-color: #0b0e14 !important;\n  margin: 0px auto !important;\n  overflow: hidden !important;\n}\n#app { min-height: 0 !important; }\n.bg-lighten:has(h2),\n.p-10:has(h2),\n.max-w-\\[1500px\\].my-5:not(:last-of-type) {\n  display: none !important;\n}",
                 "reroute_audio": false
             },
             "mixers": 255,
@@ -566,7 +595,7 @@
                 "height": 1300,
                 "shutdown": true,
                 "restart_when_active": false,
-                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }"
+                "css": "#CybotCookiebotDialog,\n#CybotCookiebotDialogBodyUnderlay,\n#CookiebotWidget,\n[id^=\"CybotCookiebot\"],\n[class*=\"Cookiebot\"],\n.fc-consent-root,\n.fc-dialog-overlay,\nfooter-popup-disclaimer,\n.disclaimer,\n.footer-wrapper,\n#main-menu,\n.main-navigation-wrapper,\nnav,\n.alt-acct-nav,\nhorizontal-banner-ad,\nrich-media-ad,\ndynamic-banner-ad,\ntakeover-ad,\n#horizontal-banner-ad-container,\n#rich-media-placement,\n#takeover-ad-container,\n[id^=\"dynamic-banner-ad-container\"],\n[id^=\"dynamic-square-ad-container\"],\n.vm-placement,\n[class^=\"vm-\"],\n[class*=\" vm-\"],\n[data-display-type],\niframe,\n.bg-teal.px-20.py-4,\n#hotsapi-alert,\n.flyout-menu {\n  display: none !important;\n}\nhtml, body {\n  background-color: #0b0e14 !important;\n  margin: 0px auto !important;\n  overflow: hidden !important;\n}\n#app { min-height: 0 !important; }\n.p-10:has(h2),\n.max-w-\\[1500px\\].my-5 {\n  display: none !important;\n}"
             },
             "mixers": 255,
             "sync": 0,
@@ -664,7 +693,7 @@
                 "height": 600,
                 "shutdown": true,
                 "restart_when_active": false,
-                "css": "div#hotsapi-alert, .flyout-menu, .fc-consent-root, .fc-dialog-overlay, footer-popup-disclaimer, .disclaimer { display: none !important; }\nbody { background-color: rgba(0, 0, 0, 0); margin: 0px auto; overflow: hidden; }"
+                "css": "#CybotCookiebotDialog,\n#CybotCookiebotDialogBodyUnderlay,\n#CookiebotWidget,\n[id^=\"CybotCookiebot\"],\n[class*=\"Cookiebot\"],\n.fc-consent-root,\n.fc-dialog-overlay,\nfooter-popup-disclaimer,\n.disclaimer,\n.footer-wrapper,\n#main-menu,\n.main-navigation-wrapper,\nnav,\n.alt-acct-nav,\nhorizontal-banner-ad,\nrich-media-ad,\ndynamic-banner-ad,\ntakeover-ad,\n#horizontal-banner-ad-container,\n#rich-media-placement,\n#takeover-ad-container,\n[id^=\"dynamic-banner-ad-container\"],\n[id^=\"dynamic-square-ad-container\"],\n.vm-placement,\n[class^=\"vm-\"],\n[class*=\" vm-\"],\n[data-display-type],\niframe,\n.bg-teal.px-20.py-4,\n#hotsapi-alert,\n.flyout-menu {\n  display: none !important;\n}\nhtml, body {\n  background-color: #0b0e14 !important;\n  margin: 0px auto !important;\n  overflow: hidden !important;\n}\n#app { min-height: 0 !important; }\n.bg-lighten:has(h2),\n.p-10:has(h2),\n.max-w-\\[1500px\\].my-5 {\n  display: none !important;\n}"
             },
             "mixers": 255,
             "sync": 0,

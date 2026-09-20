@@ -260,7 +260,6 @@ public class Spectator : ISpectator
                             "heroesreplay.view.configure",
                             sessionActivity
                         );
-                        controller.HideReplayTimeline();
                         controller.ZoomOut();
                         replayViewConfigured = true;
                     }

@@ -11,7 +11,6 @@ public interface IGameController
     Task<TimeSpan?> TryGetTimerAsync();
     void SendFocus(int player);
     void SendPanel(Panel panel);
-    void HideReplayTimeline();
     void ZoomOut();
     void Kill();
 }
