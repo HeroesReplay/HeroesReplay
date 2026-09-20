@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using PInvoke;
@@ -8,110 +9,47 @@ namespace HeroesReplay.Core.Services.Observer;
 
 internal static class GameWindowInput
 {
-    private const uint InputKeyboard = 1;
-    private const uint KeyeventfKeyup = 0x0002;
-    private const uint KeyeventfScancode = 0x0008;
+    private const int WmKeydown = 0x0100;
+    private const int WmKeyup = 0x0101;
     private const uint MapvkVkToVsc = 0;
-
-    public static bool TryActivate(IntPtr handle, ILogger logger)
-    {
-        if (handle == IntPtr.Zero)
-        {
-            return false;
-        }
-
-        ShowWindow(handle, WindowShowStyle.SW_RESTORE);
-        uint thisThread = GetCurrentThreadId();
-        uint targetThread = GetWindowThreadProcessId(handle, out _);
-        IntPtr foreground = GetForegroundWindow();
-        uint foregroundThread = GetWindowThreadProcessId(foreground, out _);
-        bool attachedTarget = false;
-        bool attachedForeground = false;
-
-        try
-        {
-            if (thisThread != targetThread)
-            {
-                attachedTarget = AttachThreadInput(thisThread, targetThread, true);
-            }
-
-            if (
-                foregroundThread != 0
-                && foregroundThread != thisThread
-                && foregroundThread != targetThread
-            )
-            {
-                attachedForeground = AttachThreadInput(thisThread, foregroundThread, true);
-            }
-
-            BringWindowToTop(handle);
-            SetForegroundWindow(handle);
-            SetActiveWindow(handle);
-            NativeMethodsSetFocus(handle);
-
-            if (GetForegroundWindow() != handle)
-            {
-                SendVirtualKey(VirtualKey.VK_MENU, down: true);
-                SetForegroundWindow(handle);
-                SendVirtualKey(VirtualKey.VK_MENU, down: false);
-            }
-
-            bool ok = GetForegroundWindow() == handle;
-            if (!ok)
-            {
-                logger?.LogWarning(
-                    "Could not make Heroes of the Storm the foreground window (hwnd {Handle}).",
-                    handle
-                );
-            }
-
-            return ok;
-        }
-        finally
-        {
-            if (attachedForeground)
-            {
-                AttachThreadInput(thisThread, foregroundThread, false);
-            }
-
-            if (attachedTarget)
-            {
-                AttachThreadInput(thisThread, targetThread, false);
-            }
-        }
-    }
 
     public static void SendKeys(IntPtr handle, VirtualKey[] keys, ILogger logger)
     {
-        if (keys == null || keys.Length == 0)
+        if (handle == IntPtr.Zero || keys == null || keys.Length == 0)
         {
             return;
         }
 
-        TryActivate(handle, logger);
+        var targets = new List<IntPtr> { handle };
+        EnumChildWindows(
+            handle,
+            (child, l) =>
+            {
+                if (IsWindowVisible(child))
+                {
+                    targets.Add(child);
+                }
 
-        int count = keys.Length * 2;
-        var inputs = new INPUT[count];
-        for (int i = 0; i < keys.Length; i++)
+                return true;
+            },
+            IntPtr.Zero
+        );
+
+        foreach (VirtualKey key in keys)
         {
-            inputs[i] = Key(keys[i], up: false);
+            PostKey(targets, key, down: true);
         }
 
-        for (int i = 0; i < keys.Length; i++)
+        for (int i = keys.Length - 1; i >= 0; i--)
         {
-            inputs[keys.Length + i] = Key(keys[keys.Length - 1 - i], up: true);
+            PostKey(targets, keys[i], down: false);
         }
 
-        uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-        if (sent != inputs.Length)
-        {
-            logger?.LogWarning(
-                "SendInput sent {Sent}/{Expected} events to hwnd {Handle}.",
-                sent,
-                inputs.Length,
-                handle
-            );
-        }
+        logger?.LogDebug(
+            "Posted {Count} key(s) to {Windows} HWND(s) of the game process.",
+            keys.Length,
+            targets.Count
+        );
     }
 
     public static IntPtr FindLargestVisibleWindow(int processId, int minWidth, int minHeight)
@@ -161,128 +99,41 @@ internal static class GameWindowInput
             IntPtr.Zero
         );
 
-        if (titled != IntPtr.Zero)
-        {
-            return titled;
-        }
-
-        return best;
+        return titled != IntPtr.Zero ? titled : best;
     }
 
-    private static INPUT Key(VirtualKey key, bool up)
+    private static void PostKey(List<IntPtr> windows, VirtualKey key, bool down)
     {
         ushort vk = (ushort)key;
-        ushort scan = (ushort)MapVirtualKey(vk, MapvkVkToVsc);
-        uint flags = KeyeventfScancode;
-        if (up)
+        uint scan = MapVirtualKey(vk, MapvkVkToVsc);
+        uint lParam = 1u | (scan << 16);
+        if (!down)
         {
-            flags |= KeyeventfKeyup;
+            lParam |= (1u << 30) | (1u << 31);
         }
 
-        return new INPUT
+        int message = down ? WmKeydown : WmKeyup;
+        IntPtr wParam = (IntPtr)vk;
+        IntPtr lp = unchecked((IntPtr)(int)lParam);
+        foreach (IntPtr hwnd in windows)
         {
-            type = InputKeyboard,
-            U = new InputUnion
-            {
-                ki = new KEYBDINPUT
-                {
-                    wVk = 0,
-                    wScan = scan,
-                    dwFlags = flags,
-                    time = 0,
-                    dwExtraInfo = IntPtr.Zero,
-                },
-            },
-        };
-    }
-
-    private static void SendVirtualKey(VirtualKey key, bool down)
-    {
-        var input = new INPUT
-        {
-            type = InputKeyboard,
-            U = new InputUnion
-            {
-                ki = new KEYBDINPUT
-                {
-                    wVk = (ushort)key,
-                    wScan = 0,
-                    dwFlags = down ? 0 : KeyeventfKeyup,
-                    time = 0,
-                    dwExtraInfo = IntPtr.Zero,
-                },
-            },
-        };
-        SendInput(1, new[] { input }, Marshal.SizeOf<INPUT>());
+            PostMessage(hwnd, message, wParam, lp);
+        }
     }
 
     [DllImport("user32.dll")]
-    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    private static extern bool EnumChildWindows(
+        IntPtr hWndParent,
+        WNDENUMPROC lpEnumFunc,
+        IntPtr lParam
+    );
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
 
-    [DllImport("kernel32.dll")]
-    private static extern uint GetCurrentThreadId();
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SetActiveWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll", EntryPoint = "SetFocus")]
-    private static extern IntPtr NativeMethodsSetFocus(IntPtr hWnd);
-
     [DllImport("user32.dll")]
     private static extern uint MapVirtualKey(uint uCode, uint uMapType);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct INPUT
-    {
-        public uint type;
-        public InputUnion U;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    private struct InputUnion
-    {
-        [FieldOffset(0)]
-        public MOUSEINPUT mi;
-
-        [FieldOffset(0)]
-        public KEYBDINPUT ki;
-
-        [FieldOffset(0)]
-        public HARDWAREINPUT hi;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MOUSEINPUT
-    {
-        public int dx;
-        public int dy;
-        public uint mouseData;
-        public uint dwFlags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KEYBDINPUT
-    {
-        public ushort wVk;
-        public ushort wScan;
-        public uint dwFlags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct HARDWAREINPUT
-    {
-        public uint uMsg;
-        public ushort wParamL;
-        public ushort wParamH;
-    }
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 }
