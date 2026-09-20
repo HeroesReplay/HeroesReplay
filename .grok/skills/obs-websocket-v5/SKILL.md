@@ -31,7 +31,7 @@ Do not connect, send one request, disconnect. Polly retries belong on **requests
 | `GetSourcesList` | `GetInputList` |
 | `GetSourceSettings` / `SetSourceSettings` | `GetInputSettings` / `SetInputSettings` |
 | `SetSourceRender` | `GetSceneItemId` + `SetSceneItemEnabled` |
-| `StartRecording` / `StopRecording` | `StartRecord` / `StopRecord` + `GetRecordStatus` |
+| `StartRecording` / `StopRecording` | `StartRecord` / `StopRecord` + `GetRecordStatus`. Default **off**. Records when `RecordingEnabled` or (`RecordRequestedReplays` and the replay has a Twitch requestor). |
 | `SetRecordingFolder` | `SetRecordDirectory` |
 
 Scene and source names stay in `appsettings` (`GameSceneName`, `WaitingSceneName`, `InfoSourceName`, `RankImagesSourceNames`, `ReportScenes`).

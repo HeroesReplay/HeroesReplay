@@ -58,7 +58,7 @@ public class ObsController : IObsController
             SetRankImage();
             SetCurrentReplayTextSource();
 
-            if (settings.OBS.RecordingEnabled)
+            if (ShouldRecord())
             {
                 obs.SetRecordDirectory(context.Current.Directory.FullName);
             }
@@ -104,13 +104,19 @@ public class ObsController : IObsController
             {
                 try
                 {
-                    if (settings.OBS.RecordingEnabled)
+                    if (ShouldRecord())
                     {
                         EnsureConnected();
                         RecordingStatus status = obs.GetRecordStatus();
 
                         if (!status.IsRecording)
                         {
+                            logger.LogInformation(
+                                "Starting OBS recording for {Reason}.",
+                                SessionMedia.HasRequestor(context.Current?.LoadedReplay)
+                                    ? "viewer request"
+                                    : "RecordingEnabled"
+                            );
                             obs.StartRecord();
                         }
                     }
@@ -134,15 +140,11 @@ public class ObsController : IObsController
             {
                 try
                 {
-                    if (settings.OBS.RecordingEnabled)
+                    EnsureConnected();
+                    RecordingStatus status = obs.GetRecordStatus();
+                    if (status.IsRecording)
                     {
-                        EnsureConnected();
-                        RecordingStatus status = obs.GetRecordStatus();
-
-                        if (status.IsRecording)
-                        {
-                            obs.StopRecord();
-                        }
+                        obs.StopRecord();
                     }
                 }
                 catch (Exception e)
@@ -448,4 +450,7 @@ public class ObsController : IObsController
             logger.LogWarning("Could not control OBS");
         }
     }
+
+    private bool ShouldRecord() =>
+        SessionMedia.ShouldRecord(settings.OBS, context.Current?.LoadedReplay);
 }

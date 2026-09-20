@@ -7,6 +7,7 @@ public class OBSSettings
 {
     public bool Enabled { get; set; }
     public bool RecordingEnabled { get; set; }
+    public bool RecordRequestedReplays { get; set; }
     public string InfoFileName { get; set; }
     public string WebSocketEndpoint { get; set; }
     public string WebSocketPassword { get; set; }

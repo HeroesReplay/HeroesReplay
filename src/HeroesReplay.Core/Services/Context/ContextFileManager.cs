@@ -9,6 +9,7 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Context;
@@ -114,56 +115,64 @@ public class ContextFileManager : IContextFileManager
 
     private async Task WriteYoutubeEntryAsync(ContextData contextData)
     {
-        if (settings.YouTube.Enabled)
+        LoadedReplay loaded = contextData.LoadedReplay;
+        if (!SessionMedia.ShouldWriteYouTubeEntry(settings.YouTube, loaded))
         {
-            try
+            return;
+        }
+
+        try
+        {
+            var heroesProfileReplay = loaded.HeroesProfileReplay;
+            string requestor = loaded.RewardQueueItem?.Request?.Login;
+            string map = heroesProfileReplay?.Map ?? loaded.Replay?.Map;
+            string gameType = heroesProfileReplay?.GameType;
+            string rank = heroesProfileReplay?.Rank;
+            string id = heroesProfileReplay?.Id.ToString();
+
+            var descriptionLines = new[]
             {
-                var heroesProfileReplay = contextData.LoadedReplay.HeroesProfileReplay;
-
-                var descriptionLines = new[]
-                {
-                    $"Twitch: http://twitch.tv/saltysadism",
-                    $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={heroesProfileReplay.Id}",
-                    $"Game type: {heroesProfileReplay.GameType}",
-                    !string.IsNullOrWhiteSpace(heroesProfileReplay.Rank)
-                        ? $"Rank: {heroesProfileReplay.Rank}"
-                        : string.Empty,
-                    $"Hashtags: #HeroesOfTheStorm #SaltySadism",
-                }.ToArray();
-
-                var entry = new YouTubeEntry()
-                {
-                    Title = string.Join(
-                        " - ",
-                        new[]
-                        {
-                            $"{heroesProfileReplay.Id}",
-                            heroesProfileReplay.Map,
-                            heroesProfileReplay.GameType ?? string.Empty,
-                            heroesProfileReplay.Rank,
-                        }
-                    ),
-                    PrivacyStatus = "public",
-                    CategoryId = settings.YouTube.CategoryId,
-                    DescriptionLines = descriptionLines,
-                    Tags = new[] { heroesProfileReplay.GameType, heroesProfileReplay.Map },
-                };
-
-                string file = Path.Combine(
-                    contextData.Directory.FullName,
-                    settings.YouTube.EntryFileName
-                );
-                string json = JsonSerializer.Serialize(
-                    entry,
-                    new JsonSerializerOptions { WriteIndented = true }
-                );
-
-                await File.WriteAllTextAsync(file, json);
+                "Twitch: http://twitch.tv/saltysadism",
+                heroesProfileReplay != null
+                    ? $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={heroesProfileReplay.Id}"
+                    : string.Empty,
+                gameType != null ? $"Game type: {gameType}" : string.Empty,
+                !string.IsNullOrWhiteSpace(rank) ? $"Rank: {rank}" : string.Empty,
+                !string.IsNullOrWhiteSpace(requestor) ? $"Requested by: {requestor}" : string.Empty,
+                "Hashtags: #HeroesOfTheStorm #SaltySadism",
             }
-            catch (Exception e)
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .ToArray();
+
+            var entry = new YouTubeEntry()
             {
-                logger.LogError(e, "Could not write youtube info file.");
-            }
+                Title = string.Join(
+                    " - ",
+                    new[] { id, map, gameType, rank }.Where(part =>
+                        !string.IsNullOrWhiteSpace(part)
+                    )
+                ),
+                PrivacyStatus = settings.YouTube.PrivacyStatus ?? "private",
+                CategoryId = settings.YouTube.CategoryId,
+                DescriptionLines = descriptionLines,
+                Tags = new[] { gameType, map }.Where(t => !string.IsNullOrWhiteSpace(t)).ToArray(),
+            };
+
+            string file = Path.Combine(
+                contextData.Directory.FullName,
+                settings.YouTube.EntryFileName
+            );
+            string json = JsonSerializer.Serialize(
+                entry,
+                new JsonSerializerOptions { WriteIndented = true }
+            );
+
+            await File.WriteAllTextAsync(file, json);
+            logger.LogInformation("Wrote YouTube entry {File}.", file);
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Could not write youtube info file.");
         }
     }
 }

@@ -36,7 +36,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `twitch connect` | Chat bot; blocks |
 | `twitch rewards generate\|submit\|list\|test` | Helix custom rewards; `test` runs the local redeem handler |
 | `twitch predictions test [--outcome Blue\|Red\|cancel]` | Create then resolve/cancel a 30s Blue/Red prediction |
-| `youtube uploader` | Upload OBS recordings |
+| `youtube uploader` | Watch `Data\\Contexts` for `.mp4` + `youtube-entry.json`. Needs Google `client_secrets.json`. Spectate only writes the entry / records for **requested** replays unless `YouTube:Enabled` / `OBS:RecordingEnabled`. |
 | `mcp` | Stdio MCP server. Logs on stderr. Snapshot: `%LOCALAPPDATA%/HeroesReplay/status.json` |
 
 New commands go on `HeroesReplayCommand` and need a **Smoke** test in `src/HeroesReplay.Tests/Smoke`.
