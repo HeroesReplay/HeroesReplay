@@ -39,13 +39,32 @@ CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents
 | --- | --- | --- |
 | Hostname | `ASA-SERVER` | `DESKTOP-8SJE72` |
 | Role | Development VM (Unraid guest). Lighter GPU: Intel Arc A310. Keep QXL/VNC. | 24/7 Twitch stream box (`saltysadism`). |
-| Repo | `C:\heroesreplay\HeroesReplay` | Same git remote; pull/rebuild on this machine. |
+| Repo | `C:\heroesreplay\HeroesReplay` | Same path. Do not clone elsewhere (OBS `Default.json` hard-codes it). |
 | Stream | Do not treat as the 24/7 channel. OBS/Twitch here is for testing. | Production ingest. Do not experiment on the live stream. |
 | Upgrades | Safe to stop spectate, rebuild, reboot the guest (not Unraid/Tower). | Schedule **downtime** before pull, rebuild, client/OBS upgrades, or reboots. |
 
+Both are Windows 11. Use the **same directory tree** so spectate, downloads, and OBS assets match.
+
+| Path | Purpose |
+| --- | --- |
+| `C:\heroesreplay\HeroesReplay` | Git clone |
+| `C:\heroesreplay\Battle.net\Battle.net.exe` | Battle.net (`winget --location C:\heroesreplay\Battle.net`) |
+| `C:\Program Files (x86)\Heroes of the Storm` | HotS install |
+| `C:\heroesreplay\Replays` | `spectate file` queue (`Location:ReplaySource`) |
+| `C:\heroesreplay\Data\Standard` | Heroes Profile downloaded `.StormReplay` files |
+| `C:\heroesreplay\Data\Requests` | Twitch-requested downloads |
+| `C:\heroesreplay\Data\Contexts` | Per-replay context + OBS recordings (`RecFilePath`) |
+| `C:\heroesreplay\Data\HeroesData` | heroes-data JSON cache |
+| `C:\heroesreplay\secrets` | Local backup of gitignored `appsettings.secrets.json` |
+| `%USERPROFILE%\Documents\Heroes of the Storm\Interfaces` | AhliObs (`client configure`) |
+| `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` |
+| `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile from `obs/Default/basic.ini` |
+
+`Location:DataDirectory` is `C:\heroesreplay\Data`. Contexts are `Data\Contexts` (not a sibling of Data). Do not copy OBS `service.json` (stream key).
+
 Detect with `hostname`. If `DESKTOP-8SJE72`, ask before stopping `heroesreplay` / HotS / OBS, and do not start a Twitch stream from a test build. If `ASA-SERVER`, do not SSH to Unraid (`Tower` / 192.168.1.102), do not bind the host 3090/iGPU, and do not reboot Tower.
 
-New machine bootstrap (either host): skill `op-service-account`.
+New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/bootstrap-workstation.ps1` (skill `op-service-account`).
 
 ## Hard rules
 

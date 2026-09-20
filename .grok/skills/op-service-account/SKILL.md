@@ -30,7 +30,7 @@ This account is **SERVICE_ACCOUNT**. It cannot see vault `Private`. Do not use d
 ## New machine (clone / pull)
 
 1. Install Git, .NET 10 SDK, and 1Password CLI (`winget install --exact Git.Git Microsoft.DotNet.SDK.10 AgileBits.1Password.CLI`). Open a new shell so `op` is on PATH.
-2. Clone `https://github.com/HeroesReplay/HeroesReplay.git` (or `git pull --ff-only origin master` in an existing clone).
+2. Clone into **`C:\heroesreplay\HeroesReplay`** (required: OBS `obs/Default.json` uses that path). `git clone https://github.com/HeroesReplay/HeroesReplay.git C:\heroesreplay\HeroesReplay`
 3. Set the service-account token **once** at User scope (paste the `ops_` value; do not commit it):
 
 ```powershell
@@ -40,7 +40,7 @@ This account is **SERVICE_ACCOUNT**. It cannot see vault `Private`. Do not use d
 4. New PowerShell, then from the repo root:
 
 ```powershell
-pwsh -File tools/fill-secrets-from-op.ps1
+pwsh -File tools/bootstrap-workstation.ps1
 op whoami
 dotnet tool restore
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check config
@@ -48,7 +48,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check heroespro
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check twitch
 ```
 
-`fill-secrets-from-op.ps1` writes gitignored `src/HeroesReplay.CLI/appsettings.secrets.json` and copies it into any CLI `bin` outputs. Report only `op whoami` user type and secret **lengths**.
+`bootstrap-workstation.ps1` creates `C:\heroesreplay\Replays`, `Data\Standard`, `Data\Contexts`, copies the OBS HeroesReplay collection/profile, then runs `fill-secrets-from-op.ps1`. Install Battle.net with `winget install Blizzard.BattleNet --location C:\heroesreplay\Battle.net`. Quit HotS and run `heroesreplay client configure` for AhliObs + windowed 1080p. Report only `op whoami` user type and secret **lengths**. Layout: `AGENTS.md` Environments.
 
 ## Vault
 

@@ -42,7 +42,7 @@ New commands go on `HeroesReplayCommand` and need a **Smoke** test in `src/Heroe
 
 ## Secrets
 
-Skill `op-service-account`. Live file `src/HeroesReplay.CLI/appsettings.secrets.json` (gitignored). Template `appsettings.secrets.example.json`. `BindSettings` runs `SecretResolver.Apply` (maps `OP_SERVICE_ACCOUNT` for `op read`). Env prefix `HEROES_REPLAY_`. Do not log resolved tokens.
+Skill `op-service-account`. Clone to `C:\heroesreplay\HeroesReplay`. `pwsh -File tools/bootstrap-workstation.ps1` creates Data/Replays dirs, copies OBS collection, fills secrets. Live file `src/HeroesReplay.CLI/appsettings.secrets.json` (gitignored). `BindSettings` runs `SecretResolver.Apply`. Env prefix `HEROES_REPLAY_`. Do not log resolved tokens. Layout: `AGENTS.md` Environments.
 
 ## Config load
 

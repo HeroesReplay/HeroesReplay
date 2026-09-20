@@ -36,6 +36,8 @@ Do not connect, send one request, disconnect. Polly retries belong on **requests
 
 Scene and source names stay in `appsettings` (`GameSceneName`, `WaitingSceneName`, `InfoSourceName`, `RankImagesSourceNames`, `ReportScenes`).
 
+Both machines use the same OBS files from the repo (`obs/Default.json` → `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json`, `obs/Default/basic.ini` → `...\profiles\HeroesReplay\`). Asset paths are `C:/heroesreplay/HeroesReplay/obs/...`. Recordings: `C:\heroesreplay\Data\Contexts`. `tools/bootstrap-workstation.ps1` copies the collection. Do not commit `service.json`.
+
 ## Verify
 
 ```powershell

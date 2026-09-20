@@ -17,4 +17,4 @@ Do **not** commit `service.json` (Twitch stream key).
 
 ## Paths
 
-Asset paths in `Default.json` are `C:/heroesreplay/HeroesReplay/obs/...`. Rewrite if the repo lives elsewhere.
+Asset paths in `Default.json` are `C:/heroesreplay/HeroesReplay/obs/...`. Both Windows 11 boxes clone the repo to that path (`AGENTS.md` Environments). `pwsh -File tools/bootstrap-workstation.ps1` copies this collection and profile.
