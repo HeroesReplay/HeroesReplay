@@ -81,7 +81,7 @@ public sealed class SpectatorMcpTools
     [
         McpServerTool(Name = "check_heroesprofile"),
         Description(
-            "Call Heroes Profile Replay/Max using the configured API key (supports op:// via 1Password CLI)."
+            "Call Heroes Profile GET /replays (Kiota v1 Bearer) using the configured API key (supports op:// via 1Password CLI)."
         )
     ]
     public Task<string> CheckHeroesProfile(CancellationToken cancellationToken) =>

@@ -29,7 +29,7 @@ dotnet test heroes-replay.slnx -p:TestCategory=Integration
 dotnet test heroes-replay.slnx -p:TestCategory=Smoke
 ```
 
-Heroes Profile integration uses `HEROES_REPLAY_HeroesProfileApi__ApiKey` or `op read op://Private/Heroes Profile API/password`. Never commit the resolved token.
+Heroes Profile integration uses `HEROES_REPLAY_HeroesProfileApi__ApiKey` or `op read "op://Private/HeroesProfileAPI/V1 API KEY/password"`. Never commit the resolved token.
 
 CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
 

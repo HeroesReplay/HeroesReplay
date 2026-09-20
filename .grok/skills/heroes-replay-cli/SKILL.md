@@ -26,7 +26,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `calculators report [--file path]` | Spectator report for a file/directory |
 | `check` | Config + Heroes Profile + OBS + Twitch; continues on failure; exit 1 if any fail |
 | `check config` | Bind settings; print which secrets are present (never print values) |
-| `check heroesprofile` | `Replay/Max` with the resolved API key |
+| `check heroesprofile` | Kiota `GET /replays` max_replay_id with Bearer key |
 | `check obs` | obs-websocket 5 Identify + `GetVersion` |
 | `check twitch` | Helix `GetUsers` for configured channel |
 | `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
@@ -45,7 +45,7 @@ New commands go on `HeroesReplayCommand` and need a **Smoke** test in `src/Heroe
 - Live file: `src/HeroesReplay.CLI/appsettings.secrets.json` (gitignored).
 - Template: `appsettings.secrets.example.json`.
 - Env prefix: `HEROES_REPLAY_` (e.g. `HEROES_REPLAY_HeroesProfileApi__ApiKey`).
-- Values starting with `op://` are resolved by `SecretResolver` via `op read`. Heroes Profile default URI: `op://Private/Heroes Profile API/password`.
+- Values starting with `op://` are resolved by `SecretResolver` via `op read`. Heroes Profile v1 URI: `op://Private/HeroesProfileAPI/V1 API KEY/password`.
 - `BindSettings` runs `SecretResolver.Apply` after JSON bind. Do not log resolved tokens.
 
 ## Config load
@@ -58,7 +58,7 @@ New commands go on `HeroesReplayCommand` and need a **Smoke** test in `src/Heroe
 | --- | --- |
 | default / `Category=Unit` | Analysis only |
 | `Category=Smoke` | Parse `--help`; asserts `check` subcommands exist |
-| `Category=Integration` | Live Heroes Profile `Replay/Max` (needs `op` or env key) |
+| `Category=Integration` | Live Heroes Profile v1 list/download (needs `op` or env key) |
 
 After changing a check target, run that CLI command, not only unit tests.
 

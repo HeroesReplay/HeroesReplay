@@ -23,7 +23,7 @@ public class HeroesProfileApiTests
         string apiKey = ResolveApiKey();
         Assert.False(
             string.IsNullOrWhiteSpace(apiKey),
-            "Set HEROES_REPLAY_HeroesProfileApi__ApiKey or sign in with 1Password CLI (`op read \"op://Private/Heroes Profile API/password\"`)."
+            "Set HEROES_REPLAY_HeroesProfileApi__ApiKey or sign in with 1Password CLI (`op read \"op://Private/HeroesProfileAPI/V1 API KEY/password\"`)."
         );
 
         using var provider = CreateProvider(apiKey);
@@ -42,7 +42,7 @@ public class HeroesProfileApiTests
         string apiKey = ResolveApiKey();
         Assert.False(
             string.IsNullOrWhiteSpace(apiKey),
-            "Set HEROES_REPLAY_HeroesProfileApi__ApiKey or sign in with 1Password CLI (`op read \"op://Private/Heroes Profile API/password\"`)."
+            "Set HEROES_REPLAY_HeroesProfileApi__ApiKey or sign in with 1Password CLI (`op read \"op://Private/HeroesProfileAPI/V1 API KEY/password\"`)."
         );
 
         using var provider = CreateProvider(apiKey);
@@ -52,7 +52,6 @@ public class HeroesProfileApiTests
         int maxId = await api.GetMaxReplayIdAsync();
         Assert.True(maxId > 0, $"Expected a positive replay id, got {maxId}.");
         Assert.NotEqual(settings.HeroesProfileApi.FallbackMaxReplayId, maxId);
-        Assert.False(settings.HeroesProfileApi.UseExternalV1);
 
         HeroesProfileReplay found = null;
         int minId = Math.Max(

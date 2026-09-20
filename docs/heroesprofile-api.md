@@ -16,7 +16,7 @@ dotnet tool restore
 .\tools\generate-heroesprofile-client.ps1
 ```
 
-Paths included: `/replays`, `/replays/**`, `/download/replay`, `/replay/{replayID}`. Do not csharpier `Generated/`. `HeroesProfileService` uses `HeroesProfileClient` only when `HeroesProfileApi:UseExternalV1` is true.
+Paths included: `/replays`, `/replays/**`, `/download/replay`, `/replay/{replayID}`. Do not csharpier `Generated/`. List and download always go through `HeroesProfileClient` with `Authorization: Bearer`.
 
 ## Endpoints we use
 
@@ -28,4 +28,4 @@ Paths included: `/replays`, `/replays/**`, `/download/replay`, `/replay/{replayI
 
 `region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable` instead of a GCS/S3 `url`. Skip when `downloadable` is false or `deleted` is non-zero.
 
-This project still uses the legacy host by default (`HeroesProfileApi:UseExternalV1` = false) because current keys return **401** on v1. Set `UseExternalV1` to true and `ExternalV1BaseUri` when you have a Bearer key from [heroesprofile.com/Api](https://www.heroesprofile.com/Api).
+Auth is `Authorization: Bearer` ([Migrating](https://www.heroesprofile.com/Api/Migrating)). The v1 key is `op://Private/HeroesProfileAPI/V1 API KEY/password`. The old `api.heroesprofile.com` `api_token` key is not accepted.

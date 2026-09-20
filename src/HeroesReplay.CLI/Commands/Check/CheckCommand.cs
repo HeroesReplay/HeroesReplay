@@ -31,7 +31,7 @@ public class CheckCommand : Command
         Subcommands.Add(
             Build(
                 "heroesprofile",
-                "Call Heroes Profile Replay/Max with the configured API key.",
+                "Call Heroes Profile GET /replays with the v1 Bearer key.",
                 CheckHeroesProfileAsync
             )
         );
@@ -105,8 +105,7 @@ public class CheckCommand : Command
             var lines = new List<string>
             {
                 $"Heroes Profile API key: {SecretResolver.Describe(settings.HeroesProfileApi?.ApiKey)}",
-                $"Heroes Profile base URI: {settings.HeroesProfileApi?.BaseUri}",
-                $"Heroes Profile v1 (Kiota): {settings.HeroesProfileApi?.UseExternalV1}",
+                $"Heroes Profile v1 URI: {settings.HeroesProfileApi?.ExternalV1BaseUri}",
                 $"OBS endpoint: {settings.OBS?.WebSocketEndpoint}",
                 $"OBS password: {SecretResolver.Describe(settings.OBS?.WebSocketPassword)}",
                 $"Twitch channel: {NullToMissing(settings.Twitch?.Channel)}",
@@ -142,7 +141,7 @@ public class CheckCommand : Command
                 return new CheckResult(
                     "heroesprofile",
                     false,
-                    "API key is missing. Put `op://Private/Heroes Profile API/password` in appsettings.secrets.json or set HEROES_REPLAY_HeroesProfileApi__ApiKey."
+                    "API key is missing. Put `op://Private/HeroesProfileAPI/V1 API KEY/password` in appsettings.secrets.json or set HEROES_REPLAY_HeroesProfileApi__ApiKey."
                 );
             }
 
@@ -153,15 +152,12 @@ public class CheckCommand : Command
             int maxId = await api.GetMaxReplayIdAsync();
             activity?.SetTag("heroesprofile.max_id", maxId);
             bool ok = maxId > 0 && maxId != settings.HeroesProfileApi.FallbackMaxReplayId;
-            string source = settings.HeroesProfileApi.UseExternalV1
-                ? "GET /replays max_replay_id"
-                : "Replay/Max";
             return new CheckResult(
                 "heroesprofile",
                 ok,
                 ok
-                    ? $"{source} returned {maxId}."
-                    : $"{source} returned {maxId} (fallback {settings.HeroesProfileApi.FallbackMaxReplayId}). Check the API key."
+                    ? $"GET /replays max_replay_id returned {maxId}."
+                    : $"GET /replays max_replay_id returned {maxId} (fallback {settings.HeroesProfileApi.FallbackMaxReplayId}). Check the v1 Bearer key."
             );
         }
         catch (Exception e)

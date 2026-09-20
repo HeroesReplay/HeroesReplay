@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
@@ -51,7 +50,6 @@ public class HeroesProfileService : IHeroesProfileService
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         this.kiotaClient = kiotaClient ?? throw new ArgumentNullException(nameof(kiotaClient));
-        this.httpClient.BaseAddress = ReplayApiBase;
 
         replayCachePolicy = Policy.CacheAsync(
             cacheProvider: this.cacheProvider.AsyncFor<HeroesProfileReplay>(),
@@ -122,51 +120,15 @@ public class HeroesProfileService : IHeroesProfileService
         return await replayCachePolicy.ExecuteAsync(
             async (context, token) =>
             {
-                if (UseKiota)
-                {
-                    ReplaysGetResponse page = await GetReplaysPageAsync(
-                        replayId - 1,
-                        gameType: null,
-                        gameMap: null,
-                        token
-                    );
-                    return HeroesProfileReplayMapper
-                        .ToReplays(page)
-                        .FirstOrDefault(r => r.Id == replayId);
-                }
-
-                HttpResponseMessage response = await Policy
-                    .Handle<Exception>()
-                    .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                    .WaitAndRetryAsync(
-                        retryCount: 10,
-                        sleepDurationProvider: GetSleepDuration,
-                        onRetry: OnRetry
-                    )
-                    .ExecuteAsync(
-                        action: (PollyContext context, CancellationToken token) =>
-                            httpClient.GetAsync(
-                                new Uri(
-                                    BuildListPath(replayId - 1, gameType: null),
-                                    UriKind.Relative
-                                ),
-                                token
-                            ),
-                        context: new PollyContext(),
-                        cancellationToken: tokenProvider.Token
-                    )
-                    .ConfigureAwait(false);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    IEnumerable<HeroesProfileReplay> replays = await ReadReplayListAsync(
-                        response,
-                        token
-                    );
-                    return replays.FirstOrDefault(r => r.Id == replayId);
-                }
-
-                return null;
+                ReplaysGetResponse page = await GetReplaysPageAsync(
+                    replayId - 1,
+                    gameType: null,
+                    gameMap: null,
+                    token
+                );
+                return HeroesProfileReplayMapper
+                    .ToReplays(page)
+                    .FirstOrDefault(r => r.Id == replayId);
             },
             new PollyContext(operationKey: $"{replayId}"),
             tokenProvider.Token
@@ -180,50 +142,15 @@ public class HeroesProfileService : IHeroesProfileService
             return await maxReplayIdCachePolicy.ExecuteAsync(
                 async (context, token) =>
                 {
-                    if (UseKiota)
+                    ReplaysGetResponse page = await GetReplaysPageAsync(
+                        after: null,
+                        settings.HeroesProfileApi.GameTypes?.FirstOrDefault(),
+                        gameMap: null,
+                        token
+                    );
+                    if (page != null && page.MaxReplayId.GetValueOrDefault() > 0)
                     {
-                        ReplaysGetResponse page = await GetReplaysPageAsync(
-                            after: null,
-                            settings.HeroesProfileApi.GameTypes?.FirstOrDefault(),
-                            gameMap: null,
-                            token
-                        );
-                        if (page != null && page.MaxReplayId.GetValueOrDefault() > 0)
-                        {
-                            return page.MaxReplayId.Value;
-                        }
-
-                        return settings.HeroesProfileApi.FallbackMaxReplayId;
-                    }
-
-                    HttpResponseMessage response = await Policy
-                        .Handle<Exception>()
-                        .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                        .WaitAndRetryAsync(
-                            retryCount: 10,
-                            sleepDurationProvider: GetSleepDuration,
-                            onRetry: OnRetry
-                        )
-                        .ExecuteAsync(
-                            action: (PollyContext context, CancellationToken token) =>
-                                httpClient.GetAsync(
-                                    new Uri(BuildMaxPath(), UriKind.Relative),
-                                    token
-                                ),
-                            context: context,
-                            cancellationToken: token
-                        );
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        string content = await response.Content.ReadAsStringAsync(token);
-                        if (
-                            !string.IsNullOrWhiteSpace(content)
-                            && int.TryParse(content.Trim(), out int maxId)
-                        )
-                        {
-                            return maxId;
-                        }
+                        return page.MaxReplayId.Value;
                     }
 
                     return settings.HeroesProfileApi.FallbackMaxReplayId;
@@ -287,46 +214,13 @@ public class HeroesProfileService : IHeroesProfileService
                                     gameType?.GetQueryValue()
                                     ?? settings.HeroesProfileApi.GameTypes?.FirstOrDefault();
                                 int after = (int)context["minId"];
-                                if (UseKiota)
-                                {
-                                    ReplaysGetResponse page = await GetReplaysPageAsync(
-                                        after,
-                                        typeQuery,
-                                        gameMap,
-                                        token
-                                    );
-                                    return FilterListed(HeroesProfileReplayMapper.ToReplays(page));
-                                }
-
-                                HttpResponseMessage response = await Policy
-                                    .Handle<Exception>()
-                                    .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                                    .WaitAndRetryAsync(
-                                        retryCount: 10,
-                                        sleepDurationProvider: GetSleepDuration,
-                                        OnRetry
-                                    )
-                                    .ExecuteAsync(
-                                        (context, token) =>
-                                            httpClient.GetAsync(
-                                                new Uri(
-                                                    BuildListPath(after, typeQuery, gameMap),
-                                                    UriKind.Relative
-                                                ),
-                                                token
-                                            ),
-                                        context,
-                                        token
-                                    );
-
-                                if (response.IsSuccessStatusCode)
-                                {
-                                    return FilterListed(await ReadReplayListAsync(response, token));
-                                }
-                                else
-                                {
-                                    return Enumerable.Empty<HeroesProfileReplay>();
-                                }
+                                ReplaysGetResponse page = await GetReplaysPageAsync(
+                                    after,
+                                    typeQuery,
+                                    gameMap,
+                                    token
+                                );
+                                return FilterListed(HeroesProfileReplayMapper.ToReplays(page));
                             },
                             context,
                             token
@@ -351,46 +245,13 @@ public class HeroesProfileService : IHeroesProfileService
     {
         try
         {
-            if (UseKiota)
-            {
-                ReplaysGetResponse page = await GetReplaysPageAsync(
-                    minId,
-                    settings.HeroesProfileApi.GameTypes?.FirstOrDefault(),
-                    gameMap: null,
-                    tokenProvider.Token
-                );
-                return FilterListed(HeroesProfileReplayMapper.ToReplays(page));
-            }
-
-            HttpResponseMessage response = await Policy
-                .Handle<Exception>()
-                .OrResult<HttpResponseMessage>(msg => !msg.IsSuccessStatusCode)
-                .WaitAndRetryAsync(
-                    retryCount: 10,
-                    sleepDurationProvider: GetSleepDuration,
-                    onRetry: OnRetry
-                )
-                .ExecuteAsync(
-                    (context, token) =>
-                        httpClient.GetAsync(
-                            new Uri(
-                                BuildListPath(
-                                    minId,
-                                    settings.HeroesProfileApi.GameTypes?.FirstOrDefault()
-                                ),
-                                UriKind.Relative
-                            ),
-                            token
-                        ),
-                    new PollyContext(),
-                    tokenProvider.Token
-                )
-                .ConfigureAwait(false);
-
-            if (response.IsSuccessStatusCode)
-            {
-                return FilterListed(await ReadReplayListAsync(response, tokenProvider.Token));
-            }
+            ReplaysGetResponse page = await GetReplaysPageAsync(
+                minId,
+                settings.HeroesProfileApi.GameTypes?.FirstOrDefault(),
+                gameMap: null,
+                tokenProvider.Token
+            );
+            return FilterListed(HeroesProfileReplayMapper.ToReplays(page));
         }
         catch (Exception e)
         {
@@ -411,43 +272,21 @@ public class HeroesProfileService : IHeroesProfileService
             throw new ArgumentNullException(nameof(destination));
         }
 
-        if (UseKiota)
+        using Stream network = await kiotaClient
+            .Download.Replay.GetAsync(
+                config => config.QueryParameters.ReplayID = replayId,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        if (network == null)
         {
-            using Stream network = await kiotaClient
-                .Download.Replay.GetAsync(
-                    config => config.QueryParameters.ReplayID = replayId,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-            if (network == null)
-            {
-                throw new InvalidOperationException(
-                    $"Heroes Profile v1 download returned no content for replay {replayId}."
-                );
-            }
-
-            await network.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
-            return;
+            throw new InvalidOperationException(
+                $"Heroes Profile v1 download returned no content for replay {replayId}."
+            );
         }
 
-        using HttpClient downloadClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-        Uri downloadUri = new Uri(
-            settings.HeroesProfileApi.BaseUri,
-            $"Replay/Download?replayID={replayId}&api_token={settings.HeroesProfileApi.ApiKey}"
-        );
-        using HttpResponseMessage response = await downloadClient
-            .GetAsync(downloadUri, cancellationToken)
-            .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        await using Stream networkStream = await response.Content.ReadAsStreamAsync(
-            cancellationToken
-        );
-        await networkStream.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+        await network.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
     }
-
-    private bool UseKiota => settings.HeroesProfileApi.UseExternalV1;
-
-    private Uri ReplayApiBase => settings.HeroesProfileApi.BaseUri;
 
     private async Task<ReplaysGetResponse> GetReplaysPageAsync(
         int? after,
@@ -497,36 +336,6 @@ public class HeroesProfileService : IHeroesProfileService
         return true;
     }
 
-    private string BuildMaxPath() => $"Replay/Max?api_token={settings.HeroesProfileApi.ApiKey}";
-
-    private string BuildListPath(int? after, string gameType, string gameMap = null)
-    {
-        int minId = after.GetValueOrDefault();
-        string path = $"Replay/Min_id?min_id={minId}&api_token={settings.HeroesProfileApi.ApiKey}";
-        if (!string.IsNullOrWhiteSpace(gameType))
-        {
-            path += "&game_type=" + Uri.EscapeDataString(gameType);
-        }
-
-        if (!string.IsNullOrWhiteSpace(gameMap))
-        {
-            path += "&game_map=" + Uri.EscapeDataString(gameMap);
-        }
-
-        return path;
-    }
-
-    private static async Task<IEnumerable<HeroesProfileReplay>> ReadReplayListAsync(
-        HttpResponseMessage response,
-        CancellationToken token
-    )
-    {
-        IEnumerable<HeroesProfileReplay> list = await response.Content.ReadFromJsonAsync<
-            IEnumerable<HeroesProfileReplay>
-        >(cancellationToken: token);
-        return list ?? Enumerable.Empty<HeroesProfileReplay>();
-    }
-
     private IEnumerable<HeroesProfileReplay> FilterListed(IEnumerable<HeroesProfileReplay> replays)
     {
         if (replays == null)
@@ -543,47 +352,6 @@ public class HeroesProfileService : IHeroesProfileService
                 || (x.Downloadable != false && settings.HeroesProfileApi.MatchesReplayUrl(x.Url))
             )
             .Where(x => versions == null || !versions.Any() || versions.Contains(x.GameVersion));
-    }
-
-    private TimeSpan GetSleepDuration(int retry, PollyContext context)
-    {
-        if (context.ContainsKey("retry-after"))
-        {
-            var retryAfter = (TimeSpan)context["retry-after"];
-            logger.LogInformation(
-                $"getting sleep duration for retry attempt {retry}: {retryAfter}"
-            );
-            return retryAfter;
-        }
-
-        return TimeSpan.FromSeconds(1);
-    }
-
-    private void OnRetry(
-        DelegateResult<HttpResponseMessage> wrappedResponse,
-        TimeSpan timeSpan,
-        int retryAttempt,
-        PollyContext context
-    )
-    {
-        if (wrappedResponse.Exception != null)
-        {
-            logger.LogError(wrappedResponse.Exception, "Error with Heroes Profile Service");
-        }
-
-        if (wrappedResponse.Result != null)
-        {
-            logger.LogDebug(
-                $"retry attempt {retryAttempt}: {wrappedResponse.Result.StatusCode}: {wrappedResponse.Result.ReasonPhrase}"
-            );
-        }
-
-        if (wrappedResponse?.Result?.Headers?.RetryAfter != null)
-        {
-            TimeSpan retryAfter = wrappedResponse.Result.Headers.RetryAfter.Delta.Value;
-            logger.LogWarning($"Setting retry-after to {retryAfter}");
-            context["retry-after"] = retryAfter;
-        }
     }
 
     private void OnFilterRetry(

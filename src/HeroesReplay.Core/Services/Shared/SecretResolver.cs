@@ -6,7 +6,8 @@ namespace HeroesReplay.Core.Services.Shared;
 
 public static class SecretResolver
 {
-    public const string HeroesProfileApiKeyOpUri = "op://Private/Heroes Profile API/password";
+    public const string HeroesProfileApiKeyOpUri =
+        "op://Private/HeroesProfileAPI/V1 API KEY/password";
 
     public static void Apply(AppSettings settings)
     {
@@ -119,7 +120,7 @@ public static class SecretResolver
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(15000))
+        if (!process.WaitForExit(60000))
         {
             try
             {
