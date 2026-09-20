@@ -48,4 +48,40 @@ public class SessionMediaTests
         Assert.False(SessionMedia.ShouldWriteYouTubeEntry(youtube, auto));
         Assert.True(SessionMedia.ShouldWriteYouTubeEntry(youtube, requested));
     }
+
+    [Fact]
+    public void ReplayId_WithoutRecordAndUpload_DoesNotRecordOrWriteEntry()
+    {
+        var obs = new OBSSettings { RecordingEnabled = false, RecordRequestedReplays = true };
+        var youtube = new YouTubeSettings { Enabled = false, UploadRequestedReplays = true };
+        var replay = ReplayIdLoaded(recordAndUpload: false);
+
+        Assert.False(SessionMedia.ShouldRecord(obs, replay));
+        Assert.False(SessionMedia.ShouldWriteYouTubeEntry(youtube, replay));
+    }
+
+    [Fact]
+    public void ReplayId_WithRecordAndUpload_RecordsAndWritesEntry()
+    {
+        var obs = new OBSSettings { RecordingEnabled = false, RecordRequestedReplays = true };
+        var youtube = new YouTubeSettings { Enabled = false, UploadRequestedReplays = true };
+        var replay = ReplayIdLoaded(recordAndUpload: true);
+
+        Assert.True(SessionMedia.ShouldRecord(obs, replay));
+        Assert.True(SessionMedia.ShouldWriteYouTubeEntry(youtube, replay));
+    }
+
+    private static LoadedReplay ReplayIdLoaded(bool recordAndUpload) =>
+        new()
+        {
+            RewardQueueItem = new RewardQueueItem
+            {
+                Request = new RewardRequest
+                {
+                    Login = "viewer",
+                    ReplayId = 65268119,
+                    RecordAndUpload = recordAndUpload,
+                },
+            },
+        };
 }

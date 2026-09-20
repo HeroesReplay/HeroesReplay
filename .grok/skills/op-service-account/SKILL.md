@@ -61,6 +61,10 @@ Name: `Heroes Replay` (id `fk7tudovwzuaa64lvomn6rxwtq`). Quote `op://` URIs that
 | Twitch client id | `op://Heroes Replay/Twitch SaltySadism/twitchtokengenerator/Client Id` |
 | Twitch refresh token | `op://Heroes Replay/Twitch SaltySadism/twitchtokengenerator/Refresh Token` |
 | Stream key | `op://Heroes Replay/Twitch SaltySadism/stream key` |
+| YouTube API key | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/API Key` (item YouTube Uploader) |
+| YouTube OAuth client id | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Client ID` |
+| YouTube OAuth client secret | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Client Secret` |
+| YouTube GCP project id | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Project ID` |
 
 Items with `(` in the title: use the item UUID, not the name.
 
@@ -74,4 +78,4 @@ Twitch Helix Predictions need `channel:manage:predictions` on the access token. 
 
 ## App secrets file
 
-Live values go in gitignored `src/HeroesReplay.CLI/appsettings.secrets.json` (literals, same as Twitch/AWS). Template: `appsettings.secrets.example.json`. Copy into CLI `bin/...` when running the exe. Env override prefix `HEROES_REPLAY_`. Do not grep or echo that file for secret values; report `source=literal|op` and length only.
+Live values go in gitignored `src/HeroesReplay.CLI/appsettings.secrets.json` (Twitch Helix, Heroes Profile v1 Bearer, YouTube API key). `fill-secrets-from-op.ps1` also writes `C:\heroesreplay\Data\client_secrets.json` (Google OAuth desktop client for `youtube uploader`). Template: `appsettings.secrets.example.json`. Copy into CLI `bin/...` when running the exe. Env override prefix `HEROES_REPLAY_`. Do not grep or echo that file for secret values; report `source=literal|op` and length only. The Google account password on the YouTube Uploader item is not used; upload uses OAuth.

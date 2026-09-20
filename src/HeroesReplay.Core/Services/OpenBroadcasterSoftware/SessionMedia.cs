@@ -8,6 +8,26 @@ public static class SessionMedia
     public static bool HasRequestor(LoadedReplay replay) =>
         replay?.RewardQueueItem?.Request != null;
 
+    /// <summary>
+    /// ReplayId (500) spectates only. ReplayId + YouTube (1000) records and writes
+    /// youtube-entry.json. Other Twitch requests still record when requested.
+    /// </summary>
+    public static bool WantsRecording(LoadedReplay replay)
+    {
+        RewardRequest request = replay?.RewardQueueItem?.Request;
+        if (request == null)
+        {
+            return false;
+        }
+
+        if (request.ReplayId.HasValue)
+        {
+            return request.RecordAndUpload;
+        }
+
+        return true;
+    }
+
     public static bool ShouldRecord(OBSSettings obs, LoadedReplay replay)
     {
         if (obs == null)
@@ -20,7 +40,7 @@ public static class SessionMedia
             return true;
         }
 
-        return obs.RecordRequestedReplays && HasRequestor(replay);
+        return obs.RecordRequestedReplays && WantsRecording(replay);
     }
 
     public static bool ShouldWriteYouTubeEntry(YouTubeSettings youtube, LoadedReplay replay)
@@ -35,6 +55,6 @@ public static class SessionMedia
             return true;
         }
 
-        return youtube.UploadRequestedReplays && HasRequestor(replay);
+        return youtube.UploadRequestedReplays && WantsRecording(replay);
     }
 }

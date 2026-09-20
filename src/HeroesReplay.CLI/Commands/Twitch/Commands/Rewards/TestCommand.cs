@@ -23,16 +23,30 @@ public class TestCommand : Command
             Description = "Reward title, e.g. Random (SL).",
             DefaultValueFactory = _ => "Random (SL)",
         };
+        Option<string> message = new("--message")
+        {
+            Description = "Viewer input, e.g. a Heroes Profile ReplayId.",
+            DefaultValueFactory = _ => string.Empty,
+        };
         Options.Add(title);
+        Options.Add(message);
         SetAction(
             async (parseResult, cancellationToken) =>
             {
-                await CommandAsync(parseResult.GetValue(title), cancellationToken);
+                await CommandAsync(
+                    parseResult.GetValue(title),
+                    parseResult.GetValue(message),
+                    cancellationToken
+                );
             }
         );
     }
 
-    private static async Task CommandAsync(string title, CancellationToken cancellationToken)
+    private static async Task CommandAsync(
+        string title,
+        string message,
+        CancellationToken cancellationToken
+    )
     {
         using ServiceProvider provider = new ServiceCollection()
             .AddTwitchServices(cancellationToken)
@@ -49,7 +63,7 @@ public class TestCommand : Command
                 RewardTitle = title,
                 DisplayName = "test",
                 Login = "test",
-                Message = string.Empty,
+                Message = message ?? string.Empty,
                 RedemptionId = Guid.NewGuid(),
                 ChannelId = "487238352",
             }

@@ -10,8 +10,6 @@ public class HeroesProfileApiSettings
     public Uri ExternalV1BaseUri { get; set; }
     public Uri TwitchBaseUri { get; set; }
     public string ApiKey { get; set; }
-    public string AwsAccessKey { get; set; }
-    public string AwsSecretKey { get; set; }
     public IEnumerable<string> GameTypes { get; set; }
     public string S3Bucket { get; set; }
     public string S3Region { get; set; }

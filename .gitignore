@@ -351,6 +351,7 @@ MigrationBackup/
 
 # Secrets and local credentials
 **/appsettings.secrets.json
+**/client_secrets.json
 .env
 .env.*
 

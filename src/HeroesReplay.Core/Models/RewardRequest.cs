@@ -11,6 +11,7 @@ public class RewardRequest
     public GameRank? Rank { get; set; }
     public string Map { get; set; }
     public GameType? GameType { get; set; }
+    public bool RecordAndUpload { get; set; }
 
     public RewardRequest() { }
 

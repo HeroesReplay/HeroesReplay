@@ -327,6 +327,10 @@ public class ObsController : IObsController
         string sourceName = RankImage.SourceName(row.Rank, row.LeagueTier);
         if (string.IsNullOrWhiteSpace(sourceName))
         {
+            sourceName = RankImage.SourceName(RankImage.FromAverageMmr(row.AverageMmr));
+        }
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
             logger.LogInformation("No rank badge for replay {ReplayId}.", row.Id);
             return false;
         }

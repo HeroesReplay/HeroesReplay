@@ -106,6 +106,14 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
         rewards.Add(
             new SupportedReward(RewardType.ReplayId, nameof(RewardType.ReplayId), cost: 500)
         );
+        rewards.Add(
+            new SupportedReward(
+                RewardType.ReplayId,
+                "ReplayId + YouTube",
+                cost: 1000,
+                recordAndUpload: true
+            )
+        );
 
         return rewards;
     }

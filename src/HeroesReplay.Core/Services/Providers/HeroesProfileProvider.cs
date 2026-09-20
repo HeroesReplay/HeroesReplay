@@ -151,6 +151,10 @@ public class HeroesProfileProvider : IReplayProvider
         {
             if (item != null)
             {
+                await heroesProfileService
+                    .EnrichRankAsync(item.HeroesProfileReplay, provider.Token)
+                    .ConfigureAwait(false);
+
                 FileInfo fileInfo = GetFileInfo(RequestsDirectory, item.HeroesProfileReplay);
 
                 if (!fileInfo.Exists)

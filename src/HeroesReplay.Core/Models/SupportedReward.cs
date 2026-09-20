@@ -11,20 +11,26 @@ public class SupportedReward
     public bool IsUserInputRequired { get; set; }
     public string Prompt { get; set; }
     public int Cost { get; set; }
+    public bool RecordAndUpload { get; set; }
 
     public SupportedReward(
         RewardType rewardType,
         string title,
         string map = null,
         GameType? mode = null,
-        int cost = 0
+        int cost = 0,
+        bool recordAndUpload = false
     )
     {
+        RecordAndUpload = recordAndUpload;
         Prompt =
             rewardType == RewardType.ReplayId
-                ? "Enter a heroes profile ReplayId for the current version of the game"
-            : rewardType.HasFlag(RewardType.Rank) ? "Enter a rank without a division"
-            : null;
+                ? recordAndUpload
+                    ? "Enter a Heroes Profile ReplayId. This match will be recorded and uploaded to YouTube."
+                    : "Enter a heroes profile ReplayId for the current version of the game"
+                : rewardType.HasFlag(RewardType.Rank)
+                    ? "Enter a rank without a division"
+                    : null;
 
         IsUserInputRequired =
             rewardType.HasFlag(RewardType.Rank) || rewardType == RewardType.ReplayId;

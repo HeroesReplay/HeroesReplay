@@ -19,12 +19,6 @@ public static class SecretResolver
         if (settings.HeroesProfileApi != null)
         {
             settings.HeroesProfileApi.ApiKey = Resolve(settings.HeroesProfileApi.ApiKey);
-            settings.HeroesProfileApi.AwsAccessKey = Resolve(
-                settings.HeroesProfileApi.AwsAccessKey
-            );
-            settings.HeroesProfileApi.AwsSecretKey = Resolve(
-                settings.HeroesProfileApi.AwsSecretKey
-            );
         }
 
         if (settings.Twitch != null)

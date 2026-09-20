@@ -22,7 +22,10 @@ public class RewardRequestFactory : IRewardRequestFactory
                 rank: null,
                 reward.Map,
                 reward.Mode
-            );
+            )
+            {
+                RecordAndUpload = reward.RecordAndUpload,
+            };
         }
         else
         {

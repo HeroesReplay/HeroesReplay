@@ -118,7 +118,7 @@ public class RequestQueue : IRequestQueue, IDisposable
             );
         }
 
-        if (replay.Deleted != null)
+        if (replay.Deleted is > 0)
         {
             await AddToFailedRequestsAsync(new(request, replay));
             return new RewardResponse(
