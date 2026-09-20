@@ -143,7 +143,9 @@ public class HeroesProfileService : IHeroesProfileService
                 async (context, token) =>
                 {
                     ReplaysGetResponse page = await GetReplaysPageAsync(
-                        after: null,
+                        settings.HeroesProfileApi.MinReplayId > 0
+                            ? settings.HeroesProfileApi.MinReplayId
+                            : null,
                         settings.HeroesProfileApi.GameTypes?.FirstOrDefault(),
                         gameMap: null,
                         token
