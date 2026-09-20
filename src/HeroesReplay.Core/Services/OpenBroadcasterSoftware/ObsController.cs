@@ -181,17 +181,17 @@ public class ObsController : IObsController
 
     public void SetRankImage()
     {
-        if (settings.HeroesProfileApi.EnableMMR)
+        try
         {
-            try
+            HideRankImages();
+            if (settings.HeroesProfileApi.EnableMMR)
             {
-                HideRankImages();
                 ShowRankImage();
             }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Could not update the Tier for OBS.");
-            }
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Could not update the rank image for OBS.");
         }
     }
 
@@ -316,31 +316,36 @@ public class ObsController : IObsController
 
     private bool ShowRankImage()
     {
-        if (context.Current.LoadedReplay.HeroesProfileReplay != null)
+        HeroesProfileReplay row = context.Current?.LoadedReplay?.HeroesProfileReplay;
+        if (row == null)
         {
-            if (!string.IsNullOrWhiteSpace(context.Current.LoadedReplay.HeroesProfileReplay.Rank))
-            {
-                string rank = context.Current.LoadedReplay.HeroesProfileReplay.Rank.ToLower();
-                string sourceName = $"{rank}-image";
-
-                try
-                {
-                    SetSceneItemVisible(settings.OBS.GameSceneName, sourceName, visible: true);
-                    return true;
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, $"could not set {rank} to visible=true");
-                }
-            }
+            return false;
         }
 
-        return false;
+        string sourceName = RankImage.SourceName(row.Rank, row.LeagueTier);
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
+            logger.LogInformation("No rank badge for replay {ReplayId}.", row.Id);
+            return false;
+        }
+
+        try
+        {
+            SetSceneItemVisible(settings.OBS.GameSceneName, sourceName, visible: true);
+            logger.LogInformation("OBS rank image {Source} visible.", sourceName);
+            return true;
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Could not show rank image {Source}.", sourceName);
+            return false;
+        }
     }
 
     private void HideRankImages()
     {
-        foreach (var rankImageSourceName in settings.OBS.RankImagesSourceNames)
+        IEnumerable<string> names = settings.OBS.RankImagesSourceNames ?? RankImage.SourceNames;
+        foreach (string rankImageSourceName in names)
         {
             try
             {
@@ -352,7 +357,7 @@ public class ObsController : IObsController
             }
             catch (Exception e)
             {
-                logger.LogError(e, $"could not set {rankImageSourceName} to visible=false");
+                logger.LogDebug(e, "Could not hide {Source}.", rankImageSourceName);
             }
         }
     }

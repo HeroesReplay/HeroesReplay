@@ -10,6 +10,7 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.HeroesProfile.Client;
 using HeroesReplay.HeroesProfile.Client.Replays;
@@ -288,6 +289,38 @@ public class HeroesProfileService : IHeroesProfileService
         }
 
         await network.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task EnrichRankAsync(
+        HeroesProfileReplay replay,
+        CancellationToken cancellationToken
+    )
+    {
+        if (replay == null || !string.IsNullOrWhiteSpace(replay.Rank))
+        {
+            return;
+        }
+
+        try
+        {
+            var detail = await kiotaClient
+                .Replay[replay.Id]
+                .GetAsync(cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            double? mmr = RankImage.AveragePlayerMmr(detail?.Players);
+            replay.AverageMmr = mmr ?? replay.AverageMmr;
+            replay.Rank = RankImage.FromAverageMmr(mmr);
+            logger.LogInformation(
+                "Replay {ReplayId} rank {Rank} (avg player_mmr {Mmr}).",
+                replay.Id,
+                replay.Rank ?? "(none)",
+                mmr
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not fill rank for replay {ReplayId}.", replay.Id);
+        }
     }
 
     private async Task<ReplaysGetResponse> GetReplaysPageAsync(

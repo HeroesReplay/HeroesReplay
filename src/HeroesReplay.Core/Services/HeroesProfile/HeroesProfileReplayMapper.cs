@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.HeroesProfile.Client.Replay.Item;
 using HeroesReplay.HeroesProfile.Client.Replays;
 
@@ -37,6 +38,9 @@ public static class HeroesProfileReplayMapper
             Map = row.GameMap,
             GameDate = row.GameDate,
             Downloadable = row.Downloadable,
+            Rank = ReadAdditionalString(row.AdditionalData, "rank"),
+            LeagueTier = ReadAdditionalInt(row.AdditionalData, "league_tier"),
+            AverageMmr = ReadAdditionalDouble(row.AdditionalData, "avg_mmr"),
         };
     }
 
@@ -55,6 +59,66 @@ public static class HeroesProfileReplayMapper
             Map = detail.GameMap?.Name ?? detail.GameMap?.SanitizedMapName,
             GameDate = detail.GameDate,
             Downloadable = detail.Downloadable,
+            Rank = RankImage.FromAverageMmr(RankImage.AveragePlayerMmr(detail.Players)),
         };
+    }
+
+    private static string ReadAdditionalString(
+        System.Collections.Generic.IDictionary<string, object> data,
+        string key
+    )
+    {
+        if (data == null || !data.TryGetValue(key, out object value) || value == null)
+        {
+            return null;
+        }
+
+        return value.ToString();
+    }
+
+    private static int? ReadAdditionalInt(
+        System.Collections.Generic.IDictionary<string, object> data,
+        string key
+    )
+    {
+        if (data == null || !data.TryGetValue(key, out object value) || value == null)
+        {
+            return null;
+        }
+
+        if (value is int i)
+        {
+            return i;
+        }
+
+        if (int.TryParse(value.ToString(), out int parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    private static double? ReadAdditionalDouble(
+        System.Collections.Generic.IDictionary<string, object> data,
+        string key
+    )
+    {
+        if (data == null || !data.TryGetValue(key, out object value) || value == null)
+        {
+            return null;
+        }
+
+        if (value is double d)
+        {
+            return d;
+        }
+
+        if (double.TryParse(value.ToString(), out double parsed))
+        {
+            return parsed;
+        }
+
+        return null;
     }
 }

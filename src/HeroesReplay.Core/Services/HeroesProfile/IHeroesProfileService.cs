@@ -17,4 +17,5 @@ public interface IHeroesProfileService
     Task<HeroesProfileReplay> GetReplayByIdAsync(int replayId);
     Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId);
     Task DownloadReplayAsync(int replayId, Stream destination, CancellationToken cancellationToken);
+    Task EnrichRankAsync(HeroesProfileReplay replay, CancellationToken cancellationToken);
 }
