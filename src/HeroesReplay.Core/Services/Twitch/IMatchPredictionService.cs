@@ -8,4 +8,5 @@ public interface IMatchPredictionService
 {
     Task StartAsync(LoadedReplay replay, CancellationToken cancellationToken);
     Task ResolveAsync(LoadedReplay replay, CancellationToken cancellationToken);
+    Task TestAsync(int? winningTeam, CancellationToken cancellationToken);
 }

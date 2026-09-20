@@ -100,7 +100,44 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         );
     }
 
+    public async Task TestAsync(int? winningTeam, CancellationToken cancellationToken)
+    {
+        var dummy = new LoadedReplay { Replay = new Replay { Map = "Test" } };
+        bool savedDry = settings.Twitch.DryRunMode;
+        CaptureMethod savedCapture =
+            settings.Capture != null ? settings.Capture.Method : CaptureMethod.BitBlt;
+        TimeSpan savedWindow = settings.Twitch.PredictionWindow;
+        try
+        {
+            settings.Twitch.DryRunMode = false;
+            settings.Twitch.EnablePredictions = true;
+            if (settings.Capture == null)
+            {
+                settings.Capture = new CaptureSettings();
+            }
+            settings.Capture.Method = CaptureMethod.BitBlt;
+            settings.Twitch.PredictionWindow = TimeSpan.FromSeconds(30);
+            await StartAsync(dummy, cancellationToken).ConfigureAwait(false);
+            await ResolveTeamAsync(winningTeam, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            settings.Twitch.DryRunMode = savedDry;
+            if (settings.Capture != null)
+            {
+                settings.Capture.Method = savedCapture;
+            }
+            settings.Twitch.PredictionWindow = savedWindow;
+        }
+    }
+
     public async Task ResolveAsync(LoadedReplay replay, CancellationToken cancellationToken)
+    {
+        int? team = replay?.Replay == null ? null : WinningTeam(replay.Replay);
+        await ResolveTeamAsync(team, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ResolveTeamAsync(int? team, CancellationToken cancellationToken)
     {
         string id;
         string channelId;
@@ -120,7 +157,6 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        int? team = replay?.Replay == null ? null : WinningTeam(replay.Replay);
         try
         {
             if (!team.HasValue)

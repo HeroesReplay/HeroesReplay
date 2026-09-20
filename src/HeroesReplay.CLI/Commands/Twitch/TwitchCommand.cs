@@ -10,5 +10,6 @@ public class TwitchCommand : Command
     {
         Subcommands.Add(new ConnectCommand());
         Subcommands.Add(new RewardsCommand());
+        Subcommands.Add(new PredictionsCommand());
     }
 }

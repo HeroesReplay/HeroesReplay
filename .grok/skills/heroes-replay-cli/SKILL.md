@@ -35,6 +35,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `otel up` / `otel down` / `otel status` | Optional Aspire Dashboard via Docker Compose (`deploy/aspire/docker-compose.yml`). UI http://127.0.0.1:18888, OTLP gRPC :4317. |
 | `twitch connect` | Chat bot; blocks |
 | `twitch rewards generate\|submit` | Helix custom rewards |
+| `twitch predictions test [--outcome Blue\|Red\|cancel]` | Create then resolve/cancel a 30s Blue/Red prediction |
 | `youtube uploader` | Upload OBS recordings |
 | `mcp` | Stdio MCP server. Logs on stderr. Snapshot: `%LOCALAPPDATA%/HeroesReplay/status.json` |
 

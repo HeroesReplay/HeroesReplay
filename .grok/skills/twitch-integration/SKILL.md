@@ -37,6 +37,9 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check twitch
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch connect
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards generate
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards submit
+dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch predictions test --outcome Blue
 ```
+
+`twitch predictions test` creates a 30s Blue/Red Helix prediction then resolves (`Blue`/`Red`) or `cancel`. Watch it on the Twitch creator dashboard. Spectate does the same at TimerDetected and at session end from `Player.IsWinner`.
 
 `check twitch` is Helix `GetUsers` plus `GetPredictions` when `EnablePredictions` is true. `twitch connect` blocks. Command map: skill `heroes-replay-cli`.

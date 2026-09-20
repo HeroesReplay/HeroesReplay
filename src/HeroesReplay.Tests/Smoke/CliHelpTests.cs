@@ -58,4 +58,15 @@ public class CliHelpTests
         Assert.Contains(otel.Subcommands, c => c.Name == "down");
         Assert.Contains(otel.Subcommands, c => c.Name == "status");
     }
+
+    [Fact]
+    public void TwitchHelp_HasPredictionsTest()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("twitch --help");
+        Assert.Empty(result.Errors);
+        Command twitch = root.Subcommands.Single(c => c.Name == "twitch");
+        Command predictions = twitch.Subcommands.Single(c => c.Name == "predictions");
+        Assert.Contains(predictions.Subcommands, c => c.Name == "test");
+    }
 }
