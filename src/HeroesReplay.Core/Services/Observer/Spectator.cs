@@ -10,6 +10,7 @@ using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.HeroesProfileExtension;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Services.Twitch;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Observer;
@@ -24,6 +25,7 @@ public class Spectator : ISpectator
     private readonly IReplayContext context;
     private readonly SpectatorStatusStore statusStore;
     private readonly IObserverPanelRequests panelRequests;
+    private readonly IMatchPredictionService predictions;
     private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
     private State State { get; set; }
@@ -50,7 +52,8 @@ public class Spectator : ISpectator
         ITalentNotifier talentsNotifier,
         CancellationTokenProvider tokenProvider,
         SpectatorStatusStore statusStore,
-        IObserverPanelRequests panelRequests
+        IObserverPanelRequests panelRequests,
+        IMatchPredictionService predictions
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -64,6 +67,7 @@ public class Spectator : ISpectator
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
         this.panelRequests =
             panelRequests ?? throw new ArgumentNullException(nameof(panelRequests));
+        this.predictions = predictions ?? throw new ArgumentNullException(nameof(predictions));
 
         panelTimes = new()
         {
@@ -238,6 +242,16 @@ public class Spectator : ISpectator
                         detected?.SetTag("timer.source", fromOcr ? "ocr" : "software");
                         detected?.SetTag("timer.raw", result.Value.ToString());
                         detected?.SetTag("timer.replay", Timer.ToString());
+                        try
+                        {
+                            await predictions
+                                .StartAsync(Data?.LoadedReplay, LinkedTokenSource.Token)
+                                .ConfigureAwait(false);
+                        }
+                        catch (Exception e)
+                        {
+                            logger.LogWarning(e, "Could not open Twitch Blue/Red prediction.");
+                        }
                     }
 
                     if (!replayViewConfigured)

@@ -17,6 +17,8 @@ description: >
 
 Channel-point methods are `*Async`: `GetCustomRewardAsync`, `CreateCustomRewardsAsync`, `UpdateCustomRewardAsync`, `DeleteCustomRewardAsync`.
 
+Helix Predictions (Blue/Red who-wins): `CreatePredictionAsync` when the match clock is detected, `EndPredictionAsync` (RESOLVED/CANCELED) when the spectate session ends. Team 0 = Blue (left), team 1 = Red (right). Requires `channel:manage:predictions`. Toggle `Twitch:EnablePredictions`. Window `Twitch:PredictionWindow` (clamped 30s–1800s). Dry-run and `CaptureMethod.None` skip Helix.
+
 ## Do not grow PubSub rewards
 
 `ITwitchPubSub.ListenToRewards` / `OnRewardRedeemed` are obsolete (undocumented topic). Do not add new listeners. New redemption work should target **EventSub** (`channel.channel_points_custom_reward_redemption.add`), not PubSub.
@@ -37,4 +39,4 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards 
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards submit
 ```
 
-`check twitch` is Helix `GetUsers` only (needs AccessToken + ClientId). `twitch connect` blocks. Command map: skill `heroes-replay-cli`.
+`check twitch` is Helix `GetUsers` plus `GetPredictions` when `EnablePredictions` is true. `twitch connect` blocks. Command map: skill `heroes-replay-cli`.

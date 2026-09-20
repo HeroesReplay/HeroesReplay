@@ -1,0 +1,307 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Heroes.ReplayParser;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
+using Microsoft.Extensions.Logging;
+using TwitchLib.Api.Core.Enums;
+using TwitchLib.Api.Helix.Models.Predictions;
+using TwitchLib.Api.Helix.Models.Predictions.CreatePrediction;
+using TwitchLib.Api.Interfaces;
+using CreateOutcome = TwitchLib.Api.Helix.Models.Predictions.CreatePrediction.Outcome;
+
+namespace HeroesReplay.Core.Services.Twitch;
+
+public class TwitchMatchPredictionService : IMatchPredictionService
+{
+    private readonly ILogger<TwitchMatchPredictionService> logger;
+    private readonly AppSettings settings;
+    private readonly ITwitchAPI api;
+    private readonly object gate = new object();
+    private string broadcasterId;
+    private string predictionId;
+    private string blueOutcomeId;
+    private string redOutcomeId;
+
+    public TwitchMatchPredictionService(
+        ILogger<TwitchMatchPredictionService> logger,
+        AppSettings settings,
+        ITwitchAPI api
+    )
+    {
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        this.api = api ?? throw new ArgumentNullException(nameof(api));
+    }
+
+    public async Task StartAsync(LoadedReplay replay, CancellationToken cancellationToken)
+    {
+        if (!settings.Twitch.EnablePredictions || settings.Capture.Method == CaptureMethod.None)
+        {
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await CancelActiveAsync(cancellationToken).ConfigureAwait(false);
+
+        string channelId = await GetChannelIdAsync().ConfigureAwait(false);
+        string map = replay?.Replay?.Map;
+        var request = new CreatePredictionRequest
+        {
+            BroadcasterId = channelId,
+            Title = MatchPrediction.TitleForMap(map),
+            PredictionWindowSeconds = MatchPrediction.WindowSeconds(
+                settings.Twitch.PredictionWindow
+            ),
+            Outcomes = new[]
+            {
+                new CreateOutcome { Title = MatchPrediction.Blue },
+                new CreateOutcome { Title = MatchPrediction.Red },
+            },
+        };
+
+        if (settings.Twitch.DryRunMode)
+        {
+            logger.LogInformation(
+                "Dry-run prediction: {Title} ({Window}s) Blue vs Red.",
+                request.Title,
+                request.PredictionWindowSeconds
+            );
+            return;
+        }
+
+        CreatePredictionResponse created = await api
+            .Helix.Predictions.CreatePredictionAsync(request)
+            .ConfigureAwait(false);
+        Prediction prediction = created?.Data?[0];
+        if (prediction == null || string.IsNullOrWhiteSpace(prediction.Id))
+        {
+            logger.LogWarning("Helix CreatePrediction returned no prediction.");
+            return;
+        }
+
+        string blue = FindOutcomeId(prediction.Outcomes, MatchPrediction.Blue);
+        string red = FindOutcomeId(prediction.Outcomes, MatchPrediction.Red);
+        lock (gate)
+        {
+            broadcasterId = channelId;
+            predictionId = prediction.Id;
+            blueOutcomeId = blue;
+            redOutcomeId = red;
+        }
+
+        logger.LogInformation(
+            "Opened Blue/Red prediction {PredictionId} ({Title}, {Window}s).",
+            prediction.Id,
+            request.Title,
+            request.PredictionWindowSeconds
+        );
+    }
+
+    public async Task ResolveAsync(LoadedReplay replay, CancellationToken cancellationToken)
+    {
+        string id;
+        string channelId;
+        string blue;
+        string red;
+        lock (gate)
+        {
+            id = predictionId;
+            channelId = broadcasterId;
+            blue = blueOutcomeId;
+            red = redOutcomeId;
+        }
+
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(channelId))
+        {
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        int? team = replay?.Replay == null ? null : WinningTeam(replay.Replay);
+        try
+        {
+            if (!team.HasValue)
+            {
+                if (settings.Twitch.DryRunMode)
+                {
+                    logger.LogInformation(
+                        "Dry-run prediction cancel {PredictionId} (no winner).",
+                        id
+                    );
+                    return;
+                }
+
+                await api
+                    .Helix.Predictions.EndPredictionAsync(
+                        channelId,
+                        id,
+                        PredictionEndStatus.CANCELED
+                    )
+                    .ConfigureAwait(false);
+                logger.LogInformation("Canceled prediction {PredictionId} (no winner).", id);
+                return;
+            }
+
+            string winningId = team.Value == 0 ? blue : red;
+            if (string.IsNullOrWhiteSpace(winningId))
+            {
+                logger.LogWarning(
+                    "Prediction {PredictionId} missing outcome id for team {Team}.",
+                    id,
+                    team.Value
+                );
+                return;
+            }
+
+            if (settings.Twitch.DryRunMode)
+            {
+                logger.LogInformation(
+                    "Dry-run prediction resolve {PredictionId} -> {Outcome}.",
+                    id,
+                    MatchPrediction.OutcomeTitle(team.Value)
+                );
+                return;
+            }
+
+            await api
+                .Helix.Predictions.EndPredictionAsync(
+                    channelId,
+                    id,
+                    PredictionEndStatus.RESOLVED,
+                    winningId
+                )
+                .ConfigureAwait(false);
+            logger.LogInformation(
+                "Resolved prediction {PredictionId} -> {Outcome}.",
+                id,
+                MatchPrediction.OutcomeTitle(team.Value)
+            );
+        }
+        finally
+        {
+            Clear();
+        }
+    }
+
+    public static int? WinningTeam(Replay replay)
+    {
+        if (replay?.Players == null)
+        {
+            return null;
+        }
+
+        int? team = null;
+        foreach (Player player in replay.Players)
+        {
+            if (player == null || !player.IsWinner)
+            {
+                continue;
+            }
+
+            if (team == null)
+            {
+                team = player.Team;
+            }
+            else if (team.Value != player.Team)
+            {
+                return null;
+            }
+        }
+
+        return team;
+    }
+
+    private async Task CancelActiveAsync(CancellationToken cancellationToken)
+    {
+        string id;
+        string channelId;
+        lock (gate)
+        {
+            id = predictionId;
+            channelId = broadcasterId;
+        }
+
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(channelId))
+        {
+            return;
+        }
+
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!settings.Twitch.DryRunMode)
+            {
+                await api
+                    .Helix.Predictions.EndPredictionAsync(
+                        channelId,
+                        id,
+                        PredictionEndStatus.CANCELED
+                    )
+                    .ConfigureAwait(false);
+            }
+
+            logger.LogInformation("Canceled leftover prediction {PredictionId}.", id);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not cancel leftover prediction {PredictionId}.", id);
+        }
+        finally
+        {
+            Clear();
+        }
+    }
+
+    private async Task<string> GetChannelIdAsync()
+    {
+        string login = string.IsNullOrWhiteSpace(settings.Twitch.Channel)
+            ? settings.Twitch.Account
+            : settings.Twitch.Channel;
+        var users = await api
+            .Helix.Users.GetUsersAsync(logins: new List<string> { login })
+            .ConfigureAwait(false);
+        if (users?.Users == null || users.Users.Length == 0)
+        {
+            throw new InvalidOperationException($"Helix returned no user for `{login}`.");
+        }
+
+        return users.Users[0].Id;
+    }
+
+    private static string FindOutcomeId(
+        TwitchLib.Api.Helix.Models.Predictions.Outcome[] outcomes,
+        string title
+    )
+    {
+        if (outcomes == null)
+        {
+            return null;
+        }
+
+        foreach (var outcome in outcomes)
+        {
+            if (
+                outcome != null
+                && string.Equals(outcome.Title, title, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return outcome.Id;
+            }
+        }
+
+        return null;
+    }
+
+    private void Clear()
+    {
+        lock (gate)
+        {
+            predictionId = null;
+            blueOutcomeId = null;
+            redOutcomeId = null;
+        }
+    }
+}

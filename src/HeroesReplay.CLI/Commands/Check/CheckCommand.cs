@@ -39,7 +39,11 @@ public class CheckCommand : Command
             Build("obs", "Connect to obs-websocket 5 and read the server version.", CheckObsAsync)
         );
         Subcommands.Add(
-            Build("twitch", "Call Helix GetUsers for the configured channel.", CheckTwitchAsync)
+            Build(
+                "twitch",
+                "Call Helix GetUsers (and Predictions when enabled) for the configured channel.",
+                CheckTwitchAsync
+            )
         );
         Subcommands.Add(
             Build(
@@ -252,10 +256,25 @@ public class CheckCommand : Command
                 return new CheckResult("twitch", false, $"Helix returned no user for `{login}`.");
             }
 
+            string extra = string.Empty;
+            if (settings.Twitch.EnablePredictions)
+            {
+                try
+                {
+                    await api.Helix.Predictions.GetPredictionsAsync(users.Users[0].Id, first: 1);
+                    extra = " Predictions scope OK.";
+                }
+                catch (Exception e)
+                {
+                    extra =
+                        " Predictions need channel:manage:predictions (Helix: " + e.Message + ").";
+                }
+            }
+
             return new CheckResult(
                 "twitch",
                 true,
-                $"Helix OK for {users.Users[0].DisplayName} ({users.Users[0].Id})."
+                $"Helix OK for {users.Users[0].DisplayName} ({users.Users[0].Id}).{extra}"
             );
         }
         catch (Exception e)

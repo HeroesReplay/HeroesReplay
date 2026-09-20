@@ -14,6 +14,8 @@ public class TwitchSettings
     public bool EnableTwitchClips { get; set; }
     public bool EnablePubSub { get; set; }
     public bool EnableChatBot { get; set; }
+    public bool EnablePredictions { get; set; }
+    public TimeSpan PredictionWindow { get; set; }
     public bool DryRunMode { get; set; }
 
     public string QueueFileName { get; set; }
