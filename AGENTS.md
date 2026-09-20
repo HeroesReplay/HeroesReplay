@@ -10,7 +10,7 @@ Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `Her
 
 ## Before editing
 
-1. Load the matching **repo skill** under `.grok/skills/` (dotnet, CLI, OBS, Twitch).
+1. Load the matching **repo skill** under `.grok/skills/` (dotnet, CLI, OBS, Twitch, op-service-account).
 2. Prefer official **dotnet/skills** plugins for generic .NET work (see below).
 3. Format with CSharpier. Do not hand-format.
 
@@ -29,7 +29,7 @@ dotnet test heroes-replay.slnx -p:TestCategory=Integration
 dotnet test heroes-replay.slnx -p:TestCategory=Smoke
 ```
 
-Heroes Profile integration uses `HEROES_REPLAY_HeroesProfileApi__ApiKey` or `op read "op://Private/HeroesProfileAPI/V1 API KEY/password"`. Never commit the resolved token.
+Secrets: skill `op-service-account` (`OP_SERVICE_ACCOUNT` → `op` CLI). Never commit or print resolved tokens.
 
 CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
 

@@ -42,11 +42,7 @@ New commands go on `HeroesReplayCommand` and need a **Smoke** test in `src/Heroe
 
 ## Secrets
 
-- Live file: `src/HeroesReplay.CLI/appsettings.secrets.json` (gitignored).
-- Template: `appsettings.secrets.example.json`.
-- Env prefix: `HEROES_REPLAY_` (e.g. `HEROES_REPLAY_HeroesProfileApi__ApiKey`).
-- Values starting with `op://` are resolved by `SecretResolver` via `op read`. Heroes Profile v1 URI: `op://Private/HeroesProfileAPI/V1 API KEY/password`.
-- `BindSettings` runs `SecretResolver.Apply` after JSON bind. Do not log resolved tokens.
+Skill `op-service-account`. Live file `src/HeroesReplay.CLI/appsettings.secrets.json` (gitignored). Template `appsettings.secrets.example.json`. `BindSettings` runs `SecretResolver.Apply` (maps `OP_SERVICE_ACCOUNT` for `op read`). Env prefix `HEROES_REPLAY_`. Do not log resolved tokens.
 
 ## Config load
 

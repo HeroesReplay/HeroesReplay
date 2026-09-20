@@ -23,7 +23,7 @@ public class HeroesProfileApiTests
         string apiKey = ResolveApiKey();
         Assert.False(
             string.IsNullOrWhiteSpace(apiKey),
-            "Set HEROES_REPLAY_HeroesProfileApi__ApiKey or sign in with 1Password CLI (`op read \"op://Private/HeroesProfileAPI/V1 API KEY/password\"`)."
+            "Set HEROES_REPLAY_HeroesProfileApi__ApiKey or OP_SERVICE_ACCOUNT (`op read \"op://Heroes Replay/Heroes Profile API Key/password\"`)."
         );
 
         using var provider = CreateProvider(apiKey);
@@ -42,7 +42,7 @@ public class HeroesProfileApiTests
         string apiKey = ResolveApiKey();
         Assert.False(
             string.IsNullOrWhiteSpace(apiKey),
-            "Set HEROES_REPLAY_HeroesProfileApi__ApiKey or sign in with 1Password CLI (`op read \"op://Private/HeroesProfileAPI/V1 API KEY/password\"`)."
+            "Set HEROES_REPLAY_HeroesProfileApi__ApiKey or OP_SERVICE_ACCOUNT (`op read \"op://Heroes Replay/Heroes Profile API Key/password\"`)."
         );
 
         using var provider = CreateProvider(apiKey);

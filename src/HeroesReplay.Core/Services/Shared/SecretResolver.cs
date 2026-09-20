@@ -7,7 +7,7 @@ namespace HeroesReplay.Core.Services.Shared;
 public static class SecretResolver
 {
     public const string HeroesProfileApiKeyOpUri =
-        "op://Private/HeroesProfileAPI/V1 API KEY/password";
+        "op://Heroes Replay/Heroes Profile API Key/password";
 
     public static void Apply(AppSettings settings)
     {
@@ -109,12 +109,17 @@ public static class SecretResolver
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        string token = ServiceAccountToken();
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            start.Environment["OP_SERVICE_ACCOUNT_TOKEN"] = token;
+        }
 
         using var process = Process.Start(start);
         if (process == null)
         {
             throw new InvalidOperationException(
-                "Could not start the 1Password CLI (`op`). Install it and run `op signin`."
+                "Could not start the 1Password CLI (`op`). Install it and set OP_SERVICE_ACCOUNT."
             );
         }
 
@@ -145,5 +150,32 @@ public static class SecretResolver
         }
 
         return secret;
+    }
+
+    private static string ServiceAccountToken()
+    {
+        string token = FirstNonEmpty(
+            Environment.GetEnvironmentVariable("OP_SERVICE_ACCOUNT_TOKEN"),
+            Environment.GetEnvironmentVariable("OP_SERVICE_ACCOUNT"),
+            Environment.GetEnvironmentVariable(
+                "OP_SERVICE_ACCOUNT_TOKEN",
+                EnvironmentVariableTarget.User
+            ),
+            Environment.GetEnvironmentVariable("OP_SERVICE_ACCOUNT", EnvironmentVariableTarget.User)
+        );
+        return token;
+    }
+
+    private static string FirstNonEmpty(params string[] values)
+    {
+        foreach (string value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
     }
 }

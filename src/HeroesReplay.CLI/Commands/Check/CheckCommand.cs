@@ -145,7 +145,7 @@ public class CheckCommand : Command
                 return new CheckResult(
                     "heroesprofile",
                     false,
-                    "API key is missing. Put `op://Private/HeroesProfileAPI/V1 API KEY/password` in appsettings.secrets.json or set HEROES_REPLAY_HeroesProfileApi__ApiKey."
+                    "API key is missing. Put `op://Heroes Replay/Heroes Profile API Key/password` in appsettings.secrets.json or set HEROES_REPLAY_HeroesProfileApi__ApiKey."
                 );
             }
 

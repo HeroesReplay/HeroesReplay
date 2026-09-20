@@ -28,4 +28,4 @@ Paths included: `/replays`, `/replays/**`, `/download/replay`, `/replay/{replayI
 
 `region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable` instead of a GCS/S3 `url`. Skip when `downloadable` is false or `deleted` is non-zero.
 
-Auth is `Authorization: Bearer` ([Migrating](https://www.heroesprofile.com/Api/Migrating)). The v1 key is `op://Private/HeroesProfileAPI/V1 API KEY/password`. The old `api.heroesprofile.com` `api_token` key is not accepted.
+Auth is `Authorization: Bearer` ([Migrating](https://www.heroesprofile.com/Api/Migrating)). The v1 key is `op://Heroes Replay/Heroes Profile API Key/password` (skill `op-service-account`). The old `api.heroesprofile.com` `api_token` key is not accepted.
