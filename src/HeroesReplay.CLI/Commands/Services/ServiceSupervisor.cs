@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Processes;
@@ -90,10 +91,14 @@ public static class ServiceSupervisor
         Action requestGracefulStop = null,
         TimeSpan? gracefulWait = null,
         Action<TimeSpan> wait = null,
-        Action clearStopFile = null
+        Action clearStopFile = null,
+        Action stopSpectatedGame = null
     )
     {
         requestGracefulStop?.Invoke();
+        bool hadSpectate =
+            ServiceLockStore.TryLoad(lockPath)?.Processes?.Any(record => record?.Name == "spectate")
+            == true;
         TimeSpan budget = gracefulWait ?? TimeSpan.FromSeconds(20);
         Action<TimeSpan> pause = wait ?? Thread.Sleep;
         try
@@ -115,6 +120,11 @@ public static class ServiceSupervisor
 
             if (living.Count == 0)
             {
+                if (hadSpectate)
+                {
+                    stopSpectatedGame?.Invoke();
+                }
+
                 Console.WriteLine(
                     sawAny ? "Services stopped." : "No HeroesReplay services are running."
                 );
@@ -136,8 +146,13 @@ public static class ServiceSupervisor
                 }
             }
 
+            if (hadSpectate)
+            {
+                stopSpectatedGame?.Invoke();
+            }
+
             Console.WriteLine(
-                "Forced stop skipped spectator shutdown. If Heroes of the Storm is still open, close it."
+                "Forced stop skipped spectator shutdown. Heroes of the Storm was closed if it was still open."
             );
             return 0;
         }

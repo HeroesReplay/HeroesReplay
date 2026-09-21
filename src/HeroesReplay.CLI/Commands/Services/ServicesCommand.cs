@@ -51,7 +51,7 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "stop",
-            "Ask the recorded heroesreplay processes to shut down, then kill any that are still running after 20 seconds."
+            "Ask the recorded processes to shut down, kill any still running after 20 seconds, and close Heroes of the Storm."
         );
         command.SetAction(
             (parseResult, cancellationToken) =>
@@ -63,7 +63,8 @@ public class ServicesCommand : Command
                     () => ServiceStopFile.Request(),
                     TimeSpan.FromSeconds(20),
                     Thread.Sleep,
-                    () => ServiceStopFile.Clear()
+                    () => ServiceStopFile.Clear(),
+                    StopSpectatedGame
                 );
                 return Task.FromResult(code);
             }
@@ -207,6 +208,24 @@ public class ServicesCommand : Command
     }
 
     private static string PsQuote(string value) => "'" + (value ?? "").Replace("'", "''") + "'";
+
+    private static void StopSpectatedGame()
+    {
+        foreach (Process game in Process.GetProcessesByName("HeroesOfTheStorm_x64"))
+        {
+            try
+            {
+                game.Kill(entireProcessTree: true);
+                Console.WriteLine($"Stopped Heroes of the Storm pid {game.Id}.");
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine(
+                    $"Could not stop Heroes of the Storm pid {game.Id}: {e.Message}"
+                );
+            }
+        }
+    }
 
     private static void Kill(int pid)
     {

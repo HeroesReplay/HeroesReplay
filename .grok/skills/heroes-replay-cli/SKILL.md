@@ -26,7 +26,7 @@ On **ASA-SERVER** (dev VM): after spectator/OCR/OBS/Twitch code changes, stop `h
 | `spectate heroesprofile` | Play `.StormReplay` files already in `Data\Standard` and `Data\Requests`. Does not call Heroes Profile. |
 | `heroesprofile download` | List and download Storm League replays into `Data\Standard` and `Data\Requests`. Does not launch the game. |
 | `services start` | Start spectate, `twitch connect`, `heroesprofile download`, and `youtube uploader` as separate processes. Logs under `%LOCALAPPDATA%\HeroesReplay\logs`. Does not start Twitch ingest. |
-| `services stop` | Write `services.stop`, wait up to 20s for those processes to exit (spectate closes HotS on that path), then kill any still-living `heroesreplay` pids. |
+| `services stop` | Write `services.stop`, wait up to 20s, kill any `heroesreplay` pid still recorded, and close Heroes of the Storm if spectate was one of them. |
 | `services status` | Which of those processes are still alive, plus `status.json`. |
 | `calculators coordinates [--file path]` | Parse replay, print coordinate samples, build Kill/NearEnemy/Roaming focus map |
 | `calculators report [--file path]` | Spectator report for a file/directory |

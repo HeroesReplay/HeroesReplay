@@ -299,6 +299,41 @@ public class ServiceSupervisorTests
     }
 
     [Fact]
+    public void Stop_ClosesTheGameWhenSpectateWasRunning()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceLockStore.Save(
+                path,
+                new ServiceLock
+                {
+                    Processes = new List<ServiceProcessRecord>
+                    {
+                        new() { Name = "spectate", Pid = 80 },
+                    },
+                }
+            );
+            bool closedGame = false;
+            ServiceSupervisor.Stop(
+                path,
+                pid => null,
+                _ => { },
+                requestGracefulStop: () => { },
+                gracefulWait: TimeSpan.Zero,
+                wait: _ => { },
+                clearStopFile: () => { },
+                stopSpectatedGame: () => closedGame = true
+            );
+            Assert.True(closedGame);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Status_NotRunning_IsSuccess()
     {
         string path = TempLock();
