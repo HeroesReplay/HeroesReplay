@@ -2,7 +2,6 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Twitch;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,7 +23,7 @@ public class ConnectCommand : Command
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
         using ServiceProvider provider = new ServiceCollection()
-            .AddSpectateServices(cancellationToken, typeof(HeroesProfileProvider))
+            .AddTwitchServices(cancellationToken)
             .BuildServiceProvider(
                 new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
             );
