@@ -46,6 +46,7 @@ public class Spectator : ISpectator
     private DateTimeOffset lastAdvancedHudAt;
 
     private DateTimeOffset nextEndScreenProbe;
+    private DateTimeOffset lastOcrMissLog;
 
     private bool endScreenSeen;
 
@@ -238,7 +239,13 @@ public class Spectator : ISpectator
                 }
                 else if (State != State.TimerDetected)
                 {
-                    logger.LogWarning("Timer OCR unavailable; still loading.");
+                    if (DateTimeOffset.UtcNow - lastOcrMissLog > TimeSpan.FromSeconds(10))
+                    {
+                        lastOcrMissLog = DateTimeOffset.UtcNow;
+                        logger.LogWarning(
+                            "Timer OCR missed. No hero is selected until the HUD clock reads MM:SS."
+                        );
+                    }
                 }
                 else
                 {
