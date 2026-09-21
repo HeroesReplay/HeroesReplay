@@ -8,6 +8,7 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Providers;
@@ -105,7 +106,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
             Replay = replay,
             ReplayId = replayId,
             RewardQueueItem = null,
-            HeroesProfileReplay = null,
+            HeroesProfileReplay = RankFromFile(next.Name, replayId, replay.Map),
         };
     }
 
@@ -155,6 +156,22 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private void AppendPlayed(int replayId)
     {
         File.AppendAllText(PlayedPath(), replayId + Environment.NewLine);
+    }
+
+    private static HeroesProfileReplay RankFromFile(string fileName, int replayId, string map)
+    {
+        string rank = RankImage.RankFromCacheFileName(fileName);
+        if (rank == null)
+        {
+            return null;
+        }
+
+        return new HeroesProfileReplay
+        {
+            Id = replayId,
+            Rank = rank,
+            Map = map,
+        };
     }
 
     private string PlayedPath() =>

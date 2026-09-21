@@ -272,10 +272,7 @@ public class ObsController : IObsController
         try
         {
             HideRankImages();
-            if (settings.HeroesProfileApi.EnableMMR)
-            {
-                ShowRankImage();
-            }
+            ShowRankImage();
         }
         catch (Exception e)
         {
@@ -428,19 +425,27 @@ public class ObsController : IObsController
     private bool ShowRankImage()
     {
         HeroesProfileReplay row = context.Current?.LoadedReplay?.HeroesProfileReplay;
-        if (row == null)
+        string rank = row?.Rank;
+        int? leagueTier = row?.LeagueTier;
+        if (string.IsNullOrWhiteSpace(RankImage.SourceName(rank, leagueTier)))
         {
-            return false;
+            rank = RankImage.FromAverageMmr(row?.AverageMmr) ?? rank;
         }
 
-        string sourceName = RankImage.SourceName(row.Rank, row.LeagueTier);
-        if (string.IsNullOrWhiteSpace(sourceName))
+        if (string.IsNullOrWhiteSpace(RankImage.SourceName(rank, leagueTier)))
         {
-            sourceName = RankImage.SourceName(RankImage.FromAverageMmr(row.AverageMmr));
+            rank = RankImage.RankFromCacheFileName(context.Current?.LoadedReplay?.FileInfo?.Name);
+            leagueTier = null;
         }
+
+        string sourceName = RankImage.SourceName(rank, leagueTier);
         if (string.IsNullOrWhiteSpace(sourceName))
         {
-            logger.LogInformation("No rank badge for replay {ReplayId}.", row.Id);
+            logger.LogInformation(
+                "No rank badge for replay {ReplayId} ({File}).",
+                row?.Id,
+                context.Current?.LoadedReplay?.FileInfo?.Name
+            );
             return false;
         }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using Microsoft.Kiota.Abstractions.Serialization;
 
 namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware;
@@ -17,6 +18,33 @@ public static class RankImage
         "master-image",
         "grandmaster-image",
     };
+
+    /// <summary>
+    /// Cache files are named id_gameType_rank_map_fingerprint.
+    /// </summary>
+    public static string RankFromCacheFileName(string fileName, string separator = "_")
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrEmpty(separator))
+        {
+            return null;
+        }
+
+        string name = Path.GetFileName(fileName);
+        int dot = name.LastIndexOf('.');
+        if (dot > 0)
+        {
+            name = name.Substring(0, dot);
+        }
+
+        string[] parts = name.Split(separator);
+        if (parts.Length < 3)
+        {
+            return null;
+        }
+
+        string rank = parts[2];
+        return SourceName(rank) == null ? null : rank;
+    }
 
     public static string SourceName(string rank, int? leagueTier = null)
     {

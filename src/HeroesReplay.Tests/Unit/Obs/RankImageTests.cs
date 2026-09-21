@@ -17,6 +17,15 @@ public class RankImageTests
         Assert.Equal(expected, RankImage.SourceName(rank));
     }
 
+    [Theory]
+    [InlineData("65268389_Storm League_Diamond_Sky Temple_4f570172_.StormReplay", "Diamond")]
+    [InlineData("1_Storm League_Unknown_Tomb of the Spider Queen_.StormReplay", null)]
+    [InlineData("not-a-cache-name.StormReplay", null)]
+    public void RankFromCacheFileName_ReadsTheThirdSegment(string fileName, string expected)
+    {
+        Assert.Equal(expected, RankImage.RankFromCacheFileName(fileName));
+    }
+
     [Fact]
     public void SourceName_FromLeagueTier()
     {
