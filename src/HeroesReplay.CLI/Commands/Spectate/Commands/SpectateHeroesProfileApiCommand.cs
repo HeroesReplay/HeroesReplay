@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI;
 using HeroesReplay.Core;
+using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Providers;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,8 +27,9 @@ public class SpectateHeroesProfileApiCommand : Command
 
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
+        using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
-            .AddSpectateServices(cancellationToken, typeof(ReplayCacheProvider))
+            .AddSpectateServices(stop.Token, typeof(ReplayCacheProvider))
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();

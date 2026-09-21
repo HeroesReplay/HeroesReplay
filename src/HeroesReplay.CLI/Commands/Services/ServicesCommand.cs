@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Status;
@@ -37,7 +38,8 @@ public class ServicesCommand : Command
                     ServiceLockStore.DefaultPath,
                     exe,
                     ProcessNameOrNull,
-                    (name, arguments) => StartProcess(exe, arguments)
+                    (name, arguments) => StartProcess(exe, arguments),
+                    () => ServiceStopFile.Clear()
                 );
                 return Task.FromResult(code);
             }
@@ -49,7 +51,7 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "stop",
-            "Stop the heroesreplay processes recorded by services start. Does not close Heroes of the Storm."
+            "Ask the recorded heroesreplay processes to shut down, then kill any that are still running after 20 seconds."
         );
         command.SetAction(
             (parseResult, cancellationToken) =>
@@ -57,7 +59,11 @@ public class ServicesCommand : Command
                 int code = ServiceSupervisor.Stop(
                     ServiceLockStore.DefaultPath,
                     ProcessNameOrNull,
-                    Kill
+                    Kill,
+                    () => ServiceStopFile.Request(),
+                    TimeSpan.FromSeconds(20),
+                    Thread.Sleep,
+                    () => ServiceStopFile.Clear()
                 );
                 return Task.FromResult(code);
             }

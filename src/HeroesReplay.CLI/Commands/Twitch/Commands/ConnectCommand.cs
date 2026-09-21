@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Services.Data;
+using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Twitch;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -25,8 +26,9 @@ public class ConnectCommand : Command
 
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
+        using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
-            .AddTwitchServices(cancellationToken)
+            .AddTwitchServices(stop.Token)
             .BuildServiceProvider(
                 new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
             );
@@ -37,6 +39,6 @@ public class ConnectCommand : Command
         await twitchBot.InitializeAsync();
         StatusPredictionWatcher predictions =
             scope.ServiceProvider.GetRequiredService<StatusPredictionWatcher>();
-        await predictions.WatchAsync(cancellationToken);
+        await predictions.WatchAsync(stop.Token);
     }
 }

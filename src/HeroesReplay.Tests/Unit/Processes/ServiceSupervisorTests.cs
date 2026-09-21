@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Services.Processes;
 using Xunit;
@@ -219,7 +220,9 @@ public class ServiceSupervisorTests
             int code = ServiceSupervisor.Stop(
                 path,
                 pid => pid == 50 ? "heroesreplay" : "explorer",
-                killed.Add
+                killed.Add,
+                requestGracefulStop: () => { },
+                gracefulWait: TimeSpan.Zero
             );
 
             Assert.Equal(0, code);
@@ -229,6 +232,67 @@ public class ServiceSupervisorTests
         finally
         {
             ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_WaitsForGracefulExitBeforeKilling()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceLockStore.Save(
+                path,
+                new ServiceLock
+                {
+                    Processes = new List<ServiceProcessRecord>
+                    {
+                        new() { Name = "spectate", Pid = 70 },
+                    },
+                }
+            );
+            int polls = 0;
+            var killed = new List<int>();
+            bool requested = false;
+            int code = ServiceSupervisor.Stop(
+                path,
+                pid =>
+                {
+                    polls++;
+                    return polls < 3 ? "heroesreplay" : null;
+                },
+                killed.Add,
+                () => requested = true,
+                TimeSpan.FromSeconds(5),
+                _ => { }
+            );
+
+            Assert.Equal(0, code);
+            Assert.True(requested);
+            Assert.Empty(killed);
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void StopFile_CancelsWhenTheFileAppears()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"heroesreplay-stop-{Guid.NewGuid():N}");
+        try
+        {
+            using var idle = ServiceStopFile.Link(CancellationToken.None, path);
+            Assert.False(idle.Token.WaitHandle.WaitOne(300));
+
+            ServiceStopFile.Request(path);
+            Assert.True(idle.Token.WaitHandle.WaitOne(2000));
+        }
+        finally
+        {
+            ServiceStopFile.Clear(path);
         }
     }
 

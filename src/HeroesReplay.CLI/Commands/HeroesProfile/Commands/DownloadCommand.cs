@@ -3,6 +3,7 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI;
+using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Providers;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,8 +27,9 @@ public class DownloadCommand : Command
 
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
+        using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
-            .AddTwitchServices(cancellationToken)
+            .AddTwitchServices(stop.Token)
             .AddSingleton<ReplayLoader>()
             .AddSingleton<IReplayLoader>(sp => sp.GetRequiredService<ReplayLoader>())
             .AddSingleton<ReplayHelper>()
@@ -37,12 +39,12 @@ public class DownloadCommand : Command
         using IServiceScope scope = provider.CreateScope();
         HeroesProfileProvider downloader =
             scope.ServiceProvider.GetRequiredService<HeroesProfileProvider>();
-        while (!cancellationToken.IsCancellationRequested)
+        while (!stop.Token.IsCancellationRequested)
         {
             bool downloaded = await downloader.DownloadNextAsync().ConfigureAwait(false);
             await Task.Delay(
                 downloaded ? TimeSpan.FromSeconds(2) : TimeSpan.FromSeconds(15),
-                cancellationToken
+                stop.Token
             );
         }
     }

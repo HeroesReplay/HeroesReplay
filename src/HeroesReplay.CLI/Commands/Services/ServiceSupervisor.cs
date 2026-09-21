@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Processes;
 
@@ -12,7 +13,8 @@ public static class ServiceSupervisor
         string lockPath,
         string exePath,
         Func<int, string> processNameOrNull,
-        Func<string, string, int?> startProcess
+        Func<string, string, int?> startProcess,
+        Action clearStopFile = null
     )
     {
         if (
@@ -38,6 +40,8 @@ public static class ServiceSupervisor
 
             return 1;
         }
+
+        clearStopFile?.Invoke();
 
         var started = new List<ServiceProcessRecord>();
         foreach ((string name, string arguments) in ServiceProcessPlan.All)
@@ -79,39 +83,69 @@ public static class ServiceSupervisor
         return 0;
     }
 
-    public static int Stop(string lockPath, Func<int, string> processNameOrNull, Action<int> kill)
+    public static int Stop(
+        string lockPath,
+        Func<int, string> processNameOrNull,
+        Action<int> kill,
+        Action requestGracefulStop = null,
+        TimeSpan? gracefulWait = null,
+        Action<TimeSpan> wait = null,
+        Action clearStopFile = null
+    )
     {
-        List<ServiceProcessRecord> living = ServiceProcessPlan.StillRunning(
-            ServiceLockStore.TryLoad(lockPath)?.Processes,
-            processNameOrNull
-        );
-        if (living.Count == 0)
+        requestGracefulStop?.Invoke();
+        TimeSpan budget = gracefulWait ?? TimeSpan.FromSeconds(20);
+        Action<TimeSpan> pause = wait ?? Thread.Sleep;
+        try
         {
-            Console.WriteLine("No HeroesReplay services are running.");
-            ServiceLockStore.Delete(lockPath);
-            return 0;
-        }
-
-        foreach (ServiceProcessRecord record in living)
-        {
-            try
+            List<ServiceProcessRecord> living = ServiceProcessPlan.StillRunning(
+                ServiceLockStore.TryLoad(lockPath)?.Processes,
+                processNameOrNull
+            );
+            bool sawAny = living.Count > 0;
+            DateTimeOffset until = DateTimeOffset.UtcNow + budget;
+            while (living.Count > 0 && DateTimeOffset.UtcNow < until)
             {
-                kill(record.Pid);
-                Console.WriteLine($"Stopped {record.Name} pid {record.Pid}.");
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine(
-                    $"Could not stop {record.Name} pid {record.Pid}: {e.Message}"
+                pause(TimeSpan.FromMilliseconds(200));
+                living = ServiceProcessPlan.StillRunning(
+                    ServiceLockStore.TryLoad(lockPath)?.Processes,
+                    processNameOrNull
                 );
             }
-        }
 
-        ServiceLockStore.Delete(lockPath);
-        Console.WriteLine(
-            "If Heroes of the Storm is still open, close it. A forced stop does not run the spectator shutdown."
-        );
-        return 0;
+            if (living.Count == 0)
+            {
+                Console.WriteLine(
+                    sawAny ? "Services stopped." : "No HeroesReplay services are running."
+                );
+                return 0;
+            }
+
+            foreach (ServiceProcessRecord record in living)
+            {
+                try
+                {
+                    kill(record.Pid);
+                    Console.WriteLine($"Stopped {record.Name} pid {record.Pid}.");
+                }
+                catch (Exception e)
+                {
+                    Console.Error.WriteLine(
+                        $"Could not stop {record.Name} pid {record.Pid}: {e.Message}"
+                    );
+                }
+            }
+
+            Console.WriteLine(
+                "Forced stop skipped spectator shutdown. If Heroes of the Storm is still open, close it."
+            );
+            return 0;
+        }
+        finally
+        {
+            ServiceLockStore.Delete(lockPath);
+            clearStopFile?.Invoke();
+        }
     }
 
     public static int Status(
