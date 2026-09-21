@@ -9,6 +9,15 @@ namespace HeroesReplay.Tests.Unit.Obs;
 public class SessionMediaTests
 {
     [Fact]
+    public void ShouldStream_OffByDefault()
+    {
+        Assert.False(SessionMedia.ShouldStream(null));
+        Assert.False(SessionMedia.ShouldStream(new OBSSettings()));
+        Assert.False(SessionMedia.ShouldStream(new OBSSettings { StreamingEnabled = false }));
+        Assert.True(SessionMedia.ShouldStream(new OBSSettings { StreamingEnabled = true }));
+    }
+
+    [Fact]
     public void ShouldRecord_OffUnlessRequested()
     {
         var obs = new OBSSettings { RecordingEnabled = false, RecordRequestedReplays = true };

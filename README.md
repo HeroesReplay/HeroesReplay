@@ -6,12 +6,26 @@ Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Mod
 
 ## What it does
 
-1. Load a local `.StormReplay`, a directory of them, or download Storm League games from Heroes Profile (S3).
+1. Load a local `.StormReplay`, a directory of them, or download Storm League games from Heroes Profile (HTTPS, not AWS S3).
 2. Build a **focus timeline**: kills, proximity, camps, objectives, structures, emotes. Weights live in `appsettings.json`.
 3. Launch Heroes of the Storm (Battle.net when the replay is the latest client build), wait for the in-game timer (WinRT OCR + **BitBlt** of the windowed client).
-4. Send spectator hotkeys (`1`–`0`, Ctrl+panels) as the OCR timer advances. When the match clock starts, send **Ctrl+Z** (zoom out). AhliObs already hides the replay control panel; do not send Ctrl+Shift+O (that chord toggles it back on).
+4. Send spectator hotkeys (`1`–`0`, Ctrl+panels) as the OCR timer advances. Player focus uses Observe Player 1–10, not Follow Player Camera (C). AhliObs already hides the replay control panel; do not send Ctrl+Shift+O (that chord toggles it back on).
 5. Optionally control **OBS Studio 28+** (obs-websocket **5**, default `ws://127.0.0.1:4455`): game scene, recording folder, rank images, post-game Heroes Profile report scenes (`summary`, `match-scores`, `talents`, `experience`, team stats).
 6. Chat **`!talents`** (Ctrl+1) and **`!stats`** (Ctrl+2) show those Ahli panels for 10 seconds (2 minute cooldown each). Talents still open automatically at talent times.
+
+Spectator camera uses **Observe Player 1–10** (`1`–`0`). It does **not** send Follow Player Camera (`C`) and does **not** send Shift+Z ultra zoom (that jittered on hero swaps).
+
+## Maps and modes
+
+Heroes Profile loop is **Storm League** on the current patch. Channel-point rewards can also queue **Quick Match** and **ARAM**. Unranked Draft and brawls are not supported (Unranked Draft is gone from current clients).
+
+**Ranked / QM (15):** Infernal Shrines, Sky Temple, Cursed Hollow, Dragon Shire, Towers of Doom, Tomb of the Spider Queen, Volskaya Foundry, Garden of Terror, Blackheart's Bay, Warhead Junction, Alterac Pass, Battlefield of Eternity, Hanamura Temple, Haunted Mines, Braxis Holdout.
+
+**ARAM (reward / ReplayId only):** Silver City, Lost Cavern, Industrial District, Braxis Outpost.
+
+ReplayId rewards should use a **recent current-patch** id. Older `.StormReplay` files need a matching `Versions\Base*` client already on disk; Blizzard often stops serving old builds.
+
+Catalog: `Maps:Catalog` in `appsettings.json` (`Playable`, `RankedRotation`, `Type`).
 
 ## Requirements
 
@@ -19,7 +33,7 @@ Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Mod
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Heroes of the Storm + Battle.net
 - Optional: OBS Studio 28+ with **Tools → WebSocket Server Settings** enabled (port **4455**)
-- Optional: Twitch app credentials, Heroes Profile API key, AWS keys for S3 replay download
+- Optional: Twitch app credentials, Heroes Profile API key (Bearer). S3/AWS keys are not used.
 
 ## Build
 
@@ -75,7 +89,7 @@ dotnet run --no-launch-profile -- --help
 | Command | Purpose |
 | --- | --- |
 | `spectate file --file <path>` | Play one replay (or each file in a directory) then exit |
-| `spectate heroesprofile` | Download and spectate Heroes Profile S3 replays in a loop |
+| `spectate heroesprofile` | Download and spectate Heroes Profile Storm League replays in a loop |
 | `calculators coordinates` | Parse the newest Documents replay and prove coordinates + focus timeline |
 | `calculators report --file <path>` | Write a spectator report |
 | `twitch connect` / `twitch rewards …` | Chat bot and channel-point rewards |

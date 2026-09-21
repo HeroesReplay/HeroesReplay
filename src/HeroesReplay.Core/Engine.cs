@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Providers;
@@ -21,6 +22,7 @@ public class Engine : IEngine
     private readonly IReplayProvider replayProvider;
     private readonly CancellationTokenProvider consoleTokenProvider;
     private readonly SpectatorStatusStore statusStore;
+    private readonly IConnectivityWatchdog connectivityWatchdog;
 
     public Engine(
         ILogger<Engine> logger,
@@ -29,7 +31,8 @@ public class Engine : IEngine
         IGameData gameData,
         IReplayProvider replayProvider,
         CancellationTokenProvider consoleTokenProvider,
-        SpectatorStatusStore statusStore
+        SpectatorStatusStore statusStore,
+        IConnectivityWatchdog connectivityWatchdog
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -41,6 +44,8 @@ public class Engine : IEngine
         this.consoleTokenProvider =
             consoleTokenProvider ?? throw new ArgumentNullException(nameof(consoleTokenProvider));
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
+        this.connectivityWatchdog =
+            connectivityWatchdog ?? throw new ArgumentNullException(nameof(connectivityWatchdog));
     }
 
     public async Task RunAsync()
@@ -50,7 +55,8 @@ public class Engine : IEngine
             await Initialize();
             await Task.WhenAll(
                 Task.Run(SpectatorAsync, consoleTokenProvider.Token),
-                Task.Run(TwitchBotAsync, consoleTokenProvider.Token)
+                Task.Run(TwitchBotAsync, consoleTokenProvider.Token),
+                Task.Run(ConnectivityAsync, consoleTokenProvider.Token)
             );
         }
         catch (OperationCanceledException) { }
@@ -69,6 +75,11 @@ public class Engine : IEngine
     private async Task TwitchBotAsync()
     {
         await twitchBot.InitializeAsync();
+    }
+
+    private async Task ConnectivityAsync()
+    {
+        await connectivityWatchdog.RunAsync(consoleTokenProvider.Token);
     }
 
     private async Task SpectatorAsync()

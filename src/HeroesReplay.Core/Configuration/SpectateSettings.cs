@@ -19,6 +19,18 @@ public class SpectateSettings
     public TimeSpan RetryTimerSleepDuration { get; set; }
 
     public TimeSpan EndScreenTime { get; set; }
+
+    /// <summary>OCR reads per tick when the clock jumps (1–5).</summary>
+    public int OcrConfirmReads { get; set; } = 3;
+
+    /// <summary>Reject an OCR clock that leaps more than this from the last accepted time.</summary>
+    public TimeSpan MaxTimerJump { get; set; } = TimeSpan.FromSeconds(8);
+
+    /// <summary>
+    /// After the core dies, consecutive OCR misses (timer hidden on end screens)
+    /// required before ending the session.
+    /// </summary>
+    public int MissingTimerReadsToEnd { get; set; } = 3;
     public TimeSpan PanelDownTime { get; set; }
     public TimeSpan TalentsPanelStartTime { get; set; }
     public TimeSpan StatsPanelShowDuration { get; set; }

@@ -86,7 +86,7 @@ public class NearBossCalculator : IFocusCalculator
                         GetType(),
                         heroUnit,
                         heroUnit.PlayerControlledBy,
-                        settings.Weights.CaptureBeacon,
+                        settings.Weights.BossCapture,
                         $"{heroUnit.PlayerControlledBy.Character} near {boss.Name} (Boss)"
                     );
                 }

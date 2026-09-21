@@ -9,9 +9,10 @@ public class TrackerEventSettings
     public string JungleCampCapture { get; set; }
 
     /// <summary>
-    /// StatGameEvent names that mark the end screen. Session end uses the last
-    /// matching time (e.g. EndOfGameUpVotesCollected). ScoreResultEvent is only
-    /// used when none of these names appear in the replay.
+    /// StatGameEvent names that mark the end screen (e.g. EndOfGameUpVotesCollected).
+    /// These may extend the watch past CoreKilled + EndScreenTime; they do not
+    /// replace the core-death hold. ScoreResultEvent is only used when none of
+    /// these names appear in the replay.
     /// </summary>
     public IEnumerable<string> EndOfGameStatEvents { get; set; }
 

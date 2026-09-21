@@ -102,8 +102,11 @@ public class TwitchBot : ITwitchBot
         logger.LogDebug($"{e.Data}");
     }
 
-    private void Client_OnConnectionError(object sender, OnConnectionErrorArgs e) =>
+    private void Client_OnConnectionError(object sender, OnConnectionErrorArgs e)
+    {
         logger.LogError(e.Error.Message, "OnConnectionError");
+        _ = ReconnectChatAsync();
+    }
 
     private void PubSub_OnPubSubServiceConnected(object sender, EventArgs e)
     {

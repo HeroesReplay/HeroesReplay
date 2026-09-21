@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
@@ -14,7 +13,6 @@ public sealed class StubController : IGameController
     private readonly ILogger<StubController> logger;
     private readonly IReplayContext context;
     private readonly Queue<TimeSpan?> timers = new();
-    private Stopwatch replayOpened;
 
     public StubController(ILogger<StubController> logger, IReplayContext context)
     {
@@ -22,12 +20,13 @@ public sealed class StubController : IGameController
         this.context = context;
     }
 
-    public TimeSpan? ReplayOpenElapsed =>
-        replayOpened != null && replayOpened.IsRunning
-            ? TimeSpan.FromSeconds(Math.Floor(replayOpened.Elapsed.TotalSeconds))
-            : null;
-
     public void Kill() { }
+
+    public void SaveEndScreenshot() { }
+
+    public bool IsGameHung() => false;
+
+    public bool IsGameRunning() => true;
 
     public Task LaunchAsync()
     {
@@ -41,15 +40,12 @@ public sealed class StubController : IGameController
             timers.Enqueue(TimeSpan.FromSeconds(second));
         }
 
-        replayOpened = Stopwatch.StartNew();
         return Task.CompletedTask;
     }
 
     public void SendFocus(int player) => logger.LogInformation("Selected player {Player}", player);
 
     public void SendPanel(Panel panel) => logger.LogInformation("Selected panel {Panel}", panel);
-
-    public void ZoomOut() => logger.LogInformation("Zoom out (Ctrl+Z)");
 
     public Task<TimeSpan?> TryGetTimerAsync()
     {

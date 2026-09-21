@@ -16,6 +16,8 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 
 `--no-launch-profile` is required; launchSettings would otherwise inject leftover spectate args.
 
+On **ASA-SERVER** (dev VM): after spectator/OCR/OBS/Twitch code changes, stop `heroesreplay`, `dotnet build heroes-replay.slnx -c Release`, copy `appsettings.secrets.json` into the CLI Release bin, and relaunch. That is the normal test loop. Do **not** start Twitch ingest. On **DESKTOP-8SJE72** (live), do not kill/rebuild the running stream.
+
 ## Commands
 
 | Command | Behavior |

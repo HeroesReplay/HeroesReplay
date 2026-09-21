@@ -9,11 +9,13 @@ public class AppSettings
     public HeroesToolChestSettings HeroesToolChest { get; set; }
     public GithubSettings Github { get; set; }
     public OBSSettings OBS { get; set; }
+    public ConnectivitySettings Connectivity { get; set; }
     public StormReplaySettings StormReplay { get; set; }
     public HeroesProfileApiSettings HeroesProfileApi { get; set; }
     public HeroesProfileTwitchExtensionSettings TwitchExtension { get; set; }
     public TrackerEventSettings TrackerEvents { get; set; }
     public WeightSettings Weights { get; set; }
+    public CalculatorSettings Calculators { get; set; }
     public ReplayDetailsWriterSettings ReplayDetailsWriter { get; set; }
     public TwitchSettings Twitch { get; set; }
     public SpectateSettings Spectate { get; set; }

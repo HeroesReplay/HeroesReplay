@@ -8,6 +8,7 @@ using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Analysis.Calculators;
 using HeroesReplay.Core.Services.Client;
+using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.HeroesProfile;
@@ -137,7 +138,9 @@ public static class ServiceCollectionExtensions
                     AccessToken = bound.Twitch?.AccessToken,
                     ClientId = bound.Twitch?.ClientId,
                 };
-            });
+            })
+            .AddSingleton<SpectatorStatusStore>()
+            .AddConnectivityServices();
     }
 
     public static AppSettings BindSettings(IConfiguration configuration)
@@ -410,7 +413,29 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IObsController, ObsController>()
             .AddSingleton<IEngine, Engine>()
             .AddSingleton<SpectatorStatusStore>()
+            .AddConnectivityServices()
             .AddFocusCalculators();
+    }
+
+    private static IServiceCollection AddConnectivityServices(this IServiceCollection services)
+    {
+        services
+            .AddHttpClient<INetworkProbe, NetworkProbe>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(8);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                    "HeroesReplay-ConnectivityWatchdog"
+                );
+            })
+            .Services.AddSingleton<IConnectivityWatchdog>(sp => new ConnectivityWatchdog(
+                sp.GetRequiredService<ILogger<ConnectivityWatchdog>>(),
+                sp.GetRequiredService<AppSettings>(),
+                sp.GetRequiredService<INetworkProbe>(),
+                sp.GetRequiredService<SpectatorStatusStore>(),
+                sp.GetRequiredService<CancellationTokenProvider>(),
+                sp.GetService<IObsController>()
+            ));
+        return services;
     }
 
     private static IServiceCollection AddHeroesProfileKiotaClient(this IServiceCollection services)

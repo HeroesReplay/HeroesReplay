@@ -91,7 +91,6 @@ public class GameManager : IGameManager
                 obsSession = true;
                 statusStore.Patch(status => status.ObsSession = true);
                 obsController.ConfigureFromContext();
-                obsController.SwapToGameScene();
                 obsController.StartRecording();
             }
 
@@ -115,6 +114,15 @@ public class GameManager : IGameManager
                     obsController.StopRecording();
                 }
                 catch { }
+            }
+
+            try
+            {
+                gameController.SaveEndScreenshot();
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "Could not save end screenshot.");
             }
 
             gameController.Kill();

@@ -14,6 +14,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Context;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Logging;
 using Polly;
@@ -34,12 +35,12 @@ public class GameController : IGameController
     private readonly ILogger<GameController> logger;
     private readonly IReplayContext context;
     private readonly AppSettings settings;
+    private readonly IObsController obsController;
     private readonly CaptureStrategy captureStrategy;
 
     private readonly object controllerLock = new object();
     private Process cachedProcess;
     private IntPtr cachedHandle;
-    private Stopwatch replayOpened;
 
     public static readonly VirtualKey[] Keys =
     {
@@ -59,6 +60,7 @@ public class GameController : IGameController
         ILogger<GameController> logger,
         IReplayContext context,
         AppSettings settings,
+        IObsController obsController,
         CaptureStrategy captureStrategy,
         OcrEngine engine,
         CancellationTokenProvider tokenProvider
@@ -67,17 +69,14 @@ public class GameController : IGameController
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.context = context ?? throw new ArgumentNullException(nameof(context));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        this.obsController =
+            obsController ?? throw new ArgumentNullException(nameof(obsController));
         this.captureStrategy =
             captureStrategy ?? throw new ArgumentNullException(nameof(captureStrategy));
         this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
     }
-
-    public TimeSpan? ReplayOpenElapsed =>
-        replayOpened != null && replayOpened.IsRunning
-            ? TimeSpan.FromSeconds(Math.Floor(replayOpened.Elapsed.TotalSeconds))
-            : null;
 
     public async Task LaunchAsync()
     {
@@ -102,7 +101,7 @@ public class GameController : IGameController
         if (IsLaunched() && await IsReplay().ConfigureAwait(false))
         {
             logger.LogInformation("Client already in a replay (timer visible). Skipping launch.");
-            replayOpened ??= Stopwatch.StartNew();
+            ShowGameScene("timer already visible");
             return;
         }
 
@@ -111,7 +110,6 @@ public class GameController : IGameController
             logger.LogInformation(
                 "Client is running and not on the home screen; attaching without waiting for loading OCR."
             );
-            replayOpened ??= Stopwatch.StartNew();
             return;
         }
 
@@ -200,8 +198,6 @@ public class GameController : IGameController
             )
         ) { }
 
-        replayOpened = Stopwatch.StartNew();
-
         bool versionMatched = Policy
             .Handle<Exception>()
             .OrResult<bool>(result => result == false)
@@ -231,11 +227,34 @@ public class GameController : IGameController
             )
             .ExecuteAsync(
                 async (t) =>
-                    await ContainsAnyAsync(searchTerms).ConfigureAwait(false)
-                    || await IsReplay().ConfigureAwait(false),
+                {
+                    bool loading = await ContainsAnyAsync(searchTerms).ConfigureAwait(false);
+                    bool timer = await IsReplay().ConfigureAwait(false);
+                    if (loading)
+                    {
+                        ShowGameScene("loading screen");
+                    }
+                    else if (timer)
+                    {
+                        ShowGameScene("timer visible");
+                    }
+
+                    return loading || timer;
+                },
                 tokenProvider.Token
             )
             .ConfigureAwait(false);
+    }
+
+    private void ShowGameScene(string reason)
+    {
+        if (!settings.OBS.Enabled)
+        {
+            return;
+        }
+
+        logger.LogInformation("OBS game-scene ({Reason}).", reason);
+        obsController.SwapToGameScene();
     }
 
     public async Task<TimeSpan?> TryGetTimerAsync()
@@ -521,11 +540,6 @@ public class GameController : IGameController
         );
     }
 
-    public void ZoomOut()
-    {
-        SendChord("zoom out (Ctrl+Z)", VirtualKey.VK_CONTROL, VirtualKey.VK_Z);
-    }
-
     private void SendChord(string description, params VirtualKey[] keys)
     {
         lock (controllerLock)
@@ -540,6 +554,63 @@ public class GameController : IGameController
             logger.LogInformation("Sent {Description} to hwnd {Handle}.", description, handle);
         }
     }
+
+    public void SaveEndScreenshot()
+    {
+        try
+        {
+            if (!TryGetGameHandle(out IntPtr handle))
+            {
+                logger.LogWarning("Could not capture end screenshot; no game window.");
+                return;
+            }
+
+            string directory = context.Current?.Directory?.FullName;
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                logger.LogWarning("Could not capture end screenshot; no context directory.");
+                return;
+            }
+
+            Directory.CreateDirectory(directory);
+            using Bitmap bitmap = captureStrategy.Capture(handle);
+            if (bitmap == null)
+            {
+                logger.LogWarning("End screenshot capture returned no bitmap.");
+                return;
+            }
+
+            TimeSpan timer = context.Current.Timer ?? TimeSpan.Zero;
+            string name =
+                $"end-{((int)timer.TotalHours):D2}-{timer.Minutes:D2}-{timer.Seconds:D2}.png";
+            string path = Path.Combine(directory, name);
+            bitmap.Save(path, ImageFormat.Png);
+            File.Copy(path, Path.Combine(directory, "end.png"), overwrite: true);
+            logger.LogInformation(
+                "Wrote end screenshot {Path} ({Width}x{Height}) timer={Timer}.",
+                path,
+                bitmap.Width,
+                bitmap.Height,
+                timer
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not write end screenshot.");
+        }
+    }
+
+    public bool IsGameHung()
+    {
+        if (!TryGetGameHandle(out IntPtr handle) || handle == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        return NativeMethods.IsHungAppWindow(handle);
+    }
+
+    public bool IsGameRunning() => IsGameProcessRunning();
 
     public void Kill()
     {
@@ -711,5 +782,11 @@ public class GameController : IGameController
         {
             logger.LogError(result.Exception, "Could not kill game process.");
         }
+    }
+
+    private static class NativeMethods
+    {
+        [DllImport("user32.dll")]
+        public static extern bool IsHungAppWindow(IntPtr hwnd);
     }
 }

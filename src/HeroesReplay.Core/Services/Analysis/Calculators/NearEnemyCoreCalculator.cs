@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Services.Data;
 
 namespace HeroesReplay.Core.Services.Analysis.Calculators;
@@ -58,7 +59,7 @@ public class NearEnemyCoreCalculator : IFocusCalculator
 
                 foreach (Unit core in cores)
                 {
-                    if (core.Team == heroUnit.Team)
+                    if (core.Team == heroUnit.Team || !core.IsAliveAt(now))
                     {
                         continue;
                     }

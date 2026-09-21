@@ -100,6 +100,36 @@ public class AnalyzerTests : IClassFixture<ReplayFixture>
     }
 
     [Fact]
+    public void GetWatchUntil_HoldsAfterCore_TrackerCanExtendNotShorten()
+    {
+        TimeSpan core = TimeSpan.FromMinutes(17);
+        TimeSpan hold = TimeSpan.FromMinutes(1);
+        TimeSpan length = TimeSpan.FromMinutes(20);
+
+        Assert.Equal(
+            TimeSpan.FromMinutes(18),
+            ReplayAnalyzer.GetWatchUntil(core, TimeSpan.FromMinutes(17.3), hold, length)
+        );
+        Assert.Equal(
+            TimeSpan.FromMinutes(18.5),
+            ReplayAnalyzer.GetWatchUntil(core, TimeSpan.FromMinutes(18.5), hold, length)
+        );
+        Assert.Equal(
+            TimeSpan.FromMinutes(17.5),
+            ReplayAnalyzer.GetWatchUntil(
+                core,
+                TimeSpan.FromMinutes(17.2),
+                hold,
+                TimeSpan.FromMinutes(17.5)
+            )
+        );
+        Assert.Equal(
+            TimeSpan.Zero,
+            ReplayAnalyzer.GetWatchUntil(TimeSpan.Zero, core, hold, length)
+        );
+    }
+
+    [Fact]
     public void FocusTimeline_IsContiguousFromFirstSelectionToEnd()
     {
         var settings = CreateSettings();

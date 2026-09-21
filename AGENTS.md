@@ -40,8 +40,24 @@ CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents
 | Hostname | `ASA-SERVER` | `DESKTOP-8SJE72` |
 | Role | Development VM (Unraid guest). Lighter GPU: Intel Arc A310. Keep QXL/VNC. | 24/7 Twitch stream box (`saltysadism`). |
 | Repo | `C:\heroesreplay\HeroesReplay` | Same path. Do not clone elsewhere (OBS `Default.json` hard-codes it). |
-| Stream | Do not treat as the 24/7 channel. OBS/Twitch here is for testing. | Production ingest. Do not experiment on the live stream. |
+| Stream | **Do not go live.** OBS, predictions, chat, rewards, and requested-replay recording/YouTube are for testing only. | Production ingest. Do not experiment on the live stream. |
 | Upgrades | Safe to stop spectate, rebuild, reboot the guest (not Unraid/Tower). | Schedule **downtime** before pull, rebuild, client/OBS upgrades, or reboots. |
+| Spectator engine | **Normal** to kill `heroesreplay`, quit HotS, `dotnet build -c Release`, copy `appsettings.secrets.json` into the CLI bin, and relaunch (`elev-hr-spectate*.ps1`). That is how changes are tested here. | Do **not** kill/rebuild/restart the spectator as a routine. Treat the running stream as production. |
+
+On **ASA-SERVER**, agents should rebuild and restart after spectator/OBS/Twitch/OCR changes, then watch `%LOCALAPPDATA%\HeroesReplay\status.json` and `Data\Contexts\<id>\end.png` (last frame before `Kill()`). On **DESKTOP-8SJE72**, ask before stopping anything.
+
+### Maps, modes, client
+
+- Loop: Storm League, current patch. Rewards: QM, SL, ARAM. Not Unranked Draft (removed from the client) or brawls (`Maps:Catalog` `Playable: false`).
+- Ranked/QM maps: Infernal Shrines, Sky Temple, Cursed Hollow, Dragon Shire, Towers of Doom, Tomb of the Spider Queen, Volskaya Foundry, Garden of Terror, Blackheart's Bay, Warhead Junction, Alterac Pass, Battlefield of Eternity, Hanamura Temple, Haunted Mines, Braxis Holdout.
+- ARAM: Silver City, Lost Cavern, Industrial District, Braxis Outpost.
+- ReplayId rewards: current patch only. Older replays need a local `Versions\Base*` folder; old clients are often no longer downloadable.
+- Spectator keys: `1`–`0` observe player. Do not send `C` (follow player camera) or Shift+Z ultra zoom.
+- Twitch: chat + PubSub reconnect with backoff; Helix predictions; channel-point rewards queue `Data\requests.json`. Reward prompts must say recent patch ReplayIds.
+
+### Calculators
+
+`Calculators:Enabled` in appsettings (type name, default on) for A/B. Example: `"EmotingCalculator": false`.
 
 Both are Windows 11. Use the **same directory tree** so spectate, downloads, and OBS assets match.
 

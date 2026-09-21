@@ -17,6 +17,8 @@ public sealed class SpectatorStatus
     public string ReplayVersion { get; set; }
     public int? ReplayId { get; set; }
     public bool ObsSession { get; set; }
+    public bool? ConnectivityOnline { get; set; }
+    public string Connectivity { get; set; }
     public SpectatorFocusStatus Focus { get; set; }
 }
 

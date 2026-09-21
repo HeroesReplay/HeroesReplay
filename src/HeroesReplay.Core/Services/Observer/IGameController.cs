@@ -6,11 +6,12 @@ namespace HeroesReplay.Core.Services.Observer;
 
 public interface IGameController
 {
-    TimeSpan? ReplayOpenElapsed { get; }
     Task LaunchAsync();
     Task<TimeSpan?> TryGetTimerAsync();
     void SendFocus(int player);
     void SendPanel(Panel panel);
-    void ZoomOut();
+    void SaveEndScreenshot();
+    bool IsGameHung();
+    bool IsGameRunning();
     void Kill();
 }

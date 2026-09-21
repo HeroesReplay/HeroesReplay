@@ -6,7 +6,17 @@ namespace HeroesReplay.Core.Configuration;
 public class OBSSettings
 {
     public bool Enabled { get; set; }
+
+    /// <summary>Optional path to obs64.exe. Empty = default Program Files install.</summary>
+    public string ExecutablePath { get; set; }
     public bool RecordingEnabled { get; set; }
+
+    /// <summary>
+    /// When false (the default), HeroesReplay never calls OBS StartStream/StopStream.
+    /// Dev VMs must leave this off so connectivity recovery cannot go live.
+    /// </summary>
+    public bool StreamingEnabled { get; set; }
+
     public bool RecordRequestedReplays { get; set; }
     public string InfoFileName { get; set; }
     public string WebSocketEndpoint { get; set; }

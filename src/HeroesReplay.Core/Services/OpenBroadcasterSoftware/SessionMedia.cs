@@ -28,6 +28,8 @@ public static class SessionMedia
         return true;
     }
 
+    public static bool ShouldStream(OBSSettings obs) => obs is { StreamingEnabled: true };
+
     public static bool ShouldRecord(OBSSettings obs, LoadedReplay replay)
     {
         if (obs == null)

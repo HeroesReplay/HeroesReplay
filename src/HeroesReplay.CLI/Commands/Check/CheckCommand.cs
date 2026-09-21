@@ -9,6 +9,7 @@ using HeroesReplay.CLI;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Client;
+using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Configuration;
@@ -23,7 +24,7 @@ public class CheckCommand : Command
     public CheckCommand()
         : base(
             "check",
-            "Validate configuration and connectivity to Heroes Profile, OBS, and Twitch."
+            "Validate configuration and connectivity to Heroes Profile, OBS, Twitch, and the internet."
         )
     {
         Subcommands.Add(
@@ -51,6 +52,13 @@ public class CheckCommand : Command
                 "client",
                 "Verify windowed 1080p and AhliObs in Heroes of the Storm Variables.txt.",
                 CheckClientAsync
+            )
+        );
+        Subcommands.Add(
+            Build(
+                "connectivity",
+                "Probe 1.1.1.1, Twitch, and Heroes Profile without starting an OBS stream.",
+                CheckConnectivityAsync
             )
         );
 
@@ -89,6 +97,7 @@ public class CheckCommand : Command
             await CheckObsAsync(cancellationToken),
             await CheckTwitchAsync(cancellationToken),
             await CheckClientAsync(cancellationToken),
+            await CheckConnectivityAsync(cancellationToken),
         };
 
         bool ok = true;
@@ -113,6 +122,7 @@ public class CheckCommand : Command
                 $"Heroes Profile v1 URI: {settings.HeroesProfileApi?.ExternalV1BaseUri}",
                 $"OBS endpoint: {settings.OBS?.WebSocketEndpoint}",
                 $"OBS password: {SecretResolver.Describe(settings.OBS?.WebSocketPassword)}",
+                $"OBS streaming enabled: {settings.OBS?.StreamingEnabled == true}",
                 $"OBS report scenes enabled: {DescribeReportScenes(settings)}",
                 $"Twitch channel: {NullToMissing(settings.Twitch?.Channel)}",
                 $"Twitch access token: {SecretResolver.Describe(settings.Twitch?.AccessToken)}",
@@ -282,6 +292,37 @@ public class CheckCommand : Command
         catch (Exception e)
         {
             return Fail("twitch", e);
+        }
+    }
+
+    public static async Task<CheckResult> CheckConnectivityAsync(
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            using var provider = CreateProvider(cancellationToken);
+            IConnectivityWatchdog watchdog = provider.GetRequiredService<IConnectivityWatchdog>();
+            AppSettings settings = provider.GetRequiredService<AppSettings>();
+            using Activity activity = HeroesReplayTelemetry.StartSpan(
+                "heroesreplay.check.connectivity"
+            );
+            ConnectivitySnapshot snapshot = await watchdog.ProbeAsync(cancellationToken);
+            activity?.SetTag("connectivity.internet", snapshot.Internet);
+            activity?.SetTag("connectivity.twitch", snapshot.Twitch);
+            activity?.SetTag("connectivity.heroesprofile", snapshot.HeroesProfile);
+            activity?.SetTag("obs.streaming_enabled", settings.OBS?.StreamingEnabled == true);
+
+            bool ok = snapshot.Internet || snapshot.Twitch || snapshot.HeroesProfile;
+            string streamNote =
+                settings.OBS?.StreamingEnabled == true
+                    ? " OBS:StreamingEnabled is true (this check does not StartStream)."
+                    : " OBS:StreamingEnabled is false (StartStream will not run).";
+            return new CheckResult("connectivity", ok, snapshot.Describe() + streamNote);
+        }
+        catch (Exception e)
+        {
+            return Fail("connectivity", e);
         }
     }
 

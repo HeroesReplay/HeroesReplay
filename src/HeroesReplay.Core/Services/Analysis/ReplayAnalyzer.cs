@@ -110,6 +110,33 @@ public class ReplayAnalyzer : IReplayAnalyzer
         return GetEnd(replay);
     }
 
+    /// <summary>
+    /// When to stop watching: at least <paramref name="endScreenTime"/> after the
+    /// core dies. Tracker end-screen events may extend that, never shorten it.
+    /// Capped at replay length so we do not wait past the file.
+    /// </summary>
+    public static TimeSpan GetWatchUntil(
+        TimeSpan coreKilled,
+        TimeSpan trackerEnd,
+        TimeSpan endScreenTime,
+        TimeSpan replayLength
+    )
+    {
+        if (coreKilled <= TimeSpan.Zero)
+        {
+            return TimeSpan.Zero;
+        }
+
+        TimeSpan afterCore = coreKilled + endScreenTime;
+        TimeSpan end = trackerEnd > afterCore ? trackerEnd : afterCore;
+        if (replayLength > TimeSpan.Zero && end > replayLength)
+        {
+            return replayLength;
+        }
+
+        return end;
+    }
+
     public IReadOnlyDictionary<TimeSpan, Panel> GetPanels(Replay replay)
     {
         if (replay == null)
@@ -172,6 +199,15 @@ public class ReplayAnalyzer : IReplayAnalyzer
         ReplayTimeline timeline = ReplayTimeline.Create(replay);
         foreach (IFocusCalculator calculator in calculators)
         {
+            if (
+                settings.Calculators != null
+                && !settings.Calculators.IsEnabled(calculator.GetType())
+            )
+            {
+                logger.LogInformation("Calculator {Name} disabled.", calculator.GetType().Name);
+                continue;
+            }
+
             calculator.Contribute(timeline);
         }
 

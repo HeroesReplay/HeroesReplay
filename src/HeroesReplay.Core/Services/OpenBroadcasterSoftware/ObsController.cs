@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -154,6 +155,90 @@ public class ObsController : IObsController
             });
     }
 
+    public void StartStreaming()
+    {
+        if (!SessionMedia.ShouldStream(settings.OBS))
+        {
+            logger.LogDebug("Skipping OBS StartStream because OBS:StreamingEnabled is false.");
+            return;
+        }
+
+        Policy
+            .Handle<Exception>()
+            .WaitAndRetry(
+                retryCount: 5,
+                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(1)
+            )
+            .Execute(() =>
+            {
+                try
+                {
+                    EnsureConnected();
+                    OutputStatus status = obs.GetStreamStatus();
+                    if (!status.IsActive)
+                    {
+                        logger.LogInformation("Starting OBS stream.");
+                        obs.StartStream();
+                    }
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, "There was an error starting OBS streaming.");
+                }
+            });
+    }
+
+    public void StopStreaming()
+    {
+        if (!SessionMedia.ShouldStream(settings.OBS))
+        {
+            logger.LogDebug("Skipping OBS StopStream because OBS:StreamingEnabled is false.");
+            return;
+        }
+
+        Policy
+            .Handle<Exception>()
+            .WaitAndRetry(
+                retryCount: 5,
+                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(1)
+            )
+            .Execute(() =>
+            {
+                try
+                {
+                    EnsureConnected();
+                    OutputStatus status = obs.GetStreamStatus();
+                    if (status.IsActive)
+                    {
+                        logger.LogInformation("Stopping OBS stream.");
+                        obs.StopStream();
+                    }
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, "There was an error stopping OBS streaming.");
+                }
+            });
+    }
+
+    public bool IsStreaming()
+    {
+        try
+        {
+            if (!obs.IsIdentified)
+            {
+                return false;
+            }
+
+            return obs.GetStreamStatus().IsActive;
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not read OBS stream status.");
+            return false;
+        }
+    }
+
     public void SwapToGameScene()
     {
         Policy
@@ -170,6 +255,7 @@ public class ObsController : IObsController
                 {
                     EnsureConnected();
                     obs.SetCurrentProgramScene(settings.OBS.GameSceneName);
+                    logger.LogInformation("Set scene to: {Scene}", settings.OBS.GameSceneName);
                     return true;
                 }
                 catch (Exception e)
@@ -411,8 +497,46 @@ public class ObsController : IObsController
         }
     }
 
+    private void EnsureObsProcess()
+    {
+        if (Process.GetProcessesByName("obs64").Length > 0)
+        {
+            return;
+        }
+
+        string path = settings.OBS.ExecutablePath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            path = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "obs-studio",
+                "bin",
+                "64bit",
+                "obs64.exe"
+            );
+        }
+
+        if (!File.Exists(path))
+        {
+            logger.LogWarning("OBS is not running and {Path} was not found.", path);
+            return;
+        }
+
+        logger.LogWarning("OBS is not running; starting {Path}.", path);
+        Process.Start(
+            new ProcessStartInfo
+            {
+                FileName = path,
+                WorkingDirectory = Path.GetDirectoryName(path),
+                UseShellExecute = true,
+            }
+        );
+        Thread.Sleep(TimeSpan.FromSeconds(5));
+    }
+
     private void ConnectAndWait()
     {
+        EnsureObsProcess();
         if (obs.IsIdentified)
         {
             return;

@@ -12,4 +12,7 @@ public interface IObsController
     void SwapToWaitingScene();
     void StartRecording();
     void StopRecording();
+    void StartStreaming();
+    void StopStreaming();
+    bool IsStreaming();
 }

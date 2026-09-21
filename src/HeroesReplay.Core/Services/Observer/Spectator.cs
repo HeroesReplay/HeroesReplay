@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.HeroesProfileExtension;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Status;
 using HeroesReplay.Core.Services.Twitch;
@@ -26,15 +29,20 @@ public class Spectator : ISpectator
     private readonly SpectatorStatusStore statusStore;
     private readonly IObserverPanelRequests panelRequests;
     private readonly IMatchPredictionService predictions;
+    private readonly IObsController obsController;
     private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
     private State State { get; set; }
 
     private TimeSpan Timer { get; set; }
 
-    private Stopwatch softwareClock;
+    private readonly MatchTimerFilter timerFilter = new();
 
-    private bool replayViewConfigured;
+    private DateTimeOffset? endScreenStarted;
+
+    private int hungChecks;
+
+    private int missingProcessChecks;
 
     private ContextData Data => context.Current;
 
@@ -53,7 +61,8 @@ public class Spectator : ISpectator
         CancellationTokenProvider tokenProvider,
         SpectatorStatusStore statusStore,
         IObserverPanelRequests panelRequests,
-        IMatchPredictionService predictions
+        IMatchPredictionService predictions,
+        IObsController obsController
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -68,6 +77,8 @@ public class Spectator : ISpectator
         this.panelRequests =
             panelRequests ?? throw new ArgumentNullException(nameof(panelRequests));
         this.predictions = predictions ?? throw new ArgumentNullException(nameof(predictions));
+        this.obsController =
+            obsController ?? throw new ArgumentNullException(nameof(obsController));
 
         panelTimes = new()
         {
@@ -89,20 +100,12 @@ public class Spectator : ISpectator
                 return TimeSpan.Zero;
             }
 
-            TimeSpan marker = Data.SessionEnd > TimeSpan.Zero ? Data.SessionEnd : Data.CoreKilled;
-            if (marker <= TimeSpan.Zero)
-            {
-                return TimeSpan.Zero;
-            }
-
-            TimeSpan withHold = marker + settings.Spectate.EndScreenTime;
-            TimeSpan length = Data.LoadedReplay?.Replay?.ReplayLength ?? TimeSpan.Zero;
-            if (length > TimeSpan.Zero && withHold > length)
-            {
-                return length;
-            }
-
-            return withHold;
+            return ReplayAnalyzer.GetWatchUntil(
+                Data.CoreKilled,
+                Data.SessionEnd,
+                settings.Spectate.EndScreenTime,
+                Data.LoadedReplay?.Replay?.ReplayLength ?? TimeSpan.Zero
+            );
         }
     }
 
@@ -119,7 +122,10 @@ public class Spectator : ISpectator
         );
         State = State.Loading;
         Timer = default;
-        replayViewConfigured = false;
+        timerFilter.Reset();
+        endScreenStarted = null;
+        hungChecks = 0;
+        missingProcessChecks = 0;
         PublishStatus();
 
         using (CancelSessionSource = new CancellationTokenSource())
@@ -180,57 +186,28 @@ public class Spectator : ISpectator
         {
             try
             {
-                TimeSpan? result;
-                bool fromOcr = false;
-                TimeSpan? ocr = await controller.TryGetTimerAsync().ConfigureAwait(false);
-                if (ocr.HasValue)
-                {
-                    fromOcr = true;
-                    result = ocr;
-                    softwareClock = null;
-                }
-                else
-                {
-                    TimeSpan? sinceOpen = controller.ReplayOpenElapsed;
-                    if (sinceOpen.HasValue)
-                    {
-                        result = sinceOpen;
-                    }
-                    else
-                    {
-                        softwareClock ??= Stopwatch.StartNew();
-                        result = TimeSpan.FromSeconds(
-                            Math.Floor(softwareClock.Elapsed.TotalSeconds)
-                        );
-                    }
+                TimeSpan? ocrReplay = await ReadOcrReplayTimeAsync().ConfigureAwait(false);
+                bool fromOcr = ocrReplay.HasValue;
 
-                    if (State != State.TimerDetected)
-                    {
-                        logger.LogWarning(
-                            "Timer OCR unavailable; using elapsed since the replay was opened ({Elapsed}).",
-                            result
-                        );
-                    }
+                if (fromOcr)
+                {
+                    timerFilter.Accept(ocrReplay.Value);
+                    Timer = ocrReplay.Value;
+                }
+                else if (State != State.TimerDetected)
+                {
+                    logger.LogWarning("Timer OCR unavailable; still loading.");
                 }
 
-                bool firstTimer = State != State.TimerDetected && result.HasValue;
+                bool firstTimer = State != State.TimerDetected && fromOcr;
                 State =
                     CancelSessionSource.IsCancellationRequested ? State.EndDetected
-                    : result.HasValue ? State.TimerDetected
+                    : fromOcr || State == State.TimerDetected ? State.TimerDetected
                     : State.Loading;
 
-                if (result.HasValue)
+                if (fromOcr)
                 {
-                    // OCR reads the in-game clock (0:00 at gates). CoreKilled is replay time.
-                    // The software clock starts at spectate/replay 0:00 — do not add GatesOpen again.
-                    Timer = fromOcr ? result.Value.Add(context.Current.GatesOpen) : result.Value;
-                    logger.LogInformation(
-                        "{State}, {Source} {Raw} Replay Time: {Timer}",
-                        State,
-                        fromOcr ? "UI Time:" : "software:",
-                        result.Value,
-                        Timer
-                    );
+                    logger.LogInformation("{State}, HUD Time: {Timer}", State, Timer);
                     context.Current.Timer = Timer;
 
                     if (firstTimer)
@@ -239,9 +216,13 @@ public class Spectator : ISpectator
                             "heroesreplay.timer.detected",
                             sessionActivity
                         );
-                        detected?.SetTag("timer.source", fromOcr ? "ocr" : "software");
-                        detected?.SetTag("timer.raw", result.Value.ToString());
+                        detected?.SetTag("timer.source", "ocr");
                         detected?.SetTag("timer.replay", Timer.ToString());
+                        if (settings.OBS.Enabled)
+                        {
+                            logger.LogInformation("OBS game-scene (timer detected).");
+                            obsController.SwapToGameScene();
+                        }
                         try
                         {
                             await predictions
@@ -253,30 +234,39 @@ public class Spectator : ISpectator
                             logger.LogWarning(e, "Could not open Twitch Blue/Red prediction.");
                         }
                     }
+                }
 
-                    if (!replayViewConfigured)
+                if (!controller.IsGameRunning())
+                {
+                    missingProcessChecks++;
+                    logger.LogWarning(
+                        "Heroes of the Storm process is gone ({Count}).",
+                        missingProcessChecks
+                    );
+                    if (missingProcessChecks >= 2)
                     {
-                        using Activity view = HeroesReplayTelemetry.StartSpan(
-                            "heroesreplay.view.configure",
-                            sessionActivity
-                        );
-                        controller.ZoomOut();
-                        replayViewConfigured = true;
-                    }
-
-                    TimeSpan sessionEnd = SessionEndTime;
-                    if (sessionEnd > TimeSpan.Zero && Timer >= sessionEnd)
-                    {
-                        logger.LogInformation(
-                            "Ending session at {SessionEnd} (core {CoreKilled}, tracker {TrackerEnd}, timer {Timer}).",
-                            sessionEnd,
-                            context.Current.CoreKilled,
-                            context.Current.SessionEnd,
-                            Timer
-                        );
+                        logger.LogError("Game process exited (crash or closed); ending session.");
                         CancelSessionSource.Cancel();
                     }
                 }
+                else if (controller.IsGameHung())
+                {
+                    missingProcessChecks = 0;
+                    hungChecks++;
+                    logger.LogWarning("Game window hung ({Count}).", hungChecks);
+                    if (hungChecks >= 3)
+                    {
+                        logger.LogError("Game not responding; ending session.");
+                        CancelSessionSource.Cancel();
+                    }
+                }
+                else
+                {
+                    missingProcessChecks = 0;
+                    hungChecks = 0;
+                }
+
+                TryEndAfterCore(fromOcr);
 
                 PublishStatus();
 
@@ -288,6 +278,126 @@ public class Spectator : ISpectator
             {
                 logger.LogError(e, "Could not complete state loop");
             }
+        }
+    }
+
+    private async Task<TimeSpan?> ReadOcrReplayTimeAsync()
+    {
+        TimeSpan? first = await ReadOneOcrReplayTimeAsync().ConfigureAwait(false);
+        if (first == null)
+        {
+            return null;
+        }
+
+        TimeSpan maxJump =
+            settings.Spectate.MaxTimerJump > TimeSpan.Zero
+                ? settings.Spectate.MaxTimerJump
+                : TimeSpan.FromSeconds(8);
+        if (timerFilter.IsPlausible(first.Value, maxJump))
+        {
+            return first;
+        }
+
+        logger.LogWarning(
+            "OCR timer {Candidate} jumped from {Last}; confirming with extra reads.",
+            first,
+            timerFilter.LastAccepted
+        );
+
+        int extra = Math.Clamp(settings.Spectate.OcrConfirmReads, 1, 5) - 1;
+        var samples = new List<TimeSpan> { first.Value };
+        for (int i = 0; i < extra; i++)
+        {
+            await Task.Delay(75, LinkedTokenSource.Token).ConfigureAwait(false);
+            TimeSpan? next = await ReadOneOcrReplayTimeAsync().ConfigureAwait(false);
+            if (next.HasValue)
+            {
+                samples.Add(next.Value);
+            }
+        }
+
+        List<TimeSpan> plausible = samples
+            .Where(sample => timerFilter.IsPlausible(sample, maxJump))
+            .OrderBy(sample => sample)
+            .ToList();
+        if (plausible.Count == 0)
+        {
+            return null;
+        }
+
+        return plausible[plausible.Count / 2];
+    }
+
+    private async Task<TimeSpan?> ReadOneOcrReplayTimeAsync()
+    {
+        TimeSpan? ui = await controller.TryGetTimerAsync().ConfigureAwait(false);
+        if (!ui.HasValue)
+        {
+            return null;
+        }
+
+        TimeSpan candidate = ui.Value.Add(Data.GatesOpen);
+        TimeSpan replayLength = Data?.LoadedReplay?.Replay?.ReplayLength ?? TimeSpan.Zero;
+        if (replayLength > TimeSpan.Zero && candidate > replayLength + TimeSpan.FromMinutes(1))
+        {
+            logger.LogWarning(
+                "Ignoring implausible timer {Timer} (replay length {Length}).",
+                candidate,
+                replayLength
+            );
+            return null;
+        }
+
+        return candidate;
+    }
+
+    private void TryEndAfterCore(bool ocrTimerVisible)
+    {
+        if (Data?.CoreKilled <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        bool nearCore = Timer + TimeSpan.FromSeconds(20) >= Data.CoreKilled;
+        bool pastCore =
+            Timer >= Data.CoreKilled
+            || (!ocrTimerVisible && State == State.TimerDetected && nearCore);
+
+        if (!pastCore)
+        {
+            endScreenStarted = null;
+            return;
+        }
+
+        // HUD clock vanishing is the START of victory/MVP/votes, not the end.
+        endScreenStarted ??= DateTimeOffset.UtcNow;
+        TimeSpan held = DateTimeOffset.UtcNow - endScreenStarted.Value;
+        TimeSpan need =
+            settings.Spectate.EndScreenTime > TimeSpan.Zero
+                ? settings.Spectate.EndScreenTime
+                : TimeSpan.FromMinutes(1);
+
+        if (ocrTimerVisible)
+        {
+            logger.LogDebug(
+                "Past core {CoreKilled}; clock still visible at {Timer}, held {Held}.",
+                Data.CoreKilled,
+                Timer,
+                held
+            );
+        }
+
+        if (held >= need)
+        {
+            logger.LogInformation(
+                "Ending session after {Held} of end screen (core {CoreKilled}, tracker {TrackerEnd}, timer {Timer}, clockVisible={ClockVisible}).",
+                held,
+                Data.CoreKilled,
+                Data.SessionEnd,
+                Timer,
+                ocrTimerVisible
+            );
+            CancelSessionSource.Cancel();
         }
     }
 
