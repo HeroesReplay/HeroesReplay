@@ -65,51 +65,53 @@ public class ContextFileManager : IContextFileManager
 
     private async Task WriteObsFileAsync(ContextData contextData)
     {
-        if (settings.ReplayDetailsWriter.Enabled)
+        if (settings.ReplayDetailsWriter?.Enabled != true)
         {
-            try
+            return;
+        }
+
+        try
+        {
+            Replay replay = contextData.LoadedReplay.Replay;
+            string requestor = contextData.LoadedReplay.RewardQueueItem?.Request?.Login;
+            string gameType = contextData.LoadedReplay.HeroesProfileReplay?.GameType;
+            IEnumerable<string> bans = Enumerable.Empty<string>();
+
+            if (
+                contextData.TeamBans != null
+                && contextData.TeamBans.Values.Any(teamBans => teamBans != null && teamBans.Any())
+            )
             {
-                Replay replay = contextData.LoadedReplay.Replay;
-                string requestor = contextData.LoadedReplay.RewardQueueItem?.Request?.Login;
-                string gameType = contextData.LoadedReplay.HeroesProfileReplay?.GameType;
-                IEnumerable<string> bans = Enumerable.Empty<string>();
+                bans = bans.Append("Bans:");
 
-                if (contextData.TeamBans.Values.Any(teamBans => teamBans.Any()))
+                if (contextData.TeamBans[0].Any())
                 {
-                    bans = bans.Append("Bans:");
-
-                    if (contextData.TeamBans[0].Any())
-                    {
-                        bans = bans.Concat(contextData.TeamBans[0].Select(ban => $"T1: {ban}"));
-                    }
-
-                    if (contextData.TeamBans[1].Any())
-                    {
-                        bans = bans.Concat(contextData.TeamBans[1].Select(ban => $"T2: {ban}"));
-                    }
+                    bans = bans.Concat(contextData.TeamBans[0].Select(ban => $"T1: {ban}"));
                 }
 
-                var lines = new[]
+                if (contextData.TeamBans[1].Any())
                 {
-                    settings.ReplayDetailsWriter.Requestor
-                        ? requestor != null
-                            ? $"Requestor: {requestor}"
-                            : string.Empty
-                        : string.Empty,
-                    settings.ReplayDetailsWriter.GameType ? gameType ?? string.Empty : string.Empty,
-                }.Concat(settings.ReplayDetailsWriter.Bans ? bans : Enumerable.Empty<string>()).Where(line => !string.IsNullOrWhiteSpace(line));
+                    bans = bans.Concat(contextData.TeamBans[1].Select(ban => $"T2: {ban}"));
+                }
+            }
 
-                string file = Path.Combine(
-                    contextData.Directory.FullName,
-                    settings.OBS.InfoFileName
-                );
-                logger.LogInformation($"writing replay details to: {file}");
-                await File.WriteAllLinesAsync(file, lines, CancellationToken.None);
-            }
-            catch (Exception e)
+            var lines = new[]
             {
-                logger.LogError(e, $"Could not write OBS info file.");
-            }
+                settings.ReplayDetailsWriter.Requestor
+                    ? requestor != null
+                        ? $"Requestor: {requestor}"
+                        : string.Empty
+                    : string.Empty,
+                settings.ReplayDetailsWriter.GameType ? gameType ?? string.Empty : string.Empty,
+            }.Concat(settings.ReplayDetailsWriter.Bans ? bans : Enumerable.Empty<string>()).Where(line => !string.IsNullOrWhiteSpace(line));
+
+            string file = Path.Combine(contextData.Directory.FullName, settings.OBS.InfoFileName);
+            logger.LogInformation($"writing replay details to: {file}");
+            await File.WriteAllLinesAsync(file, lines, CancellationToken.None);
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, $"Could not write OBS info file.");
         }
     }
 

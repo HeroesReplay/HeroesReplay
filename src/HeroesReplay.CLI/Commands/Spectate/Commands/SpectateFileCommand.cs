@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HeroesReplay.CLI;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Providers;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -33,8 +34,9 @@ public class SpectateFileCommand : Command
     protected async Task CommandAsync(string path, CancellationToken cancellationToken)
     {
         var replayPath = new ReplayPathOptions { Path = path, PlayOnce = true };
+        using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
-            .AddSpectateServices(cancellationToken, typeof(ReplayFileProvider), replayPath)
+            .AddSpectateServices(stop.Token, typeof(ReplayFileProvider), replayPath)
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();

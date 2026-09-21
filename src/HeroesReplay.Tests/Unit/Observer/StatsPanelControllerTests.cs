@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Observer;
@@ -12,16 +13,7 @@ public class ObserverPanelRequestsTests
     [Fact]
     public void TryRequest_StatsAndTalentsHaveIndependentCooldowns()
     {
-        var controller = new ObserverPanelRequests(
-            new AppSettings
-            {
-                Spectate = new SpectateSettings
-                {
-                    StatsPanelShowDuration = TimeSpan.FromSeconds(10),
-                    StatsPanelCooldown = TimeSpan.FromMinutes(2),
-                },
-            }
-        );
+        var controller = new ObserverPanelRequests(Settings(), TempFile());
 
         Assert.Equal(
             ObserverPanelTryStatus.Accepted,
@@ -46,4 +38,37 @@ public class ObserverPanelRequestsTests
             controller.TryRequest(Panel.DeathDamageRole, "bob").Status
         );
     }
+
+    [Fact]
+    public void TwoInstances_ShareTheRequestFile()
+    {
+        string path = TempFile();
+        var twitch = new ObserverPanelRequests(Settings(), path);
+        var spectator = new ObserverPanelRequests(Settings(), path);
+
+        Assert.Equal(
+            ObserverPanelTryStatus.Accepted,
+            twitch.TryRequest(Panel.Talents, "alice").Status
+        );
+        Assert.True(spectator.TryConsume(out Panel panel, out string user));
+        Assert.Equal(Panel.Talents, panel);
+        Assert.Equal("alice", user);
+        Assert.Equal(
+            ObserverPanelTryStatus.AlreadyVisible,
+            twitch.TryRequest(Panel.Talents, "bob").Status
+        );
+    }
+
+    private static AppSettings Settings() =>
+        new()
+        {
+            Spectate = new SpectateSettings
+            {
+                StatsPanelShowDuration = TimeSpan.FromSeconds(10),
+                StatsPanelCooldown = TimeSpan.FromMinutes(2),
+            },
+        };
+
+    private static string TempFile() =>
+        Path.Combine(Path.GetTempPath(), $"heroesreplay-panels-{Guid.NewGuid():N}.json");
 }

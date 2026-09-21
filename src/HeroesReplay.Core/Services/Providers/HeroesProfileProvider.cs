@@ -108,6 +108,47 @@ public class HeroesProfileProvider : IReplayProvider
         this.heroesProfileResume = heroesProfileResume;
     }
 
+    /// <summary>
+    /// Download the next Storm League replay or a queued reward replay.
+    /// Does not load or spectate the file. Used by the downloader process.
+    /// </summary>
+    public async Task<bool> DownloadNextAsync()
+    {
+        if (settings.Twitch.EnableRequests)
+        {
+            RewardQueueItem item = await requestQueue.DequeueItemAsync().ConfigureAwait(false);
+            if (item?.HeroesProfileReplay != null)
+            {
+                await heroesProfileService
+                    .EnrichRankAsync(item.HeroesProfileReplay, provider.Token)
+                    .ConfigureAwait(false);
+                FileInfo requested = GetFileInfo(RequestsDirectory, item.HeroesProfileReplay);
+                if (!requested.Exists)
+                {
+                    await DownloadReplayAsync(item.HeroesProfileReplay, requested)
+                        .ConfigureAwait(false);
+                }
+
+                return true;
+            }
+        }
+
+        HeroesProfileReplay replay = await GetNextReplayAsync().ConfigureAwait(false);
+        if (replay == null)
+        {
+            return false;
+        }
+
+        await heroesProfileService.EnrichRankAsync(replay, provider.Token).ConfigureAwait(false);
+        FileInfo fileInfo = GetFileInfo(StandardDirectory, replay);
+        if (!fileInfo.Exists)
+        {
+            await DownloadReplayAsync(replay, fileInfo).ConfigureAwait(false);
+        }
+
+        return true;
+    }
+
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");

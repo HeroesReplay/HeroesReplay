@@ -28,7 +28,6 @@ public class Spectator : ISpectator
     private readonly IReplayContext context;
     private readonly SpectatorStatusStore statusStore;
     private readonly IObserverPanelRequests panelRequests;
-    private readonly IMatchPredictionService predictions;
     private readonly IObsController obsController;
     private readonly Dictionary<Panel, TimeSpan> panelTimes;
 
@@ -71,7 +70,6 @@ public class Spectator : ISpectator
         CancellationTokenProvider tokenProvider,
         SpectatorStatusStore statusStore,
         IObserverPanelRequests panelRequests,
-        IMatchPredictionService predictions,
         IObsController obsController
     )
     {
@@ -86,7 +84,6 @@ public class Spectator : ISpectator
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
         this.panelRequests =
             panelRequests ?? throw new ArgumentNullException(nameof(panelRequests));
-        this.predictions = predictions ?? throw new ArgumentNullException(nameof(predictions));
         this.obsController =
             obsController ?? throw new ArgumentNullException(nameof(obsController));
         memoryClock = new MemoryMatchClock(logger);
@@ -165,7 +162,7 @@ public class Spectator : ISpectator
                 }
                 finally
                 {
-                    statusStore.MarkIdle("EndDetected");
+                    PublishMatchCompleted();
                 }
             }
         }
@@ -271,16 +268,6 @@ public class Spectator : ISpectator
                         {
                             logger.LogInformation("OBS game-scene (timer detected).");
                             obsController.SwapToGameScene();
-                        }
-                        try
-                        {
-                            await predictions
-                                .StartAsync(Data?.LoadedReplay, LinkedTokenSource.Token)
-                                .ConfigureAwait(false);
-                        }
-                        catch (Exception e)
-                        {
-                            logger.LogWarning(e, "Could not open Twitch Blue/Red prediction.");
                         }
                     }
                 }
@@ -708,6 +695,30 @@ public class Spectator : ISpectator
             status.ReplayPath = data?.LoadedReplay?.FileInfo?.FullName;
             status.ReplayVersion = data?.LoadedReplay?.Replay?.ReplayVersion;
             status.ReplayId = data?.LoadedReplay?.ReplayId;
+        });
+    }
+
+    private void PublishMatchCompleted()
+    {
+        int? winner = TwitchMatchPredictionService.WinningTeam(Data?.LoadedReplay?.Replay);
+        statusStore.Patch(status =>
+        {
+            status.SpectatorRunning = false;
+            status.Phase = nameof(State.EndDetected);
+            status.ObsSession = false;
+            status.Focus = null;
+            status.CompletedAt = DateTimeOffset.UtcNow;
+            status.CompletedReplayId = Data?.LoadedReplay?.ReplayId;
+            status.CompletedWinnerTeam = winner;
+            if (Data?.LoadedReplay == null)
+            {
+                return;
+            }
+
+            status.Map = Data.LoadedReplay.Replay?.Map ?? status.Map;
+            status.ReplayPath = Data.LoadedReplay.FileInfo?.FullName ?? status.ReplayPath;
+            status.ReplayVersion = Data.LoadedReplay.Replay?.ReplayVersion ?? status.ReplayVersion;
+            status.ReplayId = Data.LoadedReplay.ReplayId ?? status.ReplayId;
         });
     }
 }

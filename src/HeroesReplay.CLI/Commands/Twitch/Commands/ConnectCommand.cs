@@ -2,7 +2,7 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Twitch;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -11,7 +11,10 @@ namespace HeroesReplay.CLI.Commands.Twitch.Commands;
 public class ConnectCommand : Command
 {
     public ConnectCommand()
-        : base("connect", "Connect to the twitch channel for HeroesReplay.")
+        : base(
+            "connect",
+            "Connect chat and watch spectator status for Blue/Red predictions. Does not launch the game."
+        )
     {
         SetAction(
             async (parseResult, cancellationToken) =>
@@ -23,17 +26,19 @@ public class ConnectCommand : Command
 
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
+        using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
-            .AddSpectateServices(cancellationToken, typeof(HeroesProfileProvider))
+            .AddTwitchServices(stop.Token)
             .BuildServiceProvider(
                 new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
             );
         using IServiceScope scope = provider.CreateScope();
-        using var waiter = new ManualResetEventSlim();
         IGameData gameData = scope.ServiceProvider.GetRequiredService<IGameData>();
         await gameData.LoadDataAsync();
         ITwitchBot twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
         await twitchBot.InitializeAsync();
-        waiter.Wait(cancellationToken);
+        StatusPredictionWatcher predictions =
+            scope.ServiceProvider.GetRequiredService<StatusPredictionWatcher>();
+        await predictions.WatchAsync(stop.Token);
     }
 }

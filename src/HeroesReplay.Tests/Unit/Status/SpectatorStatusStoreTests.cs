@@ -43,6 +43,40 @@ public class SpectatorStatusStoreTests
     }
 
     [Fact]
+    public void Patch_RoundTripsMatchCompletion()
+    {
+        string path = Path.Combine(
+            Path.GetTempPath(),
+            $"heroesreplay-status-{Guid.NewGuid():N}.json"
+        );
+        try
+        {
+            var ended = new DateTimeOffset(2026, 9, 21, 19, 5, 0, TimeSpan.Zero);
+            var store = new SpectatorStatusStore(path);
+            store.Patch(status =>
+            {
+                status.Phase = "EndDetected";
+                status.ReplayId = 65268379;
+                status.CompletedAt = ended;
+                status.CompletedReplayId = 65268379;
+                status.CompletedWinnerTeam = 0;
+            });
+
+            var read = store.Read();
+            Assert.Equal(ended, read.CompletedAt);
+            Assert.Equal(65268379, read.CompletedReplayId);
+            Assert.Equal(0, read.CompletedWinnerTeam);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
     public void Read_MissingFile_IsIdle()
     {
         var store = new SpectatorStatusStore(

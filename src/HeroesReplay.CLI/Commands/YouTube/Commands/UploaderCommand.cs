@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.YouTube;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,8 +22,9 @@ public class UploaderCommand : Command
 
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
+        using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
-            .AddYouTubeServices(cancellationToken)
+            .AddYouTubeServices(stop.Token)
             .BuildServiceProvider(
                 new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
             );

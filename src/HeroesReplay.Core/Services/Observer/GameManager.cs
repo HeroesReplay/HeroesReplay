@@ -8,7 +8,6 @@ using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Status;
-using HeroesReplay.Core.Services.Twitch;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Observer;
@@ -23,7 +22,6 @@ public class GameManager : IGameManager
     private readonly IReplayContext context;
     private readonly SpectatorStatusStore statusStore;
     private readonly StormClientConfigurator clientConfigurator;
-    private readonly IMatchPredictionService predictions;
     private readonly ILogger<GameManager> logger;
 
     public GameManager(
@@ -35,7 +33,6 @@ public class GameManager : IGameManager
         IReplayContext context,
         SpectatorStatusStore statusStore,
         StormClientConfigurator clientConfigurator,
-        IMatchPredictionService predictions,
         ILogger<GameManager> logger
     )
     {
@@ -51,7 +48,6 @@ public class GameManager : IGameManager
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
         this.clientConfigurator =
             clientConfigurator ?? throw new ArgumentNullException(nameof(clientConfigurator));
-        this.predictions = predictions ?? throw new ArgumentNullException(nameof(predictions));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -98,15 +94,6 @@ public class GameManager : IGameManager
         }
         finally
         {
-            try
-            {
-                await predictions.ResolveAsync(loadedReplay, default);
-            }
-            catch (Exception e)
-            {
-                logger.LogWarning(e, "Could not resolve Twitch Blue/Red prediction.");
-            }
-
             if (obsSession)
             {
                 try

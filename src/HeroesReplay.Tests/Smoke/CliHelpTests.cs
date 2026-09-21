@@ -62,6 +62,28 @@ public class CliHelpTests
     }
 
     [Fact]
+    public void ServicesHelp_HasStartStopStatus()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("services --help");
+        Assert.Empty(result.Errors);
+        Command services = root.Subcommands.Single(c => c.Name == "services");
+        Assert.Contains(services.Subcommands, c => c.Name == "start");
+        Assert.Contains(services.Subcommands, c => c.Name == "stop");
+        Assert.Contains(services.Subcommands, c => c.Name == "status");
+    }
+
+    [Fact]
+    public void HeroesProfileHelp_HasDownload()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("heroesprofile --help");
+        Assert.Empty(result.Errors);
+        Command heroesProfile = root.Subcommands.Single(c => c.Name == "heroesprofile");
+        Assert.Contains(heroesProfile.Subcommands, c => c.Name == "download");
+    }
+
+    [Fact]
     public void TwitchHelp_HasPredictionsTest()
     {
         var root = new HeroesReplayCommand();

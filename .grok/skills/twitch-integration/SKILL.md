@@ -17,7 +17,7 @@ description: >
 
 Channel-point methods are `*Async`: `GetCustomRewardAsync`, `CreateCustomRewardsAsync`, `UpdateCustomRewardAsync`, `DeleteCustomRewardAsync`.
 
-Helix Predictions (Blue/Red who-wins): `CreatePredictionAsync` when the match clock is detected, `EndPredictionAsync` (RESOLVED/CANCELED) when the spectate session ends. Team 0 = Blue (left), team 1 = Red (right). Requires `channel:manage:predictions`. Toggle `Twitch:EnablePredictions`. Window `Twitch:PredictionWindow` (clamped 30s–1800s). Dry-run and `CaptureMethod.None` skip Helix.
+Helix Predictions (Blue/Red who-wins): `twitch connect` calls `CreatePredictionAsync` when `status.json` phase is `TimerDetected`, and `EndPredictionAsync` (RESOLVED/CANCELED) from the completion fields when the session ends. Team 0 = Blue (left), team 1 = Red (right). Requires `channel:manage:predictions`. Toggle `Twitch:EnablePredictions`. Window `Twitch:PredictionWindow` (clamped 30s–1800s). Dry-run and `CaptureMethod.None` skip Helix. The spectator does not call Helix.
 
 ## Do not grow PubSub rewards
 
@@ -31,7 +31,7 @@ Helix can only **update** channel-point rewards created with the same Client-Id 
 
 Chat (`TwitchClient`) and Helix remain fine.
 
-Chat (during `spectate`, chatbot enabled), matching Icy Veins observer hotkeys:
+Chat (during `twitch connect`, chatbot enabled), matching Icy Veins observer hotkeys. The request is written to `%LOCALAPPDATA%\HeroesReplay\panel-requests.json`. The spectator process consumes it:
 - `!talents` → Ctrl+1 talent panel
 - `!stats` → Ctrl+2 stats panel
 Each shows for `Spectate:StatsPanelShowDuration` (default 10s) with `StatsPanelCooldown` (default 2 minutes, independent per panel). Do not auto-cycle KDA/XP/stats; talents still open automatically at talent times.
@@ -48,6 +48,8 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards 
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch predictions test --outcome Blue
 ```
 
-`twitch predictions test` creates a 30s Blue/Red Helix prediction then resolves (`Blue`/`Red`) or `cancel`. Watch it on the Twitch creator dashboard. Spectate does the same at TimerDetected and at session end from `Player.IsWinner`.
+`twitch predictions test` creates a 30s Blue/Red Helix prediction then resolves (`Blue`/`Red`) or `cancel`. Watch it on the Twitch creator dashboard.
+
+`twitch connect` opens the real match prediction. It watches `%LOCALAPPDATA%\HeroesReplay\status.json` and does not call into the spectator. Phase `TimerDetected` opens Blue/Red for `map`. When the session ends, the spectator writes `completedReplayId`, `completedAt`, and `completedWinnerTeam` (0 blue, 1 red, null cancels) and leaves them in place while the next replay loads. The spectator process does not call Helix.
 
 `check twitch` is Helix `GetUsers` plus `GetPredictions` when `EnablePredictions` is true. `twitch connect` blocks. Command map: skill `heroes-replay-cli`.
