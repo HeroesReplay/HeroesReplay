@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
@@ -7,6 +8,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Api.Core.Enums;
+using TwitchLib.Api.Core.Exceptions;
 using TwitchLib.Api.Helix.Models.Predictions;
 using TwitchLib.Api.Helix.Models.Predictions.CreatePrediction;
 using TwitchLib.Api.Interfaces;
@@ -50,6 +52,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         await CancelActiveAsync(cancellationToken).ConfigureAwait(false);
 
         string channelId = await GetChannelIdAsync().ConfigureAwait(false);
+        await CancelChannelPredictionAsync(channelId, cancellationToken).ConfigureAwait(false);
         var request = new CreatePredictionRequest
         {
             BroadcasterId = channelId,
@@ -74,9 +77,21 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             return;
         }
 
-        CreatePredictionResponse created = await api
-            .Helix.Predictions.CreatePredictionAsync(request)
-            .ConfigureAwait(false);
+        CreatePredictionResponse created;
+        try
+        {
+            created = await api
+                .Helix.Predictions.CreatePredictionAsync(request)
+                .ConfigureAwait(false);
+        }
+        catch (BadRequestException)
+        {
+            logger.LogWarning(
+                "Could not open \"{Title}\". Twitch already has a prediction on this channel.",
+                request.Title
+            );
+            return;
+        }
         Prediction prediction = created?.Data?[0];
         if (prediction == null || string.IsNullOrWhiteSpace(prediction.Id))
         {
@@ -250,6 +265,61 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         }
 
         return team;
+    }
+
+    private async Task CancelChannelPredictionAsync(
+        string channelId,
+        CancellationToken cancellationToken
+    )
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (settings.Twitch.DryRunMode || string.IsNullOrWhiteSpace(channelId))
+        {
+            return;
+        }
+
+        try
+        {
+            var existing = await api
+                .Helix.Predictions.GetPredictionsAsync(channelId)
+                .ConfigureAwait(false);
+            Prediction active = existing?.Data?.FirstOrDefault(prediction =>
+                prediction != null
+                && (
+                    prediction.Status == PredictionStatus.ACTIVE
+                    || prediction.Status == PredictionStatus.LOCKED
+                )
+            );
+            if (active == null)
+            {
+                return;
+            }
+
+            if (active.Status == PredictionStatus.LOCKED)
+            {
+                logger.LogWarning(
+                    "Prediction {PredictionId} is locked, so a new one cannot be opened yet.",
+                    active.Id
+                );
+                return;
+            }
+
+            await api
+                .Helix.Predictions.EndPredictionAsync(
+                    channelId,
+                    active.Id,
+                    PredictionEndStatus.CANCELED
+                )
+                .ConfigureAwait(false);
+            logger.LogInformation(
+                "Canceled the channel prediction {PredictionId} that was already open.",
+                active.Id
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not clear the prediction already open on the channel.");
+        }
     }
 
     private async Task CancelActiveAsync(CancellationToken cancellationToken)

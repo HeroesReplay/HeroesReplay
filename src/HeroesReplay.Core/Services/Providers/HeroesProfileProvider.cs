@@ -133,6 +133,14 @@ public class HeroesProfileProvider : IReplayProvider
             }
         }
 
+        if (UnspectatedOnDisk() >= 2)
+        {
+            logger.LogInformation(
+                "Two replays are already waiting to be spectated. Not downloading another."
+            );
+            return false;
+        }
+
         HeroesProfileReplay replay = await GetNextReplayAsync().ConfigureAwait(false);
         if (replay == null)
         {
@@ -412,5 +420,41 @@ public class HeroesProfileProvider : IReplayProvider
         }
 
         return null;
+    }
+
+    private int UnspectatedOnDisk()
+    {
+        var played = new HashSet<int>();
+        string playedPath = Path.Combine(settings.Location.DataDirectory, "spectated-ids.txt");
+        if (File.Exists(playedPath))
+        {
+            foreach (string line in File.ReadLines(playedPath))
+            {
+                if (int.TryParse(line, out int id))
+                {
+                    played.Add(id);
+                }
+            }
+        }
+
+        if (!StandardDirectory.Exists)
+        {
+            return 0;
+        }
+
+        int waiting = 0;
+        foreach (FileInfo file in StandardDirectory.GetFiles(settings.StormReplay.WildCard))
+        {
+            if (replayHelper.TryGetReplayId(file.Name, out int id) && !played.Contains(id))
+            {
+                waiting++;
+                if (waiting >= 2)
+                {
+                    return waiting;
+                }
+            }
+        }
+
+        return waiting;
     }
 }
