@@ -40,13 +40,15 @@ public class DestroyingStructureCalculator : IFocusCalculator
                 continue;
             }
 
-            if (gameData.GetUnitGroup(unit.Name) != Unit.UnitGroup.Structures)
+            bool core = IsCore(unit.Name);
+            if (!core && gameData.GetUnitGroup(unit.Name) != Unit.UnitGroup.Structures)
             {
                 continue;
             }
 
             float weighting = unit.Name switch
             {
+                string name when core => settings.Weights.Core,
                 string name when name.StartsWith(TownWallUnit) => settings.Weights.TownWall,
                 string name when name.StartsWith(TownGateUnit) => settings.Weights.TownGate,
                 string name when name.StartsWith(TownCannonUnit) => settings.Weights.TownCannon,
@@ -54,7 +56,6 @@ public class DestroyingStructureCalculator : IFocusCalculator
                 string name when name.StartsWith(TownHallFortKeepUnit) => settings
                     .Weights
                     .TownTownHall,
-                string name when IsCore(name) => settings.Weights.Core,
                 _ => settings.Weights.Structure,
             };
 
@@ -71,9 +72,33 @@ public class DestroyingStructureCalculator : IFocusCalculator
 
     private bool IsCore(string name)
     {
-        foreach (string core in gameData.CoreUnits)
+        if (string.IsNullOrWhiteSpace(name))
         {
-            if (name.Equals(core, StringComparison.OrdinalIgnoreCase))
+            return false;
+        }
+
+        if (gameData?.CoreUnits != null)
+        {
+            foreach (string core in gameData.CoreUnits)
+            {
+                if (name.Equals(core, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (settings.FocusUnits?.CoreContains == null)
+        {
+            return false;
+        }
+
+        foreach (string token in settings.FocusUnits.CoreContains)
+        {
+            if (
+                !string.IsNullOrWhiteSpace(token)
+                && name.Contains(token, StringComparison.OrdinalIgnoreCase)
+            )
             {
                 return true;
             }

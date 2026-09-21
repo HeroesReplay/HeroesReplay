@@ -26,6 +26,8 @@ public class WeightSettings
 
     public float NearEnemyCore { get; set; }
 
+    public float EndingCore { get; set; }
+
     public float NearEnemyHero { get; set; }
     public float NearEnemyHeroOffset { get; set; }
     public float NearEnemyHeroDistanceDivisor { get; set; }

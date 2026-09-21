@@ -8,6 +8,8 @@ public class SpectateSettings
     public IEnumerable<string> VersionsSupported { get; set; }
     public int MinDistanceToSpawn { get; set; }
     public int MaxDistanceToCore { get; set; }
+
+    public TimeSpan EndingCoreWindow { get; set; }
     public int MaxDistanceToEnemy { get; set; }
     public int MaxDistanceToObjective { get; set; }
     public int MaxDistanceToOwnerChange { get; set; }
