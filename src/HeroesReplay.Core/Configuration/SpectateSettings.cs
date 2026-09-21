@@ -33,6 +33,15 @@ public class SpectateSettings
     /// required before ending the session.
     /// </summary>
     public int MissingTimerReadsToEnd { get; set; } = 3;
+
+    /// <summary>
+    /// Scan HeroesOfTheStorm_x64 for a live match clock and log it next to HUD OCR.
+    /// Does not replace OCR unless UseMemoryTimer is also true.
+    /// </summary>
+    public bool MemoryTimerEnabled { get; set; }
+
+    /// <summary>When true and a memory clock is locked, use it as the match timer (OCR fallback).</summary>
+    public bool UseMemoryTimer { get; set; }
     public TimeSpan PanelDownTime { get; set; }
     public TimeSpan TalentsPanelStartTime { get; set; }
     public TimeSpan StatsPanelShowDuration { get; set; }

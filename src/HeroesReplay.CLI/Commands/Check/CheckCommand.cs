@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI;
@@ -11,9 +13,11 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OBSWebsocketDotNet;
 using TwitchLib.Api.Interfaces;
 
@@ -59,6 +63,13 @@ public class CheckCommand : Command
                 "connectivity",
                 "Probe 1.1.1.1, Twitch, and Heroes Profile without starting an OBS stream.",
                 CheckConnectivityAsync
+            )
+        );
+        Subcommands.Add(
+            Build(
+                "timer",
+                "Read-only scan of HeroesOfTheStorm_x64 for a ticking match clock (issue 27).",
+                CheckTimerAsync
             )
         );
 
@@ -324,6 +335,125 @@ public class CheckCommand : Command
         {
             return Fail("connectivity", e);
         }
+    }
+
+    public static async Task<CheckResult> CheckTimerAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            Process process = Process
+                .GetProcessesByName("HeroesOfTheStorm_x64")
+                .FirstOrDefault(p =>
+                {
+                    try
+                    {
+                        return !p.HasExited;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+            if (process == null)
+            {
+                return new CheckResult("timer", false, "HeroesOfTheStorm_x64 is not running.");
+            }
+
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+            var clock = new MemoryMatchClock(loggerFactory.CreateLogger("MemoryMatchClock"));
+            string statusPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "HeroesReplay",
+                "status.json"
+            );
+            TimeSpan? hud = ReadStatusTimer(statusPath);
+
+            if (hud == null)
+            {
+                return new CheckResult(
+                    "timer",
+                    false,
+                    $"HotS pid {process.Id} is running but no HUD timer is available to seed a scan. Start spectate until TimerDetected, then re-run."
+                );
+            }
+
+            // Follow status.json. Do not invent seconds: a stuck HUD cannot prove a memory clock.
+            var deadline = DateTime.UtcNow.AddSeconds(35);
+            int sample = 0;
+            int stuck = 0;
+            TimeSpan seed = hud.Value;
+            TimeSpan? previous = null;
+            while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
+            {
+                TimeSpan? live = ReadStatusTimer(statusPath);
+                seed = live ?? seed;
+                if (previous.HasValue && seed == previous.Value)
+                {
+                    stuck++;
+                }
+                else if (previous.HasValue)
+                {
+                    stuck = 0;
+                }
+
+                previous = seed;
+                clock.Observe(process, seed, TimeSpan.FromSeconds(1));
+                sample++;
+                Console.WriteLine(
+                    $"sample {sample}: seed={seed} memory={clock.LastRead} locked={clock.IsLocked} phase={clock.Phase} candidates={clock.CandidateCount}"
+                );
+                if (clock.IsLocked || clock.Phase == "cooldown")
+                {
+                    break;
+                }
+
+                if (stuck >= 3)
+                {
+                    break;
+                }
+
+                await Task.Delay(1000, cancellationToken);
+            }
+
+            bool found = clock.IsLocked;
+            string stuckNote =
+                stuck >= 3
+                    ? $" HUD seed stayed {seed} (status.json is not advancing), so no ticking address could be confirmed."
+                    : string.Empty;
+            string detail =
+                $"pid={process.Id} HUD seed={seed} memory={clock.LastRead} locked={clock.IsLocked} phase={clock.Phase} candidates={clock.CandidateCount}.{stuckNote} BitBlt HUD stays the clock until this address agrees across patches.";
+            return new CheckResult("timer", found, detail);
+        }
+        catch (Exception e)
+        {
+            return Fail("timer", e);
+        }
+    }
+
+    private static TimeSpan? ReadStatusTimer(string statusPath)
+    {
+        if (!File.Exists(statusPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(statusPath));
+            if (
+                doc.RootElement.TryGetProperty("timer", out JsonElement timer)
+                && TimeSpan.TryParse(timer.GetString(), out TimeSpan parsed)
+            )
+            {
+                return parsed;
+            }
+        }
+        catch
+        {
+            // ignore stale status
+        }
+
+        return null;
     }
 
     public static Task<CheckResult> CheckClientAsync(CancellationToken cancellationToken)
