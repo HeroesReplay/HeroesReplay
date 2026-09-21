@@ -9,6 +9,7 @@ public interface IGameController
 {
     Task LaunchAsync();
     Task<TimeSpan?> TryGetTimerAsync();
+    Task<bool> TrySeeEndScreenAsync();
     void SendFocus(int player);
     void SendPanel(Panel panel);
     void SaveEndScreenshot();

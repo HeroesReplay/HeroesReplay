@@ -287,6 +287,51 @@ public class GameController : IGameController
         return null;
     }
 
+    public async Task<bool> TrySeeEndScreenAsync()
+    {
+        try
+        {
+            if (!TryGetGameHandle(out IntPtr handle))
+            {
+                return false;
+            }
+
+            using Bitmap frame = captureStrategy.Capture(handle);
+            if (frame == null || frame.Width < 200 || frame.Height < 200)
+            {
+                return false;
+            }
+
+            var crop = new Rectangle(
+                frame.Width / 5,
+                frame.Height / 8,
+                frame.Width * 3 / 5,
+                frame.Height / 3
+            );
+            using Bitmap region = frame.Clone(crop, frame.PixelFormat);
+            using Bitmap resized = region.GetResized(zoom: 2);
+            using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized)
+                .ConfigureAwait(false);
+            OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
+            string text = result?.Text ?? string.Empty;
+            bool endScreen =
+                text.Contains("MVP", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("VICTORY", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("DEFEAT", StringComparison.OrdinalIgnoreCase);
+            if (endScreen)
+            {
+                logger.LogInformation("End-screen OCR saw: {Text}", text.Replace('\n', ' '));
+            }
+
+            return endScreen;
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "End-screen OCR failed.");
+            return false;
+        }
+    }
+
     private async Task<TimeSpan?> ConvertBitmapTimerToTimeSpan(Bitmap bitmap)
     {
         using (Bitmap resized = bitmap.GetResized(zoom: 4))

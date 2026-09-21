@@ -20,6 +20,17 @@ public sealed class MatchTimerFilter
         }
 
         TimeSpan delta = candidate - LastAccepted.Value;
+        // The first minute of OCR often locks a high glitch (gates offset) then
+        // settles on the real 0:xx clock. Allow that correction.
+        if (
+            candidate < TimeSpan.FromMinutes(3)
+            && LastAccepted.Value < TimeSpan.FromMinutes(3)
+            && delta > TimeSpan.FromSeconds(-90)
+        )
+        {
+            return true;
+        }
+
         if (delta < TimeSpan.FromSeconds(-3))
         {
             return false;

@@ -46,6 +46,10 @@ public class Spectator : ISpectator
 
     private DateTimeOffset lastAdvancedHudAt;
 
+    private DateTimeOffset nextEndScreenProbe;
+
+    private bool endScreenSeen;
+
     private int hungChecks;
 
     private int missingProcessChecks;
@@ -134,6 +138,8 @@ public class Spectator : ISpectator
         endScreenStarted = null;
         lastAdvancedHud = TimeSpan.MinValue;
         lastAdvancedHudAt = default;
+        nextEndScreenProbe = default;
+        endScreenSeen = false;
         hungChecks = 0;
         missingProcessChecks = 0;
         PublishStatus();
@@ -236,6 +242,10 @@ public class Spectator : ISpectator
                 else if (State != State.TimerDetected)
                 {
                     logger.LogWarning("Timer OCR unavailable; still loading.");
+                }
+                else
+                {
+                    await ProbeEndScreenAsync().ConfigureAwait(false);
                 }
 
                 bool firstTimer = State != State.TimerDetected && fromOcr;
@@ -417,6 +427,32 @@ public class Spectator : ISpectator
         }
     }
 
+    private async Task ProbeEndScreenAsync()
+    {
+        if (endScreenSeen || DateTimeOffset.UtcNow < nextEndScreenProbe)
+        {
+            return;
+        }
+
+        if (
+            lastAdvancedHudAt != default
+            && DateTimeOffset.UtcNow - lastAdvancedHudAt < TimeSpan.FromSeconds(20)
+        )
+        {
+            return;
+        }
+
+        nextEndScreenProbe = DateTimeOffset.UtcNow.AddSeconds(12);
+        if (await controller.TrySeeEndScreenAsync().ConfigureAwait(false))
+        {
+            endScreenSeen = true;
+            logger.LogInformation(
+                "MVP/victory screen detected at HUD {Timer}; holding for votes.",
+                Timer
+            );
+        }
+    }
+
     private void TryEndAfterCore(bool ocrTimerVisible)
     {
         if (Data?.CoreKilled <= TimeSpan.Zero)
@@ -427,9 +463,14 @@ public class Spectator : ISpectator
         bool nearCore = Timer + TimeSpan.FromSeconds(20) >= Data.CoreKilled;
         bool hudFrozen =
             State == State.TimerDetected
+            && lastAdvancedHud >= TimeSpan.FromMinutes(2)
             && lastAdvancedHudAt != default
             && DateTimeOffset.UtcNow - lastAdvancedHudAt >= TimeSpan.FromSeconds(90);
-        bool pastCore = Timer >= Data.CoreKilled || (!ocrTimerVisible && nearCore) || hudFrozen;
+        bool pastCore =
+            Timer >= Data.CoreKilled
+            || (!ocrTimerVisible && nearCore)
+            || hudFrozen
+            || endScreenSeen;
 
         if (!pastCore)
         {

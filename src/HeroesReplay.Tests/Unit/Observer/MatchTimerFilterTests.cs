@@ -44,6 +44,14 @@ public class MatchTimerFilterTests
     }
 
     [Fact]
+    public void EarlyGame_AllowsSettlingDownFromAHighGlitch()
+    {
+        var filter = new MatchTimerFilter();
+        filter.Accept(TimeSpan.FromSeconds(38));
+        Assert.True(filter.IsPlausible(TimeSpan.FromSeconds(26), Jump));
+    }
+
+    [Fact]
     public void OneSecondRewind_IsAllowed()
     {
         var filter = new MatchTimerFilter();
