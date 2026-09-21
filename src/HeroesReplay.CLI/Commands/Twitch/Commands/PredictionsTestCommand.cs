@@ -36,7 +36,7 @@ public class PredictionsTestCommand : Command
         using ServiceProvider provider = new ServiceCollection()
             .AddCheckServices(cancellationToken)
             .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>()
-            .BuildServiceProvider(
+            .BuildHeroesReplayProvider(
                 new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
             );
         IMatchPredictionService predictions =

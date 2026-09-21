@@ -19,7 +19,8 @@ public static class HeroesReplayOpenTelemetry
 
     public static IServiceCollection AddHeroesReplayOpenTelemetry(
         this IServiceCollection services,
-        IConfiguration configuration
+        IConfiguration configuration,
+        string serviceName = null
     )
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -36,12 +37,16 @@ public static class HeroesReplayOpenTelemetry
             ?? configuration["OpenTelemetry:OtlpEndpoint"]
             ?? DefaultOtlpEndpoint;
 
-        string serviceName =
+        serviceName =
             Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME")
+            ?? serviceName
             ?? configuration["OpenTelemetry:ServiceName"]
             ?? DefaultServiceName;
 
         Uri otlpUri = new(endpoint);
+        ResourceBuilder resourceBuilder = ResourceBuilder
+            .CreateDefault()
+            .AddService(serviceName: serviceName, serviceNamespace: "HeroesReplay");
 
         services
             .AddOpenTelemetry()
@@ -76,6 +81,7 @@ public static class HeroesReplayOpenTelemetry
                 otel.IncludeFormattedMessage = true;
                 otel.IncludeScopes = true;
                 otel.ParseStateValues = true;
+                otel.SetResourceBuilder(resourceBuilder);
                 otel.AddOtlpExporter(exporter =>
                 {
                     exporter.Endpoint = otlpUri;
@@ -87,9 +93,16 @@ public static class HeroesReplayOpenTelemetry
         return services;
     }
 
-    public static ServiceProvider BuildHeroesReplayProvider(this IServiceCollection services)
+    public static ServiceProvider BuildHeroesReplayProvider(
+        this IServiceCollection services,
+        ServiceProviderOptions options = null
+    )
     {
-        ServiceProvider provider = services.BuildServiceProvider();
+        ServiceProvider provider =
+            options == null
+                ? services.BuildServiceProvider()
+                : services.BuildServiceProvider(options);
+        // Resolving these starts export. Without a generic host they stay idle otherwise.
         _ = provider.GetService<TracerProvider>();
         _ = provider.GetService<MeterProvider>();
         return provider;

@@ -39,7 +39,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
 | `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). Spectate applies this automatically if the game is not running. Capture is GDI BitBlt; windowed 1080p is required. |
 | `client status` | Report preset mismatches |
-| `otel up` / `otel down` / `otel status` | Optional Aspire Dashboard via Docker Compose (`deploy/aspire/docker-compose.yml`). UI http://127.0.0.1:18888, OTLP gRPC :4317. |
+| `otel up` / `otel down` / `otel status` | Optional Aspire Dashboard. This machine already listens on UI http://127.0.0.1:18888 and OTLP gRPC :4317 (no Docker). Spectate, Twitch, download, and YouTube each export under their own service name. |
 | `twitch connect` | Chat, PubSub, and Blue/Red predictions from `status.json`. Does not launch the game. Blocks. |
 | `twitch rewards generate\|submit\|list\|test` | Helix custom rewards; `test` runs the local redeem handler |
 | `twitch predictions test [--outcome Blue\|Red\|cancel]` | Create then resolve/cancel a 30s Blue/Red prediction |

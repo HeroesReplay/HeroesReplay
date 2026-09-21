@@ -27,7 +27,7 @@ public class SubmitCommand : Command
     {
         using ServiceProvider provider = new ServiceCollection()
             .AddTwitchServices(cancellationToken)
-            .BuildServiceProvider(
+            .BuildHeroesReplayProvider(
                 new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
             );
         using IServiceScope scope = provider.CreateScope();

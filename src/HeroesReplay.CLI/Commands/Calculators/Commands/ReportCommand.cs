@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Reports;
@@ -34,7 +35,7 @@ public class ReportCommand : Command
         var replayPath = new ReplayPathOptions { Path = path, PlayOnce = true };
         using ServiceProvider provider = new ServiceCollection()
             .AddReportServices(cancellationToken, typeof(ReplayFileProvider), replayPath)
-            .BuildServiceProvider();
+            .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         ISpectateReportWriter reportWriter =
             scope.ServiceProvider.GetRequiredService<ISpectateReportWriter>();

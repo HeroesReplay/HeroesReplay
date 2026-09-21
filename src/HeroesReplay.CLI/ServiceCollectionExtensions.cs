@@ -55,7 +55,7 @@ public static class ServiceCollectionExtensions
         IConfigurationRoot configuration = GetConfiguration();
 
         return services
-            .AddHeroesReplayOpenTelemetry(configuration)
+            .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-youtube")
             .AddMemoryCache()
             .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
@@ -86,7 +86,7 @@ public static class ServiceCollectionExtensions
         var settings = BindSettings(configuration);
 
         return services
-            .AddHeroesReplayOpenTelemetry(configuration)
+            .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-calculators")
             .AddLogging(builder =>
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
@@ -116,7 +116,7 @@ public static class ServiceCollectionExtensions
         AppSettings settings = BindSettings(configuration);
 
         return services
-            .AddHeroesReplayOpenTelemetry(configuration)
+            .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-check")
             .AddMemoryCache()
             .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
@@ -159,7 +159,7 @@ public static class ServiceCollectionExtensions
         IConfigurationRoot configuration = GetConfiguration();
         AppSettings settings = BindSettings(configuration);
         return services
-            .AddHeroesReplayOpenTelemetry(configuration)
+            .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-client")
             .AddSingleton(settings)
             .AddSingleton<StormClientConfigurator>();
     }
@@ -186,7 +186,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddTwitchServices(
         this IServiceCollection services,
-        CancellationToken token
+        CancellationToken token,
+        string telemetryServiceName = "heroesreplay-twitch"
     )
     {
         IConfigurationRoot configuration = GetConfiguration();
@@ -213,7 +214,7 @@ public static class ServiceCollectionExtensions
         }
 
         return services
-            .AddHeroesReplayOpenTelemetry(configuration)
+            .AddHeroesReplayOpenTelemetry(configuration, telemetryServiceName)
             .AddMemoryCache()
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
@@ -312,7 +313,7 @@ public static class ServiceCollectionExtensions
         }
 
         return services
-            .AddHeroesReplayOpenTelemetry(configuration)
+            .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-spectate")
             .AddMemoryCache()
             .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>

@@ -1,6 +1,8 @@
 using System.CommandLine;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.YouTube;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,9 +27,10 @@ public class UploaderCommand : Command
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
             .AddYouTubeServices(stop.Token)
-            .BuildServiceProvider(
+            .BuildHeroesReplayProvider(
                 new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
             );
+        using Activity ready = HeroesReplayTelemetry.StartSpan("heroesreplay.service.ready");
         using IServiceScope scope = provider.CreateScope();
         IYouTubeUploader uploader = scope.ServiceProvider.GetRequiredService<IYouTubeUploader>();
         await uploader.ListenAsync();

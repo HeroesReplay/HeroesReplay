@@ -1,6 +1,8 @@
 using System.CommandLine;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Twitch;
@@ -29,9 +31,10 @@ public class ConnectCommand : Command
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
             .AddTwitchServices(stop.Token)
-            .BuildServiceProvider(
+            .BuildHeroesReplayProvider(
                 new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
             );
+        using Activity ready = HeroesReplayTelemetry.StartSpan("heroesreplay.service.ready");
         using IServiceScope scope = provider.CreateScope();
         IGameData gameData = scope.ServiceProvider.GetRequiredService<IGameData>();
         await gameData.LoadDataAsync();
