@@ -92,6 +92,7 @@ dotnet run --no-launch-profile -- --help
 | `spectate heroesprofile` | Download and spectate Heroes Profile Storm League replays in a loop |
 | `calculators coordinates` | Parse the newest Documents replay and prove coordinates + focus timeline |
 | `calculators report --file <path>` | Write a spectator report |
+| `calculators units --directory <path>` | Sample 1–5 replays per map, one file at a time, and write unit CSVs |
 | `twitch connect` / `twitch rewards …` | Chat bot and channel-point rewards |
 | `youtube uploader` | Upload OBS recordings |
 | `client configure` | Windowed 1080p + AhliObs in `Documents\Heroes of the Storm` (Variables.txt + StormInterface). Quit the game first. |

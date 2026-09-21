@@ -73,4 +73,16 @@ public class CliHelpTests
         Assert.Contains(rewards.Subcommands, c => c.Name == "list");
         Assert.Contains(rewards.Subcommands, c => c.Name == "test");
     }
+
+    [Fact]
+    public void CalculatorsHelp_HasUnitsReport()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("calculators units --help");
+        Assert.Empty(result.Errors);
+        Command calculators = root.Subcommands.Single(c => c.Name == "calculators");
+        Assert.Contains(calculators.Subcommands, c => c.Name == "report");
+        Assert.Contains(calculators.Subcommands, c => c.Name == "coordinates");
+        Assert.Contains(calculators.Subcommands, c => c.Name == "units");
+    }
 }

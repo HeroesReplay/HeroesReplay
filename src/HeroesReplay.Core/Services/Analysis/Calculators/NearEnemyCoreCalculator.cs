@@ -27,13 +27,9 @@ public class NearEnemyCoreCalculator : IFocusCalculator
         }
 
         var cores = new List<Unit>();
-        foreach (Unit unit in timeline.Replay.Units)
+        foreach (Unit unit in timeline.Replay.Units ?? new List<Unit>())
         {
-            if (
-                gameData.CoreUnits.Any(core =>
-                    unit.Name.Equals(core, StringComparison.OrdinalIgnoreCase)
-                )
-            )
+            if (IsCore(unit))
             {
                 cores.Add(unit);
             }
@@ -64,21 +60,86 @@ public class NearEnemyCoreCalculator : IFocusCalculator
                         continue;
                     }
 
-                    if (point.DistanceTo(core.PointBorn) > settings.Spectate.MaxDistanceToCore)
+                    if (
+                        core.PointBorn == null
+                        || point.DistanceTo(core.PointBorn) > settings.Spectate.MaxDistanceToCore
+                    )
                     {
                         continue;
                     }
 
+                    bool ending = IsEndingPush(core, now);
+                    float weight = ending
+                        ? settings.Weights.EndingCore
+                        : settings.Weights.NearEnemyCore;
+                    string kind = ending ? "ending on enemy core" : "near enemy core";
                     timeline.Offer(
                         now,
                         GetType(),
                         heroUnit,
                         heroUnit.PlayerControlledBy,
-                        settings.Weights.NearEnemyCore,
-                        $"{heroUnit.PlayerControlledBy.Character} near enemy core: {core.Name}."
+                        weight,
+                        $"{heroUnit.PlayerControlledBy.Character} {kind}: {core.Name}."
                     );
                 }
             }
         }
+    }
+
+    private bool IsCore(Unit unit)
+    {
+        if (unit == null || string.IsNullOrWhiteSpace(unit.Name))
+        {
+            return false;
+        }
+
+        if (gameData?.CoreUnits != null)
+        {
+            foreach (string core in gameData.CoreUnits)
+            {
+                if (unit.Name.Equals(core, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (settings.FocusUnits?.CoreContains == null)
+        {
+            return false;
+        }
+
+        foreach (string token in settings.FocusUnits.CoreContains)
+        {
+            if (
+                !string.IsNullOrWhiteSpace(token)
+                && unit.Name.Contains(token, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsEndingPush(Unit core, TimeSpan now)
+    {
+        if (
+            !core.TimeSpanDied.HasValue
+            || settings.Spectate.EndingCoreWindow <= TimeSpan.Zero
+            || settings.Weights.EndingCore <= settings.Weights.NearEnemyCore
+        )
+        {
+            return false;
+        }
+
+        TimeSpan start = core.TimeSpanDied.Value - settings.Spectate.EndingCoreWindow;
+        if (start < TimeSpan.Zero)
+        {
+            start = TimeSpan.Zero;
+        }
+
+        return now >= start && core.IsAliveAt(now);
     }
 }

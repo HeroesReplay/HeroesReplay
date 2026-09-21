@@ -7,6 +7,7 @@ public class AppSettings
 {
     public ProcessSettings Process { get; set; }
     public HeroesToolChestSettings HeroesToolChest { get; set; }
+    public FocusUnitSettings FocusUnits { get; set; }
     public GithubSettings Github { get; set; }
     public OBSSettings OBS { get; set; }
     public ConnectivitySettings Connectivity { get; set; }

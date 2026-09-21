@@ -26,6 +26,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `spectate heroesprofile` | Loop: download Storm League replays from Heroes Profile S3 |
 | `calculators coordinates [--file path]` | Parse replay, print coordinate samples, build Kill/NearEnemy/Roaming focus map |
 | `calculators report [--file path]` | Spectator report for a file/directory |
+| `calculators units --directory <path> [--per-map 1-5] [--output path]` | Survey a replay folder one file at a time, keep up to 5 per map, then parse those units into CSV reports |
 | `check` | Config + Heroes Profile + OBS + Twitch; continues on failure; exit 1 if any fail |
 | `check config` | Bind settings; print which secrets are present (never print values) |
 | `check heroesprofile` | Kiota `GET /replays` max_replay_id with Bearer key |

@@ -7,6 +7,7 @@ public class WeightSettings
     public float CaptureBeacon { get; set; }
 
     public float CampClear { get; set; }
+    public float Pickup { get; set; }
     public float CampCapture { get; set; }
     public float BossCapture { get; set; }
 
@@ -24,6 +25,8 @@ public class WeightSettings
     public float MapObjective { get; set; }
 
     public float NearEnemyCore { get; set; }
+
+    public float EndingCore { get; set; }
 
     public float NearEnemyHero { get; set; }
     public float NearEnemyHeroOffset { get; set; }
