@@ -592,10 +592,10 @@
             "settings": {
                 "url": "https://www.heroesprofile.com/Match/Single/-1#match-scores",
                 "width": 1920,
-                "height": 1300,
+                "height": 1900,
                 "shutdown": true,
                 "restart_when_active": false,
-                "css": "#CybotCookiebotDialog,\n#CybotCookiebotDialogBodyUnderlay,\n#CookiebotWidget,\n[id^=\"CybotCookiebot\"],\n[class*=\"Cookiebot\"],\n.fc-consent-root,\n.fc-dialog-overlay,\nfooter-popup-disclaimer,\n.disclaimer,\n.footer-wrapper,\n#main-menu,\n.main-navigation-wrapper,\nnav,\n.alt-acct-nav,\nhorizontal-banner-ad,\nrich-media-ad,\ndynamic-banner-ad,\ntakeover-ad,\n#horizontal-banner-ad-container,\n#rich-media-placement,\n#takeover-ad-container,\n[id^=\"dynamic-banner-ad-container\"],\n[id^=\"dynamic-square-ad-container\"],\n.vm-placement,\n[class^=\"vm-\"],\n[class*=\" vm-\"],\n[data-display-type],\niframe,\n.bg-teal.px-20.py-4,\n#hotsapi-alert,\n.flyout-menu {\n  display: none !important;\n}\nhtml, body {\n  background-color: #0b0e14 !important;\n  margin: 0px auto !important;\n  overflow: hidden !important;\n}\n#app { min-height: 0 !important; }\n.p-10:has(h2),\n.max-w-\\[1500px\\].my-5 {\n  display: none !important;\n}"
+                "css": "#CybotCookiebotDialog,\n#CybotCookiebotDialogBodyUnderlay,\n#CookiebotWidget,\n[id^=\"CybotCookiebot\"],\n[class*=\"Cookiebot\"],\n.fc-consent-root,\n.fc-dialog-overlay,\nfooter-popup-disclaimer,\n.disclaimer,\n.footer-wrapper,\n#main-menu,\n.main-navigation-wrapper,\nnav,\n.alt-acct-nav,\nhorizontal-banner-ad,\nrich-media-ad,\ndynamic-banner-ad,\ntakeover-ad,\n#horizontal-banner-ad-container,\n#rich-media-placement,\n#takeover-ad-container,\n[id^=\"dynamic-banner-ad-container\"],\n[id^=\"dynamic-square-ad-container\"],\n.vm-placement,\n[class^=\"vm-\"],\n[class*=\" vm-\"],\n[data-display-type],\niframe,\n.bg-teal.px-20.py-4,\n#hotsapi-alert,\n.flyout-menu {\n  display: none !important;\n}\nhtml, body {\n  background-color: #0b0e14 !important;\n  margin: 0px auto !important;\n  overflow: hidden !important;\n}\n#app { min-height: 0 !important; }\n.p-10:has(h2),\n.max-w-\\[1500px\\].my-5 {\n  display: none !important;\n}\n.fixed.bottom-0,\n.sticky.bottom-0,\ndiv[class*=\"bottom-0\"][class*=\"fixed\"],\ndiv[class*=\"bottom-0\"][class*=\"sticky\"] {\n  display: none !important;\n}\nhtml, body, #app {\n  overflow: visible !important;\n  height: auto !important;\n}"
             },
             "mixers": 255,
             "sync": 0,
@@ -605,8 +605,8 @@
             "enabled": true,
             "muted": false,
             "push-to-mute": false,
-            "push-to-mute-delay": 0,
             "push-to-talk": false,
+            "push-to-mute-delay": 0,
             "push-to-talk-delay": 0,
             "hotkeys": {
                 "libobs.mute": [],
@@ -629,7 +629,7 @@
                     "settings": {
                         "left": 150,
                         "right": 150,
-                        "top": 50
+                        "top": 0
                     },
                     "mixers": 0,
                     "sync": 0,
@@ -656,18 +656,18 @@
                     "versioned_id": "scroll_filter",
                     "settings": {
                         "limit_cx": false,
-                        "limit_cy": true,
-                        "speed_y": 15.0,
-                        "cx": 1000,
-                        "cy": 1080,
-                        "loop": true
+                        "limit_cy": false,
+                        "speed_y": 0.0,
+                        "cx": 1920,
+                        "cy": 1900,
+                        "loop": false
                     },
                     "mixers": 0,
                     "sync": 0,
                     "flags": 0,
                     "volume": 1.0,
                     "balance": 0.5,
-                    "enabled": true,
+                    "enabled": false,
                     "muted": false,
                     "push-to-mute": false,
                     "push-to-mute-delay": 0,

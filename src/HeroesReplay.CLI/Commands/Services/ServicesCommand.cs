@@ -111,8 +111,6 @@ public class ServicesCommand : Command
     public static string PowerShellStartCommand(
         string exe,
         string arguments,
-        string outLog,
-        string errLog,
         string pidFile
     )
     {
@@ -126,11 +124,7 @@ public class ServicesCommand : Command
             + argList
             + " -WorkingDirectory "
             + PsQuote(Path.GetDirectoryName(exe))
-            + " -WindowStyle Hidden -RedirectStandardOutput "
-            + PsQuote(outLog)
-            + " -RedirectStandardError "
-            + PsQuote(errLog)
-            + " -PassThru; Set-Content -LiteralPath "
+            + " -WindowStyle Normal -PassThru; Set-Content -LiteralPath "
             + PsQuote(pidFile)
             + " -Value $p.Id -NoNewline";
     }
@@ -144,15 +138,13 @@ public class ServicesCommand : Command
         );
         Directory.CreateDirectory(logDir);
         string slug = string.Join("-", arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-        string outLog = Path.Combine(logDir, slug + ".log");
-        string errLog = Path.Combine(logDir, slug + ".err.log");
         string pidFile = Path.Combine(logDir, slug + ".pid");
         if (File.Exists(pidFile))
         {
             File.Delete(pidFile);
         }
 
-        string script = PowerShellStartCommand(exe, arguments, outLog, errLog, pidFile);
+        string script = PowerShellStartCommand(exe, arguments, pidFile);
         string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
         using Process process = Process.Start(
             new ProcessStartInfo
@@ -184,7 +176,7 @@ public class ServicesCommand : Command
             return null;
         }
 
-        Console.WriteLine($"Log: {outLog}");
+        Console.WriteLine($"Console open for {arguments} (pid file {pidFile}).");
         return pid;
     }
 
