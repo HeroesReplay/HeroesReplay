@@ -8,6 +8,7 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Twitch.Rewards;
@@ -25,6 +26,7 @@ public class HeroesProfileProvider : IReplayProvider
     private readonly IReplayHelper replayHelper;
     private readonly IHeroesProfileService heroesProfileService;
     private readonly IRequestQueue requestQueue;
+    private readonly IHeroesProfileResume heroesProfileResume;
     private int minReplayId;
 
     public bool ContinuesWhenEmpty => true;
@@ -91,7 +93,8 @@ public class HeroesProfileProvider : IReplayProvider
         IRequestQueue requestQueue,
         IHeroesProfileService heroesProfileService,
         CancellationTokenProvider provider,
-        AppSettings settings
+        AppSettings settings,
+        IHeroesProfileResume heroesProfileResume = null
     )
     {
         this.provider = provider ?? throw new ArgumentNullException(nameof(provider));
@@ -102,6 +105,7 @@ public class HeroesProfileProvider : IReplayProvider
         this.requestQueue = requestQueue ?? throw new ArgumentNullException(nameof(requestQueue));
         this.heroesProfileService =
             heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
+        this.heroesProfileResume = heroesProfileResume;
     }
 
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
@@ -239,6 +243,23 @@ public class HeroesProfileProvider : IReplayProvider
         activity?.SetTag("replay.id", replay.Id);
         activity?.SetTag("replay.map", replay.Map);
 
+        try
+        {
+            await WriteDownloadAsync(replay, fileInfo).ConfigureAwait(false);
+        }
+        catch (Exception e) when (heroesProfileResume != null && heroesProfileResume.Consume())
+        {
+            logger.LogWarning(
+                e,
+                "Connectivity restored. Retrying Heroes Profile download of {ReplayId} once.",
+                replay.Id
+            );
+            await WriteDownloadAsync(replay, fileInfo).ConfigureAwait(false);
+        }
+    }
+
+    private async Task WriteDownloadAsync(HeroesProfileReplay replay, FileInfo fileInfo)
+    {
         await using (FileStream file = fileInfo.OpenWrite())
         {
             await heroesProfileService
@@ -277,53 +298,76 @@ public class HeroesProfileProvider : IReplayProvider
     {
         try
         {
-            return await Policy
+            HeroesProfileReplay found = await Policy
                 .Handle<Exception>()
                 .OrResult<HeroesProfileReplay>(replay => replay == null)
                 .WaitAndRetryAsync(60, retry => settings.HeroesProfileApi.APIRetryWaitTime)
-                .ExecuteAsync(
-                    async token =>
-                    {
-                        IEnumerable<HeroesProfileReplay> replays = await heroesProfileService
-                            .GetReplaysByMinId(MinReplayId)
-                            .ConfigureAwait(false);
-
-                        if (replays != null && replays.Any())
-                        {
-                            logger.LogInformation("Finding replay that fits criteria.");
-
-                            HeroesProfileReplay found = replays
-                                .Where(r =>
-                                    r.Id > MinReplayId
-                                    && settings.HeroesProfileApi.IsAllowedGameType(r.GameType)
-                                )
-                                .OrderBy(x => x.Id)
-                                .FirstOrDefault();
-
-                            if (found == null)
-                            {
-                                logger.LogWarning(
-                                    $"Replay not found with criteria. MinReplayId = {MinReplayId}"
-                                );
-                                MinReplayId = replays.Max(x => x.Id);
-                            }
-                            else
-                            {
-                                logger.LogInformation($"Replay found. MinReplayId = {MinReplayId}");
-                                MinReplayId = found.Id;
-                                return found;
-                            }
-                        }
-
-                        return null;
-                    },
-                    provider.Token
-                )
+                .ExecuteAsync(_ => ListOnceAsync(), provider.Token)
                 .ConfigureAwait(false);
+
+            if (found == null && heroesProfileResume != null && heroesProfileResume.Consume())
+            {
+                logger.LogInformation(
+                    "Connectivity restored. Retrying Heroes Profile replay list once."
+                );
+                found = await ListOnceAsync().ConfigureAwait(false);
+            }
+
+            return found;
         }
         catch (Exception e)
         {
+            if (heroesProfileResume != null && heroesProfileResume.Consume())
+            {
+                logger.LogWarning(
+                    e,
+                    "Connectivity restored. Retrying Heroes Profile replay list once."
+                );
+                try
+                {
+                    return await ListOnceAsync().ConfigureAwait(false);
+                }
+                catch (Exception retryError)
+                {
+                    logger.LogError(retryError, "Could not get the next replay file.");
+                    return null;
+                }
+            }
+
             logger.LogError(e, "Could not get the next replay file.");
+        }
+
+        return null;
+    }
+
+    private async Task<HeroesProfileReplay> ListOnceAsync()
+    {
+        IEnumerable<HeroesProfileReplay> replays = await heroesProfileService
+            .GetReplaysByMinId(MinReplayId)
+            .ConfigureAwait(false);
+
+        if (replays != null && replays.Any())
+        {
+            logger.LogInformation("Finding replay that fits criteria.");
+
+            HeroesProfileReplay found = replays
+                .Where(r =>
+                    r.Id > MinReplayId && settings.HeroesProfileApi.IsAllowedGameType(r.GameType)
+                )
+                .OrderBy(x => x.Id)
+                .FirstOrDefault();
+
+            if (found == null)
+            {
+                logger.LogWarning($"Replay not found with criteria. MinReplayId = {MinReplayId}");
+                MinReplayId = replays.Max(x => x.Id);
+            }
+            else
+            {
+                logger.LogInformation($"Replay found. MinReplayId = {MinReplayId}");
+                MinReplayId = found.Id;
+                return found;
+            }
         }
 
         return null;

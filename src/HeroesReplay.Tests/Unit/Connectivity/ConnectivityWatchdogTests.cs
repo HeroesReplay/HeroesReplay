@@ -41,6 +41,34 @@ public class ConnectivityWatchdogTests
     }
 
     [Fact]
+    public void Apply_OfflineThenOnline_ArmsHeroesProfileRetryOnceWithoutStreaming()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: false);
+        Assert.False(fixture.Resume.IsPending);
+
+        fixture.Watchdog.Apply(FailSnapshot());
+        fixture.Watchdog.Apply(FailSnapshot());
+        Assert.False(fixture.Resume.IsPending);
+        Assert.True(fixture.Watchdog.IsOnline);
+
+        Assert.True(fixture.Watchdog.Apply(FailSnapshot()));
+        Assert.False(fixture.Watchdog.IsOnline);
+        Assert.False(fixture.Resume.IsPending);
+
+        Assert.False(fixture.Watchdog.Apply(OkSnapshot()));
+        Assert.False(fixture.Resume.IsPending);
+
+        Assert.True(fixture.Watchdog.Apply(OkSnapshot()));
+        Assert.True(fixture.Watchdog.IsOnline);
+        Assert.True(fixture.Resume.IsPending);
+        Assert.True(fixture.Resume.Consume());
+        Assert.False(fixture.Resume.IsPending);
+        Assert.False(fixture.Resume.Consume());
+        Assert.Equal(0, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
     public void Apply_DoesNotStartStreamWhenStreamingDisabled()
     {
         using Fixture fixture = CreateFixture(streamingEnabled: false);
@@ -118,6 +146,7 @@ public class ConnectivityWatchdogTests
         var store = new SpectatorStatusStore(path);
         var probe = new FakeProbe();
         var obs = new FakeObs();
+        var resume = new HeroesProfileResume();
         var watchdog = new ConnectivityWatchdog(
             NullLogger<ConnectivityWatchdog>.Instance,
             new AppSettings
@@ -133,25 +162,34 @@ public class ConnectivityWatchdogTests
             probe,
             store,
             new CancellationTokenProvider(),
-            obs
+            obs,
+            resume
         );
-        return new Fixture(path, probe, obs, watchdog);
+        return new Fixture(path, probe, obs, watchdog, resume);
     }
 
     private sealed class Fixture : IDisposable
     {
-        public Fixture(string path, FakeProbe probe, FakeObs obs, ConnectivityWatchdog watchdog)
+        public Fixture(
+            string path,
+            FakeProbe probe,
+            FakeObs obs,
+            ConnectivityWatchdog watchdog,
+            HeroesProfileResume resume
+        )
         {
             Path = path;
             Probe = probe;
             Obs = obs;
             Watchdog = watchdog;
+            Resume = resume;
         }
 
         public string Path { get; }
         public FakeProbe Probe { get; }
         public FakeObs Obs { get; }
         public ConnectivityWatchdog Watchdog { get; }
+        public HeroesProfileResume Resume { get; }
 
         public void Dispose()
         {

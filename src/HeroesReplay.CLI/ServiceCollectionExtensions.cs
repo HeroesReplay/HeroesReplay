@@ -419,6 +419,7 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddConnectivityServices(this IServiceCollection services)
     {
+        services.AddSingleton<IHeroesProfileResume, HeroesProfileResume>();
         services
             .AddHttpClient<INetworkProbe, NetworkProbe>(client =>
             {
@@ -433,7 +434,8 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<INetworkProbe>(),
                 sp.GetRequiredService<SpectatorStatusStore>(),
                 sp.GetRequiredService<CancellationTokenProvider>(),
-                sp.GetService<IObsController>()
+                sp.GetService<IObsController>(),
+                sp.GetRequiredService<IHeroesProfileResume>()
             ));
         return services;
     }

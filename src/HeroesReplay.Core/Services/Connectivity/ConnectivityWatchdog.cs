@@ -17,6 +17,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     private readonly SpectatorStatusStore statusStore;
     private readonly CancellationTokenProvider tokenProvider;
     private readonly IObsController obsController;
+    private readonly IHeroesProfileResume heroesProfileResume;
     private readonly object gate = new();
     private int failCount;
     private int recoverCount;
@@ -29,7 +30,8 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         INetworkProbe probe,
         SpectatorStatusStore statusStore,
         CancellationTokenProvider tokenProvider,
-        IObsController obsController = null
+        IObsController obsController = null,
+        IHeroesProfileResume heroesProfileResume = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -39,6 +41,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.obsController = obsController;
+        this.heroesProfileResume = heroesProfileResume;
         IsOnline = true;
         Last = new ConnectivitySnapshot
         {
@@ -78,7 +81,6 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         }
 
         ConnectivityChangedEventArgs changed = null;
-        bool becameOnline;
         lock (gate)
         {
             Last = snapshot;
@@ -99,7 +101,6 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             if (IsOnline && failCount >= failThreshold)
             {
                 IsOnline = false;
-                becameOnline = false;
                 changed = new ConnectivityChangedEventArgs
                 {
                     IsOnline = false,
@@ -109,12 +110,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             else if (!IsOnline && recoverCount >= recoverThreshold)
             {
                 IsOnline = true;
-                becameOnline = true;
                 changed = new ConnectivityChangedEventArgs { IsOnline = true, Snapshot = snapshot };
-            }
-            else
-            {
-                becameOnline = IsOnline;
             }
         }
 
@@ -135,12 +131,26 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             return false;
         }
 
+        ConnectivityResume.Decision decision = ConnectivityResume.Decide(
+            wasOnline: !changed.IsOnline,
+            isOnline: changed.IsOnline,
+            streamingEnabled: SessionMedia.ShouldStream(settings.OBS)
+        );
+
         logger.LogWarning(
             "Connectivity {State}: {Detail}",
             changed.IsOnline ? "restored" : "lost",
             snapshot.Describe()
         );
-        HandleStream(becameOnline);
+        if (decision.RetryHeroesProfile)
+        {
+            heroesProfileResume?.Arm();
+            logger.LogInformation(
+                "Connectivity restored. Retrying Heroes Profile list/download once."
+            );
+        }
+
+        HandleStream(decision);
         Changed?.Invoke(this, changed);
         return true;
     }
@@ -188,7 +198,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
 
     private ConnectivitySettings Settings => settings.Connectivity ?? new ConnectivitySettings();
 
-    private void HandleStream(bool becameOnline)
+    private void HandleStream(ConnectivityResume.Decision decision)
     {
         if (obsController == null || !SessionMedia.ShouldStream(settings.OBS))
         {
@@ -197,7 +207,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
 
         try
         {
-            if (becameOnline)
+            if (decision.StartStream)
             {
                 obsController.StartStreaming();
             }
@@ -211,7 +221,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             logger.LogWarning(
                 e,
                 "Could not {Action} OBS stream after connectivity change.",
-                becameOnline ? "start" : "stop"
+                decision.StartStream ? "start" : "stop"
             );
         }
     }
