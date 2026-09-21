@@ -413,13 +413,26 @@ public class Spectator : ISpectator
             return;
         }
 
-        memoryClock.Observe(process, hudTime);
+        // The on-screen clock starts at 0:00 when gates open. Replay time is that
+        // clock plus GatesOpen. The client stores the on-screen seconds.
+        TimeSpan gates = Data?.GatesOpen ?? TimeSpan.Zero;
+        TimeSpan uiTime = hudTime - gates;
+        if (uiTime < TimeSpan.Zero)
+        {
+            uiTime = hudTime;
+        }
+
+        memoryClock.Observe(process, uiTime);
         if (memoryClock.LastRead != null || memoryClock.CandidateCount > 0)
         {
+            TimeSpan? memoryReplay =
+                memoryClock.LastRead == null ? null : memoryClock.LastRead + gates;
             logger.LogInformation(
-                "HUD {Hud} memory {Memory} locked={Locked} phase={Phase} candidates={Candidates}",
+                "HUD {Hud} ui={Ui} memory={Memory} asReplay={MemoryReplay} locked={Locked} phase={Phase} candidates={Candidates}",
                 hudTime,
+                uiTime,
                 memoryClock.LastRead,
+                memoryReplay,
                 memoryClock.IsLocked,
                 memoryClock.Phase,
                 memoryClock.CandidateCount
