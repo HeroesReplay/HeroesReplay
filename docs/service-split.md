@@ -52,7 +52,7 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 
 1. This document only.
 2. Done on this branch: `Engine` no longer starts `TwitchBot`. `twitch connect` uses `AddTwitchServices` and does not build the game/OCR graph. Predictions still run inside the spectator until a later cut.
-3. Move Heroes Profile list/download out of `HeroesProfileProvider`. The spectator process uses a file provider against `Data\Standard` and `Data\Requests`.
+3. Done on this branch: `heroesprofile download` lists and downloads. `spectate heroesprofile` uses `ReplayCacheProvider` and only plays files already in `Data\Standard` and `Data\Requests`. Existing files are seeded into `Data\spectated-ids.txt` so the cache is not replayed from the beginning.
 4. Point the orchestrator at the existing `youtube uploader` process. Do not fold it back into spectate.
 5. Optional later: Windows services or containers for Twitch, the downloader, and YouTube. Not for the spectator.
 

@@ -27,7 +27,7 @@ public class SpectateHeroesProfileApiCommand : Command
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
         using ServiceProvider provider = new ServiceCollection()
-            .AddSpectateServices(cancellationToken, typeof(HeroesProfileProvider))
+            .AddSpectateServices(cancellationToken, typeof(ReplayCacheProvider))
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
