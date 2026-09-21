@@ -31,7 +31,7 @@ Shared state stays on disk. No message bus in v1.
 
 | Process | Owns | Must not own |
 | --- | --- | --- |
-| CLI | Short commands: `start` / `stop` / `status`, plus today's one-shot `check`, `client`, `calculators`, reward admin, `mcp` | `Engine.RunAsync`, `TwitchBot.InitializeAsync`, `YouTubeUploader.ListenAsync`, the Heroes Profile poll loop |
+| CLI | Short commands: `services start` / `services stop` / `services status`, plus today's one-shot `check`, `client`, `calculators`, reward admin, `mcp` | `Engine.RunAsync`, `TwitchBot.InitializeAsync`, `YouTubeUploader.ListenAsync`, the Heroes Profile poll loop |
 | Spectator (Windows only) | HotS process, window input, WinRT OCR / BitBlt, focus loop, per-replay OBS session, connectivity watchdog, `%LOCALAPPDATA%\HeroesReplay\status.json` (including match completion fields) | Twitch sockets, Helix predictions, Heroes Profile list/download, YouTube upload |
 | Twitch | Chat, PubSub, reward handlers writing `Data\requests.json`, predictions read from `status.json` / context | Game HWND, OCR, OBS, replay parse |
 | Heroes Profile downloader | List and download into `Data\Standard`; fulfill requests into `Data\Requests` | Spectating, Twitch, YouTube |
@@ -56,7 +56,7 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 2. Done on this branch: `Engine` no longer starts `TwitchBot`. `twitch connect` uses `AddTwitchServices` and does not build the game/OCR graph.
 3. Done on this branch: `heroesprofile download` lists and downloads. `spectate heroesprofile` uses `ReplayCacheProvider` and only plays files already in `Data\Standard` and `Data\Requests`. Existing files are seeded into `Data\spectated-ids.txt` so the cache is not replayed from the beginning.
 4. Done on this branch: Blue/Red predictions run in `twitch connect`. The spectator does not call Helix. `twitch connect` opens a prediction when `status.json` phase is `TimerDetected`, and settles it from `completedReplayId` / `completedAt` / `completedWinnerTeam` (0 blue, 1 red, null cancels). Those completion fields are written when the spectate session ends and are not cleared when the next replay loads.
-5. Point the orchestrator at the existing `youtube uploader` process, plus `twitch connect`, `heroesprofile download`, and `spectate heroesprofile`. Do not fold them back into one process.
-6. Optional later: Windows services or containers for Twitch, the downloader, and YouTube. Not for the spectator.
+5. Done on this branch: `heroesreplay services start` launches four processes (`spectate heroesprofile`, `twitch connect`, `heroesprofile download`, `youtube uploader`) and records their pids in `%LOCALAPPDATA%\HeroesReplay\services.json`. Each process is detached. Stdout and stderr go to `%LOCALAPPDATA%\HeroesReplay\logs\`. `services stop` kills only those still-living `heroesreplay` pids. `services status` reports that list plus `status.json`. Start does not turn on Twitch ingest. Stop does not close Heroes of the Storm, because a forced kill skips the spectator shutdown.
+6. Optional later: Windows services or containers for Twitch, the downloader, and YouTube. Not for the spectator. Graceful Ctrl+C so stop can run the spectator's game shutdown.
 
 Do not start Twitch ingest as part of this split. Do not merge the process cut to `master` until each process runs and stops on its own.
