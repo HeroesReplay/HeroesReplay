@@ -472,7 +472,7 @@ public class GameController : IGameController
         }
         catch (Exception)
         {
-            logger.LogInformation($"Could not parse the timer: {text ?? string.Empty}");
+            logger.LogDebug("Could not parse the timer: {Text}", text ?? string.Empty);
         }
 
         return null;

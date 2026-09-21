@@ -159,6 +159,25 @@ public static class MemoryTimerSelection
         return true;
     }
 
+    public static List<MemoryTimerCandidate> Ticking(IReadOnlyList<MemoryTimerCandidate> candidates)
+    {
+        var ticking = new List<MemoryTimerCandidate>();
+        if (candidates == null)
+        {
+            return ticking;
+        }
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            if (candidates[i].AgreeTicks >= 1)
+            {
+                ticking.Add(candidates[i]);
+            }
+        }
+
+        return ticking;
+    }
+
     public static List<MemoryTimerCandidate> KeepTicking(
         IReadOnlyList<MemoryTimerCandidate> previous,
         IReadOnlyDictionary<long, int> readings,

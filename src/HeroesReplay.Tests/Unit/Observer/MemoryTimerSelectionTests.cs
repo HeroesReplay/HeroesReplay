@@ -33,6 +33,23 @@ public class MemoryTimerSelectionTests
     }
 
     [Fact]
+    public void Ticking_KeepsOnlyCellsThatHaveStepped()
+    {
+        var candidates = new List<MemoryTimerCandidate>
+        {
+            new(0x10, MemoryTimerKind.FloatSeconds, 12, 0),
+            new(0x20, MemoryTimerKind.FloatSeconds, 13, 1),
+            new(0x30, MemoryTimerKind.Int32Seconds, 13, 2),
+        };
+
+        List<MemoryTimerCandidate> ticking = MemoryTimerSelection.Ticking(candidates);
+
+        Assert.Equal(2, ticking.Count);
+        Assert.Equal(0x20L, ticking[0].Address);
+        Assert.Equal(0x30L, ticking[1].Address);
+    }
+
+    [Fact]
     public void KeepTicking_DropsStaticAndMissing_KeepsStepper()
     {
         var previous = new List<MemoryTimerCandidate>

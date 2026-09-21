@@ -263,6 +263,26 @@ public sealed class MemoryMatchClock
         }
 
         ReplaceCandidates(kept);
+        List<MemoryTimerCandidate> ticking = MemoryTimerSelection.Ticking(candidates);
+        if (ticking.Count > 0)
+        {
+            if (ticking.Count != candidates.Count)
+            {
+                ReplaceCandidates(ticking);
+            }
+
+            // Do not scan further. New copies of the current second drown the cells that tick.
+            discoveryPaused = false;
+            discoveryComplete = true;
+            pausedAtHud = -1;
+            logger.LogInformation(
+                "Memory timer kept {Count} {Mode} candidates that moved with the HUD. Not scanning for more.",
+                candidates.Count,
+                ModeLabel
+            );
+            return;
+        }
+
         if (
             discoveryPaused
             && pausedAtHud >= 0
@@ -271,24 +291,23 @@ public sealed class MemoryMatchClock
         )
         {
             logger.LogWarning(
-                "Memory timer still has {Count} {Mode} candidates after {Seconds}s; not locking.",
+                "Memory timer still has {Count} {Mode} candidates after {Seconds}s and none tracked the HUD. Continuing the scan.",
                 candidates.Count,
                 ModeLabel,
                 hud - pausedAtHud
             );
             ReplaceCandidates(Array.Empty<MemoryTimerCandidate>());
             discoveryPaused = false;
-            discoveryComplete = true;
+            pausedAtHud = -1;
             return;
         }
 
-        if (discoveryPaused && candidates.Count <= MemoryTimerSelection.ResumeBelow)
+        if (discoveryPaused && candidates.Count == 0)
         {
             discoveryPaused = false;
             pausedAtHud = -1;
             logger.LogInformation(
-                "Memory timer down to {Count} candidates; resuming {Mode} scan at 0x{Cursor:X}.",
-                candidates.Count,
+                "Memory timer candidates did not tick. Resuming {Mode} scan at 0x{Cursor:X}.",
                 ModeLabel,
                 cursor
             );
