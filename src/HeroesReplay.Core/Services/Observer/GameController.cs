@@ -403,12 +403,13 @@ public class GameController : IGameController
 
         Rectangle dimensions = captureStrategy.GetDimensions(handle);
         int width = dimensions.Width;
-        // The HUD clock is the small MM:SS pill. A 240px-wide crop also includes
-        // the level and kill digits on either side, which OCR then treats as the time.
-        int cropWidth = Math.Clamp(width / 16, 96, 128);
-        int cropHeight = 40;
+        int height = dimensions.Height;
+        // 1920x1080: the MM:SS pill is about x=910, y=22, 100x32.
+        // Wider than that includes the team level and kill digits beside it.
+        int cropWidth = Math.Clamp(width * 100 / 1920, 80, 110);
+        int cropHeight = Math.Clamp(height * 32 / 1080, 24, 40);
+        int top = Math.Clamp(height * 22 / 1080, 12, 36);
         int start = Math.Max(0, (width - cropWidth) / 2);
-        int top = 18;
         if (start + cropWidth > width)
         {
             cropWidth = width - start;
