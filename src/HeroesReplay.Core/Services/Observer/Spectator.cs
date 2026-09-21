@@ -443,6 +443,12 @@ public class Spectator : ISpectator
         }
 
         nextEndScreenProbe = DateTimeOffset.UtcNow.AddSeconds(12);
+        TimeSpan core = Data?.CoreKilled ?? TimeSpan.Zero;
+        if (core <= TimeSpan.Zero || Timer + TimeSpan.FromMinutes(3) < core)
+        {
+            return;
+        }
+
         if (await controller.TrySeeEndScreenAsync().ConfigureAwait(false))
         {
             endScreenSeen = true;
