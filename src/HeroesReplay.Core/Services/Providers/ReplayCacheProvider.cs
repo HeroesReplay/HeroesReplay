@@ -64,7 +64,8 @@ public sealed class ReplayCacheProvider : IReplayProvider
             .Where(file =>
                 replayHelper.TryGetReplayId(file.Name, out int id) && !played.Contains(id)
             )
-            .OrderBy(file =>
+            .OrderBy(file => IsRequest(file) ? 0 : 1)
+            .ThenBy(file =>
             {
                 replayHelper.TryGetReplayId(file.Name, out int id);
                 return id;
@@ -96,7 +97,9 @@ public sealed class ReplayCacheProvider : IReplayProvider
             replay.ReplayVersion
         );
         logger.LogInformation(
-            "Playing cached replay {ReplayId} from {Path}",
+            IsRequest(next)
+                ? "Playing requested replay {ReplayId} from {Path}"
+                : "Playing cached replay {ReplayId} from {Path}",
             replayId,
             next.FullName
         );
@@ -172,6 +175,21 @@ public sealed class ReplayCacheProvider : IReplayProvider
             Rank = rank,
             Map = map,
         };
+    }
+
+    private bool IsRequest(FileInfo file)
+    {
+        string directory = file.DirectoryName;
+        if (string.IsNullOrEmpty(directory))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            Path.GetFullPath(directory),
+            Path.GetFullPath(settings.RequestedReplayCachePath),
+            StringComparison.OrdinalIgnoreCase
+        );
     }
 
     private string PlayedPath() =>

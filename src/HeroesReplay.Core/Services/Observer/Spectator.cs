@@ -352,16 +352,20 @@ public class Spectator : ISpectator
             }
         }
 
-        List<TimeSpan> plausible = samples
-            .Where(sample => timerFilter.IsPlausible(sample, maxJump))
-            .OrderBy(sample => sample)
-            .ToList();
-        if (plausible.Count == 0)
+        samples.Sort();
+        if (samples.Count >= 2 && samples[^1] - samples[0] <= maxJump)
         {
-            return null;
+            TimeSpan agreed = samples[samples.Count / 2];
+            logger.LogWarning(
+                "OCR timer caught up from {Last} to {Timer} after {Count} agreeing reads.",
+                timerFilter.LastAccepted,
+                agreed,
+                samples.Count
+            );
+            return agreed;
         }
 
-        return plausible[plausible.Count / 2];
+        return null;
     }
 
     private async Task<TimeSpan?> ReadOneOcrReplayTimeAsync()
