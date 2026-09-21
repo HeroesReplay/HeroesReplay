@@ -33,18 +33,28 @@ Secrets: skill `op-service-account`. On a new clone, set user env `OP_SERVICE_AC
 
 CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
 
+## Purpose of the work
+
+Improve the spectator and the tools around it. The work is to prove, validate, and keep the functionality correct, and to make the CLI, the services, and the spectator more resilient and easier to run.
+
+**ASA-SERVER is the development machine.** Sessions here exist only to test a change: launch, HUD clock, focus, end screen, OBS, Twitch chat/rewards, crash recovery. Stop the process when the check is done. Do not leave a match running for its own sake. Do not treat this box as the broadcast.
+
+**DESKTOP-8SJE72 is the production machine.** That is where real spectating and the live stream happen. Do not kill, rebuild, or experiment there without a scheduled downtime.
+
+On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: stop `heroesreplay` and HotS, `dotnet build heroes-replay.slnx -c Release`, copy `appsettings.secrets.json` into the CLI Release bin, and start a short spectate only if you need to prove that change. Never start Twitch ingest here.
+
 ## Environments
 
 | | **dev** | **live** |
 | --- | --- | --- |
 | Hostname | `ASA-SERVER` | `DESKTOP-8SJE72` |
-| Role | Development VM (Unraid guest). Lighter GPU: Intel Arc A310. Keep QXL/VNC. | 24/7 Twitch stream box (`saltysadism`). |
+| Role | Develop, prove, and harden the spectator, CLI, and services. Not a broadcast. | Real spectating and the 24/7 Twitch stream (`saltysadism`). Intel Arc A310 guest vs this live box. |
 | Repo | `C:\heroesreplay\HeroesReplay` | Same path. Do not clone elsewhere (OBS `Default.json` hard-codes it). |
 | Stream | **Do not go live.** OBS, predictions, chat, rewards, and requested-replay recording/YouTube are for testing only. | Production ingest. Do not experiment on the live stream. |
 | Upgrades | Safe to stop spectate, rebuild, reboot the guest (not Unraid/Tower). | Schedule **downtime** before pull, rebuild, client/OBS upgrades, or reboots. |
-| Spectator engine | **Normal** to kill `heroesreplay`, quit HotS, `dotnet build -c Release`, copy `appsettings.secrets.json` into the CLI bin, and relaunch (`elev-hr-spectate*.ps1`). That is how changes are tested here. | Do **not** kill/rebuild/restart the spectator as a routine. Treat the running stream as production. |
+| Spectator engine | **Normal** to kill `heroesreplay`, quit HotS, rebuild Release, and relaunch only long enough to prove a change. Stop when the proof is done. | Do **not** kill/rebuild/restart the spectator as a routine. This is the production spectate. |
 
-On **ASA-SERVER**, agents should rebuild and restart after spectator/OBS/Twitch/OCR changes, then watch `%LOCALAPPDATA%\HeroesReplay\status.json` and `Data\Contexts\<id>\end.png` (last frame before `Kill()`). On **DESKTOP-8SJE72**, ask before stopping anything.
+On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\HeroesReplay\status.json` and `Data\Contexts\<id>\end.png` if the client was closed. Do not keep spectating after that. On **DESKTOP-8SJE72**, ask before stopping anything.
 
 ### Maps, modes, client
 
