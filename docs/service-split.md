@@ -46,7 +46,8 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 ## Contracts already on disk
 
 - `%LOCALAPPDATA%\HeroesReplay\status.json` — phase, timer, map, replay id, core death, and when the session ends `completedReplayId`, `completedAt`, and `completedWinnerTeam`. Twitch predictions and `status` read this. They do not call into the spectator.
-- `Data\requests.json` (and the failed file) — Twitch enqueues; the downloader fulfills; the spectator only sees local `.StormReplay` files.
+- `Data\requests.json` (and the failed file) — Twitch enqueues; the downloader fulfills; the spectator only sees local `.StormReplay` files. Both processes lock the files with a named mutex.
+- `%LOCALAPPDATA%\HeroesReplay\panel-requests.json` — `!talents` and `!stats` from `twitch connect`. The spectator consumes the pending panel and sends the hotkey.
 - `Data\Standard` and `Data\Requests` — replay cache. After the split, `spectate heroesprofile` becomes "play the cache" (same shape as `spectate file`).
 - `Data\Contexts\<id>\` — recording, end screenshot, YouTube entry. The uploader already keys off these files.
 
@@ -57,6 +58,7 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 3. Done on this branch: `heroesprofile download` lists and downloads. `spectate heroesprofile` uses `ReplayCacheProvider` and only plays files already in `Data\Standard` and `Data\Requests`. Existing files are seeded into `Data\spectated-ids.txt` so the cache is not replayed from the beginning.
 4. Done on this branch: Blue/Red predictions run in `twitch connect`. The spectator does not call Helix. `twitch connect` opens a prediction when `status.json` phase is `TimerDetected`, and settles it from `completedReplayId` / `completedAt` / `completedWinnerTeam` (0 blue, 1 red, null cancels). Those completion fields are written when the spectate session ends and are not cleared when the next replay loads.
 5. Done on this branch: `heroesreplay services start` launches four processes (`spectate heroesprofile`, `twitch connect`, `heroesprofile download`, `youtube uploader`) and records their pids in `%LOCALAPPDATA%\HeroesReplay\services.json`. Each process is detached. Stdout and stderr go to `%LOCALAPPDATA%\HeroesReplay\logs\`. `services stop` writes `%LOCALAPPDATA%\HeroesReplay\services.stop`. Spectate, `twitch connect`, `heroesprofile download`, and `youtube uploader` cancel on that file. The spectator then runs its normal shutdown, which closes Heroes of the Storm. Processes still alive after 20 seconds are killed. `services status` reports the pid list plus `status.json`. Start does not turn on Twitch ingest, and it clears a leftover stop file before launching.
-6. Optional later: Windows services or containers for Twitch, the downloader, and YouTube. Not for the spectator.
+6. Done on this branch: `!talents` / `!stats` and `Data\requests.json` are shared files with a cross-process lock. Chat in `twitch connect` can show a panel in the spectator process.
+7. Optional later: Windows services or containers for Twitch, the downloader, and YouTube. Not for the spectator.
 
 Do not start Twitch ingest as part of this split. Do not merge the process cut to `master` until each process runs and stops on its own.

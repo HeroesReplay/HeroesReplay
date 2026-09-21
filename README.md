@@ -89,7 +89,9 @@ dotnet run --no-launch-profile -- --help
 | Command | Purpose |
 | --- | --- |
 | `spectate file --file <path>` | Play one replay (or each file in a directory) then exit |
-| `spectate heroesprofile` | Download and spectate Heroes Profile Storm League replays in a loop |
+| `services start` / `services stop` / `services status` | Run spectate, Twitch, the Heroes Profile downloader, and the YouTube uploader as separate processes |
+| `spectate heroesprofile` | Spectate `.StormReplay` files already in `Data\Standard` and `Data\Requests` |
+| `heroesprofile download` | List and download Storm League replays into those folders |
 | `calculators coordinates` | Parse the newest Documents replay and prove coordinates + focus timeline |
 | `calculators report --file <path>` | Write a spectator report |
 | `twitch connect` / `twitch rewards …` | Chat bot and channel-point rewards |

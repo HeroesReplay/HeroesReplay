@@ -22,8 +22,8 @@ public class RequestQueue : IRequestQueue, IDisposable
     private readonly IHeroesProfileService heroesProfileService;
     private readonly AppSettings settings;
     private readonly JsonSerializerOptions options;
-    private readonly SemaphoreSlim successSemaphore;
-    private readonly SemaphoreSlim failedSemaphore;
+    private readonly Mutex queueMutex = new(false, @"Local\HeroesReplay.RequestQueue");
+    private readonly Mutex failedMutex = new(false, @"Local\HeroesReplay.FailedRequests");
 
     public RequestQueue(
         ILogger<RequestQueue> logger,
@@ -47,45 +47,84 @@ public class RequestQueue : IRequestQueue, IDisposable
             WriteIndented = true,
             Converters = { new JsonStringEnumConverter(allowIntegerValues: true) },
         };
-        successSemaphore = new(1, maxCount: 1);
-        failedSemaphore = new(1, maxCount: 1);
+    }
+
+    private async Task<IDisposable> AcquireAsync(Mutex mutex)
+    {
+        bool acquired = await Task.Run(() =>
+            {
+                try
+                {
+                    return mutex.WaitOne(TimeSpan.FromSeconds(30));
+                }
+                catch (AbandonedMutexException)
+                {
+                    return true;
+                }
+            })
+            .ConfigureAwait(false);
+        if (!acquired)
+        {
+            throw new TimeoutException("Could not lock a request queue file.");
+        }
+
+        return new MutexReleaser(mutex);
+    }
+
+    private sealed class MutexReleaser : IDisposable
+    {
+        private Mutex mutex;
+
+        public MutexReleaser(Mutex mutex)
+        {
+            this.mutex = mutex;
+        }
+
+        public void Dispose()
+        {
+            if (mutex == null)
+            {
+                return;
+            }
+
+            try
+            {
+                mutex.ReleaseMutex();
+            }
+            catch (ApplicationException) { }
+
+            mutex = null;
+        }
     }
 
     public async Task<int> GetItemsInQueue()
     {
-        if (queueFile.Exists)
+        if (!queueFile.Exists)
         {
-            try
-            {
-                await successSemaphore.WaitAsync();
-                List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                    await File.ReadAllTextAsync(queueFile.FullName),
-                    options
-                );
-                successSemaphore.Release();
-                return requests.Count;
-            }
-            finally
-            {
-                successSemaphore.Release();
-            }
+            return 0;
         }
 
-        return 0;
+        using (await AcquireAsync(queueMutex).ConfigureAwait(false))
+        {
+            List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(
+                await File.ReadAllTextAsync(queueFile.FullName),
+                options
+            );
+            return requests?.Count ?? 0;
+        }
     }
 
     public async Task<RewardResponse> EnqueueItemAsync(RewardRequest request)
     {
         try
         {
-            await successSemaphore.WaitAsync();
+            using (await AcquireAsync(queueMutex).ConfigureAwait(false))
+            {
+                if (request.ReplayId.HasValue)
+                {
+                    return await QueueByReplayIdAsync(request);
+                }
 
-            if (request.ReplayId.HasValue)
-            {
-                return await QueueByReplayIdAsync(request);
-            }
-            else
-            {
                 return await QueueByRewardFilterAsync(request);
             }
         }
@@ -96,10 +135,6 @@ public class RequestQueue : IRequestQueue, IDisposable
                 success: false,
                 message: "there was an unexpected error with your request."
             );
-        }
-        finally
-        {
-            successSemaphore.Release();
         }
     }
 
@@ -174,10 +209,8 @@ public class RequestQueue : IRequestQueue, IDisposable
 
     private async Task AddToFailedRequestsAsync(RewardQueueItem item)
     {
-        try
+        using (await AcquireAsync(failedMutex).ConfigureAwait(false))
         {
-            await failedSemaphore.WaitAsync();
-
             if (failedFile.Exists)
             {
                 List<RewardQueueItem> items = new(
@@ -201,10 +234,6 @@ public class RequestQueue : IRequestQueue, IDisposable
                     JsonSerializer.Serialize(new List<RewardQueueItem> { item }, options)
                 );
             }
-        }
-        finally
-        {
-            failedSemaphore.Release();
         }
     }
 
@@ -241,36 +270,34 @@ public class RequestQueue : IRequestQueue, IDisposable
         {
             try
             {
-                await successSemaphore.WaitAsync();
-                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                    await File.ReadAllTextAsync(queueFile.FullName),
-                    options
-                );
-
-                if (items.Count > 0)
+                using (await AcquireAsync(queueMutex).ConfigureAwait(false))
                 {
-                    RewardQueueItem item = items[0];
+                    List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
+                        await File.ReadAllTextAsync(queueFile.FullName),
+                        options
+                    );
 
-                    if (items.Remove(item))
+                    if (items.Count > 0)
                     {
-                        await File.WriteAllTextAsync(
-                            queueFile.FullName,
-                            JsonSerializer.Serialize(items, options)
-                        );
-                        logger.LogInformation(
-                            $"Request: '{item.Request.RewardTitle}' removed from the queue."
-                        );
-                        return item;
+                        RewardQueueItem item = items[0];
+
+                        if (items.Remove(item))
+                        {
+                            await File.WriteAllTextAsync(
+                                queueFile.FullName,
+                                JsonSerializer.Serialize(items, options)
+                            );
+                            logger.LogInformation(
+                                $"Request: '{item.Request.RewardTitle}' removed from the queue."
+                            );
+                            return item;
+                        }
                     }
                 }
             }
             catch (Exception e)
             {
                 logger.LogError(e, "Could not dequeue item");
-            }
-            finally
-            {
-                successSemaphore.Release();
             }
         }
 
@@ -283,32 +310,34 @@ public class RequestQueue : IRequestQueue, IDisposable
         {
             try
             {
-                await successSemaphore.WaitAsync();
-                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                    await File.ReadAllTextAsync(queueFile.FullName),
-                    options
-                );
-
-                if (items.Count > 0)
+                using (await AcquireAsync(queueMutex).ConfigureAwait(false))
                 {
-                    RewardQueueItem item = items.Find(item =>
-                        item.Request.Login.Equals(login, StringComparison.OrdinalIgnoreCase)
+                    List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
+                        await File.ReadAllTextAsync(queueFile.FullName),
+                        options
                     );
 
-                    if (item != null)
+                    if (items.Count > 0)
                     {
-                        int position = items.IndexOf(item) + 1;
+                        RewardQueueItem item = items.Find(item =>
+                            item.Request.Login.Equals(login, StringComparison.OrdinalIgnoreCase)
+                        );
 
-                        if (items.Remove(item))
+                        if (item != null)
                         {
-                            await File.WriteAllTextAsync(
-                                queueFile.FullName,
-                                JsonSerializer.Serialize(items, options)
-                            );
-                            logger.LogInformation(
-                                $"Request: '{item.Request.RewardTitle}' removed from the queue."
-                            );
-                            return (item, position);
+                            int position = items.IndexOf(item) + 1;
+
+                            if (items.Remove(item))
+                            {
+                                await File.WriteAllTextAsync(
+                                    queueFile.FullName,
+                                    JsonSerializer.Serialize(items, options)
+                                );
+                                logger.LogInformation(
+                                    $"Request: '{item.Request.RewardTitle}' removed from the queue."
+                                );
+                                return (item, position);
+                            }
                         }
                     }
                 }
@@ -316,10 +345,6 @@ public class RequestQueue : IRequestQueue, IDisposable
             catch (Exception e)
             {
                 logger.LogError(e, "Could not remove item from queue");
-            }
-            finally
-            {
-                successSemaphore.Release();
             }
         }
 
@@ -332,29 +357,26 @@ public class RequestQueue : IRequestQueue, IDisposable
         {
             try
             {
-                await successSemaphore.WaitAsync();
-
-                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                    await File.ReadAllTextAsync(queueFile.FullName),
-                    options
-                );
-
-                var item = items.FirstOrDefault(x =>
-                    x.Request.Login.Equals(login, StringComparison.OrdinalIgnoreCase)
-                );
-
-                if (item != null)
+                using (await AcquireAsync(queueMutex).ConfigureAwait(false))
                 {
-                    return (item, items.IndexOf(item) + 1);
+                    List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
+                        await File.ReadAllTextAsync(queueFile.FullName),
+                        options
+                    );
+
+                    var item = items.FirstOrDefault(x =>
+                        x.Request.Login.Equals(login, StringComparison.OrdinalIgnoreCase)
+                    );
+
+                    if (item != null)
+                    {
+                        return (item, items.IndexOf(item) + 1);
+                    }
                 }
             }
             catch (Exception e)
             {
                 logger.LogError(e, $"Could not find next queue item for: {login}");
-            }
-            finally
-            {
-                successSemaphore.Release();
             }
         }
 
@@ -367,30 +389,29 @@ public class RequestQueue : IRequestQueue, IDisposable
         {
             try
             {
-                await successSemaphore.WaitAsync();
-
-                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                    await File.ReadAllTextAsync(queueFile.FullName),
-                    options
-                );
-
-                if (items.Count > 0)
+                using (await AcquireAsync(queueMutex).ConfigureAwait(false))
                 {
-                    RewardQueueItem item = items.Find(item => items.IndexOf(item) == (index - 1));
+                    List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
+                        await File.ReadAllTextAsync(queueFile.FullName),
+                        options
+                    );
 
-                    if (item != null)
+                    if (items.Count > 0)
                     {
-                        return item;
+                        RewardQueueItem item = items.Find(item =>
+                            items.IndexOf(item) == (index - 1)
+                        );
+
+                        if (item != null)
+                        {
+                            return item;
+                        }
                     }
                 }
             }
             catch (Exception e)
             {
                 logger.LogError(e, $"Could not find next queue item by index: {index}");
-            }
-            finally
-            {
-                successSemaphore.Release();
             }
         }
 
@@ -399,16 +420,7 @@ public class RequestQueue : IRequestQueue, IDisposable
 
     public void Dispose()
     {
-        try
-        {
-            successSemaphore.Dispose();
-        }
-        catch { }
-
-        try
-        {
-            failedSemaphore.Dispose();
-        }
-        catch { }
+        queueMutex.Dispose();
+        failedMutex.Dispose();
     }
 }

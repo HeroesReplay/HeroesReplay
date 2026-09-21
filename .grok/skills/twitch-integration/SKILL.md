@@ -17,7 +17,7 @@ description: >
 
 Channel-point methods are `*Async`: `GetCustomRewardAsync`, `CreateCustomRewardsAsync`, `UpdateCustomRewardAsync`, `DeleteCustomRewardAsync`.
 
-Helix Predictions (Blue/Red who-wins): `CreatePredictionAsync` when the match clock is detected, `EndPredictionAsync` (RESOLVED/CANCELED) when the spectate session ends. Team 0 = Blue (left), team 1 = Red (right). Requires `channel:manage:predictions`. Toggle `Twitch:EnablePredictions`. Window `Twitch:PredictionWindow` (clamped 30s–1800s). Dry-run and `CaptureMethod.None` skip Helix.
+Helix Predictions (Blue/Red who-wins): `twitch connect` calls `CreatePredictionAsync` when `status.json` phase is `TimerDetected`, and `EndPredictionAsync` (RESOLVED/CANCELED) from the completion fields when the session ends. Team 0 = Blue (left), team 1 = Red (right). Requires `channel:manage:predictions`. Toggle `Twitch:EnablePredictions`. Window `Twitch:PredictionWindow` (clamped 30s–1800s). Dry-run and `CaptureMethod.None` skip Helix. The spectator does not call Helix.
 
 ## Do not grow PubSub rewards
 
@@ -31,7 +31,7 @@ Helix can only **update** channel-point rewards created with the same Client-Id 
 
 Chat (`TwitchClient`) and Helix remain fine.
 
-Chat (during `spectate`, chatbot enabled), matching Icy Veins observer hotkeys:
+Chat (during `twitch connect`, chatbot enabled), matching Icy Veins observer hotkeys. The request is written to `%LOCALAPPDATA%\HeroesReplay\panel-requests.json`. The spectator process consumes it:
 - `!talents` → Ctrl+1 talent panel
 - `!stats` → Ctrl+2 stats panel
 Each shows for `Spectate:StatsPanelShowDuration` (default 10s) with `StatsPanelCooldown` (default 2 minutes, independent per panel). Do not auto-cycle KDA/XP/stats; talents still open automatically at talent times.
