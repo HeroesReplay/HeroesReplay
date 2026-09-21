@@ -19,13 +19,15 @@ public class ServiceSupervisorTests
             @"C:\heroes replay\heroesreplay.exe",
             "spectate heroesprofile",
             @"C:\logs\spectate.log",
-            @"C:\logs\spectate.err.log"
+            @"C:\logs\spectate.err.log",
+            @"C:\logs\spectate.pid"
         );
 
         Assert.Contains(@"'C:\heroes replay\heroesreplay.exe'", script);
         Assert.Contains("-ArgumentList 'spectate','heroesprofile'", script);
         Assert.Contains(@"-RedirectStandardOutput 'C:\logs\spectate.log'", script);
         Assert.Contains(@"-RedirectStandardError 'C:\logs\spectate.err.log'", script);
+        Assert.Contains(@"Set-Content -LiteralPath 'C:\logs\spectate.pid'", script);
         Assert.DoesNotContain("spectate heroesprofile", script);
     }
 

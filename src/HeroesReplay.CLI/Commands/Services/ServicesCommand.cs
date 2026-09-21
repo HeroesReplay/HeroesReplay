@@ -111,7 +111,8 @@ public class ServicesCommand : Command
         string exe,
         string arguments,
         string outLog,
-        string errLog
+        string errLog,
+        string pidFile
     )
     {
         string argList = string.Join(
@@ -128,7 +129,9 @@ public class ServicesCommand : Command
             + PsQuote(outLog)
             + " -RedirectStandardError "
             + PsQuote(errLog)
-            + " -PassThru; $p.Id";
+            + " -PassThru; Set-Content -LiteralPath "
+            + PsQuote(pidFile)
+            + " -Value $p.Id -NoNewline";
     }
 
     private static int? StartProcess(string exe, string arguments)
@@ -142,7 +145,13 @@ public class ServicesCommand : Command
         string slug = string.Join("-", arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         string outLog = Path.Combine(logDir, slug + ".log");
         string errLog = Path.Combine(logDir, slug + ".err.log");
-        string script = PowerShellStartCommand(exe, arguments, outLog, errLog);
+        string pidFile = Path.Combine(logDir, slug + ".pid");
+        if (File.Exists(pidFile))
+        {
+            File.Delete(pidFile);
+        }
+
+        string script = PowerShellStartCommand(exe, arguments, outLog, errLog, pidFile);
         string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
         using Process process = Process.Start(
             new ProcessStartInfo
@@ -151,8 +160,6 @@ public class ServicesCommand : Command
                 Arguments = "-NoProfile -NonInteractive -EncodedCommand " + encoded,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
             }
         );
         if (process == null)
@@ -160,26 +167,19 @@ public class ServicesCommand : Command
             return null;
         }
 
-        string stdout = process.StandardOutput.ReadToEnd();
-        string stderr = process.StandardError.ReadToEnd();
         if (!process.WaitForExit(15000))
         {
             try
             {
-                process.Kill(entireProcessTree: true);
+                process.Kill();
             }
             catch (InvalidOperationException) { }
             return null;
         }
 
-        int? pid = ParseProcessId(stdout);
+        int? pid = File.Exists(pidFile) ? ParseProcessId(File.ReadAllText(pidFile)) : null;
         if (process.ExitCode != 0 || pid == null)
         {
-            if (!string.IsNullOrWhiteSpace(stderr))
-            {
-                Console.Error.WriteLine(stderr.Trim());
-            }
-
             return null;
         }
 
