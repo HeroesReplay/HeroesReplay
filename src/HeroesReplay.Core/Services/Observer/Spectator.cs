@@ -42,6 +42,10 @@ public class Spectator : ISpectator
 
     private DateTimeOffset? endScreenStarted;
 
+    private TimeSpan lastAdvancedHud = TimeSpan.MinValue;
+
+    private DateTimeOffset lastAdvancedHudAt;
+
     private int hungChecks;
 
     private int missingProcessChecks;
@@ -128,6 +132,8 @@ public class Spectator : ISpectator
         timerFilter.Reset();
         memoryClock.Reset();
         endScreenStarted = null;
+        lastAdvancedHud = TimeSpan.MinValue;
+        lastAdvancedHudAt = default;
         hungChecks = 0;
         missingProcessChecks = 0;
         PublishStatus();
@@ -197,6 +203,11 @@ public class Spectator : ISpectator
                 {
                     timerFilter.Accept(ocrReplay.Value);
                     Timer = ocrReplay.Value;
+                    if (ocrReplay.Value > lastAdvancedHud)
+                    {
+                        lastAdvancedHud = ocrReplay.Value;
+                        lastAdvancedHudAt = DateTimeOffset.UtcNow;
+                    }
                     ObserveMemoryTimer(ocrReplay.Value);
                 }
                 else if (
@@ -414,9 +425,11 @@ public class Spectator : ISpectator
         }
 
         bool nearCore = Timer + TimeSpan.FromSeconds(20) >= Data.CoreKilled;
-        bool pastCore =
-            Timer >= Data.CoreKilled
-            || (!ocrTimerVisible && State == State.TimerDetected && nearCore);
+        bool hudFrozen =
+            State == State.TimerDetected
+            && lastAdvancedHudAt != default
+            && DateTimeOffset.UtcNow - lastAdvancedHudAt >= TimeSpan.FromSeconds(90);
+        bool pastCore = Timer >= Data.CoreKilled || (!ocrTimerVisible && nearCore) || hudFrozen;
 
         if (!pastCore)
         {
