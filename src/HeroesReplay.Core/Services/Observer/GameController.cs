@@ -403,15 +403,18 @@ public class GameController : IGameController
 
         Rectangle dimensions = captureStrategy.GetDimensions(handle);
         int width = dimensions.Width;
-        int cropWidth = Math.Max(240, width / 8);
-        int cropHeight = 80;
+        // The HUD clock is the small MM:SS pill. A 240px-wide crop also includes
+        // the level and kill digits on either side, which OCR then treats as the time.
+        int cropWidth = Math.Clamp(width / 16, 96, 128);
+        int cropHeight = 40;
         int start = Math.Max(0, (width - cropWidth) / 2);
+        int top = 18;
         if (start + cropWidth > width)
         {
             cropWidth = width - start;
         }
 
-        return captureStrategy.Capture(handle, new Rectangle(start, 0, cropWidth, cropHeight));
+        return captureStrategy.Capture(handle, new Rectangle(start, top, cropWidth, cropHeight));
     }
 
     private bool IsMatchingClientVersion()

@@ -31,7 +31,7 @@ public class BitBltCapture : CaptureStrategy
         if (bitmap != null && IsMostlyBlack(bitmap))
         {
             Logger.LogWarning(
-                "BitBlt of client {Bounds} was empty/black. Keep the game windowed and uncovered.",
+                "BitBlt of screen {Bounds} was empty/black. Windowed mode is fine. A window covering this rectangle is what gets captured.",
                 bounds
             );
         }
