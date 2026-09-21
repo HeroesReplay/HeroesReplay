@@ -465,16 +465,17 @@ public class GameController : IGameController
         try
         {
             string time = new string(SanitizeOcrTimer(text));
-            if (
-                !System.Text.RegularExpressions.Regex.IsMatch(time, @"^-?\d{1,2}:\d{2}$")
-                && !System.Text.RegularExpressions.Regex.IsMatch(time, @"^\d{1,2}:\d{2}:\d{2}$")
-            )
+            // The HUD clock is only -MM:SS before the gates, or MM:SS after. Never hours.
+            if (!System.Text.RegularExpressions.Regex.IsMatch(time, @"^-?\d{1,2}:\d{2}$"))
             {
-                if (!string.Equals(time, lastRejectedTimer, StringComparison.Ordinal))
+                if (
+                    !string.IsNullOrEmpty(time)
+                    && !string.Equals(time, lastRejectedTimer, StringComparison.Ordinal)
+                )
                 {
                     lastRejectedTimer = time;
                     logger.LogWarning(
-                        "Timer OCR is not a clock. Saw \"{Text}\", sanitized to \"{Sanitized}\".",
+                        "Timer OCR is not -MM:SS or MM:SS. Saw \"{Text}\", sanitized to \"{Sanitized}\".",
                         text,
                         time
                     );
@@ -483,25 +484,20 @@ public class GameController : IGameController
                 return null;
             }
 
-            string[] segments = time.Split(settings.OCR.TimerSeperator);
-
-            if (segments.Length == settings.OCR.TimerHours)
-            {
-                return time.ParseTimerHours(settings.OCR.TimeSpanFormatHours);
-            }
-            else if (
-                segments.Length == settings.OCR.TimerMinutes
-                && segments[0].StartsWith(settings.OCR.TimerNegativePrefix)
+            bool negative = time.StartsWith('-');
+            string[] segments = (negative ? time[1..] : time).Split(':');
+            if (
+                !int.TryParse(segments[0], out int minutes)
+                || !int.TryParse(segments[1], out int seconds)
+                || minutes > 90
+                || seconds > 59
             )
             {
-                return time.ParseNegativeTimerMinutes(settings.OCR.TimeSpanFormatMatchStart);
-            }
-            else if (segments.Length == settings.OCR.TimerMinutes)
-            {
-                return time.ParsePositiveTimerMinutes(settings.OCR.TimerSeperator);
+                return null;
             }
 
-            throw new Exception($"Unhandled segments: {segments.Length}");
+            TimeSpan clock = new TimeSpan(0, minutes, seconds);
+            return negative ? clock.Negate() : clock;
         }
         catch (Exception)
         {
