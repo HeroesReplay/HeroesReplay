@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
 
@@ -13,5 +14,6 @@ public interface IGameController
     void SaveEndScreenshot();
     bool IsGameHung();
     bool IsGameRunning();
+    Process GetGameProcess();
     void Kill();
 }

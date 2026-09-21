@@ -612,6 +612,37 @@ public class GameController : IGameController
 
     public bool IsGameRunning() => IsGameProcessRunning();
 
+    public Process GetGameProcess()
+    {
+        if (cachedProcess != null)
+        {
+            try
+            {
+                if (!cachedProcess.HasExited)
+                {
+                    return cachedProcess;
+                }
+            }
+            catch (InvalidOperationException) { }
+        }
+
+        foreach (Process process in Process.GetProcessesByName(settings.Process.HeroesOfTheStorm))
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    return process;
+                }
+            }
+            catch (InvalidOperationException) { }
+
+            process.Dispose();
+        }
+
+        return null;
+    }
+
     public void Kill()
     {
         ClearProcessCache();

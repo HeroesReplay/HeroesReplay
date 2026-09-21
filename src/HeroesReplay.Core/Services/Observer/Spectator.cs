@@ -38,6 +38,8 @@ public class Spectator : ISpectator
 
     private readonly MatchTimerFilter timerFilter = new();
 
+    private readonly MemoryMatchClock memoryClock;
+
     private DateTimeOffset? endScreenStarted;
 
     private int hungChecks;
@@ -79,6 +81,7 @@ public class Spectator : ISpectator
         this.predictions = predictions ?? throw new ArgumentNullException(nameof(predictions));
         this.obsController =
             obsController ?? throw new ArgumentNullException(nameof(obsController));
+        memoryClock = new MemoryMatchClock(logger);
 
         panelTimes = new()
         {
@@ -123,6 +126,7 @@ public class Spectator : ISpectator
         State = State.Loading;
         Timer = default;
         timerFilter.Reset();
+        memoryClock.Reset();
         endScreenStarted = null;
         hungChecks = 0;
         missingProcessChecks = 0;
@@ -193,6 +197,30 @@ public class Spectator : ISpectator
                 {
                     timerFilter.Accept(ocrReplay.Value);
                     Timer = ocrReplay.Value;
+                    ObserveMemoryTimer(ocrReplay.Value);
+                }
+                else if (
+                    settings.Spectate.UseMemoryTimer
+                    && memoryClock.IsLocked
+                    && controller.GetGameProcess() is { } alive
+                )
+                {
+                    TimeSpan? memory = memoryClock.TryRead(alive);
+                    if (
+                        memory.HasValue
+                        && timerFilter.IsPlausible(
+                            memory.Value,
+                            settings.Spectate.MaxTimerJump > TimeSpan.Zero
+                                ? settings.Spectate.MaxTimerJump
+                                : TimeSpan.FromSeconds(8)
+                        )
+                    )
+                    {
+                        timerFilter.Accept(memory.Value);
+                        Timer = memory.Value;
+                        fromOcr = true;
+                        logger.LogInformation("Memory Time: {Timer}", Timer);
+                    }
                 }
                 else if (State != State.TimerDetected)
                 {
@@ -349,6 +377,31 @@ public class Spectator : ISpectator
         }
 
         return candidate;
+    }
+
+    private void ObserveMemoryTimer(TimeSpan hudTime)
+    {
+        if (!settings.Spectate.MemoryTimerEnabled)
+        {
+            return;
+        }
+
+        Process process = controller.GetGameProcess();
+        if (process == null)
+        {
+            return;
+        }
+
+        memoryClock.Observe(process, hudTime);
+        if (memoryClock.LastRead != null)
+        {
+            logger.LogInformation(
+                "HUD {Hud} memory {Memory} locked={Locked}",
+                hudTime,
+                memoryClock.LastRead,
+                memoryClock.IsLocked
+            );
+        }
     }
 
     private void TryEndAfterCore(bool ocrTimerVisible)

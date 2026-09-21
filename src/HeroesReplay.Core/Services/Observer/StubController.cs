@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
@@ -27,6 +28,8 @@ public sealed class StubController : IGameController
     public bool IsGameHung() => false;
 
     public bool IsGameRunning() => true;
+
+    public Process GetGameProcess() => null;
 
     public Task LaunchAsync()
     {
