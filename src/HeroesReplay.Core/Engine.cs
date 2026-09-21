@@ -88,7 +88,19 @@ public class Engine : IEngine
                     loadedReplay.ReplayId,
                     loadedReplay.Replay?.ReplayVersion
                 );
-                await gameManager.LaunchAndSpectate(loadedReplay);
+                try
+                {
+                    await gameManager.LaunchAndSpectate(loadedReplay);
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(
+                        e,
+                        "Spectate failed for replay {ReplayId}. Continuing.",
+                        loadedReplay.ReplayId
+                    );
+                }
+
                 continue;
             }
 
