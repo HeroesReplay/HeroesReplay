@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI;
@@ -11,9 +13,11 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OBSWebsocketDotNet;
 using TwitchLib.Api.Interfaces;
 
@@ -59,6 +63,13 @@ public class CheckCommand : Command
                 "connectivity",
                 "Probe 1.1.1.1, Twitch, and Heroes Profile without starting an OBS stream.",
                 CheckConnectivityAsync
+            )
+        );
+        Subcommands.Add(
+            Build(
+                "timer",
+                "Read-only scan of HeroesOfTheStorm_x64 for a ticking match clock (issue 27).",
+                CheckTimerAsync
             )
         );
 
@@ -323,6 +334,89 @@ public class CheckCommand : Command
         catch (Exception e)
         {
             return Fail("connectivity", e);
+        }
+    }
+
+    public static async Task<CheckResult> CheckTimerAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            Process process = Process
+                .GetProcessesByName("HeroesOfTheStorm_x64")
+                .FirstOrDefault(p =>
+                {
+                    try
+                    {
+                        return !p.HasExited;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+            if (process == null)
+            {
+                return new CheckResult("timer", false, "HeroesOfTheStorm_x64 is not running.");
+            }
+
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+            var clock = new MemoryMatchClock(loggerFactory.CreateLogger("MemoryMatchClock"));
+            TimeSpan? hud = null;
+            string statusPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "HeroesReplay",
+                "status.json"
+            );
+            if (File.Exists(statusPath))
+            {
+                try
+                {
+                    using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(statusPath));
+                    if (
+                        doc.RootElement.TryGetProperty("timer", out JsonElement timer)
+                        && TimeSpan.TryParse(timer.GetString(), out TimeSpan parsed)
+                    )
+                    {
+                        hud = parsed;
+                    }
+                }
+                catch
+                {
+                    // ignore stale status
+                }
+            }
+
+            if (hud == null)
+            {
+                return new CheckResult(
+                    "timer",
+                    false,
+                    $"HotS pid {process.Id} is running but no HUD timer is available to seed a scan. Start spectate until TimerDetected, then re-run."
+                );
+            }
+
+            for (int i = 0; i < 6 && !cancellationToken.IsCancellationRequested; i++)
+            {
+                TimeSpan guess = hud.Value.Add(TimeSpan.FromSeconds(i));
+                clock.Observe(process, guess);
+                Console.WriteLine(
+                    $"sample {i + 1}: seed={guess} memory={clock.LastRead} locked={clock.IsLocked}"
+                );
+                if (i < 5)
+                {
+                    await Task.Delay(1000, cancellationToken);
+                }
+            }
+
+            return new CheckResult(
+                "timer",
+                clock.IsLocked || clock.LastRead != null,
+                $"pid={process.Id} HUD seed={hud} memory={clock.LastRead} locked={clock.IsLocked}"
+            );
+        }
+        catch (Exception e)
+        {
+            return Fail("timer", e);
         }
     }
 
