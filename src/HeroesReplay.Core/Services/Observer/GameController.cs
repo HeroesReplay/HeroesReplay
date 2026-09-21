@@ -41,6 +41,7 @@ public class GameController : IGameController
     private readonly object controllerLock = new object();
     private Process cachedProcess;
     private IntPtr cachedHandle;
+    private string lastRejectedTimer;
 
     public static readonly VirtualKey[] Keys =
     {
@@ -366,7 +367,21 @@ public class GameController : IGameController
 
                 if (timer.HasValue)
                     return timer;
-                else if (settings.Capture.SaveCaptureFailureCondition)
+
+                try
+                {
+                    Directory.CreateDirectory(settings.CapturesPath);
+                    resized.Save(
+                        Path.Combine(settings.CapturesPath, "timer-rejected.png"),
+                        ImageFormat.Png
+                    );
+                }
+                catch (Exception saveError)
+                {
+                    logger.LogDebug(saveError, "Could not save the rejected timer crop.");
+                }
+
+                if (settings.Capture.SaveCaptureFailureCondition)
                 {
                     Directory.CreateDirectory(settings.CapturesPath);
                     resized.Save(
@@ -450,6 +465,24 @@ public class GameController : IGameController
         try
         {
             string time = new string(SanitizeOcrTimer(text));
+            if (
+                !System.Text.RegularExpressions.Regex.IsMatch(time, @"^-?\d{1,2}:\d{2}$")
+                && !System.Text.RegularExpressions.Regex.IsMatch(time, @"^\d{1,2}:\d{2}:\d{2}$")
+            )
+            {
+                if (!string.Equals(time, lastRejectedTimer, StringComparison.Ordinal))
+                {
+                    lastRejectedTimer = time;
+                    logger.LogWarning(
+                        "Timer OCR is not a clock. Saw \"{Text}\", sanitized to \"{Sanitized}\".",
+                        text,
+                        time
+                    );
+                }
+
+                return null;
+            }
+
             string[] segments = time.Split(settings.OCR.TimerSeperator);
 
             if (segments.Length == settings.OCR.TimerHours)
@@ -488,7 +521,7 @@ public class GameController : IGameController
             .Replace("S", "5", StringComparison.OrdinalIgnoreCase)
             .Replace("G", "6", StringComparison.OrdinalIgnoreCase)
             .Replace("T", "7", StringComparison.OrdinalIgnoreCase)
-            .Replace("B", "13", StringComparison.OrdinalIgnoreCase)
+            .Replace("B", "8", StringComparison.OrdinalIgnoreCase)
             .Replace(".", ":", StringComparison.OrdinalIgnoreCase)
             .Replace("'", string.Empty, StringComparison.OrdinalIgnoreCase)
             .Replace("\"", string.Empty, StringComparison.OrdinalIgnoreCase)
