@@ -52,7 +52,8 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         await CancelActiveAsync(cancellationToken).ConfigureAwait(false);
 
         string channelId = await GetChannelIdAsync().ConfigureAwait(false);
-        await CancelChannelPredictionAsync(channelId, cancellationToken).ConfigureAwait(false);
+        bool channelClear = await CancelChannelPredictionAsync(channelId, cancellationToken)
+            .ConfigureAwait(false);
         var request = new CreatePredictionRequest
         {
             BroadcasterId = channelId,
@@ -74,6 +75,11 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 request.Title,
                 request.PredictionWindowSeconds
             );
+            return;
+        }
+
+        if (!channelClear)
+        {
             return;
         }
 
@@ -267,7 +273,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         return team;
     }
 
-    private async Task CancelChannelPredictionAsync(
+    private async Task<bool> CancelChannelPredictionAsync(
         string channelId,
         CancellationToken cancellationToken
     )
@@ -275,7 +281,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         cancellationToken.ThrowIfCancellationRequested();
         if (settings.Twitch.DryRunMode || string.IsNullOrWhiteSpace(channelId))
         {
-            return;
+            return true;
         }
 
         try
@@ -292,7 +298,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             );
             if (active == null)
             {
-                return;
+                return true;
             }
 
             if (active.Status == PredictionStatus.LOCKED)
@@ -301,7 +307,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                     "Prediction {PredictionId} is locked, so a new one cannot be opened yet.",
                     active.Id
                 );
-                return;
+                return false;
             }
 
             await api
@@ -315,10 +321,12 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 "Canceled the channel prediction {PredictionId} that was already open.",
                 active.Id
             );
+            return true;
         }
         catch (Exception e)
         {
             logger.LogWarning(e, "Could not clear the prediction already open on the channel.");
+            return false;
         }
     }
 
