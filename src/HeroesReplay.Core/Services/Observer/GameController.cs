@@ -468,40 +468,26 @@ public class GameController : IGameController
     {
         try
         {
-            string time = new string(SanitizeOcrTimer(text));
-            // The HUD clock is only -MM:SS before the gates, or MM:SS after. Never hours.
-            if (!System.Text.RegularExpressions.Regex.IsMatch(time, @"^-?\d{1,2}:\d{2}$"))
+            if (!HudClock.TryParse(text, out TimeSpan clock))
             {
+                string sanitized = HudClock.Sanitize(text);
                 if (
-                    !string.IsNullOrEmpty(time)
-                    && !string.Equals(time, lastRejectedTimer, StringComparison.Ordinal)
+                    !string.IsNullOrEmpty(sanitized)
+                    && !string.Equals(sanitized, lastRejectedTimer, StringComparison.Ordinal)
                 )
                 {
-                    lastRejectedTimer = time;
+                    lastRejectedTimer = sanitized;
                     logger.LogWarning(
                         "Timer OCR is not -MM:SS or MM:SS. Saw \"{Text}\", sanitized to \"{Sanitized}\".",
                         text,
-                        time
+                        sanitized
                     );
                 }
 
                 return null;
             }
 
-            bool negative = time.StartsWith('-');
-            string[] segments = (negative ? time[1..] : time).Split(':');
-            if (
-                !int.TryParse(segments[0], out int minutes)
-                || !int.TryParse(segments[1], out int seconds)
-                || minutes > 90
-                || seconds > 59
-            )
-            {
-                return null;
-            }
-
-            TimeSpan clock = new TimeSpan(0, minutes, seconds);
-            return negative ? clock.Negate() : clock;
+            return clock;
         }
         catch (Exception)
         {
@@ -509,24 +495,6 @@ public class GameController : IGameController
         }
 
         return null;
-    }
-
-    private static char[] SanitizeOcrTimer(string text)
-    {
-        return text.Replace("O", "0", StringComparison.OrdinalIgnoreCase)
-            .Replace("L", "1", StringComparison.OrdinalIgnoreCase)
-            .Replace("Z", "2", StringComparison.OrdinalIgnoreCase)
-            .Replace("E", "3", StringComparison.OrdinalIgnoreCase)
-            .Replace("A", "4", StringComparison.OrdinalIgnoreCase)
-            .Replace("S", "5", StringComparison.OrdinalIgnoreCase)
-            .Replace("G", "6", StringComparison.OrdinalIgnoreCase)
-            .Replace("T", "7", StringComparison.OrdinalIgnoreCase)
-            .Replace("B", "8", StringComparison.OrdinalIgnoreCase)
-            .Replace(".", ":", StringComparison.OrdinalIgnoreCase)
-            .Replace("'", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("\"", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Where(c => char.IsDigit(c) || c.Equals(':') || c.Equals('-'))
-            .ToArray();
     }
 
     private async Task<bool> IsHomeScreen() =>
