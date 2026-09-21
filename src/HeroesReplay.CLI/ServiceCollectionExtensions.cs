@@ -178,6 +178,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IFocusCalculator, BossCampCaptureCalculator>()
             .AddSingleton<IFocusCalculator, CampClearCalculator>()
             .AddSingleton<IFocusCalculator, MapObjectiveCalculator>()
+            .AddSingleton<IFocusCalculator, NearMapUnitCalculator>()
             .AddSingleton<IFocusCalculator, DestroyingStructureCalculator>()
             .AddSingleton<IFocusCalculator, VehicleCalculator>()
             .AddSingleton<IFocusCalculator, EmotingCalculator>();

@@ -7,6 +7,7 @@ public class WeightSettings
     public float CaptureBeacon { get; set; }
 
     public float CampClear { get; set; }
+    public float Pickup { get; set; }
     public float CampCapture { get; set; }
     public float BossCapture { get; set; }
 
