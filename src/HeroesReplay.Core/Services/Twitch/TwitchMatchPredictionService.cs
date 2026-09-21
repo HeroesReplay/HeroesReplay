@@ -36,7 +36,10 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         this.api = api ?? throw new ArgumentNullException(nameof(api));
     }
 
-    public async Task StartAsync(LoadedReplay replay, CancellationToken cancellationToken)
+    public Task StartAsync(LoadedReplay replay, CancellationToken cancellationToken) =>
+        OpenAsync(replay?.Replay?.Map, cancellationToken);
+
+    public async Task OpenAsync(string map, CancellationToken cancellationToken)
     {
         if (!settings.Twitch.EnablePredictions || settings.Capture.Method == CaptureMethod.None)
         {
@@ -47,7 +50,6 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         await CancelActiveAsync(cancellationToken).ConfigureAwait(false);
 
         string channelId = await GetChannelIdAsync().ConfigureAwait(false);
-        string map = replay?.Replay?.Map;
         var request = new CreatePredictionRequest
         {
             BroadcasterId = channelId,
@@ -117,7 +119,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             }
             settings.Capture.Method = CaptureMethod.BitBlt;
             settings.Twitch.PredictionWindow = TimeSpan.FromSeconds(30);
-            await StartAsync(dummy, cancellationToken).ConfigureAwait(false);
+            await OpenAsync(dummy.Replay.Map, cancellationToken).ConfigureAwait(false);
             await ResolveTeamAsync(winningTeam, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -131,13 +133,13 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         }
     }
 
-    public async Task ResolveAsync(LoadedReplay replay, CancellationToken cancellationToken)
+    public Task ResolveAsync(LoadedReplay replay, CancellationToken cancellationToken)
     {
         int? team = replay?.Replay == null ? null : WinningTeam(replay.Replay);
-        await ResolveTeamAsync(team, cancellationToken).ConfigureAwait(false);
+        return ResolveTeamAsync(team, cancellationToken);
     }
 
-    private async Task ResolveTeamAsync(int? team, CancellationToken cancellationToken)
+    public async Task ResolveTeamAsync(int? team, CancellationToken cancellationToken)
     {
         string id;
         string channelId;

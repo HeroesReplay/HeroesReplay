@@ -244,7 +244,9 @@ public static class ServiceCollectionExtensions
                 }
             )
             .AddSingleton(new CancellationTokenProvider(token))
+            .AddSingleton<SpectatorStatusStore>()
             .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>()
+            .AddSingleton<StatusPredictionWatcher>()
             .AddSingleton<ITwitchRewardsManager, TwitchRewardsManager>()
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
@@ -391,7 +393,6 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton<ITwitchPubSub, TwitchPubSub>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
-            .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>()
             .AddSingleton(serviceProvider =>
             {
                 AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();

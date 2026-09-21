@@ -48,6 +48,8 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards 
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch predictions test --outcome Blue
 ```
 
-`twitch predictions test` creates a 30s Blue/Red Helix prediction then resolves (`Blue`/`Red`) or `cancel`. Watch it on the Twitch creator dashboard. Spectate does the same at TimerDetected and at session end from `Player.IsWinner`.
+`twitch predictions test` creates a 30s Blue/Red Helix prediction then resolves (`Blue`/`Red`) or `cancel`. Watch it on the Twitch creator dashboard.
+
+`twitch connect` opens the real match prediction. It watches `%LOCALAPPDATA%\HeroesReplay\status.json` and does not call into the spectator. Phase `TimerDetected` opens Blue/Red for `map`. When the session ends, the spectator writes `completedReplayId`, `completedAt`, and `completedWinnerTeam` (0 blue, 1 red, null cancels) and leaves them in place while the next replay loads. The spectator process does not call Helix.
 
 `check twitch` is Helix `GetUsers` plus `GetPredictions` when `EnablePredictions` is true. `twitch connect` blocks. Command map: skill `heroes-replay-cli`.

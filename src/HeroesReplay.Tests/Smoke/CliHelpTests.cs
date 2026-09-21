@@ -61,6 +61,16 @@ public class CliHelpTests
     }
 
     [Fact]
+    public void HeroesProfileHelp_HasDownload()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("heroesprofile --help");
+        Assert.Empty(result.Errors);
+        Command heroesProfile = root.Subcommands.Single(c => c.Name == "heroesprofile");
+        Assert.Contains(heroesProfile.Subcommands, c => c.Name == "download");
+    }
+
+    [Fact]
     public void TwitchHelp_HasPredictionsTest()
     {
         var root = new HeroesReplayCommand();

@@ -16,6 +16,9 @@ public sealed class SpectatorStatus
     public string ReplayPath { get; set; }
     public string ReplayVersion { get; set; }
     public int? ReplayId { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public int? CompletedReplayId { get; set; }
+    public int? CompletedWinnerTeam { get; set; }
     public bool ObsSession { get; set; }
     public bool? ConnectivityOnline { get; set; }
     public string Connectivity { get; set; }

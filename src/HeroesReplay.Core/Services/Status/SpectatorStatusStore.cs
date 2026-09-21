@@ -72,13 +72,33 @@ public sealed class SpectatorStatusStore
     public SpectatorStatus Read()
     {
         SpectatorStatus status = TryReadFile() ?? CopyCurrent();
+        MarkStale(status);
+        return status;
+    }
+
+    /// <summary>
+    /// Reads the status file another process wrote. Returns null when the file is missing or busy
+    /// so a watcher does not treat this process's idle memory as the spectator stopping.
+    /// </summary>
+    public SpectatorStatus TryReadShared()
+    {
+        SpectatorStatus status = TryReadFile();
+        if (status == null)
+        {
+            return null;
+        }
+
+        MarkStale(status);
+        return status;
+    }
+
+    private static void MarkStale(SpectatorStatus status)
+    {
         if (DateTimeOffset.UtcNow - status.UpdatedAt > StaleAfter)
         {
             status.SnapshotStale = true;
             status.SpectatorRunning = false;
         }
-
-        return status;
     }
 
     public string ReadJson() => JsonSerializer.Serialize(Read(), JsonOptions);

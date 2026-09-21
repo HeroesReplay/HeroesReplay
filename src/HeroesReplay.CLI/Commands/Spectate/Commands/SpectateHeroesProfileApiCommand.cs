@@ -13,7 +13,7 @@ public class SpectateHeroesProfileApiCommand : Command
     public SpectateHeroesProfileApiCommand()
         : base(
             "heroesprofile",
-            "Access the HeroesProfile S3 bucket to download uploaded replays and spectate them."
+            "Spectate StormReplay files already in Data\\Standard and Data\\Requests. Does not call Heroes Profile."
         )
     {
         SetAction(

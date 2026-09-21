@@ -23,7 +23,8 @@ On **ASA-SERVER** (dev VM): after spectator/OCR/OBS/Twitch code changes, stop `h
 | Command | Behavior |
 | --- | --- |
 | `spectate file [--file path]` | Play one `.StormReplay` or each file in a directory, then exit |
-| `spectate heroesprofile` | Loop: download Storm League replays from Heroes Profile S3 |
+| `spectate heroesprofile` | Play `.StormReplay` files already in `Data\Standard` and `Data\Requests`. Does not call Heroes Profile. |
+| `heroesprofile download` | List and download Storm League replays into `Data\Standard` and `Data\Requests`. Does not launch the game. |
 | `calculators coordinates [--file path]` | Parse replay, print coordinate samples, build Kill/NearEnemy/Roaming focus map |
 | `calculators report [--file path]` | Spectator report for a file/directory |
 | `check` | Config + Heroes Profile + OBS + Twitch; continues on failure; exit 1 if any fail |
@@ -35,7 +36,7 @@ On **ASA-SERVER** (dev VM): after spectator/OCR/OBS/Twitch code changes, stop `h
 | `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). Spectate applies this automatically if the game is not running. Capture is GDI BitBlt; windowed 1080p is required. |
 | `client status` | Report preset mismatches |
 | `otel up` / `otel down` / `otel status` | Optional Aspire Dashboard via Docker Compose (`deploy/aspire/docker-compose.yml`). UI http://127.0.0.1:18888, OTLP gRPC :4317. |
-| `twitch connect` | Chat bot; blocks |
+| `twitch connect` | Chat, PubSub, and Blue/Red predictions from `status.json`. Does not launch the game. Blocks. |
 | `twitch rewards generate\|submit\|list\|test` | Helix custom rewards; `test` runs the local redeem handler |
 | `twitch predictions test [--outcome Blue\|Red\|cancel]` | Create then resolve/cancel a 30s Blue/Red prediction |
 | `youtube uploader` | Watch `Data\\Contexts` for `.mp4` + `youtube-entry.json`. Needs Google `client_secrets.json`. Spectate only writes the entry / records for **requested** replays unless `YouTube:Enabled` / `OBS:RecordingEnabled`. |
