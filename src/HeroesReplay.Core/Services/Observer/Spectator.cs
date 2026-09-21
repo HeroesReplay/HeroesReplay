@@ -467,8 +467,10 @@ public class Spectator : ISpectator
         }
 
         bool nearCore = Timer + TimeSpan.FromSeconds(20) >= Data.CoreKilled;
+        bool nearEnd = Timer + TimeSpan.FromMinutes(3) >= Data.CoreKilled;
         bool hudFrozen =
             State == State.TimerDetected
+            && nearEnd
             && lastAdvancedHud >= TimeSpan.FromMinutes(2)
             && lastAdvancedHudAt != default
             && DateTimeOffset.UtcNow - lastAdvancedHudAt >= TimeSpan.FromSeconds(90);
