@@ -393,13 +393,15 @@ public class Spectator : ISpectator
         }
 
         memoryClock.Observe(process, hudTime);
-        if (memoryClock.LastRead != null)
+        if (memoryClock.LastRead != null || memoryClock.CandidateCount > 0)
         {
             logger.LogInformation(
-                "HUD {Hud} memory {Memory} locked={Locked}",
+                "HUD {Hud} memory {Memory} locked={Locked} phase={Phase} candidates={Candidates}",
                 hudTime,
                 memoryClock.LastRead,
-                memoryClock.IsLocked
+                memoryClock.IsLocked,
+                memoryClock.Phase,
+                memoryClock.CandidateCount
             );
         }
     }

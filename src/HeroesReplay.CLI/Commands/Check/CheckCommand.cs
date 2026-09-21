@@ -361,30 +361,12 @@ public class CheckCommand : Command
 
             using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
             var clock = new MemoryMatchClock(loggerFactory.CreateLogger("MemoryMatchClock"));
-            TimeSpan? hud = null;
             string statusPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "HeroesReplay",
                 "status.json"
             );
-            if (File.Exists(statusPath))
-            {
-                try
-                {
-                    using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(statusPath));
-                    if (
-                        doc.RootElement.TryGetProperty("timer", out JsonElement timer)
-                        && TimeSpan.TryParse(timer.GetString(), out TimeSpan parsed)
-                    )
-                    {
-                        hud = parsed;
-                    }
-                }
-                catch
-                {
-                    // ignore stale status
-                }
-            }
+            TimeSpan? hud = ReadStatusTimer(statusPath);
 
             if (hud == null)
             {
@@ -395,29 +377,83 @@ public class CheckCommand : Command
                 );
             }
 
-            for (int i = 0; i < 6 && !cancellationToken.IsCancellationRequested; i++)
+            // Follow status.json. Do not invent seconds: a stuck HUD cannot prove a memory clock.
+            var deadline = DateTime.UtcNow.AddSeconds(35);
+            int sample = 0;
+            int stuck = 0;
+            TimeSpan seed = hud.Value;
+            TimeSpan? previous = null;
+            while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
             {
-                TimeSpan guess = hud.Value.Add(TimeSpan.FromSeconds(i));
-                clock.Observe(process, guess);
-                Console.WriteLine(
-                    $"sample {i + 1}: seed={guess} memory={clock.LastRead} locked={clock.IsLocked}"
-                );
-                if (i < 5)
+                TimeSpan? live = ReadStatusTimer(statusPath);
+                seed = live ?? seed;
+                if (previous.HasValue && seed == previous.Value)
                 {
-                    await Task.Delay(1000, cancellationToken);
+                    stuck++;
                 }
+                else if (previous.HasValue)
+                {
+                    stuck = 0;
+                }
+
+                previous = seed;
+                clock.Observe(process, seed, TimeSpan.FromSeconds(1));
+                sample++;
+                Console.WriteLine(
+                    $"sample {sample}: seed={seed} memory={clock.LastRead} locked={clock.IsLocked} phase={clock.Phase} candidates={clock.CandidateCount}"
+                );
+                if (clock.IsLocked || clock.Phase == "cooldown")
+                {
+                    break;
+                }
+
+                if (stuck >= 3)
+                {
+                    break;
+                }
+
+                await Task.Delay(1000, cancellationToken);
             }
 
-            return new CheckResult(
-                "timer",
-                clock.IsLocked || clock.LastRead != null,
-                $"pid={process.Id} HUD seed={hud} memory={clock.LastRead} locked={clock.IsLocked}"
-            );
+            bool found = clock.IsLocked;
+            string stuckNote =
+                stuck >= 3
+                    ? $" HUD seed stayed {seed} (status.json is not advancing), so no ticking address could be confirmed."
+                    : string.Empty;
+            string detail =
+                $"pid={process.Id} HUD seed={seed} memory={clock.LastRead} locked={clock.IsLocked} phase={clock.Phase} candidates={clock.CandidateCount}.{stuckNote} BitBlt HUD stays the clock until this address agrees across patches.";
+            return new CheckResult("timer", found, detail);
         }
         catch (Exception e)
         {
             return Fail("timer", e);
         }
+    }
+
+    private static TimeSpan? ReadStatusTimer(string statusPath)
+    {
+        if (!File.Exists(statusPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(statusPath));
+            if (
+                doc.RootElement.TryGetProperty("timer", out JsonElement timer)
+                && TimeSpan.TryParse(timer.GetString(), out TimeSpan parsed)
+            )
+            {
+                return parsed;
+            }
+        }
+        catch
+        {
+            // ignore stale status
+        }
+
+        return null;
     }
 
     public static Task<CheckResult> CheckClientAsync(CancellationToken cancellationToken)
