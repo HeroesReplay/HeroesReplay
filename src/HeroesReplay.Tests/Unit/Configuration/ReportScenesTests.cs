@@ -12,6 +12,7 @@ public class ReportScenesTests
 {
     private static readonly string[] ExpectedScenes =
     {
+        "prediction-report",
         "summary",
         "match-scores",
         "talents",
@@ -36,9 +37,18 @@ public class ReportScenesTests
                 scene.GetProperty("Enabled").GetBoolean(),
                 $"{scene.GetProperty("SceneName").GetString()} should be enabled."
             );
+            string name = scene.GetProperty("SceneName").GetString();
             string url = scene.GetProperty("SourceUrl").GetString();
-            Assert.Contains("/Match/Single/[ID]", url, StringComparison.Ordinal);
-            names.Add(scene.GetProperty("SceneName").GetString());
+            if (name == "prediction-report")
+            {
+                Assert.EndsWith("prediction-report.html", url, StringComparison.OrdinalIgnoreCase);
+            }
+            else
+            {
+                Assert.Contains("/Match/Single/[ID]", url, StringComparison.Ordinal);
+            }
+
+            names.Add(name);
         }
 
         Assert.Equal(ExpectedScenes, names);

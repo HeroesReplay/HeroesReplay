@@ -247,6 +247,7 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton(new CancellationTokenProvider(token))
             .AddSingleton<SpectatorStatusStore>()
+            .AddSingleton<PredictionReportWriter>()
             .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>()
             .AddSingleton<StatusPredictionWatcher>()
             .AddSingleton<ITwitchRewardsManager, TwitchRewardsManager>()

@@ -41,7 +41,11 @@ public class TwitchMatchPredictionServiceTests
                 },
                 Capture = new CaptureSettings { Method = CaptureMethod.BitBlt },
             },
-            api
+            api,
+            new PredictionReportWriter(
+                NullLogger<PredictionReportWriter>.Instance,
+                new AppSettings()
+            )
         );
 
         await service.OpenAsync("Cursed Hollow", CancellationToken.None);

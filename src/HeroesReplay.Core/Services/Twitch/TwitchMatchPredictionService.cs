@@ -21,6 +21,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
     private readonly ILogger<TwitchMatchPredictionService> logger;
     private readonly AppSettings settings;
     private readonly ITwitchAPI api;
+    private readonly PredictionReportWriter reports;
     private readonly object gate = new object();
     private string broadcasterId;
     private string predictionId;
@@ -31,12 +32,14 @@ public class TwitchMatchPredictionService : IMatchPredictionService
     public TwitchMatchPredictionService(
         ILogger<TwitchMatchPredictionService> logger,
         AppSettings settings,
-        ITwitchAPI api
+        ITwitchAPI api,
+        PredictionReportWriter reports
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.api = api ?? throw new ArgumentNullException(nameof(api));
+        this.reports = reports ?? throw new ArgumentNullException(nameof(reports));
     }
 
     public Task StartAsync(LoadedReplay replay, CancellationToken cancellationToken) =>
@@ -226,7 +229,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 return;
             }
 
-            await api
+            var ended = await api
                 .Helix.Predictions.EndPredictionAsync(
                     channelId,
                     id,
@@ -234,6 +237,16 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                     winningId
                 )
                 .ConfigureAwait(false);
+            Prediction settled = FirstSettled(ended?.Data);
+            if (settled == null)
+            {
+                var fetched = await api
+                    .Helix.Predictions.GetPredictionsAsync(channelId, new List<string> { id })
+                    .ConfigureAwait(false);
+                settled = fetched?.Data?.FirstOrDefault();
+            }
+
+            reports.TryWrite(settled);
             logger.LogInformation(
                 "Resolved prediction {PredictionId} -> {Outcome}.",
                 id,
@@ -400,6 +413,24 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         }
 
         return users.Users[0].Id;
+    }
+
+    private static Prediction FirstSettled(Prediction[] predictions)
+    {
+        if (predictions == null)
+        {
+            return null;
+        }
+
+        foreach (Prediction prediction in predictions)
+        {
+            if (prediction?.Outcomes != null && prediction.Outcomes.Length > 0)
+            {
+                return prediction;
+            }
+        }
+
+        return null;
     }
 
     private static string FindOutcomeId(

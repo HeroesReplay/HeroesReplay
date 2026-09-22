@@ -335,7 +335,7 @@ public class ObsController : IObsController
 
                     foreach (
                         ReportScene segment in settings.OBS.ReportScenes.Where(scene =>
-                            scene.Enabled
+                            scene.Enabled && !IsMissingLocalFile(scene)
                         )
                     )
                     {
@@ -344,7 +344,7 @@ public class ObsController : IObsController
 
                     foreach (
                         ReportScene source in settings.OBS.ReportScenes.Where(scene =>
-                            scene.Enabled
+                            scene.Enabled && !IsMissingLocalFile(scene)
                         )
                     )
                     {
@@ -355,6 +355,30 @@ public class ObsController : IObsController
                 },
                 tokenProvider.Token
             );
+    }
+
+    private bool IsMissingLocalFile(ReportScene scene)
+    {
+        if (
+            scene?.SourceUrl == null
+            || !scene.SourceUrl.IsAbsoluteUri
+            || scene.SourceUrl.Scheme != Uri.UriSchemeFile
+        )
+        {
+            return false;
+        }
+
+        if (File.Exists(scene.SourceUrl.LocalPath))
+        {
+            return false;
+        }
+
+        logger.LogInformation(
+            "Skipping report scene {Scene} because {Path} does not exist yet.",
+            scene.SceneName,
+            scene.SourceUrl.LocalPath
+        );
+        return true;
     }
 
     private async Task<bool> TryCycleSceneAsync(ReportScene source)

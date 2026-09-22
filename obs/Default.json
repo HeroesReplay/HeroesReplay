@@ -65,6 +65,37 @@
     "sources": [
         {
             "prev_ver": 537001986,
+            "name": "prediction-report-browser",
+            "uuid": "7c2e9a10-4b6d-4f11-9c3a-2e8d5f1a6b70",
+            "id": "browser_source",
+            "versioned_id": "browser_source",
+            "settings": {
+                "url": "file:///C:/heroesreplay/Data/prediction-report.html",
+                "width": 1920,
+                "height": 1080,
+                "shutdown": true,
+                "restart_when_active": true,
+                "css": ""
+            },
+            "mixers": 255,
+            "sync": 0,
+            "flags": 0,
+            "volume": 1.0,
+            "balance": 0.5,
+            "enabled": true,
+            "muted": false,
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "hotkeys": {},
+            "deinterlace_mode": 0,
+            "deinterlace_field_order": 0,
+            "monitoring_type": 0,
+            "private_settings": {}
+        },
+        {
+            "prev_ver": 537001986,
             "name": "current-replay",
             "uuid": "dbfe02ae-ef6f-430c-a611-ad911c818123",
             "id": "text_gdiplus",
@@ -1821,6 +1852,62 @@
         },
         {
             "prev_ver": 537001986,
+            "name": "prediction-report",
+            "uuid": "3f8a1c22-9d44-4e77-b1a0-6c5d8e2f9041",
+            "id": "scene",
+            "versioned_id": "scene",
+            "settings": {
+                "custom_size": false,
+                "id_counter": 2,
+                "items": [
+                    {
+                        "name": "prediction-report-browser",
+                        "source_uuid": "7c2e9a10-4b6d-4f11-9c3a-2e8d5f1a6b70",
+                        "visible": true,
+                        "locked": false,
+                        "rot": 0.0,
+                        "align": 5,
+                        "bounds_type": 1,
+                        "bounds_align": 0,
+                        "bounds_crop": false,
+                        "crop_left": 0,
+                        "crop_top": 0,
+                        "crop_right": 0,
+                        "crop_bottom": 0,
+                        "id": 1,
+                        "group_item_backup": false,
+                        "pos": { "x": 0.0, "y": 0.0 },
+                        "scale": { "x": 1.0, "y": 1.0 },
+                        "bounds": { "x": 1920.0, "y": 1080.0 },
+                        "scale_filter": "disable",
+                        "blend_method": "default",
+                        "blend_type": "normal",
+                        "show_transition": { "duration": 0 },
+                        "hide_transition": { "duration": 0 },
+                        "private_settings": {}
+                    }
+                ]
+            },
+            "mixers": 0,
+            "sync": 0,
+            "flags": 0,
+            "volume": 1.0,
+            "balance": 0.5,
+            "enabled": true,
+            "muted": false,
+            "push-to-mute": false,
+            "push-to-mute-delay": 0,
+            "push-to-talk": false,
+            "push-to-talk-delay": 0,
+            "hotkeys": {},
+            "deinterlace_mode": 0,
+            "deinterlace_field_order": 0,
+            "monitoring_type": 0,
+            "canvas_uuid": "6c69626f-6273-4c00-9d88-c5136d61696e",
+            "private_settings": {}
+        },
+        {
+            "prev_ver": 537001986,
             "name": "team-1-stats",
             "uuid": "c923cc63-eec4-4196-b2fa-aebfaab675dc",
             "id": "scene",
@@ -3178,6 +3265,9 @@
         },
         {
             "name": "waiting-screen"
+        },
+        {
+            "name": "prediction-report"
         },
         {
             "name": "summary"
