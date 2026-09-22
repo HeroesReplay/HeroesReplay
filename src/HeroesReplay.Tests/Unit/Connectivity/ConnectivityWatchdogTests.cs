@@ -150,6 +150,51 @@ public class ConnectivityWatchdogTests
     }
 
     [Fact]
+    public void Apply_RestoreRequestsTheUnfinishedReplayWhenTheGameIsGone()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: false, gameRunning: false);
+        string replayPath = Path.GetTempFileName();
+        try
+        {
+            fixture.Store.Patch(status =>
+            {
+                status.ReplayId = 65268468;
+                status.CompletedReplayId = 65268467;
+                status.ReplayPath = replayPath;
+            });
+            DropThenRestore(fixture);
+            Assert.True(fixture.Replays.TryTake(out int id, out string path));
+            Assert.Equal(65268468, id);
+            Assert.Equal(replayPath, path);
+        }
+        finally
+        {
+            File.Delete(replayPath);
+        }
+    }
+
+    [Fact]
+    public void Apply_RestoreLeavesARunningGameAlone()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: false, gameRunning: true);
+        string replayPath = Path.GetTempFileName();
+        try
+        {
+            fixture.Store.Patch(status =>
+            {
+                status.ReplayId = 65268468;
+                status.ReplayPath = replayPath;
+            });
+            DropThenRestore(fixture);
+            Assert.False(fixture.Replays.TryTake(out _, out _));
+        }
+        finally
+        {
+            File.Delete(replayPath);
+        }
+    }
+
+    [Fact]
     public void AppSettings_StreamingEnabledIsFalse()
     {
         string path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
@@ -185,16 +230,21 @@ public class ConnectivityWatchdogTests
             HeroesProfile = true,
         };
 
-    private static Fixture CreateFixture(bool streamingEnabled)
+    private static Fixture CreateFixture(bool streamingEnabled, bool gameRunning = true)
     {
         string path = Path.Combine(
             Path.GetTempPath(),
             $"heroesreplay-connectivity-{Guid.NewGuid():N}.json"
         );
+        string resumePath = Path.Combine(
+            Path.GetTempPath(),
+            $"heroesreplay-replay-resume-{Guid.NewGuid():N}.json"
+        );
         var store = new SpectatorStatusStore(path);
         var probe = new FakeProbe();
         var obs = new FakeObs();
         var resume = new HeroesProfileResume();
+        var replays = new ReplayResumeFile(resumePath);
         var watchdog = new ConnectivityWatchdog(
             NullLogger<ConnectivityWatchdog>.Instance,
             new AppSettings
@@ -212,39 +262,55 @@ public class ConnectivityWatchdogTests
             store,
             new CancellationTokenProvider(),
             obs,
-            resume
+            resume,
+            replays,
+            () => gameRunning
         );
-        return new Fixture(path, probe, obs, watchdog, resume);
+        return new Fixture(path, resumePath, probe, obs, watchdog, resume, store, replays);
     }
 
     private sealed class Fixture : IDisposable
     {
         public Fixture(
             string path,
+            string resumePath,
             FakeProbe probe,
             FakeObs obs,
             ConnectivityWatchdog watchdog,
-            HeroesProfileResume resume
+            HeroesProfileResume resume,
+            SpectatorStatusStore store,
+            ReplayResumeFile replays
         )
         {
             Path = path;
+            ResumePath = resumePath;
             Probe = probe;
             Obs = obs;
             Watchdog = watchdog;
             Resume = resume;
+            Store = store;
+            Replays = replays;
         }
 
         public string Path { get; }
+        public string ResumePath { get; }
         public FakeProbe Probe { get; }
         public FakeObs Obs { get; }
         public ConnectivityWatchdog Watchdog { get; }
         public HeroesProfileResume Resume { get; }
+        public SpectatorStatusStore Store { get; }
+        public ReplayResumeFile Replays { get; }
 
         public void Dispose()
         {
             if (File.Exists(Path))
             {
                 File.Delete(Path);
+            }
+
+            if (File.Exists(ResumePath))
+            {
+                File.Delete(ResumePath);
             }
         }
     }

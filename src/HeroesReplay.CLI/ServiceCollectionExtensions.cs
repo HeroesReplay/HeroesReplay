@@ -279,7 +279,10 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IOnRewardHandler, OnRewardRedeemedHandler>()
             .AddSingleton<IOnMessageHandler, OnMessageReceivedHandler>()
             .AddSingleton<IRewardRequestFactory, RewardRequestFactory>()
-            .AddSingleton<IRequestQueue, RequestQueue>();
+            .AddSingleton<IRequestQueue, RequestQueue>()
+            .AddSingleton<IHeroesProfileResume>(_ => new HeroesProfileResume(
+                HeroesProfileResume.SharedPath
+            ));
     }
 
     public static IServiceCollection AddSpectateServices(
@@ -429,7 +432,12 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddConnectivityServices(this IServiceCollection services)
     {
-        services.AddSingleton<IHeroesProfileResume, HeroesProfileResume>();
+        services.AddSingleton<IHeroesProfileResume>(_ => new HeroesProfileResume(
+            HeroesProfileResume.SharedPath
+        ));
+        services.AddSingleton<IReplayResume>(_ => new ReplayResumeFile(
+            ReplayResumeFile.SharedPath
+        ));
         services
             .AddHttpClient<INetworkProbe, NetworkProbe>(client =>
             {
@@ -445,7 +453,9 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<SpectatorStatusStore>(),
                 sp.GetRequiredService<CancellationTokenProvider>(),
                 sp.GetService<IObsController>(),
-                sp.GetRequiredService<IHeroesProfileResume>()
+                sp.GetRequiredService<IHeroesProfileResume>(),
+                sp.GetService<IReplayResume>(),
+                () => NamedProcess.IsRunning(NamedProcess.HeroesOfTheStorm)
             ));
         return services;
     }

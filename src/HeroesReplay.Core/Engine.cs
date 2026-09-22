@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
+using Heroes.ReplayParser;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.Data;
@@ -21,6 +23,8 @@ public class Engine : IEngine
     private readonly CancellationTokenProvider consoleTokenProvider;
     private readonly SpectatorStatusStore statusStore;
     private readonly IConnectivityWatchdog connectivityWatchdog;
+    private readonly IReplayResume replayResume;
+    private readonly IReplayLoader replayLoader;
 
     public Engine(
         ILogger<Engine> logger,
@@ -29,7 +33,9 @@ public class Engine : IEngine
         IReplayProvider replayProvider,
         CancellationTokenProvider consoleTokenProvider,
         SpectatorStatusStore statusStore,
-        IConnectivityWatchdog connectivityWatchdog
+        IConnectivityWatchdog connectivityWatchdog,
+        IReplayResume replayResume,
+        IReplayLoader replayLoader
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -42,6 +48,8 @@ public class Engine : IEngine
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
         this.connectivityWatchdog =
             connectivityWatchdog ?? throw new ArgumentNullException(nameof(connectivityWatchdog));
+        this.replayResume = replayResume ?? throw new ArgumentNullException(nameof(replayResume));
+        this.replayLoader = replayLoader ?? throw new ArgumentNullException(nameof(replayLoader));
     }
 
     public async Task RunAsync()
@@ -77,7 +85,11 @@ public class Engine : IEngine
         while (!consoleTokenProvider.Token.IsCancellationRequested)
         {
             using Activity replayActivity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay");
-            LoadedReplay loadedReplay = await replayProvider.TryLoadNextReplayAsync();
+            LoadedReplay loadedReplay = await TakeResumedReplayAsync().ConfigureAwait(false);
+            if (loadedReplay == null)
+            {
+                loadedReplay = await replayProvider.TryLoadNextReplayAsync();
+            }
 
             if (loadedReplay != null)
             {
@@ -115,5 +127,32 @@ public class Engine : IEngine
             statusStore.MarkIdle();
             await Task.Delay(TimeSpan.FromSeconds(5), consoleTokenProvider.Token);
         }
+    }
+
+    private async Task<LoadedReplay> TakeResumedReplayAsync()
+    {
+        if (!replayResume.TryTake(out int replayId, out string replayPath))
+        {
+            return null;
+        }
+
+        logger.LogInformation(
+            "Replaying {ReplayId} after connectivity returned ({Path}).",
+            replayId,
+            replayPath
+        );
+        Replay replay = await replayLoader.LoadAsync(replayPath).ConfigureAwait(false);
+        if (replay == null)
+        {
+            logger.LogWarning("Could not load the replay requested after connectivity returned.");
+            return null;
+        }
+
+        return new LoadedReplay
+        {
+            ReplayId = replayId,
+            Replay = replay,
+            FileInfo = new FileInfo(replayPath),
+        };
     }
 }

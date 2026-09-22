@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Status;
@@ -18,6 +19,8 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     private readonly CancellationTokenProvider tokenProvider;
     private readonly IObsController obsController;
     private readonly IHeroesProfileResume heroesProfileResume;
+    private readonly IReplayResume replayResume;
+    private readonly Func<bool> gameIsRunning;
     private readonly object gate = new();
     private int failCount;
     private int recoverCount;
@@ -31,7 +34,9 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         SpectatorStatusStore statusStore,
         CancellationTokenProvider tokenProvider,
         IObsController obsController = null,
-        IHeroesProfileResume heroesProfileResume = null
+        IHeroesProfileResume heroesProfileResume = null,
+        IReplayResume replayResume = null,
+        Func<bool> gameIsRunning = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -42,6 +47,8 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.obsController = obsController;
         this.heroesProfileResume = heroesProfileResume;
+        this.replayResume = replayResume;
+        this.gameIsRunning = gameIsRunning;
         IsOnline = true;
         Last = new ConnectivitySnapshot
         {
@@ -155,6 +162,8 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             logger.LogInformation(
                 "Connectivity restored. Retrying Heroes Profile list/download once."
             );
+            NoteBattleNet();
+            RequestReplayIfGameIsGone();
         }
 
         HandleStream(decision);
@@ -219,6 +228,58 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         value > TimeSpan.Zero ? value : fallback;
 
     private ConnectivitySettings Settings => settings.Connectivity ?? new ConnectivitySettings();
+
+    private void NoteBattleNet()
+    {
+        bool running = NamedProcess.IsRunning(NamedProcess.BattleNet);
+        if (running)
+        {
+            logger.LogInformation("Battle.net is running.");
+            return;
+        }
+
+        logger.LogInformation(
+            "Battle.net is not running. Login is not automated. The next replay launch opens Battle.net when the replay requires it."
+        );
+    }
+
+    private void RequestReplayIfGameIsGone()
+    {
+        if (replayResume == null)
+        {
+            return;
+        }
+
+        SpectatorStatus status = statusStore.Read();
+        bool running =
+            gameIsRunning != null
+                ? gameIsRunning()
+                : NamedProcess.IsRunning(NamedProcess.HeroesOfTheStorm);
+        if (
+            !ReplayResumeRules.ShouldReplay(
+                running,
+                status?.ReplayId,
+                status?.CompletedReplayId,
+                status?.ReplayPath
+            )
+        )
+        {
+            if (running)
+            {
+                logger.LogInformation(
+                    "Connectivity restored. Heroes of the Storm is still running, so this replay stays on screen."
+                );
+            }
+
+            return;
+        }
+
+        replayResume.Request(status.ReplayId.Value, status.ReplayPath);
+        logger.LogInformation(
+            "Connectivity restored. Heroes of the Storm is not running. Will replay {ReplayId}.",
+            status.ReplayId
+        );
+    }
 
     private void HandleStream(ConnectivityResume.Decision decision)
     {
