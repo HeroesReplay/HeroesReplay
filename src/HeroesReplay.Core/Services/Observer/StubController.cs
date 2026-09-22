@@ -60,5 +60,5 @@ public sealed class StubController : IGameController
         return Task.FromResult(timers.Dequeue());
     }
 
-    public Task<bool> TrySeeEndScreenAsync() => Task.FromResult(false);
+    public Task<bool> TrySeeEndScreenAsync(bool nearCore) => Task.FromResult(false);
 }

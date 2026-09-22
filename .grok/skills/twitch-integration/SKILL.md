@@ -44,6 +44,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch connect
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards generate
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards submit
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards list
+dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards remove-unranked-draft
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch rewards test --title "Random (SL)"
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch predictions test --outcome Blue
 ```

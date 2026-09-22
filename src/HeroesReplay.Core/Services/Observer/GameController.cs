@@ -288,7 +288,7 @@ public class GameController : IGameController
         return null;
     }
 
-    public async Task<bool> TrySeeEndScreenAsync()
+    public async Task<bool> TrySeeEndScreenAsync(bool nearCore)
     {
         try
         {
@@ -315,7 +315,7 @@ public class GameController : IGameController
                 .ConfigureAwait(false);
             OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
             string text = result?.Text ?? string.Empty;
-            bool endScreen = IsMatchEndBanner(text);
+            bool endScreen = MatchEndBanner.IsEnd(text, nearCore);
             if (endScreen)
             {
                 logger.LogInformation("End-screen OCR saw: {Text}", text.Replace('\n', ' '));
@@ -328,29 +328,6 @@ public class GameController : IGameController
             logger.LogDebug(e, "End-screen OCR failed.");
             return false;
         }
-    }
-
-    private static bool IsMatchEndBanner(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        // Garden Terror camp tooltip: "Defeat or bribe this camp to gain Mercenaries".
-        if (
-            text.Contains("bribe", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("mercenar", StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            return false;
-        }
-
-        return System.Text.RegularExpressions.Regex.IsMatch(
-            text,
-            @"\b(MVP|VICTORY|DEFEAT)\b",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase
-        );
     }
 
     private async Task<TimeSpan?> ConvertBitmapTimerToTimeSpan(Bitmap bitmap)

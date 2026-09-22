@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using HeroesReplay.Core.Services.Status;
 using Xunit;
 
@@ -72,6 +73,40 @@ public class SpectatorStatusStoreTests
             if (File.Exists(path))
             {
                 File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Patch_ReplacesFileWhileAReaderHoldsIt()
+    {
+        string path = Path.Combine(
+            Path.GetTempPath(),
+            $"heroesreplay-status-{Guid.NewGuid():N}.json"
+        );
+        try
+        {
+            var store = new SpectatorStatusStore(path);
+            store.Patch(status => status.Phase = "Loading");
+
+            using var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+            Task write = Task.Run(() => store.Patch(status => status.Phase = "TimerDetected"));
+            await Task.Delay(200);
+            held.Dispose();
+
+            await write.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal("TimerDetected", store.Read().Phase);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+
+            if (File.Exists(path + ".tmp"))
+            {
+                File.Delete(path + ".tmp");
             }
         }
     }

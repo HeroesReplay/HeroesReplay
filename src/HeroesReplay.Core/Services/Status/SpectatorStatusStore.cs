@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using HeroesReplay.Core.Models;
 
 namespace HeroesReplay.Core.Services.Status;
@@ -145,7 +146,23 @@ public sealed class SpectatorStatusStore
         }
 
         string temp = FilePath + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(status, JsonOptions));
-        File.Move(temp, FilePath, overwrite: true);
+        string json = JsonSerializer.Serialize(status, JsonOptions);
+        // A watcher can hold status.json open. Replace retries instead of failing the focus loop.
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.WriteAllText(temp, json);
+                File.Move(temp, FilePath, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (IsSharingViolation(ex) && attempt < 20)
+            {
+                Thread.Sleep(50);
+            }
+        }
     }
+
+    private static bool IsSharingViolation(Exception ex) =>
+        ex is UnauthorizedAccessException or IOException;
 }

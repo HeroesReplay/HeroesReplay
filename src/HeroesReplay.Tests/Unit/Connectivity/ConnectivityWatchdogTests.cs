@@ -89,16 +89,64 @@ public class ConnectivityWatchdogTests
     [Fact]
     public async Task ProbeAsync_UsesInjectedProbe()
     {
-        using Fixture fixture = CreateFixture(streamingEnabled: false);
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
         fixture.Probe.Internet = true;
         fixture.Probe.Twitch = false;
         fixture.Probe.HeroesProfile = true;
 
         ConnectivitySnapshot snapshot = await fixture.Watchdog.ProbeAsync(CancellationToken.None);
         Assert.True(snapshot.Internet);
+        Assert.True(snapshot.TwitchProbed);
         Assert.False(snapshot.Twitch);
         Assert.True(snapshot.HeroesProfile);
         Assert.False(snapshot.Healthy);
+        Assert.Equal(1, fixture.Probe.TwitchCalls);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_SkipsTwitchWebsiteUnlessStreamingEnabled()
+    {
+        using Fixture off = CreateFixture(streamingEnabled: false);
+        ConnectivitySnapshot skipped = await off.Watchdog.ProbeAsync(CancellationToken.None);
+        Assert.Equal(0, off.Probe.TwitchCalls);
+        Assert.Equal(1, off.Probe.InternetCalls);
+        Assert.Equal(1, off.Probe.HeroesProfileCalls);
+        Assert.False(skipped.TwitchProbed);
+        Assert.False(skipped.Twitch);
+        Assert.True(skipped.Internet);
+        Assert.True(skipped.HeroesProfile);
+        Assert.True(skipped.Healthy);
+        Assert.Contains("twitch=skipped", skipped.Describe(), StringComparison.Ordinal);
+
+        using Fixture on = CreateFixture(streamingEnabled: true);
+        on.Probe.Twitch = false;
+        ConnectivitySnapshot probed = await on.Watchdog.ProbeAsync(CancellationToken.None);
+        Assert.Equal(1, on.Probe.TwitchCalls);
+        Assert.True(probed.TwitchProbed);
+        Assert.False(probed.Twitch);
+        Assert.False(probed.Healthy);
+    }
+
+    [Fact]
+    public async Task RunAsync_DoesNotPollTwitchWhenStreamingDisabled()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: false);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        await fixture.Watchdog.RunAsync(cts.Token);
+        Assert.Equal(0, fixture.Probe.TwitchCalls);
+        Assert.Equal(1, fixture.Probe.InternetCalls);
+        Assert.Equal(1, fixture.Probe.HeroesProfileCalls);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProbesTwitchWhenStreamingEnabled()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        await fixture.Watchdog.RunAsync(cts.Token);
+        Assert.True(fixture.Probe.TwitchCalls >= 1);
+        Assert.True(fixture.Probe.InternetCalls >= 1);
+        Assert.True(fixture.Probe.HeroesProfileCalls >= 1);
     }
 
     [Fact]
@@ -157,6 +205,7 @@ public class ConnectivityWatchdogTests
                     FailThreshold = 3,
                     RecoverThreshold = 2,
                     Interval = TimeSpan.FromMilliseconds(1),
+                    IdleInterval = TimeSpan.FromMinutes(5),
                 },
             },
             probe,
@@ -205,15 +254,27 @@ public class ConnectivityWatchdogTests
         public bool Internet { get; set; } = true;
         public bool Twitch { get; set; } = true;
         public bool HeroesProfile { get; set; } = true;
+        public int InternetCalls { get; private set; }
+        public int TwitchCalls { get; private set; }
+        public int HeroesProfileCalls { get; private set; }
 
-        public Task<bool> ProbeInternetAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(Internet);
+        public Task<bool> ProbeInternetAsync(CancellationToken cancellationToken)
+        {
+            InternetCalls++;
+            return Task.FromResult(Internet);
+        }
 
-        public Task<bool> ProbeTwitchAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(Twitch);
+        public Task<bool> ProbeTwitchAsync(CancellationToken cancellationToken)
+        {
+            TwitchCalls++;
+            return Task.FromResult(Twitch);
+        }
 
-        public Task<bool> ProbeHeroesProfileAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(HeroesProfile);
+        public Task<bool> ProbeHeroesProfileAsync(CancellationToken cancellationToken)
+        {
+            HeroesProfileCalls++;
+            return Task.FromResult(HeroesProfile);
+        }
     }
 
     private sealed class FakeObs : IObsController

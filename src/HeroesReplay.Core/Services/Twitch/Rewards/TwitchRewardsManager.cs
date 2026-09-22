@@ -42,6 +42,16 @@ public class TwitchRewardsManager : ITwitchRewardsManager
 
     public async Task CreateOrUpdateAsync()
     {
+        UnrankedDraftRewardRemoval removed = await DeleteUnrankedDraftRewardsAsync();
+        if (removed.Deleted.Count > 0 || removed.Failed.Count > 0)
+        {
+            logger.LogInformation(
+                "Unranked Draft channel rewards: deleted {Deleted}, failed {Failed}.",
+                removed.Deleted.Count,
+                removed.Failed.Count
+            );
+        }
+
         var broadcasterId = await GetChannelId();
 
         var rewards = await twitchApi.Helix.ChannelPoints.GetCustomRewardAsync(broadcasterId);
@@ -140,6 +150,64 @@ public class TwitchRewardsManager : ITwitchRewardsManager
         }
 
         return rewards.Data.Select(r => r.Title).ToArray();
+    }
+
+    public async Task<UnrankedDraftRewardRemoval> DeleteUnrankedDraftRewardsAsync()
+    {
+        var broadcasterId = await GetChannelId();
+        var rewards = await twitchApi.Helix.ChannelPoints.GetCustomRewardAsync(
+            broadcasterId,
+            accessToken: settings.Twitch.AccessToken
+        );
+        var existing =
+            rewards?.Data ?? Array.Empty<TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward>();
+        var deleted = new List<string>();
+        var failed = new List<string>();
+
+        foreach (var reward in existing)
+        {
+            if (!UnrankedDraftRewardTitles.IsUnrankedDraft(reward.Title))
+            {
+                continue;
+            }
+
+            try
+            {
+                await twitchApi.Helix.ChannelPoints.DeleteCustomRewardAsync(
+                    broadcasterId,
+                    reward.Id,
+                    settings.Twitch.AccessToken
+                );
+                deleted.Add(reward.Title);
+                logger.LogInformation("Deleted Unranked Draft reward '{Title}'.", reward.Title);
+            }
+            catch (Exception e)
+            {
+                failed.Add(reward.Title);
+                logger.LogWarning(
+                    "Could not delete Unranked Draft reward '{Title}': {Error}",
+                    reward.Title,
+                    SafeError(e)
+                );
+            }
+        }
+
+        return new UnrankedDraftRewardRemoval(deleted, failed);
+    }
+
+    private static string SafeError(Exception exception)
+    {
+        string message = exception.Message ?? string.Empty;
+        if (
+            message.Contains("Bearer ", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("oauth", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("access_token", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return exception.GetType().Name;
+        }
+
+        return exception.GetType().Name + ": " + message;
     }
 
     public async Task GenerateAsync()

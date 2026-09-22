@@ -59,7 +59,13 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     public async Task<ConnectivitySnapshot> ProbeAsync(CancellationToken cancellationToken)
     {
         bool internet = await probe.ProbeInternetAsync(cancellationToken).ConfigureAwait(false);
-        bool twitch = await probe.ProbeTwitchAsync(cancellationToken).ConfigureAwait(false);
+        bool probeTwitch = SessionMedia.ShouldStream(settings.OBS);
+        bool twitch = false;
+        if (probeTwitch)
+        {
+            twitch = await probe.ProbeTwitchAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         bool heroesProfile = await probe
             .ProbeHeroesProfileAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -69,6 +75,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             At = DateTimeOffset.UtcNow,
             Internet = internet,
             Twitch = twitch,
+            TwitchProbed = probeTwitch,
             HeroesProfile = heroesProfile,
         };
     }
@@ -168,11 +175,13 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             return;
         }
 
+        bool probeTwitch = SessionMedia.ShouldStream(settings.OBS);
         logger.LogInformation(
-            "Connectivity watchdog probing {Host}, Twitch, and Heroes Profile every {Interval}. StreamingEnabled={StreamingEnabled}.",
+            "Connectivity watchdog probing {Host} and Heroes Profile every {Interval}. TwitchWebsite={TwitchWebsite}. StreamingEnabled={StreamingEnabled}.",
             Settings.InternetHost,
-            Settings.Interval,
-            settings.OBS?.StreamingEnabled == true
+            ProbeInterval(),
+            probeTwitch ? Settings.TwitchUri : "skipped",
+            probeTwitch
         );
 
         while (!cancellationToken.IsCancellationRequested)
@@ -182,7 +191,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
                 ConnectivitySnapshot snapshot = await ProbeAsync(cancellationToken)
                     .ConfigureAwait(false);
                 Apply(snapshot);
-                await Task.Delay(Settings.Interval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(ProbeInterval(), cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -191,10 +200,23 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             catch (Exception e)
             {
                 logger.LogWarning(e, "Connectivity probe failed.");
-                await Task.Delay(Settings.Interval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(ProbeInterval(), cancellationToken).ConfigureAwait(false);
             }
         }
     }
+
+    private TimeSpan ProbeInterval()
+    {
+        if (SessionMedia.ShouldStream(settings.OBS))
+        {
+            return Positive(Settings.Interval, TimeSpan.FromSeconds(15));
+        }
+
+        return Positive(Settings.IdleInterval, TimeSpan.FromMinutes(5));
+    }
+
+    private static TimeSpan Positive(TimeSpan value, TimeSpan fallback) =>
+        value > TimeSpan.Zero ? value : fallback;
 
     private ConnectivitySettings Settings => settings.Connectivity ?? new ConnectivitySettings();
 

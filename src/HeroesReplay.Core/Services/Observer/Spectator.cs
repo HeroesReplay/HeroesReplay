@@ -246,6 +246,13 @@ public class Spectator : ISpectator
                             "Timer OCR missed. No hero is selected until the HUD clock reads MM:SS."
                         );
                     }
+
+                    // The award screen has no clock. A match can reach it without a single
+                    // MM:SS read if capture was denied, so look for MVP before the first lock.
+                    if (controller.IsGameRunning())
+                    {
+                        await ProbeEndScreenAsync().ConfigureAwait(false);
+                    }
                 }
                 else
                 {
@@ -455,12 +462,10 @@ public class Spectator : ISpectator
 
         nextEndScreenProbe = DateTimeOffset.UtcNow.AddSeconds(12);
         TimeSpan core = Data?.CoreKilled ?? TimeSpan.Zero;
-        if (core <= TimeSpan.Zero || Timer + TimeSpan.FromMinutes(3) < core)
-        {
-            return;
-        }
-
-        if (await controller.TrySeeEndScreenAsync().ConfigureAwait(false))
+        // MVP is the award screen. A camp tooltip can say "defeat" much earlier, so that
+        // word still has to be near the parsed core. The clock may already be gone.
+        bool nearCore = core <= TimeSpan.Zero || Timer + TimeSpan.FromMinutes(3) >= core;
+        if (await controller.TrySeeEndScreenAsync(nearCore).ConfigureAwait(false))
         {
             endScreenSeen = true;
             logger.LogInformation(

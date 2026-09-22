@@ -94,6 +94,7 @@ public class CliHelpTests
         Assert.Contains(predictions.Subcommands, c => c.Name == "test");
         Command rewards = twitch.Subcommands.Single(c => c.Name == "rewards");
         Assert.Contains(rewards.Subcommands, c => c.Name == "list");
+        Assert.Contains(rewards.Subcommands, c => c.Name == "remove-unranked-draft");
         Assert.Contains(rewards.Subcommands, c => c.Name == "test");
     }
 

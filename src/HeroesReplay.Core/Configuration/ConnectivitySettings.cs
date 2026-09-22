@@ -6,6 +6,9 @@ public class ConnectivitySettings
 {
     public bool Enabled { get; set; } = true;
     public TimeSpan Interval { get; set; } = TimeSpan.FromSeconds(15);
+
+    // Used when OBS streaming is off. That path does not HEAD twitch.tv.
+    public TimeSpan IdleInterval { get; set; } = TimeSpan.FromMinutes(5);
     public int FailThreshold { get; set; } = 3;
     public int RecoverThreshold { get; set; } = 2;
     public TimeSpan ProbeTimeout { get; set; } = TimeSpan.FromSeconds(3);

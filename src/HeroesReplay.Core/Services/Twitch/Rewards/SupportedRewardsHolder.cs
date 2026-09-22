@@ -28,6 +28,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
         var rewards = new List<SupportedReward>();
 
         var rankedMaps = gameData.Maps.Where(m => m.Playable && m.RankedRotation);
+        // Quick Match maps outside the ranked rotation. Not Unranked Draft.
         var unrankedMaps = gameData.Maps.Where(m =>
             m.Playable && !m.RankedRotation && m.Type.Equals("standard")
         );

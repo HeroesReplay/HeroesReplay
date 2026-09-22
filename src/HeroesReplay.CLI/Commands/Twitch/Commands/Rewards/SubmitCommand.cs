@@ -12,7 +12,7 @@ public class SubmitCommand : Command
     public SubmitCommand()
         : base(
             "submit",
-            "submits the rewards from the config file and creates or updates the channel point rewards in the channel."
+            "Creates or updates channel-point rewards from the catalog and deletes leftover Unranked Draft rewards."
         )
     {
         SetAction(

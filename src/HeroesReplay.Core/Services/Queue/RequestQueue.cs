@@ -22,18 +22,39 @@ public class RequestQueue : IRequestQueue, IDisposable
     private readonly IHeroesProfileService heroesProfileService;
     private readonly AppSettings settings;
     private readonly JsonSerializerOptions options;
-    private readonly Mutex queueMutex = new(false, @"Local\HeroesReplay.RequestQueue");
-    private readonly Mutex failedMutex = new(false, @"Local\HeroesReplay.FailedRequests");
+    private readonly Mutex queueMutex;
+    private readonly Mutex failedMutex;
+    private readonly TimeSpan mutexWait;
 
     public RequestQueue(
         ILogger<RequestQueue> logger,
         IHeroesProfileService heroesProfileService,
         AppSettings settings
     )
+        : this(
+            logger,
+            heroesProfileService,
+            settings,
+            TimeSpan.FromSeconds(30),
+            @"Local\HeroesReplay.RequestQueue",
+            @"Local\HeroesReplay.FailedRequests"
+        ) { }
+
+    public RequestQueue(
+        ILogger<RequestQueue> logger,
+        IHeroesProfileService heroesProfileService,
+        AppSettings settings,
+        TimeSpan mutexWait,
+        string queueMutexName,
+        string failedMutexName
+    )
     {
         this.logger = logger;
         this.heroesProfileService = heroesProfileService;
         this.settings = settings;
+        this.mutexWait = mutexWait;
+        queueMutex = new Mutex(false, queueMutexName);
+        failedMutex = new Mutex(false, failedMutexName);
 
         queueFile = new(
             Path.Combine(settings.Location.DataDirectory, settings.Twitch.QueueFileName)
@@ -55,7 +76,7 @@ public class RequestQueue : IRequestQueue, IDisposable
             {
                 try
                 {
-                    return mutex.WaitOne(TimeSpan.FromSeconds(30));
+                    return mutex.WaitOne(mutexWait);
                 }
                 catch (AbandonedMutexException)
                 {
@@ -65,7 +86,8 @@ public class RequestQueue : IRequestQueue, IDisposable
             .ConfigureAwait(false);
         if (!acquired)
         {
-            throw new TimeoutException("Could not lock a request queue file.");
+            logger.LogWarning("Request queue is busy. Skipping this pass.");
+            return null;
         }
 
         return new MutexReleaser(mutex);
@@ -104,29 +126,29 @@ public class RequestQueue : IRequestQueue, IDisposable
             return 0;
         }
 
-        using (await AcquireAsync(queueMutex).ConfigureAwait(false))
+        using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
+        if (held == null)
         {
-            List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                await File.ReadAllTextAsync(queueFile.FullName),
-                options
-            );
-            return requests?.Count ?? 0;
+            return 0;
         }
+
+        List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(
+            await File.ReadAllTextAsync(queueFile.FullName),
+            options
+        );
+        return requests?.Count ?? 0;
     }
 
     public async Task<RewardResponse> EnqueueItemAsync(RewardRequest request)
     {
         try
         {
-            using (await AcquireAsync(queueMutex).ConfigureAwait(false))
+            if (request.ReplayId.HasValue)
             {
-                if (request.ReplayId.HasValue)
-                {
-                    return await QueueByReplayIdAsync(request);
-                }
-
-                return await QueueByRewardFilterAsync(request);
+                return await QueueByReplayIdAsync(request).ConfigureAwait(false);
             }
+
+            return await QueueByRewardFilterAsync(request).ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -171,7 +193,15 @@ public class RequestQueue : IRequestQueue, IDisposable
             );
         }
 
-        int position = await QueueReplayId(new(request, replay));
+        int position = await QueueReplayId(new(request, replay)).ConfigureAwait(false);
+        if (position < 0)
+        {
+            return new RewardResponse(
+                success: false,
+                message: "there was an unexpected error with your request."
+            );
+        }
+
         return new RewardResponse(
             success: true,
             message: $"{replay.Id} - {replay.Map} ({replay.Rank}) has been queued. ({position})"
@@ -180,6 +210,12 @@ public class RequestQueue : IRequestQueue, IDisposable
 
     private async Task<int> QueueReplayId(RewardQueueItem item)
     {
+        using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
+        if (held == null)
+        {
+            return -1;
+        }
+
         if (!queueFile.Exists)
         {
             await File.WriteAllTextAsync(
@@ -209,7 +245,12 @@ public class RequestQueue : IRequestQueue, IDisposable
 
     private async Task AddToFailedRequestsAsync(RewardQueueItem item)
     {
-        using (await AcquireAsync(failedMutex).ConfigureAwait(false))
+        using IDisposable held = await AcquireAsync(failedMutex).ConfigureAwait(false);
+        if (held == null)
+        {
+            return;
+        }
+
         {
             if (failedFile.Exists)
             {
@@ -248,7 +289,15 @@ public class RequestQueue : IRequestQueue, IDisposable
 
         if (replay != null)
         {
-            int position = await QueueReplayId(new(request, replay));
+            int position = await QueueReplayId(new(request, replay)).ConfigureAwait(false);
+            if (position < 0)
+            {
+                return new RewardResponse(
+                    success: false,
+                    message: "there was an unexpected error with your request."
+                );
+            }
+
             return new RewardResponse(
                 success: true,
                 message: $"'{request.RewardTitle}' - {replay.Map} ({replay.Rank}) has been queued ({position})"
@@ -270,28 +319,31 @@ public class RequestQueue : IRequestQueue, IDisposable
         {
             try
             {
-                using (await AcquireAsync(queueMutex).ConfigureAwait(false))
+                using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
+                if (held == null)
                 {
-                    List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                        await File.ReadAllTextAsync(queueFile.FullName),
-                        options
-                    );
+                    return null;
+                }
 
-                    if (items.Count > 0)
+                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
+                    await File.ReadAllTextAsync(queueFile.FullName),
+                    options
+                );
+
+                if (items != null && items.Count > 0)
+                {
+                    RewardQueueItem item = items[0];
+
+                    if (items.Remove(item))
                     {
-                        RewardQueueItem item = items[0];
-
-                        if (items.Remove(item))
-                        {
-                            await File.WriteAllTextAsync(
-                                queueFile.FullName,
-                                JsonSerializer.Serialize(items, options)
-                            );
-                            logger.LogInformation(
-                                $"Request: '{item.Request.RewardTitle}' removed from the queue."
-                            );
-                            return item;
-                        }
+                        await File.WriteAllTextAsync(
+                            queueFile.FullName,
+                            JsonSerializer.Serialize(items, options)
+                        );
+                        logger.LogInformation(
+                            $"Request: '{item.Request.RewardTitle}' removed from the queue."
+                        );
+                        return item;
                     }
                 }
             }
@@ -310,7 +362,12 @@ public class RequestQueue : IRequestQueue, IDisposable
         {
             try
             {
-                using (await AcquireAsync(queueMutex).ConfigureAwait(false))
+                using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
+                if (held == null)
+                {
+                    return null;
+                }
+
                 {
                     List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
                         await File.ReadAllTextAsync(queueFile.FullName),
@@ -357,7 +414,12 @@ public class RequestQueue : IRequestQueue, IDisposable
         {
             try
             {
-                using (await AcquireAsync(queueMutex).ConfigureAwait(false))
+                using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
+                if (held == null)
+                {
+                    return null;
+                }
+
                 {
                     List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
                         await File.ReadAllTextAsync(queueFile.FullName),
@@ -389,7 +451,12 @@ public class RequestQueue : IRequestQueue, IDisposable
         {
             try
             {
-                using (await AcquireAsync(queueMutex).ConfigureAwait(false))
+                using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
+                if (held == null)
+                {
+                    return null;
+                }
+
                 {
                     List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
                         await File.ReadAllTextAsync(queueFile.FullName),

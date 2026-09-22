@@ -26,6 +26,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
     private string predictionId;
     private string blueOutcomeId;
     private string redOutcomeId;
+    private bool adoptedLocked;
 
     public TwitchMatchPredictionService(
         ILogger<TwitchMatchPredictionService> logger,
@@ -303,8 +304,19 @@ public class TwitchMatchPredictionService : IMatchPredictionService
 
             if (active.Status == PredictionStatus.LOCKED)
             {
+                // Twitch allows RESOLVED on a locked prediction, but not a second create.
+                // Keep the outcome ids so the match winner can close it.
+                lock (gate)
+                {
+                    broadcasterId = channelId;
+                    predictionId = active.Id;
+                    blueOutcomeId = FindOutcomeId(active.Outcomes, MatchPrediction.Blue);
+                    redOutcomeId = FindOutcomeId(active.Outcomes, MatchPrediction.Red);
+                    adoptedLocked = true;
+                }
+
                 logger.LogWarning(
-                    "Prediction {PredictionId} is locked, so a new one cannot be opened yet.",
+                    "Prediction {PredictionId} is locked. It will be resolved with the match winner.",
                     active.Id
                 );
                 return false;
@@ -334,13 +346,16 @@ public class TwitchMatchPredictionService : IMatchPredictionService
     {
         string id;
         string channelId;
+        bool locked;
         lock (gate)
         {
             id = predictionId;
             channelId = broadcasterId;
+            locked = adoptedLocked;
         }
 
-        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(channelId))
+        // Canceling a locked prediction is not allowed. Leave it for ResolveTeamAsync.
+        if (locked || string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(channelId))
         {
             return;
         }
@@ -418,6 +433,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             predictionId = null;
             blueOutcomeId = null;
             redOutcomeId = null;
+            adoptedLocked = false;
         }
     }
 }
