@@ -13,12 +13,7 @@ public class ReportScenesTests
     private static readonly string[] ExpectedScenes =
     {
         "prediction-report",
-        "summary",
-        "match-scores",
-        "talents",
-        "experience",
-        "team-1-stats",
-        "team-2-stats",
+        "match-report",
     };
 
     [Fact]
@@ -45,7 +40,11 @@ public class ReportScenesTests
             }
             else
             {
-                Assert.Contains("/Match/Single/[ID]", url, StringComparison.Ordinal);
+                Assert.Equal(
+                    "https://www.heroesprofile.com/Match/Single/[ID]",
+                    url,
+                    StringComparer.Ordinal
+                );
             }
 
             names.Add(name);

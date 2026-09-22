@@ -34,7 +34,7 @@ Do not connect, send one request, disconnect. Polly retries belong on **requests
 | `StartRecording` / `StopRecording` | `StartRecord` / `StopRecord` + `GetRecordStatus`. Default **off**. Records when `RecordingEnabled` or (`RecordRequestedReplays` and the replay has a Twitch requestor). |
 | `SetRecordingFolder` | `SetRecordDirectory` |
 
-Scene and source names stay in `appsettings` (`GameSceneName`, `WaitingSceneName`, `InfoSourceName`, `RankImagesSourceNames`, `ReportScenes`).
+Scene and source names stay in `appsettings` (`GameSceneName`, `WaitingSceneName`, `InfoSourceName`, `RankImagesSourceNames`, `ReportScenes`). Post-game Heroes Profile is one scene, `match-report`: the full `Match/Single/[ID]` page, scrolled slowly. Do not add a scene per section.
 
 Both machines use the same OBS files from the repo (`obs/Default.json` → `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json`, `obs/Default/basic.ini` → `...\profiles\HeroesReplay\`). Asset paths are `C:/heroesreplay/HeroesReplay/obs/...`. Recordings: `C:\heroesreplay\Data\Contexts`. `tools/bootstrap-workstation.ps1` copies the collection. Do not commit `service.json`.
 
