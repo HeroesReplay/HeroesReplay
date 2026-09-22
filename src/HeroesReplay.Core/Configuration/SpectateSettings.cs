@@ -35,6 +35,13 @@ public class SpectateSettings
     public int MissingTimerReadsToEnd { get; set; } = 3;
 
     /// <summary>
+    /// Read the fixed 2.55.17.98025 tick RVAs and use that as the match clock.
+    /// OCR is used when the read fails or the client build is different.
+    /// The dynamic page scan stays off.
+    /// </summary>
+    public bool StableMatchClockEnabled { get; set; }
+
+    /// <summary>
     /// Scan HeroesOfTheStorm_x64 for a live match clock and log it next to HUD OCR.
     /// Does not replace OCR unless UseMemoryTimer is also true.
     /// </summary>

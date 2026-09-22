@@ -37,11 +37,32 @@ CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents
 
 Improve the spectator and the tools around it. The work is to prove, validate, and keep the functionality correct, and to make the CLI, the services, and the spectator more resilient and easier to run.
 
-**ASA-SERVER is the development machine.** Sessions here exist only to test a change: launch, HUD clock, focus, end screen, OBS, Twitch chat/rewards, crash recovery. Stop the process when the check is done. Do not leave a match running for its own sake. Do not treat this box as the broadcast.
+**ASA-SERVER is the development machine.** Sessions here exist only to test a change. Stop the process when the check is done. Do not leave a match, or the game client, running for its own sake. Do not treat this box as the broadcast.
 
 **DESKTOP-8SJE72 is the production machine.** That is where real spectating and the live stream happen. Do not kill, rebuild, or experiment there without a scheduled downtime.
 
-On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: stop `heroesreplay` and HotS, `dotnet build heroes-replay.slnx -c Release`, copy `appsettings.secrets.json` into the CLI Release bin, and start a short spectate only if you need to prove that change. Never start Twitch ingest here.
+## Dev loop
+
+One task at a time. A GitHub issue, or one concrete bug. Do not start a second task, and do not merge to `master`, while it is open. Branch work lands on `develop`.
+
+Stop at the earliest phase that can prove the change.
+
+1. **Unit.** Change the type that owns the behavior and call that type from a test. `dotnet test` is Unit only. This is enough for parse rules, reward titles, prediction decisions, queue locking, and probe decisions.
+2. **Build.** A running `heroesreplay.exe` locks the Debug bin (`MSB3027`). Stop with `heroesreplay services stop`. That asks the four processes to exit, then closes Heroes of the Storm. If you stop the processes yourself, close the game too: `CloseMainWindow`, then `Kill` if it is still there after a few seconds. An open client with no spectator is a stuck replay, not a test.
+3. **Short live proof.** Only when the change touches launch, the HUD clock, hero selection, the end screen, OBS scenes, download pacing, or predictions. One replay until the clock reads `MM:SS` and a hero is selected (`1`–`0`), then `services stop`. Streaming stays off on ASA-SERVER.
+4. **Long proof, 1 to 5 games.** Only when the user asks to prove the loop, or the change is end-of-match, the next replay loading, request-before-Standard, or a prediction opening and resolving. Each counted game reaches the core (HUD time within a second or two of core death) and the next replay starts loading. Do not kill the stack mid-game to rebuild. Do not continue past five. Then `services stop`, and confirm Heroes of the Storm is gone.
+
+Live-proof logs: Aspire at `http://127.0.0.1:18888` (`aspire otel logs` when the Aspire MCP is not connected). Spectate, Twitch, download, and YouTube. No unhandled error stacks. No repeated invalid-timer flood. Service consoles must not cover the clock pill.
+
+On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: `services stop` (this closes HotS), `dotnet build heroes-replay.slnx -c Release`, copy `appsettings.secrets.json` into the CLI Release bin, and start a proof only if phase 3 or 4 applies. Never start Twitch ingest here.
+
+### Capture
+
+The match clock is `PrintWindow` of the game HWND with `PW_RENDERFULLCONTENT`, then cropped to the client area. That is the window's composed frame, including DirectX, not the desktop. Another window on top of the game does not replace the clock. Windowed mode is still required so DWM has that frame.
+
+A desktop BitBlt (`GetDC(NULL)`) is the wrong call. It copies whatever pixels are on the screen, so a console covering the clock is what OCR would read. Do not put that back.
+
+OBS game capture also sees the frame when the window is covered, because it hooks the swap chain. One-off `GetSourceScreenshot` calls have worked. A sustained one-screenshot-per-second measurement has **not** been done. That comparison is issue 27. The dynamic memory scan stays off. Build `2.55.17.98025` also has a fixed read-only tick address (`MatchTickClock`, seconds = ticks / 4096). It is preferred when that read succeeds. OCR of `-MM:SS` or `MM:SS` remains the fallback. A different client build does not use those offsets.
 
 ## Environments
 

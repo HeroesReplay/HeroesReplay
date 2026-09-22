@@ -16,7 +16,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 
 `--no-launch-profile` is required; launchSettings would otherwise inject leftover spectate args.
 
-**ASA-SERVER** is for developing and proving the spectator, CLI, and services (resiliency included). After a code change, stop `heroesreplay`, `dotnet build heroes-replay.slnx -c Release`, copy `appsettings.secrets.json` into the CLI Release bin, and run only a short spectate to prove that change. Stop it when the proof is done. Do not leave matches running, and do not start Twitch ingest. **DESKTOP-8SJE72** is the production spectate and live stream. Do not kill or rebuild it.
+**ASA-SERVER** is for developing and proving the spectator, CLI, and services. The phases are in `AGENTS.md` (unit, then build, then one replay, then 1–5 full games only when the loop itself changed). Stop with `heroesreplay services stop`, which also closes Heroes of the Storm. If you kill `heroesreplay` yourself, close the game too (`CloseMainWindow`, then `Kill` if it does not exit). An open client with no spectator is a stuck replay. Do not start Twitch ingest. **DESKTOP-8SJE72** is the production spectate and live stream. Do not kill or rebuild it.
 
 ## Commands
 
@@ -26,7 +26,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `spectate heroesprofile` | Play `.StormReplay` files already in `Data\Standard` and `Data\Requests`. Does not call Heroes Profile. |
 | `heroesprofile download` | List and download Storm League replays into `Data\Standard` and `Data\Requests`. Does not launch the game. |
 | `services start` | Start spectate, `twitch connect`, `heroesprofile download`, and `youtube uploader` as separate processes. Logs under `%LOCALAPPDATA%\HeroesReplay\logs`. Does not start Twitch ingest. |
-| `services stop` | Write `services.stop`, wait up to 20s, kill any `heroesreplay` pid still recorded, and close Heroes of the Storm if spectate was one of them. |
+| `services stop` | Write `services.stop`, wait up to 20s, kill any `heroesreplay` pid still recorded, and close Heroes of the Storm. Do not leave the game client open after this. |
 | `services status` | Which of those processes are still alive, plus `status.json`. |
 | `calculators coordinates [--file path]` | Parse replay, print coordinate samples, build Kill/NearEnemy/Roaming focus map |
 | `calculators report [--file path]` | Spectator report for a file/directory |
