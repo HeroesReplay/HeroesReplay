@@ -35,17 +35,11 @@ public class Spectator : ISpectator
 
     private TimeSpan Timer { get; set; }
 
-    private readonly MatchTimerFilter timerFilter = new();
-
     private readonly MemoryMatchClock memoryClock;
 
-    private readonly StableMatchClock stableMatchClock = new();
+    private readonly IGameTimer gameTimer;
 
-    private TimeSpan lastStableLogged = TimeSpan.MinValue;
-
-    private string lastClockSource = "";
-
-    private string lastClockReason = "";
+    private readonly GameTimerLog clockLog;
 
     private DateTimeOffset? endScreenStarted;
 
@@ -79,7 +73,9 @@ public class Spectator : ISpectator
         CancellationTokenProvider tokenProvider,
         SpectatorStatusStore statusStore,
         IObserverPanelRequests panelRequests,
-        IObsController obsController
+        IObsController obsController,
+        IGameTimer gameTimer,
+        GameTimerLog clockLog
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -96,6 +92,8 @@ public class Spectator : ISpectator
         this.obsController =
             obsController ?? throw new ArgumentNullException(nameof(obsController));
         memoryClock = new MemoryMatchClock(logger);
+        this.gameTimer = gameTimer ?? throw new ArgumentNullException(nameof(gameTimer));
+        this.clockLog = clockLog ?? throw new ArgumentNullException(nameof(clockLog));
 
         panelTimes = new()
         {
@@ -139,7 +137,7 @@ public class Spectator : ISpectator
         );
         State = State.Loading;
         Timer = default;
-        timerFilter.Reset();
+        gameTimer.Reset();
         memoryClock.Reset();
         endScreenStarted = null;
         lastAdvancedHud = TimeSpan.MinValue;
@@ -208,49 +206,24 @@ public class Spectator : ISpectator
         {
             try
             {
-                TimeSpan? stable = TryStableMatchClock();
-                TimeSpan? ocrReplay = stable.HasValue
-                    ? null
-                    : await ReadOcrReplayTimeAsync().ConfigureAwait(false);
-                TimeSpan? clock = stable ?? ocrReplay;
-                bool fromOcr = clock.HasValue;
+                GameTimerReading reading = await gameTimer
+                    .ReadAsync(LinkedTokenSource.Token)
+                    .ConfigureAwait(false);
+                clockLog.Write(sessionActivity, reading);
+                bool fromOcr = reading.Ok && reading.Time.HasValue;
 
                 if (fromOcr)
                 {
-                    timerFilter.Accept(clock.Value);
-                    Timer = clock.Value;
-                    if (clock.Value > lastAdvancedHud)
+                    Timer = reading.Time.Value;
+                    if (reading.Time.Value > lastAdvancedHud)
                     {
-                        lastAdvancedHud = clock.Value;
+                        lastAdvancedHud = reading.Time.Value;
                         lastAdvancedHudAt = DateTimeOffset.UtcNow;
                     }
 
-                    if (!stable.HasValue)
+                    if (reading.Source != "memory")
                     {
-                        ObserveMemoryTimer(clock.Value);
-                    }
-                }
-                else if (
-                    settings.Spectate.UseMemoryTimer
-                    && memoryClock.IsLocked
-                    && controller.GetGameProcess() is { } alive
-                )
-                {
-                    TimeSpan? memory = memoryClock.TryRead(alive);
-                    if (
-                        memory.HasValue
-                        && timerFilter.IsPlausible(
-                            memory.Value,
-                            settings.Spectate.MaxTimerJump > TimeSpan.Zero
-                                ? settings.Spectate.MaxTimerJump
-                                : TimeSpan.FromSeconds(8)
-                        )
-                    )
-                    {
-                        timerFilter.Accept(memory.Value);
-                        Timer = memory.Value;
-                        fromOcr = true;
-                        logger.LogInformation("Memory Time: {Timer}", Timer);
+                        ObserveMemoryTimer(reading.Time.Value);
                     }
                 }
                 else if (State != State.TimerDetected)
@@ -345,204 +318,6 @@ public class Spectator : ISpectator
                 logger.LogError(e, "Could not complete state loop");
             }
         }
-    }
-
-    private async Task<TimeSpan?> ReadOcrReplayTimeAsync()
-    {
-        TimeSpan? first = await ReadOneOcrReplayTimeAsync().ConfigureAwait(false);
-        if (first == null)
-        {
-            return null;
-        }
-
-        TimeSpan maxJump =
-            settings.Spectate.MaxTimerJump > TimeSpan.Zero
-                ? settings.Spectate.MaxTimerJump
-                : TimeSpan.FromSeconds(8);
-        if (timerFilter.IsPlausible(first.Value, maxJump))
-        {
-            return first;
-        }
-
-        logger.LogWarning(
-            "OCR timer {Candidate} jumped from {Last}; confirming with extra reads.",
-            first,
-            timerFilter.LastAccepted
-        );
-
-        int extra = Math.Clamp(settings.Spectate.OcrConfirmReads, 1, 5) - 1;
-        var samples = new List<TimeSpan> { first.Value };
-        for (int i = 0; i < extra; i++)
-        {
-            await Task.Delay(75, LinkedTokenSource.Token).ConfigureAwait(false);
-            TimeSpan? next = await ReadOneOcrReplayTimeAsync().ConfigureAwait(false);
-            if (next.HasValue)
-            {
-                samples.Add(next.Value);
-            }
-        }
-
-        samples.Sort();
-        if (samples.Count >= 2 && samples[^1] - samples[0] <= maxJump)
-        {
-            TimeSpan agreed = samples[samples.Count / 2];
-            logger.LogWarning(
-                "OCR timer caught up from {Last} to {Timer} after {Count} agreeing reads.",
-                timerFilter.LastAccepted,
-                agreed,
-                samples.Count
-            );
-            return agreed;
-        }
-
-        return null;
-    }
-
-    private async Task<TimeSpan?> ReadOneOcrReplayTimeAsync()
-    {
-        TimeSpan? ui = await controller.TryGetTimerAsync().ConfigureAwait(false);
-        if (!ui.HasValue)
-        {
-            return null;
-        }
-
-        TimeSpan candidate = ui.Value.Add(Data.GatesOpen);
-        TimeSpan replayLength = Data?.LoadedReplay?.Replay?.ReplayLength ?? TimeSpan.Zero;
-        if (replayLength > TimeSpan.Zero && candidate > replayLength + TimeSpan.FromMinutes(1))
-        {
-            logger.LogWarning(
-                "Ignoring implausible timer {Timer} (replay length {Length}).",
-                candidate,
-                replayLength
-            );
-            return null;
-        }
-
-        return candidate;
-    }
-
-    private TimeSpan? TryStableMatchClock()
-    {
-        if (!settings.Spectate.StableMatchClockEnabled)
-        {
-            return null;
-        }
-
-        if (controller.GetGameProcess() is not Process process)
-        {
-            return null;
-        }
-
-        StableClockSample sample = stableMatchClock.Read(process);
-        if (!sample.Ok)
-        {
-            NoteClock(
-                "ocr",
-                null,
-                sample.Reason,
-                sample.Ticks,
-                sample.Scale,
-                warning: sample.Reason
-                    is "read-failed"
-                        or "unsupported-build"
-                        or "open-failed"
-                        or "bad-scale"
-            );
-            return null;
-        }
-
-        TimeSpan time = TimeSpan.FromSeconds(sample.Seconds);
-        TimeSpan limit =
-            settings.Spectate.MaxTimerJump > TimeSpan.Zero
-                ? settings.Spectate.MaxTimerJump
-                : TimeSpan.FromSeconds(8);
-        if (!timerFilter.IsPlausible(time, limit))
-        {
-            NoteClock("ocr", time, "implausible-jump", sample.Ticks, sample.Scale, warning: true);
-            return null;
-        }
-
-        NoteClock("memory", time, "ok", sample.Ticks, sample.Scale, warning: false);
-        return time;
-    }
-
-    private void NoteClock(
-        string source,
-        TimeSpan? timer,
-        string reason,
-        int ticks,
-        float scale,
-        bool warning
-    )
-    {
-        bool changed =
-            source != lastClockSource
-            || reason != lastClockReason
-            || (
-                timer.HasValue
-                && (timer.Value - lastStableLogged).Duration() >= TimeSpan.FromSeconds(1)
-            );
-        if (!changed)
-        {
-            return;
-        }
-
-        if (warning)
-        {
-            logger.LogWarning(
-                "Match clock fallback {ClockSource} reason {ClockReason} ticks {ClockTicks} scale {ClockScale} candidate {Timer}",
-                source,
-                reason,
-                ticks,
-                scale,
-                timer
-            );
-        }
-        else
-        {
-            logger.LogInformation(
-                "Match clock {ClockSource} {Timer} reason {ClockReason} ticks {ClockTicks} scale {ClockScale}",
-                source,
-                timer,
-                reason,
-                ticks,
-                scale
-            );
-        }
-
-        lastClockSource = source;
-        lastClockReason = reason;
-        if (timer.HasValue)
-        {
-            lastStableLogged = timer.Value;
-        }
-
-        if (sessionActivity == null)
-        {
-            return;
-        }
-
-        sessionActivity.SetTag("clock.source", source);
-        sessionActivity.SetTag("clock.reason", reason);
-        sessionActivity.SetTag("clock.ticks", ticks);
-        sessionActivity.SetTag("clock.scale", scale);
-        if (timer.HasValue)
-        {
-            sessionActivity.SetTag("clock.seconds", timer.Value.TotalSeconds);
-        }
-
-        sessionActivity.AddEvent(
-            new ActivityEvent(
-                warning ? "clock.fallback" : "clock.memory",
-                tags: new ActivityTagsCollection
-                {
-                    { "clock.source", source },
-                    { "clock.reason", reason },
-                    { "clock.ticks", ticks },
-                    { "clock.scale", scale },
-                }
-            )
-        );
     }
 
     private void ObserveMemoryTimer(TimeSpan hudTime)

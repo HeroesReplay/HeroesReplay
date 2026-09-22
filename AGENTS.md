@@ -58,9 +58,7 @@ On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: `services stop` (t
 
 ### Capture
 
-The match clock is `PrintWindow` of the game HWND with `PW_RENDERFULLCONTENT`, then cropped to the client area. That is the window's composed frame, including DirectX, not the desktop. Another window on top of the game does not replace the clock. Windowed mode is still required so DWM has that frame.
-
-A desktop BitBlt (`GetDC(NULL)`) is the wrong call. It copies whatever pixels are on the screen, so a console covering the clock is what OCR would read. Do not put that back.
+`IGameCapture` is the capture port. `PrintWindowCapture` is the default (`Capture:Method` = `PrintWindow`): the game HWND's composed frame, cropped to the client area, including DirectX. Another window on top of the game does not replace the clock. `BitBltCapture` is the desktop copy and is only used when `Capture:Method` is `BitBlt`. Windowed mode is still required so DWM has a frame.
 
 OBS game capture also sees the frame when the window is covered, because it hooks the swap chain. One-off `GetSourceScreenshot` calls have worked. A sustained one-screenshot-per-second measurement has **not** been done. That comparison is issue 27. The dynamic memory scan stays off. Build `2.55.17.98025` also has a fixed read-only tick address (`MatchTickClock`, seconds = ticks / 4096). It is preferred when that read succeeds. OCR of `-MM:SS` or `MM:SS` remains the fallback. A different client build does not use those offsets.
 

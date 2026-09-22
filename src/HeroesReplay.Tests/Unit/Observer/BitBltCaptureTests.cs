@@ -14,7 +14,7 @@ public class BitBltCaptureTests
         var clientOnScreen = new Point(293, 107);
         var clock = new Rectangle(910, 14, 100, 48);
 
-        bool mapped = BitBltCapture.TryMapClientToWindow(
+        bool mapped = PrintWindowCapture.TryMapClientToWindow(
             window,
             clientOnScreen,
             clock,
@@ -28,7 +28,7 @@ public class BitBltCaptureTests
     [Fact]
     public void TryMapClientToWindow_RejectsARegionOutsideTheWindow()
     {
-        bool mapped = BitBltCapture.TryMapClientToWindow(
+        bool mapped = PrintWindowCapture.TryMapClientToWindow(
             new Rectangle(0, 0, 100, 100),
             new Point(0, 0),
             new Rectangle(90, 0, 20, 10),

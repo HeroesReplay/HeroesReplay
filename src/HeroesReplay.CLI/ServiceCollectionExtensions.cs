@@ -327,13 +327,19 @@ public static class ServiceCollectionExtensions
             .AddSingleton(new CancellationTokenProvider(token))
             .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
             .AddSingleton(
-                typeof(CaptureStrategy),
+                typeof(IGameCapture),
                 settings.Capture.Method switch
                 {
                     CaptureMethod.None => typeof(StubCapture),
-                    _ => typeof(BitBltCapture),
+                    CaptureMethod.BitBlt => typeof(BitBltCapture),
+                    _ => typeof(PrintWindowCapture),
                 }
             )
+            .AddSingleton<MatchTimerFilter>()
+            .AddSingleton<StableGameTimer>()
+            .AddSingleton<OcrGameTimer>()
+            .AddSingleton<IGameTimer, FallbackGameTimer>()
+            .AddSingleton<GameTimerLog>()
             .AddSingleton(
                 typeof(IGameController),
                 settings.Capture.Method switch

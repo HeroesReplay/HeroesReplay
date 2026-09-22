@@ -36,7 +36,7 @@ public class GameController : IGameController
     private readonly IReplayContext context;
     private readonly AppSettings settings;
     private readonly IObsController obsController;
-    private readonly CaptureStrategy captureStrategy;
+    private readonly IGameCapture capture;
 
     private readonly object controllerLock = new object();
     private Process cachedProcess;
@@ -62,7 +62,7 @@ public class GameController : IGameController
         IReplayContext context,
         AppSettings settings,
         IObsController obsController,
-        CaptureStrategy captureStrategy,
+        IGameCapture capture,
         OcrEngine engine,
         CancellationTokenProvider tokenProvider
     )
@@ -72,8 +72,7 @@ public class GameController : IGameController
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.obsController =
             obsController ?? throw new ArgumentNullException(nameof(obsController));
-        this.captureStrategy =
-            captureStrategy ?? throw new ArgumentNullException(nameof(captureStrategy));
+        this.capture = capture ?? throw new ArgumentNullException(nameof(capture));
         this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
@@ -297,7 +296,7 @@ public class GameController : IGameController
                 return false;
             }
 
-            using Bitmap frame = captureStrategy.Capture(handle);
+            using Bitmap frame = capture.Capture(handle);
             if (frame == null || frame.Width < 200 || frame.Height < 200)
             {
                 return false;
@@ -378,7 +377,7 @@ public class GameController : IGameController
             return null;
         }
 
-        Rectangle dimensions = captureStrategy.GetDimensions(handle);
+        Rectangle dimensions = capture.GetClientSize(handle);
         int width = dimensions.Width;
         int height = dimensions.Height;
         // 1920x1080: the MM:SS digits sit at about x=910, y=14, 100x48.
@@ -392,7 +391,7 @@ public class GameController : IGameController
             cropWidth = width - start;
         }
 
-        return captureStrategy.Capture(handle, new Rectangle(start, top, cropWidth, cropHeight));
+        return capture.Capture(handle, new Rectangle(start, top, cropWidth, cropHeight));
     }
 
     private bool IsMatchingClientVersion()
@@ -514,23 +513,23 @@ public class GameController : IGameController
             return false;
         }
 
-        using (Bitmap capture = captureStrategy.Capture(handle))
+        using (Bitmap frame = capture.Capture(handle))
         {
-            if (capture == null)
+            if (frame == null)
             {
                 return false;
             }
 
             using (
-                SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(capture)
+                SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
                     .ConfigureAwait(false)
             )
             {
                 OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
                 logger.LogInformation(
                     "Window OCR ({Width}x{Height}): {Text}",
-                    capture.Width,
-                    capture.Height,
+                    frame.Width,
+                    frame.Height,
                     string.IsNullOrWhiteSpace(result.Text) ? "(empty)" : result.Text
                 );
 
@@ -546,7 +545,7 @@ public class GameController : IGameController
                 if (settings.Capture.SaveCaptureFailureCondition)
                 {
                     Directory.CreateDirectory(settings.CapturesPath);
-                    capture.Save(
+                    frame.Save(
                         Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp")
                     );
                 }
@@ -616,7 +615,7 @@ public class GameController : IGameController
             }
 
             Directory.CreateDirectory(directory);
-            using Bitmap bitmap = captureStrategy.Capture(handle);
+            using Bitmap bitmap = capture.Capture(handle);
             if (bitmap == null)
             {
                 logger.LogWarning("End screenshot capture returned no bitmap.");
