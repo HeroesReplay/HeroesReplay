@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Heroes.ReplayParser;
+using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -9,201 +9,228 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension;
 
 public class ExtensionPayloadBuilder : IExtensionPayloadsBuilder
 {
-    public const string PLACEHOLDER_SESSION_ID = nameof(PLACEHOLDER_SESSION_ID);
+    private const int MaxPlayers = 10;
+    private const int MaxTalents = 7;
 
     private readonly ILogger<ExtensionPayloadBuilder> logger;
     private readonly AppSettings settings;
-    private readonly List<KeyValuePair<string, string>> sharedFormData;
 
     public ExtensionPayloadBuilder(ILogger<ExtensionPayloadBuilder> logger, AppSettings settings)
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-
-        sharedFormData = new List<KeyValuePair<string, string>>()
-        {
-            new KeyValuePair<string, string>(
-                ExtensionFormKeys.TwitchKey,
-                settings.TwitchExtension.ApiKey
-            ),
-            new KeyValuePair<string, string>(
-                ExtensionFormKeys.Email,
-                settings.TwitchExtension.ApiEmail
-            ),
-            new KeyValuePair<string, string>(
-                ExtensionFormKeys.TwitchUserName,
-                settings.TwitchExtension.TwitchUserName
-            ),
-            new KeyValuePair<string, string>(
-                ExtensionFormKeys.UserId,
-                settings.TwitchExtension.ApiUserId
-            ),
-        };
     }
 
-    public TalentPayloads CreatePayloads(Replay replay)
+    public ExtensionGame CreatePayloads(Replay replay)
     {
-        if (settings.TwitchExtension.Enabled)
+        if (settings.TwitchExtension?.Enabled != true || replay == null)
         {
-            TalentPayloads payloads = new();
-
-            payloads.Create.Add(CreateSession());
-            payloads.Create.Add(CreatePlayer(replay));
-
-            payloads.Update.Add(UpdateReplay(replay));
-            payloads.Update.Add(UpdatePlayer(replay));
-
-            payloads.Talents = CreateTalents(replay);
-
-            return payloads;
+            return null;
         }
 
-        return null;
-    }
-
-    private Dictionary<TimeSpan, List<ExtensionPayload>> CreateTalents(Replay replay)
-    {
-        Dictionary<TimeSpan, List<ExtensionPayload>> talentEvents =
-            new Dictionary<TimeSpan, List<ExtensionPayload>>();
-
-        if (replay.TrackerEvents != null)
+        List<Player> selected = new();
+        if (replay.Players != null)
         {
-            foreach (var trackerEvent in replay.TrackerEvents)
+            foreach (Player player in replay.Players)
             {
-                if (trackerEvent.Data.dictionary[0].blobText == settings.TrackerEvents.TalentChosen)
+                if (selected.Count >= MaxPlayers)
                 {
-                    string talentName = trackerEvent
-                        .Data
-                        .dictionary[1]
-                        .optionalData
-                        .array[0]
-                        .dictionary[1]
-                        .blobText;
-                    TimeSpan timeSpan = trackerEvent.TimeSpan;
-                    int playerID = Convert.ToInt32(
-                        trackerEvent
-                            .Data
-                            .dictionary[2]
-                            .optionalData
-                            .array[0]
-                            .dictionary[1]
-                            .vInt
-                            .Value
-                    );
-                    Player player = replay.Players[playerID - 1];
-
-                    if (!talentEvents.ContainsKey(timeSpan))
-                    {
-                        talentEvents[timeSpan] = new List<ExtensionPayload>();
-                    }
-
-                    var talents = talentEvents[timeSpan];
-
-                    talents.Add(
-                        new ExtensionPayload()
-                        {
-                            Step = ExtensionStep.SaveTalentData,
-                            Content = new List<Dictionary<string, string>>()
-                            {
-                                new(sharedFormData)
-                                {
-                                    { ExtensionFormKeys.SessionId, PLACEHOLDER_SESSION_ID },
-                                    { ExtensionFormKeys.BlizzId, player.BattleNetId.ToString() },
-                                    {
-                                        ExtensionFormKeys.BattleTag,
-                                        $"{player.Name}#{player.BattleTag}"
-                                    },
-                                    {
-                                        ExtensionFormKeys.Region,
-                                        player.BattleNetRegionId.ToString()
-                                    },
-                                    { ExtensionFormKeys.Talent, talentName },
-                                    { ExtensionFormKeys.Hero, player.Character },
-                                    { ExtensionFormKeys.HeroId, player.HeroId },
-                                    { ExtensionFormKeys.HeroAttributeId, player.HeroAttributeId },
-                                },
-                            },
-                        }
-                    );
+                    break;
                 }
+
+                if (
+                    player == null
+                    || string.IsNullOrWhiteSpace(player.Name)
+                    || (player.Team != 0 && player.Team != 1)
+                )
+                {
+                    continue;
+                }
+
+                selected.Add(player);
+            }
+        }
+
+        int fallbackRegion = 0;
+        foreach (Player player in selected)
+        {
+            if (player.BattleNetRegionId is >= 1 and <= 5)
+            {
+                fallbackRegion = player.BattleNetRegionId;
+                break;
+            }
+        }
+
+        var roster = new List<ExtensionPlayer>(selected.Count);
+        var rosterPlayers = new List<Player>(selected.Count);
+        foreach (Player player in selected)
+        {
+            int region = player.BattleNetRegionId;
+            if (region is < 1 or > 5)
+            {
+                region = fallbackRegion;
             }
 
-            var payloads = talentEvents.Sum(x => x.Value.Count);
+            if (region is < 1 or > 5)
+            {
+                logger.LogWarning(
+                    "Twitch extension skipped {Name} because region {Region} is not 1-5.",
+                    player.Name,
+                    player.BattleNetRegionId
+                );
+                continue;
+            }
 
-            logger.LogInformation($"Total talent payloads: {payloads}");
+            bool ai = player.PlayerType == PlayerType.Computer;
+            rosterPlayers.Add(player);
+            roster.Add(
+                new ExtensionPlayer(
+                    Limit(player.Name, 32, "name"),
+                    ai ? 0 : player.BattleTag,
+                    region,
+                    player.Team,
+                    Limit(HeroName(player), 64, "hero"),
+                    Limit(player.HeroAttributeId, 64, "hero_attribute"),
+                    ai
+                )
+            );
         }
 
-        return talentEvents;
-    }
-
-    private ExtensionPayload UpdateReplay(Replay replay)
-    {
-        return new ExtensionPayload
+        var picks = new List<ExtensionTalentPick>();
+        var seen = new Dictionary<int, List<string>>();
+        string talentChosen = settings.TrackerEvents?.TalentChosen;
+        if (
+            !string.IsNullOrEmpty(talentChosen)
+            && replay.TrackerEvents != null
+            && replay.Players != null
+        )
         {
-            Step = ExtensionStep.UpdateReplayData,
-            Content = new List<Dictionary<string, string>>()
+            foreach (TrackerEvent trackerEvent in replay.TrackerEvents)
             {
-                new(sharedFormData)
+                if (
+                    !TryReadTalent(
+                        trackerEvent,
+                        talentChosen,
+                        out string talentName,
+                        out int playerSlot
+                    )
+                )
                 {
-                    { ExtensionFormKeys.SessionId, PLACEHOLDER_SESSION_ID },
-                    { ExtensionFormKeys.GameType, replay.GameMode.ToString() },
-                    { ExtensionFormKeys.GameMap, replay.Map },
-                    { ExtensionFormKeys.GameVersion, replay.ReplayVersion },
-                    { ExtensionFormKeys.Region, replay.Players[0].BattleNetRegionId.ToString() },
-                },
-            },
+                    continue;
+                }
+
+                if ((uint)playerSlot >= (uint)replay.Players.Length)
+                {
+                    continue;
+                }
+
+                Player player = replay.Players[playerSlot];
+                int rosterIndex = rosterPlayers.IndexOf(player);
+                if (rosterIndex < 0)
+                {
+                    continue;
+                }
+
+                if (!seen.TryGetValue(rosterIndex, out List<string> names))
+                {
+                    names = new List<string>();
+                    seen[rosterIndex] = names;
+                }
+
+                if (names.Count >= MaxTalents || names.Contains(talentName))
+                {
+                    continue;
+                }
+
+                talentName = Limit(talentName, 128, "talent");
+                names.Add(talentName);
+                picks.Add(new ExtensionTalentPick(trackerEvent.TimeSpan, rosterIndex, talentName));
+            }
+        }
+
+        logger.LogInformation("Twitch extension talent picks: {Count}.", picks.Count);
+        return new ExtensionGame
+        {
+            GameMode = Limit(replay.GameMode.ToString(), 32, "game_mode"),
+            Map = Limit(replay.Map, 64, "map"),
+            GameVersion = Limit(replay.ReplayVersion, 32, "game_version"),
+            Players = roster,
+            Talents = picks,
         };
     }
 
-    private ExtensionPayload UpdatePlayer(Replay replay)
+    private bool TryReadTalent(
+        TrackerEvent trackerEvent,
+        string talentChosen,
+        out string talentName,
+        out int playerIndex
+    )
     {
-        return new ExtensionPayload
+        talentName = null;
+        playerIndex = -1;
+        try
         {
-            Step = ExtensionStep.UpdatePlayerData,
-            Content = replay
-                .Players.Select(player => new Dictionary<string, string>(sharedFormData)
-                {
-                    { ExtensionFormKeys.SessionId, PLACEHOLDER_SESSION_ID },
-                    { ExtensionFormKeys.BlizzId, player.BattleNetId.ToString() },
-                    { ExtensionFormKeys.BattleTag, $"{player.Name}#{player.BattleTag}" },
-                    { ExtensionFormKeys.Hero, player.Character },
-                    { ExtensionFormKeys.HeroId, player.HeroId },
-                    { ExtensionFormKeys.HeroAttributeId, player.HeroAttributeId },
-                    { ExtensionFormKeys.Team, player.Team.ToString() },
-                    { ExtensionFormKeys.Region, player.BattleNetRegionId.ToString() },
-                })
-                .ToList(),
-        };
-    }
-
-    private ExtensionPayload CreatePlayer(Replay replay)
-    {
-        return new ExtensionPayload
-        {
-            Step = ExtensionStep.CreatePlayerData,
-            Content = replay
-                .Players.Select(player => new Dictionary<string, string>(sharedFormData)
-                {
-                    { ExtensionFormKeys.SessionId, PLACEHOLDER_SESSION_ID },
-                    { ExtensionFormKeys.BattleTag, $"{player.Name}#{player.BattleTag}" },
-                    { ExtensionFormKeys.Team, player.Team.ToString() },
-                })
-                .ToList(),
-        };
-    }
-
-    private ExtensionPayload CreateSession()
-    {
-        return new ExtensionPayload
-        {
-            Step = ExtensionStep.CreateReplayData,
-            Content = new List<Dictionary<string, string>>()
+            if (trackerEvent?.Data?.dictionary == null)
             {
-                new(sharedFormData)
-                {
-                    { ExtensionFormKeys.GameDate, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") },
-                },
-            },
-        };
+                return false;
+            }
+
+            if (
+                !trackerEvent.Data.dictionary.TryGetValue(0, out TrackerEventStructure eventName)
+                || eventName?.blobText != talentChosen
+            )
+            {
+                return false;
+            }
+
+            talentName = trackerEvent
+                .Data
+                .dictionary[1]
+                .optionalData
+                .array[0]
+                .dictionary[1]
+                .blobText;
+            long slot = trackerEvent
+                .Data
+                .dictionary[2]
+                .optionalData
+                .array[0]
+                .dictionary[1]
+                .vInt
+                .Value;
+            playerIndex = (int)slot - 1;
+            return !string.IsNullOrEmpty(talentName);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Skipped a tracker event the Twitch extension could not read.");
+            return false;
+        }
+    }
+
+    private static string HeroName(Player player)
+    {
+        if (!string.IsNullOrEmpty(player.Character))
+        {
+            return player.Character;
+        }
+
+        return player.HeroAttributeId;
+    }
+
+    private string Limit(string value, int max, string field)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= max)
+        {
+            return value;
+        }
+
+        logger.LogWarning(
+            "Twitch extension {Field} truncated from {Length} to {Max}.",
+            field,
+            value.Length,
+            max
+        );
+        return value.Substring(0, max);
     }
 }

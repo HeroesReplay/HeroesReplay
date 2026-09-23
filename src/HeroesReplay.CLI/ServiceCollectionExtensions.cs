@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
@@ -128,7 +129,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton(new CancellationTokenProvider(token))
             .AddHeroesProfileKiotaClient()
             .AddHttpClient<IHeroesProfileService, HeroesProfileService>()
-            .Services.AddSingleton<OBSWebsocket>()
+            .Services.AddTwitchExtensionClient()
+            .AddSingleton<OBSWebsocket>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
             .AddSingleton<IApiSettings>(serviceProvider =>
             {
@@ -385,8 +387,8 @@ public static class ServiceCollectionExtensions
                 provider.GetRequiredService<ReplayContext>()
             )
             .AddSingleton<IReplayContext>(provider => provider.GetRequiredService<ReplayContext>())
-            .AddHttpClient<TwitchExtensionService>()
-            .Services.AddHeroesProfileKiotaClient()
+            .AddTwitchExtensionClient()
+            .AddHeroesProfileKiotaClient()
             .AddHttpClient<HeroesProfileService>()
             .Services.AddSingleton<IHeroesProfileService, HeroesProfileService>()
             .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
@@ -396,7 +398,6 @@ public static class ServiceCollectionExtensions
             .AddSingleton<ICustomRewardsHolder, SupportedRewardsHolder>()
             .AddSingleton<IRewardRequestFactory, RewardRequestFactory>()
             .AddSingleton<IRequestQueue, RequestQueue>()
-            .AddSingleton<ITwitchExtensionService, TwitchExtensionService>()
             .AddSingleton(
                 typeof(ITwitchClient),
                 settings.Capture.Method switch
@@ -461,6 +462,20 @@ public static class ServiceCollectionExtensions
                 sp.GetService<IReplayResume>(),
                 () => NamedProcess.IsRunning(NamedProcess.HeroesOfTheStorm)
             ));
+        return services;
+    }
+
+    private static IServiceCollection AddTwitchExtensionClient(this IServiceCollection services)
+    {
+        services.AddHttpClient(TwitchExtensionService.HttpClientName);
+        services.AddSingleton<ITwitchExtensionService>(serviceProvider =>
+            ActivatorUtilities.CreateInstance<TwitchExtensionService>(
+                serviceProvider,
+                serviceProvider
+                    .GetRequiredService<IHttpClientFactory>()
+                    .CreateClient(TwitchExtensionService.HttpClientName)
+            )
+        );
         return services;
     }
 

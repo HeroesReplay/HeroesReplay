@@ -14,6 +14,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.HeroesProfileExtension;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Configuration;
@@ -71,6 +72,13 @@ public class CheckCommand : Command
                 "timer",
                 "Read-only scan of HeroesOfTheStorm_x64 for a ticking match clock (issue 27).",
                 CheckTimerAsync
+            )
+        );
+        Subcommands.Add(
+            Build(
+                "twitch-extension",
+                "Call Heroes Profile GET /api/twitch/v1/uploader/whoami with the uploader key (issue 49).",
+                CheckTwitchExtensionAsync
             )
         );
 
@@ -529,6 +537,48 @@ public class CheckCommand : Command
         }
 
         return null;
+    }
+
+    public static async Task<CheckResult> CheckTwitchExtensionAsync(
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            using var provider = CreateProvider(cancellationToken);
+            AppSettings settings = provider.GetRequiredService<AppSettings>();
+            if (string.IsNullOrWhiteSpace(settings.TwitchExtension?.ApiKey))
+            {
+                return new CheckResult(
+                    "twitch-extension",
+                    false,
+                    "Uploader key is missing. Put `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password` in TwitchExtension:ApiKey. This is not the v1 Bearer key."
+                );
+            }
+
+            ITwitchExtensionService extension =
+                provider.GetRequiredService<ITwitchExtensionService>();
+            ExtensionWhoAmI who = await extension.WhoAmIAsync(cancellationToken);
+            if (!who.Reachable)
+            {
+                return new CheckResult(
+                    "twitch-extension",
+                    false,
+                    who.Message ?? "uploader/whoami failed."
+                );
+            }
+
+            string channel = who.TwitchDisplayName ?? who.TwitchLogin ?? "unknown";
+            return new CheckResult(
+                "twitch-extension",
+                true,
+                $"Connected to {channel}. entitlement.active={who.EntitlementActive}. player_linked={who.PlayerLinked}."
+            );
+        }
+        catch (Exception e)
+        {
+            return Fail("twitch-extension", e);
+        }
     }
 
     public static Task<CheckResult> CheckClientAsync(CancellationToken cancellationToken)

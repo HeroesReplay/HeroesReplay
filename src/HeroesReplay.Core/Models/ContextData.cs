@@ -14,7 +14,7 @@ public class ContextData
     public TimeSpan SessionEnd { get; set; }
     public bool IsCarriedObjectiveMap { get; set; }
     public TimeSpan GatesOpen { get; set; }
-    public ITalentPayloads Payloads { get; set; }
+    public ExtensionGame Payloads { get; set; }
     public DateTime Timeloaded { get; set; }
     public TimeSpan? Timer { get; set; }
     public DirectoryInfo Directory { get; set; }

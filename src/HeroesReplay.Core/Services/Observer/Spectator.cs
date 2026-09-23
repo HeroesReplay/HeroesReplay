@@ -177,16 +177,24 @@ public class Spectator : ISpectator
 
     private async Task TalentsLoopAsync()
     {
-        if (settings.TwitchExtension.Enabled)
+        if (settings.TwitchExtension?.Enabled != true)
         {
-            talentsNotifier.ClearSession();
+            return;
+        }
 
+        talentsNotifier.ClearSession();
+        try
+        {
             while (!LinkedTokenSource.IsCancellationRequested)
             {
                 try
                 {
                     await talentsNotifier
-                        .SendCurrentTalentsAsync(Timer, CancelSessionSource.Token)
+                        .SendCurrentTalentsAsync(
+                            Timer,
+                            State == State.TimerDetected,
+                            CancelSessionSource.Token
+                        )
                         .ConfigureAwait(false);
                     await Task.Delay(TimeSpan.FromSeconds(1), consoleTokenProvider.Token)
                         .ConfigureAwait(false);
@@ -196,6 +204,17 @@ public class Spectator : ISpectator
                 {
                     logger.LogError(e, "Could not complete Heroes Profile Talents loop");
                 }
+            }
+        }
+        finally
+        {
+            try
+            {
+                await talentsNotifier.EndGameAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Could not close the Heroes Profile Twitch extension game");
             }
         }
     }
@@ -663,7 +682,9 @@ public class Spectator : ISpectator
             status.ReplayPath = data?.LoadedReplay?.FileInfo?.FullName;
             status.ReplayVersion = data?.LoadedReplay?.Replay?.ReplayVersion;
             status.ReplayId = data?.LoadedReplay?.ReplayId;
-            status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(data?.LoadedReplay);
+            status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(
+                data?.LoadedReplay
+            );
         });
     }
 

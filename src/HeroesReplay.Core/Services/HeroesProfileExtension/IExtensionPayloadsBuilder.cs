@@ -4,5 +4,5 @@ namespace HeroesReplay.Core.Services.HeroesProfileExtension;
 
 public interface IExtensionPayloadsBuilder
 {
-    TalentPayloads CreatePayloads(Replay replay);
+    ExtensionGame CreatePayloads(Replay replay);
 }

@@ -179,7 +179,7 @@ public class ReplayAnalyzer : IReplayAnalyzer
         return new ReadOnlyDictionary<TimeSpan, Panel>(panels);
     }
 
-    public ITalentPayloads GetPayloads(Replay replay)
+    public ExtensionGame GetPayloads(Replay replay)
     {
         if (payloadsBuilder == null)
         {
