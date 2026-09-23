@@ -21,6 +21,7 @@ public sealed class EventSubRewardListener : IDisposable
     private readonly ITwitchAPI api;
     private readonly IOnRewardHandler rewards;
     private readonly HttpClient http;
+    private int listenGate;
 
     public EventSubRewardListener(
         ILogger<EventSubRewardListener> logger,
@@ -38,6 +39,12 @@ public sealed class EventSubRewardListener : IDisposable
 
     public async Task ListenAsync(CancellationToken cancellationToken)
     {
+        if (Interlocked.Exchange(ref listenGate, 1) != 0)
+        {
+            logger.LogInformation("EventSub reward listener is already running.");
+            return;
+        }
+
         int backoffSeconds = 1;
         while (!cancellationToken.IsCancellationRequested)
         {

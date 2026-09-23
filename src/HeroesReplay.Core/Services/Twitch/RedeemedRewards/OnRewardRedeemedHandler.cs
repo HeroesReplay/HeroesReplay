@@ -10,8 +10,13 @@ namespace HeroesReplay.Core.Services.Twitch.RedeemedRewards;
 
 public class OnRewardRedeemedHandler : IOnRewardHandler
 {
+    private const int SeenRedemptionLimit = 2000;
+
     private readonly ICustomRewardsHolder rewards;
     private readonly ILogger<OnRewardRedeemedHandler> logger;
+    private readonly HashSet<Guid> seenRedemptions = new();
+    private readonly Queue<Guid> seenOrder = new();
+    private readonly object seenGate = new();
     public readonly IEnumerable<IRewardHandler> handlers;
 
     public OnRewardRedeemedHandler(
@@ -27,6 +32,21 @@ public class OnRewardRedeemedHandler : IOnRewardHandler
 
     public void Handle(OnRewardRedeemedArgs args)
     {
+        if (args == null)
+        {
+            return;
+        }
+
+        if (args.RedemptionId != Guid.Empty && !IsFirstDelivery(args.RedemptionId))
+        {
+            logger.LogInformation(
+                "Ignoring duplicate redemption {RedemptionId} for '{Title}'.",
+                args.RedemptionId,
+                args.RewardTitle
+            );
+            return;
+        }
+
         if (rewards.TryGetReward(args, out SupportedReward reward))
         {
             foreach (
@@ -50,6 +70,25 @@ public class OnRewardRedeemedHandler : IOnRewardHandler
             logger.LogWarning(
                 $"Could not handle reward '{args.RewardTitle}' because it was not found"
             );
+        }
+    }
+
+    private bool IsFirstDelivery(Guid redemptionId)
+    {
+        lock (seenGate)
+        {
+            if (!seenRedemptions.Add(redemptionId))
+            {
+                return false;
+            }
+
+            seenOrder.Enqueue(redemptionId);
+            while (seenOrder.Count > SeenRedemptionLimit)
+            {
+                seenRedemptions.Remove(seenOrder.Dequeue());
+            }
+
+            return true;
         }
     }
 }

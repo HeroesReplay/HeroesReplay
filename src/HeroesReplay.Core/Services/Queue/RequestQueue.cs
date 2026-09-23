@@ -26,6 +26,7 @@ public class RequestQueue : IRequestQueue, IDisposable
     private readonly Mutex queueMutex;
     private readonly Mutex failedMutex;
     private readonly TimeSpan mutexWait;
+    private const int DuplicateQueuePosition = -2;
 
     public RequestQueue(
         ILogger<RequestQueue> logger,
@@ -228,12 +229,22 @@ public class RequestQueue : IRequestQueue, IDisposable
             () =>
             {
                 List<RewardQueueItem> items = ReadItems(queueFile);
+                if (IsDuplicateRedemption(request, items))
+                {
+                    return DuplicateQueuePosition;
+                }
+
                 items.Add(new RewardQueueItem(request, replay));
                 SaveQueue(items);
                 return items.Count;
             },
             -1
         );
+        if (position == DuplicateQueuePosition)
+        {
+            return DuplicateResponse(request);
+        }
+
         if (position < 0)
         {
             return new RewardResponse(
@@ -260,6 +271,11 @@ public class RequestQueue : IRequestQueue, IDisposable
             () =>
             {
                 List<RewardQueueItem> items = ReadItems(queueFile);
+                if (IsDuplicateRedemption(request, items))
+                {
+                    return DuplicateQueuePosition;
+                }
+
                 var queued = new HashSet<int>();
                 foreach (RewardQueueItem item in items)
                 {
@@ -286,6 +302,11 @@ public class RequestQueue : IRequestQueue, IDisposable
             },
             -1
         );
+        if (position == DuplicateQueuePosition)
+        {
+            return DuplicateResponse(request);
+        }
+
         if (position < 0)
         {
             return new RewardResponse(
@@ -386,6 +407,38 @@ public class RequestQueue : IRequestQueue, IDisposable
         Directory.CreateDirectory(file.DirectoryName);
         File.WriteAllText(file.FullName, JsonSerializer.Serialize(items, options));
         file.Refresh();
+    }
+
+    private static bool IsDuplicateRedemption(RewardRequest request, List<RewardQueueItem> items)
+    {
+        if (request == null || request.RedemptionId == Guid.Empty || items == null)
+        {
+            return false;
+        }
+
+        foreach (RewardQueueItem item in items)
+        {
+            if (item?.Request != null && item.Request.RedemptionId == request.RedemptionId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private RewardResponse DuplicateResponse(RewardRequest request)
+    {
+        logger.LogInformation(
+            "Redemption {RedemptionId} for '{Title}' is already queued.",
+            request.RedemptionId,
+            request.RewardTitle
+        );
+        return new RewardResponse(
+            success: false,
+            message: $"'{request.RewardTitle}' is already queued.",
+            duplicate: true
+        );
     }
 
     private T WithLock<T>(Mutex mutex, Func<T> work, T busy)

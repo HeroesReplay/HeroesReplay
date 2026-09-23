@@ -47,6 +47,15 @@ public class ReplayIdRequestHandler : IRewardHandler
                     RewardResponse response = await queue.EnqueueItemAsync(
                         requestFactory.Create(reward, args)
                     );
+                    if (response.Duplicate)
+                    {
+                        logger.LogInformation(
+                            "{Login} redeemed '{Title}' again. Not queueing it twice.",
+                            args.Login,
+                            reward.Title
+                        );
+                        return;
+                    }
 
                     if (settings.Twitch.EnableChatBot)
                     {

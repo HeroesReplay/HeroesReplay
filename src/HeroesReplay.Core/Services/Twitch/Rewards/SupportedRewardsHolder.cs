@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using HeroesReplay.Core.Models;
@@ -122,16 +123,135 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
     public bool TryGetReward(OnRewardRedeemedArgs args, out SupportedReward reward)
     {
         reward = null;
-
-        foreach (var item in Rewards)
+        if (string.IsNullOrWhiteSpace(args?.RewardTitle))
         {
-            if (item.Title == args.RewardTitle)
+            return false;
+        }
+
+        string title = args.RewardTitle.Trim();
+        foreach (SupportedReward item in Rewards)
+        {
+            if (item != null && string.Equals(item.Title, title, StringComparison.Ordinal))
             {
                 reward = item;
                 return true;
             }
         }
 
+        // Ranked maps are not given QM rewards at sync time. Twitch allows 50
+        // channel rewards, and those QM rewards are already on the channel.
+        return TryMatchPlayableMap(title, out reward);
+    }
+
+    private bool TryMatchPlayableMap(string title, out SupportedReward reward)
+    {
+        reward = null;
+        IReadOnlyList<Map> maps = gameData.Maps;
+        if (maps == null)
+        {
+            return false;
+        }
+
+        foreach (Map map in maps)
+        {
+            if (map == null || !map.Playable || string.IsNullOrWhiteSpace(map.Name))
+            {
+                continue;
+            }
+
+            if (
+                TryKnownMode(
+                    title,
+                    map,
+                    " (Rank QM)",
+                    RewardType.QM | RewardType.Map | RewardType.Rank,
+                    GameType.QuickMatch,
+                    1000,
+                    "standard",
+                    out reward
+                )
+                || TryKnownMode(
+                    title,
+                    map,
+                    " (Rank SL)",
+                    RewardType.SL | RewardType.Map | RewardType.Rank,
+                    GameType.StormLeague,
+                    1000,
+                    "standard",
+                    out reward
+                )
+                || TryKnownMode(
+                    title,
+                    map,
+                    " (Rank ARAM)",
+                    RewardType.ARAM | RewardType.Map | RewardType.Rank,
+                    GameType.ARAM,
+                    1000,
+                    "ARAM",
+                    out reward
+                )
+                || TryKnownMode(
+                    title,
+                    map,
+                    " (QM)",
+                    RewardType.QM | RewardType.Map,
+                    GameType.QuickMatch,
+                    500,
+                    "standard",
+                    out reward
+                )
+                || TryKnownMode(
+                    title,
+                    map,
+                    " (SL)",
+                    RewardType.SL | RewardType.Map,
+                    GameType.StormLeague,
+                    500,
+                    "standard",
+                    out reward
+                )
+                || TryKnownMode(
+                    title,
+                    map,
+                    " (ARAM)",
+                    RewardType.ARAM | RewardType.Map,
+                    GameType.ARAM,
+                    500,
+                    "ARAM",
+                    out reward
+                )
+            )
+            {
+                return true;
+            }
+        }
+
         return false;
+    }
+
+    private static bool TryKnownMode(
+        string title,
+        Map map,
+        string suffix,
+        RewardType rewardType,
+        GameType mode,
+        int cost,
+        string mapType,
+        out SupportedReward reward
+    )
+    {
+        reward = null;
+        if (map.Type == null || !map.Type.Equals(mapType, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.Equals(title, map.Name + suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        reward = new SupportedReward(rewardType, map.Name + suffix, map.Name, mode, cost);
+        return true;
     }
 }
