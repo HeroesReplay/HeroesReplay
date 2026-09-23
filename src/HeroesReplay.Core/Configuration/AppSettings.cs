@@ -30,6 +30,7 @@ public class AppSettings
     public AbilityDetectionSettings AbilityDetection { get; set; }
     public QuoteSettings Quotes { get; set; }
     public YouTubeSettings YouTube { get; set; }
+    public RetentionSettings Retention { get; set; }
     public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
     public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
     public string ContextsDirectory => Path.Combine(Location.DataDirectory, "Contexts");

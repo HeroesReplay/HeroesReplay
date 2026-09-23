@@ -209,6 +209,7 @@ public class Spectator : ISpectator
                 GameTimerReading reading = await gameTimer
                     .ReadAsync(LinkedTokenSource.Token)
                     .ConfigureAwait(false);
+                reading = PreferLockedScan(reading);
                 clockLog.Write(sessionActivity, reading);
                 bool fromOcr = reading.Ok && reading.Time.HasValue;
 
@@ -320,6 +321,37 @@ public class Spectator : ISpectator
         }
     }
 
+    private GameTimerReading PreferLockedScan(GameTimerReading reading)
+    {
+        if (reading.Ok || !settings.Spectate.UseMemoryTimer || !memoryClock.IsLocked)
+        {
+            return reading;
+        }
+
+        if (memoryClock.LastRead is not TimeSpan ui)
+        {
+            return reading;
+        }
+
+        TimeSpan gates = Data?.GatesOpen ?? TimeSpan.Zero;
+        TimeSpan replayTime;
+        try
+        {
+            replayTime = ui + gates;
+        }
+        catch (OverflowException)
+        {
+            return reading;
+        }
+
+        if (replayTime < TimeSpan.FromMinutes(-3) || replayTime > TimeSpan.FromMinutes(90))
+        {
+            return reading;
+        }
+
+        return new GameTimerReading(true, "memory-scan", "locked", replayTime);
+    }
+
     private void ObserveMemoryTimer(TimeSpan hudTime)
     {
         if (!settings.Spectate.MemoryTimerEnabled)
@@ -420,10 +452,7 @@ public class Spectator : ISpectator
         // HUD clock vanishing is the START of victory/MVP/votes, not the end.
         endScreenStarted ??= DateTimeOffset.UtcNow;
         TimeSpan held = DateTimeOffset.UtcNow - endScreenStarted.Value;
-        TimeSpan need =
-            settings.Spectate.EndScreenTime > TimeSpan.Zero
-                ? settings.Spectate.EndScreenTime
-                : TimeSpan.FromMinutes(1);
+        TimeSpan need = EndScreenHold.Duration(endScreenSeen, settings.Spectate.EndScreenTime);
 
         if (ocrTimerVisible)
         {
@@ -634,6 +663,7 @@ public class Spectator : ISpectator
             status.ReplayPath = data?.LoadedReplay?.FileInfo?.FullName;
             status.ReplayVersion = data?.LoadedReplay?.Replay?.ReplayVersion;
             status.ReplayId = data?.LoadedReplay?.ReplayId;
+            status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(data?.LoadedReplay);
         });
     }
 
@@ -658,6 +688,7 @@ public class Spectator : ISpectator
             status.ReplayPath = Data.LoadedReplay.FileInfo?.FullName ?? status.ReplayPath;
             status.ReplayVersion = Data.LoadedReplay.Replay?.ReplayVersion ?? status.ReplayVersion;
             status.ReplayId = Data.LoadedReplay.ReplayId ?? status.ReplayId;
+            status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(Data.LoadedReplay);
         });
     }
 }

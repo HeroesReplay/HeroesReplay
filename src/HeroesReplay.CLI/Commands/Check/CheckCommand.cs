@@ -4,6 +4,7 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -294,9 +295,34 @@ public class CheckCommand : Command
                 }
             }
 
+            string scopes = await ReadTwitchScopesAsync(
+                    settings.Twitch.AccessToken,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            bool chatOk =
+                !settings.Twitch.EnableChatBot
+                || ScopeHas(scopes, "chat:edit")
+                || ScopeHas(scopes, "user:write:chat");
+            bool rewardsOk =
+                !(settings.Twitch.EnablePubSub || settings.Twitch.EnableRequests)
+                || ScopeHas(scopes, "channel:read:redemptions")
+                || ScopeHas(scopes, "channel:manage:redemptions");
+            extra += " Scopes: " + (string.IsNullOrWhiteSpace(scopes) ? "(none)" : scopes) + ".";
+            if (!chatOk)
+            {
+                extra += " Chat send needs chat:edit or user:write:chat.";
+            }
+
+            if (!rewardsOk)
+            {
+                extra +=
+                    " Channel-point redemptions need channel:read:redemptions or channel:manage:redemptions.";
+            }
+
             return new CheckResult(
                 "twitch",
-                true,
+                chatOk && rewardsOk,
                 $"Helix OK for {users.Users[0].DisplayName} ({users.Users[0].Id}).{extra}"
             );
         }
@@ -304,6 +330,55 @@ public class CheckCommand : Command
         {
             return Fail("twitch", e);
         }
+    }
+
+    private static bool ScopeHas(string scopes, string name)
+    {
+        return !string.IsNullOrWhiteSpace(scopes)
+            && scopes.Contains(name, StringComparison.Ordinal);
+    }
+
+    private static async Task<string> ReadTwitchScopesAsync(
+        string token,
+        CancellationToken cancellationToken
+    )
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "https://id.twitch.tv/oauth2/validate"
+        );
+        request.Headers.TryAddWithoutValidation("Authorization", "OAuth " + token);
+        using HttpResponseMessage response = await http.SendAsync(request, cancellationToken)
+            .ConfigureAwait(false);
+        string body = await response
+            .Content.ReadAsStringAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            return "validate-failed-" + (int)response.StatusCode;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(body);
+        if (
+            !document.RootElement.TryGetProperty("scopes", out JsonElement scopes)
+            || scopes.ValueKind != JsonValueKind.Array
+        )
+        {
+            return string.Empty;
+        }
+
+        var names = new List<string>();
+        foreach (JsonElement scope in scopes.EnumerateArray())
+        {
+            string value = scope.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                names.Add(value);
+            }
+        }
+
+        return string.Join(' ', names);
     }
 
     public static async Task<CheckResult> CheckConnectivityAsync(

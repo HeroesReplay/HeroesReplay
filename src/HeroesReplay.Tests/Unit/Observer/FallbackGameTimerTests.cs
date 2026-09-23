@@ -39,4 +39,17 @@ public class FallbackGameTimerTests
         Assert.Equal("near-zero", chosen.Reason);
         Assert.Equal(TimeSpan.FromSeconds(8), chosen.Time);
     }
+
+    [Fact]
+    public void Select_UsesOcrWhenMemoryTimeIsOutsideAMatch()
+    {
+        GameTimerReading chosen = FallbackGameTimer.Select(
+            new GameTimerReading(true, "memory", "ok", TimeSpan.FromHours(30)),
+            new GameTimerReading(true, "ocr", "ok", TimeSpan.FromSeconds(40))
+        );
+
+        Assert.Equal("ocr", chosen.Source);
+        Assert.Equal("memory-unplayable", chosen.Reason);
+        Assert.Equal(TimeSpan.FromSeconds(40), chosen.Time);
+    }
 }

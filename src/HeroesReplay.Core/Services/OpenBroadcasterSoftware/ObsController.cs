@@ -113,10 +113,11 @@ public class ObsController : IObsController
                         if (!status.IsRecording)
                         {
                             logger.LogInformation(
-                                "Starting OBS recording for {Reason}.",
+                                "Starting OBS recording for replay {ReplayId} ({Reason}). Stops when spectate ends.",
+                                context.Current?.LoadedReplay?.ReplayId,
                                 SessionMedia.HasRequestor(context.Current?.LoadedReplay)
                                     ? "viewer request"
-                                    : "RecordingEnabled"
+                                    : "every replay"
                             );
                             obs.StartRecord();
                         }
@@ -145,6 +146,10 @@ public class ObsController : IObsController
                     RecordingStatus status = obs.GetRecordStatus();
                     if (status.IsRecording)
                     {
+                        logger.LogInformation(
+                            "Stopping OBS recording for replay {ReplayId}.",
+                            context.Current?.LoadedReplay?.ReplayId
+                        );
                         obs.StopRecord();
                     }
                 }
@@ -429,7 +434,9 @@ public class ObsController : IObsController
 
     private void ApplyReportBrowserCss(JObject browserSettings)
     {
-        string extra = settings.OBS.ReportBrowserCss;
+        string extra =
+            (settings.OBS.ReportBrowserCss ?? string.Empty)
+            + " a[href*='/Match/Single/'],a[href*='replayID=']{font-size:0!important;color:transparent!important;pointer-events:none!important;}";
         if (string.IsNullOrWhiteSpace(extra))
         {
             return;

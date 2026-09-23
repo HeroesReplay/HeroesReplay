@@ -258,12 +258,14 @@ public static class ServiceCollectionExtensions
             .Services.AddSingleton<IHeroesProfileService, HeroesProfileService>()
             .AddSingleton<ITwitchPubSub, TwitchPubSub>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
+            .AddSingleton<EventSubRewardListener>()
             .AddSingleton(serviceProvider =>
             {
                 AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
                 return new ConnectionCredentials(
                     settings.Twitch.Account,
-                    settings.Twitch.AccessToken
+                    settings.Twitch.AccessToken,
+                    TwitchChatEndpoint.SecureWebSocket
                 );
             })
             .AddSingleton<IApiSettings>(serviceProvider =>
@@ -405,12 +407,14 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton<ITwitchPubSub, TwitchPubSub>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
+            .AddSingleton<EventSubRewardListener>()
             .AddSingleton(serviceProvider =>
             {
                 AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
                 return new ConnectionCredentials(
                     settings.Twitch.Account,
-                    settings.Twitch.AccessToken
+                    settings.Twitch.AccessToken,
+                    TwitchChatEndpoint.SecureWebSocket
                 );
             })
             .AddSingleton<IApiSettings>(serviceProvider =>

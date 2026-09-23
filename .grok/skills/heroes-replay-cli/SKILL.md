@@ -43,7 +43,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `twitch connect` | Chat, PubSub, and Blue/Red predictions from `status.json`. Does not launch the game. Blocks. |
 | `twitch rewards generate\|submit\|list\|remove-unranked-draft\|test` | Helix custom rewards. `submit` also deletes leftover Unranked Draft titles. `remove-unranked-draft` deletes only `(UD)` / `Unranked Draft` titles. `test` runs the local redeem handler |
 | `twitch predictions test [--outcome Blue\|Red\|cancel]` | Create then resolve/cancel a 30s Blue/Red prediction |
-| `youtube uploader` | Watch `Data\\Contexts` for `.mp4` + `youtube-entry.json`. Needs Google `client_secrets.json`. Spectate only writes the entry / records for **requested** replays unless `YouTube:Enabled` / `OBS:RecordingEnabled`. |
+| `youtube uploader` | Watch `Data\\Contexts` for `.mp4` + `youtube-entry.json`. `YouTube:DryRun` true (dev and base) writes `youtube-dry-run.json` and does not call YouTube. Production (`HEROES_REPLAY_ENV=prod`) sets `DryRun` false, `YouTube:Enabled` true, and `OBS:RecordingEnabled` true, so every spectated replay is recorded from the loading screen until the MVP screen and this process uploads it. Real uploads need `Data\\client_secrets.json`. `services start` launches this process. |
 | `mcp` | Stdio MCP server. Logs on stderr. Snapshot: `%LOCALAPPDATA%/HeroesReplay/status.json` |
 
 New commands go on `HeroesReplayCommand` and need a **Smoke** test in `src/HeroesReplay.Tests/Smoke`.

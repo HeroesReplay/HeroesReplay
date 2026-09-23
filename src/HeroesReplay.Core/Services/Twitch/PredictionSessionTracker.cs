@@ -9,6 +9,7 @@ public enum PredictionSignalKind
     Open,
     Resolve,
     Cancel,
+    Disabled,
 }
 
 public readonly record struct PredictionSignal(
@@ -28,6 +29,7 @@ public sealed class PredictionSessionTracker
     public static readonly TimeSpan AbandonAfter = TimeSpan.FromMinutes(2);
 
     private int? openReplayId;
+    private int? announcedDisabledReplayId;
     private DateTimeOffset openedAt;
     private string openMap;
 
@@ -55,6 +57,22 @@ public sealed class PredictionSessionTracker
 
         if (CanOpen(status))
         {
+            if (status.SuppressPredictions)
+            {
+                if (announcedDisabledReplayId == status.ReplayId)
+                {
+                    return default;
+                }
+
+                announcedDisabledReplayId = status.ReplayId;
+                return new PredictionSignal(
+                    PredictionSignalKind.Disabled,
+                    status.ReplayId.Value,
+                    status.Map,
+                    null
+                );
+            }
+
             openReplayId = status.ReplayId;
             openedAt = status.UpdatedAt;
             openMap = status.Map;

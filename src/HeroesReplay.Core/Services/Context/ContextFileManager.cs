@@ -10,6 +10,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.Services.YouTube;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Context;
@@ -125,40 +126,7 @@ public class ContextFileManager : IContextFileManager
 
         try
         {
-            var heroesProfileReplay = loaded.HeroesProfileReplay;
-            string requestor = loaded.RewardQueueItem?.Request?.Login;
-            string map = heroesProfileReplay?.Map ?? loaded.Replay?.Map;
-            string gameType = heroesProfileReplay?.GameType;
-            string rank = heroesProfileReplay?.Rank;
-            string id = heroesProfileReplay?.Id.ToString();
-
-            var descriptionLines = new[]
-            {
-                "Twitch: http://twitch.tv/saltysadism",
-                heroesProfileReplay != null
-                    ? $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={heroesProfileReplay.Id}"
-                    : string.Empty,
-                gameType != null ? $"Game type: {gameType}" : string.Empty,
-                !string.IsNullOrWhiteSpace(rank) ? $"Rank: {rank}" : string.Empty,
-                !string.IsNullOrWhiteSpace(requestor) ? $"Requested by: {requestor}" : string.Empty,
-                "Hashtags: #HeroesOfTheStorm #SaltySadism",
-            }
-                .Where(line => !string.IsNullOrWhiteSpace(line))
-                .ToArray();
-
-            var entry = new YouTubeEntry()
-            {
-                Title = string.Join(
-                    " - ",
-                    new[] { id, map, gameType, rank }.Where(part =>
-                        !string.IsNullOrWhiteSpace(part)
-                    )
-                ),
-                PrivacyStatus = settings.YouTube.PrivacyStatus ?? "private",
-                CategoryId = settings.YouTube.CategoryId,
-                DescriptionLines = descriptionLines,
-                Tags = new[] { gameType, map }.Where(t => !string.IsNullOrWhiteSpace(t)).ToArray(),
-            };
+            YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, settings.YouTube);
 
             string file = Path.Combine(
                 contextData.Directory.FullName,

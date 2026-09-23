@@ -9,6 +9,7 @@ public class TwitchCommand : Command
         : base("twitch", "Twitch bot, rewards, and chat integration.")
     {
         Subcommands.Add(new ConnectCommand());
+        Subcommands.Add(new SayCommand());
         Subcommands.Add(new RewardsCommand());
         Subcommands.Add(new PredictionsCommand());
     }

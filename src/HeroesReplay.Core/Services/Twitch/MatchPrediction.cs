@@ -1,4 +1,5 @@
 using System;
+using HeroesReplay.Core.Models;
 
 namespace HeroesReplay.Core.Services.Twitch;
 
@@ -12,12 +13,13 @@ public static class MatchPrediction
 
     public static string TitleForMap(string map)
     {
+        map = EnglishMapNames.Canonical(map);
         if (string.IsNullOrWhiteSpace(map))
         {
             return "Who wins?";
         }
 
-        string title = map.Trim() + ": who wins?";
+        string title = map + ": who wins?";
         if (title.Length <= MaxTitleLength)
         {
             return title;

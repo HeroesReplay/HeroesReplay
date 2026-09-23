@@ -108,11 +108,7 @@ public class ServicesCommand : Command
         }
     }
 
-    public static string PowerShellStartCommand(
-        string exe,
-        string arguments,
-        string pidFile
-    )
+    public static string PowerShellStartCommand(string exe, string arguments, string pidFile)
     {
         string argList = string.Join(
             ",",

@@ -133,7 +133,7 @@
           "id": "scroll_filter",
           "versioned_id": "scroll_filter",
           "settings": {
-            "speed_y": 28.0,
+            "speed_y": 34.0,
             "loop": false
           },
           "mixers": 0,
@@ -850,7 +850,7 @@
       "versioned_id": "scene",
       "settings": {
         "custom_size": false,
-        "id_counter": 2,
+        "id_counter": 3,
         "items": [
           {
             "name": "prediction-report-browser",
@@ -889,6 +889,32 @@
             "hide_transition": {
               "duration": 0
             },
+            "private_settings": {}
+          },
+          {
+            "name": "soundcloud",
+            "source_uuid": "b903df54-c4f6-4d2b-9154-dfaed586cfb0",
+            "visible": true,
+            "locked": true,
+            "rot": 0.0,
+            "align": 5,
+            "bounds_type": 0,
+            "bounds_align": 0,
+            "bounds_crop": false,
+            "crop_left": 0,
+            "crop_top": 0,
+            "crop_right": 0,
+            "crop_bottom": 0,
+            "id": 2,
+            "group_item_backup": false,
+            "pos": { "x": 0.0, "y": 900.0 },
+            "scale": { "x": 0.66, "y": 0.66 },
+            "bounds": { "x": 0.0, "y": 0.0 },
+            "scale_filter": "disable",
+            "blend_method": "default",
+            "blend_type": "normal",
+            "show_transition": { "duration": 0 },
+            "hide_transition": { "duration": 0 },
             "private_settings": {}
           }
         ]
@@ -958,6 +984,145 @@
             "hide_transition": {
               "duration": 0
             },
+            "private_settings": {}
+          },
+          {
+            "name": "soundcloud",
+            "source_uuid": "b903df54-c4f6-4d2b-9154-dfaed586cfb0",
+            "visible": true,
+            "locked": true,
+            "rot": 0.0,
+            "align": 5,
+            "bounds_type": 0,
+            "bounds_align": 0,
+            "bounds_crop": false,
+            "crop_left": 0,
+            "crop_top": 0,
+            "crop_right": 0,
+            "crop_bottom": 0,
+            "id": 2,
+            "group_item_backup": false,
+            "pos": { "x": 0.0, "y": 900.0 },
+            "scale": { "x": 0.66, "y": 0.66 },
+            "bounds": { "x": 0.0, "y": 0.0 },
+            "scale_filter": "disable",
+            "blend_method": "default",
+            "blend_type": "normal",
+            "show_transition": { "duration": 0 },
+            "hide_transition": { "duration": 0 },
+            "private_settings": {}
+          }
+        ]
+      },
+      "mixers": 0,
+      "sync": 0,
+      "flags": 0,
+      "volume": 1.0,
+      "balance": 0.5,
+      "enabled": true,
+      "muted": false,
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "hotkeys": {},
+      "deinterlace_mode": 0,
+      "deinterlace_field_order": 0,
+      "monitoring_type": 0,
+      "canvas_uuid": "6c69626f-6273-4c00-9d88-c5136d61696e",
+      "private_settings": {}
+    },
+    {
+      "prev_ver": 537001986,
+      "name": "request-queue-browser",
+      "uuid": "4e91c0aa-2b17-4d8e-9f33-0a6c5d8e1b42",
+      "id": "browser_source",
+      "versioned_id": "browser_source",
+      "settings": {
+        "url": "file:///C:/heroesreplay/Data/queue.html",
+        "width": 1920,
+        "height": 1080,
+        "shutdown": false,
+        "restart_when_active": true,
+        "css": "html, body { background-color: #0b0e14 !important; margin: 0 !important; }"
+      },
+      "mixers": 255,
+      "sync": 0,
+      "flags": 0,
+      "volume": 1.0,
+      "balance": 0.5,
+      "enabled": true,
+      "muted": false,
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "hotkeys": {},
+      "deinterlace_mode": 0,
+      "deinterlace_field_order": 0,
+      "monitoring_type": 0,
+      "private_settings": {}
+    },
+    {
+      "prev_ver": 537001986,
+      "name": "request-queue",
+      "uuid": "9b0e7c55-1a24-4f68-8d90-3c2b6a5e7d18",
+      "id": "scene",
+      "versioned_id": "scene",
+      "settings": {
+        "custom_size": false,
+        "id_counter": 3,
+        "items": [
+          {
+            "name": "request-queue-browser",
+            "source_uuid": "4e91c0aa-2b17-4d8e-9f33-0a6c5d8e1b42",
+            "visible": true,
+            "locked": false,
+            "rot": 0.0,
+            "align": 5,
+            "bounds_type": 1,
+            "bounds_align": 0,
+            "bounds_crop": false,
+            "crop_left": 0,
+            "crop_top": 0,
+            "crop_right": 0,
+            "crop_bottom": 0,
+            "id": 1,
+            "group_item_backup": false,
+            "pos": { "x": 0.0, "y": 0.0 },
+            "scale": { "x": 1.0, "y": 1.0 },
+            "bounds": { "x": 1920.0, "y": 1080.0 },
+            "scale_filter": "disable",
+            "blend_method": "default",
+            "blend_type": "normal",
+            "show_transition": { "duration": 0 },
+            "hide_transition": { "duration": 0 },
+            "private_settings": {}
+          },
+          {
+            "name": "soundcloud",
+            "source_uuid": "b903df54-c4f6-4d2b-9154-dfaed586cfb0",
+            "visible": true,
+            "locked": true,
+            "rot": 0.0,
+            "align": 5,
+            "bounds_type": 0,
+            "bounds_align": 0,
+            "bounds_crop": false,
+            "crop_left": 0,
+            "crop_top": 0,
+            "crop_right": 0,
+            "crop_bottom": 0,
+            "id": 2,
+            "group_item_backup": false,
+            "pos": { "x": 0.0, "y": 900.0 },
+            "scale": { "x": 0.66, "y": 0.66 },
+            "bounds": { "x": 0.0, "y": 0.0 },
+            "scale_filter": "disable",
+            "blend_method": "default",
+            "blend_type": "normal",
+            "show_transition": { "duration": 0 },
+            "hide_transition": { "duration": 0 },
             "private_settings": {}
           }
         ]
@@ -1880,6 +2045,9 @@
     },
     {
       "name": "match-report"
+    },
+    {
+      "name": "request-queue"
     }
   ],
   "current_scene": "waiting-screen",

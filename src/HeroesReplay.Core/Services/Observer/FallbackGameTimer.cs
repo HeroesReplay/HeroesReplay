@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -26,11 +27,12 @@ public sealed class FallbackGameTimer : IGameTimer
         GameTimerReading memoryReading = await memory
             .ReadAsync(cancellationToken)
             .ConfigureAwait(false);
-        GameTimerReading screenshot = memoryReading.Ok
+        bool memoryUsable = IsPlayable(memoryReading);
+        GameTimerReading screenshot = memoryUsable
             ? default
             : await ocr.ReadAsync(cancellationToken).ConfigureAwait(false);
         GameTimerReading chosen = Select(memoryReading, screenshot);
-        if (chosen.Ok)
+        if (chosen.Ok && chosen.Time.HasValue)
         {
             filter.Accept(chosen.Time.Value);
         }
@@ -40,14 +42,30 @@ public sealed class FallbackGameTimer : IGameTimer
 
     public static GameTimerReading Select(GameTimerReading memory, GameTimerReading screenshots)
     {
-        if (memory.Ok)
+        if (IsPlayable(memory))
         {
             return memory;
         }
 
+        if (screenshots.Ok && IsPlayable(screenshots))
+        {
+            return screenshots with { Reason = memory.Ok ? "memory-unplayable" : memory.Reason };
+        }
+
         return screenshots with
         {
-            Reason = memory.Reason,
+            Reason = string.IsNullOrWhiteSpace(memory.Reason) ? screenshots.Reason : memory.Reason,
         };
+    }
+
+    public static bool IsPlayable(GameTimerReading reading)
+    {
+        if (!reading.Ok || reading.Time == null)
+        {
+            return false;
+        }
+
+        TimeSpan time = reading.Time.Value;
+        return time >= TimeSpan.FromMinutes(-3) && time <= TimeSpan.FromMinutes(90);
     }
 }

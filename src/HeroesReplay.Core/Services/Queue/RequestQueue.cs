@@ -18,6 +18,7 @@ public class RequestQueue : IRequestQueue, IDisposable
 {
     private readonly FileInfo queueFile;
     private readonly FileInfo failedFile;
+    private readonly string boardPath;
     private readonly ILogger<RequestQueue> logger;
     private readonly IHeroesProfileService heroesProfileService;
     private readonly AppSettings settings;
@@ -55,88 +56,31 @@ public class RequestQueue : IRequestQueue, IDisposable
         this.mutexWait = mutexWait;
         queueMutex = new Mutex(false, queueMutexName);
         failedMutex = new Mutex(false, failedMutexName);
-
-        queueFile = new(
+        queueFile = new FileInfo(
             Path.Combine(settings.Location.DataDirectory, settings.Twitch.QueueFileName)
         );
-        failedFile = new(
+        failedFile = new FileInfo(
             Path.Combine(settings.Location.DataDirectory, settings.Twitch.FailedFileName)
         );
-
+        boardPath = Path.Combine(settings.Location.DataDirectory, QueueBoard.FileName);
         options = new JsonSerializerOptions
         {
             WriteIndented = true,
             Converters = { new JsonStringEnumConverter(allowIntegerValues: true) },
         };
-    }
-
-    private async Task<IDisposable> AcquireAsync(Mutex mutex)
-    {
-        bool acquired = await Task.Run(() =>
-            {
-                try
-                {
-                    return mutex.WaitOne(mutexWait);
-                }
-                catch (AbandonedMutexException)
-                {
-                    return true;
-                }
-            })
-            .ConfigureAwait(false);
-        if (!acquired)
+        try
         {
-            logger.LogWarning("Request queue is busy. Skipping this pass.");
-            return null;
+            QueueBoard.Write(boardPath, ReadItems(queueFile));
         }
-
-        return new MutexReleaser(mutex);
-    }
-
-    private sealed class MutexReleaser : IDisposable
-    {
-        private Mutex mutex;
-
-        public MutexReleaser(Mutex mutex)
+        catch (Exception e)
         {
-            this.mutex = mutex;
-        }
-
-        public void Dispose()
-        {
-            if (mutex == null)
-            {
-                return;
-            }
-
-            try
-            {
-                mutex.ReleaseMutex();
-            }
-            catch (ApplicationException) { }
-
-            mutex = null;
+            logger.LogDebug(e, "Could not write the request queue page.");
         }
     }
 
-    public async Task<int> GetItemsInQueue()
+    public Task<int> GetItemsInQueue()
     {
-        if (!queueFile.Exists)
-        {
-            return 0;
-        }
-
-        using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
-        if (held == null)
-        {
-            return 0;
-        }
-
-        List<RewardQueueItem> requests = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-            await File.ReadAllTextAsync(queueFile.FullName),
-            options
-        );
-        return requests?.Count ?? 0;
+        return Task.FromResult(WithLock(queueMutex, () => ReadItems(queueFile).Count, 0));
     }
 
     public async Task<RewardResponse> EnqueueItemAsync(RewardRequest request)
@@ -160,40 +104,136 @@ public class RequestQueue : IRequestQueue, IDisposable
         }
     }
 
+    public Task<RewardQueueItem> DequeueItemAsync()
+    {
+        return Task.FromResult(
+            WithLock(
+                queueMutex,
+                () =>
+                {
+                    List<RewardQueueItem> items = ReadItems(queueFile);
+                    if (items.Count == 0)
+                    {
+                        return null;
+                    }
+
+                    RewardQueueItem item = items[0];
+                    items.RemoveAt(0);
+                    SaveQueue(items);
+                    logger.LogInformation(
+                        "Request: '{Title}' removed from the queue.",
+                        item.Request?.RewardTitle
+                    );
+                    return item;
+                },
+                null
+            )
+        );
+    }
+
+    public Task<(RewardQueueItem Item, int Position)?> RemoveItemAsync(string login)
+    {
+        return Task.FromResult(RemoveItem(login));
+    }
+
+    public Task<(RewardQueueItem Item, int Position)?> FindNextByLoginAsync(string login)
+    {
+        return Task.FromResult(
+            WithLock(
+                queueMutex,
+                () =>
+                {
+                    List<RewardQueueItem> items = ReadItems(queueFile);
+                    int index = items.FindIndex(item =>
+                        item.Request?.Login != null
+                        && item.Request.Login.Equals(login, StringComparison.OrdinalIgnoreCase)
+                    );
+                    if (index < 0)
+                    {
+                        return ((RewardQueueItem, int)?)null;
+                    }
+
+                    return (items[index], index + 1);
+                },
+                null
+            )
+        );
+    }
+
+    public Task<RewardQueueItem> FindByIndexAsync(int index)
+    {
+        return Task.FromResult(
+            WithLock(
+                queueMutex,
+                () =>
+                {
+                    List<RewardQueueItem> items = ReadItems(queueFile);
+                    int offset = index - 1;
+                    if (offset < 0 || offset >= items.Count)
+                    {
+                        return null;
+                    }
+
+                    return items[offset];
+                },
+                null
+            )
+        );
+    }
+
+    public void Dispose()
+    {
+        queueMutex.Dispose();
+        failedMutex.Dispose();
+    }
+
     private async Task<RewardResponse> QueueByReplayIdAsync(RewardRequest request)
     {
-        HeroesProfileReplay replay = await heroesProfileService.GetReplayByIdAsync(
-            request.ReplayId.Value
-        );
-
+        HeroesProfileReplay replay = await heroesProfileService
+            .GetReplayByIdAsync(request.ReplayId.Value)
+            .ConfigureAwait(false);
         if (replay == null)
         {
-            await AddToFailedRequestsAsync(new(request, replay));
+            RememberFailure(new RewardQueueItem(request, replay));
             return new RewardResponse(
                 success: false,
                 message: $"could not find replay with id {request.ReplayId.Value}"
             );
         }
 
-        if (replay.Deleted is > 0)
+        if (replay.Deleted is > 0 || replay.Downloadable == false)
         {
-            await AddToFailedRequestsAsync(new(request, replay));
+            RememberFailure(new RewardQueueItem(request, replay));
             return new RewardResponse(
                 success: false,
                 message: $"the raw file for replay id {request.ReplayId.Value} is no longer available."
             );
         }
 
-        if (!settings.Spectate.VersionsSupported.Contains(replay.GameVersion))
+        if (
+            settings.Spectate?.VersionsSupported != null
+            && settings.Spectate.VersionsSupported.Any()
+            && !settings.Spectate.VersionsSupported.Contains(replay.GameVersion)
+        )
         {
-            await AddToFailedRequestsAsync(new(request, replay));
+            RememberFailure(new RewardQueueItem(request, replay));
             return new RewardResponse(
                 success: false,
                 message: $"the version found '{replay.GameVersion}' does not match the supported versions."
             );
         }
 
-        int position = await QueueReplayId(new(request, replay)).ConfigureAwait(false);
+        int position = WithLock(
+            queueMutex,
+            () =>
+            {
+                List<RewardQueueItem> items = ReadItems(queueFile);
+                items.Add(new RewardQueueItem(request, replay));
+                SaveQueue(items);
+                return items.Count;
+            },
+            -1
+        );
         if (position < 0)
         {
             return new RewardResponse(
@@ -204,290 +244,193 @@ public class RequestQueue : IRequestQueue, IDisposable
 
         return new RewardResponse(
             success: true,
-            message: $"{replay.Id} - {replay.Map} ({replay.Rank}) has been queued. ({position})"
+            message: $"{replay.Id} - {ReplayLabel.MapAndRank(replay.Map, replay.Rank)} has been queued. ({position})"
         );
-    }
-
-    private async Task<int> QueueReplayId(RewardQueueItem item)
-    {
-        using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
-        if (held == null)
-        {
-            return -1;
-        }
-
-        if (!queueFile.Exists)
-        {
-            await File.WriteAllTextAsync(
-                queueFile.FullName,
-                JsonSerializer.Serialize(new List<RewardQueueItem> { item }, options)
-            );
-            return 1;
-        }
-        else
-        {
-            List<RewardQueueItem> items = new(
-                JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                    await File.ReadAllTextAsync(queueFile.FullName),
-                    options
-                )
-            )
-            {
-                item,
-            };
-            await File.WriteAllTextAsync(
-                queueFile.FullName,
-                JsonSerializer.Serialize(items, options)
-            );
-            return items.Count;
-        }
-    }
-
-    private async Task AddToFailedRequestsAsync(RewardQueueItem item)
-    {
-        using IDisposable held = await AcquireAsync(failedMutex).ConfigureAwait(false);
-        if (held == null)
-        {
-            return;
-        }
-
-        {
-            if (failedFile.Exists)
-            {
-                List<RewardQueueItem> items = new(
-                    JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                        await File.ReadAllTextAsync(failedFile.FullName),
-                        options
-                    )
-                )
-                {
-                    item,
-                };
-                await File.WriteAllTextAsync(
-                    failedFile.FullName,
-                    JsonSerializer.Serialize(items, options)
-                );
-            }
-            else
-            {
-                await File.WriteAllTextAsync(
-                    failedFile.FullName,
-                    JsonSerializer.Serialize(new List<RewardQueueItem> { item }, options)
-                );
-            }
-        }
     }
 
     private async Task<RewardResponse> QueueByRewardFilterAsync(RewardRequest request)
     {
-        IEnumerable<HeroesProfileReplay> replays = await heroesProfileService.GetReplaysByFilters(
-            request.GameType,
-            request.Rank,
-            request.Map
-        );
-        HeroesProfileReplay replay = replays.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
-
-        if (replay != null)
-        {
-            int position = await QueueReplayId(new(request, replay)).ConfigureAwait(false);
-            if (position < 0)
+        IEnumerable<HeroesProfileReplay> replays = await heroesProfileService
+            .GetReplaysByFilters(request.GameType, request.Rank, request.Map)
+            .ConfigureAwait(false);
+        HashSet<int> played = PlayedReplayIds.Read(settings.Location?.DataDirectory);
+        HeroesProfileReplay chosen = null;
+        int position = WithLock(
+            queueMutex,
+            () =>
             {
-                return new RewardResponse(
-                    success: false,
-                    message: "there was an unexpected error with your request."
-                );
-            }
+                List<RewardQueueItem> items = ReadItems(queueFile);
+                var queued = new HashSet<int>();
+                foreach (RewardQueueItem item in items)
+                {
+                    if (item?.HeroesProfileReplay?.Id > 0)
+                    {
+                        queued.Add(item.HeroesProfileReplay.Id);
+                    }
+                }
 
-            return new RewardResponse(
-                success: true,
-                message: $"'{request.RewardTitle}' - {replay.Map} ({replay.Rank}) has been queued ({position})"
-            );
-        }
-        else
+                chosen = RewardCandidateFilter.Choose(
+                    replays,
+                    played,
+                    queued,
+                    settings.Spectate?.VersionsSupported
+                );
+                if (chosen == null)
+                {
+                    return 0;
+                }
+
+                items.Add(new RewardQueueItem(request, chosen));
+                SaveQueue(items);
+                return items.Count;
+            },
+            -1
+        );
+        if (position < 0)
         {
-            await AddToFailedRequestsAsync(new(request, replay));
             return new RewardResponse(
                 success: false,
-                message: "Request failed to queue because the given reward criteria could not be found"
+                message: "there was an unexpected error with your request."
             );
         }
+
+        if (chosen == null)
+        {
+            RememberFailure(new RewardQueueItem(request, null));
+            return new RewardResponse(
+                success: false,
+                message: "no recent unplayed replay matched that reward. Replay ids can still be requested directly."
+            );
+        }
+
+        return new RewardResponse(
+            success: true,
+            message: $"'{request.RewardTitle}' - {ReplayLabel.MapAndRank(chosen.Map, chosen.Rank)} has been queued ({position})"
+        );
     }
 
-    public async Task<RewardQueueItem> DequeueItemAsync()
+    private (RewardQueueItem Item, int Position)? RemoveItem(string login)
     {
-        if (queueFile.Exists)
-        {
-            try
+        return WithLock(
+            queueMutex,
+            () =>
             {
-                using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
-                if (held == null)
-                {
-                    return null;
-                }
-
-                List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                    await File.ReadAllTextAsync(queueFile.FullName),
-                    options
+                List<RewardQueueItem> items = ReadItems(queueFile);
+                int index = items.FindIndex(item =>
+                    item.Request?.Login != null
+                    && item.Request.Login.Equals(login, StringComparison.OrdinalIgnoreCase)
                 );
-
-                if (items != null && items.Count > 0)
+                if (index < 0)
                 {
-                    RewardQueueItem item = items[0];
-
-                    if (items.Remove(item))
-                    {
-                        await File.WriteAllTextAsync(
-                            queueFile.FullName,
-                            JsonSerializer.Serialize(items, options)
-                        );
-                        logger.LogInformation(
-                            $"Request: '{item.Request.RewardTitle}' removed from the queue."
-                        );
-                        return item;
-                    }
+                    return ((RewardQueueItem, int)?)null;
                 }
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Could not dequeue item");
-            }
-        }
 
-        return null;
+                RewardQueueItem item = items[index];
+                items.RemoveAt(index);
+                SaveQueue(items);
+                logger.LogInformation(
+                    "Request: '{Title}' removed from the queue.",
+                    item.Request?.RewardTitle
+                );
+                return (item, index + 1);
+            },
+            null
+        );
     }
 
-    public async Task<(RewardQueueItem Item, int Position)?> RemoveItemAsync(string login)
+    private void RememberFailure(RewardQueueItem item)
     {
-        if (queueFile.Exists)
-        {
-            try
+        WithLock(
+            failedMutex,
+            () =>
             {
-                using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
-                if (held == null)
-                {
-                    return null;
-                }
+                List<RewardQueueItem> items = ReadItems(failedFile);
+                items.Add(item);
+                WriteItems(failedFile, items);
+                return 0;
+            },
+            0
+        );
+    }
 
-                {
-                    List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                        await File.ReadAllTextAsync(queueFile.FullName),
-                        options
-                    );
+    private void SaveQueue(List<RewardQueueItem> items)
+    {
+        WriteItems(queueFile, items);
+        QueueBoard.Write(boardPath, items);
+    }
 
-                    if (items.Count > 0)
+    private List<RewardQueueItem> ReadItems(FileInfo file)
+    {
+        if (file == null || !file.Exists)
+        {
+            return new List<RewardQueueItem>();
+        }
+
+        try
+        {
+            List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
+                File.ReadAllText(file.FullName),
+                options
+            );
+            return items ?? new List<RewardQueueItem>();
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Could not read {QueueFile}.", file.Name);
+            return new List<RewardQueueItem>();
+        }
+    }
+
+    private void WriteItems(FileInfo file, List<RewardQueueItem> items)
+    {
+        Directory.CreateDirectory(file.DirectoryName);
+        File.WriteAllText(file.FullName, JsonSerializer.Serialize(items, options));
+        file.Refresh();
+    }
+
+    private T WithLock<T>(Mutex mutex, Func<T> work, T busy)
+    {
+        return Task
+            .Factory.StartNew(
+                () =>
+                {
+                    bool owned = false;
+                    try
                     {
-                        RewardQueueItem item = items.Find(item =>
-                            item.Request.Login.Equals(login, StringComparison.OrdinalIgnoreCase)
-                        );
-
-                        if (item != null)
+                        try
                         {
-                            int position = items.IndexOf(item) + 1;
+                            owned = mutex.WaitOne(mutexWait);
+                        }
+                        catch (AbandonedMutexException)
+                        {
+                            owned = true;
+                        }
 
-                            if (items.Remove(item))
+                        if (!owned)
+                        {
+                            logger.LogWarning("Request queue is busy. Skipping this pass.");
+                            return busy;
+                        }
+
+                        return work();
+                    }
+                    finally
+                    {
+                        if (owned)
+                        {
+                            try
                             {
-                                await File.WriteAllTextAsync(
-                                    queueFile.FullName,
-                                    JsonSerializer.Serialize(items, options)
-                                );
-                                logger.LogInformation(
-                                    $"Request: '{item.Request.RewardTitle}' removed from the queue."
-                                );
-                                return (item, position);
+                                mutex.ReleaseMutex();
                             }
+                            catch (ApplicationException) { }
                         }
                     }
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, "Could not remove item from queue");
-            }
-        }
-
-        return null;
-    }
-
-    public async Task<(RewardQueueItem Item, int Position)?> FindNextByLoginAsync(string login)
-    {
-        if (queueFile.Exists)
-        {
-            try
-            {
-                using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
-                if (held == null)
-                {
-                    return null;
-                }
-
-                {
-                    List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                        await File.ReadAllTextAsync(queueFile.FullName),
-                        options
-                    );
-
-                    var item = items.FirstOrDefault(x =>
-                        x.Request.Login.Equals(login, StringComparison.OrdinalIgnoreCase)
-                    );
-
-                    if (item != null)
-                    {
-                        return (item, items.IndexOf(item) + 1);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, $"Could not find next queue item for: {login}");
-            }
-        }
-
-        return null;
-    }
-
-    public async Task<RewardQueueItem> FindByIndexAsync(int index)
-    {
-        if (queueFile.Exists)
-        {
-            try
-            {
-                using IDisposable held = await AcquireAsync(queueMutex).ConfigureAwait(false);
-                if (held == null)
-                {
-                    return null;
-                }
-
-                {
-                    List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                        await File.ReadAllTextAsync(queueFile.FullName),
-                        options
-                    );
-
-                    if (items.Count > 0)
-                    {
-                        RewardQueueItem item = items.Find(item =>
-                            items.IndexOf(item) == (index - 1)
-                        );
-
-                        if (item != null)
-                        {
-                            return item;
-                        }
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogError(e, $"Could not find next queue item by index: {index}");
-            }
-        }
-
-        return null;
-    }
-
-    public void Dispose()
-    {
-        queueMutex.Dispose();
-        failedMutex.Dispose();
+                },
+                CancellationToken.None,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default
+            )
+            .GetAwaiter()
+            .GetResult();
     }
 }

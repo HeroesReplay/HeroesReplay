@@ -10,6 +10,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
@@ -114,6 +115,7 @@ public class HeroesProfileProvider : IReplayProvider
     /// </summary>
     public async Task<bool> DownloadNextAsync()
     {
+        MediaRetention.SweepAndLog(settings, logger);
         if (settings.Twitch.EnableRequests)
         {
             RewardQueueItem item = await requestQueue.DequeueItemAsync().ConfigureAwait(false);

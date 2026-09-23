@@ -9,7 +9,7 @@ public sealed class GameTimerLog
     private readonly ILogger<GameTimerLog> logger;
     private string lastSource = "";
     private string lastReason = "";
-    private TimeSpan lastTimer = TimeSpan.MinValue;
+    private TimeSpan? lastTimer;
 
     public GameTimerLog(ILogger<GameTimerLog> logger)
     {
@@ -24,14 +24,12 @@ public sealed class GameTimerLog
                 or "unsupported-build"
                 or "open-failed"
                 or "bad-scale"
-                or "implausible-jump";
+                or "implausible-jump"
+                or "memory-unplayable";
         bool changed =
             reading.Source != lastSource
             || reading.Reason != lastReason
-            || (
-                reading.Time.HasValue
-                && (reading.Time.Value - lastTimer).Duration() >= TimeSpan.FromSeconds(1)
-            );
+            || (reading.Time.HasValue && Moved(reading.Time.Value, lastTimer));
         if (!changed)
         {
             return;
@@ -93,5 +91,25 @@ public sealed class GameTimerLog
                 }
             )
         );
+    }
+
+    /// <summary>
+    /// TimeSpan.MinValue minus a match clock overflows. The first reading has no previous clock.
+    /// </summary>
+    internal static bool Moved(TimeSpan current, TimeSpan? previous)
+    {
+        if (previous == null)
+        {
+            return true;
+        }
+
+        try
+        {
+            return (current - previous.Value).Duration() >= TimeSpan.FromSeconds(1);
+        }
+        catch (OverflowException)
+        {
+            return true;
+        }
     }
 }

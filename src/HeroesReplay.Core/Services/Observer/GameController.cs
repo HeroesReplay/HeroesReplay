@@ -188,6 +188,25 @@ public class GameController : IGameController
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.launch.replay");
         activity?.SetTag("replay.path", context.Current.LoadedReplay.FileInfo?.FullName);
+        for (int attempt = 1; attempt <= 2; attempt++)
+        {
+            activity?.SetTag("launch.replay_attempt", attempt);
+            bool disconnected = await StartReplayAndWaitAsync().ConfigureAwait(false);
+            if (!disconnected || attempt == 2)
+            {
+                return;
+            }
+
+            logger.LogWarning(
+                "Battle.net disconnected while loading the replay. Closing the client and trying once more."
+            );
+            Kill();
+            await Task.Delay(TimeSpan.FromSeconds(8), tokenProvider.Token).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<bool> StartReplayAndWaitAsync()
+    {
         using (
             Process.Start(
                 new ProcessStartInfo
@@ -216,8 +235,9 @@ public class GameController : IGameController
             .Current.LoadedReplay.Replay.Players.Select(x => x.Name)
             .Concat(context.Current.LoadedReplay.Replay.Players.Select(x => x.Character))
             .Concat(settings.OCR.LoadingScreenText)
-            .Concat(new[] { context.Current.LoadedReplay.Replay.Map });
-
+            .Concat(new[] { context.Current.LoadedReplay.Replay.Map })
+            .ToArray();
+        bool disconnected = false;
         await Policy
             .Handle<Exception>()
             .OrResult<bool>(result => result == false)
@@ -228,7 +248,18 @@ public class GameController : IGameController
             .ExecuteAsync(
                 async (t) =>
                 {
-                    bool loading = await ContainsAnyAsync(searchTerms).ConfigureAwait(false);
+                    string text = await ReadWindowTextAsync().ConfigureAwait(false);
+                    if (BattleNetDisconnect.IsShown(text))
+                    {
+                        disconnected = true;
+                        logger.LogWarning("Battle.net disconnect dialog: {Text}", text);
+                        return true;
+                    }
+
+                    bool loading = searchTerms.Any(word =>
+                        !string.IsNullOrWhiteSpace(word)
+                        && text.Contains(word, StringComparison.OrdinalIgnoreCase)
+                    );
                     bool timer = await IsReplay().ConfigureAwait(false);
                     if (loading)
                     {
@@ -244,6 +275,33 @@ public class GameController : IGameController
                 tokenProvider.Token
             )
             .ConfigureAwait(false);
+        return disconnected;
+    }
+
+    private async Task<string> ReadWindowTextAsync()
+    {
+        if (!TryGetGameHandle(out IntPtr handle))
+        {
+            return string.Empty;
+        }
+
+        using Bitmap frame = capture.Capture(handle);
+        if (frame == null)
+        {
+            return string.Empty;
+        }
+
+        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
+            .ConfigureAwait(false);
+        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
+        string text = result?.Text ?? string.Empty;
+        logger.LogInformation(
+            "Window OCR ({Width}x{Height}): {Text}",
+            frame.Width,
+            frame.Height,
+            string.IsNullOrWhiteSpace(text) ? "(empty)" : text
+        );
+        return text;
     }
 
     private void ShowGameScene(string reason)

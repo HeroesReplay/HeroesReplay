@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -20,7 +21,10 @@ public sealed class StableMatchClock : IDisposable
     private IntPtr handle;
     private int pid;
     private long moduleBase;
-    private bool supportedBuild;
+    private long moduleSize;
+    private long tickRva;
+    private long speedRva;
+    private bool located;
     private string attachReason = "no-process";
 
     public bool TryRead(Process process, out TimeSpan time)
@@ -46,8 +50,8 @@ public sealed class StableMatchClock : IDisposable
         int ticks = 0;
         float speed = 0;
         if (
-            !TryReadInt32(moduleBase + MatchTickClock.MatchTickRva, out ticks)
-            || !TryReadSingle(moduleBase + MatchTickClock.GameSpeedFactorRva, out speed)
+            !TryReadInt32(moduleBase + tickRva, out ticks)
+            || !TryReadSingle(moduleBase + speedRva, out speed)
         )
         {
             return new StableClockSample(false, "read-failed", ticks, speed, 0);
@@ -94,7 +98,7 @@ public sealed class StableMatchClock : IDisposable
             return false;
         }
 
-        if (handle != IntPtr.Zero && pid == nextPid && supportedBuild && moduleBase != 0)
+        if (handle != IntPtr.Zero && pid == nextPid && located && moduleBase != 0)
         {
             return true;
         }
@@ -116,28 +120,102 @@ public sealed class StableMatchClock : IDisposable
         {
             ProcessModule module = process.MainModule;
             moduleBase = module?.BaseAddress.ToInt64() ?? 0;
-            supportedBuild = MatchTickClock.IsSupportedVersion(module?.FileVersionInfo.FileVersion);
+            moduleSize = module?.ModuleMemorySize ?? 0;
+            string version = module?.FileVersionInfo.FileVersion;
+            if (moduleBase == 0)
+            {
+                attachReason = "no-module";
+                return false;
+            }
+
+            if (MatchTickClock.IsSupportedVersion(version))
+            {
+                tickRva = MatchTickClock.MatchTickRva;
+                speedRva = MatchTickClock.GameSpeedFactorRva;
+                located = true;
+                attachReason = "ok";
+                return true;
+            }
+
+            if (TryLocateByPattern(out int sites))
+            {
+                located = true;
+                attachReason = "pattern";
+                return true;
+            }
+
+            attachReason = sites == 0 ? "unsupported-build" : "pattern-disagreed";
+            return false;
         }
         catch
         {
-            supportedBuild = false;
+            located = false;
             moduleBase = 0;
-        }
-
-        if (!supportedBuild)
-        {
             attachReason = "unsupported-build";
             return false;
         }
+    }
 
-        if (moduleBase == 0)
+    private bool TryLocateByPattern(out int sites)
+    {
+        sites = 0;
+        tickRva = 0;
+        speedRva = 0;
+        byte[] headers = new byte[0x1000];
+        if (
+            !TryRead(moduleBase, headers)
+            || !MatchClockPattern.TryExecutableSections(headers, out var sections)
+        )
         {
-            attachReason = "no-module";
             return false;
         }
 
-        attachReason = "ok";
-        return true;
+        var found = new List<MatchClockPattern.Site>();
+        foreach (MatchClockPattern.Section section in sections)
+        {
+            if (section.VirtualSize <= 0 || section.VirtualAddress < 0)
+            {
+                continue;
+            }
+
+            if (moduleSize > 0 && section.VirtualAddress + section.VirtualSize > moduleSize)
+            {
+                continue;
+            }
+
+            CollectSites(section.VirtualAddress, section.VirtualSize, found);
+        }
+
+        sites = found.Count;
+        return MatchClockPattern.TryAgree(found, out tickRva, out speedRva);
+    }
+
+    private void CollectSites(long rva, int size, List<MatchClockPattern.Site> found)
+    {
+        if (size <= 0 || size > 64 * 1024 * 1024)
+        {
+            return;
+        }
+
+        byte[] window = new byte[size];
+        if (TryRead(moduleBase + rva, window))
+        {
+            found.AddRange(MatchClockPattern.Find(window, rva));
+            return;
+        }
+
+        const int chunk = 1 << 20;
+        for (int offset = 0; offset < size; offset += chunk)
+        {
+            int count = Math.Min(size - offset, chunk + MatchClockPattern.MulssEnd);
+            byte[] slice = new byte[count];
+            if (!TryRead(moduleBase + rva + offset, slice))
+            {
+                continue;
+            }
+
+            found.AddRange(MatchClockPattern.Find(slice, rva + offset));
+        }
     }
 
     private bool TryReadInt32(long address, out int value)
@@ -190,7 +268,10 @@ public sealed class StableMatchClock : IDisposable
 
         pid = 0;
         moduleBase = 0;
-        supportedBuild = false;
+        moduleSize = 0;
+        tickRva = 0;
+        speedRva = 0;
+        located = false;
     }
 
     private static class Native

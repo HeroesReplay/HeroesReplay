@@ -16,6 +16,12 @@ public sealed class SpectatorStatus
     public string ReplayPath { get; set; }
     public string ReplayVersion { get; set; }
     public int? ReplayId { get; set; }
+
+    /// <summary>
+    /// True when the viewer typed the Heroes Profile replay id. Predictions stay off
+    /// because that id is already public.
+    /// </summary>
+    public bool SuppressPredictions { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public int? CompletedReplayId { get; set; }
     public int? CompletedWinnerTeam { get; set; }

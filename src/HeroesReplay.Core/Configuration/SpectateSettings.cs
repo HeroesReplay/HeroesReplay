@@ -43,11 +43,14 @@ public class SpectateSettings
 
     /// <summary>
     /// Scan HeroesOfTheStorm_x64 for a live match clock and log it next to HUD OCR.
-    /// Does not replace OCR unless UseMemoryTimer is also true.
+    /// A locked address is used only when the stable clock and OCR both miss.
     /// </summary>
     public bool MemoryTimerEnabled { get; set; }
 
-    /// <summary>When true and a memory clock is locked, use it as the match timer (OCR fallback).</summary>
+    /// <summary>
+    /// When the stable memory clock and OCR both miss, use a locked scan address.
+    /// OCR remains the fallback whenever that scan is missing or out of range.
+    /// </summary>
     public bool UseMemoryTimer { get; set; }
     public TimeSpan PanelDownTime { get; set; }
     public TimeSpan TalentsPanelStartTime { get; set; }

@@ -5,6 +5,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Status;
 using Microsoft.Extensions.Logging;
+using TwitchLib.Client.Interfaces;
 
 namespace HeroesReplay.Core.Services.Twitch;
 
@@ -14,18 +15,21 @@ public sealed class StatusPredictionWatcher
     private readonly AppSettings settings;
     private readonly SpectatorStatusStore statusStore;
     private readonly IMatchPredictionService predictions;
+    private readonly ITwitchClient twitchClient;
 
     public StatusPredictionWatcher(
         ILogger<StatusPredictionWatcher> logger,
         AppSettings settings,
         SpectatorStatusStore statusStore,
-        IMatchPredictionService predictions
+        IMatchPredictionService predictions,
+        ITwitchClient twitchClient
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
         this.predictions = predictions ?? throw new ArgumentNullException(nameof(predictions));
+        this.twitchClient = twitchClient ?? throw new ArgumentNullException(nameof(twitchClient));
     }
 
     public async Task WatchAsync(CancellationToken cancellationToken)
@@ -108,6 +112,34 @@ public sealed class StatusPredictionWatcher
                 );
                 await predictions.ResolveTeamAsync(null, cancellationToken).ConfigureAwait(false);
                 break;
+            case PredictionSignalKind.Disabled:
+                logger.LogInformation(
+                    "Prediction disabled for viewer-entered replay {ReplayId}.",
+                    signal.ReplayId
+                );
+                AnnouncePredictionDisabled();
+                break;
+        }
+    }
+
+    private void AnnouncePredictionDisabled()
+    {
+        if (!settings.Twitch.EnableChatBot || string.IsNullOrWhiteSpace(settings.Twitch.Channel))
+        {
+            return;
+        }
+
+        try
+        {
+            twitchClient.SendMessage(
+                settings.Twitch.Channel,
+                "Prediction disabled for this replay.",
+                settings.Twitch.DryRunMode
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not announce that the prediction is disabled.");
         }
     }
 }

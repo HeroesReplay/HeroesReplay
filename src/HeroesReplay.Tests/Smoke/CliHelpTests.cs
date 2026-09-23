@@ -81,6 +81,7 @@ public class CliHelpTests
         Assert.Empty(result.Errors);
         Command heroesProfile = root.Subcommands.Single(c => c.Name == "heroesprofile");
         Assert.Contains(heroesProfile.Subcommands, c => c.Name == "download");
+        Assert.Contains(heroesProfile.Subcommands, c => c.Name == "patch-index");
     }
 
     [Fact]
@@ -90,6 +91,7 @@ public class CliHelpTests
         ParseResult result = root.Parse("twitch --help");
         Assert.Empty(result.Errors);
         Command twitch = root.Subcommands.Single(c => c.Name == "twitch");
+        Assert.Contains(twitch.Subcommands, c => c.Name == "say");
         Command predictions = twitch.Subcommands.Single(c => c.Name == "predictions");
         Assert.Contains(predictions.Subcommands, c => c.Name == "test");
         Command rewards = twitch.Subcommands.Single(c => c.Name == "rewards");

@@ -7,6 +7,7 @@ using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.Status;
 using Microsoft.Extensions.Logging;
 
@@ -53,16 +54,22 @@ public class GameManager : IGameManager
 
     public async Task LaunchAndSpectate(LoadedReplay loadedReplay)
     {
+        MediaRetention.SweepAndLog(settings, logger);
         await contextSetter.SetContextAsync(loadedReplay);
         bool obsSession = false;
         statusStore.Patch(status =>
         {
             status.SpectatorRunning = true;
             status.Phase = "Loading";
-            status.Map = loadedReplay?.Replay?.Map;
+            status.Map = EnglishMapNames.Prefer(
+                loadedReplay?.HeroesProfileReplay?.Map,
+                loadedReplay?.Replay?.Map,
+                loadedReplay?.Replay?.MapAlternativeName
+            );
             status.ReplayPath = loadedReplay?.FileInfo?.FullName;
             status.ReplayVersion = loadedReplay?.Replay?.ReplayVersion;
             status.ReplayId = loadedReplay?.ReplayId;
+            status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(loadedReplay);
             status.GatesOpen = context.Current?.GatesOpen.ToString();
             status.CoreKilled = context.Current?.CoreKilled.ToString();
         });

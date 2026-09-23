@@ -14,6 +14,7 @@ public class ReportScenesTests
     {
         "prediction-report",
         "match-report",
+        "request-queue",
     };
 
     [Fact]
@@ -37,6 +38,10 @@ public class ReportScenesTests
             if (name == "prediction-report")
             {
                 Assert.EndsWith("prediction-report.html", url, StringComparison.OrdinalIgnoreCase);
+            }
+            else if (name == "request-queue")
+            {
+                Assert.EndsWith("queue.html", url, StringComparison.OrdinalIgnoreCase);
             }
             else
             {

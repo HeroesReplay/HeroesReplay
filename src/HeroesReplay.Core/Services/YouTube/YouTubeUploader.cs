@@ -12,6 +12,7 @@ using Google.Apis.YouTube.v3;
 using Google.Apis.YouTube.v3.Data;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Retention;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -51,7 +52,17 @@ public class YouTubeUploader : IYouTubeUploader
 
     public async Task ListenAsync()
     {
-        await AuthorizeAsync().ConfigureAwait(false);
+        if (settings.YouTube.DryRun)
+        {
+            logger.LogInformation(
+                "YouTube uploader is in dry-run. Recordings are not sent to YouTube."
+            );
+        }
+        else
+        {
+            logger.LogInformation("YouTube uploader will publish recordings.");
+            await AuthorizeAsync().ConfigureAwait(false);
+        }
 
         using var recordingWatcher = new FileSystemWatcher(settings.ContextsDirectory, "*.mp4")
         {
@@ -97,6 +108,18 @@ public class YouTubeUploader : IYouTubeUploader
         YouTubeEntry entry = JsonSerializer.Deserialize<YouTubeEntry>(
             await File.ReadAllTextAsync(entryFile.FullName, token)
         );
+
+        if (settings.YouTube.DryRun)
+        {
+            logger.LogInformation(
+                "Dry run for {Path} ({Bytes} bytes) as {Title}. YouTube is not called.",
+                recording.FullName,
+                recording.Length,
+                entry.Title
+            );
+            await CompleteDryRunAsync(recording, entryFile, entry, token).ConfigureAwait(false);
+            return;
+        }
 
         UserCredential credential = await AuthorizeAsync().ConfigureAwait(false);
 
@@ -146,12 +169,8 @@ public class YouTubeUploader : IYouTubeUploader
 
         if (result.Status == UploadStatus.Completed)
         {
-            string uploadedName = settings.YouTube.EntryFileNameUploaded;
-            if (!string.IsNullOrWhiteSpace(uploadedName))
-            {
-                string uploadedPath = Path.Combine(recording.Directory.FullName, uploadedName);
-                File.Move(entryFile.FullName, uploadedPath, overwrite: true);
-            }
+            MarkEntryUploaded(entryFile, recording.Directory);
+            MediaRetention.SweepAndLog(settings, logger);
         }
         else
         {
@@ -204,7 +223,11 @@ public class YouTubeUploader : IYouTubeUploader
                 if (TryOpenRead(recording.FullName))
                 {
                     stable++;
-                    if (stable >= 5)
+                    int need =
+                        settings.YouTube.ReadyStableReads > 0
+                            ? settings.YouTube.ReadyStableReads
+                            : 5;
+                    if (stable >= need)
                     {
                         logger.LogInformation(
                             "Recording ready {Path} ({Bytes} bytes).",
@@ -225,7 +248,11 @@ public class YouTubeUploader : IYouTubeUploader
             }
 
             lastLength = recording.Exists ? recording.Length : -1;
-            await Task.Delay(TimeSpan.FromSeconds(2), token).ConfigureAwait(false);
+            int poll =
+                settings.YouTube.ReadyPollMilliseconds > 0
+                    ? settings.YouTube.ReadyPollMilliseconds
+                    : 2000;
+            await Task.Delay(TimeSpan.FromMilliseconds(poll), token).ConfigureAwait(false);
         }
 
         token.ThrowIfCancellationRequested();
@@ -271,6 +298,48 @@ public class YouTubeUploader : IYouTubeUploader
         {
             return false;
         }
+    }
+
+    private async Task CompleteDryRunAsync(
+        FileInfo recording,
+        FileInfo entryFile,
+        YouTubeEntry entry,
+        CancellationToken token
+    )
+    {
+        string receiptPath = Path.Combine(recording.Directory.FullName, "youtube-dry-run.json");
+        string receipt = JsonSerializer.Serialize(
+            new
+            {
+                entry.Title,
+                entry.PrivacyStatus,
+                Bytes = recording.Length,
+                Recording = recording.Name,
+                Simulated = true,
+            },
+            new JsonSerializerOptions { WriteIndented = true }
+        );
+        await File.WriteAllTextAsync(receiptPath, receipt, token).ConfigureAwait(false);
+        logger.LogInformation(
+            "Dry run saved {Receipt} for {Title} ({Bytes} bytes). YouTube was not called.",
+            receiptPath,
+            entry.Title,
+            recording.Length
+        );
+        MarkEntryUploaded(entryFile, recording.Directory);
+        MediaRetention.SweepAndLog(settings, logger);
+    }
+
+    private void MarkEntryUploaded(FileInfo entryFile, DirectoryInfo directory)
+    {
+        string uploadedName = settings.YouTube.EntryFileNameUploaded;
+        if (string.IsNullOrWhiteSpace(uploadedName))
+        {
+            return;
+        }
+
+        string uploadedPath = Path.Combine(directory.FullName, uploadedName);
+        File.Move(entryFile.FullName, uploadedPath, overwrite: true);
     }
 
     private void videosInsertRequest_ResponseReceived(Video video)

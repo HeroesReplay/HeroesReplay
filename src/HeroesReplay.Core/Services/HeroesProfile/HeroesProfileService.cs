@@ -264,6 +264,25 @@ public class HeroesProfileService : IHeroesProfileService
         return Enumerable.Empty<HeroesProfileReplay>();
     }
 
+    public async Task<IReadOnlyList<HeroesProfileReplay>> ListAfterAsync(
+        int after,
+        CancellationToken cancellationToken
+    )
+    {
+        ReplaysGetResponse page = await GetReplaysPageAsync(
+                after > 0 ? after : 1,
+                gameType: null,
+                gameMap: null,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        return HeroesProfileReplayMapper
+            .ToReplays(page)
+            .Where(replay => replay != null && replay.Id > after)
+            .OrderBy(replay => replay.Id)
+            .ToList();
+    }
+
     public async Task DownloadReplayAsync(
         int replayId,
         Stream destination,

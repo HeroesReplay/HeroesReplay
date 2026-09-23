@@ -4,7 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI;
 using HeroesReplay.Core.Services.Data;
+using HeroesReplay.Core.Services.Twitch;
 using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
+using TwitchLib.Client.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using TwitchLib.PubSub.Events;
 
@@ -56,6 +58,19 @@ public class TestCommand : Command
         using IServiceScope scope = provider.CreateScope();
         IGameData gameData = scope.ServiceProvider.GetRequiredService<IGameData>();
         await gameData.LoadDataAsync();
+        ITwitchBot bot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
+        ITwitchClient client = scope.ServiceProvider.GetRequiredService<ITwitchClient>();
+        await bot.InitializeAsync();
+        DateTime until = DateTime.UtcNow.AddSeconds(20);
+        while (
+            DateTime.UtcNow < until
+            && !(
+                client.IsConnected && client.JoinedChannels != null && client.JoinedChannels.Count > 0
+            )
+        )
+        {
+            await Task.Delay(250, cancellationToken);
+        }
         IOnRewardHandler handler = scope.ServiceProvider.GetRequiredService<IOnRewardHandler>();
         handler.Handle(
             new OnRewardRedeemedArgs
@@ -68,7 +83,7 @@ public class TestCommand : Command
                 ChannelId = "487238352",
             }
         );
-        await Task.Delay(2000, cancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken);
         Console.WriteLine("dispatched reward '" + title + "'");
     }
 }

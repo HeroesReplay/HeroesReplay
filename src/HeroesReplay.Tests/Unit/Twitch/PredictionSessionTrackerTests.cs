@@ -141,6 +141,20 @@ public class PredictionSessionTrackerTests
         Assert.Equal(12, next.ReplayId);
     }
 
+    [Fact]
+    public void Observe_ViewerEnteredReplayId_DoesNotOpen()
+    {
+        var tracker = new PredictionSessionTracker();
+        SpectatorStatus live = Live(replayId: 10, at: T0);
+        live.SuppressPredictions = true;
+
+        PredictionSignal first = tracker.Observe(live, T0);
+        PredictionSignal second = tracker.Observe(live, T0.AddSeconds(1));
+
+        Assert.Equal(PredictionSignalKind.Disabled, first.Kind);
+        Assert.Equal(PredictionSignalKind.None, second.Kind);
+    }
+
     private static SpectatorStatus Live(int replayId, DateTimeOffset at) =>
         new()
         {
