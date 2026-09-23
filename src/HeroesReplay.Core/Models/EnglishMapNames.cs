@@ -1,9 +1,36 @@
 using System;
+using System.Collections.Generic;
 
 namespace HeroesReplay.Core.Models;
 
 public static class EnglishMapNames
 {
+    // Replay MapAlternativeName and the map-file id, not the localized title.
+    private static readonly Dictionary<string, string> ShortNames = new Dictionary<string, string>
+    {
+        ["alteracpass"] = "Alterac Pass",
+        ["battlefieldofeternity"] = "Battlefield of Eternity",
+        ["blackheartsbay"] = "Blackheart's Bay",
+        ["braxisholdout"] = "Braxis Holdout",
+        ["braxisoutpost"] = "Braxis Outpost",
+        ["controlpoints"] = "Sky Temple",
+        ["crypts"] = "Tomb of the Spider Queen",
+        ["cursedhollow"] = "Cursed Hollow",
+        ["dragonshire"] = "Dragon Shire",
+        ["hanamura"] = "Hanamura Temple",
+        ["hauntedmines"] = "Haunted Mines",
+        ["hauntedwoods"] = "Garden of Terror",
+        ["industrialdistrict"] = "Industrial District",
+        ["lostcavern"] = "Lost Cavern",
+        ["shrines"] = "Infernal Shrines",
+        ["silvercity"] = "Silver City",
+        ["towersofdoom"] = "Towers of Doom",
+        ["volskaya"] = "Volskaya Foundry",
+        ["warheadjunction"] = "Warhead Junction",
+        ["용의둥지"] = "Dragon Shire",
+        ["lelaboratoiredebraxis"] = "Braxis Holdout",
+    };
+
     private static readonly string[] Catalog =
     {
         "Alterac Pass",
@@ -56,7 +83,7 @@ public static class EnglishMapNames
             return null;
         }
 
-        string trimmed = map.Trim().Replace('\u2019', '\'');
+        string trimmed = map.Trim().Replace('\u2019', '\'').Replace('\u00A0', ' ');
         foreach (string name in Catalog)
         {
             if (string.Equals(name, trimmed, StringComparison.OrdinalIgnoreCase))
@@ -65,7 +92,27 @@ public static class EnglishMapNames
             }
         }
 
+        if (ShortNames.TryGetValue(Normalize(trimmed), out string english))
+        {
+            return english;
+        }
+
         return trimmed;
+    }
+
+    private static string Normalize(string value)
+    {
+        var chars = new char[value.Length];
+        int count = 0;
+        foreach (char c in value)
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                chars[count++] = char.ToLowerInvariant(c);
+            }
+        }
+
+        return new string(chars, 0, count);
     }
 
     public static bool IsCatalog(string map)

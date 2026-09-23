@@ -10,7 +10,11 @@ public static class YouTubeEntryBuilder
     {
         HeroesProfileReplay heroesProfileReplay = loaded?.HeroesProfileReplay;
         string requestor = loaded?.RewardQueueItem?.Request?.Login;
-        string map = heroesProfileReplay?.Map ?? loaded?.Replay?.Map;
+        string map = EnglishMapNames.Prefer(
+            heroesProfileReplay?.Map,
+            loaded?.Replay?.Map,
+            loaded?.Replay?.MapAlternativeName
+        );
         string gameType = heroesProfileReplay?.GameType;
         string rank = heroesProfileReplay?.Rank;
         int? replayId = heroesProfileReplay?.Id ?? loaded?.ReplayId;
