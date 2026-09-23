@@ -26,6 +26,23 @@ public class RankImageTests
         Assert.Equal(expected, RankImage.RankFromCacheFileName(fileName));
     }
 
+    [Theory]
+    [InlineData("Diamond 3", "3")]
+    [InlineData("platinum-1", "1")]
+    [InlineData("Master", null)]
+    [InlineData("Grandmaster 4200", null)]
+    public void Division_ReadsOneThroughFive(string rank, string expected)
+    {
+        Assert.Equal(expected, RankImage.Division(rank));
+    }
+
+    [Fact]
+    public void PointsText_RoundsAverageMmr()
+    {
+        Assert.Equal("2670", RankImage.PointsText(2669.6));
+        Assert.Null(RankImage.PointsText(null));
+    }
+
     [Fact]
     public void SourceName_FromLeagueTier()
     {

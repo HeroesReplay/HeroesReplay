@@ -46,6 +46,39 @@ public static class RankImage
         return SourceName(rank) == null ? null : rank;
     }
 
+    /// <summary>Storm League division painted on the badge, 1 through 5. Master and Grandmaster have none.</summary>
+    public static string Division(string rank)
+    {
+        if (string.IsNullOrWhiteSpace(rank))
+        {
+            return null;
+        }
+
+        string[] parts = rank.Trim()
+            .Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+        {
+            return null;
+        }
+
+        if (int.TryParse(parts[^1], out int division) && division is >= 1 and <= 5)
+        {
+            return division.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return null;
+    }
+
+    public static string PointsText(double? mmr)
+    {
+        if (!mmr.HasValue)
+        {
+            return null;
+        }
+
+        return Math.Round(mmr.Value).ToString(CultureInfo.InvariantCulture);
+    }
+
     public static string SourceName(string rank, int? leagueTier = null)
     {
         string key = Normalize(rank, leagueTier);

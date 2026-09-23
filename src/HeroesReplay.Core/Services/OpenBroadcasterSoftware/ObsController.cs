@@ -79,12 +79,21 @@ public class ObsController : IObsController
             if (replayInfo != null)
             {
                 InputSettings sourceSettings = obs.GetInputSettings(replayInfo.InputName);
-                sourceSettings.Settings["read_from_file"] = true;
-                sourceSettings.Settings["file"] = Path.Combine(
+                string path = Path.Combine(
                     context.Current.Directory.FullName,
                     settings.OBS.InfoFileName
                 );
+                sourceSettings.Settings["read_from_file"] = true;
+                sourceSettings.Settings["file"] = path;
                 obs.SetInputSettings(replayInfo.InputName, sourceSettings.Settings);
+                bool show = File.Exists(path) && File.ReadAllText(path).Trim().Length > 0;
+                SetSceneItemVisible(settings.OBS.GameSceneName, replayInfo.InputName, show);
+                logger.LogInformation(
+                    show
+                        ? "OBS replay details {Source} visible."
+                        : "OBS replay details {Source} hidden.",
+                    replayInfo.InputName
+                );
             }
         }
         catch (Exception e)
@@ -277,6 +286,7 @@ public class ObsController : IObsController
         try
         {
             HideRankImages();
+            HideRankCaption();
             ShowRankImage();
         }
         catch (Exception e)
@@ -484,12 +494,55 @@ public class ObsController : IObsController
         {
             SetSceneItemVisible(settings.OBS.GameSceneName, sourceName, visible: true);
             logger.LogInformation("OBS rank image {Source} visible.", sourceName);
+            ShowRankCaption(rank, row?.AverageMmr);
             return true;
         }
         catch (Exception e)
         {
             logger.LogError(e, "Could not show rank image {Source}.", sourceName);
             return false;
+        }
+    }
+
+    private void ShowRankCaption(string rank, double? mmr)
+    {
+        HideRankCaption();
+        string division = RankImage.Division(rank);
+        if (division != null)
+        {
+            SetText(settings.OBS.TierDivisionSourceName, division, visible: true);
+            logger.LogInformation("OBS tier division {Division} visible.", division);
+            return;
+        }
+
+        string points = RankImage.PointsText(mmr);
+        if (points != null)
+        {
+            SetText(settings.OBS.TierRankPointsSourceName, points, visible: true);
+            logger.LogInformation("OBS rank points {Points} visible.", points);
+        }
+    }
+
+    private void HideRankCaption()
+    {
+        HideSceneItem(settings.OBS.TierDivisionSourceName);
+        HideSceneItem(settings.OBS.TierRankPointsSourceName);
+    }
+
+    private void HideSceneItem(string sourceName)
+    {
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
+            return;
+        }
+
+        try
+        {
+            SetSceneItemVisible(settings.OBS.GameSceneName, sourceName, visible: false);
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not hide {Source}.", sourceName);
         }
     }
 
@@ -511,6 +564,27 @@ public class ObsController : IObsController
                 logger.LogDebug(e, "Could not hide {Source}.", rankImageSourceName);
             }
         }
+    }
+
+    private void SetText(string sourceName, string text, bool visible)
+    {
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
+            return;
+        }
+
+        InputBasicInfo input = FindInput(sourceName);
+        if (input == null)
+        {
+            logger.LogDebug("OBS source {Source} was not found.", sourceName);
+            return;
+        }
+
+        InputSettings sourceSettings = obs.GetInputSettings(input.InputName);
+        sourceSettings.Settings["read_from_file"] = false;
+        sourceSettings.Settings["text"] = text;
+        obs.SetInputSettings(input.InputName, sourceSettings.Settings);
+        SetSceneItemVisible(settings.OBS.GameSceneName, input.InputName, visible);
     }
 
     private void SetSceneItemVisible(string sceneName, string sourceName, bool visible)

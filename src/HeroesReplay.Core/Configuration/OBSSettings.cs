@@ -28,4 +28,6 @@ public class OBSSettings
     public IEnumerable<string> RankImagesSourceNames { get; set; }
 
     public string InfoSourceName { get; set; }
+    public string TierDivisionSourceName { get; set; } = "tier-division";
+    public string TierRankPointsSourceName { get; set; } = "rank-points";
 }
