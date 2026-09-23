@@ -10,8 +10,8 @@ Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `Her
 
 ## Before editing
 
-1. Load the matching **repo skill** under `.grok/skills/` (dotnet, CLI, OBS, Twitch, op-service-account).
-2. Prefer official **dotnet/skills** plugins for generic .NET work (see below).
+1. Load the matching skill under `.grok/skills/` (HeroesReplay skills and the vendored official .NET skills).
+2. For generic .NET work, use the vendored `dotnet/skills` set in that folder (`csharp-refactoring`, MSBuild, NuGet, test, diagnostics, upgrade).
 3. Format with CSharpier. Do not hand-format.
 
 ```powershell
@@ -142,21 +142,21 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 | `.grok/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
 | `.grok/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
 
-Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`.
+Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`. `csharp-solid` is also in this folder.
 
-## External skills worth installing
+## Official .NET skills
 
-Official [.NET agent skills](https://github.com/dotnet/skills) (marketplace `dotnet/skills`):
+These are installed under `.grok/skills/<name>/` from [dotnet/skills](https://github.com/dotnet/skills) commit `e115891bd2ac` (MIT, `.grok/skills/dotnet-skills.LICENSE.txt`). Load the skill whose name matches the task. Each `SKILL.md` is the source of truth for when to use it.
 
-| Plugin | Why it helps here |
+| Plugin | Skills |
 | --- | --- |
-| `dotnet` / `csharp-refactoring` | File-scoped namespaces, modern C# |
-| `dotnet-upgrade` | Further TFM/language migrations |
-| `dotnet-msbuild` | slnx, Directory.Build.*, build breaks |
-| `dotnet-nuget` | Central package management |
-| `dotnet-test` | xUnit runs and fixtures |
-| `dotnet-diag` | GDI/process leaks, perf |
+| `dotnet` | `csharp-refactoring`, `setup-local-sdk` |
+| `dotnet-upgrade` | `dotnet-aot-compat`, `migrate-dotnet8-to-dotnet9`, `migrate-dotnet9-to-dotnet10`, `migrate-dotnet10-to-dotnet11`, `migrate-nullable-references`, `thread-abort-migration` |
+| `dotnet-msbuild` | `binlog-failure-analysis`, `binlog-generation`, `build-parallelism`, `build-perf-baseline`, `build-perf-diagnostics`, `check-bin-obj-clash`, `copy-to-output-directory`, `directory-build-organization`, `eval-performance`, `extension-points`, `including-generated-files`, `incremental-build`, `item-management`, `msbuild-antipatterns`, `msbuild-modernization`, `property-patterns`, `resolve-project-references`, `target-authoring` |
+| `dotnet-nuget` | `convert-to-cpm` |
+| `dotnet-test` | `assertion-quality`, `code-testing-agent`, `code-testing-extensions`, `coverage-analysis`, `crap-score`, `detect-static-dependencies`, `filter-syntax`, `find-untested-sources`, `generate-testability-wrappers`, `grade-tests`, `migrate-static-to-wrapper`, `mtp-hot-reload`, `platform-detection`, `run-tests`, `scaffold-dotnet-test-project`, `test-analysis-extensions`, `test-anti-patterns`, `test-gap-analysis`, `test-smell-detection`, `test-tagging`, `testability-obstacle`, `writing-mstest-tests` |
+| `dotnet-diag` | `analyzing-dotnet-performance`, `android-tombstone-symbolication`, `apple-crash-symbolication`, `clr-activation-debugging`, `dotnet-trace-collect`, `dump-collect`, `microbenchmarking` |
 
-Grok Build bundled skills already useful: `review` (maintainability bar), `create-skill`, `long-running-background-tasks` (OBS/game process).
+Grok already provides `review`, `create-skill`, and `long-running-background-tasks`. They stay with the tool and are not copied into this repo.
 
 There is no high-quality public skill specifically for **obs-websocket 5** or **TwitchLib 3.x** — that is why the two repo skills exist. Twitch EventSub (not PubSub) is the long-term replacement for channel-point redemptions.
