@@ -678,7 +678,11 @@ public class Spectator : ISpectator
             status.GatesOpen = data?.GatesOpen.ToString();
             status.CoreKilled = data?.CoreKilled.ToString();
             status.SessionEnd = SessionEndTime > TimeSpan.Zero ? SessionEndTime.ToString() : null;
-            status.Map = data?.LoadedReplay?.Replay?.Map;
+            status.Map = EnglishMapNames.Prefer(
+                data?.LoadedReplay?.HeroesProfileReplay?.Map,
+                data?.LoadedReplay?.Replay?.Map,
+                data?.LoadedReplay?.Replay?.MapAlternativeName
+            );
             status.ReplayPath = data?.LoadedReplay?.FileInfo?.FullName;
             status.ReplayVersion = data?.LoadedReplay?.Replay?.ReplayVersion;
             status.ReplayId = data?.LoadedReplay?.ReplayId;
@@ -705,7 +709,12 @@ public class Spectator : ISpectator
                 return;
             }
 
-            status.Map = Data.LoadedReplay.Replay?.Map ?? status.Map;
+            status.Map =
+                EnglishMapNames.Prefer(
+                    Data.LoadedReplay.HeroesProfileReplay?.Map,
+                    Data.LoadedReplay.Replay?.Map,
+                    Data.LoadedReplay.Replay?.MapAlternativeName
+                ) ?? status.Map;
             status.ReplayPath = Data.LoadedReplay.FileInfo?.FullName ?? status.ReplayPath;
             status.ReplayVersion = Data.LoadedReplay.Replay?.ReplayVersion ?? status.ReplayVersion;
             status.ReplayId = Data.LoadedReplay.ReplayId ?? status.ReplayId;

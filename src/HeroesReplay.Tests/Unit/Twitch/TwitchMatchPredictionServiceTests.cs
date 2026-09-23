@@ -59,10 +59,44 @@ public class TwitchMatchPredictionServiceTests
         Assert.Equal(0, http.CreateCount);
     }
 
+    [Fact]
+    public async Task Open_LockedPredictionForAnotherMap_DoesNotResolveIt()
+    {
+        var http = new RecordingHttpHandler();
+        http.LockedTitle = "Towers of Doom: who wins?";
+        ITwitchAPI api = FakeTwitchApi.Create(http);
+        var service = new TwitchMatchPredictionService(
+            NullLogger<TwitchMatchPredictionService>.Instance,
+            new AppSettings
+            {
+                Twitch = new TwitchSettings
+                {
+                    EnablePredictions = true,
+                    DryRunMode = false,
+                    Channel = "saltysadism",
+                    PredictionWindow = TimeSpan.FromMinutes(2),
+                },
+                Capture = new CaptureSettings { Method = CaptureMethod.BitBlt },
+            },
+            api,
+            new PredictionReportWriter(
+                NullLogger<PredictionReportWriter>.Instance,
+                new AppSettings()
+            )
+        );
+
+        bool opened = await service.OpenAsync("Garden of Terror", CancellationToken.None);
+
+        Assert.False(opened);
+        Assert.Null(http.EndPredictionBody);
+        Assert.Equal(0, http.CreateCount);
+    }
+
     private sealed class RecordingHttpHandler : IHttpCallHandler
     {
         public string EndPredictionBody { get; private set; }
         public int CreateCount { get; private set; }
+        public string LockedTitle { get; set; } = "Cursed Hollow: who wins?";
 
         public Task<KeyValuePair<int, string>> GeneralRequestAsync(
             string url,
@@ -95,7 +129,9 @@ public class TwitchMatchPredictionServiceTests
                             + "\"broadcaster_id\":\""
                             + BroadcasterId
                             + "\","
-                            + "\"title\":\"Haunted Mines: who wins?\","
+                            + "\"title\":\""
+                            + LockedTitle
+                            + "\","
                             + "\"status\":\"LOCKED\","
                             + "\"outcomes\":["
                             + "{\"id\":\""

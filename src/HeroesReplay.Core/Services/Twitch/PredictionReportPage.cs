@@ -29,7 +29,7 @@ public static class PredictionReportPage
         html.Append("</h1><p>");
         if (string.IsNullOrWhiteSpace(report?.WinningOutcome))
         {
-            html.Append("No winning outcome.");
+            html.Append("Voting is open.");
         }
         else
         {

@@ -155,6 +155,22 @@ public class PredictionSessionTrackerTests
         Assert.Equal(PredictionSignalKind.None, second.Kind);
     }
 
+    [Fact]
+    public void Release_LetsTheNextReplayOpenWithItsOwnMap()
+    {
+        var tracker = new PredictionSessionTracker();
+        tracker.Observe(Live(replayId: 10, at: T0), T0);
+        tracker.Release(10);
+
+        SpectatorStatus next = Live(replayId: 11, at: T0.AddSeconds(2));
+        next.Map = "Garden of Terror";
+        PredictionSignal signal = tracker.Observe(next, T0.AddSeconds(2));
+
+        Assert.Equal(PredictionSignalKind.Open, signal.Kind);
+        Assert.Equal(11, signal.ReplayId);
+        Assert.Equal("Garden of Terror", signal.Map);
+    }
+
     private static SpectatorStatus Live(int replayId, DateTimeOffset at) =>
         new()
         {

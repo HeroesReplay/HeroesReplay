@@ -93,7 +93,14 @@ public sealed class StatusPredictionWatcher
                     signal.ReplayId,
                     signal.Map
                 );
-                await predictions.OpenAsync(signal.Map, cancellationToken).ConfigureAwait(false);
+                bool opened = await predictions
+                    .OpenAsync(signal.Map, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!opened)
+                {
+                    tracker.Release(signal.ReplayId);
+                }
+
                 break;
             case PredictionSignalKind.Resolve:
                 logger.LogInformation(

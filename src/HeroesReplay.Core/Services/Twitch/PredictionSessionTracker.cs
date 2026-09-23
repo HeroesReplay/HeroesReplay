@@ -33,6 +33,16 @@ public sealed class PredictionSessionTracker
     private DateTimeOffset openedAt;
     private string openMap;
 
+    public void Release(int replayId)
+    {
+        if (openReplayId == replayId)
+        {
+            openReplayId = null;
+            openMap = null;
+            openedAt = default;
+        }
+    }
+
     public PredictionSignal Observe(SpectatorStatus status, DateTimeOffset utcNow)
     {
         if (status == null)

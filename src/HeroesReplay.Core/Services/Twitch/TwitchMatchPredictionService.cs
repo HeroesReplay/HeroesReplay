@@ -43,21 +43,40 @@ public class TwitchMatchPredictionService : IMatchPredictionService
     }
 
     public Task StartAsync(LoadedReplay replay, CancellationToken cancellationToken) =>
-        OpenAsync(replay?.Replay?.Map, cancellationToken);
+        OpenAsync(
+            EnglishMapNames.Prefer(null, replay?.Replay?.Map, replay?.Replay?.MapAlternativeName),
+            cancellationToken
+        );
 
-    public async Task OpenAsync(string map, CancellationToken cancellationToken)
+    public async Task<bool> OpenAsync(string map, CancellationToken cancellationToken)
     {
         if (!settings.Twitch.EnablePredictions || settings.Capture.Method == CaptureMethod.None)
         {
-            return;
+            return false;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        string title = MatchPrediction.TitleForMap(map);
+        reports.TryWriteCurrent(title);
         await CancelActiveAsync(cancellationToken).ConfigureAwait(false);
 
         string channelId = await GetChannelIdAsync().ConfigureAwait(false);
-        bool channelClear = await CancelChannelPredictionAsync(channelId, cancellationToken)
+        ChannelPrediction channel = await CancelChannelPredictionAsync(
+            channelId,
+            title,
+            cancellationToken
+        )
             .ConfigureAwait(false);
+        if (channel == ChannelPrediction.Adopted)
+        {
+            return true;
+        }
+
+        if (channel == ChannelPrediction.Blocked)
+        {
+            return false;
+        }
+
         var request = new CreatePredictionRequest
         {
             BroadcasterId = channelId,
@@ -79,12 +98,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 request.Title,
                 request.PredictionWindowSeconds
             );
-            return;
-        }
-
-        if (!channelClear)
-        {
-            return;
+            return true;
         }
 
         CreatePredictionResponse created;
@@ -100,13 +114,13 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 "Could not open \"{Title}\". Twitch already has a prediction on this channel.",
                 request.Title
             );
-            return;
+            return false;
         }
-        Prediction prediction = created?.Data?[0];
+        Prediction prediction = created?.Data?.FirstOrDefault();
         if (prediction == null || string.IsNullOrWhiteSpace(prediction.Id))
         {
             logger.LogWarning("Helix CreatePrediction returned no prediction.");
-            return;
+            return false;
         }
 
         string blue = FindOutcomeId(prediction.Outcomes, MatchPrediction.Blue);
@@ -125,6 +139,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             request.Title,
             request.PredictionWindowSeconds
         );
+        return true;
     }
 
     public async Task TestAsync(int? winningTeam, CancellationToken cancellationToken)
@@ -287,15 +302,23 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         return team;
     }
 
-    private async Task<bool> CancelChannelPredictionAsync(
+    private enum ChannelPrediction
+    {
+        Clear,
+        Adopted,
+        Blocked,
+    }
+
+    private async Task<ChannelPrediction> CancelChannelPredictionAsync(
         string channelId,
+        string wantedTitle,
         CancellationToken cancellationToken
     )
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (settings.Twitch.DryRunMode || string.IsNullOrWhiteSpace(channelId))
         {
-            return true;
+            return ChannelPrediction.Clear;
         }
 
         try
@@ -312,27 +335,37 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             );
             if (active == null)
             {
-                return true;
+                return ChannelPrediction.Clear;
             }
 
             if (active.Status == PredictionStatus.LOCKED)
             {
-                // Twitch allows RESOLVED on a locked prediction, but not a second create.
-                // Keep the outcome ids so the match winner can close it.
-                lock (gate)
+                if (string.Equals(active.Title, wantedTitle, StringComparison.OrdinalIgnoreCase))
                 {
-                    broadcasterId = channelId;
-                    predictionId = active.Id;
-                    blueOutcomeId = FindOutcomeId(active.Outcomes, MatchPrediction.Blue);
-                    redOutcomeId = FindOutcomeId(active.Outcomes, MatchPrediction.Red);
-                    adoptedLocked = true;
+                    lock (gate)
+                    {
+                        broadcasterId = channelId;
+                        predictionId = active.Id;
+                        blueOutcomeId = FindOutcomeId(active.Outcomes, MatchPrediction.Blue);
+                        redOutcomeId = FindOutcomeId(active.Outcomes, MatchPrediction.Red);
+                        adoptedLocked = true;
+                    }
+
+                    logger.LogInformation(
+                        "Prediction {PredictionId} is already locked for {Title}. It will close with this match.",
+                        active.Id,
+                        active.Title
+                    );
+                    return ChannelPrediction.Adopted;
                 }
 
                 logger.LogWarning(
-                    "Prediction {PredictionId} is locked. It will be resolved with the match winner.",
-                    active.Id
+                    "Prediction {PredictionId} ({Title}) is locked for a different match than {Wanted}. Twitch will not refund a locked prediction, so a new one cannot open yet.",
+                    active.Id,
+                    active.Title,
+                    wantedTitle
                 );
-                return false;
+                return ChannelPrediction.Blocked;
             }
 
             await api
@@ -343,15 +376,15 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 )
                 .ConfigureAwait(false);
             logger.LogInformation(
-                "Canceled the channel prediction {PredictionId} that was already open.",
+                "Canceled prediction {PredictionId}. Channel points for that prediction are refunded.",
                 active.Id
             );
-            return true;
+            return ChannelPrediction.Clear;
         }
         catch (Exception e)
         {
             logger.LogWarning(e, "Could not clear the prediction already open on the channel.");
-            return false;
+            return ChannelPrediction.Blocked;
         }
     }
 

@@ -25,6 +25,25 @@ public sealed class PredictionReportWriter
             ? null
             : Path.Combine(settings.Location.DataDirectory, ReportFileName);
 
+    public void TryWriteCurrent(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(ReportPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var report = new PredictionReport { Title = title };
+            File.WriteAllText(ReportPath, PredictionReportPage.ToHtml(report));
+            logger.LogInformation("Prediction scene {Path} set to {Title}.", ReportPath, title);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not write the current prediction scene.");
+        }
+    }
+
     public void TryWrite(Prediction prediction)
     {
         if (prediction == null || string.IsNullOrWhiteSpace(ReportPath))
