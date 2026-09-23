@@ -377,6 +377,106 @@ public class ServiceSupervisorTests
         }
     }
 
+    [Fact]
+    public void Start_EnsuresDashboardBeforeChildProcesses()
+    {
+        string path = TempLock();
+        try
+        {
+            var order = new List<string>();
+            int code = ServiceSupervisor.Start(
+                path,
+                @"C:\heroesreplay\heroesreplay.exe",
+                pid => null,
+                (name, arguments) =>
+                {
+                    order.Add(arguments);
+                    return 5;
+                },
+                () => order.Add("clear"),
+                () => order.Add("dashboard")
+            );
+
+            Assert.Equal(0, code);
+            Assert.Equal("clear", order[0]);
+            Assert.Equal("dashboard", order[1]);
+            Assert.Equal("spectate heroesprofile", order[2]);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Start_DoesNotEnsureDashboardWhenServicesAreAlreadyRunning()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceLockStore.Save(
+                path,
+                new ServiceLock
+                {
+                    StartedAt = DateTimeOffset.UtcNow,
+                    Processes = new List<ServiceProcessRecord>
+                    {
+                        new()
+                        {
+                            Name = "spectate",
+                            Pid = 40,
+                            Arguments = "spectate heroesprofile",
+                        },
+                    },
+                }
+            );
+            int ensures = 0;
+            int code = ServiceSupervisor.Start(
+                path,
+                @"C:\heroesreplay\heroesreplay.exe",
+                pid => pid == 40 ? "heroesreplay" : null,
+                (name, arguments) => 1,
+                clearStopFile: () => { },
+                ensureDashboard: () => ensures++
+            );
+
+            Assert.Equal(1, code);
+            Assert.Equal(0, ensures);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Start_ContinuesWhenDashboardEnsureThrows()
+    {
+        string path = TempLock();
+        try
+        {
+            int starts = 0;
+            int code = ServiceSupervisor.Start(
+                path,
+                @"C:\heroesreplay\heroesreplay.exe",
+                pid => null,
+                (name, arguments) =>
+                {
+                    starts++;
+                    return 9;
+                },
+                ensureDashboard: () => throw new InvalidOperationException("no aspire")
+            );
+
+            Assert.Equal(0, code);
+            Assert.Equal(4, starts);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
     private static string TempLock() =>
         Path.Combine(Path.GetTempPath(), $"heroesreplay-services-{Guid.NewGuid():N}.json");
 }

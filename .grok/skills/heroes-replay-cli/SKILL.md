@@ -22,10 +22,10 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 
 | Command | Behavior |
 | --- | --- |
-| `spectate file [--file path]` | Play one `.StormReplay` or each file in a directory, then exit |
-| `spectate heroesprofile` | Play `.StormReplay` files already in `Data\Standard` and `Data\Requests`. Does not call Heroes Profile. |
+| `spectate file [--file path]` | Play one `.StormReplay` or each file in a directory, then exit. Starts the Aspire dashboard when OTLP :4317 is down; dashboard failure does not fail the replay. |
+| `spectate heroesprofile` | Play `.StormReplay` files already in `Data\Standard` and `Data\Requests`. Does not call Heroes Profile. Same dashboard startup as `spectate file`. |
 | `heroesprofile download` | List and download Storm League replays into `Data\Standard` and `Data\Requests`. Does not launch the game. |
-| `services start` | Start spectate, `twitch connect`, `heroesprofile download`, and `youtube uploader` as separate processes. Logs under `%LOCALAPPDATA%\HeroesReplay\logs`. Does not start Twitch ingest. |
+| `services start` | Start spectate, `twitch connect`, `heroesprofile download`, and `youtube uploader` as separate processes. Logs under `%LOCALAPPDATA%\HeroesReplay\logs`. Does not start Twitch ingest. Starts the Aspire dashboard first when OTLP :4317 is not listening; a dashboard failure does not fail the services. |
 | `services stop` | Write `services.stop`, wait up to 20s, kill any `heroesreplay` pid still recorded, and close Heroes of the Storm. Do not leave the game client open after this. |
 | `services status` | Which of those processes are still alive, plus `status.json`. |
 | `calculators coordinates [--file path]` | Parse replay, print coordinate samples, build Kill/NearEnemy/Roaming focus map |
@@ -39,7 +39,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
 | `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). Spectate applies this automatically if the game is not running. Capture is GDI BitBlt; windowed 1080p is required. |
 | `client status` | Report preset mismatches |
-| `otel up` / `otel down` / `otel status` | Optional Aspire Dashboard. This machine already listens on UI http://127.0.0.1:18888 and OTLP gRPC :4317 (no Docker). Spectate, Twitch, download, and YouTube each export under their own service name. |
+| `otel up` / `otel down` / `otel status` | Standalone Aspire dashboard via the local `Aspire.Cli` tool (`dotnet tool restore`, then `dotnet aspire dashboard run --allow-anonymous`). UI http://127.0.0.1:18888, OTLP gRPC http://127.0.0.1:4317. No Docker. Spectate, Twitch, download, and YouTube each export logs, metrics, and traces under their own service name. |
 | `twitch connect` | Chat, PubSub, and Blue/Red predictions from `status.json`. Does not launch the game. Blocks. |
 | `twitch rewards generate\|submit\|list\|remove-unranked-draft\|test` | Helix custom rewards. `submit` also deletes leftover Unranked Draft titles. `remove-unranked-draft` deletes only `(UD)` / `Unranked Draft` titles. `test` runs the local redeem handler |
 | `twitch predictions test [--outcome Blue\|Red\|cancel]` | Create then resolve/cancel a 30s Blue/Red prediction |

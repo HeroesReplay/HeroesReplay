@@ -33,6 +33,7 @@ public class SpectateFileCommand : Command
 
     protected async Task CommandAsync(string path, CancellationToken cancellationToken)
     {
+        AspireDashboardHost.EnsureRunning();
         var replayPath = new ReplayPathOptions { Path = path, PlayOnce = true };
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()

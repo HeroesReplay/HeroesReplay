@@ -27,6 +27,7 @@ public class SpectateHeroesProfileApiCommand : Command
 
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
+        AspireDashboardHost.EnsureRunning();
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
             .AddSpectateServices(stop.Token, typeof(ReplayCacheProvider))

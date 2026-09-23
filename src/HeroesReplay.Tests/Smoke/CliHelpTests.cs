@@ -57,9 +57,16 @@ public class CliHelpTests
         ParseResult result = root.Parse("otel --help");
         Assert.Empty(result.Errors);
         Command otel = root.Subcommands.Single(c => c.Name == "otel");
+        Assert.Contains("No Docker", otel.Description);
+        Assert.DoesNotContain("compose", otel.Description);
+        Assert.DoesNotContain("container", otel.Description);
         Assert.Contains(otel.Subcommands, c => c.Name == "up");
         Assert.Contains(otel.Subcommands, c => c.Name == "down");
         Assert.Contains(otel.Subcommands, c => c.Name == "status");
+        Command up = otel.Subcommands.Single(c => c.Name == "up");
+        Assert.DoesNotContain("container", up.Description);
+        Assert.DoesNotContain("Docker", up.Description);
+        Assert.Contains("Aspire", up.Description);
     }
 
     [Fact]

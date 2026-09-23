@@ -14,7 +14,7 @@ namespace HeroesReplay.CLI;
 
 public static class HeroesReplayOpenTelemetry
 {
-    public const string DefaultOtlpEndpoint = "http://127.0.0.1:4317";
+    public const string DefaultOtlpEndpoint = AspireDashboardHost.OtlpGrpcEndpoint;
     public const string DefaultServiceName = "heroesreplay";
 
     public static IServiceCollection AddHeroesReplayOpenTelemetry(

@@ -15,7 +15,8 @@ public static class ServiceSupervisor
         string exePath,
         Func<int, string> processNameOrNull,
         Func<string, string, int?> startProcess,
-        Action clearStopFile = null
+        Action clearStopFile = null,
+        Action ensureDashboard = null
     )
     {
         if (
@@ -43,6 +44,16 @@ public static class ServiceSupervisor
         }
 
         clearStopFile?.Invoke();
+        try
+        {
+            ensureDashboard?.Invoke();
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(
+                $"Aspire dashboard was not started. Continuing without the dashboard. {e.Message}"
+            );
+        }
 
         var started = new List<ServiceProcessRecord>();
         foreach ((string name, string arguments) in ServiceProcessPlan.All)
@@ -80,6 +91,9 @@ public static class ServiceSupervisor
 
         Console.WriteLine(
             "Twitch ingest was not started. Streaming stays at OBS:StreamingEnabled."
+        );
+        Console.WriteLine(
+            $"OpenTelemetry export: {AspireDashboardHost.OtlpGrpcEndpoint} (Aspire dashboard {AspireDashboardHost.UiUrl})."
         );
         return 0;
     }

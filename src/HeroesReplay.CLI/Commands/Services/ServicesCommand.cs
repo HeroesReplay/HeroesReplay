@@ -39,7 +39,11 @@ public class ServicesCommand : Command
                     exe,
                     ProcessNameOrNull,
                     (name, arguments) => StartProcess(exe, arguments),
-                    () => ServiceStopFile.Clear()
+                    () => ServiceStopFile.Clear(),
+                    () =>
+                    {
+                        AspireDashboardHost.EnsureRunning();
+                    }
                 );
                 return Task.FromResult(code);
             }

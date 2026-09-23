@@ -50,9 +50,5 @@
             <Link>Assets\Interfaces\AhliObs 0.75.StormInterface</Link>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Include="..\..\deploy\aspire\docker-compose.yml">
-            <Link>Assets\aspire\docker-compose.yml</Link>
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
     </ItemGroup>
 </Project>
