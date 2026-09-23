@@ -85,47 +85,6 @@ public static class RankImage
         return key == null ? null : key + "-image";
     }
 
-    public static string FromAverageMmr(double? mmr)
-    {
-        if (!mmr.HasValue)
-        {
-            return null;
-        }
-
-        double value = mmr.Value;
-        if (value < 1800)
-        {
-            return "Bronze";
-        }
-
-        if (value < 2100)
-        {
-            return "Silver";
-        }
-
-        if (value < 2400)
-        {
-            return "Gold";
-        }
-
-        if (value < 2700)
-        {
-            return "Platinum";
-        }
-
-        if (value < 3000)
-        {
-            return "Diamond";
-        }
-
-        if (value < 3300)
-        {
-            return "Master";
-        }
-
-        return "Grandmaster";
-    }
-
     public static double? AveragePlayerMmr(UntypedNode players)
     {
         var values = new List<double>();

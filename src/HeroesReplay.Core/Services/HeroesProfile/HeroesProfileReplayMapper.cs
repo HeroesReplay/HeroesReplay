@@ -59,7 +59,7 @@ public static class HeroesProfileReplayMapper
             Map = detail.GameMap?.Name ?? detail.GameMap?.SanitizedMapName,
             GameDate = detail.GameDate,
             Downloadable = detail.Downloadable,
-            Rank = RankImage.FromAverageMmr(RankImage.AveragePlayerMmr(detail.Players)),
+            AverageMmr = RankImage.AveragePlayerMmr(detail.Players),
         };
     }
 

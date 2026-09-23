@@ -470,11 +470,6 @@ public class ObsController : IObsController
         int? leagueTier = row?.LeagueTier;
         if (string.IsNullOrWhiteSpace(RankImage.SourceName(rank, leagueTier)))
         {
-            rank = RankImage.FromAverageMmr(row?.AverageMmr) ?? rank;
-        }
-
-        if (string.IsNullOrWhiteSpace(RankImage.SourceName(rank, leagueTier)))
-        {
             rank = RankImage.RankFromCacheFileName(context.Current?.LoadedReplay?.FileInfo?.Name);
             leagueTier = null;
         }

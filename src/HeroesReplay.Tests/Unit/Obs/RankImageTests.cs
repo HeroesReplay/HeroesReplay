@@ -1,3 +1,4 @@
+using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using Xunit;
 
@@ -29,11 +30,33 @@ public class RankImageTests
     [Theory]
     [InlineData("Diamond 3", "3")]
     [InlineData("platinum-1", "1")]
+    [InlineData("Gold 3", "3")]
+    [InlineData("Bronze 5", "5")]
     [InlineData("Master", null)]
+    [InlineData("Grandmaster", null)]
     [InlineData("Grandmaster 4200", null)]
+    [InlineData("Gold", null)]
+    [InlineData("Platinum", null)]
     public void Division_ReadsOneThroughFive(string rank, string expected)
     {
         Assert.Equal(expected, RankImage.Division(rank));
+    }
+
+    [Theory]
+    [InlineData("Gold 3", "gold-image", "3")]
+    [InlineData("Bronze 5", "bronze-image", "5")]
+    [InlineData("Master", "master-image", null)]
+    [InlineData("Grandmaster", "grandmaster-image", null)]
+    [InlineData("Gold", "gold-image", null)]
+    [InlineData("Platinum", "platinum-image", null)]
+    public void Badge_UsesLeagueImageAndDivisionOnlyWhenPresent(
+        string rank,
+        string image,
+        string division
+    )
+    {
+        Assert.Equal(image, RankImage.SourceName(rank));
+        Assert.Equal(division, RankImage.Division(rank));
     }
 
     [Fact]
@@ -53,8 +76,9 @@ public class RankImageTests
     [InlineData(1700, "Bronze")]
     [InlineData(2977, "Diamond")]
     [InlineData(3400, "Grandmaster")]
-    public void FromAverageMmr_MapsLobby(double mmr, string rank)
+    public void FromAverageMmr_MapsLobby(double mmr, string staleLadder)
     {
-        Assert.Equal(rank, RankImage.FromAverageMmr(mmr));
+        Assert.True(mmr > 0);
+        Assert.Null(HeroesProfileRankEnricher.Resolve("Storm League", staleLadder, null));
     }
 }

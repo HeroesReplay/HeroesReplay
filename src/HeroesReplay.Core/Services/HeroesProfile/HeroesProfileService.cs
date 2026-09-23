@@ -31,6 +31,7 @@ public class HeroesProfileService : IHeroesProfileService
     private readonly IAsyncPolicy<IEnumerable<HeroesProfileReplay>> replaysByFilterCachePolicy;
     private readonly IAsyncPolicy<HeroesProfileReplay> replayCachePolicy;
     private readonly IAsyncPolicy<int> maxReplayIdCachePolicy;
+    private readonly IAsyncPolicy<string> tierCachePolicy;
     private readonly HttpClient httpClient;
     private readonly HeroesProfileClient kiotaClient;
 
@@ -79,6 +80,19 @@ public class HeroesProfileService : IHeroesProfileService
         maxReplayIdCachePolicy = Policy.CacheAsync(
             cacheProvider: this.cacheProvider.AsyncFor<int>(),
             ttlStrategy: new ResultTtl<int>((context, replay) => new Ttl(TimeSpan.FromHours(1))),
+            onCacheGet: OnCacheGet,
+            onCachePut: OnCachePut,
+            onCacheMiss: OnCacheMiss,
+            onCacheGetError: OnCacheGetError,
+            onCachePutError: OnCachePutError
+        );
+
+        tierCachePolicy = Policy.CacheAsync(
+            cacheProvider: this.cacheProvider.AsyncFor<string>(),
+            ttlStrategy: new ResultTtl<string>(
+                (context, tier) =>
+                    new Ttl(string.IsNullOrWhiteSpace(tier) ? TimeSpan.Zero : TimeSpan.FromHours(1))
+            ),
             onCacheGet: OnCacheGet,
             onCachePut: OnCachePut,
             onCacheMiss: OnCacheMiss,
@@ -315,31 +329,132 @@ public class HeroesProfileService : IHeroesProfileService
         CancellationToken cancellationToken
     )
     {
-        if (replay == null || !string.IsNullOrWhiteSpace(replay.Rank))
+        if (replay == null)
         {
+            return;
+        }
+
+        if (!HeroesProfileRankEnricher.ShouldLookup(replay))
+        {
+            string kept = HeroesProfileRankEnricher.Resolve(replay.GameType, replay.Rank, null);
+            if (
+                !string.IsNullOrWhiteSpace(replay.Rank)
+                && string.IsNullOrWhiteSpace(kept)
+                && !HeroesProfileRankEnricher.IsStormLeague(replay.GameType)
+            )
+            {
+                logger.LogInformation(
+                    "Replay {ReplayId} is not Storm League; rank badge hidden.",
+                    replay.Id
+                );
+            }
+
+            replay.Rank = kept;
             return;
         }
 
         try
         {
-            var detail = await kiotaClient
-                .Replay[replay.Id]
-                .GetAsync(cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-            double? mmr = RankImage.AveragePlayerMmr(detail?.Players);
+            double? mmr = replay.AverageMmr;
+            try
+            {
+                var detail = await kiotaClient
+                    .Replay[replay.Id]
+                    .GetAsync(cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+                double? fromPlayers = RankImage.AveragePlayerMmr(detail?.Players);
+                if (fromPlayers.HasValue)
+                {
+                    mmr = fromPlayers;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(
+                    e,
+                    "Could not load replay {ReplayId} to average player_mmr.",
+                    replay.Id
+                );
+            }
+
             replay.AverageMmr = mmr ?? replay.AverageMmr;
-            replay.Rank = RankImage.FromAverageMmr(mmr);
+            int? rounded = HeroesProfileRankEnricher.RoundMmr(mmr);
+            if (!rounded.HasValue)
+            {
+                replay.Rank = null;
+                logger.LogWarning(
+                    "Replay {ReplayId} has no average player_mmr; rank badge hidden.",
+                    replay.Id
+                );
+                return;
+            }
+
+            string tier = await Policy
+                .Handle<Exception>(exception =>
+                    exception is not OperationCanceledException && ShouldRetryKiota(exception)
+                )
+                .WaitAndRetryAsync(
+                    retryCount: 3,
+                    sleepDurationProvider: _ => TimeSpan.FromSeconds(1)
+                )
+                .ExecuteAsync(
+                    ct =>
+                        tierCachePolicy.ExecuteAsync(
+                            (context, token) => LookupStormLeagueTierAsync(rounded.Value, token),
+                            new PollyContext(operationKey: $"sl-mmr-tier:{rounded.Value}"),
+                            ct
+                        ),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+
+            replay.Rank = HeroesProfileRankEnricher.Resolve(replay.GameType, replay.Rank, tier);
+            if (string.IsNullOrWhiteSpace(replay.Rank))
+            {
+                logger.LogWarning(
+                    "Replay {ReplayId} Storm League tier lookup failed for MMR {Mmr}; rank badge hidden.",
+                    replay.Id,
+                    rounded.Value
+                );
+                return;
+            }
+
             logger.LogInformation(
                 "Replay {ReplayId} rank {Rank} (avg player_mmr {Mmr}).",
                 replay.Id,
-                replay.Rank ?? "(none)",
+                replay.Rank,
                 mmr
             );
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception e)
         {
+            replay.Rank = HeroesProfileRankEnricher.Resolve(replay.GameType, replay.Rank, null);
             logger.LogWarning(e, "Could not fill rank for replay {ReplayId}.", replay.Id);
         }
+    }
+
+    private async Task<string> LookupStormLeagueTierAsync(
+        int mmr,
+        CancellationToken cancellationToken
+    )
+    {
+        string tier = await kiotaClient
+            .GetMmrTierAsync("Storm League", mmr, cancellationToken)
+            .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(tier) || RankImage.SourceName(tier) == null)
+        {
+            return string.Empty;
+        }
+
+        return tier.Trim();
     }
 
     private async Task<ReplaysGetResponse> GetReplaysPageAsync(
