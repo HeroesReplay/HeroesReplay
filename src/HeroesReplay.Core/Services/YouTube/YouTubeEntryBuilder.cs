@@ -36,7 +36,7 @@ public static class YouTubeEntryBuilder
                 " - ",
                 new[] { map, id, gameType, rank }.Where(part => !string.IsNullOrWhiteSpace(part))
             ),
-            PrivacyStatus = youtube?.PrivacyStatus ?? "private",
+            PrivacyStatus = youtube?.PrivacyStatus ?? "public",
             CategoryId = youtube?.CategoryId,
             DescriptionLines = descriptionLines,
             Tags = new[] { gameType, map }.Where(t => !string.IsNullOrWhiteSpace(t)).ToArray(),

@@ -43,13 +43,17 @@ public static class MediaRetention
             return result;
         }
 
-        int keepDays = settings.Retention?.KeepDays > 0 ? settings.Retention.KeepDays : 1;
-        int maxDays =
-            settings.Retention?.MaxAgeDays > keepDays
-                ? settings.Retention.MaxAgeDays
-                : keepDays + 2;
-        DateTimeOffset keepBefore = utcNow.AddDays(-keepDays);
-        DateTimeOffset dropBefore = utcNow.AddDays(-maxDays);
+        int videoKeepDays =
+            settings.Retention?.VideoKeepDays > 0 ? settings.Retention.VideoKeepDays : 3;
+        int videoMaxDays =
+            settings.Retention?.VideoMaxAgeDays > videoKeepDays
+                ? settings.Retention.VideoMaxAgeDays
+                : videoKeepDays + 4;
+        int replayKeepDays =
+            settings.Retention?.ReplayKeepDays > 0 ? settings.Retention.ReplayKeepDays : 30;
+        DateTimeOffset keepBefore = utcNow.AddDays(-videoKeepDays);
+        DateTimeOffset dropBefore = utcNow.AddDays(-videoMaxDays);
+        DateTimeOffset replayBefore = utcNow.AddDays(-replayKeepDays);
         string separator = string.IsNullOrEmpty(settings.StormReplay?.Seperator)
             ? "_"
             : settings.StormReplay.Seperator;
@@ -63,6 +67,7 @@ public static class MediaRetention
                 played,
                 protectedId,
                 separator,
+                replayBefore,
                 result
             );
             DeletePlayedReplays(
@@ -70,6 +75,7 @@ public static class MediaRetention
                 played,
                 protectedId,
                 separator,
+                replayBefore,
                 result
             );
         }
@@ -96,6 +102,7 @@ public static class MediaRetention
         HashSet<int> played,
         string protectedId,
         string separator,
+        DateTimeOffset replayBefore,
         RetentionSweep result
     )
     {
@@ -117,7 +124,7 @@ public static class MediaRetention
                 continue;
             }
 
-            if (played.Contains(id))
+            if (played.Contains(id) && File.GetLastWriteTimeUtc(path) < replayBefore.UtcDateTime)
             {
                 DeleteFile(path, result, warning: null);
             }

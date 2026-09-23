@@ -25,21 +25,26 @@ public class MediaRetentionTests
             Directory.CreateDirectory(requests);
             Directory.CreateDirectory(Path.Combine(contexts, "10"));
             Directory.CreateDirectory(Path.Combine(contexts, "11"));
-            File.WriteAllText(Path.Combine(root, "spectated-ids.txt"), "10" + Environment.NewLine);
-            File.WriteAllBytes(
-                Path.Combine(standard, "10_Storm League_Gold_Map_.StormReplay"),
-                new byte[32]
+            File.WriteAllText(
+                Path.Combine(root, "spectated-ids.txt"),
+                "10" + Environment.NewLine + "13" + Environment.NewLine
             );
+            string oldReplay = Path.Combine(standard, "10_Storm League_Gold_Map_.StormReplay");
+            string recentReplay = Path.Combine(standard, "13_Storm League_Gold_Map_.StormReplay");
+            File.WriteAllBytes(oldReplay, new byte[32]);
+            File.WriteAllBytes(recentReplay, new byte[8]);
             File.WriteAllBytes(
                 Path.Combine(standard, "12_Storm League_Gold_Map_.StormReplay"),
                 new byte[8]
             );
+            File.SetLastWriteTimeUtc(oldReplay, DateTime.UtcNow.AddDays(-40));
+            File.SetLastWriteTimeUtc(recentReplay, DateTime.UtcNow.AddDays(-2));
             File.WriteAllBytes(Path.Combine(contexts, "10", "match.mp4"), new byte[64]);
             File.WriteAllText(Path.Combine(contexts, "10", "youtube-entry-uploaded.json"), "{}");
             File.WriteAllBytes(Path.Combine(contexts, "11", "live.mp4"), new byte[16]);
             Directory.SetLastWriteTimeUtc(
                 Path.Combine(contexts, "10"),
-                DateTime.UtcNow.AddDays(-2)
+                DateTime.UtcNow.AddDays(-4)
             );
             Directory.SetLastWriteTimeUtc(Path.Combine(contexts, "11"), DateTime.UtcNow);
 
@@ -47,6 +52,9 @@ public class MediaRetentionTests
 
             Assert.False(
                 File.Exists(Path.Combine(standard, "10_Storm League_Gold_Map_.StormReplay"))
+            );
+            Assert.True(
+                File.Exists(Path.Combine(standard, "13_Storm League_Gold_Map_.StormReplay"))
             );
             Assert.True(
                 File.Exists(Path.Combine(standard, "12_Storm League_Gold_Map_.StormReplay"))
@@ -80,7 +88,7 @@ public class MediaRetentionTests
             File.WriteAllBytes(Path.Combine(contexts, "21", "current.mp4"), new byte[4]);
             Directory.SetLastWriteTimeUtc(
                 Path.Combine(contexts, "20"),
-                DateTime.UtcNow.AddDays(-5)
+                DateTime.UtcNow.AddDays(-8)
             );
             Directory.SetLastWriteTimeUtc(Path.Combine(contexts, "21"), DateTime.UtcNow);
 
@@ -112,8 +120,9 @@ public class MediaRetentionTests
             Retention = new RetentionSettings
             {
                 Enabled = true,
-                KeepDays = 1,
-                MaxAgeDays = 3,
+                VideoKeepDays = 3,
+                VideoMaxAgeDays = 7,
+                ReplayKeepDays = 30,
             },
         };
 }
