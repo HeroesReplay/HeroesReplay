@@ -8,20 +8,24 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Providers;
 
 /// <summary>
-/// Plays .StormReplay files already on disk. Does not call Heroes Profile.
-/// The downloader process fills Data\Standard and Data\Requests.
+/// Plays .StormReplay files already on disk. The downloader fills Data\Standard and Data\Requests.
+/// A filename that only has a league name is looked up with Heroes Profile before the badge is shown.
 /// </summary>
 public sealed class ReplayCacheProvider : IReplayProvider
 {
     private readonly ILogger<ReplayCacheProvider> logger;
     private readonly IReplayLoader loader;
     private readonly IReplayHelper replayHelper;
+    private readonly IHeroesProfileService heroesProfile;
+    private readonly CancellationTokenProvider tokenProvider;
     private readonly AppSettings settings;
     private readonly HashSet<int> played = new();
     private bool seeded;
@@ -32,12 +36,18 @@ public sealed class ReplayCacheProvider : IReplayProvider
         ILogger<ReplayCacheProvider> logger,
         IReplayLoader loader,
         IReplayHelper replayHelper,
+        IHeroesProfileService heroesProfile,
+        CancellationTokenProvider tokenProvider,
         AppSettings settings
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
         this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
+        this.heroesProfile =
+            heroesProfile ?? throw new ArgumentNullException(nameof(heroesProfile));
+        this.tokenProvider =
+            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
     }
 
@@ -103,13 +113,19 @@ public sealed class ReplayCacheProvider : IReplayProvider
             replayId,
             next.FullName
         );
+        HeroesProfileReplay profile = RankFromFile(next.Name, replayId, replay.Map);
+        if (profile != null)
+        {
+            await heroesProfile.EnrichRankAsync(profile, tokenProvider.Token).ConfigureAwait(false);
+        }
+
         return new LoadedReplay
         {
             FileInfo = next,
             Replay = replay,
             ReplayId = replayId,
             RewardQueueItem = null,
-            HeroesProfileReplay = RankFromFile(next.Name, replayId, replay.Map),
+            HeroesProfileReplay = profile,
         };
     }
 
@@ -164,7 +180,8 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private static HeroesProfileReplay RankFromFile(string fileName, int replayId, string map)
     {
         string rank = RankImage.RankFromCacheFileName(fileName);
-        if (rank == null)
+        string gameType = GameTypeFromCacheFileName(fileName);
+        if (rank == null && !HeroesProfileRankEnricher.IsStormLeague(gameType))
         {
             return null;
         }
@@ -174,7 +191,26 @@ public sealed class ReplayCacheProvider : IReplayProvider
             Id = replayId,
             Rank = rank,
             Map = map,
+            GameType = gameType,
         };
+    }
+
+    private static string GameTypeFromCacheFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return null;
+        }
+
+        string name = Path.GetFileName(fileName);
+        int dot = name.LastIndexOf('.');
+        if (dot > 0)
+        {
+            name = name.Substring(0, dot);
+        }
+
+        string[] parts = name.Split('_');
+        return parts.Length >= 2 ? parts[1] : null;
     }
 
     private bool IsRequest(FileInfo file)
