@@ -10,12 +10,12 @@ public class MatchReportPaceTests
     [Fact]
     public void ScrollSpeed_KeepsTheSameDistanceWhenTheReportIsShorter()
     {
-        double speed = MatchReportPace.ScrollSpeedY(TimeSpan.FromSeconds(165));
+        double speed = MatchReportPace.ScrollSpeedY(TimeSpan.FromMinutes(2));
 
-        Assert.Equal(37.091, speed, 3);
+        Assert.Equal(51, speed, 3);
         Assert.Equal(
             MatchReportPace.ReferenceSpeedY * MatchReportPace.ReferenceDuration.TotalSeconds,
-            speed * 165,
+            speed * 120,
             3
         );
     }

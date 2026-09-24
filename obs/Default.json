@@ -133,7 +133,7 @@
           "id": "scroll_filter",
           "versioned_id": "scroll_filter",
           "settings": {
-            "speed_y": 37.090909,
+            "speed_y": 51.0,
             "loop": false
           },
           "mixers": 0,
