@@ -107,6 +107,38 @@ public class MediaRetentionTests
         }
     }
 
+    [Fact]
+    public void Sweep_KeepsTheMatchUntilThePentakillClipExists()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "heroesreplay-retain-" + Guid.NewGuid().ToString("N")
+        );
+        try
+        {
+            string folder = Path.Combine(root, "Contexts", "10");
+            Directory.CreateDirectory(folder);
+            File.WriteAllBytes(Path.Combine(folder, "match.mp4"), new byte[64]);
+            File.WriteAllText(Path.Combine(folder, "youtube-dry-run.json"), "{}");
+            File.WriteAllText(
+                Path.Combine(folder, "clips.json"),
+                "[{\"File\":\"pentakill-Li-Ming-100.mp4\"}]"
+            );
+            Directory.SetLastWriteTimeUtc(folder, DateTime.UtcNow.AddDays(-4));
+
+            MediaRetention.Sweep(Settings(root), DateTimeOffset.UtcNow);
+
+            Assert.True(File.Exists(Path.Combine(folder, "match.mp4")));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static AppSettings Settings(string root) =>
         new()
         {

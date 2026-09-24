@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -55,6 +56,12 @@ public class Spectator : ISpectator
     private int hungChecks;
 
     private int missingProcessChecks;
+
+    private readonly RecordingClock recordingClock = new();
+
+    private IReadOnlyList<TeamKillClip> matchClips;
+
+    private int writtenClips;
 
     private ContextData Data => context.Current;
 
@@ -219,6 +226,55 @@ public class Spectator : ISpectator
         }
     }
 
+    private void ObserveMatchClips()
+    {
+        try
+        {
+            TimeSpan? elapsed = obsController.RecordingElapsed();
+            if (elapsed == null || Data?.Directory == null)
+            {
+                return;
+            }
+
+            recordingClock.Observe(Timer, elapsed.Value);
+            if (matchClips == null)
+            {
+                int window = (int)settings.Spectate.KillStreakWindow.TotalSeconds;
+                IEnumerable<Heroes.ReplayParser.Unit> units =
+                    Data.LoadedReplay?.Replay?.Players?.SelectMany(player =>
+                        player.HeroUnits ?? new List<Heroes.ReplayParser.Unit>()
+                    );
+                matchClips = TeamKillClips.Select(
+                    TeamKillDeaths.FromHeroUnits(units),
+                    window,
+                    leadSeconds: 12,
+                    tailSeconds: 8
+                );
+            }
+
+            IReadOnlyList<MatchClipEntry> ready = MatchClipList.Ready(
+                Data.LoadedReplay?.ReplayId,
+                matchClips,
+                recordingClock
+            );
+            if (ready.Count <= writtenClips)
+            {
+                return;
+            }
+
+            writtenClips = ready.Count;
+            MatchClipList.Write(
+                Path.Combine(Data.Directory.FullName, MatchClipList.FileName),
+                ready
+            );
+            logger.LogInformation("Wrote {Count} match clips to clips.json.", ready.Count);
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "Could not update clips.json.");
+        }
+    }
+
     private async Task StateLoopAsync()
     {
         while (!LinkedTokenSource.IsCancellationRequested)
@@ -278,6 +334,7 @@ public class Spectator : ISpectator
                 {
                     logger.LogInformation("{State}, HUD Time: {Timer}", State, Timer);
                     context.Current.Timer = Timer;
+                    ObserveMatchClips();
 
                     if (firstTimer)
                     {

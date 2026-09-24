@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
@@ -115,6 +116,15 @@ public class GameManager : IGameManager
                     obsController.StopRecording();
                 }
                 catch { }
+
+                try
+                {
+                    FfmpegClipCutter.CutDirectory(context.Current?.Directory?.FullName, logger);
+                }
+                catch (Exception e)
+                {
+                    logger.LogWarning(e, "Could not cut pentakill clips.");
+                }
             }
 
             try

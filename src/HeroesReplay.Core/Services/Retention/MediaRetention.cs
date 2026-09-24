@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Queue;
 using Microsoft.Extensions.Logging;
 
@@ -151,6 +153,14 @@ public static class MediaRetention
                 continue;
             }
 
+            if (ClipsStillNeedSource(dir))
+            {
+                result.Warnings.Add(
+                    "Kept " + dir.FullName + " because a pentakill clip is not cut yet."
+                );
+                continue;
+            }
+
             DateTime written = dir.LastWriteTimeUtc;
             FileInfo[] videos = dir.GetFiles("*.mp4");
             bool uploaded =
@@ -198,6 +208,40 @@ public static class MediaRetention
                 }
             }
         }
+    }
+
+    private static bool ClipsStillNeedSource(DirectoryInfo dir)
+    {
+        string path = Path.Combine(dir.FullName, MatchClipList.FileName);
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        IReadOnlyList<MatchClipEntry> entries;
+        try
+        {
+            entries = MatchClipList.Read(path);
+        }
+        catch (Exception exception) when (exception is IOException or JsonException)
+        {
+            return true;
+        }
+
+        foreach (MatchClipEntry entry in entries)
+        {
+            if (string.IsNullOrWhiteSpace(entry?.File))
+            {
+                continue;
+            }
+
+            if (!File.Exists(Path.Combine(dir.FullName, entry.File)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void DeleteFile(string path, RetentionSweep result, string warning)

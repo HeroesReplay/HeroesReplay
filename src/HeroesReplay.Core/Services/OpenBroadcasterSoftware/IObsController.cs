@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware;
@@ -12,6 +13,7 @@ public interface IObsController
     void SwapToWaitingScene();
     void StartRecording();
     void StopRecording();
+    TimeSpan? RecordingElapsed();
     void StartStreaming();
     void StopStreaming();
     bool IsStreaming();

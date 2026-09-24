@@ -169,6 +169,26 @@ public class ObsController : IObsController
             });
     }
 
+    public TimeSpan? RecordingElapsed()
+    {
+        try
+        {
+            EnsureConnected();
+            RecordingStatus status = obs.GetRecordStatus();
+            if (!status.IsRecording || status.RecordingDuration < 0)
+            {
+                return null;
+            }
+
+            return TimeSpan.FromMilliseconds(status.RecordingDuration);
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "OBS recording time is not available.");
+            return null;
+        }
+    }
+
     public void StartStreaming()
     {
         if (!SessionMedia.ShouldStream(settings.OBS))

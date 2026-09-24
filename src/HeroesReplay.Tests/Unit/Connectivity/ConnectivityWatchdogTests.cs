@@ -364,6 +364,8 @@ public class ConnectivityWatchdogTests
 
         public void StopRecording() { }
 
+        public TimeSpan? RecordingElapsed() => null;
+
         public void StartStreaming() => StartCalls++;
 
         public void StopStreaming() => StopCalls++;
