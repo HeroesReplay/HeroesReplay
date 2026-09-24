@@ -1,5 +1,5 @@
 workflow: GitFlow/v1
-next-version: '1.0.0'
+next-version: 'v1.0.0'
 tag-prefix: '[vV]'
 branches:
   master:
