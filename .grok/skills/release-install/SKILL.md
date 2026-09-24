@@ -7,7 +7,7 @@ description: >
 
 # Release install
 
-Production runs the zip attached to a GitHub Release. It does not clone the repo and it does not run `dotnet build`. ASA-SERVER keeps compiling from the `develop` worktree. A push to `master` should run the workflow in `tools/github-release.yml`. Copy that file to `.github/workflows/release.yml` before relying on it. The GitHub token used from ASA-SERVER cannot push workflow files. The workflow tests, publishes `win-x64`, and uploads `heroesreplay-win-x64.zip`. The tag is the commit SHA. `version.txt` in the zip is that same SHA.
+Production runs the zip attached to a GitHub Release. It does not clone the repo and it does not run `dotnet build`. ASA-SERVER keeps compiling from the `develop` worktree. A push to `master` runs `.github/workflows/release.yml`, which tests, publishes `win-x64`, and uploads `heroesreplay-win-x64.zip`. The tag is the commit SHA. `version.txt` in the zip is that same SHA.
 
 ## Layout
 
