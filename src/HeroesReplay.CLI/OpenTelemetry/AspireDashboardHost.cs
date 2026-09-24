@@ -609,12 +609,7 @@ public static class AspireDashboardHost
         try
         {
             using var client = new TcpClient();
-            Task connect = client.ConnectAsync(IPAddress.Loopback, port);
-            if (!connect.Wait(TimeSpan.FromSeconds(2)))
-            {
-                return false;
-            }
-
+            client.Connect(IPAddress.Loopback, port);
             return client.Connected;
         }
         catch (Exception)
