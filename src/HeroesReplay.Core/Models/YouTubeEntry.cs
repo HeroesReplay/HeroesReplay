@@ -4,6 +4,10 @@ public class YouTubeEntry
 {
     public string Title { get; set; }
     public int? ReplayId { get; set; }
+    public string VideoId { get; set; }
+    public string Map { get; set; }
+    public string GameType { get; set; }
+    public string Rank { get; set; }
     public string[] DescriptionLines { get; set; }
     public string[] Tags { get; set; }
 

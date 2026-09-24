@@ -67,6 +67,8 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton<IYouTubeUploader, YouTubeUploader>()
+            .AddSingleton<IYouTubePlaylistClient, GoogleYouTubePlaylistClient>()
+            .AddSingleton<IYouTubeLibrary, YouTubeLibrary>()
             .AddSingleton(serviceProvider =>
                 BindSettings(serviceProvider.GetRequiredService<IConfiguration>())
             )

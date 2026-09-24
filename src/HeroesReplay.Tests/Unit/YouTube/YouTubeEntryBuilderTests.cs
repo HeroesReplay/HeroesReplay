@@ -30,6 +30,9 @@ public class YouTubeEntryBuilderTests
         );
 
         Assert.Equal(65389750, entry.ReplayId);
+        Assert.Equal("Volskaya Foundry", entry.Map);
+        Assert.Equal("Storm League", entry.GameType);
+        Assert.Equal("Diamond", entry.Rank);
         Assert.Equal("Volskaya Foundry - 65389750 - Storm League - Diamond", entry.Title);
         Assert.Contains(
             entry.DescriptionLines,
@@ -58,6 +61,9 @@ public class YouTubeEntryBuilderTests
             new YouTubeSettings { PrivacyStatus = "public", CategoryId = "20" }
         );
 
+        Assert.Equal("Dragon Shire", entry.Map);
+        Assert.Equal("Platinum", entry.Rank);
+        Assert.Null(entry.GameType);
         Assert.Equal("Dragon Shire - 65396086 - Platinum", entry.Title);
         Assert.Contains(entry.Tags, tag => tag == "Dragon Shire");
         Assert.DoesNotContain(entry.Tags, tag => tag.Contains("용"));

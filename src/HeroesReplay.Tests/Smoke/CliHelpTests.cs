@@ -119,4 +119,19 @@ public class CliHelpTests
         Assert.Contains(calculators.Subcommands, c => c.Name == "coordinates");
         Assert.Contains(calculators.Subcommands, c => c.Name == "units");
     }
+
+    [Fact]
+    public void YouTubeHelp_HasLibrary()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("youtube --help");
+        Assert.Empty(result.Errors);
+        Command youtube = root.Subcommands.Single(c => c.Name == "youtube");
+        Assert.Contains(youtube.Subcommands, c => c.Name == "uploader");
+        Assert.Contains(youtube.Subcommands, c => c.Name == "library");
+        Command library = youtube.Subcommands.Single(c => c.Name == "library");
+        Assert.Contains("services start", library.Description);
+        ParseResult once = root.Parse("youtube library --help");
+        Assert.Empty(once.Errors);
+    }
 }

@@ -163,12 +163,36 @@ public class YouTubeUploader : IYouTubeUploader
             fileStream,
             "video/*"
         );
+        Video uploaded = null;
         videosInsertRequest.ProgressChanged += videosInsertRequest_ProgressChanged;
-        videosInsertRequest.ResponseReceived += videosInsertRequest_ResponseReceived;
+        videosInsertRequest.ResponseReceived += video =>
+        {
+            uploaded = video;
+            videosInsertRequest_ResponseReceived(video);
+        };
         IUploadProgress result = await videosInsertRequest.UploadAsync(token).ConfigureAwait(false);
 
         if (result.Status == UploadStatus.Completed)
         {
+            if (!string.IsNullOrWhiteSpace(uploaded?.Id))
+            {
+                entry.VideoId = uploaded.Id;
+                await File.WriteAllTextAsync(
+                        entryFile.FullName,
+                        JsonSerializer.Serialize(
+                            entry,
+                            new JsonSerializerOptions { WriteIndented = true }
+                        ),
+                        token
+                    )
+                    .ConfigureAwait(false);
+                logger.LogInformation(
+                    "Saved YouTube video id {VideoId} for replay {ReplayId}.",
+                    entry.VideoId,
+                    entry.ReplayId
+                );
+            }
+
             RememberUploaded(entry);
             MarkEntryUploaded(entryFile, recording.Directory);
             MediaRetention.SweepAndLog(settings, logger);

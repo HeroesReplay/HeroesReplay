@@ -9,5 +9,6 @@ public class YouTubeCommand : Command
         : base("youtube", "YouTube upload helpers for OBS recordings.")
     {
         Subcommands.Add(new UploaderCommand());
+        Subcommands.Add(new LibraryCommand());
     }
 }

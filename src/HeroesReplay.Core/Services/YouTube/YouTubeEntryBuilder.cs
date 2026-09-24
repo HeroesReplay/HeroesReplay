@@ -37,6 +37,9 @@ public static class YouTubeEntryBuilder
         return new YouTubeEntry
         {
             ReplayId = replayId,
+            Map = map,
+            GameType = gameType,
+            Rank = rank,
             Title = string.Join(
                 " - ",
                 new[] { map, id, gameType, rank }.Where(part => !string.IsNullOrWhiteSpace(part))
