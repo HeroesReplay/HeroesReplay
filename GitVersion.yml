@@ -1,0 +1,14 @@
+workflow: GitFlow/v1
+next-version: 1.0.0
+tag-prefix: '[vV]'
+branches:
+  master:
+    mode: ContinuousDeployment
+    label: ''
+    increment: Patch
+    regex: ^master$|^main$
+  develop:
+    mode: ContinuousDelivery
+    label: alpha
+    increment: Minor
+    regex: ^dev(elop)?(ment)?$
