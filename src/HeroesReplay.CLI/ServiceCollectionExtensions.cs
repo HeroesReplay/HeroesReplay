@@ -376,6 +376,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
             .AddSingleton<IAbilityDetector, AbilityDetector>()
+            .AddSingleton<IYouTubeVideoSearch, YouTubeApiVideoSearch>()
+            .AddSingleton<IYouTubeReplayLookup, YouTubeReplayLookup>()
             .AddSingleton<IGameManager, GameManager>()
             .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
             .AddSingleton<IObserverPanelRequests, ObserverPanelRequests>()

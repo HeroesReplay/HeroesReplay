@@ -3,6 +3,7 @@ namespace HeroesReplay.Core.Models;
 public class YouTubeEntry
 {
     public string Title { get; set; }
+    public int? ReplayId { get; set; }
     public string[] DescriptionLines { get; set; }
     public string[] Tags { get; set; }
 

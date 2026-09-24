@@ -169,6 +169,7 @@ public class YouTubeUploader : IYouTubeUploader
 
         if (result.Status == UploadStatus.Completed)
         {
+            RememberUploaded(entry);
             MarkEntryUploaded(entryFile, recording.Directory);
             MediaRetention.SweepAndLog(settings, logger);
         }
@@ -328,6 +329,24 @@ public class YouTubeUploader : IYouTubeUploader
         );
         MarkEntryUploaded(entryFile, recording.Directory);
         MediaRetention.SweepAndLog(settings, logger);
+    }
+
+    private void RememberUploaded(YouTubeEntry entry)
+    {
+        int? replayId = YouTubeReplayMatch.FromEntry(entry);
+        if (replayId is not > 0)
+        {
+            return;
+        }
+
+        YouTubeReplayCatalog.Remember(
+            YouTubeReplayCatalog.PathFor(settings.Location?.DataDirectory),
+            replayId.Value
+        );
+        logger.LogInformation(
+            "Recorded YouTube upload for replay {ReplayId}. Later spectates will not record it again.",
+            replayId.Value
+        );
     }
 
     private void MarkEntryUploaded(FileInfo entryFile, DirectoryInfo directory)

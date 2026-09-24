@@ -9,6 +9,9 @@ namespace HeroesReplay.Core.Models;
 public class LoadedReplay
 {
     public int? ReplayId { get; set; }
+
+    /// <summary>True when this replay id already has a video on the YouTube channel.</summary>
+    public bool AlreadyOnYouTube { get; set; }
     public Replay Replay { get; set; }
     public FileInfo FileInfo { get; set; }
     public HeroesProfileReplay HeroesProfileReplay { get; set; }

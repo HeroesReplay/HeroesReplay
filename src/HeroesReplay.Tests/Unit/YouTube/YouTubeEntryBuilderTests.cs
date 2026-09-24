@@ -29,6 +29,7 @@ public class YouTubeEntryBuilderTests
             new YouTubeSettings { PrivacyStatus = "public", CategoryId = "20" }
         );
 
+        Assert.Equal(65389750, entry.ReplayId);
         Assert.Equal("Volskaya Foundry - 65389750 - Storm League - Diamond", entry.Title);
         Assert.Contains(
             entry.DescriptionLines,

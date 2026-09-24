@@ -37,7 +37,7 @@ public static class SessionMedia
 
     public static bool ShouldRecord(OBSSettings obs, LoadedReplay replay)
     {
-        if (obs == null)
+        if (obs == null || replay?.AlreadyOnYouTube == true)
         {
             return false;
         }
@@ -52,7 +52,7 @@ public static class SessionMedia
 
     public static bool ShouldWriteYouTubeEntry(YouTubeSettings youtube, LoadedReplay replay)
     {
-        if (youtube == null)
+        if (youtube == null || replay?.AlreadyOnYouTube == true)
         {
             return false;
         }

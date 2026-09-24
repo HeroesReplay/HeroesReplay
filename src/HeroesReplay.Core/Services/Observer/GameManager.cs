@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
@@ -9,6 +10,7 @@ using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Services.YouTube;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Observer;
@@ -23,6 +25,7 @@ public class GameManager : IGameManager
     private readonly IReplayContext context;
     private readonly SpectatorStatusStore statusStore;
     private readonly StormClientConfigurator clientConfigurator;
+    private readonly IYouTubeReplayLookup youTubeReplayLookup;
     private readonly ILogger<GameManager> logger;
 
     public GameManager(
@@ -34,6 +37,7 @@ public class GameManager : IGameManager
         IReplayContext context,
         SpectatorStatusStore statusStore,
         StormClientConfigurator clientConfigurator,
+        IYouTubeReplayLookup youTubeReplayLookup,
         ILogger<GameManager> logger
     )
     {
@@ -49,12 +53,15 @@ public class GameManager : IGameManager
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
         this.clientConfigurator =
             clientConfigurator ?? throw new ArgumentNullException(nameof(clientConfigurator));
+        this.youTubeReplayLookup =
+            youTubeReplayLookup ?? throw new ArgumentNullException(nameof(youTubeReplayLookup));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task LaunchAndSpectate(LoadedReplay loadedReplay, Func<Task> whileReporting)
     {
         MediaRetention.SweepAndLog(settings, logger);
+        await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
         await contextSetter.SetContextAsync(loadedReplay);
         bool obsSession = false;
         statusStore.Patch(status =>
@@ -145,6 +152,37 @@ public class GameManager : IGameManager
             {
                 obsController.EndSession();
             }
+        }
+    }
+
+    private async Task MarkExistingYouTubeVideoAsync(LoadedReplay loadedReplay)
+    {
+        if (loadedReplay == null)
+        {
+            return;
+        }
+
+        try
+        {
+            loadedReplay.AlreadyOnYouTube = await youTubeReplayLookup
+                .AlreadyUploadedAsync(loadedReplay, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Could not check YouTube for replay {ReplayId}. Recording stays on.",
+                loadedReplay.ReplayId
+            );
+        }
+
+        if (loadedReplay.AlreadyOnYouTube)
+        {
+            logger.LogInformation(
+                "Replay {ReplayId} already has a YouTube video. This spectate will not record.",
+                loadedReplay.HeroesProfileReplay?.Id ?? loadedReplay.ReplayId
+            );
         }
     }
 

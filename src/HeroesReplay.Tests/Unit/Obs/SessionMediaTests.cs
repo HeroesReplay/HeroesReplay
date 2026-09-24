@@ -42,6 +42,17 @@ public class SessionMediaTests
     }
 
     [Fact]
+    public void AlreadyOnYouTube_DoesNotRecordOrWriteAnotherEntry()
+    {
+        var obs = new OBSSettings { RecordingEnabled = true };
+        var youtube = new YouTubeSettings { Enabled = true };
+        var replay = new LoadedReplay { ReplayId = 65389750, AlreadyOnYouTube = true };
+
+        Assert.False(SessionMedia.ShouldRecord(obs, replay));
+        Assert.False(SessionMedia.ShouldWriteYouTubeEntry(youtube, replay));
+    }
+
+    [Fact]
     public void ShouldWriteYouTubeEntry_OnlyRequestedWhenUploadRequested()
     {
         var youtube = new YouTubeSettings { Enabled = false, UploadRequestedReplays = true };
