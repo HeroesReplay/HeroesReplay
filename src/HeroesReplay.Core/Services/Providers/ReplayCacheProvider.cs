@@ -28,6 +28,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private readonly CancellationTokenProvider tokenProvider;
     private readonly AppSettings settings;
     private readonly HashSet<int> played = new();
+    private LoadedReplay staged;
     private bool seeded;
 
     public bool ContinuesWhenEmpty => true;
@@ -55,6 +56,20 @@ public sealed class ReplayCacheProvider : IReplayProvider
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
         activity?.SetTag("replay.source", "cache");
+        if (staged != null)
+        {
+            LoadedReplay ready = staged;
+            staged = null;
+            HeroesReplayTelemetry.TagReplay(
+                activity,
+                ready.FileInfo?.FullName,
+                ready.Replay?.Map,
+                ready.ReplayId,
+                ready.Replay?.ReplayVersion
+            );
+            return ready;
+        }
+
         Seed();
 
         FileInfo next = Directory
@@ -127,6 +142,27 @@ public sealed class ReplayCacheProvider : IReplayProvider
             RewardQueueItem = null,
             HeroesProfileReplay = profile,
         };
+    }
+
+    public void Requeue(LoadedReplay replay)
+    {
+        if (replay?.ReplayId is not int replayId || replayId <= 0)
+        {
+            return;
+        }
+
+        played.Remove(replayId);
+        string path = PlayedPath();
+        if (File.Exists(path))
+        {
+            string[] kept = File.ReadAllLines(path)
+                .Where(line => line.Trim() != replayId.ToString())
+                .ToArray();
+            File.WriteAllLines(path, kept);
+        }
+
+        staged = replay;
+        logger.LogInformation("Returned replay {ReplayId} to the front of the cache.", replayId);
     }
 
     private void Seed()

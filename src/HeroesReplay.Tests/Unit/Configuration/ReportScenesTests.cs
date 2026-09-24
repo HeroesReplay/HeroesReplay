@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Configuration;
@@ -49,6 +50,18 @@ public class ReportScenesTests
                     "https://www.heroesprofile.com/Match/Single/[ID]",
                     url,
                     StringComparer.Ordinal
+                );
+            }
+
+            if (name == "match-report")
+            {
+                Assert.Equal("00:02:45", scene.GetProperty("DisplayTime").GetString());
+                Assert.Equal(
+                    37.091,
+                    MatchReportPace.ScrollSpeedY(
+                        TimeSpan.Parse(scene.GetProperty("DisplayTime").GetString())
+                    ),
+                    3
                 );
             }
 

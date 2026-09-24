@@ -8,6 +8,8 @@ public interface IReplayResume
 {
     void Request(int replayId, string replayPath);
 
+    bool HasPending();
+
     bool TryTake(out int replayId, out string replayPath);
 }
 
@@ -73,46 +75,72 @@ public sealed class ReplayResumeFile : IReplayResume
         }
     }
 
+    public bool HasPending()
+    {
+        lock (gate)
+        {
+            return TryRead(deleteFile: false, out _, out _);
+        }
+    }
+
     public bool TryTake(out int replayId, out string replayPath)
+    {
+        lock (gate)
+        {
+            return TryRead(deleteFile: true, out replayId, out replayPath);
+        }
+    }
+
+    private bool TryRead(bool deleteFile, out int replayId, out string replayPath)
     {
         replayId = 0;
         replayPath = null;
-        lock (gate)
+        if (!File.Exists(path))
         {
-            if (!File.Exists(path))
-            {
-                return false;
-            }
+            return false;
+        }
 
-            try
+        try
+        {
+            ReplayResumeRequest request = JsonSerializer.Deserialize<ReplayResumeRequest>(
+                File.ReadAllText(path),
+                JsonOptions
+            );
+            if (
+                request == null
+                || request.ReplayId <= 0
+                || string.IsNullOrWhiteSpace(request.ReplayPath)
+            )
             {
-                ReplayResumeRequest request = JsonSerializer.Deserialize<ReplayResumeRequest>(
-                    File.ReadAllText(path),
-                    JsonOptions
-                );
-                File.Delete(path);
-                if (
-                    request == null
-                    || request.ReplayId <= 0
-                    || string.IsNullOrWhiteSpace(request.ReplayPath)
-                )
+                if (deleteFile)
                 {
-                    return false;
+                    File.Delete(path);
                 }
 
-                replayId = request.ReplayId;
-                replayPath = request.ReplayPath;
-                return true;
+                return false;
             }
-            catch (JsonException)
+
+            if (deleteFile)
             {
                 File.Delete(path);
-                return false;
             }
-            catch (IOException)
+
+            replayId = request.ReplayId;
+            replayPath = request.ReplayPath;
+            return true;
+        }
+        catch (JsonException)
+        {
+            if (deleteFile)
             {
-                return false;
+                File.Delete(path);
             }
+
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
         }
     }
 

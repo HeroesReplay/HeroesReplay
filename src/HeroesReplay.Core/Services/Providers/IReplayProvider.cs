@@ -13,5 +13,11 @@ public interface IReplayProvider
     /// </returns>
     Task<LoadedReplay> TryLoadNextReplayAsync();
 
+    /// <summary>
+    /// Put a replay already taken by <see cref="TryLoadNextReplayAsync"/> back at the front.
+    /// Used when a connectivity resume has to play first.
+    /// </summary>
+    void Requeue(LoadedReplay replay);
+
     bool ContinuesWhenEmpty { get; }
 }

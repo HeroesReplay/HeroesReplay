@@ -28,6 +28,7 @@ public class HeroesProfileProvider : IReplayProvider
     private readonly IHeroesProfileService heroesProfileService;
     private readonly IRequestQueue requestQueue;
     private readonly IHeroesProfileResume heroesProfileResume;
+    private LoadedReplay staged;
     private int minReplayId;
 
     public bool ContinuesWhenEmpty => true;
@@ -159,9 +160,31 @@ public class HeroesProfileProvider : IReplayProvider
         return true;
     }
 
+    public void Requeue(LoadedReplay replay)
+    {
+        if (replay == null)
+        {
+            return;
+        }
+
+        staged = replay;
+        logger.LogInformation(
+            "Returned replay {ReplayId} to the front of the Heroes Profile queue.",
+            replay.ReplayId
+        );
+    }
+
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
+        if (staged != null)
+        {
+            LoadedReplay ready = staged;
+            staged = null;
+            TagLoaded(activity, ready);
+            return ready;
+        }
+
         LoadedReplay loaded;
         if (settings.Twitch.EnableRequests)
         {

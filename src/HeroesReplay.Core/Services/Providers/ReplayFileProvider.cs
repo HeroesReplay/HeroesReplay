@@ -19,6 +19,7 @@ public sealed class ReplayFileProvider : IReplayProvider
     private readonly IReplayHelper replayHelper;
     private readonly Queue<FileInfo> remaining = new();
     private readonly bool playOnce;
+    private LoadedReplay staged;
 
     public bool ContinuesWhenEmpty => !playOnce;
 
@@ -48,6 +49,13 @@ public sealed class ReplayFileProvider : IReplayProvider
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
+        if (staged != null)
+        {
+            LoadedReplay ready = staged;
+            staged = null;
+            return ready;
+        }
+
         while (remaining.Count > 0)
         {
             FileInfo fileInfo = remaining.Dequeue();
@@ -116,5 +124,19 @@ public sealed class ReplayFileProvider : IReplayProvider
         }
 
         logger.LogError("Replay path does not exist: {Path}", path);
+    }
+
+    public void Requeue(LoadedReplay replay)
+    {
+        if (replay == null)
+        {
+            return;
+        }
+
+        staged = replay;
+        logger.LogInformation(
+            "Returned replay {ReplayId} to the front of the file queue.",
+            replay.ReplayId
+        );
     }
 }

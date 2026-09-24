@@ -39,10 +39,13 @@ public class ReplayResumeTests
         try
         {
             store.Request(65268467, @"C:\heroesreplay\Data\Standard\one.StormReplay");
+            Assert.True(store.HasPending());
+            Assert.True(store.HasPending());
             Assert.True(store.TryTake(out int id, out string replayPath));
             Assert.Equal(65268467, id);
             Assert.EndsWith("one.StormReplay", replayPath);
             Assert.False(store.TryTake(out _, out _));
+            Assert.False(store.HasPending());
         }
         finally
         {

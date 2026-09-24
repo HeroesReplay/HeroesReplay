@@ -431,6 +431,7 @@ public class ObsController : IObsController
                 browserSettings["url"] = url;
                 ApplyReportBrowserCss(browserSettings);
                 obs.SetInputSettings(source.InputName, browserSettings);
+                SetMatchReportScroll(segment);
                 return true;
             }
             catch (Exception e)
@@ -440,6 +441,34 @@ public class ObsController : IObsController
         }
 
         return false;
+    }
+
+    private void SetMatchReportScroll(ReportScene segment)
+    {
+        if (!string.Equals(segment.SceneName, "match-report", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        double speed = MatchReportPace.ScrollSpeedY(segment.DisplayTime);
+        try
+        {
+            obs.SetSourceFilterSettings(
+                segment.SourceName,
+                "Scroll",
+                new JObject { ["speed_y"] = speed },
+                overlay: true
+            );
+            logger.LogInformation(
+                "Match report scroll speed {Speed} for {Duration}.",
+                speed,
+                segment.DisplayTime
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not set the match report scroll speed.");
+        }
     }
 
     private void ApplyReportBrowserCss(JObject browserSettings)

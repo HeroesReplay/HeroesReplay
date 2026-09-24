@@ -25,6 +25,7 @@ public class Engine : IEngine
     private readonly IConnectivityWatchdog connectivityWatchdog;
     private readonly IReplayResume replayResume;
     private readonly IReplayLoader replayLoader;
+    private LoadedReplay preparedNext;
 
     public Engine(
         ILogger<Engine> logger,
@@ -86,7 +87,20 @@ public class Engine : IEngine
         {
             using Activity replayActivity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay");
             LoadedReplay loadedReplay = await TakeResumedReplayAsync().ConfigureAwait(false);
-            if (loadedReplay == null)
+            if (loadedReplay != null)
+            {
+                ReturnPreparedNext();
+            }
+            else if (preparedNext != null)
+            {
+                loadedReplay = preparedNext;
+                preparedNext = null;
+                logger.LogInformation(
+                    "Playing replay {ReplayId} loaded during the previous report.",
+                    loadedReplay.ReplayId
+                );
+            }
+            else
             {
                 loadedReplay = await replayProvider.TryLoadNextReplayAsync();
             }
@@ -100,9 +114,17 @@ public class Engine : IEngine
                     loadedReplay.ReplayId,
                     loadedReplay.Replay?.ReplayVersion
                 );
+                Task<LoadedReplay> nextLoad = null;
                 try
                 {
-                    await gameManager.LaunchAndSpectate(loadedReplay);
+                    await gameManager.LaunchAndSpectate(
+                        loadedReplay,
+                        () =>
+                        {
+                            nextLoad = StartNextLoad();
+                            return Task.CompletedTask;
+                        }
+                    );
                 }
                 catch (Exception e)
                 {
@@ -113,6 +135,7 @@ public class Engine : IEngine
                     );
                 }
 
+                await StorePreparedNextAsync(nextLoad).ConfigureAwait(false);
                 continue;
             }
 
@@ -127,6 +150,63 @@ public class Engine : IEngine
             statusStore.MarkIdle();
             await Task.Delay(TimeSpan.FromSeconds(5), consoleTokenProvider.Token);
         }
+    }
+
+    private Task<LoadedReplay> StartNextLoad()
+    {
+        if (replayResume.HasPending())
+        {
+            logger.LogInformation(
+                "A replay is waiting to resume. The next file stays in the queue."
+            );
+            return null;
+        }
+
+        logger.LogInformation("Loading the next replay during the report scenes.");
+        return replayProvider.TryLoadNextReplayAsync();
+    }
+
+    private async Task StorePreparedNextAsync(Task<LoadedReplay> nextLoad)
+    {
+        if (nextLoad == null)
+        {
+            return;
+        }
+
+        LoadedReplay prepared;
+        try
+        {
+            prepared = await nextLoad.ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not load the next replay during the report.");
+            return;
+        }
+
+        if (prepared == null)
+        {
+            return;
+        }
+
+        if (replayResume.HasPending())
+        {
+            replayProvider.Requeue(prepared);
+            return;
+        }
+
+        preparedNext = prepared;
+    }
+
+    private void ReturnPreparedNext()
+    {
+        if (preparedNext == null)
+        {
+            return;
+        }
+
+        replayProvider.Requeue(preparedNext);
+        preparedNext = null;
     }
 
     private async Task<LoadedReplay> TakeResumedReplayAsync()

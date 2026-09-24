@@ -52,7 +52,7 @@ public class GameManager : IGameManager
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task LaunchAndSpectate(LoadedReplay loadedReplay)
+    public async Task LaunchAndSpectate(LoadedReplay loadedReplay, Func<Task> whileReporting)
     {
         MediaRetention.SweepAndLog(settings, logger);
         await contextSetter.SetContextAsync(loadedReplay);
@@ -126,6 +126,15 @@ public class GameManager : IGameManager
         {
             if (obsSession)
             {
+                try
+                {
+                    whileReporting?.Invoke();
+                }
+                catch (Exception e)
+                {
+                    logger.LogWarning(e, "Could not start loading the next replay.");
+                }
+
                 await obsController.CycleReportAsync();
                 obsController.SwapToWaitingScene();
             }
