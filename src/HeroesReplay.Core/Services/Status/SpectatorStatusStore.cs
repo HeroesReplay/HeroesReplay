@@ -156,7 +156,7 @@ public sealed class SpectatorStatusStore
                 File.Move(temp, FilePath, overwrite: true);
                 return;
             }
-            catch (Exception ex) when (IsSharingViolation(ex) && attempt < 20)
+            catch (Exception ex) when (IsSharingViolation(ex) && attempt < 60)
             {
                 Thread.Sleep(50);
             }
