@@ -28,11 +28,11 @@ jobs:
           Copy-Item obs/Default/basic.ini (Join-Path $out 'obs\Default\basic.ini')
           Remove-Item (Join-Path $out 'appsettings.secrets.json') -ErrorAction SilentlyContinue
           Get-ChildItem $out -Recurse -Filter service.json | Remove-Item -Force
-          Set-Content -Path (Join-Path $out 'version.txt') -Value '${{ github.sha }}' -NoNewline
+          Set-Content -Path (Join-Path $out 'version.txt') -Value 'r${{ github.sha }}' -NoNewline
           Compress-Archive -Path (Join-Path $out '*') -DestinationPath heroesreplay-win-x64.zip
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.sha }}
-          name: ${{ github.sha }}
+          tag_name: r${{ github.sha }}
+          name: r${{ github.sha }}
           files: heroesreplay-win-x64.zip
           fail_on_unmatched_files: true
