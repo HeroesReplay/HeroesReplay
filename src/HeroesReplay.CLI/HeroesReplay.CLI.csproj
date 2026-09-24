@@ -46,6 +46,10 @@
         <None Update="appsettings.json">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
+        <None Include="..\..\tools\apply-release.ps1">
+            <Link>apply-release.ps1</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
         <None Include="..\..\obs\interfaces\AhliObs 0.75.StormInterface">
             <Link>Assets\Interfaces\AhliObs 0.75.StormInterface</Link>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

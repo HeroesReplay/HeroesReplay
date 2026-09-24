@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
+using HeroesReplay.CLI.Commands.Update;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
@@ -18,6 +19,7 @@ using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Queue;
+using HeroesReplay.Core.Services.SelfUpdate;
 using HeroesReplay.Core.Services.Reports;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Status;
@@ -433,6 +435,7 @@ public static class ServiceCollectionExtensions
             })
             .AddSingleton<OBSWebsocket>()
             .AddSingleton<IObsController, ObsController>()
+            .AddSingleton<IReleaseUpdateGate, ReleaseUpdateGate>()
             .AddSingleton<IEngine, Engine>()
             .AddSingleton<SpectatorStatusStore>()
             .AddConnectivityServices()

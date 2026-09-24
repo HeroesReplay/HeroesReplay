@@ -142,8 +142,9 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 | `.grok/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
 | `.grok/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
 | `.grok/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. Binary is ffmpeg 9.0.2 at `C:\ffmpeg\bin`. |
+| `.grok/skills/release-install` | Install production from the GitHub Release zip instead of cloning and building. |
 
-Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`, `/ffmpeg`. `csharp-solid` is also in this folder.
+Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`, `/ffmpeg`, `/release-install`. `csharp-solid` is also in this folder.
 
 ## Official .NET skills
 

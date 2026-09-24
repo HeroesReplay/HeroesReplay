@@ -1,0 +1,38 @@
+name: release
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test heroes-replay.slnx --nologo
+      - name: Publish
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'heroesreplay-publish'
+          dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c Release -r win-x64 --self-contained false -o $out
+          New-Item -ItemType Directory -Force -Path (Join-Path $out 'obs\Default') | Out-Null
+          Copy-Item obs/Default.json (Join-Path $out 'obs\Default.json')
+          Copy-Item obs/Default/basic.ini (Join-Path $out 'obs\Default\basic.ini')
+          Remove-Item (Join-Path $out 'appsettings.secrets.json') -ErrorAction SilentlyContinue
+          Get-ChildItem $out -Recurse -Filter service.json | Remove-Item -Force
+          Set-Content -Path (Join-Path $out 'version.txt') -Value '${{ github.sha }}' -NoNewline
+          Compress-Archive -Path (Join-Path $out '*') -DestinationPath heroesreplay-win-x64.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.sha }}
+          name: ${{ github.sha }}
+          files: heroesreplay-win-x64.zip
+          fail_on_unmatched_files: true

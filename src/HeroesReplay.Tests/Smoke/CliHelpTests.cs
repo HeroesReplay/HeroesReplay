@@ -20,6 +20,7 @@ public class CliHelpTests
         Assert.Contains(root.Subcommands, c => c.Name == "mcp");
         Assert.Contains(root.Subcommands, c => c.Name == "client");
         Assert.Contains(root.Subcommands, c => c.Name == "otel");
+        Assert.Contains(root.Subcommands, c => c.Name == "update");
     }
 
     [Fact]

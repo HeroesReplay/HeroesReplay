@@ -7,6 +7,7 @@ using HeroesReplay.CLI.Commands.Otel;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.CLI.Commands.Spectate;
 using HeroesReplay.CLI.Commands.Twitch;
+using HeroesReplay.CLI.Commands.Update;
 using HeroesReplay.CLI.Commands.YouTube;
 
 namespace HeroesReplay.CLI.Commands;
@@ -26,5 +27,6 @@ public class HeroesReplayCommand : RootCommand
         Subcommands.Add(new YouTubeCommand());
         Subcommands.Add(new HeroesProfileCommand());
         Subcommands.Add(new ServicesCommand());
+        Subcommands.Add(new UpdateCommand());
     }
 }

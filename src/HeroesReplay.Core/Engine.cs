@@ -8,6 +8,7 @@ using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Services.SelfUpdate;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Status;
 using Microsoft.Extensions.Logging;
@@ -25,6 +26,7 @@ public class Engine : IEngine
     private readonly IConnectivityWatchdog connectivityWatchdog;
     private readonly IReplayResume replayResume;
     private readonly IReplayLoader replayLoader;
+    private readonly IReleaseUpdateGate releaseUpdate;
     private LoadedReplay preparedNext;
 
     public Engine(
@@ -36,7 +38,8 @@ public class Engine : IEngine
         SpectatorStatusStore statusStore,
         IConnectivityWatchdog connectivityWatchdog,
         IReplayResume replayResume,
-        IReplayLoader replayLoader
+        IReplayLoader replayLoader,
+        IReleaseUpdateGate releaseUpdate
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -51,6 +54,8 @@ public class Engine : IEngine
             connectivityWatchdog ?? throw new ArgumentNullException(nameof(connectivityWatchdog));
         this.replayResume = replayResume ?? throw new ArgumentNullException(nameof(replayResume));
         this.replayLoader = replayLoader ?? throw new ArgumentNullException(nameof(replayLoader));
+        this.releaseUpdate =
+            releaseUpdate ?? throw new ArgumentNullException(nameof(releaseUpdate));
     }
 
     public async Task RunAsync()
@@ -136,6 +141,18 @@ public class Engine : IEngine
                 }
 
                 await StorePreparedNextAsync(nextLoad).ConfigureAwait(false);
+                if (
+                    await releaseUpdate
+                        .TryStageAsync(consoleTokenProvider.Token)
+                        .ConfigureAwait(false)
+                )
+                {
+                    logger.LogInformation(
+                        "Stopping after this replay so the new release can replace this install."
+                    );
+                    break;
+                }
+
                 continue;
             }
 
