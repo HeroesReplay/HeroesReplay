@@ -147,6 +147,9 @@ public class Engine : IEngine
                         .ConfigureAwait(false)
                 )
                 {
+                    // The report already appended this id to spectated-ids.txt. A new process
+                    // only reads that file, so put the replay back before this one exits.
+                    ReturnPreparedNext();
                     logger.LogInformation(
                         "Stopping after this replay so the new release can replace this install."
                     );
