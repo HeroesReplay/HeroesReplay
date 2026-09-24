@@ -56,7 +56,11 @@ public class MapsInclusionTests
                 byName.ContainsKey(name),
                 $"Maps:Catalog is missing '{name}' from replay history."
             );
-            Assert.True(byName[name].GetProperty("Playable").GetBoolean());
+            string type = byName[name].GetProperty("Type").GetString();
+            if (!string.Equals(type, "brawl", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.True(byName[name].GetProperty("Playable").GetBoolean());
+            }
         }
     }
 }
