@@ -141,7 +141,7 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 | `.grok/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, test categories |
 | `.grok/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
 | `.grok/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
-| `.grok/skills/ffmpeg` | Cut OBS recordings into 9:16 Shorts and montages. Binary is ffmpeg 9.0.2 at `C:\ffmpeg\bin`. |
+| `.grok/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. Binary is ffmpeg 9.0.2 at `C:\ffmpeg\bin`. |
 
 Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`, `/ffmpeg`. `csharp-solid` is also in this folder.
 
