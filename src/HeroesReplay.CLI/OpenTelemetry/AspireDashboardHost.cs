@@ -608,26 +608,14 @@ public static class AspireDashboardHost
     {
         try
         {
-            using var socket = new Socket(
-                AddressFamily.InterNetwork,
-                SocketType.Stream,
-                ProtocolType.Tcp
-            );
-            IAsyncResult result = socket.BeginConnect(IPAddress.Loopback, port, null, null);
-            bool signaled = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(300));
-            if (!signaled)
+            using var client = new TcpClient();
+            Task connect = client.ConnectAsync(IPAddress.Loopback, port);
+            if (!connect.Wait(TimeSpan.FromSeconds(2)))
             {
-                try
-                {
-                    socket.Close();
-                }
-                catch (Exception) { }
-
                 return false;
             }
 
-            socket.EndConnect(result);
-            return socket.Connected;
+            return client.Connected;
         }
         catch (Exception)
         {
