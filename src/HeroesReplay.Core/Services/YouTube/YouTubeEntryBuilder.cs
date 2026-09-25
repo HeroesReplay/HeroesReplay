@@ -29,9 +29,10 @@ public static class YouTubeEntryBuilder
             gameType != null ? $"Game type: {gameType}" : string.Empty,
             !string.IsNullOrWhiteSpace(rank) ? $"Rank: {rank}" : string.Empty,
             !string.IsNullOrWhiteSpace(requestor) ? $"Requested by: {requestor}" : string.Empty,
-            "Hashtags: #HeroesOfTheStorm #SaltySadism",
         }
             .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Concat(YouTubeRoster.Lines(loaded?.Replay))
+            .Append("Hashtags: #HeroesOfTheStorm #SaltySadism")
             .ToArray();
 
         return new YouTubeEntry
