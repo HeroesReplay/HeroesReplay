@@ -38,5 +38,8 @@
         <None Include="..\HeroesReplay.CLI\appsettings.json" Link="appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Include="..\HeroesReplay.CLI\appsettings.dev.json" Link="appsettings.dev.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 </Project>
