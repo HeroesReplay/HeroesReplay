@@ -111,6 +111,82 @@ public class ReleaseHandoffTests
         Assert.Empty(provider.Requeued);
     }
 
+    [Fact]
+    public async Task PlayOnce_ReturnsWhileTheWatchdogIsStillWaiting()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        var provider = new ScriptedReplays(continuesWhenEmpty: false);
+        provider.Enqueue(101);
+        var game = new RecordingGame();
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new BlockingWatchdog(),
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false)
+        );
+
+        try
+        {
+            Task run = engine.RunAsync();
+            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Assert.Same(run, finished);
+            await run;
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        Assert.Equal(new int?[] { 101 }, game.Spectated.ToArray());
+    }
+
+    [Fact]
+    public async Task ContinuousQueue_StaysUpUntilTheConsoleTokenIsCancelled()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        using var cancel = new CancellationTokenSource();
+        var provider = new ScriptedReplays(continuesWhenEmpty: true);
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            new RecordingGame(),
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(cancel.Token),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new BlockingWatchdog(),
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false)
+        );
+
+        try
+        {
+            Task run = engine.RunAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+            Assert.False(run.IsCompleted);
+            cancel.Cancel();
+            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Assert.Same(run, finished);
+            await run;
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static AppSettings CacheSettings(string data) =>
         new()
         {
@@ -237,6 +313,33 @@ public class ReleaseHandoffTests
         public bool Apply(ConnectivitySnapshot snapshot) => false;
 
         public Task RunAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class BlockingWatchdog : IConnectivityWatchdog
+    {
+        public bool IsOnline => true;
+
+        public ConnectivitySnapshot Last { get; } = new();
+
+        public event EventHandler<ConnectivityChangedEventArgs> Changed
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<ConnectivitySnapshot> ProbeAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(Last);
+
+        public bool Apply(ConnectivitySnapshot snapshot) => false;
+
+        public async Task RunAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException) { }
+        }
     }
 
     private sealed class IdleGameData : IGameData

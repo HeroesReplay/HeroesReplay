@@ -117,16 +117,7 @@ public class GameManager : IGameManager
                 catch { }
             }
 
-            try
-            {
-                gameController.SaveEndScreenshot();
-            }
-            catch (Exception e)
-            {
-                logger.LogWarning(e, "Could not save end screenshot.");
-            }
-
-            gameController.Kill();
+            ReplayShutdown.CaptureEndThenKill(gameController, logger);
         }
 
         try

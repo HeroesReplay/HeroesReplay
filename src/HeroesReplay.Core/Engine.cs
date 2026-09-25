@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Models;
@@ -62,11 +63,22 @@ public class Engine : IEngine
     {
         try
         {
-            await Initialize();
-            await Task.WhenAll(
-                Task.Run(SpectatorAsync, consoleTokenProvider.Token),
-                Task.Run(ConnectivityAsync, consoleTokenProvider.Token)
+            await Initialize().ConfigureAwait(false);
+            using var spectatorDone = CancellationTokenSource.CreateLinkedTokenSource(
+                consoleTokenProvider.Token
             );
+            Task spectator = SpectatorAsync();
+            Task connectivity = ConnectivityAsync(spectatorDone.Token);
+            Task finished = await Task.WhenAny(spectator, connectivity).ConfigureAwait(false);
+            if (ReferenceEquals(finished, spectator))
+            {
+                // Play-once spectate has left the replay loop. The watchdog
+                // waits on the console token, which is only cancelled by
+                // services stop, so cancel it here or spectate file never exits.
+                spectatorDone.Cancel();
+            }
+
+            await Task.WhenAll(spectator, connectivity).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
         catch (Exception e)
@@ -81,9 +93,9 @@ public class Engine : IEngine
         await gameData.LoadDataAsync();
     }
 
-    private async Task ConnectivityAsync()
+    private Task ConnectivityAsync(CancellationToken cancellationToken)
     {
-        await connectivityWatchdog.RunAsync(consoleTokenProvider.Token);
+        return connectivityWatchdog.RunAsync(cancellationToken);
     }
 
     private async Task SpectatorAsync()
