@@ -314,12 +314,14 @@ public class Spectator : ISpectator
                         CancelSessionSource.Cancel();
                     }
                 }
-                else if (controller.IsGameHung())
+                else if (
+                    controller.IsGameHung() && !(fromOcr && reading.Time.Value > lastAdvancedHud)
+                )
                 {
                     missingProcessChecks = 0;
                     hungChecks++;
                     logger.LogWarning("Game window hung ({Count}).", hungChecks);
-                    if (hungChecks >= 3)
+                    if (hungChecks >= 45)
                     {
                         logger.LogError("Game not responding; ending session.");
                         CancelSessionSource.Cancel();

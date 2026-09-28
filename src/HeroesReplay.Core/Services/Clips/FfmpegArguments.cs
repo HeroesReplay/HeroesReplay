@@ -5,6 +5,14 @@ namespace HeroesReplay.Core.Services.Clips;
 
 public static class FfmpegArguments
 {
+    public static bool FitsRecording(double fileStart, double clipDuration, double recordingSeconds)
+    {
+        return recordingSeconds > 1
+            && fileStart >= 0
+            && clipDuration >= 0.5
+            && fileStart + 1 < recordingSeconds;
+    }
+
     public static string[] Cut(
         string input,
         string output,

@@ -53,6 +53,13 @@ public static class MatchClipExporter
             return;
         }
 
+        double? recordingSeconds = ProbeDurationSeconds(match);
+        if (recordingSeconds == null)
+        {
+            logger?.LogWarning("Could not read the duration of {Path}.", match);
+            return;
+        }
+
         string clipRoot = Path.Combine(contextDirectory, "clips");
         Directory.CreateDirectory(clipRoot);
         var written = new List<object>();
@@ -77,11 +84,23 @@ public static class MatchClipExporter
                 continue;
             }
 
+            if (!FfmpegArguments.FitsRecording(start, duration, recordingSeconds.Value))
+            {
+                logger?.LogWarning(
+                    "Recording is {Recording:0.0}s. {Kind} {Hero} maps to {Start:0.0}s, after the file ends.",
+                    recordingSeconds.Value,
+                    clip.Kind,
+                    clip.Hero,
+                    start
+                );
+                continue;
+            }
+
             string folderName = SafeName($"{clip.Kind}-{clip.Hero}-{clip.HudStartSecond}");
             string folder = Path.Combine(clipRoot, folderName);
             Directory.CreateDirectory(folder);
             string output = Path.Combine(folder, "clip.mp4");
-            if (File.Exists(output))
+            if (File.Exists(output) && new FileInfo(output).Length > 10_000)
             {
                 written.Add(Row(clip, start, duration, output));
                 continue;
@@ -241,6 +260,54 @@ public static class MatchClipExporter
         }
     }
 
+    private static double? ProbeDurationSeconds(string path)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "ffprobe",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        startInfo.ArgumentList.Add("-v");
+        startInfo.ArgumentList.Add("error");
+        startInfo.ArgumentList.Add("-show_entries");
+        startInfo.ArgumentList.Add("format=duration");
+        startInfo.ArgumentList.Add("-of");
+        startInfo.ArgumentList.Add("csv=p=0");
+        startInfo.ArgumentList.Add(path);
+        try
+        {
+            using Process process = Process.Start(startInfo);
+            if (process == null)
+            {
+                return null;
+            }
+
+            string text = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+            if (
+                process.ExitCode == 0
+                && double.TryParse(
+                    text.Trim(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out double seconds
+                )
+            )
+            {
+                return seconds;
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is IOException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
     private static async Task<bool> CutAsync(
         string input,
         string output,
@@ -270,7 +337,21 @@ public static class MatchClipExporter
 
             await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
             await process.WaitForExitAsync().ConfigureAwait(false);
-            return process.ExitCode == 0 && File.Exists(output);
+            if (
+                process.ExitCode != 0
+                || !File.Exists(output)
+                || new FileInfo(output).Length < 10_000
+            )
+            {
+                if (File.Exists(output))
+                {
+                    File.Delete(output);
+                }
+
+                return false;
+            }
+
+            return true;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is IOException)
         {

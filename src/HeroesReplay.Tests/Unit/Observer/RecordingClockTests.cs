@@ -32,4 +32,11 @@ public class RecordingClockTests
         Assert.DoesNotContain("-vf", args);
         Assert.Equal(@"C:\clip.mp4", args[^1]);
     }
+
+    [Fact]
+    public void FitsRecording_RejectsARangePastTheEndOfTheFile()
+    {
+        Assert.False(FfmpegArguments.FitsRecording(1138, 42, 85.6));
+        Assert.True(FfmpegArguments.FitsRecording(40, 20, 85.6));
+    }
 }
