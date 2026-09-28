@@ -298,6 +298,14 @@ public class Spectator : ISpectator
                             logger.LogInformation("OBS game-scene (timer detected).");
                             obsController.SwapToGameScene();
                         }
+
+                        if (
+                            context.Current?.LoadedReplay?.RewardQueueItem?.Request?.PlayerIndex
+                            is int
+                        )
+                        {
+                            controller.ShowSelectedUnit();
+                        }
                     }
                 }
 

@@ -12,6 +12,7 @@ public interface IGameController
     Task<bool> TrySeeEndScreenAsync(bool nearCore);
     void SendFocus(int player);
     void SendPanel(Panel panel);
+    void ShowSelectedUnit();
     void SaveEndScreenshot();
     bool IsGameHung();
     bool IsGameRunning();

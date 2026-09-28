@@ -50,6 +50,8 @@ public sealed class StubController : IGameController
 
     public void SendPanel(Panel panel) => logger.LogInformation("Selected panel {Panel}", panel);
 
+    public void ShowSelectedUnit() => logger.LogInformation("Show selected unit (Ctrl+Alt+K).");
+
     public Task<TimeSpan?> TryGetTimerAsync()
     {
         if (timers.Count == 0)

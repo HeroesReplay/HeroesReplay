@@ -640,6 +640,16 @@ public class GameController : IGameController
         );
     }
 
+    public void ShowSelectedUnit()
+    {
+        SendChord(
+            "show selected unit (Ctrl+Alt+K)",
+            VirtualKey.VK_CONTROL,
+            VirtualKey.VK_MENU,
+            VirtualKey.VK_K
+        );
+    }
+
     private void SendChord(string description, params VirtualKey[] keys)
     {
         lock (controllerLock)

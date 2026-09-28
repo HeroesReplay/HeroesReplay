@@ -60,6 +60,8 @@ public class ReplayShutdownTests
 
         public void SendPanel(Panel panel) => throw new NotSupportedException();
 
+        public void ShowSelectedUnit() => throw new NotSupportedException();
+
         public void SaveEndScreenshot()
         {
             Calls.Add("screenshot");
