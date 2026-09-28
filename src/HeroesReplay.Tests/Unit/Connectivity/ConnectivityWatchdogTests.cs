@@ -358,6 +358,8 @@ public class ConnectivityWatchdogTests
 
         public void SwapToGameScene() { }
 
+        public void UpdateReplayInfoVisibility(TimeSpan matchTime) { }
+
         public void SwapToWaitingScene() { }
 
         public void StartRecording() { }

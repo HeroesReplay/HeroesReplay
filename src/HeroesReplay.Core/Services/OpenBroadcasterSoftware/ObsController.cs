@@ -24,6 +24,7 @@ public class ObsController : IObsController
     private readonly AppSettings settings;
     private readonly OBSWebsocket obs;
     private readonly CancellationTokenProvider tokenProvider;
+    private bool replayInfoHidden;
 
     public ObsController(
         ILogger<ObsController> logger,
@@ -56,6 +57,7 @@ public class ObsController : IObsController
         try
         {
             EnsureConnected();
+            replayInfoHidden = false;
             SetRankImage();
             SetCurrentReplayTextSource();
 
@@ -250,6 +252,42 @@ public class ObsController : IObsController
         {
             logger.LogDebug(e, "Could not read OBS stream status.");
             return false;
+        }
+    }
+
+    public void UpdateReplayInfoVisibility(TimeSpan matchTime)
+    {
+        if (replayInfoHidden || !settings.OBS.Enabled)
+        {
+            return;
+        }
+
+        if (ReplayInfoVisibility.ShouldShow(matchTime, settings.OBS.InfoVisibleFor))
+        {
+            return;
+        }
+
+        replayInfoHidden = true;
+        try
+        {
+            EnsureConnected();
+            SetSceneItemVisible(
+                settings.OBS.GameSceneName,
+                settings.OBS.InfoSourceName,
+                visible: false
+            );
+            logger.LogInformation(
+                "OBS {Source} hidden at {MatchTime}. It is shown for the first {Window} of the match.",
+                settings.OBS.InfoSourceName,
+                matchTime,
+                settings.OBS.InfoVisibleFor > TimeSpan.Zero
+                    ? settings.OBS.InfoVisibleFor
+                    : ReplayInfoVisibility.Default
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not hide {Source}.", settings.OBS.InfoSourceName);
         }
     }
 

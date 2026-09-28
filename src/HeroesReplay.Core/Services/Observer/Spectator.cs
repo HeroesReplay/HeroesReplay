@@ -284,6 +284,10 @@ public class Spectator : ISpectator
                 {
                     logger.LogInformation("{State}, HUD Time: {Timer}", State, Timer);
                     context.Current.Timer = Timer;
+                    if (State == State.TimerDetected || firstTimer)
+                    {
+                        obsController.UpdateReplayInfoVisibility(Timer);
+                    }
 
                     if (firstTimer)
                     {
