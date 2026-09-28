@@ -9,6 +9,12 @@ namespace HeroesReplay.Core.Services.Twitch.Rewards;
 
 public class SupportedRewardsHolder : ICustomRewardsHolder
 {
+    private const int RandomCost = 125;
+    private const int MapCost = 250;
+    private const int RankedMapCost = 500;
+    private const int ReplayCost = 250;
+    private const int ReplayUploadCost = 500;
+
     private readonly IGameData gameData;
 
     private List<SupportedReward> rewards;
@@ -36,13 +42,28 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
         var aramMaps = gameData.Maps.Where(m => m.Playable && m.Type.Equals("ARAM"));
 
         rewards.Add(
-            new SupportedReward(RewardType.QM, "Random (QM)", mode: GameType.QuickMatch, cost: 250)
+            new SupportedReward(
+                RewardType.QM,
+                "Random (QM)",
+                mode: GameType.QuickMatch,
+                cost: RandomCost
+            )
         );
         rewards.Add(
-            new SupportedReward(RewardType.SL, "Random (SL)", mode: GameType.StormLeague, cost: 250)
+            new SupportedReward(
+                RewardType.SL,
+                "Random (SL)",
+                mode: GameType.StormLeague,
+                cost: RandomCost
+            )
         );
         rewards.Add(
-            new SupportedReward(RewardType.ARAM, "Random (ARAM)", mode: GameType.ARAM, cost: 250)
+            new SupportedReward(
+                RewardType.ARAM,
+                "Random (ARAM)",
+                mode: GameType.ARAM,
+                cost: RandomCost
+            )
         );
 
         rewards.AddRange(
@@ -51,7 +72,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                 $"{map.Name} (QM)",
                 map.Name,
                 GameType.QuickMatch,
-                500
+                MapCost
             ))
         );
         rewards.AddRange(
@@ -60,7 +81,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                 $"{map.Name} (SL)",
                 map.Name,
                 GameType.StormLeague,
-                500
+                MapCost
             ))
         );
         rewards.AddRange(
@@ -69,7 +90,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                 $"{map.Name} (ARAM)",
                 map.Name,
                 GameType.ARAM,
-                500
+                MapCost
             ))
         );
 
@@ -83,7 +104,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                 $"{map.Name} (Rank QM)",
                 map.Name,
                 GameType.QuickMatch,
-                1000
+                RankedMapCost
             ))
         );
         rewards.AddRange(
@@ -92,7 +113,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                 $"{map.Name} (Rank SL)",
                 map.Name,
                 GameType.StormLeague,
-                1000
+                RankedMapCost
             ))
         );
         rewards.AddRange(
@@ -101,18 +122,18 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                 $"{map.Name} (Rank ARAM)",
                 map.Name,
                 GameType.ARAM,
-                1000
+                RankedMapCost
             ))
         );
 
         rewards.Add(
-            new SupportedReward(RewardType.ReplayId, nameof(RewardType.ReplayId), cost: 500)
+            new SupportedReward(RewardType.ReplayId, nameof(RewardType.ReplayId), cost: ReplayCost)
         );
         rewards.Add(
             new SupportedReward(
                 RewardType.ReplayId,
                 "ReplayId + YouTube",
-                cost: 1000,
+                cost: ReplayUploadCost,
                 recordAndUpload: true
             )
         );
@@ -166,7 +187,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                     " (Rank QM)",
                     RewardType.QM | RewardType.Map | RewardType.Rank,
                     GameType.QuickMatch,
-                    1000,
+                    RankedMapCost,
                     "standard",
                     out reward
                 )
@@ -176,7 +197,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                     " (Rank SL)",
                     RewardType.SL | RewardType.Map | RewardType.Rank,
                     GameType.StormLeague,
-                    1000,
+                    RankedMapCost,
                     "standard",
                     out reward
                 )
@@ -186,7 +207,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                     " (Rank ARAM)",
                     RewardType.ARAM | RewardType.Map | RewardType.Rank,
                     GameType.ARAM,
-                    1000,
+                    RankedMapCost,
                     "ARAM",
                     out reward
                 )
@@ -196,7 +217,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                     " (QM)",
                     RewardType.QM | RewardType.Map,
                     GameType.QuickMatch,
-                    500,
+                    MapCost,
                     "standard",
                     out reward
                 )
@@ -206,7 +227,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                     " (SL)",
                     RewardType.SL | RewardType.Map,
                     GameType.StormLeague,
-                    500,
+                    MapCost,
                     "standard",
                     out reward
                 )
@@ -216,7 +237,7 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                     " (ARAM)",
                     RewardType.ARAM | RewardType.Map,
                     GameType.ARAM,
-                    500,
+                    MapCost,
                     "ARAM",
                     out reward
                 )

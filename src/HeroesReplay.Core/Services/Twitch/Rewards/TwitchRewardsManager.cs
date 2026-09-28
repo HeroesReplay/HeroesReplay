@@ -42,6 +42,9 @@ public class TwitchRewardsManager : ITwitchRewardsManager
 
     public async Task CreateOrUpdateAsync()
     {
+        logger.LogInformation(
+            "Syncing Twitch channel rewards. Matching titles are updated to the catalog cost and prompt."
+        );
         UnrankedDraftRewardRemoval removed = await DeleteUnrankedDraftRewardsAsync();
         if (removed.Deleted.Count > 0 || removed.Failed.Count > 0)
         {
