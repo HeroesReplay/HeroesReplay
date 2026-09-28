@@ -212,15 +212,21 @@ public class RequestQueue : IRequestQueue, IDisposable
         }
 
         if (
-            settings.Spectate?.VersionsSupported != null
-            && settings.Spectate.VersionsSupported.Any()
-            && !settings.Spectate.VersionsSupported.Contains(replay.GameVersion)
+            !GameVersionOrder.Allows(
+                replay.GameVersion,
+                settings.Spectate?.VersionsSupported,
+                settings.Spectate?.MinimumGameVersion
+            )
         )
         {
             RememberFailure(new RewardQueueItem(request, replay));
+            string floor = settings.Spectate?.MinimumGameVersion;
+            string required = string.IsNullOrWhiteSpace(floor)
+                ? "a supported client"
+                : $"{floor} or newer";
             return new RewardResponse(
                 success: false,
-                message: $"the version found '{replay.GameVersion}' does not match the supported versions."
+                message: $"replay {request.ReplayId.Value} is client {replay.GameVersion}. We only play {required}. Your points were spent."
             );
         }
 
@@ -299,7 +305,8 @@ public class RequestQueue : IRequestQueue, IDisposable
                     replays,
                     played,
                     queued,
-                    settings.Spectate?.VersionsSupported
+                    settings.Spectate?.VersionsSupported,
+                    settings.Spectate?.MinimumGameVersion
                 );
                 if (chosen == null)
                 {

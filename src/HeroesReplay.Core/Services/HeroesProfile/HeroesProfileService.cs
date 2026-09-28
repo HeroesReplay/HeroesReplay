@@ -512,7 +512,6 @@ public class HeroesProfileService : IHeroesProfileService
             return Enumerable.Empty<HeroesProfileReplay>();
         }
 
-        IEnumerable<string> versions = settings.Spectate?.VersionsSupported;
         return replays
             .Where(x => x.Deleted is not > 0)
             .Where(x => settings.HeroesProfileApi.IsAllowedGameType(x.GameType))
@@ -520,7 +519,13 @@ public class HeroesProfileService : IHeroesProfileService
                 x.Downloadable == true
                 || (x.Downloadable != false && settings.HeroesProfileApi.MatchesReplayUrl(x.Url))
             )
-            .Where(x => versions == null || !versions.Any() || versions.Contains(x.GameVersion));
+            .Where(x =>
+                GameVersionOrder.Allows(
+                    x.GameVersion,
+                    settings.Spectate?.VersionsSupported,
+                    settings.Spectate?.MinimumGameVersion
+                )
+            );
     }
 
     private void OnFilterRetry(

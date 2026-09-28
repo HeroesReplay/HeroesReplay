@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core.Services.Queue;
 
@@ -11,7 +12,8 @@ public static class RewardCandidateFilter
         IEnumerable<HeroesProfileReplay> replays,
         ISet<int> playedIds,
         ISet<int> queuedIds,
-        IEnumerable<string> versionsSupported
+        IEnumerable<string> versionsSupported,
+        string minimumVersion = null
     )
     {
         var versions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -30,7 +32,7 @@ public static class RewardCandidateFilter
             .Where(replay => replay != null && replay.Id > 0)
             .Where(replay => replay.Deleted is not > 0)
             .Where(replay => replay.Downloadable != false)
-            .Where(replay => versions.Count == 0 || versions.Contains(replay.GameVersion))
+            .Where(replay => GameVersionOrder.Allows(replay.GameVersion, versions, minimumVersion))
             .Where(replay => playedIds == null || !playedIds.Contains(replay.Id))
             .Where(replay => queuedIds == null || !queuedIds.Contains(replay.Id))
             .ToList();

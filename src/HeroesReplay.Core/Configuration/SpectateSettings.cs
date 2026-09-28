@@ -6,6 +6,9 @@ namespace HeroesReplay.Core.Configuration;
 public class SpectateSettings
 {
     public IEnumerable<string> VersionsSupported { get; set; }
+
+    /// <summary>Oldest client that may be spectated, inclusive. Newer builds are allowed.</summary>
+    public string MinimumGameVersion { get; set; }
     public int MinDistanceToSpawn { get; set; }
     public int MaxDistanceToCore { get; set; }
 
