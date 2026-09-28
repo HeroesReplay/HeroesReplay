@@ -7,8 +7,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="AWSSDK.Core" />
-        <PackageReference Include="AWSSDK.S3" />
         <PackageReference Include="Google.Apis.YouTube.v3" />
         <PackageReference Include="Heroes.ReplayParser" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />

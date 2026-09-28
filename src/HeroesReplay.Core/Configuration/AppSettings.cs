@@ -28,7 +28,6 @@ public class AppSettings
     public MapSettings Maps { get; set; }
     public ParseOptionsSettings ParseOptions { get; set; }
     public AbilityDetectionSettings AbilityDetection { get; set; }
-    public QuoteSettings Quotes { get; set; }
     public YouTubeSettings YouTube { get; set; }
     public RetentionSettings Retention { get; set; }
     public ReleaseSettings Release { get; set; }

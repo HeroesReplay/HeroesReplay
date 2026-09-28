@@ -6,19 +6,15 @@ namespace HeroesReplay.Core.Configuration;
 
 public class HeroesProfileApiSettings
 {
-    public Uri BaseUri { get; set; }
     public Uri ExternalV1BaseUri { get; set; }
     public Uri TwitchBaseUri { get; set; }
     public string ApiKey { get; set; }
     public IEnumerable<string> GameTypes { get; set; }
-    public string S3Bucket { get; set; }
-    public string S3Region { get; set; }
     public IEnumerable<string> ReplayUrlHostContains { get; set; }
     public int MinReplayId { get; set; }
     public int FallbackMaxReplayId { get; set; }
     public int ApiMaxReturnedReplays { get; set; }
     public int CachedReplayLimit { get; set; } = 5;
-    public bool EnableMMR { get; set; }
     public TimeSpan APIRetryWaitTime { get; set; }
     public string StandardCacheDirectoryName { get; set; }
     public string RequestsCacheDirectoryName { get; set; }
@@ -28,9 +24,9 @@ public class HeroesProfileApiSettings
         if (url == null)
             return false;
 
-        IEnumerable<string> needles = (ReplayUrlHostContains ?? Enumerable.Empty<string>())
-            .Append(S3Bucket)
-            .Where(n => !string.IsNullOrWhiteSpace(n));
+        IEnumerable<string> needles = (ReplayUrlHostContains ?? Enumerable.Empty<string>()).Where(
+            n => !string.IsNullOrWhiteSpace(n)
+        );
 
         return needles.Any(n =>
             url.Host.Contains(n, StringComparison.OrdinalIgnoreCase)

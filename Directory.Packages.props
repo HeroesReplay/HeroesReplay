@@ -33,8 +33,6 @@
         <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.14.0" />
         <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.14.0" />
 
-        <PackageVersion Include="AWSSDK.Core" Version="4.0.102.6" />
-        <PackageVersion Include="AWSSDK.S3" Version="4.0.103.3" />
         <PackageVersion Include="Google.Apis.YouTube.v3" Version="1.76.0.4262" />
         <PackageVersion Include="Heroes.ReplayParser" Version="1.2.18" />
         <PackageVersion Include="Microsoft.Kiota.Bundle" Version="1.22.2" />

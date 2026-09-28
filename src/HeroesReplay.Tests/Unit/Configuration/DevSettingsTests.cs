@@ -34,4 +34,27 @@ public class DevSettingsTests
         Assert.False(configuration.GetValue<bool>("OBS:StreamingEnabled"));
         Assert.True(configuration.GetValue<bool>("YouTube:DryRun"));
     }
+
+    [Fact]
+    public void Settings_OmitUnusedS3AndLegacyEndpoints()
+    {
+        string basePath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        string devPath = Path.Combine(AppContext.BaseDirectory, "appsettings.dev.json");
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .AddJsonFile(basePath)
+            .AddJsonFile(devPath)
+            .Build();
+
+        Assert.Null(configuration["HeroesProfileApi:S3Bucket"]);
+        Assert.Null(configuration["HeroesProfileApi:S3Region"]);
+        Assert.Null(configuration["HeroesProfileApi:BaseUri"]);
+        Assert.Null(configuration["HeroesProfileApi:OpenApiBaseUri"]);
+        Assert.Null(configuration["HeroesProfileApi:EnableMMR"]);
+        Assert.Null(configuration["Twitch:RefreshUri"]);
+        Assert.Null(configuration["Twitch:EnableTwitchClips"]);
+        Assert.Null(configuration["Quotes:Subscriber"]);
+        Assert.False(
+            string.IsNullOrWhiteSpace(configuration["HeroesProfileApi:ExternalV1BaseUri"])
+        );
+    }
 }

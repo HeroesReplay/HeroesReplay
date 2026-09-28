@@ -11,7 +11,6 @@ public class TwitchSettings
     public string Channel { get; set; }
 
     public bool EnableRequests { get; set; }
-    public bool EnableTwitchClips { get; set; }
     public bool EnablePubSub { get; set; }
     public bool EnableChatBot { get; set; }
     public bool EnablePredictions { get; set; }
@@ -20,6 +19,4 @@ public class TwitchSettings
 
     public string QueueFileName { get; set; }
     public string FailedFileName { get; set; }
-
-    public Uri TokenRefreshUri { get; set; }
 }
