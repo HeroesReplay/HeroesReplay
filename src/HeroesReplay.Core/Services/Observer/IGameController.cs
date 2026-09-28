@@ -9,6 +9,7 @@ public interface IGameController
 {
     Task LaunchAsync();
     Task<TimeSpan?> TryGetTimerAsync();
+    Task<bool> IsReplayPresentedAsync(LoadedReplay replay);
     Task<bool> TrySeeEndScreenAsync(bool nearCore);
     void SendFocus(int player);
     void SendPanel(Panel panel);

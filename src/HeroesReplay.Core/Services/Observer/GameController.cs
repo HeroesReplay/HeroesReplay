@@ -98,10 +98,15 @@ public class GameController : IGameController
             .Max();
         var requiresAuth = replay.ReplayBuild == latestBuild;
 
-        if (IsLaunched() && await IsReplay().ConfigureAwait(false))
+        if (
+            IsLaunched()
+            && await IsReplayPresentedAsync(context.Current.LoadedReplay).ConfigureAwait(false)
+        )
         {
-            logger.LogInformation("Client already in a replay (timer visible). Skipping launch.");
-            ShowGameScene("timer already visible");
+            logger.LogInformation(
+                "Client is already showing the loading screen or the match clock. Skipping launch."
+            );
+            ShowGameScene("match already on screen");
             return;
         }
 
@@ -343,6 +348,33 @@ public class GameController : IGameController
         }
 
         return null;
+    }
+
+    public async Task<bool> IsReplayPresentedAsync(LoadedReplay replay)
+    {
+        if (!IsLaunched())
+        {
+            return false;
+        }
+
+        var parsed = replay?.Replay;
+        string text = await ReadWindowTextAsync().ConfigureAwait(false);
+        if (
+            ReplayLoadCue.SeesLoadingScreen(
+                text,
+                parsed?.Map,
+                parsed?.MapAlternativeName,
+                parsed?.Players?.Select(player => player.Name),
+                parsed?.Players?.Select(player => player.Character),
+                settings.OCR.LoadingScreenText
+            )
+        )
+        {
+            return true;
+        }
+
+        // HUD crop only. The memory clock stays unused until the map and this timer are on screen.
+        return (await TryGetTimerAsync().ConfigureAwait(false)).HasValue;
     }
 
     public async Task<bool> TrySeeEndScreenAsync(bool nearCore)

@@ -361,7 +361,7 @@ public class ObsController : IObsController
             });
     }
 
-    public async Task CycleReportAsync(NextGameSignal nextGame)
+    public async Task CycleReportAsync()
     {
         if (!context.Current.LoadedReplay.ReplayId.HasValue)
         {
@@ -401,12 +401,7 @@ public class ObsController : IObsController
                         )
                     )
                     {
-                        if (nextGame?.IsSignaled == true)
-                        {
-                            break;
-                        }
-
-                        await TryCycleSceneAsync(source, nextGame).ConfigureAwait(false);
+                        await TryCycleSceneAsync(source).ConfigureAwait(false);
                     }
 
                     return true;
@@ -439,24 +434,15 @@ public class ObsController : IObsController
         return true;
     }
 
-    private async Task<bool> TryCycleSceneAsync(ReportScene source, NextGameSignal nextGame)
+    private async Task<bool> TryCycleSceneAsync(ReportScene source)
     {
-        if (nextGame?.IsSignaled == true)
-        {
-            return false;
-        }
-
         try
         {
             obs.SetCurrentProgramScene(source.SceneName);
             logger.LogInformation($"set scene to: {source.SceneName}");
-            if (nextGame == null)
+            if (source.DisplayTime > TimeSpan.Zero)
             {
                 await Task.Delay(source.DisplayTime).ConfigureAwait(false);
-            }
-            else
-            {
-                await nextGame.DelayAsync(source.DisplayTime).ConfigureAwait(false);
             }
 
             return true;

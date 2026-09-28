@@ -8,7 +8,7 @@ public interface IObsController
     void BeginSession();
     void EndSession();
     void ConfigureFromContext();
-    Task CycleReportAsync(NextGameSignal nextGame);
+    Task CycleReportAsync();
     void SwapToGameScene();
     void UpdateReplayInfoVisibility(TimeSpan matchTime);
     void SwapToWaitingScene();

@@ -52,6 +52,8 @@ public sealed class StubController : IGameController
 
     public void ShowSelectedUnit() => logger.LogInformation("Show selected unit (Ctrl+Alt+K).");
 
+    public Task<bool> IsReplayPresentedAsync(LoadedReplay replay) => Task.FromResult(false);
+
     public Task<TimeSpan?> TryGetTimerAsync()
     {
         if (timers.Count == 0)
