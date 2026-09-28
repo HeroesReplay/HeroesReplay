@@ -179,6 +179,22 @@ public class ReplayAnalyzer : IReplayAnalyzer
         return new ReadOnlyDictionary<TimeSpan, Panel>(panels);
     }
 
+    public IReadOnlyList<TimeSpan> GetTalentTimes(Replay replay)
+    {
+        if (replay?.TeamLevels == null || settings.Spectate?.TalentLevels == null)
+        {
+            return Array.Empty<TimeSpan>();
+        }
+
+        var levels = new HashSet<int>(settings.Spectate.TalentLevels);
+        return replay
+            .TeamLevels.SelectMany(team => team)
+            .Where(level => levels.Contains(level.Key))
+            .Select(level => level.Value)
+            .OrderBy(time => time)
+            .ToList();
+    }
+
     public ExtensionGame GetPayloads(Replay replay)
     {
         if (payloadsBuilder == null)

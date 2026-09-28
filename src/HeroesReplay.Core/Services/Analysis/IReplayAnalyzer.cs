@@ -10,6 +10,7 @@ public interface IReplayAnalyzer
 {
     IReadOnlyDictionary<TimeSpan, Focus> GetPlayers(Replay replay);
     IReadOnlyDictionary<TimeSpan, Panel> GetPanels(Replay replay);
+    IReadOnlyList<TimeSpan> GetTalentTimes(Replay replay);
     ExtensionGame GetPayloads(Replay replay);
     TimeSpan GetEnd(Replay replay);
     TimeSpan GetSessionEnd(Replay replay);

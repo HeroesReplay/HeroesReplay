@@ -136,10 +136,11 @@ public class HeroesProfileProvider : IReplayProvider
             }
         }
 
-        if (UnspectatedOnDisk() >= 2)
+        if (UnspectatedOnDisk() >= CachedReplayLimit)
         {
             logger.LogInformation(
-                "Two replays are already waiting to be spectated. Not downloading another."
+                "{Count} replays are already waiting to be spectated. Not downloading another.",
+                CachedReplayLimit
             );
             return false;
         }
@@ -473,7 +474,7 @@ public class HeroesProfileProvider : IReplayProvider
             if (replayHelper.TryGetReplayId(file.Name, out int id) && !played.Contains(id))
             {
                 waiting++;
-                if (waiting >= 2)
+                if (waiting >= CachedReplayLimit)
                 {
                     return waiting;
                 }
@@ -482,4 +483,9 @@ public class HeroesProfileProvider : IReplayProvider
 
         return waiting;
     }
+
+    private int CachedReplayLimit =>
+        settings.HeroesProfileApi?.CachedReplayLimit > 0
+            ? settings.HeroesProfileApi.CachedReplayLimit
+            : 5;
 }

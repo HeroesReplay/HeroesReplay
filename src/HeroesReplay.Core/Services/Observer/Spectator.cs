@@ -654,12 +654,25 @@ public class Spectator : ISpectator
             return current;
         }
 
+        if (!panelRequests.AutomaticTalentsEnabled)
+        {
+            return Panel.None;
+        }
+
         if (Timer < settings.Spectate.TalentsPanelStartTime)
         {
             return Panel.Talents;
         }
 
-        if (Data.Panels.TryGetValue(Timer, out Panel timed) && timed == Panel.Talents)
+        TimeSpan hold =
+            settings.Spectate.TalentPanelHold > TimeSpan.Zero
+                ? settings.Spectate.TalentPanelHold
+                : TimeSpan.FromSeconds(8);
+        TimeSpan cluster =
+            settings.Spectate.TalentPanelCluster > TimeSpan.Zero
+                ? settings.Spectate.TalentPanelCluster
+                : TimeSpan.FromSeconds(15);
+        if (TalentPanelSchedule.ShouldShow(Data?.TalentTimes, Timer, hold, cluster))
         {
             return Panel.Talents;
         }

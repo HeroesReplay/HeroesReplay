@@ -44,6 +44,17 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
             ? TimeSpan.FromSeconds(10)
             : settings.Spectate.StatsPanelShowDuration;
 
+    public bool AutomaticTalentsEnabled => WithState(state => state.AutomaticTalents != false);
+
+    public void SetAutomaticTalents(bool enabled)
+    {
+        WithState(state =>
+        {
+            state.AutomaticTalents = enabled;
+            return 0;
+        });
+    }
+
     public TimeSpan Cooldown =>
         settings.Spectate.StatsPanelCooldown <= TimeSpan.Zero
             ? TimeSpan.FromMinutes(2)
@@ -229,6 +240,7 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
 
     private sealed class StoredPanels
     {
+        public bool? AutomaticTalents { get; set; }
         public string PendingPanel { get; set; }
         public string PendingUser { get; set; }
         public string Showing { get; set; }

@@ -10,6 +10,7 @@ public class ContextData
     public LoadedReplay LoadedReplay { get; set; }
     public IReadOnlyDictionary<TimeSpan, Focus> Players { get; set; }
     public IReadOnlyDictionary<TimeSpan, Panel> Panels { get; set; }
+    public IReadOnlyList<TimeSpan> TalentTimes { get; set; }
     public TimeSpan CoreKilled { get; set; }
     public TimeSpan SessionEnd { get; set; }
     public bool IsCarriedObjectiveMap { get; set; }

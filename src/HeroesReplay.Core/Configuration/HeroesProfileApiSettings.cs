@@ -17,6 +17,7 @@ public class HeroesProfileApiSettings
     public int MinReplayId { get; set; }
     public int FallbackMaxReplayId { get; set; }
     public int ApiMaxReturnedReplays { get; set; }
+    public int CachedReplayLimit { get; set; } = 5;
     public bool EnableMMR { get; set; }
     public TimeSpan APIRetryWaitTime { get; set; }
     public string StandardCacheDirectoryName { get; set; }

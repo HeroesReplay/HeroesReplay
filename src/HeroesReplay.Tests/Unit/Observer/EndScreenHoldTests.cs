@@ -11,7 +11,7 @@ public class EndScreenHoldTests
     public void Duration_EndsSoonerOnceMvpIsSeen()
     {
         Assert.Equal(
-            TimeSpan.FromSeconds(20),
+            TimeSpan.FromSeconds(5),
             EndScreenHold.Duration(true, TimeSpan.FromSeconds(75))
         );
         Assert.Equal(

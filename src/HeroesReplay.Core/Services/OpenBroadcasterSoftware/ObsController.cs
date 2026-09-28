@@ -475,7 +475,9 @@ public class ObsController : IObsController
     {
         string extra =
             (settings.OBS.ReportBrowserCss ?? string.Empty)
-            + " a[href*='/Match/Single/'],a[href*='replayID=']{font-size:0!important;color:transparent!important;pointer-events:none!important;}";
+            + " a[href*='/Match/Single/'],a[href*='replayID=']{font-size:0!important;color:transparent!important;pointer-events:none!important;}"
+            + " header,.header,.navbar,.top-nav,.site-header,#site-header,.page-header,[class*='main-menu'],[class*='site-nav']{display:none!important;}"
+            + " .match-page{display:block!important;}";
         if (string.IsNullOrWhiteSpace(extra))
         {
             return;

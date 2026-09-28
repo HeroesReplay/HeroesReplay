@@ -4,7 +4,7 @@ namespace HeroesReplay.Core.Services.Observer;
 
 public static class EndScreenHold
 {
-    public static readonly TimeSpan Mvp = TimeSpan.FromSeconds(20);
+    public static readonly TimeSpan Mvp = TimeSpan.FromSeconds(5);
     public static readonly TimeSpan UnconfirmedCap = TimeSpan.FromSeconds(35);
 
     public static TimeSpan Duration(bool mvpSeen, TimeSpan configured)

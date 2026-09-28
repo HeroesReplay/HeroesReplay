@@ -55,6 +55,7 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
 
         var players = replayAnalyzer.GetPlayers(replay);
         var panels = replayAnalyzer.GetPanels(replay);
+        var talentTimes = replayAnalyzer.GetTalentTimes(replay);
         var end = replayAnalyzer.GetEnd(replay);
         var sessionEnd = replayAnalyzer.GetSessionEnd(replay);
         var isCarried = replayAnalyzer.GetIsCarriedObjective(replay);
@@ -75,6 +76,7 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
             Payloads = payloads,
             Players = players,
             Panels = panels,
+            TalentTimes = talentTimes,
             GatesOpen = start,
             CoreKilled = end,
             SessionEnd = sessionEnd,

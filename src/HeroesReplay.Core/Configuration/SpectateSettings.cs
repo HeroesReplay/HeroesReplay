@@ -54,6 +54,8 @@ public class SpectateSettings
     public bool UseMemoryTimer { get; set; }
     public TimeSpan PanelDownTime { get; set; }
     public TimeSpan TalentsPanelStartTime { get; set; }
+    public TimeSpan TalentPanelHold { get; set; } = TimeSpan.FromSeconds(8);
+    public TimeSpan TalentPanelCluster { get; set; } = TimeSpan.FromSeconds(15);
     public TimeSpan StatsPanelShowDuration { get; set; }
     public TimeSpan StatsPanelCooldown { get; set; }
     public TimeSpan WaitingTime { get; set; }
