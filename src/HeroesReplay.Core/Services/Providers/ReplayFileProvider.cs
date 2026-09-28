@@ -19,6 +19,7 @@ public sealed class ReplayFileProvider : IReplayProvider
     private readonly IReplayHelper replayHelper;
     private readonly Queue<FileInfo> remaining = new();
     private readonly bool playOnce;
+    private readonly int? playerIndex;
     private LoadedReplay staged;
 
     public bool ContinuesWhenEmpty => !playOnce;
@@ -40,6 +41,7 @@ public sealed class ReplayFileProvider : IReplayProvider
         }
 
         playOnce = pathOptions?.PlayOnce ?? true;
+        playerIndex = pathOptions?.PlayerIndex;
         string path = !string.IsNullOrWhiteSpace(pathOptions?.Path)
             ? pathOptions.Path
             : settings.Location.ReplaySource;
@@ -80,12 +82,21 @@ public sealed class ReplayFileProvider : IReplayProvider
                 replayId,
                 replay.ReplayVersion
             );
+            RewardQueueItem reward = null;
+            if (playerIndex is int slot)
+            {
+                reward = new RewardQueueItem
+                {
+                    Request = new RewardRequest { ReplayId = replayId, PlayerIndex = slot },
+                };
+            }
+
             return new LoadedReplay
             {
                 FileInfo = fileInfo,
                 Replay = replay,
                 ReplayId = replayId,
-                RewardQueueItem = null,
+                RewardQueueItem = reward,
                 HeroesProfileReplay = null,
             };
         }
