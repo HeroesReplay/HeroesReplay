@@ -34,4 +34,17 @@ Do not point the install at the git worktree.
 
 After a replay finishes, the spectator compares `version.txt` with the latest release. A newer zip is downloaded, `services stop` runs, and `apply-release.ps1` waits until `heroesreplay.exe` has exited, swaps `C:\heroesreplay\app`, copies secrets back, and starts services again. The next replay is the next unplayed file. If OBS is open, scene files stay in `app\obs` and are not copied over the live collection. If OBS is closed, `Default.json` and `basic.ini` are copied. `service.json` is never copied.
 
-`heroesreplay update check` prints the installed SHA and the latest tag. It does not download or restart.
+`heroesreplay update check` prints the installed version and the latest tag. It does not download or restart.
+
+## Agent on the production machine
+
+The zip does not yet include an MCP config. A Grok session only sees a server when its working directory, or `~/.grok/config.toml`, names it. The repo `.grok/config.toml` runs `dotnet run --project src/HeroesReplay.CLI`, which does not exist in the published folder.
+
+Two stdio servers, both already installed separately from the zip:
+
+| Server | Command | What the agent gets |
+| --- | --- | --- |
+| Spectator | `C:\heroesreplay\app\heroesreplay.exe mcp` with `HEROES_REPLAY_ENV=prod` | `get_spectator_status`, `get_current_focus`, `check_twitch`, `check_obs`, `check_heroesprofile`, `check_config`. Reads `%LOCALAPPDATA%\HeroesReplay\status.json`. A second process from the one playing the match. |
+| Aspire | `aspire agent mcp --dashboard-url http://127.0.0.1:18888` | On CLI 13.5.4, dashboard-only mode: `list_structured_logs`, `list_traces`, `list_trace_structured_logs`. The dashboard UI stays `http://127.0.0.1:18888`. `list_resources` and start/stop need an AppHost, which this app does not run. |
+
+`aspire` is the machine dotnet tool (`aspire.cli` 13.5.4), not a file inside the zip. The release should still ship `.mcp.json` next to the exe so an agent started in `C:\heroesreplay\app` finds both commands. `aspire agent init` writes that file for a source tree; it does not know the published exe path.

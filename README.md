@@ -60,6 +60,8 @@ Copy `src/HeroesReplay.CLI/appsettings.secrets.example.json` to `appsettings.sec
 
 Traces, metrics, and logs go to OTLP `http://127.0.0.1:4317` (override with `OTEL_EXPORTER_OTLP_ENDPOINT`). The standalone Aspire dashboard is the local `Aspire.Cli` dotnet tool (`aspire dashboard run`). No Docker and no AppHost.
 
+Aspire CLI 13.5.4 also starts an MCP server: `aspire agent mcp --dashboard-url http://127.0.0.1:18888`. Dashboard-only mode (no AppHost) exposes `list_structured_logs`, `list_traces`, and `list_trace_structured_logs`. Resource start/stop tools are not available. `aspire agent init` writes that server into `.mcp.json` for detected agents. `aspire mcp tools` / `aspire mcp call` talk to MCP tools on Aspire resources; they are not this observability server.
+
 ```powershell
 dotnet tool restore
 heroesreplay otel up
