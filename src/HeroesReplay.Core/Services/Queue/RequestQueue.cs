@@ -330,7 +330,7 @@ public class RequestQueue : IRequestQueue, IDisposable
             RememberFailure(new RewardQueueItem(request, null));
             return new RewardResponse(
                 success: false,
-                message: "no recent unplayed replay matched that reward. Replay ids can still be requested directly."
+                message: "I couldn't queue a game for that reward. Every recent match for it was already played, already waiting, or from an older patch. Your points were spent. Redeem ReplayId and paste a Heroes Profile replay number to request one specific game."
             );
         }
 
