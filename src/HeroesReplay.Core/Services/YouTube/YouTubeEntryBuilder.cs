@@ -19,6 +19,10 @@ public static class YouTubeEntryBuilder
         string rank = heroesProfileReplay?.Rank;
         int? replayId = heroesProfileReplay?.Id ?? loaded?.ReplayId;
         string id = replayId is > 0 ? replayId.Value.ToString() : null;
+        string hero = PlayerPriorityRequest.HeroName(
+            loaded?.Replay,
+            loaded?.RewardQueueItem?.Request?.PlayerIndex
+        );
 
         var descriptionLines = new[]
         {
@@ -43,7 +47,9 @@ public static class YouTubeEntryBuilder
             Rank = rank,
             Title = string.Join(
                 " - ",
-                new[] { map, id, gameType, rank }.Where(part => !string.IsNullOrWhiteSpace(part))
+                new[] { hero, map, id, gameType, rank }.Where(part =>
+                    !string.IsNullOrWhiteSpace(part)
+                )
             ),
             PrivacyStatus = youtube?.PrivacyStatus ?? "public",
             CategoryId = youtube?.CategoryId,

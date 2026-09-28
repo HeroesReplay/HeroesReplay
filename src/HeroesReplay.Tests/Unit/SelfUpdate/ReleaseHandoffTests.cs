@@ -226,10 +226,13 @@ public class ReleaseHandoffTests
     {
         public List<int?> Spectated { get; } = new();
 
-        public Task LaunchAndSpectate(LoadedReplay loadedReplay, Func<Task> whileReporting)
+        public async Task LaunchAndSpectate(
+            LoadedReplay loadedReplay,
+            Func<Task<LoadedReplay>> whileReporting
+        )
         {
             Spectated.Add(loadedReplay.ReplayId);
-            return whileReporting();
+            await whileReporting().ConfigureAwait(false);
         }
     }
 

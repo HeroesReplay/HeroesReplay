@@ -244,6 +244,77 @@ public sealed class ReplayTimeline
         }
     }
 
+    public void ApplyPlayerPriority(int playerIndex, double maxDistance)
+    {
+        Player[] players = Replay.Players ?? Array.Empty<Player>();
+        if (playerIndex < 0 || playerIndex >= players.Length)
+        {
+            return;
+        }
+
+        Player player = players[playerIndex];
+        for (int second = 0; second < TotalSeconds; second++)
+        {
+            Unit hero = AliveHero(player, second);
+            Focus current = slots[second];
+            bool killBySomeoneElse =
+                current?.Calculator == typeof(KillCalculator) && current.Target != player;
+            bool near =
+                current == null
+                || current.Target == player
+                || (
+                    hero != null
+                    && current.Unit != null
+                    && Within(hero, current.Unit, second, maxDistance)
+                );
+            if (!PlayerPriorityRequest.Watch(hero != null, killBySomeoneElse, near))
+            {
+                continue;
+            }
+
+            slots[second] = new Focus(
+                typeof(PlayerPriorityRequest),
+                hero,
+                player,
+                current?.Points ?? 1,
+                "player priority"
+            );
+        }
+    }
+
+    private Unit AliveHero(Player player, int second)
+    {
+        foreach (Unit unit in AliveHeroesAt(second))
+        {
+            if (unit?.PlayerControlledBy == player)
+            {
+                return unit;
+            }
+        }
+
+        return null;
+    }
+
+    private bool Within(Unit hero, Unit other, int second, double maxDistance)
+    {
+        if (maxDistance <= 0 || hero == null || other == null)
+        {
+            return false;
+        }
+
+        if (!TryGetPoint(hero, second, out Point heroPoint))
+        {
+            return false;
+        }
+
+        if (!TryGetPoint(other, second, out Point otherPoint))
+        {
+            return false;
+        }
+
+        return heroPoint.DistanceTo(otherPoint) <= maxDistance;
+    }
+
     public IReadOnlyDictionary<TimeSpan, Focus> ToDictionary()
     {
         Player[] players = Replay.Players ?? Array.Empty<Player>();

@@ -26,8 +26,8 @@ public class SupportedReward
         Prompt =
             rewardType == RewardType.ReplayId
                 ? recordAndUpload
-                    ? "Enter a recent Heroes Profile ReplayId (current patch only). This match will be recorded and uploaded to YouTube."
-                    : "Enter a recent Heroes Profile ReplayId for the current game patch only"
+                    ? "Enter a ReplayId, or ReplayId,player (1-9 or 0 for the tenth). Player focus must be redeemed before that match starts. This match is recorded and uploaded to YouTube."
+                    : "Enter a ReplayId, or ReplayId,player (1-9 or 0 for the tenth hero). Player focus must be redeemed before that match starts."
                 : rewardType.HasFlag(RewardType.Rank)
                     ? "Enter a rank without a division"
                     : null;

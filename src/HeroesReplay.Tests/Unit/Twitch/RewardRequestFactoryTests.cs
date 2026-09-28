@@ -50,5 +50,25 @@ public class RewardRequestFactoryTests
 
         Assert.Equal(65268119, request.ReplayId);
         Assert.False(request.RecordAndUpload);
+        Assert.Null(request.PlayerIndex);
+    }
+
+    [Fact]
+    public void ReplayId_WithPlayerDigit_SetsTheObserveSlot()
+    {
+        var factory = new RewardRequestFactory();
+        var reward = new SupportedReward(RewardType.ReplayId, "ReplayId", cost: 500);
+        var args = new OnRewardRedeemedArgs
+        {
+            Login = "viewer",
+            RedemptionId = System.Guid.NewGuid(),
+            RewardTitle = reward.Title,
+            Message = "65268119,0",
+        };
+
+        RewardRequest request = factory.Create(reward, args);
+
+        Assert.Equal(65268119, request.ReplayId);
+        Assert.Equal(9, request.PlayerIndex);
     }
 }

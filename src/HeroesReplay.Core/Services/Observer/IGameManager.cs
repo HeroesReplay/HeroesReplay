@@ -6,5 +6,5 @@ namespace HeroesReplay.Core.Services.Observer;
 
 public interface IGameManager
 {
-    Task LaunchAndSpectate(LoadedReplay loadedReplay, Func<Task> whileReporting);
+    Task LaunchAndSpectate(LoadedReplay loadedReplay, Func<Task<LoadedReplay>> whileReporting);
 }

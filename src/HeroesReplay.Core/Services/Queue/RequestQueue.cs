@@ -253,10 +253,20 @@ public class RequestQueue : IRequestQueue, IDisposable
             );
         }
 
-        return new RewardResponse(
-            success: true,
-            message: $"{replay.Id} - {ReplayLabel.MapAndRank(replay.Map, replay.Rank)} has been queued. ({position})"
-        );
+        return new RewardResponse(success: true, message: QueueMessage(request, replay, position));
+    }
+
+    private static string QueueMessage(
+        RewardRequest request,
+        HeroesProfileReplay replay,
+        int position
+    )
+    {
+        string focus =
+            request?.PlayerIndex is int index && PlayerPriorityRequest.Digit(index) is string digit
+                ? $" Focus follows player {digit} while they are in the fight."
+                : string.Empty;
+        return $"{replay.Id} - {ReplayLabel.MapAndRank(replay.Map, replay.Rank)} has been queued. ({position}){focus}";
     }
 
     private async Task<RewardResponse> QueueByRewardFilterAsync(RewardRequest request)

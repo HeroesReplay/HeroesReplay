@@ -6,6 +6,7 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Client;
+using HeroesReplay.Core.Services.Clips;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Retention;
@@ -26,6 +27,7 @@ public class GameManager : IGameManager
     private readonly SpectatorStatusStore statusStore;
     private readonly StormClientConfigurator clientConfigurator;
     private readonly IYouTubeReplayLookup youTubeReplayLookup;
+    private readonly RecordingClock recordingClock;
     private readonly ILogger<GameManager> logger;
 
     public GameManager(
@@ -38,6 +40,7 @@ public class GameManager : IGameManager
         SpectatorStatusStore statusStore,
         StormClientConfigurator clientConfigurator,
         IYouTubeReplayLookup youTubeReplayLookup,
+        RecordingClock recordingClock,
         ILogger<GameManager> logger
     )
     {
@@ -55,10 +58,15 @@ public class GameManager : IGameManager
             clientConfigurator ?? throw new ArgumentNullException(nameof(clientConfigurator));
         this.youTubeReplayLookup =
             youTubeReplayLookup ?? throw new ArgumentNullException(nameof(youTubeReplayLookup));
+        this.recordingClock =
+            recordingClock ?? throw new ArgumentNullException(nameof(recordingClock));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task LaunchAndSpectate(LoadedReplay loadedReplay, Func<Task> whileReporting)
+    public async Task LaunchAndSpectate(
+        LoadedReplay loadedReplay,
+        Func<Task<LoadedReplay>> whileReporting
+    )
     {
         MediaRetention.SweepAndLog(settings, logger);
         await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
@@ -101,6 +109,11 @@ public class GameManager : IGameManager
                 obsSession = true;
                 statusStore.Patch(status => status.ObsSession = true);
                 obsController.ConfigureFromContext();
+                if (SessionMedia.ShouldRecord(settings.OBS, loadedReplay))
+                {
+                    recordingClock.Start();
+                }
+
                 obsController.StartRecording();
             }
 
@@ -115,6 +128,25 @@ public class GameManager : IGameManager
                     obsController.StopRecording();
                 }
                 catch { }
+
+                try
+                {
+                    await MatchClipExporter
+                        .ExportAsync(
+                            context.Current?.LoadedReplay?.Replay,
+                            context.Current?.LoadedReplay?.ReplayId,
+                            context.Current?.Directory?.FullName,
+                            recordingClock,
+                            settings.YouTube,
+                            settings.YouTube?.EntryFileName,
+                            logger
+                        )
+                        .ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    logger.LogWarning(e, "Could not cut team-kill clips.");
+                }
             }
 
             ReplayShutdown.CaptureEndThenKill(gameController, logger);
@@ -124,17 +156,15 @@ public class GameManager : IGameManager
         {
             if (obsSession)
             {
-                try
+                NextGameSignal nextGame = new();
+                Task<LoadedReplay> nextLoad = InvokeNextLoad(whileReporting);
+                Task report = obsController.CycleReportAsync(nextGame);
+                Task launch = LaunchNextDuringReportAsync(nextLoad, nextGame);
+                await Task.WhenAll(report, launch).ConfigureAwait(false);
+                if (!nextGame.IsSignaled)
                 {
-                    whileReporting?.Invoke();
+                    obsController.SwapToWaitingScene();
                 }
-                catch (Exception e)
-                {
-                    logger.LogWarning(e, "Could not start loading the next replay.");
-                }
-
-                await obsController.CycleReportAsync();
-                obsController.SwapToWaitingScene();
             }
         }
         finally
@@ -144,6 +174,105 @@ public class GameManager : IGameManager
                 obsController.EndSession();
             }
         }
+    }
+
+    private Task<LoadedReplay> InvokeNextLoad(Func<Task<LoadedReplay>> whileReporting)
+    {
+        if (whileReporting == null)
+        {
+            return Task.FromResult<LoadedReplay>(null);
+        }
+
+        try
+        {
+            return whileReporting() ?? Task.FromResult<LoadedReplay>(null);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not start loading the next replay.");
+            return Task.FromResult<LoadedReplay>(null);
+        }
+    }
+
+    private async Task LaunchNextDuringReportAsync(
+        Task<LoadedReplay> nextLoad,
+        NextGameSignal signal
+    )
+    {
+        if (settings.Capture?.Method == CaptureMethod.None)
+        {
+            return;
+        }
+
+        LoadedReplay next;
+        try
+        {
+            next = await nextLoad.ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not load the next replay during the report.");
+            return;
+        }
+
+        if (next?.FileInfo == null || !next.FileInfo.Exists)
+        {
+            return;
+        }
+
+        DateTimeOffset exitBy = DateTimeOffset.UtcNow.AddSeconds(20);
+        while (gameController.IsGameRunning() && DateTimeOffset.UtcNow < exitBy)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+        }
+
+        if (gameController.IsGameRunning())
+        {
+            logger.LogWarning("The previous game is still running. The next replay stays queued.");
+            return;
+        }
+
+        try
+        {
+            Process.Start(
+                new ProcessStartInfo { FileName = next.FileInfo.FullName, UseShellExecute = true }
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not start the next replay during the report.");
+            return;
+        }
+
+        DateTimeOffset seenBy = DateTimeOffset.UtcNow.AddMinutes(2);
+        while (!gameController.IsGameRunning() && DateTimeOffset.UtcNow < seenBy)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+        }
+
+        if (!gameController.IsGameRunning())
+        {
+            logger.LogWarning(
+                "Next replay {ReplayId} did not open during the report.",
+                next.ReplayId
+            );
+            return;
+        }
+
+        signal.Signal();
+        try
+        {
+            obsController.SwapToGameScene();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not switch OBS to the game scene.");
+        }
+
+        logger.LogInformation(
+            "Next replay {ReplayId} is open. OBS is on the game scene.",
+            next.ReplayId
+        );
     }
 
     private async Task MarkExistingYouTubeVideoAsync(LoadedReplay loadedReplay)

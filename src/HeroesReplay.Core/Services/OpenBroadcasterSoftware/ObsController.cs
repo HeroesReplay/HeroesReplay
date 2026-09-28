@@ -323,7 +323,7 @@ public class ObsController : IObsController
             });
     }
 
-    public async Task CycleReportAsync()
+    public async Task CycleReportAsync(NextGameSignal nextGame)
     {
         if (!context.Current.LoadedReplay.ReplayId.HasValue)
         {
@@ -363,7 +363,12 @@ public class ObsController : IObsController
                         )
                     )
                     {
-                        await TryCycleSceneAsync(source).ConfigureAwait(false);
+                        if (nextGame?.IsSignaled == true)
+                        {
+                            break;
+                        }
+
+                        await TryCycleSceneAsync(source, nextGame).ConfigureAwait(false);
                     }
 
                     return true;
@@ -396,13 +401,26 @@ public class ObsController : IObsController
         return true;
     }
 
-    private async Task<bool> TryCycleSceneAsync(ReportScene source)
+    private async Task<bool> TryCycleSceneAsync(ReportScene source, NextGameSignal nextGame)
     {
+        if (nextGame?.IsSignaled == true)
+        {
+            return false;
+        }
+
         try
         {
             obs.SetCurrentProgramScene(source.SceneName);
             logger.LogInformation($"set scene to: {source.SceneName}");
-            await Task.Delay(source.DisplayTime).ConfigureAwait(false);
+            if (nextGame == null)
+            {
+                await Task.Delay(source.DisplayTime).ConfigureAwait(false);
+            }
+            else
+            {
+                await nextGame.DelayAsync(source.DisplayTime).ConfigureAwait(false);
+            }
+
             return true;
         }
         catch (Exception e)

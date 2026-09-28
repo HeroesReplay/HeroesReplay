@@ -205,7 +205,10 @@ public class ReplayAnalyzer : IReplayAnalyzer
         return payloadsBuilder.CreatePayloads(replay);
     }
 
-    public IReadOnlyDictionary<TimeSpan, Focus> GetPlayers(Replay replay)
+    public IReadOnlyDictionary<TimeSpan, Focus> GetPlayers(Replay replay) =>
+        GetPlayers(replay, priorityPlayerIndex: null);
+
+    public IReadOnlyDictionary<TimeSpan, Focus> GetPlayers(Replay replay, int? priorityPlayerIndex)
     {
         if (replay == null)
         {
@@ -229,6 +232,11 @@ public class ReplayAnalyzer : IReplayAnalyzer
 
         timeline.ApplyDeathContext(settings.Spectate);
         timeline.HoldSelectionAcrossEmptySeconds();
+        if (priorityPlayerIndex is int index && settings.Spectate != null)
+        {
+            timeline.ApplyPlayerPriority(index, settings.Spectate.MaxDistanceToEnemy);
+        }
+
         IReadOnlyDictionary<TimeSpan, Focus> result = timeline.ToDictionary();
         logger.LogInformation(
             "Focus timeline: {Seconds} second(s), {Swaps} camera swap(s).",

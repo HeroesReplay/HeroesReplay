@@ -34,6 +34,11 @@ public class YouTubeEntryBuilderTests
         Assert.Equal("Storm League", entry.GameType);
         Assert.Equal("Diamond", entry.Rank);
         Assert.Equal("Volskaya Foundry - 65389750 - Storm League - Diamond", entry.Title);
+        Assert.DoesNotContain(
+            "player priority",
+            entry.Title,
+            System.StringComparison.OrdinalIgnoreCase
+        );
         Assert.Contains(
             entry.DescriptionLines,
             line => line.Contains("replayID=65389750", System.StringComparison.Ordinal)
@@ -192,5 +197,38 @@ public class YouTubeEntryBuilderTests
         );
 
         Assert.Equal("Braxis Holdout - 65396084 - Platinum", entry.Title);
+    }
+
+    [Fact]
+    public void Create_PrefixesThePriorityHero()
+    {
+        var loaded = new LoadedReplay
+        {
+            ReplayId = 1,
+            Replay = new Replay
+            {
+                Map = "Dragon Shire",
+                Players = new[]
+                {
+                    new Player { Character = "Illidan" },
+                    new Player { Character = "Johanna" },
+                },
+            },
+            HeroesProfileReplay = new HeroesProfileReplay
+            {
+                Id = 1,
+                Map = "Dragon Shire",
+                GameType = "Storm League",
+                Rank = "Diamond 3",
+            },
+            RewardQueueItem = new RewardQueueItem
+            {
+                Request = new RewardRequest { ReplayId = 1, PlayerIndex = 0 },
+            },
+        };
+
+        YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
+
+        Assert.Equal("Illidan - Dragon Shire - 1 - Storm League - Diamond 3", entry.Title);
     }
 }

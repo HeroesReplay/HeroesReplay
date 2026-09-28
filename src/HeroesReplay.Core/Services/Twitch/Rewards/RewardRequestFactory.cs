@@ -10,8 +10,7 @@ public class RewardRequestFactory : IRewardRequestFactory
     {
         if (
             reward.RewardType == RewardType.ReplayId
-            && !string.IsNullOrWhiteSpace(args.Message)
-            && int.TryParse(args.Message.Trim(), out int replayId)
+            && PlayerPriorityRequest.TryRead(args.Message, out int replayId, out int? playerIndex)
         )
         {
             return new RewardRequest(
@@ -25,6 +24,7 @@ public class RewardRequestFactory : IRewardRequestFactory
             )
             {
                 RecordAndUpload = reward.RecordAndUpload,
+                PlayerIndex = playerIndex,
             };
         }
         else

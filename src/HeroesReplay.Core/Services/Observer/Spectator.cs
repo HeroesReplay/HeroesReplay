@@ -41,6 +41,8 @@ public class Spectator : ISpectator
 
     private readonly GameTimerLog clockLog;
 
+    private readonly RecordingClock recordingClock;
+
     private DateTimeOffset? endScreenStarted;
 
     private TimeSpan lastAdvancedHud = TimeSpan.MinValue;
@@ -75,7 +77,8 @@ public class Spectator : ISpectator
         IObserverPanelRequests panelRequests,
         IObsController obsController,
         IGameTimer gameTimer,
-        GameTimerLog clockLog
+        GameTimerLog clockLog,
+        RecordingClock recordingClock
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -94,6 +97,8 @@ public class Spectator : ISpectator
         memoryClock = new MemoryMatchClock(logger);
         this.gameTimer = gameTimer ?? throw new ArgumentNullException(nameof(gameTimer));
         this.clockLog = clockLog ?? throw new ArgumentNullException(nameof(clockLog));
+        this.recordingClock =
+            recordingClock ?? throw new ArgumentNullException(nameof(recordingClock));
 
         panelTimes = new()
         {
@@ -235,6 +240,7 @@ public class Spectator : ISpectator
                 if (fromOcr)
                 {
                     Timer = reading.Time.Value;
+                    recordingClock.Observe(reading.Time.Value);
                     if (reading.Time.Value > lastAdvancedHud)
                     {
                         lastAdvancedHud = reading.Time.Value;

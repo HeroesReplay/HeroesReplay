@@ -354,7 +354,7 @@ public class ConnectivityWatchdogTests
 
         public void ConfigureFromContext() { }
 
-        public Task CycleReportAsync() => Task.CompletedTask;
+        public Task CycleReportAsync(NextGameSignal nextGame) => Task.CompletedTask;
 
         public void SwapToGameScene() { }
 

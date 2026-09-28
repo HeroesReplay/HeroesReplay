@@ -139,7 +139,7 @@ public class Engine : IEngine
                         () =>
                         {
                             nextLoad = StartNextLoad();
-                            return Task.CompletedTask;
+                            return nextLoad ?? Task.FromResult<LoadedReplay>(null);
                         }
                     );
                 }

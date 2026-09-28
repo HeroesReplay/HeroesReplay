@@ -53,7 +53,8 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
 
         Replay replay = loadedReplay.Replay;
 
-        var players = replayAnalyzer.GetPlayers(replay);
+        int? priorityPlayer = loadedReplay.RewardQueueItem?.Request?.PlayerIndex;
+        var players = replayAnalyzer.GetPlayers(replay, priorityPlayer);
         var panels = replayAnalyzer.GetPanels(replay);
         var talentTimes = replayAnalyzer.GetTalentTimes(replay);
         var end = replayAnalyzer.GetEnd(replay);
