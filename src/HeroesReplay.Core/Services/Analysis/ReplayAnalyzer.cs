@@ -234,7 +234,7 @@ public class ReplayAnalyzer : IReplayAnalyzer
         timeline.HoldSelectionAcrossEmptySeconds();
         if (priorityPlayerIndex is int index && settings.Spectate != null)
         {
-            timeline.ApplyPlayerPriority(index, settings.Spectate.MaxDistanceToEnemy);
+            timeline.ApplyPlayerPriority(index);
         }
 
         IReadOnlyDictionary<TimeSpan, Focus> result = timeline.ToDictionary();

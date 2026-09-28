@@ -244,7 +244,7 @@ public sealed class ReplayTimeline
         }
     }
 
-    public void ApplyPlayerPriority(int playerIndex, double maxDistance)
+    public void ApplyPlayerPriority(int playerIndex)
     {
         Player[] players = Replay.Players ?? Array.Empty<Player>();
         if (playerIndex < 0 || playerIndex >= players.Length)
@@ -256,22 +256,12 @@ public sealed class ReplayTimeline
         for (int second = 0; second < TotalSeconds; second++)
         {
             Unit hero = AliveHero(player, second);
-            Focus current = slots[second];
-            bool killBySomeoneElse =
-                current?.Calculator == typeof(KillCalculator) && current.Target != player;
-            bool near =
-                current == null
-                || current.Target == player
-                || (
-                    hero != null
-                    && current.Unit != null
-                    && Within(hero, current.Unit, second, maxDistance)
-                );
-            if (!PlayerPriorityRequest.Watch(hero != null, killBySomeoneElse, near))
+            if (!PlayerPriorityRequest.Watch(hero != null))
             {
                 continue;
             }
 
+            Focus current = slots[second];
             slots[second] = new Focus(
                 typeof(PlayerPriorityRequest),
                 hero,
@@ -293,26 +283,6 @@ public sealed class ReplayTimeline
         }
 
         return null;
-    }
-
-    private bool Within(Unit hero, Unit other, int second, double maxDistance)
-    {
-        if (maxDistance <= 0 || hero == null || other == null)
-        {
-            return false;
-        }
-
-        if (!TryGetPoint(hero, second, out Point heroPoint))
-        {
-            return false;
-        }
-
-        if (!TryGetPoint(other, second, out Point otherPoint))
-        {
-            return false;
-        }
-
-        return heroPoint.DistanceTo(otherPoint) <= maxDistance;
     }
 
     public IReadOnlyDictionary<TimeSpan, Focus> ToDictionary()

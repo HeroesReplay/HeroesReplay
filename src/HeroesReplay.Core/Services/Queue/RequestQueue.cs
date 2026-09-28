@@ -264,7 +264,7 @@ public class RequestQueue : IRequestQueue, IDisposable
     {
         string focus =
             request?.PlayerIndex is int index && PlayerPriorityRequest.Digit(index) is string digit
-                ? $" Focus follows player {digit} while they are in the fight."
+                ? $" Focus follows player {digit} while they are alive."
                 : string.Empty;
         return $"{replay.Id} - {ReplayLabel.MapAndRank(replay.Map, replay.Rank)} has been queued. ({position}){focus}";
     }

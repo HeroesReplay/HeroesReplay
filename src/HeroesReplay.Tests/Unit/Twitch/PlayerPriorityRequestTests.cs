@@ -38,17 +38,10 @@ public class PlayerPriorityRequestTests
     }
 
     [Theory]
-    [InlineData(true, false, true, true)]
-    [InlineData(false, false, true, false)]
-    [InlineData(true, true, true, false)]
-    [InlineData(true, false, false, false)]
-    public void Watch_KeepsTheNormalCameraWhenDeadFarOrOnSomeoneElsesKill(
-        bool alive,
-        bool killBySomeoneElse,
-        bool nearTheAction,
-        bool watch
-    )
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void Watch_FollowsTheHeroWheneverTheyAreAlive(bool alive, bool watch)
     {
-        Assert.Equal(watch, PlayerPriorityRequest.Watch(alive, killBySomeoneElse, nearTheAction));
+        Assert.Equal(watch, PlayerPriorityRequest.Watch(alive));
     }
 }

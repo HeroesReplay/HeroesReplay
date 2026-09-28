@@ -116,10 +116,11 @@ public static class PlayerPriorityRequest
     }
 
     /// <summary>
-    /// Alive players in the fight are watched. A kill by someone else, or a player far from that fight, keeps the normal camera.
+    /// Coaching view: follow this hero whenever they are alive, including camps and rotations.
+    /// While they are dead, the normal camera is used until they respawn.
     /// </summary>
-    public static bool Watch(bool alive, bool killBySomeoneElse, bool nearTheAction)
+    public static bool Watch(bool alive)
     {
-        return alive && !killBySomeoneElse && nearTheAction;
+        return alive;
     }
 }
