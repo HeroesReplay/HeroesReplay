@@ -20,6 +20,9 @@ public class ClientSettings
     public string ReplayInterface { get; set; } = "AhliObs 0.75";
     public string InterfaceFileName { get; set; } = "AhliObs 0.75.StormInterface";
 
+    /// <summary>Play in Background. Account Variables.txt overrides the root file after login.</summary>
+    public string SoundGlobal { get; set; } = "true";
+
     public IReadOnlyDictionary<string, string> DisplayPreset =>
         new Dictionary<string, string>
         {
@@ -38,12 +41,20 @@ public class ClientSettings
             ["replayinterface"] = ReplayInterface,
         };
 
+    public IReadOnlyDictionary<string, string> SoundPreset =>
+        new Dictionary<string, string> { ["soundglobal"] = SoundGlobal };
+
     public IReadOnlyDictionary<string, string> VariablesPreset
     {
         get
         {
             var merged = new Dictionary<string, string>(DisplayPreset);
             foreach (KeyValuePair<string, string> pair in InterfacePreset)
+            {
+                merged[pair.Key] = pair.Value;
+            }
+
+            foreach (KeyValuePair<string, string> pair in SoundPreset)
             {
                 merged[pair.Key] = pair.Value;
             }

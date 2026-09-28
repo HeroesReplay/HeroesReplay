@@ -381,6 +381,8 @@ public class ReleaseHandoffTests
         public Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId) =>
             Task.FromResult<IEnumerable<HeroesProfileReplay>>(Array.Empty<HeroesProfileReplay>());
 
+        public Task<ReplayListing> ListPageAsync(int minId) => Task.FromResult(ReplayListing.Empty);
+
         public Task<IReadOnlyList<HeroesProfileReplay>> ListAfterAsync(
             int after,
             CancellationToken cancellationToken

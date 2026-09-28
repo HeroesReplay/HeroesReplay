@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Client;
 using Xunit;
 
@@ -46,17 +47,42 @@ public class StormVariablesEditorTests
         Assert.Equal("Direct3D11", parsed["GraphicsApi"]);
     }
 
+    [Fact]
+    public void VariablesPreset_WritesWindowed1080pBackgroundAudioAndAhliObs()
+    {
+        IReadOnlyDictionary<string, string> preset = new ClientSettings().VariablesPreset;
+        string applied = StormVariablesEditor.Apply(
+            "soundglobal=false\r\nGraphicsApi=Direct3D11\r\nobserverinterface=AhliObs 0.75.StormInterface\r\n",
+            preset
+        );
+        Dictionary<string, string> parsed = StormVariablesEditor.Parse(applied);
+
+        Assert.Equal("0", parsed["displaymode"]);
+        Assert.Equal("1920", parsed["width"]);
+        Assert.Equal("1080", parsed["height"]);
+        Assert.Equal("1920", parsed["windowwidth"]);
+        Assert.Equal("1080", parsed["windowheight"]);
+        Assert.Equal("1", parsed["windowstate"]);
+        Assert.Equal("true", parsed["soundglobal"]);
+        Assert.Equal("AhliObs 0.75", parsed["observerinterface"]);
+        Assert.Equal("AhliObs 0.75", parsed["replayinterface"]);
+        Assert.Equal("Direct3D11", parsed["GraphicsApi"]);
+        Assert.DoesNotContain(".StormInterface", parsed["observerinterface"]);
+    }
+
     [Theory]
-    [InlineData("AhliObs 0.75", "AhliObs 0.75")]
-    [InlineData("AhliObs 0.75", "AhliObs 0.75.StormInterface")]
-    [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75")]
-    [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75.StormInterface")]
-    public void InterfaceNameEquals_TreatsDropdownAndFilenameAsTheSame(
+    [InlineData("AhliObs 0.75", "AhliObs 0.75", true)]
+    [InlineData("AhliObs 0.75", "ahliobs 0.75", true)]
+    [InlineData("AhliObs 0.75", "AhliObs 0.75.StormInterface", false)]
+    [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75", false)]
+    [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75.StormInterface", true)]
+    public void InterfaceNameEquals_MatchesTheDropdownNameExactly(
         string expected,
-        string actual
+        string actual,
+        bool same
     )
     {
-        Assert.True(StormVariablesEditor.InterfaceNameEquals(expected, actual));
+        Assert.Equal(same, StormVariablesEditor.InterfaceNameEquals(expected, actual));
     }
 
     [Fact]

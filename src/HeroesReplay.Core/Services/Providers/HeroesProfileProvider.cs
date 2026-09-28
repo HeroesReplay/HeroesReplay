@@ -417,32 +417,40 @@ public class HeroesProfileProvider : IReplayProvider
 
     private async Task<HeroesProfileReplay> ListOnceAsync()
     {
-        IEnumerable<HeroesProfileReplay> replays = await heroesProfileService
-            .GetReplaysByMinId(MinReplayId)
-            .ConfigureAwait(false);
-
-        if (replays != null && replays.Any())
+        for (int pageIndex = 0; pageIndex < 40; pageIndex++)
         {
-            logger.LogInformation("Finding replay that fits criteria.");
-
-            HeroesProfileReplay found = replays
-                .Where(r =>
-                    r.Id > MinReplayId && settings.HeroesProfileApi.IsAllowedGameType(r.GameType)
+            provider.Token.ThrowIfCancellationRequested();
+            int currentMin = MinReplayId;
+            ReplayListing page = await heroesProfileService
+                .ListPageAsync(currentMin)
+                .ConfigureAwait(false);
+            HeroesProfileReplay found = page
+                ?.Playable?.Where(replay =>
+                    replay != null
+                    && replay.Id > currentMin
+                    && settings.HeroesProfileApi.IsAllowedGameType(replay.GameType)
                 )
-                .OrderBy(x => x.Id)
+                .OrderBy(replay => replay.Id)
                 .FirstOrDefault();
-
-            if (found == null)
+            if (found != null)
             {
-                logger.LogWarning($"Replay not found with criteria. MinReplayId = {MinReplayId}");
-                MinReplayId = replays.Max(x => x.Id);
-            }
-            else
-            {
-                logger.LogInformation($"Replay found. MinReplayId = {MinReplayId}");
+                logger.LogInformation("Replay found. MinReplayId = {MinReplayId}", currentMin);
                 MinReplayId = found.Id;
                 return found;
             }
+
+            int? next = ReplayListCursor.AfterRejectedPage(currentMin, page);
+            if (next is not int advanced)
+            {
+                return null;
+            }
+
+            logger.LogInformation(
+                "No playable replay after {MinReplayId}. Continuing after {Next}.",
+                currentMin,
+                advanced
+            );
+            MinReplayId = advanced;
         }
 
         return null;

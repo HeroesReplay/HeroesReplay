@@ -18,6 +18,8 @@ public sealed record AspireCliInvocation(
 
 public sealed record AspireProcessStart(int? Pid, string Error, string LogPath);
 
+public sealed record AspireLauncherDecision(bool KillLauncherOnly, int? Pid, string Error);
+
 public sealed record DashboardEnsureResult(bool Listening, bool Launched, string Detail);
 
 public static class AspireDashboardHost
@@ -526,6 +528,45 @@ public static class AspireDashboardHost
             + " -Value $p.Id -NoNewline";
     }
 
+    /// <summary>
+    /// Decides what Launch should do after the bounded powershell wait.
+    /// A live OTLP port means the dashboard is up, so the launcher is left alone.
+    /// The parameterless Process.WaitForExit waits for redirected-pipe EOF. A child
+    /// that inherited those pipes never signals EOF, so Launch must not call it.
+    /// </summary>
+    public static AspireLauncherDecision AfterLauncherWait(
+        bool exitedWithinBudget,
+        bool portListening,
+        int? pid,
+        int? exitCode,
+        string errorText
+    )
+    {
+        if (portListening)
+        {
+            return new AspireLauncherDecision(false, pid is > 0 ? pid : 1, null);
+        }
+
+        if (!exitedWithinBudget)
+        {
+            return new AspireLauncherDecision(
+                true,
+                null,
+                "powershell timed out starting the Aspire CLI"
+            );
+        }
+
+        if (exitCode != 0 || pid is not > 0)
+        {
+            string error = string.IsNullOrWhiteSpace(errorText)
+                ? "powershell exited without a dashboard pid"
+                : errorText;
+            return new AspireLauncherDecision(false, null, error);
+        }
+
+        return new AspireLauncherDecision(false, pid, null);
+    }
+
     public static AspireProcessStart Launch(AspireCliInvocation invocation)
     {
         if (invocation == null || string.IsNullOrWhiteSpace(invocation.FileName))
@@ -571,32 +612,41 @@ public static class AspireDashboardHost
             process.ErrorDataReceived += (_, e) => AppendLine(stderr, e.Data);
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
-            if (!process.WaitForExit(15000))
+            bool exited = process.WaitForExit(15000);
+            int? exitCode = null;
+            if (exited)
             {
                 try
                 {
-                    process.Kill(entireProcessTree: true);
+                    exitCode = process.ExitCode;
                 }
-                catch (Exception) { }
-
-                return new AspireProcessStart(
-                    null,
-                    "powershell timed out starting the Aspire CLI",
-                    StderrLogPath
-                );
+                catch (InvalidOperationException)
+                {
+                    exitCode = null;
+                }
             }
 
-            process.WaitForExit();
             int? pid = File.Exists(PidPath)
                 ? Commands.Services.ServicesCommand.ParseProcessId(File.ReadAllText(PidPath))
                 : null;
-            if (process.ExitCode != 0 || pid == null)
+            string errorText = stderr.Length > 0 ? stderr.ToString() : stdout.ToString();
+            AspireLauncherDecision decision = AfterLauncherWait(
+                exited,
+                IsPortListening(OtlpGrpcPort),
+                pid,
+                exitCode,
+                TrimError(errorText)
+            );
+            if (decision.KillLauncherOnly)
             {
-                string error = stderr.Length > 0 ? stderr.ToString() : stdout.ToString();
-                return new AspireProcessStart(null, TrimError(error), StderrLogPath);
+                try
+                {
+                    process.Kill(entireProcessTree: false);
+                }
+                catch (Exception) { }
             }
 
-            return new AspireProcessStart(pid, null, StderrLogPath);
+            return new AspireProcessStart(decision.Pid, decision.Error, StderrLogPath);
         }
         catch (Exception e)
         {

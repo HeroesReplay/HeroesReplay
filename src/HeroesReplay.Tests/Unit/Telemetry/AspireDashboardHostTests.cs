@@ -336,6 +336,79 @@ public class AspireDashboardHostTests
         Assert.False(File.Exists(Path.Combine(root, "deploy", "aspire", "docker-compose.yml")));
     }
 
+    [Fact]
+    public void AfterLauncherWait_WhenPowershellExits_ReturnsTheDashboardPid()
+    {
+        AspireLauncherDecision decision = AspireDashboardHost.AfterLauncherWait(
+            exitedWithinBudget: true,
+            portListening: false,
+            pid: 4242,
+            exitCode: 0,
+            errorText: null
+        );
+
+        Assert.False(decision.KillLauncherOnly);
+        Assert.Equal(4242, decision.Pid);
+        Assert.Null(decision.Error);
+    }
+
+    [Fact]
+    public void AfterLauncherWait_WhenThePortIsUp_LeavesTheDashboardRunning()
+    {
+        AspireLauncherDecision timedOut = AspireDashboardHost.AfterLauncherWait(
+            exitedWithinBudget: false,
+            portListening: true,
+            pid: null,
+            exitCode: null,
+            errorText: null
+        );
+        AspireLauncherDecision exitedWithoutPid = AspireDashboardHost.AfterLauncherWait(
+            exitedWithinBudget: true,
+            portListening: true,
+            pid: null,
+            exitCode: 0,
+            errorText: null
+        );
+
+        Assert.False(timedOut.KillLauncherOnly);
+        Assert.Equal(1, timedOut.Pid);
+        Assert.Null(timedOut.Error);
+        Assert.False(exitedWithoutPid.KillLauncherOnly);
+        Assert.Equal(1, exitedWithoutPid.Pid);
+    }
+
+    [Fact]
+    public void AfterLauncherWait_WhenPowershellTimesOutAndThePortIsDown_KillsOnlyTheLauncher()
+    {
+        AspireLauncherDecision decision = AspireDashboardHost.AfterLauncherWait(
+            exitedWithinBudget: false,
+            portListening: false,
+            pid: 9,
+            exitCode: null,
+            errorText: null
+        );
+
+        Assert.True(decision.KillLauncherOnly);
+        Assert.Null(decision.Pid);
+        Assert.Contains("timed out", decision.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AfterLauncherWait_WhenPowershellExitsWithoutAPid_ReportsTheError()
+    {
+        AspireLauncherDecision decision = AspireDashboardHost.AfterLauncherWait(
+            exitedWithinBudget: true,
+            portListening: false,
+            pid: null,
+            exitCode: 1,
+            errorText: "aspire missing"
+        );
+
+        Assert.False(decision.KillLauncherOnly);
+        Assert.Null(decision.Pid);
+        Assert.Equal("aspire missing", decision.Error);
+    }
+
     private static string NewManifestRoot()
     {
         string root = Path.Combine(Path.GetTempPath(), $"aspire-manifest-{Guid.NewGuid():N}");

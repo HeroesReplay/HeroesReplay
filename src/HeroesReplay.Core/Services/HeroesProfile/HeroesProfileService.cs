@@ -260,22 +260,32 @@ public class HeroesProfileService : IHeroesProfileService
 
     public async Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId)
     {
+        ReplayListing page = await ListPageAsync(minId).ConfigureAwait(false);
+        return page.Playable;
+    }
+
+    public async Task<ReplayListing> ListPageAsync(int minId)
+    {
         try
         {
             ReplaysGetResponse page = await GetReplaysPageAsync(
-                minId,
-                settings.HeroesProfileApi.GameTypes?.FirstOrDefault(),
-                gameMap: null,
-                tokenProvider.Token
-            );
-            return FilterListed(HeroesProfileReplayMapper.ToReplays(page));
+                    minId,
+                    settings.HeroesProfileApi.GameTypes?.FirstOrDefault(),
+                    gameMap: null,
+                    tokenProvider.Token
+                )
+                .ConfigureAwait(false);
+            var rows = HeroesProfileReplayMapper.ToReplays(page).ToList();
+            int highest = rows.Count == 0 ? 0 : rows.Max(replay => replay.Id);
+            var playable = FilterListed(rows).Where(replay => replay.Id > minId).ToList();
+            return new ReplayListing(playable, rows.Count > 0, highest, page?.NextAfter);
         }
         catch (Exception e)
         {
             logger.LogError(e, "Could not get replays from HeroesProfile Replays.");
         }
 
-        return Enumerable.Empty<HeroesProfileReplay>();
+        return ReplayListing.Empty;
     }
 
     public async Task<IReadOnlyList<HeroesProfileReplay>> ListAfterAsync(

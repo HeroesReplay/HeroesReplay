@@ -367,14 +367,16 @@ public class GameManager : IGameManager
         activity?.SetTag("client.hots_running", status.HotSRunning);
         if (status.MatchesPreset)
         {
-            logger.LogInformation("Heroes client already windowed 1080p with AhliObs.");
+            logger.LogInformation(
+                "Heroes client already windowed 1080p with background audio and AhliObs."
+            );
             return;
         }
 
         if (status.HotSRunning)
         {
             logger.LogWarning(
-                "Heroes client is not windowed 1080p / AhliObs ({Mismatches}). Quit the game and run `heroesreplay client configure`, then relaunch windowed.",
+                "Heroes client is not windowed 1080p with background audio and AhliObs ({Mismatches}). Quit the game and run `heroesreplay client configure`, then relaunch windowed.",
                 string.Join("; ", status.Mismatches)
             );
             return;
@@ -382,7 +384,7 @@ public class GameManager : IGameManager
 
         ClientConfigureResult result = clientConfigurator.Configure();
         logger.LogInformation(
-            "Applied windowed 1080p + AhliObs to {Variables}. Interface copied: {Copied}.",
+            "Applied windowed 1080p, background audio, and AhliObs to {Variables}. Interface copied: {Copied}.",
             result.VariablesPath,
             result.InterfaceCopied
         );

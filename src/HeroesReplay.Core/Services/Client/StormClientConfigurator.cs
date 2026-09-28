@@ -41,7 +41,7 @@ public sealed class StormClientConfigurator
         ApplyVariables(variablesPath, client.VariablesPreset);
         foreach (string accountVariables in EnumerateAccountVariables(gameFolder))
         {
-            ApplyVariables(accountVariables, client.InterfacePreset);
+            ApplyVariables(accountVariables, client.VariablesPreset);
         }
 
         bool hotSRunning = IsHeroesRunning();
@@ -56,7 +56,7 @@ public sealed class StormClientConfigurator
         if (hotSRunning)
         {
             warnings.Add(
-                "Heroes of the Storm is running. Restart the client so windowed 1080p and AhliObs take effect."
+                "Heroes of the Storm is running. Restart the client so windowed 1080p, background audio, and AhliObs take effect."
             );
         }
 
@@ -92,7 +92,7 @@ public sealed class StormClientConfigurator
         {
             foreach (string accountVariables in accountFiles)
             {
-                CollectMismatches(accountVariables, client.InterfacePreset, mismatches);
+                CollectMismatches(accountVariables, client.VariablesPreset, mismatches);
             }
         }
 

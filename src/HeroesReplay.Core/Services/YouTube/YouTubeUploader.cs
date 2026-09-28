@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -26,6 +28,9 @@ public class YouTubeUploader : IYouTubeUploader
     private readonly ILogger<YouTubeUploader> logger;
     private readonly AppSettings settings;
     private readonly CancellationTokenSource cancellationTokenSource;
+    private readonly ConcurrentDictionary<string, byte> uploadsInFlight = new(
+        StringComparer.OrdinalIgnoreCase
+    );
 
     public YouTubeUploader(
         ILogger<YouTubeUploader> logger,
@@ -42,7 +47,14 @@ public class YouTubeUploader : IYouTubeUploader
     {
         try
         {
-            await ProcessRecording(e.FullPath).ConfigureAwait(false);
+            await ProcessOnceAsync(e.FullPath).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogInformation(
+                "Upload of {Path} was interrupted and will be sent on the next start.",
+                e.FullPath
+            );
         }
         catch (Exception ex)
         {
@@ -76,6 +88,7 @@ public class YouTubeUploader : IYouTubeUploader
         );
         try
         {
+            await SendPendingAsync().ConfigureAwait(false);
             await Task.Delay(Timeout.Infinite, cancellationTokenSource.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -108,6 +121,22 @@ public class YouTubeUploader : IYouTubeUploader
         YouTubeEntry entry = JsonSerializer.Deserialize<YouTubeEntry>(
             await File.ReadAllTextAsync(entryFile.FullName, token)
         );
+        if (entry == null)
+        {
+            logger.LogWarning("YouTube entry next to {Path} was empty.", recordingPath);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(entry.VideoId))
+        {
+            logger.LogInformation(
+                "Replay {ReplayId} already has YouTube video {VideoId}. Marking the entry uploaded.",
+                entry.ReplayId,
+                entry.VideoId
+            );
+            MarkEntryUploaded(entryFile, recording.Directory);
+            return;
+        }
 
         if (settings.YouTube.DryRun)
         {
@@ -202,6 +231,67 @@ public class YouTubeUploader : IYouTubeUploader
             throw new InvalidOperationException(
                 $"YouTube upload status {result.Status}: {result.Exception?.Message}"
             );
+        }
+    }
+
+    private async Task SendPendingAsync()
+    {
+        IReadOnlyList<string> pending = PendingYouTubeUpload.Find(
+            settings.ContextsDirectory,
+            settings.YouTube.EntryFileName,
+            settings.YouTube.EntryFileNameUploaded
+        );
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        logger.LogInformation(
+            "Found {Count} recording(s) waiting to be sent to YouTube.",
+            pending.Count
+        );
+        foreach (string path in pending)
+        {
+            try
+            {
+                await ProcessOnceAsync(path).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                logger.LogInformation(
+                    "Upload of {Path} was interrupted and will be sent on the next start.",
+                    path
+                );
+                return;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Could not upload {Path}", path);
+            }
+        }
+    }
+
+    private async Task ProcessOnceAsync(string recordingPath)
+    {
+        if (string.IsNullOrWhiteSpace(recordingPath))
+        {
+            return;
+        }
+
+        string key = Path.GetFullPath(recordingPath);
+        if (!uploadsInFlight.TryAdd(key, 0))
+        {
+            logger.LogInformation("Upload of {Path} is already in progress.", key);
+            return;
+        }
+
+        try
+        {
+            await ProcessRecording(key).ConfigureAwait(false);
+        }
+        finally
+        {
+            uploadsInFlight.TryRemove(key, out _);
         }
     }
 

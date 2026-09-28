@@ -16,6 +16,7 @@ public interface IHeroesProfileService
     );
     Task<HeroesProfileReplay> GetReplayByIdAsync(int replayId);
     Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId);
+    Task<ReplayListing> ListPageAsync(int minId);
     Task<IReadOnlyList<HeroesProfileReplay>> ListAfterAsync(
         int after,
         CancellationToken cancellationToken

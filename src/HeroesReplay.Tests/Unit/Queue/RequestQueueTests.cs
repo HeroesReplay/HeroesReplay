@@ -238,6 +238,8 @@ public class RequestQueueTests
         public Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId) =>
             throw new NotSupportedException();
 
+        public Task<ReplayListing> ListPageAsync(int minId) => throw new NotSupportedException();
+
         public Task<IReadOnlyList<HeroesProfileReplay>> ListAfterAsync(
             int after,
             CancellationToken cancellationToken
