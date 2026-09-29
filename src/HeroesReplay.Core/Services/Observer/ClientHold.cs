@@ -7,6 +7,7 @@ public enum ClientHoldReason
     None,
     VersionMismatch,
     RegionUnavailable,
+    BuildNotInstalled,
 }
 
 /// <summary>

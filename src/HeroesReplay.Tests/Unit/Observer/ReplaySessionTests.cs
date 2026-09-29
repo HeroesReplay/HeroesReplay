@@ -37,6 +37,7 @@ public class ReplaySessionTests
     [Theory]
     [InlineData(ClientHoldReason.VersionMismatch, MatchOutcome.VersionMismatch)]
     [InlineData(ClientHoldReason.RegionUnavailable, MatchOutcome.RegionUnavailable)]
+    [InlineData(ClientHoldReason.BuildNotInstalled, MatchOutcome.BuildNotInstalled)]
     public void FromHold_DialogsStayHeld(ClientHoldReason hold, MatchOutcome expected)
     {
         MatchOutcome outcome = MatchCompletion.FromHold(hold);
@@ -111,6 +112,7 @@ public class ReplaySessionTests
     [InlineData(MatchOutcome.LoadTimedOut)]
     [InlineData(MatchOutcome.VersionMismatch)]
     [InlineData(MatchOutcome.RegionUnavailable)]
+    [InlineData(MatchOutcome.BuildNotInstalled)]
     public void Normalize_KeepsTheReasonThatEndedTheSession(MatchOutcome outcome)
     {
         Assert.Equal(
@@ -124,6 +126,7 @@ public class ReplaySessionTests
     [InlineData(MatchOutcome.ClientHung)]
     [InlineData(MatchOutcome.VersionMismatch)]
     [InlineData(MatchOutcome.RegionUnavailable)]
+    [InlineData(MatchOutcome.BuildNotInstalled)]
     [InlineData(MatchOutcome.LoadTimedOut)]
     [InlineData(MatchOutcome.Stopped)]
     [InlineData(MatchOutcome.Canceled)]

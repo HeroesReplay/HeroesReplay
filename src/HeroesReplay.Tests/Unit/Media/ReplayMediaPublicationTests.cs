@@ -27,6 +27,7 @@ public class ReplayMediaPublicationTests
     [InlineData(MatchOutcome.ClientHung)]
     [InlineData(MatchOutcome.VersionMismatch)]
     [InlineData(MatchOutcome.RegionUnavailable)]
+    [InlineData(MatchOutcome.BuildNotInstalled)]
     [InlineData(MatchOutcome.LoadTimedOut)]
     [InlineData(MatchOutcome.Stopped)]
     [InlineData(MatchOutcome.Canceled)]

@@ -33,7 +33,10 @@ public sealed class StubController : IGameController
 
     public Process GetGameProcess() => null;
 
-    public Task<bool> StartAuthenticatedReplayAsync(string replayPath) => Task.FromResult(false);
+    public Task<bool> StartAuthenticatedReplayAsync(
+        string replayPath,
+        string replayVersion = null
+    ) => Task.FromResult(false);
 
     public Task<bool> OpenReplayFromHomeScreenAsync(string replayPath) => Task.FromResult(false);
 

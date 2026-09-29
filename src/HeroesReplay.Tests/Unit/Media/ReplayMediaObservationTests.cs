@@ -364,6 +364,7 @@ public class ReplayMediaObservationTests
     [Theory]
     [InlineData(MatchOutcome.VersionMismatch)]
     [InlineData(MatchOutcome.RegionUnavailable)]
+    [InlineData(MatchOutcome.BuildNotInstalled)]
     [InlineData(MatchOutcome.ClientCrashed)]
     [InlineData(MatchOutcome.ClientHung)]
     [InlineData(MatchOutcome.LoadTimedOut)]

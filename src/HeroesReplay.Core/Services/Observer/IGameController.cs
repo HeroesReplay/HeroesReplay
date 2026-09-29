@@ -8,7 +8,7 @@ namespace HeroesReplay.Core.Services.Observer;
 public interface IGameController
 {
     Task<ClientHoldReason> LaunchAsync();
-    Task<bool> StartAuthenticatedReplayAsync(string replayPath);
+    Task<bool> StartAuthenticatedReplayAsync(string replayPath, string replayVersion = null);
     Task<bool> OpenReplayFromHomeScreenAsync(string replayPath);
     Task<TimeSpan?> TryGetTimerAsync();
     Task<bool> IsReplayPresentedAsync(LoadedReplay replay);

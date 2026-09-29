@@ -41,6 +41,7 @@ public class GameController : IGameController
     private IntPtr cachedHandle;
     private string lastRejectedTimer;
     private bool replayFileOpened;
+    private ReplayClientPatch launchPatch = ReplayClientPatch.Current;
 
     public bool ReplayFileOpened => replayFileOpened;
 
@@ -94,29 +95,6 @@ public class GameController : IGameController
         );
 
         replayFileOpened = false;
-        bool running = IsLaunched();
-        bool presented =
-            running
-            && await IsReplayPresentedAsync(context.Current.LoadedReplay).ConfigureAwait(false);
-        bool home = running && !presented && await IsHomeScreen().ConfigureAwait(false);
-        ReplayLaunchStep step = ReplayLaunchPlan.Decide(running, presented, home);
-        if (step == ReplayLaunchStep.AlreadyInMatch)
-        {
-            logger.LogInformation(
-                "Client is already showing the loading screen or the match clock. Skipping launch."
-            );
-            replayFileOpened = true;
-            ShowGameScene("match already on screen");
-            return ClientHoldReason.None;
-        }
-
-        if (step == ReplayLaunchStep.Wait)
-        {
-            logger.LogInformation(
-                "Client is up without the home screen or the match clock. Leaving it open until the signed-in menu or the match is visible."
-            );
-        }
-
         return await LaunchAndWait().ConfigureAwait(false);
     }
 
@@ -150,27 +128,13 @@ public class GameController : IGameController
         return ClientHoldReason.None;
     }
 
-    public async Task<bool> StartAuthenticatedReplayAsync(string replayPath)
+    public async Task<bool> StartAuthenticatedReplayAsync(
+        string replayPath,
+        string replayVersion = null
+    )
     {
-        if (!IsLaunched())
-        {
-            await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
-        }
-
-        if (IsLaunched() && await IsHomeScreen().ConfigureAwait(false))
-        {
-            OpenReplayFromHome(replayPath);
-            return true;
-        }
-
-        if (IsLaunched())
-        {
-            logger.LogInformation(
-                "Heroes is open without the home screen. The replay file stays closed until the signed-in menu is visible."
-            );
-        }
-
-        return false;
+        ReplayBoot boot = await BeginReplayAsync(replayPath, replayVersion).ConfigureAwait(false);
+        return boot.OpenedFromHome || boot.Auth == ReplayLaunchAuth.AlreadyInMatch;
     }
 
     public async Task<bool> OpenReplayFromHomeScreenAsync(string replayPath)
@@ -189,6 +153,149 @@ public class GameController : IGameController
         replayFileOpened = true;
         logger.LogInformation("Client is on the home screen. Opening the replay.");
         replayOpener.Open(replayPath);
+    }
+
+    private readonly record struct ReplayBoot(ReplayLaunchAuth Auth, bool OpenedFromHome);
+
+    private async Task<ReplayBoot> BeginReplayAsync(string replayPath, string replayVersion)
+    {
+        IReadOnlyList<string> installed = InstalledClientCatalog.FileVersions(
+            settings.Location?.GameInstallDirectory
+        );
+        launchPatch = ReplayClientRoute.Classify(replayVersion, installed);
+        if (installed.Count == 0)
+        {
+            logger.LogWarning(
+                "No Heroes clients were found under Versions. This replay uses the current-patch sign-in."
+            );
+        }
+
+        RunningClientBuild running = ReadRunningBuild(replayVersion);
+        bool presented = false;
+        bool home = false;
+        if (running == RunningClientBuild.Matches)
+        {
+            presented = await IsReplayPresentedAsync(context.Current?.LoadedReplay)
+                .ConfigureAwait(false);
+            home = !presented && await IsHomeScreen().ConfigureAwait(false);
+        }
+
+        ReplayLaunchAuth auth = ReplayClientRoute.Decide(launchPatch, running, home, presented);
+        logger.LogInformation(
+            "Replay {Version} is the {Patch} patch. Running client is {Running}. Launch step is {Auth}. Installed: {Installed}.",
+            string.IsNullOrWhiteSpace(replayVersion) ? "(unknown)" : replayVersion,
+            launchPatch,
+            running,
+            auth,
+            installed.Count == 0 ? "(none)" : string.Join(", ", installed)
+        );
+
+        if (auth == ReplayLaunchAuth.Unavailable)
+        {
+            logger.LogWarning(
+                "Replay {Version} needs a Heroes client that is not installed. The current patch was not launched.",
+                replayVersion
+            );
+            return new ReplayBoot(auth, false);
+        }
+
+        if (auth == ReplayLaunchAuth.AlreadyInMatch)
+        {
+            replayFileOpened = true;
+            ShowGameScene("match already on screen");
+            return new ReplayBoot(auth, true);
+        }
+
+        if (auth == ReplayLaunchAuth.Wait)
+        {
+            logger.LogInformation(
+                "Matching Heroes client is up without the home screen or the match clock. The replay file stays closed."
+            );
+            return new ReplayBoot(auth, false);
+        }
+
+        if (auth == ReplayLaunchAuth.OpenFromHome)
+        {
+            OpenReplayFromHome(replayPath);
+            return new ReplayBoot(auth, true);
+        }
+
+        if (running == RunningClientBuild.Differs)
+        {
+            logger.LogInformation(
+                "Closing the running Heroes client because it is not replay build {Version}.",
+                replayVersion
+            );
+            Kill();
+            replayFileOpened = false;
+            await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token)
+                .ConfigureAwait(false);
+            if (IsGameProcessRunning())
+            {
+                logger.LogWarning(
+                    "The other Heroes build is still running. The replay file was not opened."
+                );
+                return new ReplayBoot(ReplayLaunchAuth.Wait, false);
+            }
+        }
+
+        if (auth == ReplayLaunchAuth.OpenInstalledBuild)
+        {
+            logger.LogInformation(
+                "Opening previous-patch replay {Version} through HeroesSwitcher. Battle.net Play was not used.",
+                replayVersion
+            );
+            replayFileOpened = true;
+            replayOpener.Open(replayPath);
+            return new ReplayBoot(auth, false);
+        }
+
+        await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
+        if (IsLaunched() && await IsHomeScreen().ConfigureAwait(false))
+        {
+            OpenReplayFromHome(replayPath);
+            return new ReplayBoot(auth, true);
+        }
+
+        if (IsLaunched())
+        {
+            logger.LogInformation(
+                "Heroes is open without the home screen. The replay file stays closed until the signed-in menu is visible."
+            );
+        }
+
+        return new ReplayBoot(auth, false);
+    }
+
+    private RunningClientBuild ReadRunningBuild(string replayVersion)
+    {
+        if (!IsLaunched())
+        {
+            return RunningClientBuild.None;
+        }
+
+        if (string.IsNullOrWhiteSpace(replayVersion))
+        {
+            return RunningClientBuild.Unreadable;
+        }
+
+        try
+        {
+            string version = cachedProcess?.MainModule?.FileVersionInfo?.FileVersion;
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                return RunningClientBuild.Unreadable;
+            }
+
+            return ReplayClientRoute.SameBuild(version, replayVersion)
+                ? RunningClientBuild.Matches
+                : RunningClientBuild.Differs;
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not read the running Heroes file version.");
+            return RunningClientBuild.Unreadable;
+        }
     }
 
     private async Task WaitForAuthenticatedClientAsync()
@@ -217,25 +324,20 @@ public class GameController : IGameController
 
     private async Task<ColdBoot> StartReplayAndWaitAsync()
     {
-        bool openedFromHome = await StartAuthenticatedReplayAsync(
-                context.Current.LoadedReplay.FileInfo.FullName
-            )
-            .ConfigureAwait(false);
-
-        bool versionMatched = Policy
-            .Handle<Exception>()
-            .OrResult<bool>(result => result == false)
-            .WaitAndRetry(
-                retryCount: 150,
-                sleepDurationProvider: retry => settings.OCR.CheckSleepDuration
-            )
-            .Execute(() => IsMatchingClientVersion());
-
-        if (!versionMatched)
+        string replayPath = context.Current.LoadedReplay.FileInfo.FullName;
+        string replayVersion = context.Current.LoadedReplay.Replay?.ReplayVersion;
+        ReplayBoot boot = await BeginReplayAsync(replayPath, replayVersion).ConfigureAwait(false);
+        if (boot.Auth == ReplayLaunchAuth.Unavailable)
         {
-            logger.LogWarning("Launched client version did not match the replay version.");
+            return new ColdBoot(RetryDisconnect: false, ClientHoldReason.BuildNotInstalled);
         }
 
+        if (boot.Auth == ReplayLaunchAuth.AlreadyInMatch)
+        {
+            return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
+        }
+
+        bool openedFromHome = boot.OpenedFromHome;
         var searchTerms = context
             .Current.LoadedReplay.Replay.Players.Select(x => x.Name)
             .Concat(context.Current.LoadedReplay.Replay.Players.Select(x => x.Character))
@@ -281,10 +383,22 @@ public class GameController : IGameController
             if (!recoveredLogin && !loading && !timer && ClientScreenText.IsLoginForm(text))
             {
                 recoveredLogin = true;
-                logger.LogWarning(
-                    "Heroes is on the login form. Starting the signed-in client again before opening the replay."
-                );
-                await RestartAuthenticatedClientAsync().ConfigureAwait(false);
+                ReplaySignInRecovery recovery = ReplayClientRoute.Recover(launchPatch, 0);
+                if (recovery == ReplaySignInRecovery.OpenPreviousBuild)
+                {
+                    logger.LogWarning(
+                        "Previous-patch client is on the login form. Opening that build again through HeroesSwitcher."
+                    );
+                    await ReopenPreviousBuildAsync(replayPath).ConfigureAwait(false);
+                }
+                else if (recovery == ReplaySignInRecovery.LaunchCurrent)
+                {
+                    logger.LogWarning(
+                        "Heroes is on the login form. Starting the signed-in client again before opening the replay."
+                    );
+                    await RestartAuthenticatedClientAsync().ConfigureAwait(false);
+                }
+
                 openedFromHome = false;
                 blankTiming = false;
                 continue;
@@ -293,7 +407,7 @@ public class GameController : IGameController
             if (!openedFromHome && !loading && !timer && await IsHomeScreen().ConfigureAwait(false))
             {
                 openedFromHome = true;
-                OpenReplayFromHome(context.Current.LoadedReplay.FileInfo.FullName);
+                OpenReplayFromHome(replayPath);
             }
 
             if (loading)
@@ -331,11 +445,26 @@ public class GameController : IGameController
                     )
                 )
                 {
-                    blankRelaunches++;
-                    logger.LogWarning(
-                        "Heroes window stayed blank. Starting the signed-in client again before opening the replay."
+                    ReplaySignInRecovery recovery = ReplayClientRoute.Recover(
+                        launchPatch,
+                        blankRelaunches
                     );
-                    await RestartAuthenticatedClientAsync().ConfigureAwait(false);
+                    blankRelaunches++;
+                    if (recovery == ReplaySignInRecovery.OpenPreviousBuild)
+                    {
+                        logger.LogWarning(
+                            "Previous-patch window stayed blank. Opening that build again through HeroesSwitcher."
+                        );
+                        await ReopenPreviousBuildAsync(replayPath).ConfigureAwait(false);
+                    }
+                    else if (recovery == ReplaySignInRecovery.LaunchCurrent)
+                    {
+                        logger.LogWarning(
+                            "Heroes window stayed blank. Starting the signed-in client again before opening the replay."
+                        );
+                        await RestartAuthenticatedClientAsync().ConfigureAwait(false);
+                    }
+
                     openedFromHome = false;
                     blankTiming = false;
                 }
@@ -354,6 +483,18 @@ public class GameController : IGameController
         replayFileOpened = false;
         await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token).ConfigureAwait(false);
         await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
+    }
+
+    private async Task ReopenPreviousBuildAsync(string replayPath)
+    {
+        Kill();
+        replayFileOpened = false;
+        await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token).ConfigureAwait(false);
+        logger.LogInformation(
+            "Opening the previous-patch replay again through HeroesSwitcher. Battle.net Play was not used."
+        );
+        replayFileOpened = true;
+        replayOpener.Open(replayPath);
     }
 
     private readonly record struct WindowRead(string Text, int Width, int Height);
@@ -563,32 +704,6 @@ public class GameController : IGameController
         }
 
         return capture.Capture(handle, new Rectangle(start, top, cropWidth, cropHeight));
-    }
-
-    private bool IsMatchingClientVersion()
-    {
-        try
-        {
-            if (TryGetGameHandle(out _) && cachedProcess != null)
-            {
-                logger.LogInformation(
-                    $"Current: {cachedProcess.MainModule.FileVersionInfo.FileVersion}"
-                );
-                logger.LogInformation(
-                    $"Required: {context.Current.LoadedReplay.Replay.ReplayVersion}"
-                );
-                return cachedProcess.MainModule.FileVersionInfo.FileVersion
-                    == context.Current.LoadedReplay.Replay.ReplayVersion;
-            }
-
-            logger.LogInformation("Game not launched.");
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Could not retrieve process version information.");
-        }
-
-        return false;
     }
 
     private static async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)

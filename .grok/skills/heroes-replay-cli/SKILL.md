@@ -37,6 +37,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check obs` | obs-websocket 5 Identify + `GetVersion` |
 | `check twitch` | Helix `GetUsers` for configured channel |
 | `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
+| `check battlenet` | Capture the Battle.net window and report the Play or Update button |
 | `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). Spectate applies this automatically if the game is not running. Capture is GDI BitBlt; windowed 1080p is required. |
 | `client status` | Report preset mismatches |
 | `otel up` / `otel down` / `otel status` | Standalone Aspire dashboard via the local `Aspire.Cli` tool (`dotnet tool restore`, then `dotnet aspire dashboard run --allow-anonymous`). UI http://127.0.0.1:18888, OTLP gRPC http://127.0.0.1:4317. No Docker. Spectate, Twitch, download, and YouTube each export logs, metrics, and traces under their own service name. |
@@ -72,9 +73,12 @@ After changing a check target, run that CLI command, not only unit tests.
 Repo `.grok/config.toml` registers `heroesreplay`. Tools:
 
 - `get_spectator_status` — phase, timer, replay, focus, OBS session, game process, stale flag
+- `check_battlenet` — Play or Update on the Battle.net window
 - `get_current_focus` — selected hero
 - `check_config` / `check_heroesprofile` / `check_obs` / `check_twitch` — JSON of the CLI checks
 
 The MCP process is **not** the spectator. Run `spectate file` (or heroesprofile) separately; it writes the status file every second. If `updatedAt` is older than 15s, `snapshotStale` is true and `spectatorRunning` is false.
+
+A local end-to-end run is not done until both patch launches have reached the match clock. The newest installed `Versions\Base*` exe signs in through Battle.net before the replay file is opened. An older installed exe is started by HeroesSwitcher with the replay file, not by Battle.net Play. A `Base*` folder with no executable is missing and must not launch the current client. See `AGENTS.md` "Current patch and previous patch".
 
 Do not write to stdout from MCP tools (stdio is JSON-RPC).

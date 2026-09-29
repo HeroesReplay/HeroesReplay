@@ -20,7 +20,11 @@ public static class ReplaySession
             return ReplaySessionKind.Played;
         }
 
-        if (outcome == MatchOutcome.VersionMismatch || outcome == MatchOutcome.RegionUnavailable)
+        if (
+            outcome == MatchOutcome.VersionMismatch
+            || outcome == MatchOutcome.RegionUnavailable
+            || outcome == MatchOutcome.BuildNotInstalled
+        )
         {
             return ReplaySessionKind.Held;
         }

@@ -12,6 +12,7 @@ public enum MatchOutcome
     ClientHung,
     VersionMismatch,
     RegionUnavailable,
+    BuildNotInstalled,
     LoadTimedOut,
     Stopped,
     Canceled,
@@ -40,6 +41,11 @@ public sealed class MatchCompletion
         if (hold == ClientHoldReason.RegionUnavailable)
         {
             return MatchOutcome.RegionUnavailable;
+        }
+
+        if (hold == ClientHoldReason.BuildNotInstalled)
+        {
+            return MatchOutcome.BuildNotInstalled;
         }
 
         return MatchOutcome.None;

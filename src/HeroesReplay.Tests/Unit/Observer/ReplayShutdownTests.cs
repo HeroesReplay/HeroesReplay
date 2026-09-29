@@ -52,8 +52,10 @@ public class ReplayShutdownTests
 
         public Task<ClientHoldReason> LaunchAsync() => throw new NotSupportedException();
 
-        public Task<bool> StartAuthenticatedReplayAsync(string replayPath) =>
-            throw new NotSupportedException();
+        public Task<bool> StartAuthenticatedReplayAsync(
+            string replayPath,
+            string replayVersion = null
+        ) => throw new NotSupportedException();
 
         public Task<bool> OpenReplayFromHomeScreenAsync(string replayPath) =>
             throw new NotSupportedException();

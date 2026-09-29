@@ -43,6 +43,7 @@ public class ClientHoldTests
     {
         Assert.True(ClientHold.LeavesClientOpen(ClientHoldReason.RegionUnavailable));
         Assert.True(ClientHold.LeavesClientOpen(ClientHoldReason.VersionMismatch));
+        Assert.True(ClientHold.LeavesClientOpen(ClientHoldReason.BuildNotInstalled));
         Assert.False(ClientHold.LeavesClientOpen(ClientHoldReason.None));
     }
 

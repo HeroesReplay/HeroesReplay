@@ -117,11 +117,21 @@ public class GameManager : IGameManager
                 spectator.RecordHold(hold);
                 await RecordPublicationAsync(loadedReplay, recording: null).ConfigureAwait(false);
                 activity?.SetTag("session.outcome", spectator.Outcome.ToString());
-                logger.LogWarning(
-                    "Heroes is on the {Hold} dialog. Replay {ReplayId} stays queued. The client stays open and OBS uses the waiting scene.",
-                    hold,
-                    loadedReplay?.ReplayId
-                );
+                if (hold == ClientHoldReason.BuildNotInstalled)
+                {
+                    logger.LogWarning(
+                        "Replay {ReplayId} needs a Heroes build that is not installed. It stays queued. The current patch was not launched.",
+                        loadedReplay?.ReplayId
+                    );
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Heroes is on the {Hold} dialog. Replay {ReplayId} stays queued. The client stays open and OBS uses the waiting scene.",
+                        hold,
+                        loadedReplay?.ReplayId
+                    );
+                }
                 statusStore.Patch(status =>
                 {
                     status.SpectatorRunning = true;
@@ -327,7 +337,7 @@ public class GameManager : IGameManager
         try
         {
             await gameController
-                .StartAuthenticatedReplayAsync(next.FileInfo.FullName)
+                .StartAuthenticatedReplayAsync(next.FileInfo.FullName, next.Replay?.ReplayVersion)
                 .ConfigureAwait(false);
         }
         catch (Exception e)
