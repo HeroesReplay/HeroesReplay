@@ -25,6 +25,11 @@ public sealed class SpectatorStatus
     public DateTimeOffset? CompletedAt { get; set; }
     public int? CompletedReplayId { get; set; }
     public int? CompletedWinnerTeam { get; set; }
+
+    /// <summary>
+    /// Why the last session ended. Completion fields are set only for <c>VerifiedCompleted</c>.
+    /// </summary>
+    public string Outcome { get; set; }
     public bool ObsSession { get; set; }
     public bool? ConnectivityOnline { get; set; }
     public string Connectivity { get; set; }

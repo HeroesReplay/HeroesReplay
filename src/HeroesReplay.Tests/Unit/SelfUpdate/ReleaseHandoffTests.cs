@@ -195,7 +195,7 @@ public class ReleaseHandoffTests
         using var cancel = new CancellationTokenSource();
         var provider = new ScriptedReplays(continuesWhenEmpty: true);
         provider.Enqueue(101);
-        var game = new RecordingGame { Kind = ReplaySessionKind.Unplayed };
+        var game = new RecordingGame { Outcome = MatchOutcome.LoadTimedOut };
         var engine = new Engine(
             NullLogger<Engine>.Instance,
             game,
@@ -214,12 +214,12 @@ public class ReleaseHandoffTests
             Task run = engine.RunAsync();
             await Task.Delay(TimeSpan.FromMilliseconds(300));
             Assert.False(run.IsCompleted);
-            Assert.Contains(101, provider.Requeued);
-            Assert.Empty(provider.SpectatedIds);
             cancel.Cancel();
             Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
             Assert.Same(run, finished);
             await run;
+            Assert.Contains(101, provider.Requeued);
+            Assert.Empty(provider.SpectatedIds);
         }
         finally
         {
@@ -228,6 +228,157 @@ public class ReleaseHandoffTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task HeldReplay_StaysQueuedAndDoesNotMarkSpectated()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        using var cancel = new CancellationTokenSource();
+        var provider = new ScriptedReplays(continuesWhenEmpty: true);
+        provider.Enqueue(101);
+        var status = new SpectatorStatusStore(Path.Combine(root, "status.json"));
+        var game = new RecordingGame
+        {
+            Outcome = MatchOutcome.VersionMismatch,
+            Status = status,
+            Winner = 0,
+        };
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(cancel.Token),
+            status,
+            new BlockingWatchdog(),
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false)
+        );
+
+        try
+        {
+            Task run = engine.RunAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            Assert.False(run.IsCompleted);
+            cancel.Cancel();
+            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Assert.Same(run, finished);
+            await run;
+            Assert.Contains(101, provider.Requeued);
+            Assert.Empty(provider.SpectatedIds);
+            SpectatorStatus read = status.Read();
+            Assert.Null(read.CompletedAt);
+            Assert.Null(read.CompletedReplayId);
+            Assert.Null(read.CompletedWinnerTeam);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ClockSeenCrash_StaysQueuedAndPublishesNoWinner()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        using var cancel = new CancellationTokenSource();
+        var provider = new ScriptedReplays(continuesWhenEmpty: true);
+        provider.Enqueue(101);
+        var status = new SpectatorStatusStore(Path.Combine(root, "status.json"));
+        var game = new RecordingGame
+        {
+            Outcome = MatchOutcome.ClientCrashed,
+            Status = status,
+            Winner = 1,
+        };
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(cancel.Token),
+            status,
+            new BlockingWatchdog(),
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false)
+        );
+
+        try
+        {
+            Task run = engine.RunAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            Assert.False(run.IsCompleted);
+            cancel.Cancel();
+            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Assert.Same(run, finished);
+            await run;
+            Assert.Contains(101, provider.Requeued);
+            Assert.Empty(provider.SpectatedIds);
+            SpectatorStatus read = status.Read();
+            Assert.Null(read.CompletedAt);
+            Assert.Null(read.CompletedReplayId);
+            Assert.Null(read.CompletedWinnerTeam);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task VerifiedCompletion_MarksSpectatedAndPublishesOneWinner()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        var provider = new ScriptedReplays(continuesWhenEmpty: false);
+        provider.Enqueue(101);
+        var status = new SpectatorStatusStore(Path.Combine(root, "status.json"));
+        var game = new RecordingGame
+        {
+            Outcome = MatchOutcome.VerifiedCompleted,
+            Status = status,
+            Winner = 0,
+        };
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(),
+            status,
+            new IdleWatchdog(),
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false)
+        );
+
+        try
+        {
+            await engine.RunAsync();
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        Assert.Equal(new int?[] { 101 }, game.Spectated.ToArray());
+        Assert.Equal(new[] { 101 }, provider.SpectatedIds.ToArray());
+        Assert.Empty(provider.Requeued);
+        SpectatorStatus read = status.Read();
+        Assert.Equal(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero), read.CompletedAt);
+        Assert.Equal(101, read.CompletedReplayId);
+        Assert.Equal(0, read.CompletedWinnerTeam);
     }
 
     [Fact]
@@ -311,11 +462,19 @@ public class ReleaseHandoffTests
 
         public int ThrowTimes { get; set; }
 
+        public MatchOutcome Outcome { get; set; } = MatchOutcome.VerifiedCompleted;
+
+        public SpectatorStatusStore Status { get; set; }
+
+        public int? Winner { get; set; } = 1;
+
         public async Task<ReplaySessionKind> LaunchAndSpectate(
             LoadedReplay loadedReplay,
             Func<Task<LoadedReplay>> whileReporting
         )
         {
+            // A completed task would keep a requeue spinning on the caller and the test could not cancel.
+            await Task.Yield();
             if (ThrowTimes > 0)
             {
                 ThrowTimes--;
@@ -323,15 +482,27 @@ public class ReleaseHandoffTests
             }
 
             Spectated.Add(loadedReplay.ReplayId);
-            if (Kind == ReplaySessionKind.Played)
+            var completion = new MatchCompletion();
+            DateTimeOffset completedAt = new(2026, 9, 29, 12, 0, 0, TimeSpan.Zero);
+            Status?.Patch(item =>
+            {
+                completion.Apply(item, Outcome, loadedReplay.ReplayId, Winner, completedAt);
+                completion.Apply(
+                    item,
+                    Outcome,
+                    loadedReplay.ReplayId,
+                    Winner == 0 ? 1 : 0,
+                    completedAt.AddHours(1)
+                );
+            });
+            ReplaySessionKind kind = ReplaySession.Classify(Outcome);
+            if (kind == ReplaySessionKind.Played)
             {
                 await whileReporting().ConfigureAwait(false);
             }
 
-            return Kind;
+            return kind;
         }
-
-        public ReplaySessionKind Kind { get; set; } = ReplaySessionKind.Played;
     }
 
     private sealed class ScriptedReplays : IReplayProvider

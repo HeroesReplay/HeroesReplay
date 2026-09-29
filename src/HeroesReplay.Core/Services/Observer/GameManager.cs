@@ -86,6 +86,7 @@ public class GameManager : IGameManager
             status.ReplayPath = loadedReplay?.FileInfo?.FullName;
             status.ReplayVersion = loadedReplay?.Replay?.ReplayVersion;
             status.ReplayId = loadedReplay?.ReplayId;
+            status.Outcome = null;
             status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(loadedReplay);
             status.GatesOpen = context.Current?.GatesOpen.ToString();
             status.CoreKilled = context.Current?.CoreKilled.ToString();
@@ -107,6 +108,8 @@ public class GameManager : IGameManager
             ClientHoldReason hold = await gameController.LaunchAsync().ConfigureAwait(false);
             if (hold != ClientHoldReason.None)
             {
+                spectator.RecordHold(hold);
+                activity?.SetTag("session.outcome", spectator.Outcome.ToString());
                 logger.LogWarning(
                     "Heroes is on the {Hold} dialog. Replay {ReplayId} stays queued. The client stays open and OBS uses the waiting scene.",
                     hold,
@@ -117,9 +120,10 @@ public class GameManager : IGameManager
                     status.SpectatorRunning = true;
                     status.Phase = "Waiting";
                     status.Timer = null;
+                    status.Outcome = spectator.Outcome.ToString();
                 });
                 ParkWaitingScene();
-                return ReplaySessionKind.Held;
+                return ReplaySession.Classify(spectator.Outcome);
             }
 
             if (settings.OBS.Enabled)
@@ -133,6 +137,7 @@ public class GameManager : IGameManager
 
             enteredMatch = true;
             await spectator.SpectateAsync().ConfigureAwait(false);
+            activity?.SetTag("session.outcome", spectator.Outcome.ToString());
         }
         finally
         {
@@ -145,7 +150,11 @@ public class GameManager : IGameManager
                 catch { }
 
                 if (
-                    MatchRecording.ShouldPublish(recordingClock.SampleCount, recordingClock.Elapsed)
+                    MatchCompletion.AllowsMedia(
+                        spectator.Outcome,
+                        recordingClock.SampleCount,
+                        recordingClock.Elapsed
+                    )
                 )
                 {
                     try
@@ -181,7 +190,8 @@ public class GameManager : IGameManager
 
         try
         {
-            if (enteredMatch && obsSession)
+            // A crash or a hold must not preload another replay. Only a verified match moves on.
+            if (enteredMatch && obsSession && spectator.Outcome == MatchOutcome.VerifiedCompleted)
             {
                 Task<LoadedReplay> nextLoad = InvokeNextLoad(whileReporting);
                 Task report = obsController.CycleReportAsync();
@@ -222,7 +232,7 @@ public class GameManager : IGameManager
             }
         }
 
-        return ReplaySession.Classify(ClientHoldReason.None, spectator.MatchClockSeen);
+        return ReplaySession.Classify(spectator.Outcome);
     }
 
     private void ParkWaitingScene()
@@ -490,8 +500,9 @@ public class GameManager : IGameManager
         }
 
         logger.LogWarning(
-            "Replay {ReplayId} recording is not a match ({Samples} clock samples over {Elapsed}). It was not sent to YouTube.",
+            "Replay {ReplayId} recording is not published ({Outcome}, {Samples} clock samples over {Elapsed}). It was not sent to YouTube.",
             loadedReplay?.ReplayId,
+            spectator.Outcome,
             recordingClock.SampleCount,
             recordingClock.Elapsed
         );

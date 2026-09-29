@@ -8,19 +8,24 @@ public enum ReplaySessionKind
 }
 
 /// <summary>
-/// A queued replay is consumed only after the match clock was seen.
-/// A dialog hold and a session with no clock stay in the queue.
+/// A queued replay is consumed only after a verified completion.
+/// Every other outcome stays queued. A dialog hold waits before the retry.
 /// </summary>
 public static class ReplaySession
 {
-    public static ReplaySessionKind Classify(ClientHoldReason hold, bool matchClockSeen)
+    public static ReplaySessionKind Classify(MatchOutcome outcome)
     {
-        if (hold != ClientHoldReason.None)
+        if (outcome == MatchOutcome.VerifiedCompleted)
+        {
+            return ReplaySessionKind.Played;
+        }
+
+        if (outcome == MatchOutcome.VersionMismatch || outcome == MatchOutcome.RegionUnavailable)
         {
             return ReplaySessionKind.Held;
         }
 
-        return matchClockSeen ? ReplaySessionKind.Played : ReplaySessionKind.Unplayed;
+        return ReplaySessionKind.Unplayed;
     }
 
     public static bool StaysQueued(ReplaySessionKind kind) => kind != ReplaySessionKind.Played;

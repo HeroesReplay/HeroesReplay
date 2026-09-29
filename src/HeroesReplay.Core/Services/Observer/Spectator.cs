@@ -62,7 +62,13 @@ public class Spectator : ISpectator
 
     private bool matchClockSeen;
 
+    private MatchOutcome outcome;
+
+    private readonly MatchCompletion completion = new();
+
     public bool MatchClockSeen => matchClockSeen;
+
+    public MatchOutcome Outcome => outcome;
 
     private ContextData Data => context.Current;
 
@@ -135,6 +141,11 @@ public class Spectator : ISpectator
         }
     }
 
+    public void RecordHold(ClientHoldReason hold)
+    {
+        outcome = MatchCompletion.FromHold(hold);
+    }
+
     public async Task SpectateAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.session");
@@ -150,6 +161,8 @@ public class Spectator : ISpectator
         Timer = default;
         sessionStarted = DateTimeOffset.UtcNow;
         matchClockSeen = false;
+        outcome = MatchOutcome.None;
+        completion.Reset();
         gameTimer.Reset();
         memoryClock.Reset();
         endScreenStarted = null;
@@ -285,7 +298,7 @@ public class Spectator : ISpectator
                             "No match clock after {Minutes:0} minutes. Ending this session. It will not be uploaded.",
                             MatchRecording.LoadingLimit.TotalMinutes
                         );
-                        CancelSessionSource.Cancel();
+                        EndSession(MatchOutcome.LoadTimedOut);
                     }
                     else if (controller.IsGameRunning())
                     {
@@ -350,7 +363,7 @@ public class Spectator : ISpectator
                     if (missingProcessChecks >= 2)
                     {
                         logger.LogError("Game process exited (crash or closed); ending session.");
-                        CancelSessionSource.Cancel();
+                        EndSession(MatchOutcome.ClientCrashed);
                     }
                 }
                 else if (SessionWatch.IsHung(controller.IsGameHung(), clockAdvanced))
@@ -361,7 +374,7 @@ public class Spectator : ISpectator
                     if (hungChecks >= 45)
                     {
                         logger.LogError("Game not responding; ending session.");
-                        CancelSessionSource.Cancel();
+                        EndSession(MatchOutcome.ClientHung);
                     }
                 }
                 else
@@ -581,8 +594,18 @@ public class Spectator : ISpectator
                 Timer,
                 ocrTimerVisible
             );
-            CancelSessionSource.Cancel();
+            EndSession(matchClockSeen ? MatchOutcome.VerifiedCompleted : MatchOutcome.Canceled);
         }
+    }
+
+    private void EndSession(MatchOutcome reason)
+    {
+        if (outcome == MatchOutcome.None)
+        {
+            outcome = reason;
+        }
+
+        CancelSessionSource.Cancel();
     }
 
     private async Task FocusLoopAsync()
@@ -795,31 +818,35 @@ public class Spectator : ISpectator
 
     private void PublishMatchCompleted()
     {
-        if (!matchClockSeen)
-        {
-            statusStore.Patch(status =>
-            {
-                status.SpectatorRunning = false;
-                status.Phase = nameof(State.EndDetected);
-                status.ObsSession = false;
-                status.Focus = null;
-                status.ReplayId = Data?.LoadedReplay?.ReplayId ?? status.ReplayId;
-            });
-            return;
-        }
-
-        int? winner = TwitchMatchPredictionService.WinningTeam(Data?.LoadedReplay?.Replay);
+        outcome = MatchCompletion.Normalize(
+            outcome,
+            matchClockSeen,
+            consoleTokenProvider.Token.IsCancellationRequested
+        );
+        sessionActivity?.SetTag("session.outcome", outcome.ToString());
+        int? replayId = Data?.LoadedReplay?.ReplayId;
+        int? winner =
+            outcome == MatchOutcome.VerifiedCompleted
+                ? TwitchMatchPredictionService.WinningTeam(Data?.LoadedReplay?.Replay)
+                : null;
+        DateTimeOffset completedAt = DateTimeOffset.UtcNow;
+        logger.LogInformation(
+            "Session outcome {Outcome} for replay {ReplayId}.",
+            outcome,
+            replayId
+        );
         statusStore.Patch(status =>
         {
             status.SpectatorRunning = false;
+            // EndDetected, with no completion fields, is how an interrupted session is abandoned.
             status.Phase = nameof(State.EndDetected);
             status.ObsSession = false;
             status.Focus = null;
-            status.CompletedAt = DateTimeOffset.UtcNow;
-            status.CompletedReplayId = Data?.LoadedReplay?.ReplayId;
-            status.CompletedWinnerTeam = winner;
+            status.Outcome = outcome.ToString();
+            completion.Apply(status, outcome, replayId, winner, completedAt);
             if (Data?.LoadedReplay == null)
             {
+                status.ReplayId = replayId ?? status.ReplayId;
                 return;
             }
 
