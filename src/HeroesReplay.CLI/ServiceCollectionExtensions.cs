@@ -393,6 +393,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IYouTubeVideoSearch, YouTubeApiVideoSearch>()
             .AddSingleton<IYouTubeReplayLookup, YouTubeReplayLookup>()
             .AddSingleton<RecordingClock>()
+            .AddSingleton<IGameFirewall, NetshGameFirewall>()
             .AddSingleton<IReplayOpener, MediumIntegrityReplayOpener>()
             .AddSingleton(serviceProvider => new MediaPolicyAttemptLog(
                 MediaPolicyAttemptLog.AttemptsRoot(settings),
