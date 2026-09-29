@@ -81,7 +81,7 @@ public class GameController : IGameController
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
     }
 
-    public async Task LaunchAsync()
+    public async Task<ClientHoldReason> LaunchAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.launch");
         var replay = context.Current.LoadedReplay.Replay;
@@ -107,7 +107,7 @@ public class GameController : IGameController
             );
             replayFileOpened = true;
             ShowGameScene("match already on screen");
-            return;
+            return ClientHoldReason.None;
         }
 
         if (step == ReplayLaunchStep.Wait)
@@ -117,20 +117,25 @@ public class GameController : IGameController
             );
         }
 
-        await LaunchAndWait().ConfigureAwait(false);
+        return await LaunchAndWait().ConfigureAwait(false);
     }
 
-    private async Task LaunchAndWait()
+    private async Task<ClientHoldReason> LaunchAndWait()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.launch.replay");
         activity?.SetTag("replay.path", context.Current.LoadedReplay.FileInfo?.FullName);
         for (int attempt = 1; attempt <= 2; attempt++)
         {
             activity?.SetTag("launch.replay_attempt", attempt);
-            bool disconnected = await StartReplayAndWaitAsync().ConfigureAwait(false);
-            if (!disconnected || attempt == 2)
+            ColdBoot boot = await StartReplayAndWaitAsync().ConfigureAwait(false);
+            if (boot.Hold != ClientHoldReason.None)
             {
-                return;
+                return boot.Hold;
+            }
+
+            if (!boot.RetryDisconnect || attempt == 2)
+            {
+                return ClientHoldReason.None;
             }
 
             logger.LogWarning(
@@ -141,6 +146,8 @@ public class GameController : IGameController
             await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token)
                 .ConfigureAwait(false);
         }
+
+        return ClientHoldReason.None;
     }
 
     public async Task<bool> StartAuthenticatedReplayAsync(string replayPath)
@@ -206,7 +213,9 @@ public class GameController : IGameController
         }
     }
 
-    private async Task<bool> StartReplayAndWaitAsync()
+    private readonly record struct ColdBoot(bool RetryDisconnect, ClientHoldReason Hold);
+
+    private async Task<ColdBoot> StartReplayAndWaitAsync()
     {
         bool openedFromHome = await StartAuthenticatedReplayAsync(
                 context.Current.LoadedReplay.FileInfo.FullName
@@ -246,20 +255,22 @@ public class GameController : IGameController
             if (BattleNetDisconnect.IsShown(text))
             {
                 logger.LogWarning("Battle.net disconnect dialog: {Text}", text);
-                return true;
+                return new ColdBoot(RetryDisconnect: true, ClientHoldReason.None);
             }
 
-            if (ClientScreenText.IsVersionMismatch(text))
+            ClientHoldReason hold = ClientHold.Classify(text);
+            if (hold != ClientHoldReason.None)
             {
                 if (!loggedMismatch)
                 {
                     loggedMismatch = true;
                     logger.LogWarning(
-                        "Heroes is on the version-mismatch dialog. The replay file stays closed."
+                        "Heroes is on the {Hold} dialog. The replay stays queued and this client stays open.",
+                        hold
                     );
                 }
 
-                return false;
+                return new ColdBoot(RetryDisconnect: false, hold);
             }
 
             bool loading = searchTerms.Any(word =>
@@ -288,13 +299,13 @@ public class GameController : IGameController
             if (loading)
             {
                 ShowGameScene("loading screen");
-                return false;
+                return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
             if (timer)
             {
                 ShowGameScene("timer visible");
-                return false;
+                return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
             bool blank = ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
@@ -334,7 +345,7 @@ public class GameController : IGameController
                 .ConfigureAwait(false);
         }
 
-        return false;
+        return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
     }
 
     private async Task RestartAuthenticatedClientAsync()

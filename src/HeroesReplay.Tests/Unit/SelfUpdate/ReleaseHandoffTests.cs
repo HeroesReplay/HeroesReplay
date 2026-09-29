@@ -187,6 +187,87 @@ public class ReleaseHandoffTests
         }
     }
 
+    [Fact]
+    public async Task UnplayedReplay_StaysQueuedAndSpectateKeepsRunning()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        using var cancel = new CancellationTokenSource();
+        var provider = new ScriptedReplays(continuesWhenEmpty: true);
+        provider.Enqueue(101);
+        var game = new RecordingGame { Kind = ReplaySessionKind.Unplayed };
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(cancel.Token),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new BlockingWatchdog(),
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false)
+        );
+
+        try
+        {
+            Task run = engine.RunAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            Assert.False(run.IsCompleted);
+            Assert.Contains(101, provider.Requeued);
+            cancel.Cancel();
+            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Assert.Same(run, finished);
+            await run;
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task SpectateFailure_LeavesTheProcessRunning()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        using var cancel = new CancellationTokenSource();
+        var provider = new ScriptedReplays(continuesWhenEmpty: true);
+        provider.Enqueue(101);
+        var game = new RecordingGame { ThrowTimes = 1 };
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(cancel.Token),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new BlockingWatchdog(),
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false)
+        );
+
+        try
+        {
+            Task run = engine.RunAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+            Assert.False(run.IsCompleted);
+            cancel.Cancel();
+            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Assert.Same(run, finished);
+            await run;
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static AppSettings CacheSettings(string data) =>
         new()
         {
@@ -226,14 +307,29 @@ public class ReleaseHandoffTests
     {
         public List<int?> Spectated { get; } = new();
 
-        public async Task LaunchAndSpectate(
+        public int ThrowTimes { get; set; }
+
+        public async Task<ReplaySessionKind> LaunchAndSpectate(
             LoadedReplay loadedReplay,
             Func<Task<LoadedReplay>> whileReporting
         )
         {
+            if (ThrowTimes > 0)
+            {
+                ThrowTimes--;
+                throw new InvalidOperationException("game process disappeared");
+            }
+
             Spectated.Add(loadedReplay.ReplayId);
-            await whileReporting().ConfigureAwait(false);
+            if (Kind == ReplaySessionKind.Played)
+            {
+                await whileReporting().ConfigureAwait(false);
+            }
+
+            return Kind;
         }
+
+        public ReplaySessionKind Kind { get; set; } = ReplaySessionKind.Played;
     }
 
     private sealed class ScriptedReplays : IReplayProvider

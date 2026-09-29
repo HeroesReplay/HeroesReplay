@@ -102,86 +102,119 @@ public class Engine : IEngine
     {
         while (!consoleTokenProvider.Token.IsCancellationRequested)
         {
-            using Activity replayActivity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay");
-            LoadedReplay loadedReplay = await TakeResumedReplayAsync().ConfigureAwait(false);
-            if (loadedReplay != null)
+            try
             {
-                ReturnPreparedNext();
-            }
-            else if (preparedNext != null)
-            {
-                loadedReplay = preparedNext;
-                preparedNext = null;
-                logger.LogInformation(
-                    "Playing replay {ReplayId} loaded during the previous report.",
-                    loadedReplay.ReplayId
-                );
-            }
-            else
-            {
-                loadedReplay = await replayProvider.TryLoadNextReplayAsync();
-            }
-
-            if (loadedReplay != null)
-            {
-                HeroesReplayTelemetry.TagReplay(
-                    replayActivity,
-                    loadedReplay.FileInfo?.FullName,
-                    loadedReplay.Replay?.Map,
-                    loadedReplay.ReplayId,
-                    loadedReplay.Replay?.ReplayVersion
-                );
-                Task<LoadedReplay> nextLoad = null;
-                try
+                if (!await SpectateOneAsync().ConfigureAwait(false))
                 {
-                    await gameManager.LaunchAndSpectate(
-                        loadedReplay,
-                        () =>
-                        {
-                            nextLoad = StartNextLoad();
-                            return nextLoad ?? Task.FromResult<LoadedReplay>(null);
-                        }
-                    );
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(
-                        e,
-                        "Spectate failed for replay {ReplayId}. Continuing.",
-                        loadedReplay.ReplayId
-                    );
-                }
-
-                await StorePreparedNextAsync(nextLoad).ConfigureAwait(false);
-                if (
-                    await releaseUpdate
-                        .TryStageAsync(consoleTokenProvider.Token)
-                        .ConfigureAwait(false)
-                )
-                {
-                    // The report already appended this id to spectated-ids.txt. A new process
-                    // only reads that file, so put the replay back before this one exits.
-                    ReturnPreparedNext();
-                    logger.LogInformation(
-                        "Stopping after this replay so the new release can replace this install."
-                    );
                     break;
                 }
-
-                continue;
             }
-
-            replayActivity?.SetTag("replay.empty", true);
-
-            if (!replayProvider.ContinuesWhenEmpty)
+            catch (OperationCanceledException)
+                when (consoleTokenProvider.Token.IsCancellationRequested)
             {
-                statusStore.MarkIdle();
                 break;
             }
-
-            statusStore.MarkIdle();
-            await Task.Delay(TimeSpan.FromSeconds(5), consoleTokenProvider.Token);
+            catch (Exception e)
+            {
+                logger.LogError(e, "Spectate hit an error and is still running.");
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(5), consoleTokenProvider.Token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
         }
+    }
+
+    private async Task<bool> SpectateOneAsync()
+    {
+        using Activity replayActivity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay");
+        LoadedReplay loadedReplay = await TakeResumedReplayAsync().ConfigureAwait(false);
+        if (loadedReplay != null)
+        {
+            ReturnPreparedNext();
+        }
+        else if (preparedNext != null)
+        {
+            loadedReplay = preparedNext;
+            preparedNext = null;
+            logger.LogInformation(
+                "Playing replay {ReplayId} loaded during the previous report.",
+                loadedReplay.ReplayId
+            );
+        }
+        else
+        {
+            loadedReplay = await replayProvider.TryLoadNextReplayAsync().ConfigureAwait(false);
+        }
+
+        if (loadedReplay != null)
+        {
+            HeroesReplayTelemetry.TagReplay(
+                replayActivity,
+                loadedReplay.FileInfo?.FullName,
+                loadedReplay.Replay?.Map,
+                loadedReplay.ReplayId,
+                loadedReplay.Replay?.ReplayVersion
+            );
+            Task<LoadedReplay> nextLoad = null;
+            ReplaySessionKind session = await gameManager
+                .LaunchAndSpectate(
+                    loadedReplay,
+                    () =>
+                    {
+                        nextLoad = StartNextLoad();
+                        return nextLoad ?? Task.FromResult<LoadedReplay>(null);
+                    }
+                )
+                .ConfigureAwait(false);
+            if (ReplaySession.StaysQueued(session))
+            {
+                replayProvider.Requeue(loadedReplay);
+                logger.LogWarning(
+                    "Replay {ReplayId} was not a match ({Session}). Spectate stays up and keeps this replay.",
+                    loadedReplay.ReplayId,
+                    session
+                );
+                if (session == ReplaySessionKind.Held)
+                {
+                    await Task.Delay(ClientHold.RetryAfter, consoleTokenProvider.Token)
+                        .ConfigureAwait(false);
+                }
+
+                return true;
+            }
+
+            await StorePreparedNextAsync(nextLoad).ConfigureAwait(false);
+            if (await releaseUpdate.TryStageAsync(consoleTokenProvider.Token).ConfigureAwait(false))
+            {
+                // The report already appended this id to spectated-ids.txt. A new process
+                // only reads that file, so put the replay back before this one exits.
+                ReturnPreparedNext();
+                logger.LogInformation(
+                    "Stopping after this replay so the new release can replace this install."
+                );
+                return false;
+            }
+
+            return true;
+        }
+
+        replayActivity?.SetTag("replay.empty", true);
+
+        if (!replayProvider.ContinuesWhenEmpty)
+        {
+            statusStore.MarkIdle();
+            return false;
+        }
+
+        statusStore.MarkIdle();
+        await Task.Delay(TimeSpan.FromSeconds(5), consoleTokenProvider.Token).ConfigureAwait(false);
+        return true;
     }
 
     private Task<LoadedReplay> StartNextLoad()

@@ -62,6 +62,8 @@ public class Spectator : ISpectator
 
     private bool matchClockSeen;
 
+    public bool MatchClockSeen => matchClockSeen;
+
     private ContextData Data => context.Current;
 
     private CancellationTokenSource CancelSessionSource { get; set; }
@@ -794,6 +796,19 @@ public class Spectator : ISpectator
 
     private void PublishMatchCompleted()
     {
+        if (!matchClockSeen)
+        {
+            statusStore.Patch(status =>
+            {
+                status.SpectatorRunning = false;
+                status.Phase = nameof(State.EndDetected);
+                status.ObsSession = false;
+                status.Focus = null;
+                status.ReplayId = Data?.LoadedReplay?.ReplayId ?? status.ReplayId;
+            });
+            return;
+        }
+
         int? winner = TwitchMatchPredictionService.WinningTeam(Data?.LoadedReplay?.Replay);
         statusStore.Patch(status =>
         {

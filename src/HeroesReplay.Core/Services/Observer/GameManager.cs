@@ -64,7 +64,7 @@ public class GameManager : IGameManager
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task LaunchAndSpectate(
+    public async Task<ReplaySessionKind> LaunchAndSpectate(
         LoadedReplay loadedReplay,
         Func<Task<LoadedReplay>> whileReporting
     )
@@ -73,6 +73,7 @@ public class GameManager : IGameManager
         await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
         await contextSetter.SetContextAsync(loadedReplay);
         bool obsSession = false;
+        bool enteredMatch = false;
         statusStore.Patch(status =>
         {
             status.SpectatorRunning = true;
@@ -103,7 +104,23 @@ public class GameManager : IGameManager
 
             EnsureWindowedClient();
             recordingClock.Reset();
-            await gameController.LaunchAsync();
+            ClientHoldReason hold = await gameController.LaunchAsync().ConfigureAwait(false);
+            if (hold != ClientHoldReason.None)
+            {
+                logger.LogWarning(
+                    "Heroes is on the {Hold} dialog. Replay {ReplayId} stays queued. The client stays open and OBS uses the waiting scene.",
+                    hold,
+                    loadedReplay?.ReplayId
+                );
+                statusStore.Patch(status =>
+                {
+                    status.SpectatorRunning = true;
+                    status.Phase = "Waiting";
+                    status.Timer = null;
+                });
+                ParkWaitingScene();
+                return ReplaySessionKind.Held;
+            }
 
             if (settings.OBS.Enabled)
             {
@@ -114,11 +131,12 @@ public class GameManager : IGameManager
                 await StartRecordingWhenMatchIsVisible(loadedReplay).ConfigureAwait(false);
             }
 
-            await spectator.SpectateAsync();
+            enteredMatch = true;
+            await spectator.SpectateAsync().ConfigureAwait(false);
         }
         finally
         {
-            if (obsSession)
+            if (enteredMatch && obsSession)
             {
                 try
                 {
@@ -155,12 +173,15 @@ public class GameManager : IGameManager
                 }
             }
 
-            ReplayShutdown.CaptureEndThenKill(gameController, logger);
+            if (enteredMatch)
+            {
+                ReplayShutdown.CaptureEndThenKill(gameController, logger);
+            }
         }
 
         try
         {
-            if (obsSession)
+            if (enteredMatch && obsSession)
             {
                 Task<LoadedReplay> nextLoad = InvokeNextLoad(whileReporting);
                 Task report = obsController.CycleReportAsync();
@@ -199,6 +220,25 @@ public class GameManager : IGameManager
             {
                 obsController.EndSession();
             }
+        }
+
+        return ReplaySession.Classify(ClientHoldReason.None, spectator.MatchClockSeen);
+    }
+
+    private void ParkWaitingScene()
+    {
+        if (!settings.OBS.Enabled)
+        {
+            return;
+        }
+
+        try
+        {
+            obsController.SwapToWaitingScene();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not switch OBS to the waiting scene.");
         }
     }
 

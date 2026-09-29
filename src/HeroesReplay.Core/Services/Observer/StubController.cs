@@ -37,7 +37,7 @@ public sealed class StubController : IGameController
 
     public Task<bool> OpenReplayFromHomeScreenAsync(string replayPath) => Task.FromResult(false);
 
-    public Task LaunchAsync()
+    public Task<ClientHoldReason> LaunchAsync()
     {
         int duration = Math.Max(
             1,
@@ -49,7 +49,7 @@ public sealed class StubController : IGameController
             timers.Enqueue(TimeSpan.FromSeconds(second));
         }
 
-        return Task.CompletedTask;
+        return Task.FromResult(ClientHoldReason.None);
     }
 
     public void SendFocus(int player) => logger.LogInformation("Selected player {Player}", player);

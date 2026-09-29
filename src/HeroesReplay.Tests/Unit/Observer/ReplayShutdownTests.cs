@@ -50,7 +50,7 @@ public class ReplayShutdownTests
 
         public List<string> Calls { get; } = new();
 
-        public Task LaunchAsync() => throw new NotSupportedException();
+        public Task<ClientHoldReason> LaunchAsync() => throw new NotSupportedException();
 
         public Task<bool> StartAuthenticatedReplayAsync(string replayPath) =>
             throw new NotSupportedException();

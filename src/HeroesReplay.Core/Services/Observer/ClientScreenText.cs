@@ -24,4 +24,15 @@ public static class ClientScreenText
         return !string.IsNullOrWhiteSpace(text)
             && text.Contains("version mismatch", StringComparison.OrdinalIgnoreCase);
     }
+
+    public static bool IsRegionUnavailable(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return text.Contains("region", StringComparison.OrdinalIgnoreCase)
+            && text.Contains("unavailable", StringComparison.OrdinalIgnoreCase);
+    }
 }
