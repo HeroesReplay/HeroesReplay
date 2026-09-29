@@ -37,6 +37,19 @@ public class ReplayClientRouteTests
     }
 
     [Fact]
+    public void Classify_AnotherIterationOfTheSamePatchIsNotTheCurrentClient()
+    {
+        Assert.Equal(
+            ReplayClientPatch.NotInstalled,
+            ReplayClientRoute.Classify("2.57.0.98285", new[] { "2.57.0.98304" })
+        );
+        Assert.Equal(
+            ReplayClientPatch.Previous,
+            ReplayClientRoute.Classify("2.57.0.98285", new[] { "2.57.0.98304", "2.57.0.98285" })
+        );
+    }
+
+    [Fact]
     public void Classify_MissingBuildDoesNotUseTheCurrentClient()
     {
         Assert.Equal(

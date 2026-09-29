@@ -28,6 +28,7 @@ public class DevSettingsTests
         Assert.Equal(@"C:\Program Files (x86)\Heroes of the Storm", location.GameInstallDirectory);
         Assert.Equal(@"C:\heroesreplay\Replays", location.ReplaySource);
         Assert.Equal(@"C:\heroesreplay\Data", location.DataDirectory);
+        Assert.Equal(@"C:\heroesreplay\Data\Clients", location.RetainedClientDirectory);
         Assert.Equal(@"C:\heroesreplay\Battle.net\Battle.net.exe", location.BattlenetPath);
         Assert.NotNull(capture);
         Assert.Equal(CaptureMethod.PrintWindow, capture.Method);

@@ -159,9 +159,41 @@ public class GameController : IGameController
 
     private async Task<ReplayBoot> BeginReplayAsync(string replayPath, string replayVersion)
     {
-        IReadOnlyList<string> installed = InstalledClientCatalog.FileVersions(
-            settings.Location?.GameInstallDirectory
+        string gameDirectory = settings.Location?.GameInstallDirectory;
+        string archiveDirectory = ClientBuildArchive.ResolveDirectory(
+            settings.Location?.RetainedClientDirectory,
+            settings.Location?.DataDirectory
         );
+        foreach (
+            ClientBuildKeepItem kept in ClientBuildArchive.Preserve(
+                InstalledClientCatalog.Clients(gameDirectory),
+                archiveDirectory,
+                settings.Spectate?.MinimumGameVersion
+            )
+        )
+        {
+            if (kept.Result == ClientBuildKeep.Copied)
+            {
+                logger.LogInformation(
+                    "Kept Heroes build {Version} so a later Battle.net reclaim can still launch it.",
+                    kept.Version
+                );
+            }
+            else if (kept.Result == ClientBuildKeep.Skipped)
+            {
+                logger.LogWarning("Could not keep Heroes build {Version}.", kept.Version);
+            }
+        }
+
+        if (ClientBuildArchive.Restore(gameDirectory, archiveDirectory, replayVersion))
+        {
+            logger.LogInformation(
+                "Restored Heroes build {Version} into Versions before opening the replay.",
+                replayVersion
+            );
+        }
+
+        IReadOnlyList<string> installed = InstalledClientCatalog.FileVersions(gameDirectory);
         launchPatch = ReplayClientRoute.Classify(replayVersion, installed);
         if (installed.Count == 0)
         {

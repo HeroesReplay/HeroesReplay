@@ -17,7 +17,7 @@ public class PatchIndexCommand : Command
     public PatchIndexCommand()
         : base(
             "patch-index",
-            "Find the first Heroes Profile replay id that uses the same game client as the latest replay."
+            "Find the first Heroes Profile replay id on the same patch line as the latest replay. Every build iteration of that line counts."
         )
     {
         Option<bool> write = new("--write")
@@ -64,8 +64,11 @@ public class PatchIndexCommand : Command
         bool supported =
             settings.Spectate?.VersionsSupported != null
             && settings.Spectate.VersionsSupported.Contains(head.GameVersion);
+        string line = GameVersionOrder.PatchLine(head.GameVersion) ?? head.GameVersion;
         Console.WriteLine($"Latest replay {head.Id} is client {head.GameVersion}.");
-        Console.WriteLine($"First replay of that client: {first}.");
+        Console.WriteLine(
+            $"First replay on patch {line}, including every {line}.* build: {first}."
+        );
         Console.WriteLine(
             supported
                 ? $"VersionsSupported already includes {head.GameVersion}."
@@ -105,24 +108,27 @@ public class PatchIndexCommand : Command
         CancellationToken cancellationToken
     )
     {
-        return CurrentPatchIndex.FindFirst(
-            maxId,
-            version,
-            after =>
+        CurrentPatchIndex.Row? FirstAfter(int after)
+        {
+            var page = heroesProfile
+                .ListAfterAsync(after, cancellationToken)
+                .GetAwaiter()
+                .GetResult();
+            HeroesProfileReplay row = page?.FirstOrDefault();
+            if (row == null || string.IsNullOrWhiteSpace(row.GameVersion))
             {
-                var page = heroesProfile
-                    .ListAfterAsync(after, cancellationToken)
-                    .GetAwaiter()
-                    .GetResult();
-                HeroesProfileReplay row = page?.FirstOrDefault();
-                if (row == null || string.IsNullOrWhiteSpace(row.GameVersion))
-                {
-                    return null;
-                }
-
-                return new CurrentPatchIndex.Row(row.Id, row.GameVersion);
+                return null;
             }
-        );
+
+            return new CurrentPatchIndex.Row(row.Id, row.GameVersion);
+        }
+
+        if (GameVersionOrder.PatchLine(version) == null)
+        {
+            return CurrentPatchIndex.FindFirst(maxId, version, FirstAfter);
+        }
+
+        return CurrentPatchIndex.FindFirstOnLine(maxId, version, FirstAfter);
     }
 
     private static string SettingsPath()

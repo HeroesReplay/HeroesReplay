@@ -38,8 +38,8 @@ public enum ReplaySignInRecovery
 
 /// <summary>
 /// The newest installed client signs in through Battle.net, then opens the replay.
-/// An older installed build is started by HeroesSwitcher with the replay file.
-/// Battle.net Play always starts the newest client.
+/// An older installed build, including an older iteration of the same patch line, is started by HeroesSwitcher.
+/// Battle.net Play always starts the newest client. A different build number is not that client.
 /// </summary>
 public static class ReplayClientRoute
 {

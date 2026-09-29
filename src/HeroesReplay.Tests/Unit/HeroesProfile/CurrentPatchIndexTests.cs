@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using HeroesReplay.Core.Services.HeroesProfile;
@@ -29,6 +30,41 @@ public class CurrentPatchIndexTests
         );
 
         Assert.Equal(11, first);
+    }
+
+    [Fact]
+    public void FindFirstOnLine_IncludesEveryBuildIterationOfTheLatestPatch()
+    {
+        var rows = new List<CurrentPatchIndex.Row>
+        {
+            new(1, "2.55.17.98025"),
+            new(2, "2.57.0.98285"),
+            new(3, "2.57.0.98297"),
+            new(4, "2.57.0.98304"),
+        };
+
+        int exact = CurrentPatchIndex.FindFirst(
+            4,
+            "2.57.0.98304",
+            after => rows.FirstOrDefault(row => row.Id > after)
+        );
+        int line = CurrentPatchIndex.FindFirstOnLine(
+            4,
+            "2.57.0.98304",
+            after => rows.FirstOrDefault(row => row.Id > after)
+        );
+
+        Assert.Equal(4, exact);
+        Assert.Equal(2, line);
+    }
+
+    [Fact]
+    public void FindFirstOnLine_RejectsAVersionWithNoPatchLine()
+    {
+        var rows = new List<CurrentPatchIndex.Row> { new(1, "2.57.0.98304") };
+        Assert.Throws<ArgumentException>(() =>
+            CurrentPatchIndex.FindFirstOnLine(1, "98304", after => rows[0])
+        );
     }
 
     [Fact]

@@ -3,8 +3,9 @@ using System;
 namespace HeroesReplay.Core.Services.HeroesProfile;
 
 /// <summary>
-/// Smallest replay id that still uses the same game version as the latest replay.
-/// Versions only move forward as ids increase.
+/// Smallest replay id that still uses the latest replay's patch.
+/// Replay ids only move onto newer builds. A patch line is the first two numbers,
+/// so 2.57.0.98285 and 2.57.0.98304 are the same patch.
 /// </summary>
 public static class CurrentPatchIndex
 {
@@ -12,14 +13,32 @@ public static class CurrentPatchIndex
 
     public static int FindFirst(int maxId, string version, Func<int, Row?> firstAfter)
     {
-        if (maxId <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxId));
-        }
-
         if (string.IsNullOrWhiteSpace(version))
         {
             throw new ArgumentException("A game version is required.", nameof(version));
+        }
+
+        return Find(maxId, version, firstAfter, matchLine: false);
+    }
+
+    public static int FindFirstOnLine(int maxId, string version, Func<int, Row?> firstAfter)
+    {
+        if (GameVersionOrder.PatchLine(version) == null)
+        {
+            throw new ArgumentException(
+                "A patch line needs a major and minor version.",
+                nameof(version)
+            );
+        }
+
+        return Find(maxId, version, firstAfter, matchLine: true);
+    }
+
+    private static int Find(int maxId, string version, Func<int, Row?> firstAfter, bool matchLine)
+    {
+        if (maxId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxId));
         }
 
         if (firstAfter == null)
@@ -41,7 +60,10 @@ public static class CurrentPatchIndex
                 continue;
             }
 
-            if (string.Equals(row.Value.Version, version, StringComparison.OrdinalIgnoreCase))
+            bool matches = matchLine
+                ? GameVersionOrder.SamePatch(row.Value.Version, version)
+                : string.Equals(row.Value.Version, version, StringComparison.OrdinalIgnoreCase);
+            if (matches)
             {
                 answer = row.Value.Id;
                 hi = row.Value.Id - 1;
