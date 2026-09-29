@@ -1,0 +1,650 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Analysis;
+using HeroesReplay.Core.Services.Media;
+
+namespace HeroesReplay.Core.Services.YouTube;
+
+public sealed class FullMatchMetadataOptions
+{
+    public bool IncludeSpoilers { get; init; }
+    public bool IncludeRequestAttribution { get; init; } = true;
+    public string CategoryId { get; init; } = "20";
+}
+
+public sealed record FullMatchMetadataInput
+{
+    public int? ReplayId { get; init; }
+    public DateTime? GameDateUtc { get; init; }
+    public string GameVersion { get; init; }
+    public string Map { get; init; }
+    public string MapAlternativeName { get; init; }
+    public string HeroesProfileMap { get; init; }
+    public string GameMode { get; init; }
+    public string Rank { get; init; }
+    public double? AverageMmr { get; init; }
+    public string FocusHero { get; init; }
+    public IReadOnlyList<ReplayMediaPlayer> Roster { get; init; }
+    public bool RecordAndUpload { get; init; }
+    public string RequestedBy { get; init; }
+    public IReadOnlyList<TeamKillClip> NotableEvents { get; init; }
+
+    /// <summary>Caller sets this only after completion and media validation. It is not inferred.</summary>
+    public bool IsCompleteRecording { get; init; }
+    public string Winner { get; init; }
+}
+
+public sealed class FullMatchMetadata
+{
+    public string TemplateVersion { get; init; }
+    public string Title { get; init; }
+    public string Description { get; init; }
+    public IReadOnlyList<string> DescriptionLines { get; init; }
+    public IReadOnlyList<string> Tags { get; init; }
+    public int? ReplayId { get; init; }
+    public string HeroesProfileUrl { get; init; }
+    public string CategoryId { get; init; }
+    public string Map { get; init; }
+    public string GameMode { get; init; }
+    public string Rank { get; init; }
+    public int? AverageMmr { get; init; }
+    public string FocusHero { get; init; }
+    public bool ClaimsFullMatch { get; init; }
+    public bool ClaimsPentakill { get; init; }
+    public bool ClaimsTeamWipe { get; init; }
+    public bool IncludesSpoiler { get; init; }
+}
+
+public static class FullMatchMetadataBuilder
+{
+    public const string TemplateVersion = "1";
+    public const int TitleMaxCharacters = 100;
+    public const int DescriptionMaxCharacters = 5000;
+    public const int TagMaxCharacters = 30;
+    public const int TagsMaxCharacters = 500;
+
+    private const string HeroesProfileUrlPrefix =
+        "https://www.heroesprofile.com/Match/Single/?replayID=";
+
+    public static FullMatchMetadata Build(
+        FullMatchMetadataInput input,
+        FullMatchMetadataOptions options
+    )
+    {
+        if (options == null)
+        {
+            options = new FullMatchMetadataOptions();
+        }
+
+        string category = Clean(options.CategoryId, 16) ?? "20";
+        if (input == null)
+        {
+            return Empty(category);
+        }
+
+        int? replayId = input.ReplayId is int id && id > 0 ? id : null;
+        string replayText = replayId?.ToString(CultureInfo.InvariantCulture);
+        string profileUrl = replayId == null ? null : HeroesProfileUrlPrefix + replayText;
+        string map = EnglishMapNames.Prefer(
+            input.HeroesProfileMap,
+            input.Map,
+            input.MapAlternativeName
+        );
+        map = Clean(map, 120);
+        string mode = Clean(input.GameMode, 80);
+        string rank = Clean(input.Rank, 40);
+        string focus = Clean(input.FocusHero, 40);
+        string build = Clean(input.GameVersion, 40);
+        string requestor = options.IncludeRequestAttribution ? Clean(input.RequestedBy, 40) : null;
+        bool attributeRequest = input.RecordAndUpload && options.IncludeRequestAttribution;
+        if (!input.RecordAndUpload)
+        {
+            requestor = null;
+        }
+
+        TeamKillClip[] events = ReplayMediaEvidence.Accepted(input.NotableEvents);
+        bool pentakill = ReplayMediaEvidence.HasKind(events, TeamKillClips.PentakillKind);
+        bool teamWipe = ReplayMediaEvidence.HasKind(events, TeamKillClips.TeamWipeKind);
+        string eventHero =
+            ReplayMediaEvidence.FirstHero(events, TeamKillClips.PentakillKind)
+            ?? ReplayMediaEvidence.FirstHero(events, TeamKillClips.TeamWipeKind);
+        eventHero = Clean(eventHero, 40);
+        string headlineHero = eventHero ?? focus;
+        int? mmr = RoundedMmr(input.AverageMmr);
+        string describedWhen = DateLabel(input.GameDateUtc);
+        string winner = options.IncludeSpoilers ? Clean(input.Winner, 80) : null;
+
+        string title = ComposeTitle(
+            Prefix(input.IsCompleteRecording, attributeRequest, pentakill, teamWipe),
+            Subject(headlineHero, map),
+            mode,
+            rank,
+            mmr == null ? null : mmr.Value.ToString(CultureInfo.InvariantCulture) + " MMR",
+            TitleDate(input.GameDateUtc),
+            replayText
+        );
+
+        var lines = new List<string>();
+        if (input.IsCompleteRecording)
+        {
+            lines.Add("Full match.");
+        }
+
+        AddLine(lines, replayText == null ? null : "Replay ID: " + replayText);
+        AddLine(lines, profileUrl == null ? null : "Heroes Profile: " + profileUrl);
+        AddLine(lines, describedWhen == null ? null : "Date: " + describedWhen + " UTC");
+        AddLine(lines, build == null ? null : "Build: " + build);
+        AddLine(lines, map == null ? null : "Map: " + map);
+        AddLine(lines, mode == null ? null : "Mode: " + mode);
+        AddLine(lines, rank == null ? null : "Rank: " + rank);
+        AddLine(
+            lines,
+            mmr == null ? null : "Average MMR: " + mmr.Value.ToString(CultureInfo.InvariantCulture)
+        );
+        AddLine(lines, focus == null ? null : "Featured: " + focus);
+        AddLine(lines, Highlights(events));
+        AddLine(lines, requestor == null ? null : "Requested by: " + requestor);
+        string resultLine = winner == null ? null : "Result: " + winner;
+        AddLine(lines, resultLine);
+        AddRoster(lines, input.Roster);
+
+        IReadOnlyList<string> kept = FitLines(lines);
+        string description = string.Join("\n", kept);
+        string[] tags = Tags(map, mode, rank, focus, pentakill, teamWipe, replayId != null);
+        string combined = title + "\n" + description;
+        return new FullMatchMetadata
+        {
+            TemplateVersion = TemplateVersion,
+            Title = title,
+            Description = description,
+            DescriptionLines = kept,
+            Tags = tags,
+            ReplayId = replayId,
+            HeroesProfileUrl = profileUrl,
+            CategoryId = category,
+            Map = map,
+            GameMode = mode,
+            Rank = rank,
+            AverageMmr = mmr,
+            FocusHero = focus,
+            ClaimsFullMatch = input.IsCompleteRecording && Has(description, "Full match."),
+            ClaimsPentakill = pentakill && Has(combined, "pentakill"),
+            ClaimsTeamWipe = teamWipe && Has(combined, "team wipe"),
+            IncludesSpoiler = resultLine != null && Has(description, resultLine),
+        };
+    }
+
+    private static FullMatchMetadata Empty(string category)
+    {
+        return new FullMatchMetadata
+        {
+            TemplateVersion = TemplateVersion,
+            Title = string.Empty,
+            Description = string.Empty,
+            DescriptionLines = Array.Empty<string>(),
+            Tags = Array.Empty<string>(),
+            CategoryId = category,
+            ClaimsFullMatch = false,
+            ClaimsPentakill = false,
+            ClaimsTeamWipe = false,
+            IncludesSpoiler = false,
+        };
+    }
+
+    private static string Prefix(bool full, bool requested, bool pentakill, bool teamWipe)
+    {
+        string events = null;
+        if (pentakill && teamWipe)
+        {
+            events = "pentakill and team wipe";
+        }
+        else if (pentakill)
+        {
+            events = "pentakill";
+        }
+        else if (teamWipe)
+        {
+            events = "team wipe";
+        }
+
+        string left = null;
+        if (full && requested)
+        {
+            left = "Full match: Requested";
+        }
+        else if (full)
+        {
+            left = "Full match";
+        }
+        else if (requested)
+        {
+            left = "Requested";
+        }
+
+        if (left == null)
+        {
+            return events == null ? null : Capitalize(events);
+        }
+
+        if (events == null)
+        {
+            return left;
+        }
+
+        return left + ": " + Capitalize(events);
+    }
+
+    private static string Capitalize(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        if (value.Length == 1)
+        {
+            return value.ToUpperInvariant();
+        }
+
+        return char.ToUpperInvariant(value[0]) + value.Substring(1);
+    }
+
+    private static string Subject(string hero, string map)
+    {
+        if (hero != null && map != null)
+        {
+            return hero + " on " + map;
+        }
+
+        return hero ?? map;
+    }
+
+    private static string ComposeTitle(
+        string prefix,
+        string subject,
+        string mode,
+        string rank,
+        string mmr,
+        string date,
+        string replayId
+    )
+    {
+        string[][] attempts =
+        {
+            new[] { prefix, subject, mode, rank, mmr, date, replayId },
+            new[] { prefix, subject, mode, rank, date, replayId },
+            new[] { prefix, subject, mode, rank, replayId },
+            new[] { prefix, subject, mode, replayId },
+            new[] { prefix, subject, replayId },
+            new[] { subject, replayId },
+            new[] { prefix, replayId },
+            new[] { replayId },
+        };
+        foreach (string[] parts in attempts)
+        {
+            string title = JoinParts(parts);
+            if (title.Length > 0 && title.Length <= TitleMaxCharacters)
+            {
+                return title;
+            }
+        }
+
+        return TruncateKeepingId(JoinParts(new[] { prefix, subject }), replayId);
+    }
+
+    private static string JoinParts(IReadOnlyList<string> parts)
+    {
+        var kept = new List<string>();
+        if (parts != null)
+        {
+            foreach (string part in parts)
+            {
+                if (!string.IsNullOrWhiteSpace(part))
+                {
+                    kept.Add(part.Trim());
+                }
+            }
+        }
+
+        return string.Join(" - ", kept);
+    }
+
+    private static string TruncateKeepingId(string head, string replayId)
+    {
+        if (string.IsNullOrEmpty(replayId))
+        {
+            if (string.IsNullOrEmpty(head))
+            {
+                return string.Empty;
+            }
+
+            return head.Length <= TitleMaxCharacters
+                ? head
+                : head.Substring(0, TitleMaxCharacters).TrimEnd();
+        }
+
+        if (replayId.Length >= TitleMaxCharacters)
+        {
+            return replayId.Substring(0, TitleMaxCharacters);
+        }
+
+        string suffix = " - " + replayId;
+        if (string.IsNullOrEmpty(head))
+        {
+            return replayId;
+        }
+
+        int room = TitleMaxCharacters - suffix.Length;
+        if (head.Length > room)
+        {
+            head = head.Substring(0, room).TrimEnd();
+        }
+
+        if (head.Length == 0)
+        {
+            return replayId;
+        }
+
+        return head + suffix;
+    }
+
+    private static string Highlights(IReadOnlyList<TeamKillClip> events)
+    {
+        if (events == null || events.Count == 0)
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+        int limit = Math.Min(events.Count, 8);
+        for (int i = 0; i < limit; i++)
+        {
+            TeamKillClip clip = events[i];
+            string kind = clip.Kind == TeamKillClips.PentakillKind ? "pentakill" : "team wipe";
+            string hero = Clean(clip.Hero, 40);
+            parts.Add(hero == null ? kind : hero + " " + kind);
+        }
+
+        return "Highlights: " + string.Join("; ", parts);
+    }
+
+    private static void AddRoster(List<string> lines, IReadOnlyList<ReplayMediaPlayer> roster)
+    {
+        AddLine(lines, RosterLine("Blue", roster, 0));
+        AddLine(lines, RosterLine("Red", roster, 1));
+    }
+
+    private static string RosterLine(
+        string teamName,
+        IReadOnlyList<ReplayMediaPlayer> roster,
+        int team
+    )
+    {
+        if (roster == null)
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+        foreach (ReplayMediaPlayer player in roster)
+        {
+            if (player == null || player.Team != team)
+            {
+                continue;
+            }
+
+            string described = Describe(player);
+            if (!string.IsNullOrWhiteSpace(described))
+            {
+                parts.Add(described);
+            }
+        }
+
+        if (parts.Count == 0)
+        {
+            return null;
+        }
+
+        return teamName + ": " + string.Join(", ", parts);
+    }
+
+    private static string Describe(ReplayMediaPlayer player)
+    {
+        string hero = Clean(player.Hero, 40);
+        if (player.IsAi)
+        {
+            return hero == null ? "AI" : hero + " (AI)";
+        }
+
+        string account = Account(player);
+        if (hero != null && account != null)
+        {
+            return hero + " (" + account + ")";
+        }
+
+        return hero ?? account;
+    }
+
+    private static string Account(ReplayMediaPlayer player)
+    {
+        string name = Clean(player.Name, 40);
+        if (name == null)
+        {
+            return null;
+        }
+
+        if (name.IndexOf('#') >= 0)
+        {
+            return name;
+        }
+
+        if (player.BattleTag > 0)
+        {
+            return name + "#" + player.BattleTag.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return name;
+    }
+
+    private static string[] Tags(
+        string map,
+        string mode,
+        string rank,
+        string focus,
+        bool pentakill,
+        bool teamWipe,
+        bool replayKnown
+    )
+    {
+        var tags = new List<string>();
+        AddTag(tags, map);
+        AddTag(tags, mode);
+        AddTag(tags, ReplayMediaRanks.Display(rank));
+        AddTag(tags, focus);
+        if (pentakill)
+        {
+            AddTag(tags, "Pentakill");
+        }
+
+        if (teamWipe)
+        {
+            AddTag(tags, "Team wipe");
+        }
+
+        if (tags.Count > 0 || replayKnown)
+        {
+            AddTag(tags, "Heroes of the Storm");
+        }
+
+        while (tags.Count > 0 && string.Join(",", tags).Length > TagsMaxCharacters)
+        {
+            tags.RemoveAt(tags.Count - 1);
+        }
+
+        return tags.ToArray();
+    }
+
+    private static void AddTag(List<string> tags, string value)
+    {
+        string clean = Clean(value, TagMaxCharacters);
+        if (clean == null)
+        {
+            return;
+        }
+
+        clean = clean.Replace(",", string.Empty).Trim();
+        if (clean.Length == 0)
+        {
+            return;
+        }
+
+        if (clean.Length > TagMaxCharacters)
+        {
+            clean = clean.Substring(0, TagMaxCharacters).TrimEnd();
+        }
+
+        foreach (string tag in tags)
+        {
+            if (string.Equals(tag, clean, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        tags.Add(clean);
+    }
+
+    private static IReadOnlyList<string> FitLines(List<string> lines)
+    {
+        while (lines.Count > 1 && JoinLength(lines) > DescriptionMaxCharacters)
+        {
+            lines.RemoveAt(lines.Count - 1);
+        }
+
+        if (lines.Count == 1 && lines[0].Length > DescriptionMaxCharacters)
+        {
+            lines[0] = lines[0].Substring(0, DescriptionMaxCharacters);
+        }
+
+        return lines.ToArray();
+    }
+
+    private static int JoinLength(List<string> lines)
+    {
+        int length = 0;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            if (i > 0)
+            {
+                length++;
+            }
+
+            length += lines[i].Length;
+        }
+
+        return length;
+    }
+
+    private static void AddLine(List<string> lines, string line)
+    {
+        if (!string.IsNullOrWhiteSpace(line))
+        {
+            lines.Add(line);
+        }
+    }
+
+    private static int? RoundedMmr(double? mmr)
+    {
+        if (mmr is not double value || double.IsNaN(value) || double.IsInfinity(value) || value < 0)
+        {
+            return null;
+        }
+
+        double rounded = Math.Round(value, MidpointRounding.AwayFromZero);
+        if (rounded > int.MaxValue)
+        {
+            return int.MaxValue;
+        }
+
+        return (int)rounded;
+    }
+
+    private static string DateLabel(DateTime? gameDate)
+    {
+        if (gameDate is not DateTime value || value.Kind == DateTimeKind.Local)
+        {
+            return null;
+        }
+
+        return value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+    }
+
+    private static string TitleDate(DateTime? gameDate)
+    {
+        if (gameDate is not DateTime value || value.Kind == DateTimeKind.Local)
+        {
+            return null;
+        }
+
+        return value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    private static bool Has(string text, string phrase)
+    {
+        return text != null
+            && phrase != null
+            && text.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static string Clean(string value, int max)
+    {
+        if (string.IsNullOrWhiteSpace(value) || max <= 0)
+        {
+            return null;
+        }
+
+        var chars = new char[value.Length];
+        int count = 0;
+        bool pendingSpace = false;
+        foreach (char character in value.Trim())
+        {
+            if (character == '<' || character == '>')
+            {
+                continue;
+            }
+
+            if (char.IsWhiteSpace(character))
+            {
+                if (count == 0 || pendingSpace)
+                {
+                    continue;
+                }
+
+                chars[count++] = ' ';
+                pendingSpace = true;
+                continue;
+            }
+
+            chars[count++] = character;
+            pendingSpace = false;
+            if (count >= max)
+            {
+                break;
+            }
+        }
+
+        if (count == 0)
+        {
+            return null;
+        }
+
+        if (chars[count - 1] == ' ')
+        {
+            count--;
+        }
+
+        return count == 0 ? null : new string(chars, 0, count);
+    }
+}
