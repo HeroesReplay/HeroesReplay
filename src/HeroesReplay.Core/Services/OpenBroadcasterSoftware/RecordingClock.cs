@@ -25,6 +25,27 @@ public sealed class RecordingClock
         }
     }
 
+    public int SampleCount
+    {
+        get
+        {
+            lock (gate)
+            {
+                return samples.Count;
+            }
+        }
+    }
+
+    public void Reset()
+    {
+        lock (gate)
+        {
+            samples.Clear();
+            watch = null;
+            lastHud = double.NegativeInfinity;
+        }
+    }
+
     public void Start()
     {
         lock (gate)

@@ -71,4 +71,22 @@ public static class StormVariablesEditor
     {
         return string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// The client writes a border of a few pixels into windowwidth. 1921 is still 1920p.
+    /// </summary>
+    public static bool WindowEdgeEquals(string expected, string actual)
+    {
+        if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (int.TryParse(expected, out int want) && int.TryParse(actual, out int got))
+        {
+            return Math.Abs(want - got) <= 8;
+        }
+
+        return false;
+    }
 }

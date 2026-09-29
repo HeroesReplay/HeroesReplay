@@ -105,13 +105,11 @@ public class GameController : IGameController
             return;
         }
 
-        if (step == ReplayLaunchStep.CloseThenOpen)
+        if (step == ReplayLaunchStep.Wait)
         {
-            logger.LogWarning(
-                "Game window is up without the home screen or the match clock. Closing it and opening the replay."
+            logger.LogInformation(
+                "Client is up without the home screen or the match clock. Leaving it open until the signed-in menu or the match is visible."
             );
-            Kill();
-            await Task.Delay(TimeSpan.FromSeconds(2), tokenProvider.Token).ConfigureAwait(false);
         }
 
         await LaunchAndWait().ConfigureAwait(false);
@@ -138,7 +136,7 @@ public class GameController : IGameController
         }
     }
 
-    public async Task StartAuthenticatedReplayAsync(string replayPath)
+    public async Task<bool> StartAuthenticatedReplayAsync(string replayPath)
     {
         if (!IsLaunched())
         {
@@ -152,7 +150,21 @@ public class GameController : IGameController
             }
         }
 
-        replayOpener.Open(replayPath);
+        if (IsLaunched() && await IsHomeScreen().ConfigureAwait(false))
+        {
+            logger.LogInformation("Client is on the home screen. Opening the replay.");
+            replayOpener.Open(replayPath);
+            return true;
+        }
+
+        if (IsLaunched())
+        {
+            logger.LogInformation(
+                "Heroes is open without the home screen. The replay file stays closed until the signed-in menu is visible."
+            );
+        }
+
+        return false;
     }
 
     public async Task<bool> OpenReplayFromHomeScreenAsync(string replayPath)
@@ -169,9 +181,10 @@ public class GameController : IGameController
 
     private async Task<bool> StartReplayAndWaitAsync()
     {
-        await StartAuthenticatedReplayAsync(context.Current.LoadedReplay.FileInfo.FullName)
+        bool openedFromHome = await StartAuthenticatedReplayAsync(
+                context.Current.LoadedReplay.FileInfo.FullName
+            )
             .ConfigureAwait(false);
-        bool reopenedFromHome = false;
 
         bool versionMatched = Policy
             .Handle<Exception>()
@@ -194,7 +207,8 @@ public class GameController : IGameController
             .Concat(new[] { context.Current.LoadedReplay.Replay.Map })
             .ToArray();
         bool disconnected = false;
-        int polls = 0;
+        bool recoveredLogin = false;
+        bool loggedMismatch = false;
         await Policy
             .Handle<Exception>()
             .OrResult<bool>(result => result == false)
@@ -205,7 +219,6 @@ public class GameController : IGameController
             .ExecuteAsync(
                 async (t) =>
                 {
-                    polls++;
                     string text = await ReadWindowTextAsync().ConfigureAwait(false);
                     if (BattleNetDisconnect.IsShown(text))
                     {
@@ -214,21 +227,48 @@ public class GameController : IGameController
                         return true;
                     }
 
+                    if (ClientScreenText.IsVersionMismatch(text))
+                    {
+                        if (!loggedMismatch)
+                        {
+                            loggedMismatch = true;
+                            logger.LogWarning(
+                                "Heroes is on the version-mismatch dialog. The replay file stays closed."
+                            );
+                        }
+
+                        return false;
+                    }
+
                     bool loading = searchTerms.Any(word =>
                         !string.IsNullOrWhiteSpace(word)
                         && text.Contains(word, StringComparison.OrdinalIgnoreCase)
                     );
                     bool timer = await IsReplay().ConfigureAwait(false);
-                    if (!reopenedFromHome && polls >= 20 && !loading && !timer)
+                    if (!recoveredLogin && !loading && !timer && ClientScreenText.IsLoginForm(text))
                     {
-                        reopenedFromHome = true;
-                        if (await IsHomeScreen().ConfigureAwait(false))
-                        {
-                            logger.LogInformation(
-                                "Client is on the home screen. Opening the replay."
-                            );
-                            replayOpener.Open(context.Current.LoadedReplay.FileInfo.FullName);
-                        }
+                        recoveredLogin = true;
+                        logger.LogWarning(
+                            "Heroes is on the login form. Starting the signed-in client again before opening the replay."
+                        );
+                        Kill();
+                        await Task.Delay(TimeSpan.FromSeconds(2), tokenProvider.Token)
+                            .ConfigureAwait(false);
+                        replayOpener.RequestAuthenticatedClient();
+                        openedFromHome = false;
+                        return false;
+                    }
+
+                    if (
+                        !openedFromHome
+                        && !loading
+                        && !timer
+                        && await IsHomeScreen().ConfigureAwait(false)
+                    )
+                    {
+                        openedFromHome = true;
+                        logger.LogInformation("Client is on the home screen. Opening the replay.");
+                        replayOpener.Open(context.Current.LoadedReplay.FileInfo.FullName);
                     }
 
                     if (loading)

@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
@@ -101,6 +102,7 @@ public class GameManager : IGameManager
             );
 
             EnsureWindowedClient();
+            recordingClock.Reset();
             await gameController.LaunchAsync();
 
             if (settings.OBS.Enabled)
@@ -109,12 +111,7 @@ public class GameManager : IGameManager
                 obsSession = true;
                 statusStore.Patch(status => status.ObsSession = true);
                 obsController.ConfigureFromContext();
-                if (SessionMedia.ShouldRecord(settings.OBS, loadedReplay))
-                {
-                    recordingClock.Start();
-                }
-
-                obsController.StartRecording();
+                await StartRecordingWhenMatchIsVisible(loadedReplay).ConfigureAwait(false);
             }
 
             await spectator.SpectateAsync();
@@ -129,23 +126,30 @@ public class GameManager : IGameManager
                 }
                 catch { }
 
-                try
+                if (MatchRecording.ShouldPublish(recordingClock.SampleCount))
                 {
-                    await MatchClipExporter
-                        .ExportAsync(
-                            context.Current?.LoadedReplay?.Replay,
-                            context.Current?.LoadedReplay?.ReplayId,
-                            context.Current?.Directory?.FullName,
-                            recordingClock,
-                            settings.YouTube,
-                            settings.YouTube?.EntryFileName,
-                            logger
-                        )
-                        .ConfigureAwait(false);
+                    try
+                    {
+                        await MatchClipExporter
+                            .ExportAsync(
+                                context.Current?.LoadedReplay?.Replay,
+                                context.Current?.LoadedReplay?.ReplayId,
+                                context.Current?.Directory?.FullName,
+                                recordingClock,
+                                settings.YouTube,
+                                settings.YouTube?.EntryFileName,
+                                logger
+                            )
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception e)
+                    {
+                        logger.LogWarning(e, "Could not cut team-kill clips.");
+                    }
                 }
-                catch (Exception e)
+                else if (recordingClock.IsRunning)
                 {
-                    logger.LogWarning(e, "Could not cut team-kill clips.");
+                    DiscardUnplayedRecording(loadedReplay);
                 }
             }
 
@@ -284,10 +288,9 @@ public class GameManager : IGameManager
         {
             if (!reopenedFromHome && DateTimeOffset.UtcNow >= reopenAt)
             {
-                reopenedFromHome = true;
                 try
                 {
-                    await gameController
+                    reopenedFromHome = await gameController
                         .OpenReplayFromHomeScreenAsync(next.FileInfo.FullName)
                         .ConfigureAwait(false);
                 }
@@ -373,6 +376,89 @@ public class GameManager : IGameManager
                 "Replay {ReplayId} already has a YouTube video. This spectate will not record.",
                 loadedReplay.HeroesProfileReplay?.Id ?? loadedReplay.ReplayId
             );
+        }
+    }
+
+    private async Task StartRecordingWhenMatchIsVisible(LoadedReplay loadedReplay)
+    {
+        if (!SessionMedia.ShouldRecord(settings.OBS, loadedReplay))
+        {
+            return;
+        }
+
+        bool presented = false;
+        try
+        {
+            presented = await gameController
+                .IsReplayPresentedAsync(loadedReplay)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Could not read the match screen before recording replay {ReplayId}.",
+                loadedReplay?.ReplayId
+            );
+        }
+
+        if (!MatchRecording.ShouldStart(recordingClock.IsRunning, presented))
+        {
+            logger.LogInformation(
+                "OBS recording for replay {ReplayId} waits until the loading screen or the match clock is visible.",
+                loadedReplay?.ReplayId
+            );
+            return;
+        }
+
+        recordingClock.Start();
+        obsController.StartRecording();
+    }
+
+    private void DiscardUnplayedRecording(LoadedReplay loadedReplay)
+    {
+        string directory = context.Current?.Directory?.FullName;
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            return;
+        }
+
+        string uploadedName = settings.YouTube?.EntryFileNameUploaded;
+        if (
+            !string.IsNullOrWhiteSpace(uploadedName)
+            && File.Exists(Path.Combine(directory, uploadedName))
+        )
+        {
+            return;
+        }
+
+        string entryName = string.IsNullOrWhiteSpace(settings.YouTube?.EntryFileName)
+            ? "youtube-entry.json"
+            : settings.YouTube.EntryFileName;
+        TryDelete(Path.Combine(directory, entryName));
+        foreach (string recording in Directory.GetFiles(directory, "*.mp4"))
+        {
+            TryDelete(recording);
+        }
+
+        logger.LogWarning(
+            "Replay {ReplayId} never showed the match clock. The recording was not sent to YouTube.",
+            loadedReplay?.ReplayId
+        );
+    }
+
+    private void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not delete {Path}.", path);
         }
     }
 

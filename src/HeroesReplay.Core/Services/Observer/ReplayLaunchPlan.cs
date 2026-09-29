@@ -4,7 +4,7 @@ public enum ReplayLaunchStep
 {
     AlreadyInMatch,
     Open,
-    CloseThenOpen,
+    Wait,
 }
 
 public static class ReplayLaunchPlan
@@ -20,10 +20,11 @@ public static class ReplayLaunchPlan
             return ReplayLaunchStep.AlreadyInMatch;
         }
 
-        // A login window is a running client with neither the home screen nor the match.
+        // Splash, the login form, and a version-mismatch dialog are still this process.
+        // Closing it and opening the replay file drops the signed-in client.
         if (processRunning && !homeScreen)
         {
-            return ReplayLaunchStep.CloseThenOpen;
+            return ReplayLaunchStep.Wait;
         }
 
         return ReplayLaunchStep.Open;

@@ -92,4 +92,15 @@ public class StormVariablesEditorTests
         Assert.False(StormVariablesEditor.InterfaceNameEquals("AhliObs 0.75", ""));
         Assert.False(StormVariablesEditor.InterfaceNameEquals("AhliObs 0.75", null));
     }
+
+    [Theory]
+    [InlineData("1920", "1920", true)]
+    [InlineData("1920", "1921", true)]
+    [InlineData("1080", "1088", true)]
+    [InlineData("1920", "2560", false)]
+    [InlineData("1920", "wide", false)]
+    public void WindowEdgeEquals_AllowsAFewPixelsOfBorder(string expected, string actual, bool same)
+    {
+        Assert.Equal(same, StormVariablesEditor.WindowEdgeEquals(expected, actual));
+    }
 }

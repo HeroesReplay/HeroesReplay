@@ -6,9 +6,9 @@ namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 public static class SessionMedia
 {
     // Twitch stream markers only bookmark the live VOD, and clips are capped at 60 seconds.
-    // Neither can publish one full match to YouTube. OBS records from the loading screen
-    // (after launch) until spectate ends, into the replay's context folder, and the
-    // uploader sends that file.
+    // Neither can publish one full match to YouTube. OBS records once the loading screen
+    // or the HUD clock is visible, and stops before the report scenes. A session that
+    // never shows the match clock is deleted instead of uploaded.
 
     public static bool HasRequestor(LoadedReplay replay) =>
         replay?.RewardQueueItem?.Request != null;

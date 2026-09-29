@@ -124,7 +124,7 @@ public class ObsController : IObsController
                         if (!status.IsRecording)
                         {
                             logger.LogInformation(
-                                "Starting OBS recording for replay {ReplayId} ({Reason}). Stops when spectate ends.",
+                                "Starting OBS recording for replay {ReplayId} ({Reason}). The file starts on the match and stops before the report scenes.",
                                 context.Current?.LoadedReplay?.ReplayId,
                                 SessionMedia.HasRequestor(context.Current?.LoadedReplay)
                                     ? "viewer request"
@@ -162,6 +162,13 @@ public class ObsController : IObsController
                             context.Current?.LoadedReplay?.ReplayId
                         );
                         obs.StopRecord();
+                        DateTimeOffset stoppedBy = DateTimeOffset.UtcNow.AddSeconds(10);
+                        while (
+                            DateTimeOffset.UtcNow < stoppedBy && obs.GetRecordStatus().IsRecording
+                        )
+                        {
+                            Thread.Sleep(250);
+                        }
                     }
                 }
                 catch (Exception e)

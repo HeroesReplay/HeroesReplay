@@ -154,6 +154,14 @@ public sealed class StormClientConfigurator
             return StormVariablesEditor.InterfaceNameEquals(expected, actual);
         }
 
+        if (
+            key.Equals("windowwidth", StringComparison.OrdinalIgnoreCase)
+            || key.Equals("windowheight", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return StormVariablesEditor.WindowEdgeEquals(expected, actual);
+        }
+
         return string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
     }
 

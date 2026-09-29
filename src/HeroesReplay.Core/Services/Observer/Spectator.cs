@@ -58,6 +58,10 @@ public class Spectator : ISpectator
 
     private int missingProcessChecks;
 
+    private DateTimeOffset sessionStarted;
+
+    private bool matchClockSeen;
+
     private ContextData Data => context.Current;
 
     private CancellationTokenSource CancelSessionSource { get; set; }
@@ -142,6 +146,8 @@ public class Spectator : ISpectator
         );
         State = State.Loading;
         Timer = default;
+        sessionStarted = DateTimeOffset.UtcNow;
+        matchClockSeen = false;
         gameTimer.Reset();
         memoryClock.Reset();
         endScreenStarted = null;
@@ -239,6 +245,7 @@ public class Spectator : ISpectator
 
                 if (fromOcr)
                 {
+                    matchClockSeen = true;
                     Timer = reading.Time.Value;
                     recordingClock.Observe(reading.Time.Value);
                     if (reading.Time.Value > lastAdvancedHud)
@@ -264,7 +271,20 @@ public class Spectator : ISpectator
 
                     // The award screen has no clock. A match can reach it without a single
                     // MM:SS read if capture was denied, so look for MVP before the first lock.
-                    if (controller.IsGameRunning())
+                    if (
+                        MatchRecording.ShouldStopLoading(
+                            matchClockSeen,
+                            DateTimeOffset.UtcNow - sessionStarted
+                        )
+                    )
+                    {
+                        logger.LogWarning(
+                            "No match clock after {Minutes:0} minutes. Ending this session. It will not be uploaded.",
+                            MatchRecording.LoadingLimit.TotalMinutes
+                        );
+                        CancelSessionSource.Cancel();
+                    }
+                    else if (controller.IsGameRunning())
                     {
                         await ProbeEndScreenAsync().ConfigureAwait(false);
                     }
@@ -302,6 +322,9 @@ public class Spectator : ISpectator
                             logger.LogInformation("OBS game-scene (timer detected).");
                             obsController.SwapToGameScene();
                         }
+
+                        BeginMatchRecording();
+                        recordingClock.Observe(Timer);
 
                         if (
                             context.Current?.LoadedReplay?.RewardQueueItem?.Request?.PlayerIndex
@@ -358,6 +381,26 @@ public class Spectator : ISpectator
                 logger.LogError(e, "Could not complete state loop");
             }
         }
+    }
+
+    private void BeginMatchRecording()
+    {
+        if (!MatchRecording.ShouldStart(recordingClock.IsRunning, matchVisible: true))
+        {
+            return;
+        }
+
+        if (!SessionMedia.ShouldRecord(settings.OBS, Data?.LoadedReplay))
+        {
+            return;
+        }
+
+        recordingClock.Start();
+        obsController.StartRecording();
+        logger.LogInformation(
+            "OBS recording starts at the match clock for replay {ReplayId}.",
+            Data?.LoadedReplay?.ReplayId
+        );
     }
 
     private GameTimerReading PreferLockedScan(GameTimerReading reading)

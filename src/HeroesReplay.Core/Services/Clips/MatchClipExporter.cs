@@ -53,10 +53,26 @@ public static class MatchClipExporter
             return;
         }
 
-        double? recordingSeconds = ProbeDurationSeconds(match);
+        double? recordingSeconds = null;
+        string probeError = null;
+        for (int attempt = 1; attempt <= 5; attempt++)
+        {
+            (recordingSeconds, probeError) = ProbeDurationSeconds(match);
+            if (recordingSeconds != null || IsMissingTool(probeError))
+            {
+                break;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+        }
+
         if (recordingSeconds == null)
         {
-            logger?.LogWarning("Could not read the duration of {Path}.", match);
+            logger?.LogWarning(
+                "Could not read the duration of {Path}. {Error}",
+                match,
+                string.IsNullOrWhiteSpace(probeError) ? "ffprobe returned no duration." : probeError
+            );
             return;
         }
 
@@ -260,11 +276,19 @@ public static class MatchClipExporter
         }
     }
 
-    private static double? ProbeDurationSeconds(string path)
+    private static bool IsMissingTool(string error) =>
+        !string.IsNullOrWhiteSpace(error)
+        && (
+            error.Contains("not found", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("cannot find the file", StringComparison.OrdinalIgnoreCase)
+        );
+
+    private static (double? Seconds, string Error) ProbeDurationSeconds(string path)
     {
+        string ffprobe = FfmpegLocator.Find("ffprobe");
         var startInfo = new ProcessStartInfo
         {
-            FileName = "ffprobe",
+            FileName = ffprobe,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
@@ -282,10 +306,11 @@ public static class MatchClipExporter
             using Process process = Process.Start(startInfo);
             if (process == null)
             {
-                return null;
+                return (null, "ffprobe did not start.");
             }
 
             string text = process.StandardOutput.ReadToEnd();
+            string error = process.StandardError.ReadToEnd();
             process.WaitForExit();
             if (
                 process.ExitCode == 0
@@ -297,15 +322,19 @@ public static class MatchClipExporter
                 )
             )
             {
-                return seconds;
+                return (seconds, null);
             }
+
+            string detail = string.IsNullOrWhiteSpace(error) ? text : error;
+            return (
+                null,
+                string.IsNullOrWhiteSpace(detail) ? "ffprobe returned no duration." : detail.Trim()
+            );
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is IOException)
         {
-            return null;
+            return (null, "ffprobe was not found. " + ex.Message);
         }
-
-        return null;
     }
 
     private static async Task<bool> CutAsync(
@@ -317,7 +346,7 @@ public static class MatchClipExporter
     {
         var startInfo = new ProcessStartInfo
         {
-            FileName = "ffmpeg",
+            FileName = FfmpegLocator.Find("ffmpeg"),
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardError = true,

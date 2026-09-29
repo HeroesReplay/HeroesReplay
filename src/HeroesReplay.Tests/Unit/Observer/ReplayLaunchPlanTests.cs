@@ -9,10 +9,10 @@ namespace HeroesReplay.Tests.Unit.Observer;
 public class ReplayLaunchPlanTests
 {
     [Fact]
-    public void Decide_LoginWindowClosesAndOpensTheReplayAgain()
+    public void Decide_LoginOrSplashWaitsWithoutClosing()
     {
         Assert.Equal(
-            ReplayLaunchStep.CloseThenOpen,
+            ReplayLaunchStep.Wait,
             ReplayLaunchPlan.Decide(processRunning: true, replayPresented: false, homeScreen: false)
         );
     }
