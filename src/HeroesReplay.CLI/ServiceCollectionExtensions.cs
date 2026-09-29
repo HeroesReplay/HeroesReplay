@@ -149,6 +149,11 @@ public static class ServiceCollectionExtensions
             .AddConnectivityServices();
     }
 
+    public static AppSettings LoadAppSettings()
+    {
+        return BindSettings(GetConfiguration());
+    }
+
     public static AppSettings BindSettings(IConfiguration configuration)
     {
         AppSettings settings =

@@ -33,6 +33,7 @@ public class UploaderCommand : Command
         using Activity ready = HeroesReplayTelemetry.StartSpan("heroesreplay.service.ready");
         using IServiceScope scope = provider.CreateScope();
         IYouTubeUploader uploader = scope.ServiceProvider.GetRequiredService<IYouTubeUploader>();
+        ServiceReadyFile.ReportFromEnvironment("youtube");
         await uploader.ListenAsync();
     }
 }

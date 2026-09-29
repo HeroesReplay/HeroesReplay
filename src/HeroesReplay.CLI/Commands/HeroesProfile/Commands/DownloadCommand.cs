@@ -46,6 +46,7 @@ public class DownloadCommand : Command
         ILogger<DownloadCommand> logger = scope.ServiceProvider.GetRequiredService<
             ILogger<DownloadCommand>
         >();
+        ServiceReadyFile.ReportFromEnvironment("download");
         while (!stop.Token.IsCancellationRequested)
         {
             bool downloaded = false;

@@ -60,6 +60,7 @@ public class ConnectCommand : Command
 
         ITwitchBot twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
         await twitchBot.InitializeAsync();
+        ServiceReadyFile.ReportFromEnvironment("twitch");
         StatusPredictionWatcher predictions =
             scope.ServiceProvider.GetRequiredService<StatusPredictionWatcher>();
         await predictions.WatchAsync(stop.Token);

@@ -36,16 +36,34 @@ public class ServicesCommand : Command
             {
                 string exe = Environment.ProcessPath;
                 PatchObsCollection(exe);
+                ServiceStartupHandshake handshake;
+                try
+                {
+                    handshake = ServiceRoleStartup.ForCurrentProcess(exe);
+                }
+                catch (Exception e)
+                {
+                    Console.Error.WriteLine(
+                        "Service startup failed: role configuration could not be loaded. "
+                            + e.Message
+                    );
+                    return Task.FromResult(1);
+                }
+
+                handshake.StopStarted = Kill;
+                handshake.Probe = ServiceProcessProbe.TryFromProcess;
+                handshake.Wait = Thread.Sleep;
                 int code = ServiceSupervisor.Start(
                     ServiceLockStore.DefaultPath,
                     exe,
                     ProcessNameOrNull,
-                    (name, arguments) => StartProcess(exe, arguments),
+                    (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
                     () => ServiceStopFile.Clear(),
                     () =>
                     {
                         AspireDashboardHost.EnsureRunning();
-                    }
+                    },
+                    handshake
                 );
                 return Task.FromResult(code);
             }
@@ -70,7 +88,8 @@ public class ServicesCommand : Command
                     TimeSpan.FromSeconds(20),
                     Thread.Sleep,
                     () => ServiceStopFile.Clear(),
-                    StopSpectatedGame
+                    StopSpectatedGame,
+                    ServiceProcessProbe.TryFromProcess
                 );
                 return Task.FromResult(code);
             }
@@ -90,7 +109,8 @@ public class ServicesCommand : Command
                 int code = ServiceSupervisor.Status(
                     ServiceLockStore.DefaultPath,
                     ProcessNameOrNull,
-                    new SpectatorStatusStore().TryReadShared()
+                    new SpectatorStatusStore().TryReadShared(),
+                    ServiceProcessProbe.TryFromProcess
                 );
                 return Task.FromResult(code);
             }
@@ -114,13 +134,40 @@ public class ServicesCommand : Command
         }
     }
 
-    public static string PowerShellStartCommand(string exe, string arguments, string pidFile)
+    public static string PowerShellStartCommand(
+        string exe,
+        string arguments,
+        string pidFile,
+        string serviceNonce = null,
+        string serviceRole = null,
+        string serviceVersion = null
+    )
     {
         string argList = string.Join(
             ",",
             arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(PsQuote)
         );
-        return "$ProgressPreference = 'SilentlyContinue'; $p = Start-Process -FilePath "
+        string prefix = string.Empty;
+        if (!string.IsNullOrWhiteSpace(serviceNonce))
+        {
+            prefix =
+                "$env:"
+                + ServiceReadyFile.NonceVariable
+                + "="
+                + PsQuote(serviceNonce)
+                + "; $env:"
+                + ServiceReadyFile.RoleVariable
+                + "="
+                + PsQuote(serviceRole)
+                + "; $env:"
+                + ServiceReadyFile.VersionVariable
+                + "="
+                + PsQuote(serviceVersion)
+                + "; ";
+        }
+
+        return prefix
+            + "$ProgressPreference = 'SilentlyContinue'; $p = Start-Process -FilePath "
             + PsQuote(exe)
             + " -ArgumentList "
             + argList
@@ -131,7 +178,7 @@ public class ServicesCommand : Command
             + " -Value $p.Id -NoNewline";
     }
 
-    private static int? StartProcess(string exe, string arguments)
+    private static int? StartProcess(string exe, string arguments, ServiceProcessRecord launch)
     {
         string logDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -146,7 +193,14 @@ public class ServicesCommand : Command
             File.Delete(pidFile);
         }
 
-        string script = PowerShellStartCommand(exe, arguments, pidFile);
+        string script = PowerShellStartCommand(
+            exe,
+            arguments,
+            pidFile,
+            launch?.Nonce,
+            launch?.Name,
+            launch?.Version
+        );
         string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
         using Process process = Process.Start(
             new ProcessStartInfo
