@@ -8,6 +8,7 @@ public class GameVersionOrderTests
 {
     [Theory]
     [InlineData("2.57.0.98285", true)]
+    [InlineData("2.57.0.98297", true)]
     [InlineData("2.57.0.99000", true)]
     [InlineData("2.57.1.1", true)]
     [InlineData("2.58.0.1", true)]
