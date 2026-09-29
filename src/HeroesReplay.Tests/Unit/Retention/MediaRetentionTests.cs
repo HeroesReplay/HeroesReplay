@@ -39,9 +39,11 @@ public class MediaRetentionTests
             );
             File.SetLastWriteTimeUtc(oldReplay, DateTime.UtcNow.AddDays(-40));
             File.SetLastWriteTimeUtc(recentReplay, DateTime.UtcNow.AddDays(-2));
-            File.WriteAllBytes(Path.Combine(contexts, "10", "match.mp4"), new byte[64]);
+            string uploadedVideo = Path.Combine(contexts, "10", "match.mp4");
+            File.WriteAllBytes(uploadedVideo, new byte[64]);
             File.WriteAllText(Path.Combine(contexts, "10", "youtube-entry-uploaded.json"), "{}");
             File.WriteAllBytes(Path.Combine(contexts, "11", "live.mp4"), new byte[16]);
+            File.SetLastWriteTimeUtc(uploadedVideo, DateTime.UtcNow.AddDays(-4));
             Directory.SetLastWriteTimeUtc(
                 Path.Combine(contexts, "10"),
                 DateTime.UtcNow.AddDays(-4)
@@ -103,6 +105,232 @@ public class MediaRetentionTests
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Sweep_DeletesUploadedMediaOnlyWhenOlderThanVideoKeepDays()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string uploaded = library.AddContext("uploaded");
+        string fresh = library.AddContext("fresh");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(uploaded, "youtube-entry-uploaded.json", "{}");
+        TempLibrary.WriteText(fresh, "youtube-entry-uploaded.json", "{}");
+        TempLibrary.WriteFile(uploaded, "young.mp4", 32, now.AddDays(-1));
+        TempLibrary.WriteFile(uploaded, "old.mp4", 32, now.AddDays(-4));
+        TempLibrary.WriteFile(uploaded, "young.StormReplay", 16, now.AddDays(-1));
+        TempLibrary.WriteFile(uploaded, "old.StormReplay", 16, now.AddDays(-4));
+        TempLibrary.WriteFile(fresh, "ancient.mp4", 8, now.AddDays(-10));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(uploaded, now.AddDays(-6));
+        TempLibrary.SetDirectoryTime(fresh, now.AddDays(-1));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(uploaded, "young.mp4")));
+        Assert.True(File.Exists(Path.Combine(uploaded, "young.StormReplay")));
+        Assert.False(File.Exists(Path.Combine(uploaded, "old.mp4")));
+        Assert.False(File.Exists(Path.Combine(uploaded, "old.StormReplay")));
+        Assert.True(Directory.Exists(uploaded));
+        Assert.False(File.Exists(Path.Combine(fresh, "ancient.mp4")));
+        Assert.True(File.Exists(Path.Combine(fresh, "youtube-entry-uploaded.json")));
+        Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
+    }
+
+    [Fact]
+    public void Sweep_DryRunReceiptDoesNotAuthorizeImmediateDeletion()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string dryRun = library.AddContext("dry-run");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(dryRun, "youtube-dry-run.json", "{}");
+        TempLibrary.WriteFile(dryRun, "young.mp4", 32, now.AddDays(-1));
+        TempLibrary.WriteFile(dryRun, "mid.mp4", 32, now.AddDays(-4));
+        TempLibrary.WriteFile(dryRun, "old.mp4", 40, now.AddDays(-8));
+        TempLibrary.WriteFile(dryRun, "mid.StormReplay", 16, now.AddDays(-4));
+        TempLibrary.WriteFile(dryRun, "old.StormReplay", 16, now.AddDays(-8));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(dryRun, now.AddDays(-8));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        RetentionSweep sweep = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(dryRun, "young.mp4")));
+        Assert.True(File.Exists(Path.Combine(dryRun, "mid.mp4")));
+        Assert.True(File.Exists(Path.Combine(dryRun, "mid.StormReplay")));
+        Assert.False(File.Exists(Path.Combine(dryRun, "old.mp4")));
+        Assert.False(File.Exists(Path.Combine(dryRun, "old.StormReplay")));
+        Assert.Contains(
+            sweep.Warnings,
+            warning => warning.Contains("never uploaded") && warning.Contains("old.mp4")
+        );
+        Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
+    }
+
+    [Fact]
+    public void Sweep_DryRunWithUploadedReceiptIsNotARemoteUpload()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string simulated = library.AddContext("simulated");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(simulated, "youtube-dry-run.json", "{}");
+        TempLibrary.WriteText(simulated, "youtube-entry-uploaded.json", "{}");
+        TempLibrary.WriteFile(simulated, "young.mp4", 32, now.AddDays(-1));
+        TempLibrary.WriteFile(simulated, "mid.mp4", 32, now.AddDays(-4));
+        TempLibrary.WriteFile(simulated, "old.mp4", 40, now.AddDays(-8));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(simulated, now.AddDays(-8));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        RetentionSweep sweep = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(simulated, "young.mp4")));
+        Assert.True(File.Exists(Path.Combine(simulated, "mid.mp4")));
+        Assert.False(File.Exists(Path.Combine(simulated, "old.mp4")));
+        Assert.Contains(
+            sweep.Warnings,
+            warning => warning.Contains("never uploaded") && warning.Contains("old.mp4")
+        );
+    }
+
+    [Fact]
+    public void Sweep_ProtectsNewestContextWhenItsMediaIsOlderThanVideoKeepDays()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string current = library.AddContext("current");
+        string previous = library.AddContext("previous");
+        TempLibrary.WriteText(current, "youtube-entry-uploaded.json", "{}");
+        TempLibrary.WriteText(previous, "youtube-entry-uploaded.json", "{}");
+        TempLibrary.WriteFile(current, "match.mp4", 64, now.AddDays(-10));
+        TempLibrary.WriteFile(current, "match.StormReplay", 16, now.AddDays(-10));
+        TempLibrary.WriteFile(previous, "match.mp4", 64, now.AddDays(-10));
+        TempLibrary.SetDirectoryTime(current, now);
+        TempLibrary.SetDirectoryTime(previous, now.AddDays(-1));
+
+        MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(current, "match.mp4")));
+        Assert.True(File.Exists(Path.Combine(current, "match.StormReplay")));
+        Assert.False(File.Exists(Path.Combine(previous, "match.mp4")));
+    }
+
+    [Fact]
+    public void Sweep_ProtectsContextThatStillHasYouTubeEntry()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string active = library.AddContext("active");
+        string reused = library.AddContext("reused");
+        string finished = library.AddContext("finished");
+        string abandoned = library.AddContext("abandoned");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(active, "youtube-entry.json", "{}");
+        TempLibrary.WriteText(reused, "youtube-entry.json", "{}");
+        TempLibrary.WriteText(reused, "youtube-entry-uploaded.json", "{}");
+        TempLibrary.WriteText(finished, "youtube-entry-uploaded.json", "{}");
+        TempLibrary.WriteFile(active, "match.mp4", 32, now.AddDays(-10));
+        TempLibrary.WriteFile(reused, "match.mp4", 32, now.AddDays(-10));
+        TempLibrary.WriteFile(finished, "match.mp4", 32, now.AddDays(-10));
+        TempLibrary.WriteFile(abandoned, "match.mp4", 32, now.AddDays(-10));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(active, now.AddDays(-10));
+        TempLibrary.SetDirectoryTime(reused, now.AddDays(-10));
+        TempLibrary.SetDirectoryTime(finished, now.AddDays(-10));
+        TempLibrary.SetDirectoryTime(abandoned, now.AddDays(-10));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        RetentionSweep sweep = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(active, "match.mp4")));
+        Assert.True(File.Exists(Path.Combine(reused, "match.mp4")));
+        Assert.False(File.Exists(Path.Combine(finished, "match.mp4")));
+        Assert.False(File.Exists(Path.Combine(abandoned, "match.mp4")));
+        Assert.Contains(
+            sweep.Warnings,
+            warning => warning.Contains("never uploaded") && warning.Contains("abandoned")
+        );
+        Assert.DoesNotContain(sweep.Warnings, warning => warning.Contains("active"));
+    }
+
+    [Fact]
+    public void Sweep_KeepsContextReplayNewerThanVideoKeepDays()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string replayOnly = library.AddContext("replay-only");
+        string live = library.AddContext("live");
+        TempLibrary.WriteFile(replayOnly, "young.StormReplay", 16, now.AddDays(-1));
+        TempLibrary.WriteFile(replayOnly, "old.StormReplay", 16, now.AddDays(-4));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(replayOnly, now.AddDays(-10));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(replayOnly, "young.StormReplay")));
+        Assert.False(File.Exists(Path.Combine(replayOnly, "old.StormReplay")));
+        Assert.True(Directory.Exists(replayOnly));
+    }
+
+    private static DateTimeOffset FixedNow() => new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
+
+    private sealed class TempLibrary : IDisposable
+    {
+        public TempLibrary()
+        {
+            Root = Path.Combine(
+                Path.GetTempPath(),
+                "heroesreplay-retain-" + Guid.NewGuid().ToString("N")
+            );
+            Contexts = Path.Combine(Root, "Contexts");
+            Directory.CreateDirectory(Contexts);
+        }
+
+        public string Root { get; }
+
+        public string Contexts { get; }
+
+        public string AddContext(string name)
+        {
+            string path = Path.Combine(Contexts, name);
+            Directory.CreateDirectory(path);
+            return path;
+        }
+
+        public static void WriteFile(
+            string directory,
+            string name,
+            int bytes,
+            DateTimeOffset written
+        )
+        {
+            string path = Path.Combine(directory, name);
+            File.WriteAllBytes(path, new byte[bytes]);
+            File.SetLastWriteTimeUtc(path, written.UtcDateTime);
+        }
+
+        public static void WriteText(string directory, string name, string text)
+        {
+            File.WriteAllText(Path.Combine(directory, name), text);
+        }
+
+        public static void SetDirectoryTime(string directory, DateTimeOffset written)
+        {
+            Directory.SetLastWriteTimeUtc(directory, written.UtcDateTime);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Root))
+            {
+                Directory.Delete(Root, recursive: true);
             }
         }
     }

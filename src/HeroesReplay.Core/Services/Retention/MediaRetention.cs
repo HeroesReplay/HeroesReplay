@@ -146,17 +146,22 @@ public static class MediaRetention
 
         foreach (DirectoryInfo dir in new DirectoryInfo(contextsDirectory).GetDirectories())
         {
-            if (string.Equals(dir.Name, protectedId, StringComparison.OrdinalIgnoreCase))
+            if (IsProtectedContext(dir, protectedId))
             {
                 continue;
             }
 
-            DateTime written = dir.LastWriteTimeUtc;
+            bool dryRun = dir.GetFiles("youtube-dry-run.json").Length > 0;
+            bool remoteUpload = !dryRun && dir.GetFiles("youtube-entry-uploaded.json").Length > 0;
             FileInfo[] videos = dir.GetFiles("*.mp4");
-            bool uploaded =
-                dir.GetFiles("youtube-entry-uploaded.json").Length > 0
-                || dir.GetFiles("youtube-dry-run.json").Length > 0;
-            if (videos.Length > 0 && !uploaded)
+            DateTime written = dir.LastWriteTimeUtc;
+            if (dryRun)
+            {
+                DeleteHeavyFilesOlderThan(dir, dropBefore, result, warnNeverUploaded: true);
+                continue;
+            }
+
+            if (videos.Length > 0 && !remoteUpload)
             {
                 if (written >= dropBefore.UtcDateTime)
                 {
@@ -175,28 +180,70 @@ public static class MediaRetention
                 continue;
             }
 
-            foreach (FileInfo heavy in dir.GetFiles("*.mp4").Concat(dir.GetFiles("*.StormReplay")))
+            bool retainedYoungMedia = DeleteHeavyFilesOlderThan(
+                dir,
+                keepBefore,
+                result,
+                warnNeverUploaded: false
+            );
+            if (!retainedYoungMedia && written < keepBefore.UtcDateTime)
             {
-                DeleteFile(heavy.FullName, result, warning: null);
+                DeleteDirectory(dir, result);
+            }
+        }
+    }
+
+    private static bool IsProtectedContext(DirectoryInfo dir, string protectedId)
+    {
+        if (string.Equals(dir.Name, protectedId, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return dir.GetFiles("youtube-entry.json").Length > 0;
+    }
+
+    private static bool DeleteHeavyFilesOlderThan(
+        DirectoryInfo dir,
+        DateTimeOffset deleteBefore,
+        RetentionSweep result,
+        bool warnNeverUploaded
+    )
+    {
+        bool retainedYoungMedia = false;
+        foreach (FileInfo heavy in dir.GetFiles("*.mp4").Concat(dir.GetFiles("*.StormReplay")))
+        {
+            if (heavy.LastWriteTimeUtc >= deleteBefore.UtcDateTime)
+            {
+                retainedYoungMedia = true;
+                continue;
             }
 
-            if (written < keepBefore.UtcDateTime)
-            {
-                try
-                {
-                    long bytes = dir.Exists
-                        ? dir.EnumerateFiles("*", SearchOption.AllDirectories)
-                            .Sum(file => file.Length)
-                        : 0;
-                    dir.Delete(recursive: true);
-                    result.DeletedFiles++;
-                    result.FreedBytes += bytes;
-                }
-                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
-                {
-                    result.Warnings.Add("Could not remove " + dir.FullName + ": " + e.Message);
-                }
-            }
+            string warning =
+                warnNeverUploaded
+                && heavy.Extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase)
+                    ? "Removed recording that was never uploaded: " + heavy.FullName
+                    : null;
+            DeleteFile(heavy.FullName, result, warning);
+        }
+
+        return retainedYoungMedia;
+    }
+
+    private static void DeleteDirectory(DirectoryInfo dir, RetentionSweep result)
+    {
+        try
+        {
+            long bytes = dir.Exists
+                ? dir.EnumerateFiles("*", SearchOption.AllDirectories).Sum(file => file.Length)
+                : 0;
+            dir.Delete(recursive: true);
+            result.DeletedFiles++;
+            result.FreedBytes += bytes;
+        }
+        catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
+        {
+            result.Warnings.Add("Could not remove " + dir.FullName + ": " + e.Message);
         }
     }
 
