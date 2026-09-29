@@ -79,7 +79,13 @@ internal sealed class RecordingSession
 
         ObsRecordingResult result = Execute(
             () => StopCore(ensureConnected, replayId),
-            error => ObsRecordingResult.Failed(ObsOutputFailure.RequestError, error.Message),
+            error =>
+            {
+                // A thrown stop did not finalize a path. Keeping ownership would make the
+                // next start look successful without a new file.
+                ReleaseOwnership();
+                return ObsRecordingResult.Failed(ObsOutputFailure.RequestError, error.Message);
+            },
             "stop OBS recording"
         );
         LogFailure(result, replayId, "stop");
@@ -311,6 +317,7 @@ internal sealed class RecordingSession
             );
         }
 
+        ReleaseOwnership();
         return ObsRecordingResult.Failed(
             ObsOutputFailure.Timeout,
             "Timed out waiting for the finalized OBS recording path."

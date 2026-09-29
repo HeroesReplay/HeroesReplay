@@ -78,6 +78,26 @@ public class RecordingOwnershipTests
     }
 
     [Fact]
+    public void Stop_Timeout_DoesNotMakeTheNextStartLookOwned()
+    {
+        var socket = new FakeObsSocket { RecordingAfterStart = true, KeepRecordingOnStop = true };
+        RecordingSession session = Session(socket);
+
+        Assert.True(session.StartRecording(Record, Noop, 7, "unit").Owned);
+        ObsRecordingResult stopped = session.StopRecording(Noop, 7);
+        ObsRecordingResult again = session.StartRecording(Record, Noop, 7, "unit");
+
+        Assert.Equal(ObsOutputFailure.Timeout, stopped.Failure);
+        Assert.Null(stopped.OutputPath);
+        Assert.False(again.Succeeded);
+        Assert.False(again.Owned);
+        Assert.Equal(ObsOutputFailure.AlreadyRecording, again.Failure);
+        Assert.Equal(1, socket.StartCalls);
+        Assert.Equal(ObsOutputFailure.NotOwned, session.StopRecording(Noop, 7).Failure);
+        Assert.Equal(1, socket.StopCalls);
+    }
+
+    [Fact]
     public void Stop_RecordStateChanged_UsesTheStoppedPath()
     {
         string finalized = Path.Combine(Path.GetTempPath(), "from-event.mkv");
@@ -222,6 +242,7 @@ public class RecordingOwnershipTests
         public bool IsConnected { get; set; } = true;
         public bool Recording { get; set; }
         public bool RecordingAfterStart { get; set; }
+        public bool KeepRecordingOnStop { get; set; }
         public bool Streaming { get; set; }
         public string StopPath { get; set; }
         public Exception StartError { get; set; }
@@ -252,7 +273,11 @@ public class RecordingOwnershipTests
         public string StopRecord()
         {
             StopCalls++;
-            Recording = false;
+            if (!KeepRecordingOnStop)
+            {
+                Recording = false;
+            }
+
             OnStop?.Invoke(this);
             return StopPath;
         }

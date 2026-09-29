@@ -433,8 +433,19 @@ public class Spectator : ISpectator
             return;
         }
 
+        ObsRecordingResult started = obsController.StartRecording();
+        if (started == null || !started.Owned)
+        {
+            logger.LogWarning(
+                "OBS recording for replay {ReplayId} did not start ({Failure}). {Detail}",
+                Data?.LoadedReplay?.ReplayId,
+                started?.Failure,
+                started?.Detail
+            );
+            return;
+        }
+
         recordingClock.Start();
-        obsController.StartRecording();
         logger.LogInformation(
             "OBS recording starts at the match clock for replay {ReplayId}.",
             Data?.LoadedReplay?.ReplayId
