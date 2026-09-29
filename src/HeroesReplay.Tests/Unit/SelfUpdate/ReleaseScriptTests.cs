@@ -18,6 +18,7 @@ public class ReleaseScriptTests
         Assert.Contains("start-live.cmd", script);
         Assert.Contains("heroesreplay is still running", script);
         Assert.Contains("robocopy.exe", script);
+        Assert.Contains("preserve-min-replay-id", script);
     }
 
     private static string FindScript()

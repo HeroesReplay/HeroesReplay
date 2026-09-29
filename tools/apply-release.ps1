@@ -45,6 +45,41 @@ function Start-HeroesReplayStack {
     Write-Host 'Started heroesreplay services start.'
 }
 
+function Protect-MinReplayId([string]$PreviousSettings, [string]$TargetSettings) {
+    # The zip default must not replace a higher MinReplayId already on this machine.
+    $exe = Join-Path $InstallDir 'heroesreplay.exe'
+    if (-not (Test-Path -LiteralPath $exe)) {
+        Write-Host 'heroesreplay.exe is missing. MinReplayId was not preserved.'
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $PreviousSettings) -or -not (Test-Path -LiteralPath $TargetSettings)) {
+        return
+    }
+
+    try {
+        $start = New-Object System.Diagnostics.ProcessStartInfo
+        $start.FileName = $exe
+        $start.Arguments = "update preserve-min-replay-id --previous `"$PreviousSettings`" --target `"$TargetSettings`""
+        $start.UseShellExecute = $false
+        $start.CreateNoWindow = $true
+        $preserve = New-Object System.Diagnostics.Process
+        $preserve.StartInfo = $start
+        if (-not $preserve.Start()) {
+            Write-Host 'MinReplayId preserve did not start. The staged appsettings.json was left unchanged.'
+            return
+        }
+
+        $preserve.WaitForExit()
+        if ($preserve.ExitCode -ne 0) {
+            Write-Host "MinReplayId preserve exited $($preserve.ExitCode). The staged appsettings.json was left unchanged."
+        }
+    }
+    catch {
+        Write-Host "MinReplayId was not preserved: $($_.Exception.Message)"
+    }
+}
+
 function Restore-PreviousInstall([string]$Previous) {
     if (-not (Test-Path -LiteralPath $Previous)) {
         return
@@ -89,6 +124,8 @@ if (-not (Test-Path -LiteralPath $stagedExe)) {
 
     $source = $found.DirectoryName
 }
+
+Protect-MinReplayId (Join-Path $InstallDir 'appsettings.json') (Join-Path $source 'appsettings.json')
 
 $previous = "$InstallDir.previous"
 if (Test-Path -LiteralPath $previous) {

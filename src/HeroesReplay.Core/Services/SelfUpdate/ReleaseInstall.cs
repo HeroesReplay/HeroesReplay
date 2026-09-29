@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core.Services.SelfUpdate;
 
@@ -51,7 +52,13 @@ public static class ReleaseInstall
             return extractedDirectory;
         }
 
-        foreach (string file in Directory.EnumerateFiles(extractedDirectory, "heroesreplay.exe", SearchOption.AllDirectories))
+        foreach (
+            string file in Directory.EnumerateFiles(
+                extractedDirectory,
+                "heroesreplay.exe",
+                SearchOption.AllDirectories
+            )
+        )
         {
             return Path.GetDirectoryName(file);
         }
@@ -72,7 +79,9 @@ public static class ReleaseInstall
         }
 
         Directory.CreateDirectory(destination);
-        foreach (string file in Directory.EnumerateFiles(publishRoot, "*", SearchOption.AllDirectories))
+        foreach (
+            string file in Directory.EnumerateFiles(publishRoot, "*", SearchOption.AllDirectories)
+        )
         {
             if (IsStreamKey(file))
             {
@@ -86,7 +95,50 @@ public static class ReleaseInstall
         }
     }
 
-    public static void PreserveSecrets(string secretsPath, string previousInstall, string destination)
+    public static void PreserveMinReplayId(string previousSettingsPath, string targetSettingsPath)
+    {
+        if (
+            string.IsNullOrWhiteSpace(previousSettingsPath)
+            || string.IsNullOrWhiteSpace(targetSettingsPath)
+        )
+        {
+            return;
+        }
+
+        if (!File.Exists(previousSettingsPath) || !File.Exists(targetSettingsPath))
+        {
+            return;
+        }
+
+        string previous = File.ReadAllText(previousSettingsPath);
+        string incoming = File.ReadAllText(targetSettingsPath);
+        if (!MinReplayIdFile.TryPreserveHigher(incoming, previous, out string updated))
+        {
+            return;
+        }
+
+        string temp = targetSettingsPath + ".tmp";
+        File.WriteAllText(temp, updated);
+        try
+        {
+            File.Move(temp, targetSettingsPath, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (File.Exists(temp))
+            {
+                File.Delete(temp);
+            }
+
+            throw;
+        }
+    }
+
+    public static void PreserveSecrets(
+        string secretsPath,
+        string previousInstall,
+        string destination
+    )
     {
         string target = Path.Combine(destination, "appsettings.secrets.json");
         if (!string.IsNullOrWhiteSpace(secretsPath) && File.Exists(secretsPath))
@@ -106,7 +158,9 @@ public static class ReleaseInstall
     {
         if (LooksLikeSourceBuild(installDirectory))
         {
-            throw new InvalidOperationException($"Refusing to replace a source build at {installDirectory}.");
+            throw new InvalidOperationException(
+                $"Refusing to replace a source build at {installDirectory}."
+            );
         }
 
         string previous = installDirectory.TrimEnd(Path.DirectorySeparatorChar) + ".previous";
@@ -131,9 +185,17 @@ public static class ReleaseInstall
         }
     }
 
-    public static void CopyObsScenesIfClosed(string installDirectory, string appData, bool obsIsRunning)
+    public static void CopyObsScenesIfClosed(
+        string installDirectory,
+        string appData,
+        bool obsIsRunning
+    )
     {
-        if (obsIsRunning || string.IsNullOrWhiteSpace(installDirectory) || string.IsNullOrWhiteSpace(appData))
+        if (
+            obsIsRunning
+            || string.IsNullOrWhiteSpace(installDirectory)
+            || string.IsNullOrWhiteSpace(appData)
+        )
         {
             return;
         }
@@ -141,7 +203,13 @@ public static class ReleaseInstall
         string scene = Path.Combine(installDirectory, "obs", "Default.json");
         if (File.Exists(scene))
         {
-            string destination = Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json");
+            string destination = Path.Combine(
+                appData,
+                "obs-studio",
+                "basic",
+                "scenes",
+                "HeroesReplay.json"
+            );
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.Copy(scene, destination, overwrite: true);
         }
@@ -166,6 +234,10 @@ public static class ReleaseInstall
 
     private static bool IsStreamKey(string file)
     {
-        return string.Equals(Path.GetFileName(file), "service.json", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(
+            Path.GetFileName(file),
+            "service.json",
+            StringComparison.OrdinalIgnoreCase
+        );
     }
 }

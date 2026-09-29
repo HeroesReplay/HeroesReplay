@@ -19,6 +19,54 @@ public class UpdateCommand : Command
         )
     {
         Subcommands.Add(CheckCommand());
+        Subcommands.Add(PreserveMinReplayIdCommand());
+    }
+
+    private static Command PreserveMinReplayIdCommand()
+    {
+        var command = new Command(
+            "preserve-min-replay-id",
+            "Keep the higher MinReplayId when a release replaces appsettings.json."
+        );
+        Option<string> previous = new("--previous")
+        {
+            Description = "appsettings.json from the install being replaced.",
+            Required = true,
+        };
+        Option<string> target = new("--target")
+        {
+            Description = "appsettings.json that the release will install.",
+            Required = true,
+        };
+        command.Options.Add(previous);
+        command.Options.Add(target);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(
+                    PreserveMinReplayId(
+                        parseResult.GetValue(previous),
+                        parseResult.GetValue(target)
+                    )
+                );
+            }
+        );
+        return command;
+    }
+
+    private static int PreserveMinReplayId(string previous, string target)
+    {
+        try
+        {
+            ReleaseInstall.PreserveMinReplayId(previous, target);
+            return 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"Could not preserve MinReplayId. {e.Message}");
+            return 1;
+        }
     }
 
     private static Command CheckCommand()

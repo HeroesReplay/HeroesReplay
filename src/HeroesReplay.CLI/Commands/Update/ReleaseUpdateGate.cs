@@ -102,6 +102,10 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
             string prepared = Path.Combine(staging, "prepared");
             ReleaseInstall.CopyPublish(publish, prepared);
             ReleaseInstall.PreserveSecrets(release.SecretsPath, install, prepared);
+            ReleaseInstall.PreserveMinReplayId(
+                Path.Combine(install, "appsettings.json"),
+                Path.Combine(prepared, "appsettings.json")
+            );
             StartHelper(install, prepared);
             ServiceStopFile.Request();
             logger.LogInformation(
