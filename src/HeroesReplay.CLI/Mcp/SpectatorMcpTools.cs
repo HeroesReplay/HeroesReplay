@@ -101,6 +101,13 @@ public sealed class SpectatorMcpTools
     public Task<string> CheckTwitch(CancellationToken cancellationToken) =>
         RunCheck(() => CheckCommand.CheckTwitchAsync(cancellationToken));
 
+    [
+        McpServerTool(Name = "check_battlenet"),
+        Description("Read the Battle.net window and report whether the button says Play or Update.")
+    ]
+    public Task<string> CheckBattleNet(CancellationToken cancellationToken) =>
+        RunCheck(() => CheckCommand.CheckBattleNetAsync(cancellationToken));
+
     private static async Task<string> RunCheck(Func<Task<CheckCommand.CheckResult>> action)
     {
         CheckCommand.CheckResult result = await action();

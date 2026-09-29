@@ -86,6 +86,13 @@ public class CheckCommand : Command
                 CheckTwitchExtensionAsync
             )
         );
+        Subcommands.Add(
+            Build(
+                "battlenet",
+                "Read the Battle.net window and report the Play or Update button.",
+                CheckBattleNetAsync
+            )
+        );
 
         SetAction(
             async (parseResult, cancellationToken) =>
@@ -122,6 +129,7 @@ public class CheckCommand : Command
             await CheckObsAsync(cancellationToken),
             await CheckTwitchAsync(cancellationToken),
             await CheckClientAsync(cancellationToken),
+            await CheckBattleNetAsync(cancellationToken),
             await CheckConnectivityAsync(cancellationToken),
         };
 
@@ -665,6 +673,21 @@ public class CheckCommand : Command
         catch (Exception e)
         {
             return Task.FromResult(Fail("client", e));
+        }
+    }
+
+    public static async Task<CheckResult> CheckBattleNetAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var provider = CreateProvider(cancellationToken);
+            return await BattleNetLauncherCheck
+                .ReadAsync(provider.GetService<Windows.Media.Ocr.OcrEngine>())
+                .ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            return Fail("battlenet", e);
         }
     }
 

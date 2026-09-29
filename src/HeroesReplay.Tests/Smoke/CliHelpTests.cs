@@ -38,6 +38,7 @@ public class CliHelpTests
         Assert.Contains(check.Subcommands, c => c.Name == "connectivity");
         Assert.Contains(check.Subcommands, c => c.Name == "timer");
         Assert.Contains(check.Subcommands, c => c.Name == "twitch-extension");
+        Assert.Contains(check.Subcommands, c => c.Name == "battlenet");
     }
 
     [Fact]

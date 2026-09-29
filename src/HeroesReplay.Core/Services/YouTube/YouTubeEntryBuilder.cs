@@ -45,11 +45,14 @@ public static class YouTubeEntryBuilder
             Map = map,
             GameType = gameType,
             Rank = rank,
-            Title = string.Join(
-                " - ",
-                new[] { hero, map, id, gameType, rank }.Where(part =>
-                    !string.IsNullOrWhiteSpace(part)
-                )
+            Title = YouTubeListing.ApplyMarker(
+                string.Join(
+                    " - ",
+                    new[] { hero, map, id, gameType, rank }.Where(part =>
+                        !string.IsNullOrWhiteSpace(part)
+                    )
+                ),
+                youtube?.TitlePrefix
             ),
             PrivacyStatus = youtube?.PrivacyStatus ?? "public",
             CategoryId = youtube?.CategoryId,

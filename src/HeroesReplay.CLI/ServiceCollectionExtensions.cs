@@ -130,6 +130,7 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
+            .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
             .AddSingleton<StormClientConfigurator>()
             .AddSingleton(new CancellationTokenProvider(token))
             .AddHeroesProfileKiotaClient()

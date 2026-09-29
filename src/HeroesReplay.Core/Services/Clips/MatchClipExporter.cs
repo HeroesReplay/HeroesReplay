@@ -11,6 +11,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.Services.YouTube;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Clips;
@@ -194,7 +195,10 @@ public static class MatchClipExporter
             : entryFileName;
         string id = replayId is > 0 ? replayId.Value.ToString(CultureInfo.InvariantCulture) : null;
         string map = replay?.Map;
-        string title = string.Join(" - ", new[] { clip.Hero, clip.Kind, map, id }.WhereNotEmpty());
+        string title = YouTubeListing.ApplyMarker(
+            string.Join(" - ", new[] { clip.Hero, clip.Kind, map, id }.WhereNotEmpty()),
+            youtube?.TitlePrefix
+        );
         var entry = new YouTubeEntry
         {
             ReplayId = replayId,

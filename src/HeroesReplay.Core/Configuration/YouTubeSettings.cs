@@ -20,5 +20,10 @@ public class YouTubeSettings
     public string EntryFileName { get; set; }
     public string CategoryId { get; set; }
     public string PrivacyStatus { get; set; }
+
+    /// <summary>
+    /// Optional title prefix such as [TEST]. Non-production uploads are marked even when this is empty.
+    /// </summary>
+    public string TitlePrefix { get; set; }
     public string EntryFileNameUploaded { get; set; }
 }

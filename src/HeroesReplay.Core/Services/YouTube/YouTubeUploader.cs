@@ -127,6 +127,8 @@ public class YouTubeUploader : IYouTubeUploader
             return;
         }
 
+        YouTubeListing.StampForHost(entry, settings.YouTube, Environment.MachineName);
+
         if (!string.IsNullOrWhiteSpace(entry.VideoId))
         {
             logger.LogInformation(
