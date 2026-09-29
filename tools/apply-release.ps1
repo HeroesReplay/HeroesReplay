@@ -45,11 +45,10 @@ function Start-HeroesReplayStack {
     Write-Host 'Started heroesreplay services start.'
 }
 
-function Protect-MinReplayId([string]$PreviousSettings, [string]$TargetSettings) {
-    # The zip default must not replace a higher MinReplayId already on this machine.
-    $exe = Join-Path $InstallDir 'heroesreplay.exe'
-    if (-not (Test-Path -LiteralPath $exe)) {
-        Write-Host 'heroesreplay.exe is missing. MinReplayId was not preserved.'
+function Protect-MinReplayId([string]$Exe, [string]$PreviousSettings, [string]$TargetSettings) {
+    # The zip being installed knows this command. The copy already on the machine may not.
+    if (-not (Test-Path -LiteralPath $Exe)) {
+        Write-Host 'The staged heroesreplay.exe is missing. MinReplayId was not preserved.'
         return
     }
 
@@ -59,7 +58,7 @@ function Protect-MinReplayId([string]$PreviousSettings, [string]$TargetSettings)
 
     try {
         $start = New-Object System.Diagnostics.ProcessStartInfo
-        $start.FileName = $exe
+        $start.FileName = $Exe
         $start.Arguments = "update preserve-min-replay-id --previous `"$PreviousSettings`" --target `"$TargetSettings`""
         $start.UseShellExecute = $false
         $start.CreateNoWindow = $true
@@ -125,7 +124,7 @@ if (-not (Test-Path -LiteralPath $stagedExe)) {
     $source = $found.DirectoryName
 }
 
-Protect-MinReplayId (Join-Path $InstallDir 'appsettings.json') (Join-Path $source 'appsettings.json')
+Protect-MinReplayId (Join-Path $source 'heroesreplay.exe') (Join-Path $InstallDir 'appsettings.json') (Join-Path $source 'appsettings.json')
 
 $previous = "$InstallDir.previous"
 if (Test-Path -LiteralPath $previous) {

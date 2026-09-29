@@ -19,6 +19,7 @@ public class ReleaseScriptTests
         Assert.Contains("heroesreplay is still running", script);
         Assert.Contains("robocopy.exe", script);
         Assert.Contains("preserve-min-replay-id", script);
+        Assert.Contains("Protect-MinReplayId (Join-Path $source 'heroesreplay.exe')", script);
     }
 
     private static string FindScript()

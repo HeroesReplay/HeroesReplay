@@ -123,7 +123,12 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
 
     private static void StartHelper(string install, string prepared)
     {
-        string script = Path.Combine(install, "apply-release.ps1");
+        string script = Path.Combine(prepared, "apply-release.ps1");
+        if (!File.Exists(script))
+        {
+            script = Path.Combine(install, "apply-release.ps1");
+        }
+
         if (!File.Exists(script))
         {
             script = Path.Combine(AppContext.BaseDirectory, "apply-release.ps1");
