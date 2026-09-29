@@ -36,6 +36,17 @@ public sealed class RecordingClock
         }
     }
 
+    public TimeSpan Elapsed
+    {
+        get
+        {
+            lock (gate)
+            {
+                return watch?.Elapsed ?? TimeSpan.Zero;
+            }
+        }
+    }
+
     public void Reset()
     {
         lock (gate)

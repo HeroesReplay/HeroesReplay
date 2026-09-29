@@ -29,6 +29,8 @@ public sealed class StubController : IGameController
 
     public bool IsGameRunning() => true;
 
+    public bool ReplayFileOpened => false;
+
     public Process GetGameProcess() => null;
 
     public Task<bool> StartAuthenticatedReplayAsync(string replayPath) => Task.FromResult(false);

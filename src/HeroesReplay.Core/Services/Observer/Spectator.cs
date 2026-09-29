@@ -286,6 +286,7 @@ public class Spectator : ISpectator
                     }
                     else if (controller.IsGameRunning())
                     {
+                        await TryOpenUnstartedReplayAsync().ConfigureAwait(false);
                         await ProbeEndScreenAsync().ConfigureAwait(false);
                     }
                 }
@@ -380,6 +381,29 @@ public class Spectator : ISpectator
             {
                 logger.LogError(e, "Could not complete state loop");
             }
+        }
+    }
+
+    private async Task TryOpenUnstartedReplayAsync()
+    {
+        if (matchClockSeen || controller.ReplayFileOpened || !controller.IsGameRunning())
+        {
+            return;
+        }
+
+        string path = Data?.LoadedReplay?.FileInfo?.FullName;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            await controller.OpenReplayFromHomeScreenAsync(path).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not open the replay from the home screen.");
         }
     }
 

@@ -126,7 +126,9 @@ public class GameManager : IGameManager
                 }
                 catch { }
 
-                if (MatchRecording.ShouldPublish(recordingClock.SampleCount))
+                if (
+                    MatchRecording.ShouldPublish(recordingClock.SampleCount, recordingClock.Elapsed)
+                )
                 {
                     try
                     {
@@ -252,6 +254,12 @@ public class GameManager : IGameManager
             logger.LogWarning("The previous game is still running. The next replay stays queued.");
             return NextMatchLaunch.NotStarted;
         }
+
+        logger.LogInformation(
+            "Waiting {Seconds:0}s for Battle.net to finish closing the previous Heroes session.",
+            ClientRelaunch.SettleAfterExit.TotalSeconds
+        );
+        await Task.Delay(ClientRelaunch.SettleAfterExit).ConfigureAwait(false);
 
         try
         {
@@ -442,8 +450,10 @@ public class GameManager : IGameManager
         }
 
         logger.LogWarning(
-            "Replay {ReplayId} never showed the match clock. The recording was not sent to YouTube.",
-            loadedReplay?.ReplayId
+            "Replay {ReplayId} recording is not a match ({Samples} clock samples over {Elapsed}). It was not sent to YouTube.",
+            loadedReplay?.ReplayId,
+            recordingClock.SampleCount,
+            recordingClock.Elapsed
         );
     }
 

@@ -16,10 +16,11 @@ public class MatchRecordingTests
     }
 
     [Fact]
-    public void ShouldPublish_RequiresAMatchClockSample()
+    public void ShouldPublish_RequiresAMatchClockAndTwoMinutes()
     {
-        Assert.False(MatchRecording.ShouldPublish(0));
-        Assert.True(MatchRecording.ShouldPublish(1));
+        Assert.False(MatchRecording.ShouldPublish(0, TimeSpan.FromMinutes(10)));
+        Assert.False(MatchRecording.ShouldPublish(4, TimeSpan.FromSeconds(90)));
+        Assert.True(MatchRecording.ShouldPublish(4, MatchRecording.MinimumLength));
     }
 
     [Fact]

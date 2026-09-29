@@ -19,6 +19,7 @@ public interface IGameController
     void SaveEndScreenshot();
     bool IsGameHung();
     bool IsGameRunning();
+    bool ReplayFileOpened { get; }
     Process GetGameProcess();
     void Kill();
 }

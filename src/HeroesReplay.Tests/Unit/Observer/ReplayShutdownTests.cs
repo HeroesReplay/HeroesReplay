@@ -82,6 +82,8 @@ public class ReplayShutdownTests
 
         public bool IsGameHung() => Hung;
 
+        public bool ReplayFileOpened => false;
+
         public bool IsGameRunning() => !Hung;
 
         public Process GetGameProcess() => throw new NotSupportedException();

@@ -40,6 +40,9 @@ public class GameController : IGameController
     private Process cachedProcess;
     private IntPtr cachedHandle;
     private string lastRejectedTimer;
+    private bool replayFileOpened;
+
+    public bool ReplayFileOpened => replayFileOpened;
 
     public static readonly VirtualKey[] Keys =
     {
@@ -90,6 +93,7 @@ public class GameController : IGameController
             replay?.ReplayVersion
         );
 
+        replayFileOpened = false;
         bool running = IsLaunched();
         bool presented =
             running
@@ -101,6 +105,7 @@ public class GameController : IGameController
             logger.LogInformation(
                 "Client is already showing the loading screen or the match clock. Skipping launch."
             );
+            replayFileOpened = true;
             ShowGameScene("match already on screen");
             return;
         }
@@ -132,7 +137,9 @@ public class GameController : IGameController
                 "Battle.net disconnected while loading the replay. Closing the client and trying once more."
             );
             Kill();
-            await Task.Delay(TimeSpan.FromSeconds(8), tokenProvider.Token).ConfigureAwait(false);
+            replayFileOpened = false;
+            await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token)
+                .ConfigureAwait(false);
         }
     }
 
@@ -140,20 +147,12 @@ public class GameController : IGameController
     {
         if (!IsLaunched())
         {
-            logger.LogInformation("Asking the logged-in Battle.net to start Heroes.");
-            replayOpener.RequestAuthenticatedClient();
-            DateTimeOffset windowBy = DateTimeOffset.UtcNow.AddSeconds(60);
-            while (!IsLaunched() && DateTimeOffset.UtcNow < windowBy)
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(500), tokenProvider.Token)
-                    .ConfigureAwait(false);
-            }
+            await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
         }
 
         if (IsLaunched() && await IsHomeScreen().ConfigureAwait(false))
         {
-            logger.LogInformation("Client is on the home screen. Opening the replay.");
-            replayOpener.Open(replayPath);
+            OpenReplayFromHome(replayPath);
             return true;
         }
 
@@ -174,9 +173,37 @@ public class GameController : IGameController
             return false;
         }
 
+        OpenReplayFromHome(replayPath);
+        return true;
+    }
+
+    private void OpenReplayFromHome(string replayPath)
+    {
+        replayFileOpened = true;
         logger.LogInformation("Client is on the home screen. Opening the replay.");
         replayOpener.Open(replayPath);
-        return true;
+    }
+
+    private async Task WaitForAuthenticatedClientAsync()
+    {
+        DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(60);
+        int requests = 0;
+        DateTimeOffset lastRequest = DateTimeOffset.MinValue;
+        while (!IsLaunched() && DateTimeOffset.UtcNow < deadline)
+        {
+            TimeSpan sinceLast =
+                requests == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - lastRequest;
+            if (ClientRelaunch.ShouldRequestLaunch(IsLaunched(), requests, sinceLast))
+            {
+                logger.LogInformation("Asking the logged-in Battle.net to start Heroes.");
+                replayOpener.RequestAuthenticatedClient();
+                requests++;
+                lastRequest = DateTimeOffset.UtcNow;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(500), tokenProvider.Token)
+                .ConfigureAwait(false);
+        }
     }
 
     private async Task<bool> StartReplayAndWaitAsync()
@@ -206,99 +233,137 @@ public class GameController : IGameController
             .Concat(settings.OCR.LoadingScreenText)
             .Concat(new[] { context.Current.LoadedReplay.Replay.Map })
             .ToArray();
-        bool disconnected = false;
         bool recoveredLogin = false;
         bool loggedMismatch = false;
-        await Policy
-            .Handle<Exception>()
-            .OrResult<bool>(result => result == false)
-            .WaitAndRetryAsync(
-                retryCount: 60,
-                sleepDurationProvider: retry => settings.OCR.CheckSleepDuration
-            )
-            .ExecuteAsync(
-                async (t) =>
+        int blankRelaunches = 0;
+        bool blankTiming = false;
+        DateTimeOffset blankSince = default;
+        DateTimeOffset deadline = DateTimeOffset.UtcNow.Add(ClientRelaunch.ColdBootLimit);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
+            string text = window.Text;
+            if (BattleNetDisconnect.IsShown(text))
+            {
+                logger.LogWarning("Battle.net disconnect dialog: {Text}", text);
+                return true;
+            }
+
+            if (ClientScreenText.IsVersionMismatch(text))
+            {
+                if (!loggedMismatch)
                 {
-                    string text = await ReadWindowTextAsync().ConfigureAwait(false);
-                    if (BattleNetDisconnect.IsShown(text))
-                    {
-                        disconnected = true;
-                        logger.LogWarning("Battle.net disconnect dialog: {Text}", text);
-                        return true;
-                    }
-
-                    if (ClientScreenText.IsVersionMismatch(text))
-                    {
-                        if (!loggedMismatch)
-                        {
-                            loggedMismatch = true;
-                            logger.LogWarning(
-                                "Heroes is on the version-mismatch dialog. The replay file stays closed."
-                            );
-                        }
-
-                        return false;
-                    }
-
-                    bool loading = searchTerms.Any(word =>
-                        !string.IsNullOrWhiteSpace(word)
-                        && text.Contains(word, StringComparison.OrdinalIgnoreCase)
+                    loggedMismatch = true;
+                    logger.LogWarning(
+                        "Heroes is on the version-mismatch dialog. The replay file stays closed."
                     );
-                    bool timer = await IsReplay().ConfigureAwait(false);
-                    if (!recoveredLogin && !loading && !timer && ClientScreenText.IsLoginForm(text))
-                    {
-                        recoveredLogin = true;
-                        logger.LogWarning(
-                            "Heroes is on the login form. Starting the signed-in client again before opening the replay."
-                        );
-                        Kill();
-                        await Task.Delay(TimeSpan.FromSeconds(2), tokenProvider.Token)
-                            .ConfigureAwait(false);
-                        replayOpener.RequestAuthenticatedClient();
-                        openedFromHome = false;
-                        return false;
-                    }
+                }
 
-                    if (
-                        !openedFromHome
-                        && !loading
-                        && !timer
-                        && await IsHomeScreen().ConfigureAwait(false)
+                return false;
+            }
+
+            bool loading = searchTerms.Any(word =>
+                !string.IsNullOrWhiteSpace(word)
+                && text.Contains(word, StringComparison.OrdinalIgnoreCase)
+            );
+            bool timer = await IsReplay().ConfigureAwait(false);
+            if (!recoveredLogin && !loading && !timer && ClientScreenText.IsLoginForm(text))
+            {
+                recoveredLogin = true;
+                logger.LogWarning(
+                    "Heroes is on the login form. Starting the signed-in client again before opening the replay."
+                );
+                await RestartAuthenticatedClientAsync().ConfigureAwait(false);
+                openedFromHome = false;
+                blankTiming = false;
+                continue;
+            }
+
+            if (!openedFromHome && !loading && !timer && await IsHomeScreen().ConfigureAwait(false))
+            {
+                openedFromHome = true;
+                OpenReplayFromHome(context.Current.LoadedReplay.FileInfo.FullName);
+            }
+
+            if (loading)
+            {
+                ShowGameScene("loading screen");
+                return false;
+            }
+
+            if (timer)
+            {
+                ShowGameScene("timer visible");
+                return false;
+            }
+
+            bool blank = ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
+            if (!blank)
+            {
+                blankTiming = false;
+            }
+            else
+            {
+                if (!blankTiming)
+                {
+                    blankTiming = true;
+                    blankSince = DateTimeOffset.UtcNow;
+                }
+
+                if (
+                    ClientRelaunch.ShouldRelaunchBlankWindow(
+                        IsLaunched(),
+                        openedFromHome,
+                        blank,
+                        DateTimeOffset.UtcNow - blankSince,
+                        blankRelaunches
                     )
-                    {
-                        openedFromHome = true;
-                        logger.LogInformation("Client is on the home screen. Opening the replay.");
-                        replayOpener.Open(context.Current.LoadedReplay.FileInfo.FullName);
-                    }
+                )
+                {
+                    blankRelaunches++;
+                    logger.LogWarning(
+                        "Heroes window stayed blank. Starting the signed-in client again before opening the replay."
+                    );
+                    await RestartAuthenticatedClientAsync().ConfigureAwait(false);
+                    openedFromHome = false;
+                    blankTiming = false;
+                }
+            }
 
-                    if (loading)
-                    {
-                        ShowGameScene("loading screen");
-                    }
-                    else if (timer)
-                    {
-                        ShowGameScene("timer visible");
-                    }
+            await Task.Delay(settings.OCR.CheckSleepDuration, tokenProvider.Token)
+                .ConfigureAwait(false);
+        }
 
-                    return loading || timer;
-                },
-                tokenProvider.Token
-            )
-            .ConfigureAwait(false);
-        return disconnected;
+        return false;
     }
+
+    private async Task RestartAuthenticatedClientAsync()
+    {
+        Kill();
+        replayFileOpened = false;
+        await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token).ConfigureAwait(false);
+        await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
+    }
+
+    private readonly record struct WindowRead(string Text, int Width, int Height);
 
     private async Task<string> ReadWindowTextAsync()
     {
+        WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
+        return window.Text;
+    }
+
+    private async Task<WindowRead> ReadWindowAsync()
+    {
         if (!TryGetGameHandle(out IntPtr handle))
         {
-            return string.Empty;
+            return new WindowRead(string.Empty, 0, 0);
         }
 
         using Bitmap frame = capture.Capture(handle);
         if (frame == null)
         {
-            return string.Empty;
+            return new WindowRead(string.Empty, 0, 0);
         }
 
         using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
@@ -311,7 +376,7 @@ public class GameController : IGameController
             frame.Height,
             string.IsNullOrWhiteSpace(text) ? "(empty)" : text
         );
-        return text;
+        return new WindowRead(text, frame.Width, frame.Height);
     }
 
     private void ShowGameScene(string reason)

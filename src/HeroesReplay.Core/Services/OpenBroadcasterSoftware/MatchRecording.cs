@@ -9,11 +9,13 @@ namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 public static class MatchRecording
 {
     public static readonly TimeSpan LoadingLimit = TimeSpan.FromMinutes(3);
+    public static readonly TimeSpan MinimumLength = TimeSpan.FromMinutes(2);
 
     public static bool ShouldStart(bool alreadyRecording, bool matchVisible) =>
         !alreadyRecording && matchVisible;
 
-    public static bool ShouldPublish(int hudSamples) => hudSamples > 0;
+    public static bool ShouldPublish(int hudSamples, TimeSpan recordedFor) =>
+        hudSamples > 0 && recordedFor >= MinimumLength;
 
     public static bool ShouldStopLoading(bool sawHud, TimeSpan loadingFor) =>
         !sawHud && loadingFor >= LoadingLimit;
