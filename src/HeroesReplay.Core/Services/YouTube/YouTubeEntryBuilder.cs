@@ -1,6 +1,7 @@
-using System.Linq;
+using System.Collections.Generic;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Media;
 
 namespace HeroesReplay.Core.Services.YouTube;
 
@@ -8,56 +9,57 @@ public static class YouTubeEntryBuilder
 {
     public static YouTubeEntry Create(LoadedReplay loaded, YouTubeSettings youtube)
     {
-        HeroesProfileReplay heroesProfileReplay = loaded?.HeroesProfileReplay;
-        string requestor = loaded?.RewardQueueItem?.Request?.Login;
-        string map = EnglishMapNames.Prefer(
-            heroesProfileReplay?.Map,
-            loaded?.Replay?.Map,
-            loaded?.Replay?.MapAlternativeName
-        );
-        string gameType = heroesProfileReplay?.GameType;
-        string rank = heroesProfileReplay?.Rank;
-        int? replayId = heroesProfileReplay?.Id ?? loaded?.ReplayId;
-        string id = replayId is > 0 ? replayId.Value.ToString() : null;
-        string hero = PlayerPriorityRequest.HeroName(
-            loaded?.Replay,
-            loaded?.RewardQueueItem?.Request?.PlayerIndex
+        ReplayMediaPolicyInput facts = ReplayMediaFacts.From(loaded, false, false, false);
+        var input = new FullMatchMetadataInput
+        {
+            ReplayId = facts.ReplayId,
+            GameDateUtc = facts.GameDateUtc,
+            GameVersion = facts.GameVersion,
+            Map = loaded?.Replay?.Map,
+            MapAlternativeName = loaded?.Replay?.MapAlternativeName,
+            HeroesProfileMap = loaded?.HeroesProfileReplay?.Map,
+            GameMode = loaded?.HeroesProfileReplay?.GameType,
+            Rank = facts.Rank,
+            AverageMmr = facts.AverageMmr,
+            FocusHero = facts.FocusHero,
+            Roster = facts.Roster,
+            RecordAndUpload = facts.RecordAndUpload,
+            RequestedBy = facts.RequestedBy,
+            NotableEvents = facts.NotableEvents,
+            IsCompleteRecording = false,
+        };
+        FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(
+            input,
+            new FullMatchMetadataOptions
+            {
+                IncludeSpoilers = false,
+                IncludeRequestAttribution = true,
+                CategoryId = string.IsNullOrWhiteSpace(youtube?.CategoryId)
+                    ? "20"
+                    : youtube.CategoryId,
+            }
         );
 
-        var descriptionLines = new[]
+        var lines = new List<string> { "Twitch: http://twitch.tv/saltysadism" };
+        if (metadata.DescriptionLines != null)
         {
-            "Twitch: http://twitch.tv/saltysadism",
-            id != null
-                ? $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}"
-                : string.Empty,
-            gameType != null ? $"Game type: {gameType}" : string.Empty,
-            !string.IsNullOrWhiteSpace(rank) ? $"Rank: {rank}" : string.Empty,
-            !string.IsNullOrWhiteSpace(requestor) ? $"Requested by: {requestor}" : string.Empty,
+            lines.AddRange(metadata.DescriptionLines);
         }
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Concat(YouTubeRoster.Lines(loaded?.Replay))
-            .Append("Hashtags: #HeroesOfTheStorm #SaltySadism")
-            .ToArray();
+
+        lines.Add("Hashtags: #HeroesOfTheStorm #SaltySadism");
 
         return new YouTubeEntry
         {
-            ReplayId = replayId,
-            Map = map,
-            GameType = gameType,
-            Rank = rank,
-            Title = YouTubeListing.ApplyMarker(
-                string.Join(
-                    " - ",
-                    new[] { hero, map, id, gameType, rank }.Where(part =>
-                        !string.IsNullOrWhiteSpace(part)
-                    )
-                ),
-                youtube?.TitlePrefix
-            ),
+            ReplayId = metadata.ReplayId ?? facts.ReplayId,
+            Map = metadata.Map,
+            GameType = metadata.GameMode,
+            Rank = metadata.Rank,
+            GameVersion = facts.GameVersion,
+            Title = YouTubeListing.ApplyMarker(metadata.Title, youtube?.TitlePrefix),
             PrivacyStatus = youtube?.PrivacyStatus ?? "public",
-            CategoryId = youtube?.CategoryId,
-            DescriptionLines = descriptionLines,
-            Tags = new[] { gameType, map }.Where(t => !string.IsNullOrWhiteSpace(t)).ToArray(),
+            CategoryId = metadata.CategoryId,
+            DescriptionLines = lines.ToArray(),
+            Tags = metadata.Tags == null ? [] : [.. metadata.Tags],
         };
     }
 }

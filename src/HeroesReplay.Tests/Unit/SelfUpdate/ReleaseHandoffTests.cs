@@ -503,6 +503,10 @@ public class ReleaseHandoffTests
 
             return kind;
         }
+
+        public void ReleaseClientAfterDefer() { }
+
+        public MatchOutcome LastOutcome => Outcome;
     }
 
     private sealed class ScriptedReplays : IReplayProvider
@@ -547,6 +551,22 @@ public class ReleaseHandoffTests
 
             Requeued.Add(replayId);
             staged = replay;
+        }
+
+        public List<int> Deferred { get; } = new();
+
+        public void Defer(LoadedReplay replay)
+        {
+            if (replay?.ReplayId is not int replayId)
+            {
+                return;
+            }
+
+            Deferred.Add(replayId);
+            if (staged?.ReplayId == replayId)
+            {
+                staged = null;
+            }
         }
 
         public void MarkSpectated(LoadedReplay replay)

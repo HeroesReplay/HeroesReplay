@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.HeroesProfile;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.YouTube;
@@ -44,7 +45,11 @@ public class YouTubeLibrary : IYouTubeLibrary
     public async Task<int> RunOnceAsync(CancellationToken cancellationToken)
     {
         List<YouTubeEntry> entries = ReadUploadedEntries();
-        IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Select(entries);
+        string patchLine = GameVersionOrder.PatchLine(settings.Spectate?.MinimumGameVersion);
+        IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Combine(
+            YouTubeLibraryPlanner.Select(entries),
+            YouTubeLibraryPlanner.Roll(entries, patchLine)
+        );
         if (settings.YouTube?.DryRun != false)
         {
             await WriteDryRunAsync(entries.Count, items, cancellationToken).ConfigureAwait(false);

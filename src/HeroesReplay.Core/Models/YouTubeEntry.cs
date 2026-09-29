@@ -8,6 +8,7 @@ public class YouTubeEntry
     public string Map { get; set; }
     public string GameType { get; set; }
     public string Rank { get; set; }
+    public string GameVersion { get; set; }
     public string[] DescriptionLines { get; set; }
     public string[] Tags { get; set; }
 

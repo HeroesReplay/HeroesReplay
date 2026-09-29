@@ -175,6 +175,24 @@ public class HeroesProfileProvider : IReplayProvider
         );
     }
 
+    public void Defer(LoadedReplay replay)
+    {
+        if (replay == null)
+        {
+            return;
+        }
+
+        if (staged?.ReplayId == replay.ReplayId)
+        {
+            staged = null;
+        }
+
+        logger.LogInformation(
+            "Replay {ReplayId} leaves the front of the Heroes Profile queue. It is not marked spectated.",
+            replay.ReplayId
+        );
+    }
+
     public void MarkSpectated(LoadedReplay replay) { }
 
     public async Task<LoadedReplay> TryLoadNextReplayAsync()

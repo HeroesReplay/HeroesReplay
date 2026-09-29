@@ -20,6 +20,12 @@ public interface IReplayProvider
     void Requeue(LoadedReplay replay);
 
     /// <summary>
+    /// Leave this replay queued, but not at the front, until its deferral expires.
+    /// It is not written to spectated-ids.
+    /// </summary>
+    void Defer(LoadedReplay replay);
+
+    /// <summary>
     /// The match clock was seen. Record the replay as spectated for the next process.
     /// </summary>
     void MarkSpectated(LoadedReplay replay);

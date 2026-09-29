@@ -10,4 +10,12 @@ public interface IGameManager
         LoadedReplay loadedReplay,
         Func<Task<LoadedReplay>> whileReporting
     );
+
+    /// <summary>
+    /// Close Heroes after repeated attempts that never became a match, so the next
+    /// replay can launch. Battle.net is left alone.
+    /// </summary>
+    void ReleaseClientAfterDefer();
+
+    MatchOutcome LastOutcome { get; }
 }

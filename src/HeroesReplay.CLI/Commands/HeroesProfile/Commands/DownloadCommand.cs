@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI;
 using HeroesReplay.Core;
+using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Providers;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,12 +48,38 @@ public class DownloadCommand : Command
             ILogger<DownloadCommand>
         >();
         ServiceReadyFile.ReportFromEnvironment("download");
+        int failures = 0;
         while (!stop.Token.IsCancellationRequested)
         {
+            OperatingMode mode = OutageMode.Decide(
+                internetUp: failures == 0,
+                downFor: TimeSpan.FromSeconds(15 * (long)failures),
+                stableFor: TimeSpan.Zero
+            );
+            if (!OutageMode.MayDownload(mode))
+            {
+                logger.LogWarning(
+                    "Heroes Profile download is paused ({Mode}). The downloader stays up.",
+                    mode
+                );
+                try
+                {
+                    await Task.Delay(OutageMode.PauseDelay, stop.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+
             bool downloaded = false;
             try
             {
                 downloaded = await downloader.DownloadNextAsync().ConfigureAwait(false);
+                if (downloaded)
+                {
+                    failures = 0;
+                }
             }
             catch (OperationCanceledException) when (stop.Token.IsCancellationRequested)
             {
@@ -60,7 +87,17 @@ public class DownloadCommand : Command
             }
             catch (Exception e)
             {
-                logger.LogError(e, "Heroes Profile download failed. The downloader stays up.");
+                failures++;
+                OperatingMode failed = OutageMode.Decide(
+                    internetUp: false,
+                    downFor: TimeSpan.FromSeconds(15 * (long)failures),
+                    stableFor: TimeSpan.Zero
+                );
+                logger.LogError(
+                    e,
+                    "Heroes Profile download failed ({Mode}). The downloader stays up.",
+                    failed
+                );
             }
 
             try

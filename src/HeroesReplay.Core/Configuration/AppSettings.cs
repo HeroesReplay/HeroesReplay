@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using HeroesReplay.Core.Services.Media;
+using HeroesReplay.Core.Services.Retention;
 
 namespace HeroesReplay.Core.Configuration;
 
@@ -30,6 +31,7 @@ public class AppSettings
     public ParseOptionsSettings ParseOptions { get; set; }
     public AbilityDetectionSettings AbilityDetection { get; set; }
     public YouTubeSettings YouTube { get; set; }
+    public DiskBacklogSettings Disk { get; set; } = SpectateAdmission.DefaultWatermarks();
     public ReplayMediaPolicySettings ReplayMedia { get; set; } = new ReplayMediaPolicySettings();
     public RetentionSettings Retention { get; set; }
     public ReleaseSettings Release { get; set; }

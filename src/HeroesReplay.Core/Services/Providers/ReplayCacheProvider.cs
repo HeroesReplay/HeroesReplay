@@ -9,7 +9,9 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.Services.Queue;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -28,6 +30,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private readonly CancellationTokenProvider tokenProvider;
     private readonly AppSettings settings;
     private readonly HashSet<int> played = new();
+    private readonly Dictionary<int, DateTimeOffset> deferredUntil = new();
     private LoadedReplay staged;
     private bool seeded;
 
@@ -60,6 +63,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
         {
             LoadedReplay ready = staged;
             staged = null;
+            ReleaseExpiredDefers();
             HeroesReplayTelemetry.TagReplay(
                 activity,
                 ready.FileInfo?.FullName,
@@ -71,8 +75,9 @@ public sealed class ReplayCacheProvider : IReplayProvider
         }
 
         Seed();
+        ReleaseExpiredDefers();
 
-        FileInfo next = Directory
+        List<FileInfo> candidates = Directory
             .EnumerateFiles(
                 settings.StandardReplayCachePath,
                 "*.StormReplay",
@@ -95,52 +100,81 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 replayHelper.TryGetReplayId(file.Name, out int id);
                 return id;
             })
-            .FirstOrDefault();
+            .ToList();
 
-        if (next == null)
+        foreach (FileInfo next in candidates)
         {
-            activity?.SetTag("replay.empty", true);
-            return null;
-        }
+            replayHelper.TryGetReplayId(next.Name, out int replayId);
+            Replay replay = await loader.LoadAsync(next.FullName).ConfigureAwait(false);
+            if (replay == null)
+            {
+                if (WorkEnvelope.AfterUnreadable() == WorkState.Quarantined)
+                {
+                    played.Add(replayId);
+                    AppendQuarantine(replayId);
+                    logger.LogWarning(
+                        "Replay {ReplayId} could not be parsed. It is quarantined and is not marked spectated.",
+                        replayId
+                    );
+                }
 
-        replayHelper.TryGetReplayId(next.Name, out int replayId);
-        Replay replay = await loader.LoadAsync(next.FullName).ConfigureAwait(false);
-        if (replay == null)
-        {
+                continue;
+            }
+
+            if (
+                !IsRequest(next)
+                && !ReplayFloor.Allows(
+                    replay.ReplayVersion,
+                    settings.Spectate?.VersionsSupported,
+                    settings.Spectate?.MinimumGameVersion
+                )
+            )
+            {
+                played.Add(replayId);
+                AppendBelowFloor(replayId);
+                logger.LogInformation(
+                    "Replay {ReplayId} ({Version}) is below the client floor. It stays on disk and is not marked spectated.",
+                    replayId,
+                    replay.ReplayVersion
+                );
+                continue;
+            }
+
             played.Add(replayId);
-            AppendPlayed(replayId);
-            return null;
+            HeroesReplayTelemetry.TagReplay(
+                activity,
+                next.FullName,
+                replay.Map,
+                replayId,
+                replay.ReplayVersion
+            );
+            logger.LogInformation(
+                IsRequest(next)
+                    ? "Playing requested replay {ReplayId} from {Path}"
+                    : "Playing cached replay {ReplayId} from {Path}",
+                replayId,
+                next.FullName
+            );
+            HeroesProfileReplay profile = RankFromFile(next.Name, replayId, replay.Map);
+            if (profile != null)
+            {
+                await heroesProfile
+                    .EnrichRankAsync(profile, tokenProvider.Token)
+                    .ConfigureAwait(false);
+            }
+
+            return new LoadedReplay
+            {
+                FileInfo = next,
+                Replay = replay,
+                ReplayId = replayId,
+                RewardQueueItem = null,
+                HeroesProfileReplay = profile,
+            };
         }
 
-        played.Add(replayId);
-        HeroesReplayTelemetry.TagReplay(
-            activity,
-            next.FullName,
-            replay.Map,
-            replayId,
-            replay.ReplayVersion
-        );
-        logger.LogInformation(
-            IsRequest(next)
-                ? "Playing requested replay {ReplayId} from {Path}"
-                : "Playing cached replay {ReplayId} from {Path}",
-            replayId,
-            next.FullName
-        );
-        HeroesProfileReplay profile = RankFromFile(next.Name, replayId, replay.Map);
-        if (profile != null)
-        {
-            await heroesProfile.EnrichRankAsync(profile, tokenProvider.Token).ConfigureAwait(false);
-        }
-
-        return new LoadedReplay
-        {
-            FileInfo = next,
-            Replay = replay,
-            ReplayId = replayId,
-            RewardQueueItem = null,
-            HeroesProfileReplay = profile,
-        };
+        activity?.SetTag("replay.empty", true);
+        return null;
     }
 
     public void Requeue(LoadedReplay replay)
@@ -162,6 +196,28 @@ public sealed class ReplayCacheProvider : IReplayProvider
 
         staged = replay;
         logger.LogInformation("Returned replay {ReplayId} to the front of the cache.", replayId);
+    }
+
+    public void Defer(LoadedReplay replay)
+    {
+        if (replay?.ReplayId is not int replayId || replayId <= 0)
+        {
+            return;
+        }
+
+        if (staged?.ReplayId == replayId)
+        {
+            staged = null;
+        }
+
+        played.Add(replayId);
+        deferredUntil[replayId] = DateTimeOffset.UtcNow.Add(ReplayRetryPlan.DeferFor);
+        WriteDefers();
+        logger.LogInformation(
+            "Deferred replay {ReplayId} until {Until:o}. It is not marked spectated.",
+            replayId,
+            deferredUntil[replayId]
+        );
     }
 
     public void MarkSpectated(LoadedReplay replay)
@@ -214,6 +270,9 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 );
             }
 
+            LoadDefers();
+            LoadQuarantine();
+            LoadBelowFloor();
             seeded = true;
         }
     }
@@ -221,6 +280,110 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private void AppendPlayed(int replayId)
     {
         File.AppendAllText(PlayedPath(), replayId + Environment.NewLine);
+    }
+
+    private void AppendQuarantine(int replayId)
+    {
+        Directory.CreateDirectory(settings.Location.DataDirectory);
+        File.AppendAllText(QuarantinePath(), replayId + Environment.NewLine);
+    }
+
+    private void AppendBelowFloor(int replayId)
+    {
+        Directory.CreateDirectory(settings.Location.DataDirectory);
+        File.AppendAllText(BelowFloorPath(), replayId + Environment.NewLine);
+    }
+
+    private void LoadBelowFloor()
+    {
+        string path = BelowFloorPath();
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        foreach (string line in File.ReadAllLines(path))
+        {
+            if (int.TryParse(line, out int id))
+            {
+                played.Add(id);
+            }
+        }
+    }
+
+    private void LoadQuarantine()
+    {
+        string path = QuarantinePath();
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        foreach (string line in File.ReadAllLines(path))
+        {
+            if (int.TryParse(line, out int id))
+            {
+                played.Add(id);
+            }
+        }
+    }
+
+    private void LoadDefers()
+    {
+        string path = DeferPath();
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        foreach (string line in File.ReadAllLines(path))
+        {
+            string[] parts = line.Split(' ');
+            if (parts.Length < 2 || !int.TryParse(parts[0], out int id))
+            {
+                continue;
+            }
+
+            if (!long.TryParse(parts[1], out long unix))
+            {
+                continue;
+            }
+
+            deferredUntil[id] = DateTimeOffset.FromUnixTimeSeconds(unix);
+            played.Add(id);
+        }
+    }
+
+    private void WriteDefers()
+    {
+        Directory.CreateDirectory(settings.Location.DataDirectory);
+        string[] lines = deferredUntil
+            .OrderBy(pair => pair.Key)
+            .Select(pair => pair.Key + " " + pair.Value.ToUnixTimeSeconds())
+            .ToArray();
+        File.WriteAllLines(DeferPath(), lines);
+    }
+
+    private void ReleaseExpiredDefers()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        List<int> due = deferredUntil
+            .Where(pair => pair.Value <= now)
+            .Select(pair => pair.Key)
+            .ToList();
+        if (due.Count == 0)
+        {
+            return;
+        }
+
+        foreach (int id in due)
+        {
+            deferredUntil.Remove(id);
+            played.Remove(id);
+            logger.LogInformation("Replay {ReplayId} is eligible again after its deferral.", id);
+        }
+
+        WriteDefers();
     }
 
     private static HeroesProfileReplay RankFromFile(string fileName, int replayId, string map)
@@ -276,4 +439,13 @@ public sealed class ReplayCacheProvider : IReplayProvider
 
     private string PlayedPath() =>
         Path.Combine(settings.Location.DataDirectory, "spectated-ids.txt");
+
+    private string DeferPath() =>
+        Path.Combine(settings.Location.DataDirectory, "deferred-replays.txt");
+
+    private string QuarantinePath() =>
+        Path.Combine(settings.Location.DataDirectory, "quarantine-ids.txt");
+
+    private string BelowFloorPath() =>
+        Path.Combine(settings.Location.DataDirectory, "below-floor-ids.txt");
 }

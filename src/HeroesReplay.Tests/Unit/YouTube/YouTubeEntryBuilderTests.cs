@@ -33,7 +33,8 @@ public class YouTubeEntryBuilderTests
         Assert.Equal("Volskaya Foundry", entry.Map);
         Assert.Equal("Storm League", entry.GameType);
         Assert.Equal("Diamond", entry.Rank);
-        Assert.Equal("Volskaya Foundry - 65389750 - Storm League - Diamond", entry.Title);
+        Assert.Equal("Volskaya Foundry - Storm League - Diamond - 65389750", entry.Title);
+        Assert.DoesNotContain("Full match", entry.Title, System.StringComparison.Ordinal);
         Assert.DoesNotContain(
             "player priority",
             entry.Title,
@@ -181,7 +182,7 @@ public class YouTubeEntryBuilderTests
         Assert.Equal("Dragon Shire", entry.Map);
         Assert.Equal("Platinum", entry.Rank);
         Assert.Null(entry.GameType);
-        Assert.Equal("Dragon Shire - 65396086 - Platinum", entry.Title);
+        Assert.Equal("Dragon Shire - Platinum - 65396086", entry.Title);
         Assert.Contains(entry.Tags, tag => tag == "Dragon Shire");
         Assert.DoesNotContain(entry.Tags, tag => tag.Contains("용"));
 
@@ -196,7 +197,7 @@ public class YouTubeEntryBuilderTests
             new YouTubeSettings { PrivacyStatus = "public", CategoryId = "20" }
         );
 
-        Assert.Equal("Braxis Holdout - 65396084 - Platinum", entry.Title);
+        Assert.Equal("Braxis Holdout - Platinum - 65396084", entry.Title);
     }
 
     [Fact]
@@ -229,6 +230,7 @@ public class YouTubeEntryBuilderTests
 
         YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
 
-        Assert.Equal("Illidan - Dragon Shire - 1 - Storm League - Diamond 3", entry.Title);
+        Assert.Equal("Illidan on Dragon Shire - Storm League - Diamond 3 - 1", entry.Title);
+        Assert.DoesNotContain("Full match", entry.Title, System.StringComparison.Ordinal);
     }
 }

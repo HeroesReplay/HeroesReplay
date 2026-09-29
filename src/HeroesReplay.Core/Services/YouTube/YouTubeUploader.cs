@@ -14,6 +14,7 @@ using Google.Apis.YouTube.v3;
 using Google.Apis.YouTube.v3.Data;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Retention;
 using Microsoft.Extensions.Logging;
 
@@ -31,6 +32,10 @@ public class YouTubeUploader : IYouTubeUploader
     private readonly ConcurrentDictionary<string, byte> uploadsInFlight = new(
         StringComparer.OrdinalIgnoreCase
     );
+    private int insertsToday;
+    private int deferredBySchedule;
+    private DateTimeOffset? lastInsertUtc;
+    private DateTimeOffset currentQuotaDay;
 
     public YouTubeUploader(
         ILogger<YouTubeUploader> logger,
@@ -89,7 +94,20 @@ public class YouTubeUploader : IYouTubeUploader
         try
         {
             await SendPendingAsync().ConfigureAwait(false);
-            await Task.Delay(Timeout.Infinite, cancellationTokenSource.Token).ConfigureAwait(false);
+            DateTimeOffset drained = DateTimeOffset.UtcNow;
+            while (!cancellationTokenSource.IsCancellationRequested)
+            {
+                await Task.Delay(UploadDrain.Poll, cancellationTokenSource.Token)
+                    .ConfigureAwait(false);
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                if (!UploadDrain.ShouldDrain(settings.YouTube.DryRun, drained, now))
+                {
+                    continue;
+                }
+
+                drained = now;
+                await SendPendingAsync().ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -127,7 +145,7 @@ public class YouTubeUploader : IYouTubeUploader
             return;
         }
 
-        YouTubeListing.StampForHost(entry, settings.YouTube, Environment.MachineName);
+        UploadStaging.Apply(entry, settings.YouTube, Environment.MachineName);
 
         if (!string.IsNullOrWhiteSpace(entry.VideoId))
         {
@@ -149,6 +167,11 @@ public class YouTubeUploader : IYouTubeUploader
                 entry.Title
             );
             await CompleteDryRunAsync(recording, entryFile, entry, token).ConfigureAwait(false);
+            return;
+        }
+
+        if (!ReservePublicationSlot(recording.FullName))
+        {
             return;
         }
 
@@ -224,6 +247,8 @@ public class YouTubeUploader : IYouTubeUploader
                 );
             }
 
+            insertsToday++;
+            lastInsertUtc = DateTimeOffset.UtcNow;
             RememberUploaded(entry);
             MarkEntryUploaded(entryFile, recording.Directory);
             MediaRetention.SweepAndLog(settings, logger);
@@ -271,6 +296,52 @@ public class YouTubeUploader : IYouTubeUploader
                 logger.LogError(ex, "Could not upload {Path}", path);
             }
         }
+
+        LogPublicationHealth(pending.Count);
+    }
+
+    private bool ReservePublicationSlot(string path)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset quotaDay = PublicationSchedule.QuotaDayStart(now);
+        if (currentQuotaDay != quotaDay)
+        {
+            currentQuotaDay = quotaDay;
+            insertsToday = 0;
+        }
+
+        bool production = TwitchIngestGuard.IsProductionHost(Environment.MachineName);
+        if (PublicationSchedule.MayUpload(production, insertsToday, now, lastInsertUtc))
+        {
+            return true;
+        }
+
+        deferredBySchedule++;
+        logger.LogInformation(
+            "Upload of {Path} waits for the publication schedule. It stays pending.",
+            path
+        );
+        LogPublicationHealth(1);
+        return false;
+    }
+
+    private void LogPublicationHealth(int pending)
+    {
+        PublicationHealthReport health = PublicationHealth.Summarize(
+            pending,
+            insertsToday,
+            deferredBySchedule,
+            insertsToday >= PublicationSchedule.MaxInsertsPerQuotaDay,
+            "1"
+        );
+        logger.LogInformation(
+            "YouTube publication health pending {Pending} uploaded {Uploaded} deferred {Deferred} limit {Limit} policy {Policy}.",
+            health.Pending,
+            health.Uploaded,
+            health.Deferred,
+            health.Limit,
+            health.PolicyVersion
+        );
     }
 
     private async Task ProcessOnceAsync(string recordingPath)

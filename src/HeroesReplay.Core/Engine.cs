@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -9,6 +10,7 @@ using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Services.Queue;
 using HeroesReplay.Core.Services.SelfUpdate;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Status;
@@ -28,6 +30,7 @@ public class Engine : IEngine
     private readonly IReplayResume replayResume;
     private readonly IReplayLoader replayLoader;
     private readonly IReleaseUpdateGate releaseUpdate;
+    private readonly Dictionary<int, int> frontAttempts = new();
     private LoadedReplay preparedNext;
 
     public Engine(
@@ -174,6 +177,26 @@ public class Engine : IEngine
                 .ConfigureAwait(false);
             if (ReplaySession.StaysQueued(session))
             {
+                int attempt = NextFrontAttempt(loadedReplay);
+                ReplayRetryAction action = ReplayRetryPlan.Decide(gameManager.LastOutcome, attempt);
+                if (action == ReplayRetryAction.Defer)
+                {
+                    if (loadedReplay.ReplayId is int deferredId)
+                    {
+                        frontAttempts.Remove(deferredId);
+                    }
+
+                    gameManager.ReleaseClientAfterDefer();
+                    replayProvider.Defer(loadedReplay);
+                    logger.LogWarning(
+                        "Replay {ReplayId} was not a match ({Session}) after {Attempt} attempts. It leaves the front of the queue. Spectate stays up.",
+                        loadedReplay.ReplayId,
+                        session,
+                        attempt
+                    );
+                    return true;
+                }
+
                 replayProvider.Requeue(loadedReplay);
                 logger.LogWarning(
                     "Replay {ReplayId} was not a match ({Session}). Spectate stays up and keeps this replay.",
@@ -189,7 +212,16 @@ public class Engine : IEngine
                 return true;
             }
 
-            replayProvider.MarkSpectated(loadedReplay);
+            if (loadedReplay.ReplayId is int playedId)
+            {
+                frontAttempts.Remove(playedId);
+            }
+
+            WorkState completed = WorkState.VerifiedCompleted;
+            if (WorkEnvelope.CountsAsPlayed(completed))
+            {
+                replayProvider.MarkSpectated(loadedReplay);
+            }
             await StorePreparedNextAsync(nextLoad).ConfigureAwait(false);
             if (await releaseUpdate.TryStageAsync(consoleTokenProvider.Token).ConfigureAwait(false))
             {
@@ -216,6 +248,19 @@ public class Engine : IEngine
         statusStore.MarkIdle();
         await Task.Delay(TimeSpan.FromSeconds(5), consoleTokenProvider.Token).ConfigureAwait(false);
         return true;
+    }
+
+    private int NextFrontAttempt(LoadedReplay loaded)
+    {
+        if (loaded?.ReplayId is not int id || id <= 0)
+        {
+            return 1;
+        }
+
+        frontAttempts.TryGetValue(id, out int previous);
+        int attempt = previous + 1;
+        frontAttempts[id] = attempt;
+        return attempt;
     }
 
     private Task<LoadedReplay> StartNextLoad()

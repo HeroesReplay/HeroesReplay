@@ -13,6 +13,7 @@ using HeroesReplay.Core.Services.Media;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Services.Twitch;
 using HeroesReplay.Core.Services.YouTube;
 using Microsoft.Extensions.Logging;
 
@@ -100,6 +101,7 @@ public class GameManager : IGameManager
 
         try
         {
+            await WaitUntilDiskAllowsAsync().ConfigureAwait(false);
             using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.spectate");
             HeroesReplayTelemetry.TagReplay(
                 activity,
@@ -147,6 +149,7 @@ public class GameManager : IGameManager
                     status.Outcome = spectator.Outcome.ToString();
                 });
                 ParkWaitingScene();
+                RecordRedemption(loadedReplay, spectator.Outcome);
                 return ReplaySession.Classify(spectator.Outcome);
             }
 
@@ -262,7 +265,99 @@ public class GameManager : IGameManager
             }
         }
 
+        RecordRedemption(loadedReplay, spectator.Outcome);
         return ReplaySession.Classify(spectator.Outcome);
+    }
+
+    public MatchOutcome LastOutcome => spectator.Outcome;
+
+    public void ReleaseClientAfterDefer()
+    {
+        logger.LogWarning(
+            "Closing Heroes after repeated attempts without a match clock. Battle.net was not clicked."
+        );
+        gameController.Kill();
+    }
+
+    private async Task WaitUntilDiskAllowsAsync()
+    {
+        while (true)
+        {
+            DiskBacklogDecision decision = SpectateAdmission.Evaluate(MeasureDisk(), settings.Disk);
+            if (SpectateAdmission.MayStart(decision))
+            {
+                if (decision.Pressure == DiskPressure.Warning)
+                {
+                    logger.LogWarning(
+                        "Disk is in warning ({Reason}). Spectate continues.",
+                        decision.Reason
+                    );
+                }
+
+                return;
+            }
+
+            logger.LogWarning(
+                "Disk {Reason}. New spectating waits. Recordings already on disk stay.",
+                decision.Reason
+            );
+            await Task.Delay(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+        }
+    }
+
+    private DiskBacklogInput MeasureDisk()
+    {
+        long free = long.MaxValue;
+        try
+        {
+            string root = Path.GetPathRoot(settings.Location?.DataDirectory);
+            if (!string.IsNullOrWhiteSpace(root))
+            {
+                free = new DriveInfo(root).AvailableFreeSpace;
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not read free disk space. Spectate continues.");
+        }
+
+        long pending = 0;
+        try
+        {
+            pending = PendingUploadSize.Bytes(
+                settings.ContextsDirectory,
+                settings.YouTube?.EntryFileName,
+                settings.YouTube?.EntryFileNameUploaded
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not measure pending uploads. Spectate continues.");
+        }
+
+        return new DiskBacklogInput { FreeBytes = free, PendingUploadBytes = pending };
+    }
+
+    private void RecordRedemption(LoadedReplay loaded, MatchOutcome outcome)
+    {
+        Guid redemptionId = loaded?.RewardQueueItem?.Request?.RedemptionId ?? Guid.Empty;
+        RedemptionEnd end = RedemptionDisposition.Decide(
+            redemptionId != Guid.Empty,
+            outcome == MatchOutcome.VerifiedCompleted
+        );
+        if (end == RedemptionEnd.None || settings.Location?.DataDirectory == null)
+        {
+            return;
+        }
+
+        string path = Path.Combine(settings.Location.DataDirectory, "redemption-dispositions.txt");
+        RedemptionDispositionLog.Append(path, loaded.ReplayId, redemptionId, end);
+        logger.LogInformation(
+            "Redemption {RedemptionId} for replay {ReplayId} is {End}. Twitch was not called.",
+            redemptionId,
+            loaded.ReplayId,
+            end
+        );
     }
 
     private void ParkWaitingScene()

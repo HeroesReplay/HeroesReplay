@@ -406,23 +406,45 @@ public class RequestQueue : IRequestQueue, IDisposable
 
         try
         {
+            string json = DurableFile.ReadOrAside(file.FullName);
+            if (json == null)
+            {
+                if (File.Exists(file.FullName))
+                {
+                    logger.LogError("Could not read {QueueFile}. It was left in place.", file.Name);
+                    return new List<RewardQueueItem>();
+                }
+
+                logger.LogError(
+                    "Could not read {QueueFile}. The unreadable copy was moved aside.",
+                    file.Name
+                );
+                file.Refresh();
+                return new List<RewardQueueItem>();
+            }
+
             List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                File.ReadAllText(file.FullName),
+                json,
                 options
             );
             return items ?? new List<RewardQueueItem>();
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Could not read {QueueFile}.", file.Name);
+            DurableFile.Aside(file.FullName);
+            logger.LogError(
+                e,
+                "Could not read {QueueFile}. The unreadable copy was moved aside.",
+                file.Name
+            );
+            file.Refresh();
             return new List<RewardQueueItem>();
         }
     }
 
     private void WriteItems(FileInfo file, List<RewardQueueItem> items)
     {
-        Directory.CreateDirectory(file.DirectoryName);
-        File.WriteAllText(file.FullName, JsonSerializer.Serialize(items, options));
+        DurableFile.Replace(file.FullName, JsonSerializer.Serialize(items, options));
         file.Refresh();
     }
 
