@@ -175,6 +175,8 @@ public class HeroesProfileProvider : IReplayProvider
         );
     }
 
+    public void MarkSpectated(LoadedReplay replay) { }
+
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");

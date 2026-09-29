@@ -113,7 +113,6 @@ public sealed class ReplayCacheProvider : IReplayProvider
         }
 
         played.Add(replayId);
-        AppendPlayed(replayId);
         HeroesReplayTelemetry.TagReplay(
             activity,
             next.FullName,
@@ -163,6 +162,17 @@ public sealed class ReplayCacheProvider : IReplayProvider
 
         staged = replay;
         logger.LogInformation("Returned replay {ReplayId} to the front of the cache.", replayId);
+    }
+
+    public void MarkSpectated(LoadedReplay replay)
+    {
+        if (replay?.ReplayId is not int replayId || replayId <= 0)
+        {
+            return;
+        }
+
+        played.Add(replayId);
+        AppendPlayed(replayId);
     }
 
     private void Seed()

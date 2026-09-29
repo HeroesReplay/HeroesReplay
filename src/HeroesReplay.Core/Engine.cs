@@ -189,11 +189,12 @@ public class Engine : IEngine
                 return true;
             }
 
+            replayProvider.MarkSpectated(loadedReplay);
             await StorePreparedNextAsync(nextLoad).ConfigureAwait(false);
             if (await releaseUpdate.TryStageAsync(consoleTokenProvider.Token).ConfigureAwait(false))
             {
-                // The report already appended this id to spectated-ids.txt. A new process
-                // only reads that file, so put the replay back before this one exits.
+                // spectated-ids.txt now contains this replay. A new process only reads that
+                // file, so put the preloaded replay back before this one exits.
                 ReturnPreparedNext();
                 logger.LogInformation(
                     "Stopping after this replay so the new release can replace this install."

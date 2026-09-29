@@ -245,12 +245,13 @@ public class Spectator : ISpectator
                 clockLog.Write(sessionActivity, reading);
                 bool fromOcr = reading.Ok && reading.Time.HasValue;
 
+                bool clockAdvanced = fromOcr && reading.Time.Value > lastAdvancedHud;
                 if (fromOcr)
                 {
                     matchClockSeen = true;
                     Timer = reading.Time.Value;
                     recordingClock.Observe(reading.Time.Value);
-                    if (reading.Time.Value > lastAdvancedHud)
+                    if (clockAdvanced)
                     {
                         lastAdvancedHud = reading.Time.Value;
                         lastAdvancedHudAt = DateTimeOffset.UtcNow;
@@ -352,9 +353,7 @@ public class Spectator : ISpectator
                         CancelSessionSource.Cancel();
                     }
                 }
-                else if (
-                    controller.IsGameHung() && !(fromOcr && reading.Time.Value > lastAdvancedHud)
-                )
+                else if (SessionWatch.IsHung(controller.IsGameHung(), clockAdvanced))
                 {
                     missingProcessChecks = 0;
                     hungChecks++;

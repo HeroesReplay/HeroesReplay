@@ -19,5 +19,10 @@ public interface IReplayProvider
     /// </summary>
     void Requeue(LoadedReplay replay);
 
+    /// <summary>
+    /// The match clock was seen. Record the replay as spectated for the next process.
+    /// </summary>
+    void MarkSpectated(LoadedReplay replay);
+
     bool ContinuesWhenEmpty { get; }
 }

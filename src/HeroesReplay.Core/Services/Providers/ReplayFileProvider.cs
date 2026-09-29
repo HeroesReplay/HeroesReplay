@@ -150,4 +150,6 @@ public sealed class ReplayFileProvider : IReplayProvider
             replay.ReplayId
         );
     }
+
+    public void MarkSpectated(LoadedReplay replay) { }
 }

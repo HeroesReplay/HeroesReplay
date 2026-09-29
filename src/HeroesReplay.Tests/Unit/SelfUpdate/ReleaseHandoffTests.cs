@@ -108,6 +108,7 @@ public class ReleaseHandoffTests
         }
 
         Assert.Equal(new int?[] { 101, 202 }, game.Spectated.ToArray());
+        Assert.Equal(new[] { 101, 202 }, provider.SpectatedIds.ToArray());
         Assert.Empty(provider.Requeued);
     }
 
@@ -214,6 +215,7 @@ public class ReleaseHandoffTests
             await Task.Delay(TimeSpan.FromMilliseconds(300));
             Assert.False(run.IsCompleted);
             Assert.Contains(101, provider.Requeued);
+            Assert.Empty(provider.SpectatedIds);
             cancel.Cancel();
             Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
             Assert.Same(run, finished);
@@ -363,6 +365,8 @@ public class ReleaseHandoffTests
             return Task.FromResult(waiting.Count == 0 ? null : waiting.Dequeue());
         }
 
+        public List<int> SpectatedIds { get; } = new();
+
         public void Requeue(LoadedReplay replay)
         {
             if (replay?.ReplayId is not int replayId)
@@ -372,6 +376,14 @@ public class ReleaseHandoffTests
 
             Requeued.Add(replayId);
             staged = replay;
+        }
+
+        public void MarkSpectated(LoadedReplay replay)
+        {
+            if (replay?.ReplayId is int replayId)
+            {
+                SpectatedIds.Add(replayId);
+            }
         }
     }
 
