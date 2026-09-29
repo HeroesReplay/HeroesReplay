@@ -24,6 +24,7 @@ public class ObsController : IObsController
     private readonly AppSettings settings;
     private readonly OBSWebsocket obs;
     private readonly CancellationTokenProvider tokenProvider;
+    private readonly RecordingSession recording;
     private bool replayInfoHidden;
 
     public ObsController(
@@ -40,6 +41,11 @@ public class ObsController : IObsController
         this.obs = obs ?? throw new ArgumentNullException(nameof(obs));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        recording = new RecordingSession(
+            logger,
+            new ObsWebsocketRecordSocket(this.obs),
+            ObsRecordingBudget.Default
+        );
     }
 
     public void BeginSession()
@@ -130,145 +136,40 @@ public class ObsController : IObsController
         }
     }
 
-    public void StartRecording()
+    public ObsRecordingResult StartRecording()
     {
-        Policy
-            .Handle<Exception>()
-            .WaitAndRetry(
-                retryCount: 5,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(1)
-            )
-            .Execute(() =>
-            {
-                try
-                {
-                    if (ShouldRecord())
-                    {
-                        EnsureConnected();
-                        RecordingStatus status = obs.GetRecordStatus();
-
-                        if (!status.IsRecording)
-                        {
-                            logger.LogInformation(
-                                "Starting OBS recording for replay {ReplayId} ({Reason}). The file starts on the match and stops before the report scenes.",
-                                context.Current?.LoadedReplay?.ReplayId,
-                                SessionMedia.HasRequestor(context.Current?.LoadedReplay)
-                                    ? "viewer request"
-                                    : "every replay"
-                            );
-                            obs.StartRecord();
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "There was an error starting OBS recording.");
-                }
-            });
+        string reason = SessionMedia.HasRequestor(context.Current?.LoadedReplay)
+            ? "viewer request"
+            : "every replay";
+        return recording.StartRecording(ShouldRecord, EnsureConnected, CurrentReplayId, reason);
     }
 
-    public void StopRecording()
-    {
-        Policy
-            .Handle<Exception>()
-            .WaitAndRetry(
-                retryCount: 5,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(1)
-            )
-            .Execute(() =>
-            {
-                try
-                {
-                    EnsureConnected();
-                    RecordingStatus status = obs.GetRecordStatus();
-                    if (status.IsRecording)
-                    {
-                        logger.LogInformation(
-                            "Stopping OBS recording for replay {ReplayId}.",
-                            context.Current?.LoadedReplay?.ReplayId
-                        );
-                        obs.StopRecord();
-                        DateTimeOffset stoppedBy = DateTimeOffset.UtcNow.AddSeconds(10);
-                        while (
-                            DateTimeOffset.UtcNow < stoppedBy && obs.GetRecordStatus().IsRecording
-                        )
-                        {
-                            Thread.Sleep(250);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "There was an error stopping OBS recording.");
-                }
-            });
-    }
+    public ObsRecordingResult StopRecording() =>
+        recording.StopRecording(EnsureConnected, CurrentReplayId);
 
-    public void StartStreaming()
+    public ObsStreamResult StartStreaming()
     {
         if (!SessionMedia.ShouldStream(settings.OBS))
         {
             logger.LogDebug("Skipping OBS StartStream because OBS:StreamingEnabled is false.");
-            return;
+            return ObsStreamResult.NotRequested();
         }
 
-        Policy
-            .Handle<Exception>()
-            .WaitAndRetry(
-                retryCount: 5,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(1)
-            )
-            .Execute(() =>
-            {
-                try
-                {
-                    EnsureConnected();
-                    OutputStatus status = obs.GetStreamStatus();
-                    if (!status.IsActive)
-                    {
-                        logger.LogInformation("Starting OBS stream.");
-                        obs.StartStream();
-                    }
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "There was an error starting OBS streaming.");
-                }
-            });
+        return recording.StartStreaming(EnsureConnected);
     }
 
-    public void StopStreaming()
+    public ObsStreamResult StopStreaming()
     {
         if (!SessionMedia.ShouldStream(settings.OBS))
         {
             logger.LogDebug("Skipping OBS StopStream because OBS:StreamingEnabled is false.");
-            return;
+            return ObsStreamResult.NotRequested();
         }
 
-        Policy
-            .Handle<Exception>()
-            .WaitAndRetry(
-                retryCount: 5,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(1)
-            )
-            .Execute(() =>
-            {
-                try
-                {
-                    EnsureConnected();
-                    OutputStatus status = obs.GetStreamStatus();
-                    if (status.IsActive)
-                    {
-                        logger.LogInformation("Stopping OBS stream.");
-                        obs.StopStream();
-                    }
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "There was an error stopping OBS streaming.");
-                }
-            });
+        return recording.StopStreaming(EnsureConnected);
     }
+
+    private int? CurrentReplayId => context.Current?.LoadedReplay?.ReplayId;
 
     public bool IsStreaming()
     {

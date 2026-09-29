@@ -21,6 +21,7 @@ public static class MatchClipExporter
         Replay replay,
         int? replayId,
         string contextDirectory,
+        string recordingPath,
         RecordingClock clock,
         YouTubeSettings youtube,
         string entryFileName,
@@ -43,12 +44,22 @@ public static class MatchClipExporter
             return;
         }
 
-        string match = await WaitForMatchFileAsync(contextDirectory).ConfigureAwait(false);
+        string match = RecordingOwnership.SelectFinalizedFile(recordingPath, contextDirectory);
+        if (string.IsNullOrWhiteSpace(match))
+        {
+            logger?.LogWarning(
+                "No finalized OBS recording for {Directory}. Pentakill clips were not cut.",
+                contextDirectory
+            );
+            return;
+        }
+
+        match = await WaitUntilReadableAsync(match).ConfigureAwait(false);
         if (match == null)
         {
             logger?.LogWarning(
-                "No match recording in {Directory}. Pentakill clips were not cut.",
-                contextDirectory
+                "Finalized OBS recording {Path} was not readable. Pentakill clips were not cut.",
+                recordingPath
             );
             return;
         }
@@ -226,30 +237,14 @@ public static class MatchClipExporter
         return kept.ToArray();
     }
 
-    private static async Task<string> WaitForMatchFileAsync(string contextDirectory)
+    private static async Task<string> WaitUntilReadableAsync(string recordingPath)
     {
-        DirectoryInfo directory = new(contextDirectory);
-        if (!directory.Exists)
-        {
-            return null;
-        }
-
         DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(20);
         while (DateTimeOffset.UtcNow < deadline)
         {
-            FileInfo[] files = directory.GetFiles("*.mp4", SearchOption.TopDirectoryOnly);
-            FileInfo newest = null;
-            foreach (FileInfo file in files)
+            if (CanRead(recordingPath))
             {
-                if (newest == null || file.Length > newest.Length)
-                {
-                    newest = file;
-                }
-            }
-
-            if (newest != null && newest.Length > 0 && CanRead(newest.FullName))
-            {
-                return newest.FullName;
+                return recordingPath;
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);

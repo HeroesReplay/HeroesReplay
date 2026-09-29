@@ -12,9 +12,9 @@ public interface IObsController
     void SwapToGameScene();
     void UpdateReplayInfoVisibility(TimeSpan matchTime);
     void SwapToWaitingScene();
-    void StartRecording();
-    void StopRecording();
-    void StartStreaming();
-    void StopStreaming();
+    ObsRecordingResult StartRecording();
+    ObsRecordingResult StopRecording();
+    ObsStreamResult StartStreaming();
+    ObsStreamResult StopStreaming();
     bool IsStreaming();
 }

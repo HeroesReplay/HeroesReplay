@@ -143,19 +143,22 @@ public class GameManager : IGameManager
         {
             if (enteredMatch && obsSession)
             {
+                ObsRecordingResult stopped = null;
                 try
                 {
-                    obsController.StopRecording();
+                    stopped = obsController.StopRecording();
                 }
-                catch { }
+                catch (Exception e)
+                {
+                    logger.LogWarning(e, "Could not stop OBS recording.");
+                }
 
-                if (
-                    MatchCompletion.AllowsMedia(
-                        spectator.Outcome,
-                        recordingClock.SampleCount,
-                        recordingClock.Elapsed
-                    )
-                )
+                bool allowsMedia = MatchCompletion.AllowsMedia(
+                    spectator.Outcome,
+                    recordingClock.SampleCount,
+                    recordingClock.Elapsed
+                );
+                if (RecordingOwnership.CanPublish(stopped, allowsMedia))
                 {
                     try
                     {
@@ -164,6 +167,7 @@ public class GameManager : IGameManager
                                 context.Current?.LoadedReplay?.Replay,
                                 context.Current?.LoadedReplay?.ReplayId,
                                 context.Current?.Directory?.FullName,
+                                stopped.OutputPath,
                                 recordingClock,
                                 settings.YouTube,
                                 settings.YouTube?.EntryFileName,
@@ -176,9 +180,9 @@ public class GameManager : IGameManager
                         logger.LogWarning(e, "Could not cut team-kill clips.");
                     }
                 }
-                else if (recordingClock.IsRunning)
+                else
                 {
-                    DiscardUnplayedRecording(loadedReplay);
+                    UnpublishRecording(loadedReplay, stopped, allowsMedia);
                 }
             }
 
@@ -469,11 +473,26 @@ public class GameManager : IGameManager
             return;
         }
 
+        ObsRecordingResult started = obsController.StartRecording();
+        if (!started.Owned)
+        {
+            logger.LogWarning(
+                "OBS recording for replay {ReplayId} did not start ({Failure}). {Detail}",
+                loadedReplay?.ReplayId,
+                started.Failure,
+                started.Detail
+            );
+            return;
+        }
+
         recordingClock.Start();
-        obsController.StartRecording();
     }
 
-    private void DiscardUnplayedRecording(LoadedReplay loadedReplay)
+    private void UnpublishRecording(
+        LoadedReplay loadedReplay,
+        ObsRecordingResult stopped,
+        bool allowsMedia
+    )
     {
         string directory = context.Current?.Directory?.FullName;
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
@@ -493,33 +512,52 @@ public class GameManager : IGameManager
         string entryName = string.IsNullOrWhiteSpace(settings.YouTube?.EntryFileName)
             ? "youtube-entry.json"
             : settings.YouTube.EntryFileName;
-        TryDelete(Path.Combine(directory, entryName));
-        foreach (string recording in Directory.GetFiles(directory, "*.mp4"))
+        bool removedEntry = TryDelete(Path.Combine(directory, entryName));
+        bool removedFile = TryDelete(RecordingOwnership.FileToDiscard(stopped, allowsMedia));
+        if (
+            !removedEntry
+            && !removedFile
+            && !recordingClock.IsRunning
+            && !RecordingWasAttempted(stopped)
+        )
         {
-            TryDelete(recording);
+            return;
         }
 
         logger.LogWarning(
-            "Replay {ReplayId} recording is not published ({Outcome}, {Samples} clock samples over {Elapsed}). It was not sent to YouTube.",
+            "Replay {ReplayId} recording is not published ({Outcome}, {Failure}, owned {Owned}, finalized {Finalized}, {Samples} clock samples over {Elapsed}). It was not sent to YouTube.",
             loadedReplay?.ReplayId,
             spectator.Outcome,
+            stopped?.Failure,
+            stopped?.Owned ?? false,
+            stopped?.Finalized ?? false,
             recordingClock.SampleCount,
             recordingClock.Elapsed
         );
     }
 
-    private void TryDelete(string path)
+    private static bool RecordingWasAttempted(ObsRecordingResult stopped) =>
+        stopped != null
+        && stopped.Failure != ObsOutputFailure.None
+        && stopped.Failure != ObsOutputFailure.NotOwned
+        && stopped.Failure != ObsOutputFailure.NotRequested;
+
+    private bool TryDelete(string path)
     {
         try
         {
-            if (File.Exists(path))
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
-                File.Delete(path);
+                return false;
             }
+
+            File.Delete(path);
+            return true;
         }
         catch (Exception e)
         {
             logger.LogWarning(e, "Could not delete {Path}.", path);
+            return false;
         }
     }
 

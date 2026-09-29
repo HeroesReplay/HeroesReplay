@@ -362,13 +362,23 @@ public class ConnectivityWatchdogTests
 
         public void SwapToWaitingScene() { }
 
-        public void StartRecording() { }
+        public ObsRecordingResult StartRecording() =>
+            ObsRecordingResult.Failed(ObsOutputFailure.NotRequested, "test");
 
-        public void StopRecording() { }
+        public ObsRecordingResult StopRecording() =>
+            ObsRecordingResult.Failed(ObsOutputFailure.NotRequested, "test");
 
-        public void StartStreaming() => StartCalls++;
+        public ObsStreamResult StartStreaming()
+        {
+            StartCalls++;
+            return ObsStreamResult.Success();
+        }
 
-        public void StopStreaming() => StopCalls++;
+        public ObsStreamResult StopStreaming()
+        {
+            StopCalls++;
+            return ObsStreamResult.Success();
+        }
 
         public bool IsStreaming() => StartCalls > StopCalls;
     }
