@@ -27,9 +27,6 @@ namespace HeroesReplay.Core.Services.Observer;
 
 public class GameController : IGameController
 {
-    private const string VersionsFolder = "Versions";
-    private const int MaxBattlenetLaunchAttempts = 3;
-
     private readonly OcrEngine ocrEngine;
     private readonly CancellationTokenProvider tokenProvider;
     private readonly ILogger<GameController> logger;
@@ -37,6 +34,7 @@ public class GameController : IGameController
     private readonly AppSettings settings;
     private readonly IObsController obsController;
     private readonly IGameCapture capture;
+    private readonly IReplayOpener replayOpener;
 
     private readonly object controllerLock = new object();
     private Process cachedProcess;
@@ -63,6 +61,7 @@ public class GameController : IGameController
         AppSettings settings,
         IObsController obsController,
         IGameCapture capture,
+        IReplayOpener replayOpener,
         OcrEngine engine,
         CancellationTokenProvider tokenProvider
     )
@@ -73,6 +72,7 @@ public class GameController : IGameController
         this.obsController =
             obsController ?? throw new ArgumentNullException(nameof(obsController));
         this.capture = capture ?? throw new ArgumentNullException(nameof(capture));
+        this.replayOpener = replayOpener ?? throw new ArgumentNullException(nameof(replayOpener));
         this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
@@ -90,18 +90,13 @@ public class GameController : IGameController
             replay?.ReplayVersion
         );
 
-        string versionFolder = Path.Combine(settings.Location.GameInstallDirectory, VersionsFolder);
-        int latestBuild = Directory
-            .EnumerateDirectories(versionFolder)
-            .Select(x => x)
-            .Select(x => int.Parse(Path.GetFileName(x).Replace("Base", string.Empty)))
-            .Max();
-        var requiresAuth = replay.ReplayBuild == latestBuild;
-
-        if (
-            IsLaunched()
-            && await IsReplayPresentedAsync(context.Current.LoadedReplay).ConfigureAwait(false)
-        )
+        bool running = IsLaunched();
+        bool presented =
+            running
+            && await IsReplayPresentedAsync(context.Current.LoadedReplay).ConfigureAwait(false);
+        bool home = running && !presented && await IsHomeScreen().ConfigureAwait(false);
+        ReplayLaunchStep step = ReplayLaunchPlan.Decide(running, presented, home);
+        if (step == ReplayLaunchStep.AlreadyInMatch)
         {
             logger.LogInformation(
                 "Client is already showing the loading screen or the match clock. Skipping launch."
@@ -110,83 +105,16 @@ public class GameController : IGameController
             return;
         }
 
-        if (IsLaunched() && !await IsHomeScreen().ConfigureAwait(false))
+        if (step == ReplayLaunchStep.CloseThenOpen)
         {
-            logger.LogInformation(
-                "Client is running and not on the home screen; attaching without waiting for loading OCR."
-            );
-            return;
-        }
-
-        if (IsLaunched() && await IsHomeScreen().ConfigureAwait(false))
-        {
-            await LaunchAndWait().ConfigureAwait(false);
-        }
-        else if (requiresAuth)
-        {
-            await LaunchGameFromBattlenet().ConfigureAwait(false);
-            await LaunchAndWait().ConfigureAwait(false);
-        }
-        else
-        {
-            await LaunchAndWait().ConfigureAwait(false);
-        }
-    }
-
-    private async Task LaunchGameFromBattlenet()
-    {
-        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.launch.battlenet");
-        for (int attempt = 1; attempt <= MaxBattlenetLaunchAttempts; attempt++)
-        {
-            activity?.SetTag("launch.attempt", attempt);
-            logger.LogInformation(
-                "Launching battlenet because this replay is the latest build and requires auth. Attempt {Attempt}/{Max}.",
-                attempt,
-                MaxBattlenetLaunchAttempts
-            );
-
-            using (
-                Process.Start(
-                    new ProcessStartInfo
-                    {
-                        FileName = settings.Location.BattlenetPath,
-                        Arguments = "--exec=\"launch Hero\"",
-                        UseShellExecute = true,
-                    }
-                )
-            ) { }
-
-            var loggedIn = await Policy
-                .Handle<Exception>()
-                .OrResult<bool>(loaded => loaded == false)
-                .WaitAndRetryAsync(retryCount: 60, retry => settings.OCR.CheckSleepDuration)
-                .ExecuteAsync((token) => IsHomeScreen(), tokenProvider.Token)
-                .ConfigureAwait(false);
-
-            if (loggedIn)
-            {
-                logger.LogInformation("Heroes of the Storm Home Screen detected");
-                return;
-            }
-
-            if (IsGameProcessRunning())
-            {
-                logger.LogWarning(
-                    "Home-screen OCR did not find PLAY/COLLECTION/LOOT/WATCH, but the game window is running. Continuing."
-                );
-                return;
-            }
-
-            logger.LogInformation(
-                "The game was launched, but we did not end up on the home screen. Killing game."
+            logger.LogWarning(
+                "Game window is up without the home screen or the match clock. Closing it and opening the replay."
             );
             Kill();
-            await Task.Delay(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(2), tokenProvider.Token).ConfigureAwait(false);
         }
 
-        throw new InvalidOperationException(
-            $"Failed to reach the Heroes of the Storm home screen after {MaxBattlenetLaunchAttempts} Battle.net launches."
-        );
+        await LaunchAndWait().ConfigureAwait(false);
     }
 
     private async Task LaunchAndWait()
@@ -210,17 +138,40 @@ public class GameController : IGameController
         }
     }
 
+    public async Task StartAuthenticatedReplayAsync(string replayPath)
+    {
+        if (!IsLaunched())
+        {
+            logger.LogInformation("Asking the logged-in Battle.net to start Heroes.");
+            replayOpener.RequestAuthenticatedClient();
+            DateTimeOffset windowBy = DateTimeOffset.UtcNow.AddSeconds(60);
+            while (!IsLaunched() && DateTimeOffset.UtcNow < windowBy)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500), tokenProvider.Token)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        replayOpener.Open(replayPath);
+    }
+
+    public async Task<bool> OpenReplayFromHomeScreenAsync(string replayPath)
+    {
+        if (!IsLaunched() || !await IsHomeScreen().ConfigureAwait(false))
+        {
+            return false;
+        }
+
+        logger.LogInformation("Client is on the home screen. Opening the replay.");
+        replayOpener.Open(replayPath);
+        return true;
+    }
+
     private async Task<bool> StartReplayAndWaitAsync()
     {
-        using (
-            Process.Start(
-                new ProcessStartInfo
-                {
-                    FileName = context.Current.LoadedReplay.FileInfo.FullName,
-                    UseShellExecute = true,
-                }
-            )
-        ) { }
+        await StartAuthenticatedReplayAsync(context.Current.LoadedReplay.FileInfo.FullName)
+            .ConfigureAwait(false);
+        bool reopenedFromHome = false;
 
         bool versionMatched = Policy
             .Handle<Exception>()
@@ -243,6 +194,7 @@ public class GameController : IGameController
             .Concat(new[] { context.Current.LoadedReplay.Replay.Map })
             .ToArray();
         bool disconnected = false;
+        int polls = 0;
         await Policy
             .Handle<Exception>()
             .OrResult<bool>(result => result == false)
@@ -253,6 +205,7 @@ public class GameController : IGameController
             .ExecuteAsync(
                 async (t) =>
                 {
+                    polls++;
                     string text = await ReadWindowTextAsync().ConfigureAwait(false);
                     if (BattleNetDisconnect.IsShown(text))
                     {
@@ -266,6 +219,18 @@ public class GameController : IGameController
                         && text.Contains(word, StringComparison.OrdinalIgnoreCase)
                     );
                     bool timer = await IsReplay().ConfigureAwait(false);
+                    if (!reopenedFromHome && polls >= 20 && !loading && !timer)
+                    {
+                        reopenedFromHome = true;
+                        if (await IsHomeScreen().ConfigureAwait(false))
+                        {
+                            logger.LogInformation(
+                                "Client is on the home screen. Opening the replay."
+                            );
+                            replayOpener.Open(context.Current.LoadedReplay.FileInfo.FullName);
+                        }
+                    }
+
                     if (loading)
                     {
                         ShowGameScene("loading screen");

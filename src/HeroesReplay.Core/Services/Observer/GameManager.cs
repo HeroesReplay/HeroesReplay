@@ -251,9 +251,9 @@ public class GameManager : IGameManager
 
         try
         {
-            Process.Start(
-                new ProcessStartInfo { FileName = next.FileInfo.FullName, UseShellExecute = true }
-            );
+            await gameController
+                .StartAuthenticatedReplayAsync(next.FileInfo.FullName)
+                .ConfigureAwait(false);
         }
         catch (Exception e)
         {
@@ -277,9 +277,26 @@ public class GameManager : IGameManager
         }
 
         bool loggedReadFailure = false;
+        bool reopenedFromHome = false;
+        DateTimeOffset reopenAt = DateTimeOffset.UtcNow.AddSeconds(25);
         DateTimeOffset readyBy = DateTimeOffset.UtcNow.AddMinutes(3);
         while (DateTimeOffset.UtcNow < readyBy)
         {
+            if (!reopenedFromHome && DateTimeOffset.UtcNow >= reopenAt)
+            {
+                reopenedFromHome = true;
+                try
+                {
+                    await gameController
+                        .OpenReplayFromHomeScreenAsync(next.FileInfo.FullName)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    logger.LogWarning(e, "Could not open the next replay from the home screen.");
+                }
+            }
+
             if (!gameController.IsGameRunning())
             {
                 logger.LogWarning(

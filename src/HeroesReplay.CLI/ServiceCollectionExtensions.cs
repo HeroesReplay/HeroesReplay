@@ -19,8 +19,8 @@ using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Providers;
 using HeroesReplay.Core.Services.Queue;
-using HeroesReplay.Core.Services.SelfUpdate;
 using HeroesReplay.Core.Services.Reports;
+using HeroesReplay.Core.Services.SelfUpdate;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Status;
 using HeroesReplay.Core.Services.Twitch;
@@ -384,6 +384,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IYouTubeVideoSearch, YouTubeApiVideoSearch>()
             .AddSingleton<IYouTubeReplayLookup, YouTubeReplayLookup>()
             .AddSingleton<RecordingClock>()
+            .AddSingleton<IReplayOpener, MediumIntegrityReplayOpener>()
             .AddSingleton<IGameManager, GameManager>()
             .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
             .AddSingleton<IObserverPanelRequests, ObserverPanelRequests>()
