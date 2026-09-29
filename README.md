@@ -2,7 +2,7 @@
 
 Automated spectator for Heroes of the Storm `.StormReplay` files. It parses a replay, scores who to watch each second, launches the game, drives camera focus, and can switch OBS Studio scenes while streaming.
 
-Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Modernized to **.NET 10 LTS**.
+Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Modernized to **.NET 10 LTS**. The product vision and the 24/7 cycle are in [docs/vision.md](docs/vision.md).
 
 ## What it does
 
