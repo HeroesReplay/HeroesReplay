@@ -8,6 +8,7 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Providers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.CLI.Commands.HeroesProfile.Commands;
 
@@ -42,13 +43,37 @@ public class DownloadCommand : Command
         using IServiceScope scope = provider.CreateScope();
         HeroesProfileProvider downloader =
             scope.ServiceProvider.GetRequiredService<HeroesProfileProvider>();
+        ILogger<DownloadCommand> logger = scope.ServiceProvider.GetRequiredService<
+            ILogger<DownloadCommand>
+        >();
         while (!stop.Token.IsCancellationRequested)
         {
-            bool downloaded = await downloader.DownloadNextAsync().ConfigureAwait(false);
-            await Task.Delay(
-                downloaded ? TimeSpan.FromSeconds(2) : TimeSpan.FromSeconds(15),
-                stop.Token
-            );
+            bool downloaded = false;
+            try
+            {
+                downloaded = await downloader.DownloadNextAsync().ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stop.Token.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Heroes Profile download failed. The downloader stays up.");
+            }
+
+            try
+            {
+                await Task.Delay(
+                        downloaded ? TimeSpan.FromSeconds(2) : TimeSpan.FromSeconds(15),
+                        stop.Token
+                    )
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
         }
     }
 }
