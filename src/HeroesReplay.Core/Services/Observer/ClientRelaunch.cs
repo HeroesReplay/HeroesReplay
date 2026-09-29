@@ -13,6 +13,8 @@ public static class ClientRelaunch
     public static readonly TimeSpan RetryIfNoProcess = TimeSpan.FromSeconds(15);
     public static readonly TimeSpan BlankWindowLimit = TimeSpan.FromSeconds(90);
     public static readonly TimeSpan ColdBootLimit = TimeSpan.FromMinutes(4);
+    public static readonly TimeSpan GameDataStartupExtension = TimeSpan.FromMinutes(3);
+    public static readonly TimeSpan GameDataStartupCap = TimeSpan.FromMinutes(12);
 
     public const int MaxLaunchRequests = 2;
     public const int MaxBlankRelaunches = 1;
@@ -54,5 +56,59 @@ public static class ClientRelaunch
             && windowBlank
             && blankRelaunches < MaxBlankRelaunches
             && blankFor >= BlankWindowLimit;
+    }
+
+    /// <summary>
+    /// While Heroes is calculating game data, a black full-size window is that same startup.
+    /// A matching client that was already running is the same wait: killing it starts the calculation over.
+    /// </summary>
+    public static bool KeepsWaitingForGameData(
+        bool startupText,
+        bool sawStartup,
+        bool windowBlank,
+        bool clientAlreadyRunning
+    )
+    {
+        return startupText || (sawStartup && windowBlank) || (clientAlreadyRunning && windowBlank);
+    }
+
+    public static DateTimeOffset ExtendForGameDataStartup(
+        DateTimeOffset started,
+        DateTimeOffset deadline,
+        DateTimeOffset now
+    )
+    {
+        DateTimeOffset cap = started.Add(GameDataStartupCap);
+        DateTimeOffset proposed = now.Add(GameDataStartupExtension);
+        if (proposed < deadline)
+        {
+            proposed = deadline;
+        }
+
+        if (proposed > cap)
+        {
+            proposed = cap;
+        }
+
+        return proposed;
+    }
+
+    public static ClientHoldReason ColdBootHold(
+        bool openedFromHome,
+        bool replayFileOpened,
+        bool sawStartup
+    )
+    {
+        if (openedFromHome)
+        {
+            return ClientHoldReason.None;
+        }
+
+        if (!replayFileOpened || sawStartup)
+        {
+            return ClientHoldReason.ClientNotReady;
+        }
+
+        return ClientHoldReason.None;
     }
 }

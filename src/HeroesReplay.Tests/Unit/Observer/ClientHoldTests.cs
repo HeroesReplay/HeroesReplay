@@ -36,6 +36,7 @@ public class ClientHoldTests
         Assert.Equal(ClientHoldReason.None, ClientHold.Classify("PLAY COLLECTION LOOT WATCH"));
         Assert.Equal(ClientHoldReason.None, ClientHold.Classify(null));
         Assert.Equal(ClientHoldReason.None, ClientHold.Classify(""));
+        Assert.Equal(ClientHoldReason.None, ClientHold.Classify("Preparing game data"));
     }
 
     [Fact]
@@ -44,6 +45,7 @@ public class ClientHoldTests
         Assert.True(ClientHold.LeavesClientOpen(ClientHoldReason.RegionUnavailable));
         Assert.True(ClientHold.LeavesClientOpen(ClientHoldReason.VersionMismatch));
         Assert.True(ClientHold.LeavesClientOpen(ClientHoldReason.BuildNotInstalled));
+        Assert.True(ClientHold.LeavesClientOpen(ClientHoldReason.ClientNotReady));
         Assert.False(ClientHold.LeavesClientOpen(ClientHoldReason.None));
     }
 

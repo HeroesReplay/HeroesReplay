@@ -8,6 +8,11 @@ public enum ClientHoldReason
     VersionMismatch,
     RegionUnavailable,
     BuildNotInstalled,
+
+    /// <summary>
+    /// The matching client is still starting. The replay was not opened, so the client stays up.
+    /// </summary>
+    ClientNotReady,
 }
 
 /// <summary>

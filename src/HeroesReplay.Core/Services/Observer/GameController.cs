@@ -346,10 +346,14 @@ public class GameController : IGameController
             .ToArray();
         bool recoveredLogin = false;
         bool loggedMismatch = false;
+        bool loggedPreparing = false;
+        bool sawGameDataStartup = false;
         int blankRelaunches = 0;
         bool blankTiming = false;
         DateTimeOffset blankSince = default;
-        DateTimeOffset deadline = DateTimeOffset.UtcNow.Add(ClientRelaunch.ColdBootLimit);
+        DateTimeOffset started = DateTimeOffset.UtcNow;
+        DateTimeOffset deadline = started.Add(ClientRelaunch.ColdBootLimit);
+        bool clientAlreadyRunning = boot.Auth == ReplayLaunchAuth.Wait;
         while (DateTimeOffset.UtcNow < deadline)
         {
             WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
@@ -422,8 +426,45 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
+            bool startup = ClientScreenText.IsGameDataStartup(text);
+            if (startup)
+            {
+                sawGameDataStartup = true;
+            }
+
             bool blank = ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
-            if (!blank)
+            if (
+                ClientRelaunch.KeepsWaitingForGameData(
+                    startup,
+                    sawGameDataStartup,
+                    blank,
+                    clientAlreadyRunning
+                )
+            )
+            {
+                DateTimeOffset extended = ClientRelaunch.ExtendForGameDataStartup(
+                    started,
+                    deadline,
+                    DateTimeOffset.UtcNow
+                );
+                if (extended > deadline)
+                {
+                    deadline = extended;
+                }
+
+                if (!loggedPreparing)
+                {
+                    loggedPreparing = true;
+                    logger.LogInformation(
+                        startup || sawGameDataStartup
+                            ? "Heroes is preparing game data. The launch wait continues."
+                            : "Matching Heroes client is still starting. The launch wait continues."
+                    );
+                }
+
+                blankTiming = false;
+            }
+            else if (!blank)
             {
                 blankTiming = false;
             }
@@ -474,7 +515,10 @@ public class GameController : IGameController
                 .ConfigureAwait(false);
         }
 
-        return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
+        return new ColdBoot(
+            RetryDisconnect: false,
+            ClientRelaunch.ColdBootHold(openedFromHome, replayFileOpened, sawGameDataStartup)
+        );
     }
 
     private async Task RestartAuthenticatedClientAsync()
@@ -518,10 +562,16 @@ public class GameController : IGameController
             return new WindowRead(string.Empty, 0, 0);
         }
 
-        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
-            .ConfigureAwait(false);
-        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-        string text = result?.Text ?? string.Empty;
+        string text = await RecognizeFrameAsync(frame).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            string startup = await StartupTextFromOtherWindowsAsync(handle).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(startup))
+            {
+                text = startup;
+            }
+        }
+
         logger.LogInformation(
             "Window OCR ({Width}x{Height}): {Text}",
             frame.Width,
@@ -529,6 +579,78 @@ public class GameController : IGameController
             string.IsNullOrWhiteSpace(text) ? "(empty)" : text
         );
         return new WindowRead(text, frame.Width, frame.Height);
+    }
+
+    private async Task<string> RecognizeFrameAsync(Bitmap frame)
+    {
+        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
+            .ConfigureAwait(false);
+        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
+        return result?.Text ?? string.Empty;
+    }
+
+    /// <summary>
+    /// The largest Heroes window can stay black while a smaller window still says it is
+    /// preparing game data. Return that phrase only. Do not log the other window's text.
+    /// </summary>
+    private async Task<string> StartupTextFromOtherWindowsAsync(IntPtr primary)
+    {
+        Process process = cachedProcess;
+        if (process == null)
+        {
+            return null;
+        }
+
+        int processId;
+        try
+        {
+            if (process.HasExited)
+            {
+                return null;
+            }
+
+            processId = process.Id;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+        catch (Win32Exception)
+        {
+            return null;
+        }
+
+        var windows = new List<GameWindowInput.VisibleClientWindow>();
+        GameWindowInput.CollectVisibleWindows(processId, windows);
+        GameWindowInput.CollectVisibleChildWindows(primary, windows);
+        foreach (GameWindowInput.VisibleClientWindow window in windows)
+        {
+            if (window.Handle == primary || window.Handle == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            try
+            {
+                using Bitmap frame = capture.Capture(window.Handle);
+                if (frame == null)
+                {
+                    continue;
+                }
+
+                string text = await RecognizeFrameAsync(frame).ConfigureAwait(false);
+                if (ClientScreenText.IsGameDataStartup(text))
+                {
+                    return ClientScreenText.GameDataStartup;
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogDebug(e, "Could not read another Heroes window.");
+            }
+        }
+
+        return null;
     }
 
     private void ShowGameScene(string reason)

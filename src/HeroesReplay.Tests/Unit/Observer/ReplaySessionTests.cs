@@ -53,6 +53,16 @@ public class ReplaySessionTests
     }
 
     [Fact]
+    public void FromHold_ClientNotReadyStaysQueuedWithoutADialogHold()
+    {
+        MatchOutcome outcome = MatchCompletion.FromHold(ClientHoldReason.ClientNotReady);
+
+        Assert.Equal(MatchOutcome.LoadTimedOut, outcome);
+        Assert.Equal(ReplaySessionKind.Unplayed, ReplaySession.Classify(outcome));
+        Assert.True(ReplaySession.StaysQueued(ReplaySessionKind.Unplayed));
+    }
+
+    [Fact]
     public void StaysQueued_KeepsHeldAndUnplayed()
     {
         Assert.True(ReplaySession.StaysQueued(ReplaySessionKind.Held));

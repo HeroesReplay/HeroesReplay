@@ -70,6 +70,111 @@ public class ClientRelaunchTests
         Assert.False(ClientRelaunch.IsBlankClientWindow("PLAY", 1280, 720));
         Assert.False(ClientRelaunch.IsBlankClientWindow("", 403, 139));
         Assert.False(ClientRelaunch.IsBlankClientWindow(null, 999, 720));
+        Assert.False(ClientRelaunch.IsBlankClientWindow("Preparing game data", 1280, 720));
+    }
+
+    [Fact]
+    public void KeepsWaitingForGameData_HoldsTheBlackWindowAfterStartupText()
+    {
+        Assert.True(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: true,
+                sawStartup: false,
+                windowBlank: false,
+                clientAlreadyRunning: false
+            )
+        );
+        Assert.True(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: false,
+                sawStartup: true,
+                windowBlank: true,
+                clientAlreadyRunning: false
+            )
+        );
+        Assert.True(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: false,
+                sawStartup: false,
+                windowBlank: true,
+                clientAlreadyRunning: true
+            )
+        );
+        Assert.False(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: false,
+                sawStartup: false,
+                windowBlank: true,
+                clientAlreadyRunning: false
+            )
+        );
+        Assert.False(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: false,
+                sawStartup: true,
+                windowBlank: false,
+                clientAlreadyRunning: false
+            )
+        );
+    }
+
+    [Fact]
+    public void ExtendForGameDataStartup_SlidesTheDeadlineWithoutPassingTheCap()
+    {
+        DateTimeOffset started = new(2026, 9, 29, 21, 0, 0, TimeSpan.Zero);
+        DateTimeOffset deadline = started.Add(ClientRelaunch.ColdBootLimit);
+
+        Assert.Equal(deadline, ClientRelaunch.ExtendForGameDataStartup(started, deadline, started));
+
+        DateTimeOffset during = started.AddMinutes(3);
+        Assert.Equal(
+            during.Add(ClientRelaunch.GameDataStartupExtension),
+            ClientRelaunch.ExtendForGameDataStartup(started, deadline, during)
+        );
+
+        DateTimeOffset nearCap =
+            started.Add(ClientRelaunch.GameDataStartupCap) - TimeSpan.FromMinutes(1);
+        Assert.Equal(
+            started.Add(ClientRelaunch.GameDataStartupCap),
+            ClientRelaunch.ExtendForGameDataStartup(started, deadline, nearCap)
+        );
+    }
+
+    [Fact]
+    public void ColdBootHold_LeavesAnUnopenedClientRunning()
+    {
+        Assert.Equal(
+            ClientHoldReason.ClientNotReady,
+            ClientRelaunch.ColdBootHold(
+                openedFromHome: false,
+                replayFileOpened: false,
+                sawStartup: false
+            )
+        );
+        Assert.Equal(
+            ClientHoldReason.ClientNotReady,
+            ClientRelaunch.ColdBootHold(
+                openedFromHome: false,
+                replayFileOpened: true,
+                sawStartup: true
+            )
+        );
+        Assert.Equal(
+            ClientHoldReason.None,
+            ClientRelaunch.ColdBootHold(
+                openedFromHome: true,
+                replayFileOpened: true,
+                sawStartup: true
+            )
+        );
+        Assert.Equal(
+            ClientHoldReason.None,
+            ClientRelaunch.ColdBootHold(
+                openedFromHome: false,
+                replayFileOpened: true,
+                sawStartup: false
+            )
+        );
     }
 
     [Fact]

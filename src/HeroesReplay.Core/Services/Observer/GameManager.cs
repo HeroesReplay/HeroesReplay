@@ -124,6 +124,13 @@ public class GameManager : IGameManager
                         loadedReplay?.ReplayId
                     );
                 }
+                else if (hold == ClientHoldReason.ClientNotReady)
+                {
+                    logger.LogWarning(
+                        "Heroes is still preparing. Replay {ReplayId} stays queued. The client stays open.",
+                        loadedReplay?.ReplayId
+                    );
+                }
                 else
                 {
                     logger.LogWarning(

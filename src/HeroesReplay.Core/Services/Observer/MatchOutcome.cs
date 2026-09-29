@@ -48,6 +48,11 @@ public sealed class MatchCompletion
             return MatchOutcome.BuildNotInstalled;
         }
 
+        if (hold == ClientHoldReason.ClientNotReady)
+        {
+            return MatchOutcome.LoadTimedOut;
+        }
+
         return MatchOutcome.None;
     }
 

@@ -4,6 +4,14 @@ namespace HeroesReplay.Core.Services.Observer;
 
 public static class ClientScreenText
 {
+    public const string GameDataStartup = "Preparing game data";
+
+    public static bool IsGameDataStartup(string text)
+    {
+        return !string.IsNullOrWhiteSpace(text)
+            && text.Contains(GameDataStartup, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool IsLoginForm(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
