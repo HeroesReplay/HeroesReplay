@@ -62,12 +62,29 @@ public static class BattleNetLauncherCheck
 
             string text = await RecognizeAsync(engine, bitmap).ConfigureAwait(false);
             string button = LauncherButtonText.Classify(text);
-            bool known = button is "Play" or "Update" or "Updating";
+            if (button is "Play" or "Update" or "Updating")
+            {
+                return new CheckCommand.CheckResult(
+                    "battlenet",
+                    true,
+                    "Battle.net button is " + button + "."
+                );
+            }
+
+            if (button == "hidden")
+            {
+                return new CheckCommand.CheckResult(
+                    "battlenet",
+                    true,
+                    "Battle.net is open. The Play or Update button is not on this page."
+                );
+            }
+
             return new CheckCommand.CheckResult(
                 "battlenet",
-                known,
-                known
-                    ? "Battle.net button is " + button + "."
+                false,
+                string.IsNullOrWhiteSpace(text)
+                    ? "Battle.net window was captured but no text was read."
                     : "Battle.net window was captured but the Play/Update button was not read."
             );
         }

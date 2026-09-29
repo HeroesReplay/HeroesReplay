@@ -29,6 +29,14 @@ public static class LauncherButtonText
             return "Play";
         }
 
+        if (
+            Regex.IsMatch(text, @"\bHOME\b", RegexOptions.IgnoreCase)
+            && Regex.IsMatch(text, @"\bGAMES\b", RegexOptions.IgnoreCase)
+        )
+        {
+            return "hidden";
+        }
+
         return "unknown";
     }
 }
