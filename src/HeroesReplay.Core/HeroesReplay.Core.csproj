@@ -25,4 +25,8 @@
     <ItemGroup>
         <ProjectReference Include="..\HeroesReplay.HeroesProfile.Client\HeroesReplay.HeroesProfile.Client.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="heroesreplay.tests" />
+    </ItemGroup>
 </Project>

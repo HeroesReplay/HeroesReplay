@@ -5,9 +5,6 @@ using System.Runtime.InteropServices;
 
 namespace HeroesReplay.Core.Services.Observer;
 
-/// <summary>
-/// Reads the fixed 98025 match-tick RVAs. No scanning and no writes.
-/// </summary>
 public readonly record struct StableClockSample(
     bool Ok,
     string Reason,
@@ -16,16 +13,40 @@ public readonly record struct StableClockSample(
     double Seconds
 );
 
+internal readonly record struct StableClockModule(
+    int ProcessId,
+    long BaseAddress,
+    long Size,
+    string FileVersion
+);
+
+/// <summary>
+/// Read-only match clock. Pattern discovery runs once per process module on every client build.
+/// Fixed 98025 RVAs are only a candidate; a failed check stays unlocked so OCR can take over.
+/// </summary>
 public sealed class StableMatchClock : IDisposable
 {
+    private const double MaxCoherentStepSeconds = 8;
+
     private IntPtr handle;
+    private int attachedPid;
+    private bool fingerprintSet;
     private int pid;
     private long moduleBase;
     private long moduleSize;
+    private string version = "";
     private long tickRva;
     private long speedRva;
+    private bool discovered;
     private bool located;
+    private bool hasSample;
+    private int lastTicks;
+    private float lastScale;
     private string attachReason = "no-process";
+
+    internal bool IsLocked => located;
+
+    internal long CandidateTickRva => tickRva;
 
     public bool TryRead(Process process, out TimeSpan time)
     {
@@ -42,7 +63,38 @@ public sealed class StableMatchClock : IDisposable
 
     public StableClockSample Read(Process process)
     {
-        if (!Ensure(process))
+        if (!TryAttach(process, out StableClockModule module))
+        {
+            return new StableClockSample(false, attachReason, 0, 0, 0);
+        }
+
+        return Read(module, ReadProcess);
+    }
+
+    internal StableClockSample Read(StableClockModule module, Func<long, byte[], bool> read)
+    {
+        if (module.ProcessId <= 0)
+        {
+            return new StableClockSample(false, "no-process", 0, 0, 0);
+        }
+
+        if (module.BaseAddress <= 0 || module.Size <= 0)
+        {
+            return new StableClockSample(false, "no-module", 0, 0, 0);
+        }
+
+        if (read == null)
+        {
+            return new StableClockSample(false, "read-failed", 0, 0, 0);
+        }
+
+        UseModule(module);
+        if (!discovered)
+        {
+            Discover(read);
+        }
+
+        if (tickRva == 0 || speedRva == 0)
         {
             return new StableClockSample(false, attachReason, 0, 0, 0);
         }
@@ -50,8 +102,8 @@ public sealed class StableMatchClock : IDisposable
         int ticks = 0;
         float speed = 0;
         if (
-            !TryReadInt32(moduleBase + tickRva, out ticks)
-            || !TryReadSingle(moduleBase + speedRva, out speed)
+            !TryReadInt32(read, moduleBase + tickRva, out ticks)
+            || !TryReadSingle(read, moduleBase + speedRva, out speed)
         )
         {
             return new StableClockSample(false, "read-failed", ticks, speed, 0);
@@ -59,6 +111,7 @@ public sealed class StableMatchClock : IDisposable
 
         if (!MatchTickClock.TrySeconds(ticks, speed, out double seconds))
         {
+            hasSample = false;
             return new StableClockSample(false, "bad-scale", ticks, speed, seconds);
         }
 
@@ -68,18 +121,141 @@ public sealed class StableMatchClock : IDisposable
             return new StableClockSample(false, "near-zero", ticks, speed, seconds);
         }
 
+        if (!located && !TryConfirm(ticks, speed, seconds, out string reason))
+        {
+            return new StableClockSample(false, reason, ticks, speed, seconds);
+        }
+
         return new StableClockSample(true, "ok", ticks, speed, seconds);
     }
 
     public void Dispose()
     {
-        Close();
+        ReleaseHandle();
+        ResetState();
     }
 
-    private bool Ensure(Process process)
+    private void UseModule(StableClockModule module)
     {
+        string fileVersion = module.FileVersion ?? "";
+        if (
+            fingerprintSet
+            && pid == module.ProcessId
+            && moduleBase == module.BaseAddress
+            && moduleSize == module.Size
+            && string.Equals(version, fileVersion, StringComparison.Ordinal)
+        )
+        {
+            return;
+        }
+
+        fingerprintSet = true;
+        pid = module.ProcessId;
+        moduleBase = module.BaseAddress;
+        moduleSize = module.Size;
+        version = fileVersion;
+        discovered = false;
+        located = false;
+        tickRva = 0;
+        speedRva = 0;
+        hasSample = false;
+        lastTicks = 0;
+        lastScale = 0;
+    }
+
+    private void Discover(Func<long, byte[], bool> read)
+    {
+        discovered = true;
+        located = false;
+        tickRva = 0;
+        speedRva = 0;
+        hasSample = false;
+        lastTicks = 0;
+        lastScale = 0;
+
+        bool agreed = TryLocateByPattern(
+            read,
+            out int sites,
+            out long patternTick,
+            out long patternSpeed
+        );
+        if (agreed && InRange(patternTick) && InRange(patternSpeed))
+        {
+            tickRva = patternTick;
+            speedRva = patternSpeed;
+            attachReason = "pattern";
+            return;
+        }
+
+        if (
+            MatchTickClock.IsSupportedVersion(version)
+            && InRange(MatchTickClock.MatchTickRva)
+            && InRange(MatchTickClock.GameSpeedFactorRva)
+        )
+        {
+            tickRva = MatchTickClock.MatchTickRva;
+            speedRva = MatchTickClock.GameSpeedFactorRva;
+            attachReason = "fixed";
+            return;
+        }
+
+        if (patternTick != 0 || patternSpeed != 0 || MatchTickClock.IsSupportedVersion(version))
+        {
+            attachReason = "out-of-range";
+            return;
+        }
+
+        attachReason = sites == 0 ? "unsupported-build" : "pattern-disagreed";
+    }
+
+    private bool InRange(long rva)
+    {
+        return rva > 0 && rva <= moduleSize - 4;
+    }
+
+    private bool TryConfirm(int ticks, float scale, double seconds, out string reason)
+    {
+        if (!hasSample)
+        {
+            hasSample = true;
+            lastTicks = ticks;
+            lastScale = scale;
+            reason = "confirming";
+            return false;
+        }
+
+        double delta = seconds - (lastTicks * (double)lastScale);
+        bool sameScale = SameScale(scale, lastScale);
+        lastTicks = ticks;
+        lastScale = scale;
+        if (!sameScale || delta < 0 || delta > MaxCoherentStepSeconds)
+        {
+            reason = "incoherent";
+            return false;
+        }
+
+        if (delta == 0)
+        {
+            reason = "confirming";
+            return false;
+        }
+
+        located = true;
+        reason = "ok";
+        return true;
+    }
+
+    private static bool SameScale(float left, float right)
+    {
+        return Math.Abs(left - right) <= 0.000001f;
+    }
+
+    private bool TryAttach(Process process, out StableClockModule module)
+    {
+        module = default;
         if (process == null)
         {
+            attachReason = "no-process";
             return false;
         }
 
@@ -88,6 +264,7 @@ public sealed class StableMatchClock : IDisposable
         {
             if (process.HasExited)
             {
+                attachReason = "no-process";
                 return false;
             }
 
@@ -95,75 +272,62 @@ public sealed class StableMatchClock : IDisposable
         }
         catch
         {
+            attachReason = "no-process";
             return false;
         }
 
-        if (handle != IntPtr.Zero && pid == nextPid && located && moduleBase != 0)
+        if (handle == IntPtr.Zero || attachedPid != nextPid)
         {
-            return true;
-        }
+            ReleaseHandle();
+            handle = Native.OpenProcess(
+                Native.ProcessQueryInformation | Native.ProcessVmRead,
+                false,
+                nextPid
+            );
+            if (handle == IntPtr.Zero)
+            {
+                attachReason = "open-failed";
+                return false;
+            }
 
-        Close();
-        pid = nextPid;
-        handle = Native.OpenProcess(
-            Native.ProcessQueryInformation | Native.ProcessVmRead,
-            false,
-            pid
-        );
-        if (handle == IntPtr.Zero)
-        {
-            attachReason = "open-failed";
-            return false;
+            attachedPid = nextPid;
         }
 
         try
         {
-            ProcessModule module = process.MainModule;
-            moduleBase = module?.BaseAddress.ToInt64() ?? 0;
-            moduleSize = module?.ModuleMemorySize ?? 0;
-            string version = module?.FileVersionInfo.FileVersion;
-            if (moduleBase == 0)
+            ProcessModule main = process.MainModule;
+            long baseAddress = main?.BaseAddress.ToInt64() ?? 0;
+            long size = main?.ModuleMemorySize ?? 0;
+            string fileVersion = main?.FileVersionInfo.FileVersion;
+            if (baseAddress == 0 || size <= 0)
             {
                 attachReason = "no-module";
                 return false;
             }
 
-            if (MatchTickClock.IsSupportedVersion(version))
-            {
-                tickRva = MatchTickClock.MatchTickRva;
-                speedRva = MatchTickClock.GameSpeedFactorRva;
-                located = true;
-                attachReason = "ok";
-                return true;
-            }
-
-            if (TryLocateByPattern(out int sites))
-            {
-                located = true;
-                attachReason = "pattern";
-                return true;
-            }
-
-            attachReason = sites == 0 ? "unsupported-build" : "pattern-disagreed";
-            return false;
+            module = new StableClockModule(nextPid, baseAddress, size, fileVersion);
+            return true;
         }
         catch
         {
-            located = false;
-            moduleBase = 0;
             attachReason = "unsupported-build";
             return false;
         }
     }
 
-    private bool TryLocateByPattern(out int sites)
+    private bool TryLocateByPattern(
+        Func<long, byte[], bool> read,
+        out int sites,
+        out long patternTick,
+        out long patternSpeed
+    )
     {
         sites = 0;
-        tickRva = 0;
-        speedRva = 0;
+        patternTick = 0;
+        patternSpeed = 0;
         byte[] headers = new byte[0x1000];
         if (
-            !TryRead(moduleBase, headers)
+            !TryRead(read, moduleBase, headers)
             || !MatchClockPattern.TryExecutableSections(headers, out var sections)
         )
         {
@@ -183,14 +347,20 @@ public sealed class StableMatchClock : IDisposable
                 continue;
             }
 
-            CollectSites(section.VirtualAddress, section.VirtualSize, found);
+            CollectSites(read, moduleBase, section.VirtualAddress, section.VirtualSize, found);
         }
 
         sites = found.Count;
-        return MatchClockPattern.TryAgree(found, out tickRva, out speedRva);
+        return MatchClockPattern.TryAgree(found, out patternTick, out patternSpeed);
     }
 
-    private void CollectSites(long rva, int size, List<MatchClockPattern.Site> found)
+    private static void CollectSites(
+        Func<long, byte[], bool> read,
+        long moduleBase,
+        long rva,
+        int size,
+        List<MatchClockPattern.Site> found
+    )
     {
         if (size <= 0 || size > 64 * 1024 * 1024)
         {
@@ -198,7 +368,7 @@ public sealed class StableMatchClock : IDisposable
         }
 
         byte[] window = new byte[size];
-        if (TryRead(moduleBase + rva, window))
+        if (TryRead(read, moduleBase + rva, window))
         {
             found.AddRange(MatchClockPattern.Find(window, rva));
             return;
@@ -209,7 +379,7 @@ public sealed class StableMatchClock : IDisposable
         {
             int count = Math.Min(size - offset, chunk + MatchClockPattern.MulssEnd);
             byte[] slice = new byte[count];
-            if (!TryRead(moduleBase + rva + offset, slice))
+            if (!TryRead(read, moduleBase + rva + offset, slice))
             {
                 continue;
             }
@@ -218,11 +388,11 @@ public sealed class StableMatchClock : IDisposable
         }
     }
 
-    private bool TryReadInt32(long address, out int value)
+    private static bool TryReadInt32(Func<long, byte[], bool> read, long address, out int value)
     {
         value = 0;
         byte[] buffer = new byte[4];
-        if (!TryRead(address, buffer))
+        if (!TryRead(read, address, buffer))
         {
             return false;
         }
@@ -231,11 +401,11 @@ public sealed class StableMatchClock : IDisposable
         return true;
     }
 
-    private bool TryReadSingle(long address, out float value)
+    private static bool TryReadSingle(Func<long, byte[], bool> read, long address, out float value)
     {
         value = 0;
         byte[] buffer = new byte[4];
-        if (!TryRead(address, buffer))
+        if (!TryRead(read, address, buffer))
         {
             return false;
         }
@@ -244,10 +414,21 @@ public sealed class StableMatchClock : IDisposable
         return true;
     }
 
-    private bool TryRead(long address, byte[] buffer)
+    private static bool TryRead(Func<long, byte[], bool> read, long address, byte[] buffer)
+    {
+        return read != null
+            && address > 0
+            && buffer != null
+            && buffer.Length > 0
+            && read(address, buffer);
+    }
+
+    private bool ReadProcess(long address, byte[] buffer)
     {
         return handle != IntPtr.Zero
             && address > 0
+            && buffer != null
+            && buffer.Length > 0
             && Native.ReadProcessMemory(
                 handle,
                 (IntPtr)address,
@@ -258,7 +439,7 @@ public sealed class StableMatchClock : IDisposable
             && read == buffer.Length;
     }
 
-    private void Close()
+    private void ReleaseHandle()
     {
         if (handle != IntPtr.Zero)
         {
@@ -266,12 +447,24 @@ public sealed class StableMatchClock : IDisposable
             handle = IntPtr.Zero;
         }
 
+        attachedPid = 0;
+    }
+
+    private void ResetState()
+    {
+        fingerprintSet = false;
         pid = 0;
         moduleBase = 0;
         moduleSize = 0;
+        version = "";
         tickRva = 0;
         speedRva = 0;
+        discovered = false;
         located = false;
+        hasSample = false;
+        lastTicks = 0;
+        lastScale = 0;
+        attachReason = "no-process";
     }
 
     private static class Native
