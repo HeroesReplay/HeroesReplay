@@ -1,6 +1,8 @@
 using System;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HeroesReplay.Core.Services.Media;
 
 namespace HeroesReplay.Core.Services.YouTube.Outbox;
 
@@ -125,6 +127,11 @@ public static class UploadAttemptManifestCodec
             return UploadAttemptResult.Failure(UploadAttemptReasons.ManifestCorrupt, null);
         }
 
+        if (!TryPolicy(root, out UploadAttemptPolicy policy))
+        {
+            return UploadAttemptResult.Failure(UploadAttemptReasons.ManifestCorrupt, null);
+        }
+
         var manifest = new UploadAttemptManifest
         {
             Schema = schema,
@@ -138,6 +145,7 @@ public static class UploadAttemptManifestCodec
             Revision = revision,
             UpdatedAtUtc = updatedAtUtc,
             ReceiptKind = EmptyToNull(receiptKind),
+            Policy = policy,
         };
 
         if (!IsInternallyConsistent(manifest))
@@ -329,6 +337,257 @@ public static class UploadAttemptManifestCodec
     private static string EmptyToNull(string value)
     {
         return string.IsNullOrEmpty(value) ? null : value;
+    }
+
+    private static bool TryPolicy(JsonElement root, out UploadAttemptPolicy policy)
+    {
+        policy = null;
+        if (!root.TryGetProperty(UploadAttemptManifest.PolicyProperty, out JsonElement element))
+        {
+            return true;
+        }
+
+        if (element.ValueKind == JsonValueKind.Null)
+        {
+            return true;
+        }
+
+        if (element.ValueKind != JsonValueKind.Object || !PolicyShapeIsValid(element))
+        {
+            return false;
+        }
+
+        try
+        {
+            policy = element.Deserialize<UploadAttemptPolicy>(JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (policy == null || !PolicyValuesAreNamed(policy))
+        {
+            policy = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool PolicyShapeIsValid(JsonElement policy)
+    {
+        return IsJsonKind(policy, "PolicyVersion", JsonValueKind.String)
+            && IsJsonKind(policy, "Record", JsonValueKind.True, JsonValueKind.False)
+            && IsJsonKind(policy, "RecordingReason", JsonValueKind.String)
+            && IsJsonKind(policy, "PublicationCandidate", JsonValueKind.True, JsonValueKind.False)
+            && IsJsonKind(policy, "PublicationReason", JsonValueKind.String)
+            && IsJsonKind(policy, "Priority", JsonValueKind.String)
+            && IsJsonKind(policy, "RecordingMode", JsonValueKind.String)
+            && IsJsonKind(policy, "PublicationMode", JsonValueKind.String)
+            && IsJsonKind(policy, "Score", JsonValueKind.Object)
+            && OptionalString(policy, "ConfigurationVersion")
+            && OptionalString(policy, "GameVersion")
+            && OptionalString(policy, "Map")
+            && OptionalString(policy, "GameMode")
+            && OptionalString(policy, "Rank")
+            && OptionalString(policy, "FocusHero")
+            && OptionalBool(policy, "PublicationEvaluated")
+            && OptionalInt(policy, "ReplayId")
+            && OptionalNumber(policy, "AverageMmr")
+            && AcceptedDate(policy, "ExpiresAtUtc")
+            && AcceptedDate(policy, "EvaluatedAtUtc")
+            && AcceptedDate(policy, "GameDateUtc")
+            && ScoreShapeIsValid(policy);
+    }
+
+    private static bool ScoreShapeIsValid(JsonElement policy)
+    {
+        JsonElement score = policy.GetProperty("Score");
+        return OptionalInt(score, "PriorityWeight")
+            && OptionalInt64(score, "Recency")
+            && OptionalInt64(score, "NotableStrength")
+            && OptionalInt64(score, "Skill")
+            && OptionalInt64(score, "Total")
+            && OptionalInt(score, "TieBreakReplayId")
+            && OptionalInt64(score, "TieBreakGameDateTicks");
+    }
+
+    private static bool PolicyValuesAreNamed(UploadAttemptPolicy policy)
+    {
+        return !string.IsNullOrWhiteSpace(policy.PolicyVersion)
+            && !string.IsNullOrWhiteSpace(policy.RecordingReason)
+            && !string.IsNullOrWhiteSpace(policy.PublicationReason)
+            && policy.Score != null
+            && IsNamedEnum<ReplayMediaPriority>(policy.Priority)
+            && IsNamedEnum<ReplayRecordingMode>(policy.RecordingMode)
+            && IsNamedEnum<ReplayPublicationMode>(policy.PublicationMode);
+    }
+
+    private static bool IsNamedEnum<TEnum>(string text)
+        where TEnum : struct
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        string trimmed = text.Trim();
+        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+        {
+            return false;
+        }
+
+        if (!Enum.TryParse(trimmed, ignoreCase: false, out TEnum value))
+        {
+            return false;
+        }
+
+        return Enum.IsDefined(typeof(TEnum), value)
+            && string.Equals(trimmed, value.ToString(), StringComparison.Ordinal);
+    }
+
+    private static bool IsJsonKind(JsonElement parent, string name, params JsonValueKind[] kinds)
+    {
+        if (!parent.TryGetProperty(name, out JsonElement property))
+        {
+            return false;
+        }
+
+        foreach (JsonValueKind kind in kinds)
+        {
+            if (property.ValueKind == kind)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool OptionalString(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out JsonElement property))
+        {
+            return true;
+        }
+
+        return property.ValueKind == JsonValueKind.Null
+            || property.ValueKind == JsonValueKind.String;
+    }
+
+    private static bool OptionalBool(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out JsonElement property))
+        {
+            return true;
+        }
+
+        return property.ValueKind == JsonValueKind.Null
+            || property.ValueKind == JsonValueKind.True
+            || property.ValueKind == JsonValueKind.False;
+    }
+
+    private static bool OptionalInt(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out JsonElement property))
+        {
+            return true;
+        }
+
+        if (property.ValueKind == JsonValueKind.Null)
+        {
+            return true;
+        }
+
+        return property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out _);
+    }
+
+    private static bool OptionalInt64(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out JsonElement property))
+        {
+            return true;
+        }
+
+        if (property.ValueKind == JsonValueKind.Null)
+        {
+            return true;
+        }
+
+        return property.ValueKind == JsonValueKind.Number && property.TryGetInt64(out _);
+    }
+
+    private static bool OptionalNumber(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out JsonElement property))
+        {
+            return true;
+        }
+
+        if (property.ValueKind == JsonValueKind.Null)
+        {
+            return true;
+        }
+
+        return property.ValueKind == JsonValueKind.Number && property.TryGetDouble(out _);
+    }
+
+    private static bool AcceptedDate(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out JsonElement property))
+        {
+            return true;
+        }
+
+        if (property.ValueKind == JsonValueKind.Null)
+        {
+            return true;
+        }
+
+        if (property.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        string text = property.GetString();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        if (
+            !DateTime.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out DateTime parsed
+            )
+        )
+        {
+            return false;
+        }
+
+        return parsed.Kind != DateTimeKind.Local && !HasNonZeroOffset(text);
+    }
+
+    private static bool HasNonZeroOffset(string text)
+    {
+        int plus = text.LastIndexOf('+');
+        int sign = plus;
+        if (sign < 0)
+        {
+            int time = text.IndexOf('T');
+            sign = time < 0 ? -1 : text.IndexOf('-', time + 1);
+        }
+
+        if (sign < 0 || text.EndsWith("Z", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        string offset = text.Substring(sign);
+        return offset != "+00:00" && offset != "+0000" && offset != "-00:00" && offset != "-0000";
     }
 
     private static JsonSerializerOptions CreateOptions()

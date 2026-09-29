@@ -17,6 +17,7 @@ public sealed class UploadAttemptManifest
     public const string RevisionProperty = "Revision";
     public const string UpdatedAtUtcProperty = "UpdatedAtUtc";
     public const string ReceiptKindProperty = "ReceiptKind";
+    public const string PolicyProperty = "Policy";
 
     [JsonPropertyName(SchemaProperty)]
     public int Schema { get; init; }
@@ -51,6 +52,11 @@ public sealed class UploadAttemptManifest
     [JsonPropertyName(ReceiptKindProperty)]
     public string ReceiptKind { get; init; }
 
+    /// <summary>Null on manifests written before a policy snapshot existed.</summary>
+    [JsonPropertyName(PolicyProperty)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public UploadAttemptPolicy Policy { get; init; }
+
     public UploadAttemptManifest WithRevision(long revision)
     {
         return new UploadAttemptManifest
@@ -66,6 +72,26 @@ public sealed class UploadAttemptManifest
             Revision = revision,
             UpdatedAtUtc = UpdatedAtUtc,
             ReceiptKind = ReceiptKind,
+            Policy = Policy,
+        };
+    }
+
+    public UploadAttemptManifest WithPolicy(UploadAttemptPolicy policy)
+    {
+        return new UploadAttemptManifest
+        {
+            Schema = Schema,
+            AttemptId = AttemptId,
+            ReplayId = ReplayId,
+            State = State,
+            MediaPath = MediaPath,
+            MediaSize = MediaSize,
+            MediaHash = MediaHash,
+            VideoId = VideoId,
+            Revision = Revision,
+            UpdatedAtUtc = UpdatedAtUtc,
+            ReceiptKind = ReceiptKind,
+            Policy = policy,
         };
     }
 }

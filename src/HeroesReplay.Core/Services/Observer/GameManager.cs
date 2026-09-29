@@ -9,6 +9,7 @@ using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Clips;
 using HeroesReplay.Core.Services.Context;
+using HeroesReplay.Core.Services.Media;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.Status;
@@ -30,6 +31,7 @@ public class GameManager : IGameManager
     private readonly IYouTubeReplayLookup youTubeReplayLookup;
     private readonly RecordingClock recordingClock;
     private readonly ILogger<GameManager> logger;
+    private readonly MediaPolicyAttemptLog mediaPolicy;
 
     public GameManager(
         AppSettings settings,
@@ -42,7 +44,8 @@ public class GameManager : IGameManager
         StormClientConfigurator clientConfigurator,
         IYouTubeReplayLookup youTubeReplayLookup,
         RecordingClock recordingClock,
-        ILogger<GameManager> logger
+        ILogger<GameManager> logger,
+        MediaPolicyAttemptLog mediaPolicy
     )
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -62,6 +65,7 @@ public class GameManager : IGameManager
         this.recordingClock =
             recordingClock ?? throw new ArgumentNullException(nameof(recordingClock));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.mediaPolicy = mediaPolicy ?? throw new ArgumentNullException(nameof(mediaPolicy));
     }
 
     public async Task<ReplaySessionKind> LaunchAndSpectate(
@@ -71,6 +75,8 @@ public class GameManager : IGameManager
     {
         MediaRetention.SweepAndLog(settings, logger);
         await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
+        // Observe-only. The snapshot does not start recording or choose the upload file.
+        await RecordPreLaunchAsync(loadedReplay).ConfigureAwait(false);
         await contextSetter.SetContextAsync(loadedReplay);
         bool obsSession = false;
         bool enteredMatch = false;
@@ -109,6 +115,7 @@ public class GameManager : IGameManager
             if (hold != ClientHoldReason.None)
             {
                 spectator.RecordHold(hold);
+                await RecordPublicationAsync(loadedReplay, recording: null).ConfigureAwait(false);
                 activity?.SetTag("session.outcome", spectator.Outcome.ToString());
                 logger.LogWarning(
                     "Heroes is on the {Hold} dialog. Replay {ReplayId} stays queued. The client stays open and OBS uses the waiting scene.",
@@ -141,9 +148,9 @@ public class GameManager : IGameManager
         }
         finally
         {
+            ObsRecordingResult stopped = null;
             if (enteredMatch && obsSession)
             {
-                ObsRecordingResult stopped = null;
                 try
                 {
                     stopped = obsController.StopRecording();
@@ -188,6 +195,8 @@ public class GameManager : IGameManager
 
             if (enteredMatch)
             {
+                // Observe-only. Eligibility stays on the attempt manifest and does not publish.
+                await RecordPublicationAsync(loadedReplay, stopped).ConfigureAwait(false);
                 ReplayShutdown.CaptureEndThenKill(gameController, logger);
             }
         }
@@ -408,6 +417,32 @@ public class GameManager : IGameManager
             next.ReplayId
         );
         return NextMatchLaunch.ProcessOnly;
+    }
+
+    private Task RecordPreLaunchAsync(LoadedReplay loadedReplay)
+    {
+        return mediaPolicy.RecordPreLaunchAsync(
+            loadedReplay,
+            settings.ReplayMedia,
+            CancellationToken.None
+        );
+    }
+
+    private Task RecordPublicationAsync(LoadedReplay loadedReplay, ObsRecordingResult recording)
+    {
+        return mediaPolicy.RecordPublicationAsync(
+            loadedReplay,
+            new MediaPublicationFacts
+            {
+                Outcome = spectator.Outcome,
+                MatchClockSeen = spectator.MatchClockSeen,
+                HudSamples = recordingClock.SampleCount,
+                RecordedFor = recordingClock.Elapsed,
+                Recording = recording,
+                AlreadyPublished = loadedReplay?.AlreadyOnYouTube == true,
+            },
+            CancellationToken.None
+        );
     }
 
     private async Task MarkExistingYouTubeVideoAsync(LoadedReplay loadedReplay)

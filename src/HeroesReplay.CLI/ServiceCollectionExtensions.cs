@@ -15,6 +15,7 @@ using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.HeroesProfileExtension;
+using HeroesReplay.Core.Services.Media;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Providers;
@@ -156,11 +157,13 @@ public static class ServiceCollectionExtensions
 
     public static AppSettings BindSettings(IConfiguration configuration)
     {
+        ReplayMediaPolicySettings media = ReplayMediaPolicyStartup.Require(configuration);
         AppSettings settings =
             configuration.Get<AppSettings>()
             ?? throw new InvalidOperationException(
                 "Could not bind AppSettings from configuration."
             );
+        settings.ReplayMedia = media;
         SecretResolver.Apply(settings);
         return settings;
     }
@@ -390,6 +393,10 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IYouTubeReplayLookup, YouTubeReplayLookup>()
             .AddSingleton<RecordingClock>()
             .AddSingleton<IReplayOpener, MediumIntegrityReplayOpener>()
+            .AddSingleton(serviceProvider => new MediaPolicyAttemptLog(
+                MediaPolicyAttemptLog.AttemptsRoot(settings),
+                serviceProvider.GetRequiredService<ILogger<MediaPolicyAttemptLog>>()
+            ))
             .AddSingleton<IGameManager, GameManager>()
             .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
             .AddSingleton<IObserverPanelRequests, ObserverPanelRequests>()

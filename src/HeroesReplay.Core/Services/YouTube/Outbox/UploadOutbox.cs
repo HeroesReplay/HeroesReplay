@@ -161,6 +161,25 @@ public sealed class UploadOutbox
         return store.LoadAsync(attemptId, cancellationToken);
     }
 
+    public Task<UploadAttemptResult> SavePolicyAsync(
+        string attemptId,
+        int? replayId,
+        DateTimeOffset at,
+        UploadAttemptPolicy policy,
+        bool replaceOpen,
+        CancellationToken cancellationToken
+    )
+    {
+        return store.SavePolicyAsync(
+            attemptId,
+            replayId,
+            at,
+            policy,
+            replaceOpen,
+            cancellationToken
+        );
+    }
+
     public Task<UploadAttemptResult> AdvanceFromAsync(
         string attemptId,
         long observedRevision,

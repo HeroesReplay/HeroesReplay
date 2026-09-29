@@ -88,6 +88,94 @@ public sealed class UploadAttemptStore
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Attaches an observe-only policy. Upload state, media, and video id stay as they are.
+    /// A decision that was already published is not replaced.
+    /// </summary>
+    public async Task<UploadAttemptResult> SavePolicyAsync(
+        string attemptId,
+        int? replayId,
+        DateTimeOffset at,
+        UploadAttemptPolicy policy,
+        bool replaceOpen,
+        CancellationToken cancellationToken
+    )
+    {
+        if (policy == null)
+        {
+            return UploadAttemptResult.Failure(UploadAttemptReasons.IllegalTransition, null);
+        }
+
+        UploadAttemptResult prepared = UploadAttemptMachine.Prepare(attemptId, replayId, at);
+        if (!prepared.Succeeded)
+        {
+            return prepared;
+        }
+
+        string directory = AttemptDirectory(attemptId);
+        if (directory == null)
+        {
+            return UploadAttemptResult.Failure(UploadAttemptReasons.AttemptIdInvalid, null);
+        }
+
+        Directory.CreateDirectory(directory);
+        return await LockedAsync(
+                directory,
+                async () =>
+                {
+                    UploadAttemptResult existing = await ReadAsync(
+                            directory,
+                            attemptId,
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
+                    if (existing.Reason == UploadAttemptReasons.ManifestMissing)
+                    {
+                        await WriteAtomicAsync(
+                                directory,
+                                ApplyPolicy(prepared.Manifest, policy, at, replayId)
+                                    .WithRevision(1),
+                                cancellationToken
+                            )
+                            .ConfigureAwait(false);
+                        return await ReadAsync(directory, attemptId, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+
+                    if (!existing.Succeeded)
+                    {
+                        return existing;
+                    }
+
+                    if (ReplayIdsConflict(existing.Manifest.ReplayId, replayId))
+                    {
+                        return UploadAttemptResult.Failure(
+                            UploadAttemptReasons.ManifestConflict,
+                            existing.Manifest
+                        );
+                    }
+
+                    UploadAttemptPolicy current = existing.Manifest.Policy;
+                    if (current != null && (!replaceOpen || current.PublicationEvaluated))
+                    {
+                        return existing;
+                    }
+
+                    await WriteAtomicAsync(
+                            directory,
+                            ApplyPolicy(existing.Manifest, policy, at, replayId)
+                                .WithRevision(existing.Manifest.Revision + 1),
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
+                    return await ReadAsync(directory, attemptId, cancellationToken)
+                        .ConfigureAwait(false);
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
     public Task<UploadAttemptResult> LoadAsync(
         string attemptId,
         CancellationToken cancellationToken
@@ -243,9 +331,23 @@ public sealed class UploadAttemptStore
                         );
                     }
 
+                    UploadAttemptManifest proposedManifest = proposed.Manifest;
+                    if (proposedManifest == null)
+                    {
+                        return UploadAttemptResult.Failure(
+                            UploadAttemptReasons.IllegalTransition,
+                            loaded.Manifest
+                        );
+                    }
+
+                    if (proposedManifest.Policy == null && loaded.Manifest.Policy != null)
+                    {
+                        proposedManifest = proposedManifest.WithPolicy(loaded.Manifest.Policy);
+                    }
+
                     await WriteAtomicAsync(
                             directory,
-                            proposed.Manifest.WithRevision(loaded.Manifest.Revision + 1),
+                            proposedManifest.WithRevision(loaded.Manifest.Revision + 1),
                             cancellationToken
                         )
                         .ConfigureAwait(false);
@@ -442,6 +544,45 @@ public sealed class UploadAttemptStore
         }
 
         return null;
+    }
+
+    private static UploadAttemptManifest ApplyPolicy(
+        UploadAttemptManifest manifest,
+        UploadAttemptPolicy policy,
+        DateTimeOffset updatedAtUtc,
+        int? replayId
+    )
+    {
+        int? id = manifest.ReplayId;
+        if ((id == null || id <= 0) && replayId is int incoming && incoming > 0)
+        {
+            id = incoming;
+        }
+
+        return new UploadAttemptManifest
+        {
+            Schema = manifest.Schema,
+            AttemptId = manifest.AttemptId,
+            ReplayId = id,
+            State = manifest.State,
+            MediaPath = manifest.MediaPath,
+            MediaSize = manifest.MediaSize,
+            MediaHash = manifest.MediaHash,
+            VideoId = manifest.VideoId,
+            Revision = manifest.Revision,
+            UpdatedAtUtc = updatedAtUtc,
+            ReceiptKind = manifest.ReceiptKind,
+            Policy = policy,
+        };
+    }
+
+    private static bool ReplayIdsConflict(int? existing, int? incoming)
+    {
+        return existing is int left
+            && left > 0
+            && incoming is int right
+            && right > 0
+            && left != right;
     }
 
     private static bool IsOpen(UploadAttemptState state)

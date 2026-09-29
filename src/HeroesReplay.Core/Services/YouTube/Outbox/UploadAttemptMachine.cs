@@ -462,6 +462,7 @@ public static class UploadAttemptMachine
                 Revision = current.Revision,
                 UpdatedAtUtc = at,
                 ReceiptKind = receiptKind,
+                Policy = current.Policy,
             }
         );
     }
