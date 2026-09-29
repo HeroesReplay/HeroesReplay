@@ -16,6 +16,7 @@ using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.HeroesProfileExtension;
 using HeroesReplay.Core.Services.Observer;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,7 +45,11 @@ public class CheckCommand : Command
             )
         );
         Subcommands.Add(
-            Build("obs", "Connect to obs-websocket 5 and read the server version.", CheckObsAsync)
+            Build(
+                "obs",
+                "Connect to obs-websocket 5, read the server version, and verify scene files.",
+                CheckObsAsync
+            )
         );
         Subcommands.Add(
             Build(
@@ -204,10 +209,15 @@ public class CheckCommand : Command
 
     public static async Task<CheckResult> CheckObsAsync(CancellationToken cancellationToken)
     {
+        string files = null;
+        bool filesOk = false;
         try
         {
             using var provider = CreateProvider(cancellationToken);
             AppSettings settings = provider.GetRequiredService<AppSettings>();
+            ObsCollectionInspection inspection = InspectObsFiles(settings);
+            files = inspection.Message;
+            filesOk = inspection.Ok;
             OBSWebsocket obs = provider.GetRequiredService<OBSWebsocket>();
 
             using var identified = new ManualResetEventSlim(false);
@@ -227,16 +237,16 @@ public class CheckCommand : Command
                     return new CheckResult(
                         "obs",
                         false,
-                        $"No Identify from {settings.OBS.WebSocketEndpoint}. Enable Tools → WebSocket Server Settings (port 4455)."
+                        files
+                            + " "
+                            + $"No Identify from {settings.OBS.WebSocketEndpoint}. Enable Tools → WebSocket Server Settings (port 4455)."
                     );
                 }
 
                 var version = obs.GetVersion();
-                return new CheckResult(
-                    "obs",
-                    true,
-                    $"Connected. OBS {version.OBSStudioVersion}, websocket {version.PluginVersion}."
-                );
+                string connected =
+                    $"Connected. OBS {version.OBSStudioVersion}, websocket {version.PluginVersion}.";
+                return new CheckResult("obs", filesOk, files + " " + connected);
             }
             finally
             {
@@ -256,7 +266,58 @@ public class CheckCommand : Command
         }
         catch (Exception e)
         {
-            return Fail("obs", e);
+            string detail = e.Message;
+            if (!string.IsNullOrWhiteSpace(files))
+            {
+                detail = files + " " + detail;
+            }
+
+            return new CheckResult("obs", false, detail);
+        }
+    }
+
+    private static ObsCollectionInspection InspectObsFiles(AppSettings settings)
+    {
+        var scenes = new List<string>();
+        var sources = new List<string>();
+        if (settings?.OBS != null)
+        {
+            AddName(scenes, settings.OBS.GameSceneName);
+            AddName(scenes, settings.OBS.WaitingSceneName);
+            AddName(sources, settings.OBS.InfoSourceName);
+            AddName(sources, settings.OBS.TierDivisionSourceName);
+            AddName(sources, settings.OBS.TierRankPointsSourceName);
+            if (settings.OBS.RankImagesSourceNames != null)
+            {
+                foreach (string name in settings.OBS.RankImagesSourceNames)
+                {
+                    AddName(sources, name);
+                }
+            }
+
+            if (settings.OBS.ReportScenes != null)
+            {
+                foreach (var scene in settings.OBS.ReportScenes)
+                {
+                    if (scene == null || !scene.Enabled)
+                    {
+                        continue;
+                    }
+
+                    AddName(scenes, scene.SceneName);
+                    AddName(sources, scene.SourceName);
+                }
+            }
+        }
+
+        return ObsCollectionPaths.Inspect(AppContext.BaseDirectory, scenes, sources);
+    }
+
+    private static void AddName(List<string> names, string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            names.Add(value);
         }
     }
 

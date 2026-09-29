@@ -162,7 +162,7 @@
       "id": "text_gdiplus",
       "versioned_id": "text_gdiplus_v2",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/OBS.txt",
+        "file": "C:/heroesreplay/Data/OBS.txt",
         "outline": true,
         "read_from_file": true,
         "font": {
@@ -201,7 +201,7 @@
       "versioned_id": "browser_source",
       "settings": {
         "is_local_file": false,
-        "local_file": "C:/heroesreplay/HeroesReplay/obs/music/index.html",
+        "local_file": "music/index.html",
         "url": "https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/406284567\u0026color=%23ff5500\u0026auto_play=true\u0026hide_related=false\u0026show_comments=true\u0026show_user=true\u0026show_reposts=false\u0026show_teaser=true",
         "height": 166,
         "shutdown": true,
@@ -317,7 +317,7 @@
       "id": "browser_source",
       "versioned_id": "browser_source",
       "settings": {
-        "url": "file:///C:/heroesreplay/HeroesReplay/obs/countdown/index.html?m=5\u0026s=0\u0026autostart=1",
+        "url": "file:///countdown/index.html?m=5\u0026s=0\u0026autostart=1",
         "width": 720,
         "height": 240,
         "shutdown": true,
@@ -381,8 +381,8 @@
       "versioned_id": "browser_source",
       "settings": {
         "is_local_file": true,
-        "local_file": "C:/heroesreplay/HeroesReplay/obs/Popups/_right-social-media-popup-v2.html",
-        "url": "file:///C:/heroesreplay/HeroesReplay/obs/Popups/_right-social-media-popup-v2.html",
+        "local_file": "Popups/_right-social-media-popup-v2.html",
+        "url": "file:///Popups/_right-social-media-popup-v2.html",
         "width": 1000,
         "shutdown": true,
         "restart_when_active": true
@@ -469,7 +469,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/Ranks/bronze.png",
+        "file": "Ranks/bronze.png",
         "unload": true
       },
       "mixers": 0,
@@ -496,7 +496,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/Ranks/silver.png",
+        "file": "Ranks/silver.png",
         "unload": true
       },
       "mixers": 0,
@@ -523,7 +523,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/Ranks/gold.png",
+        "file": "Ranks/gold.png",
         "unload": true
       },
       "mixers": 0,
@@ -550,7 +550,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/Ranks/platinum.png"
+        "file": "Ranks/platinum.png"
       },
       "mixers": 0,
       "sync": 0,
@@ -604,7 +604,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/Ranks/diamond.png"
+        "file": "Ranks/diamond.png"
       },
       "mixers": 0,
       "sync": 0,
@@ -630,7 +630,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/Ranks/master.png",
+        "file": "Ranks/master.png",
         "unload": true
       },
       "mixers": 0,
@@ -657,7 +657,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/Ranks/grandmaster.png",
+        "file": "Ranks/grandmaster.png",
         "unload": true
       },
       "mixers": 0,
@@ -735,7 +735,7 @@
       "versioned_id": "ffmpeg_source",
       "settings": {
         "close_when_inactive": false,
-        "local_file": "C:/heroesreplay/HeroesReplay/obs/StarCraft 2 Main Menu - Alarak [4K 60fps].mp4",
+        "local_file": "StarCraft 2 Main Menu - Alarak [4K 60fps].mp4",
         "looping": true
       },
       "mixers": 255,
@@ -771,7 +771,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/UI/alarak-menu-ui-2.png"
+        "file": "UI/alarak-menu-ui-2.png"
       },
       "mixers": 0,
       "sync": 0,
@@ -797,7 +797,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/hots-logo.png"
+        "file": "hots-logo.png"
       },
       "mixers": 0,
       "sync": 0,
@@ -823,7 +823,7 @@
       "id": "image_source",
       "versioned_id": "image_source",
       "settings": {
-        "file": "C:/heroesreplay/HeroesReplay/obs/UI/heroes-profile-section.png"
+        "file": "UI/heroes-profile-section.png"
       },
       "mixers": 0,
       "sync": 0,

@@ -10,7 +10,7 @@ This page uses a normal HTML `<audio>` element. CEF can reroute that into the `s
 2. OBS Browser Source `soundcloud`:
 
 ```
-file:///C:/heroesreplay/HeroesReplay/obs/music/index.html?autostart=1
+music/index.html?autostart=1
 ```
 
 Check **Control audio via OBS**. Advanced Audio: **Monitor and Output**.

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Status;
 
@@ -34,6 +35,7 @@ public class ServicesCommand : Command
             (parseResult, cancellationToken) =>
             {
                 string exe = Environment.ProcessPath;
+                PatchObsCollection(exe);
                 int code = ServiceSupervisor.Start(
                     ServiceLockStore.DefaultPath,
                     exe,
@@ -197,6 +199,32 @@ public class ServicesCommand : Command
         }
 
         return null;
+    }
+
+    private static void PatchObsCollection(string exe)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(exe))
+            {
+                return;
+            }
+
+            string installDirectory = Path.GetDirectoryName(exe);
+            ObsCollectionApplyResult result = ObsCollectionPatcher.ApplyForInstall(
+                installDirectory,
+                ObsCollectionPatcher.ReadDataDirectory(installDirectory),
+                Process.GetProcessesByName("obs64").Length > 0
+            );
+            if (result.Drift || result.Wrote)
+            {
+                Console.WriteLine(result.Message);
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("OBS collection was not updated. " + e.Message);
+        }
     }
 
     private static string PsQuote(string value) => "'" + (value ?? "").Replace("'", "''") + "'";

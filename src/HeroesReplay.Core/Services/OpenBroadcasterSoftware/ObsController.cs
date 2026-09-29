@@ -44,7 +44,33 @@ public class ObsController : IObsController
 
     public void BeginSession()
     {
+        PatchInstalledCollection();
         ConnectAndWait();
+    }
+
+    private void PatchInstalledCollection()
+    {
+        try
+        {
+            bool obsRunning = Process.GetProcessesByName("obs64").Length > 0;
+            ObsCollectionApplyResult result = ObsCollectionPatcher.ApplyForInstall(
+                AppContext.BaseDirectory,
+                settings.Location?.DataDirectory,
+                obsRunning
+            );
+            if (result.Drift)
+            {
+                logger.LogWarning("OBS collection was not updated. {Reason}", result.Message);
+            }
+            else if (result.Wrote)
+            {
+                logger.LogInformation("{Reason}", result.Message);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "OBS collection paths were not updated.");
+        }
     }
 
     public void EndSession()

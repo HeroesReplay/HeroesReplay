@@ -1,17 +1,11 @@
-# Same layout on ASA-SERVER (dev) and DESKTOP-8SJE72 (live).
-# Creates C:\heroesreplay folders, copies OBS collection/profile from the repo,
-# then fills gitignored secrets from 1Password. See AGENTS.md Environments
-# and .grok/skills/op-service-account/SKILL.md.
+# Creates C:\heroesreplay folders, copies the OBS collection and profile from this
+# clone, then fills gitignored secrets from 1Password. Scene paths in Default.json
+# are relative to obs\. heroesreplay rewrites the live collection to this folder
+# when OBS is closed. See AGENTS.md and .grok/skills/op-service-account/SKILL.md.
 $ErrorActionPreference = 'Stop'
 $root = git rev-parse --show-toplevel
 if (-not $root) {
     throw 'Run from inside the HeroesReplay git clone.'
-}
-
-$expected = 'C:\heroesreplay\HeroesReplay'
-$full = [IO.Path]::GetFullPath($root)
-if (-not $full.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) {
-    Write-Warning "Clone is $full. Both machines should use $expected so OBS asset paths in obs/Default.json resolve."
 }
 
 $dirs = @(
@@ -33,10 +27,16 @@ $obsBasic = Join-Path $env:APPDATA 'obs-studio\basic'
 $scenesDir = Join-Path $obsBasic 'scenes'
 $profileDir = Join-Path $obsBasic 'profiles\HeroesReplay'
 New-Item -ItemType Directory -Force -Path $scenesDir, $profileDir | Out-Null
-Copy-Item -Force (Join-Path $root 'obs\Default.json') (Join-Path $scenesDir 'HeroesReplay.json')
-Copy-Item -Force (Join-Path $root 'obs\Default\basic.ini') (Join-Path $profileDir 'basic.ini')
-Write-Host "OBS collection -> $scenesDir\HeroesReplay.json"
-Write-Host "OBS profile    -> $profileDir\basic.ini"
+if (Get-Process obs64 -ErrorAction SilentlyContinue) {
+    Write-Warning 'OBS is running. The live collection and profile were not overwritten.'
+}
+else {
+    Copy-Item -Force (Join-Path $root 'obs\Default.json') (Join-Path $scenesDir 'HeroesReplay.json')
+    Copy-Item -Force (Join-Path $root 'obs\Default\basic.ini') (Join-Path $profileDir 'basic.ini')
+    Write-Host "OBS collection -> $scenesDir\HeroesReplay.json"
+    Write-Host "OBS profile    -> $profileDir\basic.ini"
+    Write-Host 'Scene paths are relative to obs\. heroesreplay rewrites the live collection when OBS is closed.'
+}
 Write-Host 'Do not copy service.json (stream key). Enable Tools → WebSocket Server on port 4455.'
 
 $fill = Join-Path $root 'tools\fill-secrets-from-op.ps1'

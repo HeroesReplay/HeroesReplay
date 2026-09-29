@@ -36,7 +36,7 @@ Do not connect, send one request, disconnect. Polly retries belong on **requests
 
 Scene and source names stay in `appsettings` (`GameSceneName`, `WaitingSceneName`, `InfoSourceName`, `RankImagesSourceNames`, `ReportScenes`). Post-game Heroes Profile is one scene, `match-report`: the full `Match/Single/[ID]` page, scrolled slowly. Do not add a scene per section.
 
-Both machines use the same OBS files from the repo (`obs/Default.json` → `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json`, `obs/Default/basic.ini` → `...\profiles\HeroesReplay\`). Asset paths are `C:/heroesreplay/HeroesReplay/obs/...`. Recordings: `C:\heroesreplay\Data\Contexts`. `tools/bootstrap-workstation.ps1` copies the collection. Do not commit `service.json`.
+Both machines use the same OBS files from the repo (`obs/Default.json` → `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json`, `obs/Default/basic.ini` → `...\profiles\HeroesReplay\`). Asset paths in `Default.json` are relative to the `obs` folder. heroesreplay rewrites the live collection to the install directory that contains that folder (source checkout, or `C:\heroesreplay\app` after the release zip) when OBS is not running. It does not overwrite a custom collection or the stream key. Recordings: `C:\heroesreplay\Data\Contexts`. `tools/bootstrap-workstation.ps1` copies the collection only while OBS is closed. Do not commit `service.json`.
 
 ## Verify
 

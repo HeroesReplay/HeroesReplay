@@ -17,4 +17,4 @@ Do **not** commit `service.json` (Twitch stream key).
 
 ## Paths
 
-Asset paths in `Default.json` are `C:/heroesreplay/HeroesReplay/obs/...`. Both Windows 11 boxes clone the repo to that path (`AGENTS.md` Environments). `pwsh -File tools/bootstrap-workstation.ps1` copies this collection and profile.
+`Default.json` names assets relative to this `obs` folder (`Ranks/bronze.png`, `countdown/index.html`). `obs/bundle.manifest` is the list the release zip publishes next to `heroesreplay.exe` (`C:\heroesreplay\app\obs` after extract). heroesreplay rewrites the live collection (`%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json`) to that folder when OBS is not running. It does not replace a custom collection, and it does not copy `basic.ini` or `service.json` (the stream key). Generated pages stay under `C:\heroesreplay\Data` (`queue.html`, `prediction-report.html`). `pwsh -File tools/bootstrap-workstation.ps1` copies this collection and profile only while OBS is closed.

@@ -7,7 +7,7 @@ Local page for the OBS **countdown** Browser Source on `waiting-screen`. No Stre
 URL (query string is the config):
 
 ```
-file:///C:/heroesreplay/HeroesReplay/obs/countdown/index.html?m=5&s=0&autostart=1
+countdown/index.html?m=5&s=0&autostart=1
 ```
 
 Suggested source size: **720×240** (title + clock). At the old **225×100** size only the digits show.

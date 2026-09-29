@@ -55,4 +55,27 @@
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>
+
+    <Target Name="IncludeObsBundle" BeforeTargets="AssignTargetPaths">
+        <PropertyGroup>
+            <_ObsManifest>$(MSBuildThisFileDirectory)..\..\obs\bundle.manifest</_ObsManifest>
+            <_ObsDirectory>$(MSBuildThisFileDirectory)..\..\obs\</_ObsDirectory>
+        </PropertyGroup>
+        <ReadLinesFromFile File="$(_ObsManifest)">
+            <Output TaskParameter="Lines" ItemName="_ObsBundleLine" />
+        </ReadLinesFromFile>
+        <ItemGroup>
+            <_ObsBundleLine
+                Remove="@(_ObsBundleLine)"
+                Condition="'%(_ObsBundleLine.Identity)' == '' or $([System.String]::Copy('%(_ObsBundleLine.Identity)').StartsWith('#'))"
+            />
+            <Content
+                Include="$(_ObsDirectory)%(_ObsBundleLine.Identity)"
+                Link="obs\$([System.String]::Copy('%(_ObsBundleLine.Identity)').Replace('/','\'))"
+                CopyToPublishDirectory="PreserveNewest"
+                CopyToOutputDirectory="Never"
+                Condition="Exists('$(_ObsDirectory)%(_ObsBundleLine.Identity)')"
+            />
+        </ItemGroup>
+    </Target>
 </Project>
