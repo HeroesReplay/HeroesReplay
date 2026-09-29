@@ -1,5 +1,6 @@
 using System;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Twitch;
 using Xunit;
 
@@ -169,6 +170,138 @@ public class PredictionSessionTrackerTests
         Assert.Equal(PredictionSignalKind.Open, signal.Kind);
         Assert.Equal(11, signal.ReplayId);
         Assert.Equal("Garden of Terror", signal.Map);
+    }
+
+    [Fact]
+    public void Observe_RestoredAfterMissedPoll_ResolvesOnce()
+    {
+        var tracker = new PredictionSessionTracker();
+        tracker.Restore(10, 1, T0, "Cursed Hollow");
+
+        Assert.Equal(PredictionSignalKind.None, tracker.Observe(null, T0.AddSeconds(5)).Kind);
+
+        SpectatorStatus staleCompletion = Live(replayId: 10, at: T0.AddMinutes(1));
+        staleCompletion.CompletedAt = T0.AddMinutes(-5);
+        staleCompletion.CompletedReplayId = 10;
+        staleCompletion.CompletedWinnerTeam = 1;
+        Assert.Equal(
+            PredictionSignalKind.None,
+            tracker.Observe(staleCompletion, T0.AddMinutes(1)).Kind
+        );
+
+        SpectatorStatus ended = Idle(T0.AddMinutes(20));
+        ended.Phase = "EndDetected";
+        ended.CompletedAt = T0.AddMinutes(19);
+        ended.CompletedReplayId = 10;
+        ended.CompletedWinnerTeam = 0;
+        PredictionSignal signal = tracker.Observe(ended, T0.AddMinutes(20));
+        PredictionSignal duplicate = tracker.Observe(ended, T0.AddMinutes(21));
+
+        Assert.Equal(PredictionSignalKind.Resolve, signal.Kind);
+        Assert.Equal(10, signal.ReplayId);
+        Assert.Equal(1, signal.Attempt);
+        Assert.Equal(0, signal.WinnerTeam);
+        Assert.Equal(PredictionSignalKind.None, duplicate.Kind);
+    }
+
+    [Fact]
+    public void DecideSession_VerifiedCompletion_ResolvesOnce()
+    {
+        Assert.Equal(
+            PredictionSignalKind.Resolve,
+            PredictionSessionTracker.DecideSession(
+                ReplaySessionKind.Played,
+                matchClockSeen: true,
+                winnerTeam: 1,
+                PredictionSessionFault.None,
+                alreadySettled: false
+            )
+        );
+        Assert.Equal(
+            PredictionSignalKind.None,
+            PredictionSessionTracker.DecideSession(
+                ReplaySessionKind.Played,
+                matchClockSeen: true,
+                winnerTeam: 1,
+                PredictionSessionFault.None,
+                alreadySettled: true
+            )
+        );
+    }
+
+    [Theory]
+    [InlineData(PredictionSessionFault.Crash)]
+    [InlineData(PredictionSessionFault.Stop)]
+    [InlineData(PredictionSessionFault.VersionMismatch)]
+    [InlineData(PredictionSessionFault.LoginFailure)]
+    [InlineData(PredictionSessionFault.NoClock)]
+    public void DecideSession_InterruptedSession_CancelsOnce(PredictionSessionFault fault)
+    {
+        Assert.Equal(
+            PredictionSignalKind.Cancel,
+            PredictionSessionTracker.DecideSession(
+                ReplaySessionKind.Played,
+                matchClockSeen: true,
+                winnerTeam: 0,
+                fault,
+                alreadySettled: false
+            )
+        );
+        Assert.Equal(
+            PredictionSignalKind.None,
+            PredictionSessionTracker.DecideSession(
+                ReplaySessionKind.Played,
+                matchClockSeen: true,
+                winnerTeam: 0,
+                fault,
+                alreadySettled: true
+            )
+        );
+    }
+
+    [Fact]
+    public void DecideSession_HoldOrNoClock_CancelsWithoutAFaultFlag()
+    {
+        Assert.Equal(
+            PredictionSignalKind.Cancel,
+            PredictionSessionTracker.DecideSession(
+                ReplaySessionKind.Held,
+                matchClockSeen: true,
+                winnerTeam: 0,
+                PredictionSessionFault.None,
+                alreadySettled: false
+            )
+        );
+        Assert.Equal(
+            PredictionSignalKind.Cancel,
+            PredictionSessionTracker.DecideSession(
+                ReplaySessionKind.Unplayed,
+                matchClockSeen: false,
+                winnerTeam: 0,
+                PredictionSessionFault.None,
+                alreadySettled: false
+            )
+        );
+        Assert.Equal(
+            PredictionSignalKind.Cancel,
+            PredictionSessionTracker.DecideSession(
+                ReplaySessionKind.Played,
+                matchClockSeen: false,
+                winnerTeam: 1,
+                PredictionSessionFault.None,
+                alreadySettled: false
+            )
+        );
+        Assert.Equal(
+            PredictionSignalKind.None,
+            PredictionSessionTracker.DecideSession(
+                ReplaySessionKind.Unplayed,
+                matchClockSeen: false,
+                winnerTeam: null,
+                PredictionSessionFault.NoClock,
+                alreadySettled: true
+            )
+        );
     }
 
     private static SpectatorStatus Live(int replayId, DateTimeOffset at) =>

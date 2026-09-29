@@ -51,6 +51,35 @@ public sealed class StatusPredictionWatcher
         }
 
         var tracker = new PredictionSessionTracker();
+        if (enabled)
+        {
+            try
+            {
+                PredictionReconcileResult reconciled = await predictions
+                    .ReconcileAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                PredictionResume resume = reconciled?.Resume;
+                if (resume != null)
+                {
+                    tracker.Restore(resume.ReplayId, resume.Attempt, resume.OpenedAt, resume.Map);
+                    logger.LogInformation(
+                        "Resumed prediction {PredictionId} for replay {ReplayId} attempt {Attempt}.",
+                        resume.PredictionId,
+                        resume.ReplayId,
+                        resume.Attempt
+                    );
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "Could not reconcile Twitch predictions from the ledger.");
+            }
+        }
+
         while (!cancellationToken.IsCancellationRequested)
         {
             if (enabled)
@@ -78,6 +107,7 @@ public sealed class StatusPredictionWatcher
         CancellationToken cancellationToken
     )
     {
+        await predictions.RetryPendingAsync(cancellationToken).ConfigureAwait(false);
         SpectatorStatus status = statusStore.TryReadShared();
         if (status == null)
         {
@@ -94,7 +124,7 @@ public sealed class StatusPredictionWatcher
                     signal.Map
                 );
                 bool opened = await predictions
-                    .OpenAsync(signal.Map, cancellationToken)
+                    .OpenAsync(signal.ReplayId, signal.Map, cancellationToken)
                     .ConfigureAwait(false);
                 if (!opened)
                 {
@@ -104,20 +134,24 @@ public sealed class StatusPredictionWatcher
                 break;
             case PredictionSignalKind.Resolve:
                 logger.LogInformation(
-                    "Resolving prediction for replay {ReplayId} -> team {Team}.",
+                    "Resolving prediction for replay {ReplayId} attempt {Attempt} -> team {Team}.",
                     signal.ReplayId,
+                    signal.Attempt,
                     signal.WinnerTeam
                 );
                 await predictions
-                    .ResolveTeamAsync(signal.WinnerTeam, cancellationToken)
+                    .ResolveReplayAsync(signal.ReplayId, signal.WinnerTeam, cancellationToken)
                     .ConfigureAwait(false);
                 break;
             case PredictionSignalKind.Cancel:
                 logger.LogInformation(
-                    "Canceling prediction for replay {ReplayId} (no winner published).",
-                    signal.ReplayId
+                    "Canceling prediction for replay {ReplayId} attempt {Attempt} (no winner published).",
+                    signal.ReplayId,
+                    signal.Attempt
                 );
-                await predictions.ResolveTeamAsync(null, cancellationToken).ConfigureAwait(false);
+                await predictions
+                    .ResolveReplayAsync(signal.ReplayId, null, cancellationToken)
+                    .ConfigureAwait(false);
                 break;
             case PredictionSignalKind.Disabled:
                 logger.LogInformation(

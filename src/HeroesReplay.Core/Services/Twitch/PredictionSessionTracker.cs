@@ -1,5 +1,6 @@
 using System;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Observer;
 
 namespace HeroesReplay.Core.Services.Twitch;
 
@@ -12,11 +13,22 @@ public enum PredictionSignalKind
     Disabled,
 }
 
+public enum PredictionSessionFault
+{
+    None,
+    Crash,
+    Stop,
+    VersionMismatch,
+    LoginFailure,
+    NoClock,
+}
+
 public readonly record struct PredictionSignal(
     PredictionSignalKind Kind,
     int ReplayId,
     string Map,
-    int? WinnerTeam
+    int? WinnerTeam,
+    int Attempt
 );
 
 /// <summary>
@@ -29,6 +41,7 @@ public sealed class PredictionSessionTracker
     public static readonly TimeSpan AbandonAfter = TimeSpan.FromMinutes(2);
 
     private int? openReplayId;
+    private int openAttempt;
     private int? announcedDisabledReplayId;
     private DateTimeOffset openedAt;
     private string openMap;
@@ -38,9 +51,49 @@ public sealed class PredictionSessionTracker
         if (openReplayId == replayId)
         {
             openReplayId = null;
+            openAttempt = 0;
             openMap = null;
             openedAt = default;
         }
+    }
+
+    public void Restore(int replayId, int attempt, DateTimeOffset openedAt, string map)
+    {
+        if (replayId <= 0 || attempt <= 0)
+        {
+            return;
+        }
+
+        openReplayId = replayId;
+        openAttempt = attempt;
+        this.openedAt = openedAt;
+        openMap = map;
+    }
+
+    /// <summary>
+    /// A verified played session resolves once. Crash, stop, version mismatch, login failure,
+    /// and a session with no match clock cancel once. Callers that do not know the session pass
+    /// this in; the spectator does not.
+    /// </summary>
+    public static PredictionSignalKind DecideSession(
+        ReplaySessionKind kind,
+        bool matchClockSeen,
+        int? winnerTeam,
+        PredictionSessionFault fault,
+        bool alreadySettled
+    )
+    {
+        if (alreadySettled)
+        {
+            return PredictionSignalKind.None;
+        }
+
+        bool verified =
+            fault == PredictionSessionFault.None
+            && kind == ReplaySessionKind.Played
+            && matchClockSeen
+            && winnerTeam.HasValue;
+        return verified ? PredictionSignalKind.Resolve : PredictionSignalKind.Cancel;
     }
 
     public PredictionSignal Observe(SpectatorStatus status, DateTimeOffset utcNow)
@@ -79,18 +132,21 @@ public sealed class PredictionSessionTracker
                     PredictionSignalKind.Disabled,
                     status.ReplayId.Value,
                     status.Map,
-                    null
+                    null,
+                    0
                 );
             }
 
             openReplayId = status.ReplayId;
+            openAttempt = 0;
             openedAt = status.UpdatedAt;
             openMap = status.Map;
             return new PredictionSignal(
                 PredictionSignalKind.Open,
                 status.ReplayId.Value,
                 status.Map,
-                null
+                null,
+                openAttempt
             );
         }
 
@@ -100,14 +156,16 @@ public sealed class PredictionSessionTracker
     private PredictionSignal Finish(int? winnerTeam)
     {
         int replayId = openReplayId.Value;
+        int attempt = openAttempt;
         string map = openMap;
         openReplayId = null;
+        openAttempt = 0;
         openMap = null;
         openedAt = default;
         PredictionSignalKind kind = winnerTeam.HasValue
             ? PredictionSignalKind.Resolve
             : PredictionSignalKind.Cancel;
-        return new PredictionSignal(kind, replayId, map, winnerTeam);
+        return new PredictionSignal(kind, replayId, map, winnerTeam, attempt);
     }
 
     private bool SessionAbandoned(SpectatorStatus status, DateTimeOffset utcNow)

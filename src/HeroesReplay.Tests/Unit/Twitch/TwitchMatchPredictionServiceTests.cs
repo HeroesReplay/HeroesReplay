@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,12 +27,37 @@ public class TwitchMatchPredictionServiceTests
     [Fact]
     public async Task ResolveTeam_LockedChannelPrediction_ResolvesBlueOutcome()
     {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "hr-pred-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        PredictionLedger
+            .Load(PredictionLedger.PathFor(directory))
+            .Upsert(
+                new PredictionLedgerEntry
+                {
+                    SessionKey = "10:1",
+                    ReplayId = 10,
+                    Attempt = 1,
+                    PredictionId = PredictionId,
+                    BlueOutcomeId = BlueOutcomeId,
+                    RedOutcomeId = RedOutcomeId,
+                    BroadcasterId = BroadcasterId,
+                    Title = "Cursed Hollow: who wins?",
+                    Map = "Cursed Hollow",
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    State = PredictionLedgerState.Open,
+                }
+            );
         var http = new RecordingHttpHandler();
+        http.LockedTitle = "Not the map title";
         ITwitchAPI api = FakeTwitchApi.Create(http);
         var service = new TwitchMatchPredictionService(
             NullLogger<TwitchMatchPredictionService>.Instance,
             new AppSettings
             {
+                Location = new LocationSettings { DataDirectory = directory },
                 Twitch = new TwitchSettings
                 {
                     EnablePredictions = true,
@@ -48,8 +74,19 @@ public class TwitchMatchPredictionServiceTests
             )
         );
 
-        await service.OpenAsync("Cursed Hollow", CancellationToken.None);
-        await service.ResolveTeamAsync(0, CancellationToken.None);
+        try
+        {
+            await service.OpenAsync(10, "Cursed Hollow", CancellationToken.None);
+            await service.ResolveTeamAsync(0, CancellationToken.None);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, true);
+            }
+            catch (IOException) { }
+        }
 
         Assert.NotNull(http.EndPredictionBody);
         Assert.Contains("\"RESOLVED\"", http.EndPredictionBody, StringComparison.Ordinal);
@@ -85,7 +122,7 @@ public class TwitchMatchPredictionServiceTests
             )
         );
 
-        bool opened = await service.OpenAsync("Garden of Terror", CancellationToken.None);
+        bool opened = await service.OpenAsync(11, "Garden of Terror", CancellationToken.None);
 
         Assert.False(opened);
         Assert.Null(http.EndPredictionBody);
