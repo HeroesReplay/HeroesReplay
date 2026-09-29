@@ -42,16 +42,43 @@ public sealed class ObsRecordingResult
         new() { Failure = failure, Detail = detail };
 }
 
+/// <summary>
+/// Result of StartStream or StopStream. Success means OBS reported the output state.
+/// It does not mean the request returned.
+/// </summary>
 public sealed class ObsStreamResult
 {
     public bool Succeeded { get; private init; }
+
+    /// <summary>True when the confirmed output is active. False when it is confirmed inactive.</summary>
+    public bool Active { get; private init; }
     public ObsOutputFailure Failure { get; private init; }
     public string Detail { get; private init; }
 
-    public static ObsStreamResult Success() => new() { Succeeded = true };
+    public static ObsStreamResult ConfirmedActive() =>
+        new()
+        {
+            Succeeded = true,
+            Active = true,
+            Detail = "OBS reported the stream active.",
+        };
 
-    public static ObsStreamResult NotRequested() =>
-        new() { Failure = ObsOutputFailure.NotRequested, Detail = "OBS streaming is disabled." };
+    public static ObsStreamResult ConfirmedInactive() =>
+        new()
+        {
+            Succeeded = true,
+            Active = false,
+            Detail = "OBS reported the stream inactive.",
+        };
+
+    public static ObsStreamResult Success() => ConfirmedActive();
+
+    public static ObsStreamResult NotRequested(string detail = null) =>
+        new()
+        {
+            Failure = ObsOutputFailure.NotRequested,
+            Detail = string.IsNullOrWhiteSpace(detail) ? "OBS streaming is disabled." : detail,
+        };
 
     public static ObsStreamResult Failed(ObsOutputFailure failure, string detail) =>
         new() { Failure = failure, Detail = detail };

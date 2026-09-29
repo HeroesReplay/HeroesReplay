@@ -95,19 +95,11 @@ internal sealed class RecordingSession
     public ObsStreamResult StartStreaming(Action ensureConnected)
     {
         return Execute(
-            () =>
-            {
-                EnsureIdentified(ensureConnected);
-                if (socket.IsStreamActive())
-                {
-                    return ObsStreamResult.Success();
-                }
-
-                logger.LogInformation("Starting OBS stream.");
-                socket.StartStream();
-                return ObsStreamResult.Success();
-            },
-            error => ObsStreamResult.Failed(ObsOutputFailure.RequestError, error.Message),
+            () => StartStreamCore(ensureConnected),
+            error =>
+                error is TimeoutException
+                    ? ObsStreamResult.Failed(ObsOutputFailure.NotConfirmed, error.Message)
+                    : ObsStreamResult.Failed(ObsOutputFailure.RequestError, error.Message),
             "start OBS streaming"
         );
     }
@@ -115,21 +107,114 @@ internal sealed class RecordingSession
     public ObsStreamResult StopStreaming(Action ensureConnected)
     {
         return Execute(
-            () =>
-            {
-                EnsureIdentified(ensureConnected);
-                if (!socket.IsStreamActive())
-                {
-                    return ObsStreamResult.Success();
-                }
-
-                logger.LogInformation("Stopping OBS stream.");
-                socket.StopStream();
-                return ObsStreamResult.Success();
-            },
-            error => ObsStreamResult.Failed(ObsOutputFailure.RequestError, error.Message),
+            () => StopStreamCore(ensureConnected),
+            error =>
+                error is TimeoutException
+                    ? ObsStreamResult.Failed(ObsOutputFailure.NotConfirmed, error.Message)
+                    : ObsStreamResult.Failed(ObsOutputFailure.RequestError, error.Message),
             "stop OBS streaming"
         );
+    }
+
+    private ObsStreamResult StartStreamCore(Action ensureConnected)
+    {
+        EnsureIdentified(ensureConnected);
+        if (!socket.IsConnected)
+        {
+            return ObsStreamResult.Failed(
+                ObsOutputFailure.Disconnected,
+                "OBS websocket disconnected."
+            );
+        }
+
+        if (socket.IsStreamActive())
+        {
+            return ObsStreamResult.ConfirmedActive();
+        }
+
+        logger.LogInformation("Starting OBS stream.");
+        socket.StartStream();
+        if (socket.IsStreamActive())
+        {
+            return ObsStreamResult.ConfirmedActive();
+        }
+
+        ObsOutputFailure waited = WaitUntil(() => ProbeStream(active: true), budget.StartTimeout);
+        if (waited == ObsOutputFailure.None && socket.IsStreamActive())
+        {
+            return ObsStreamResult.ConfirmedActive();
+        }
+
+        if (waited == ObsOutputFailure.Disconnected)
+        {
+            return ObsStreamResult.Failed(
+                ObsOutputFailure.Disconnected,
+                "OBS websocket disconnected before the stream was confirmed."
+            );
+        }
+
+        return ObsStreamResult.Failed(
+            ObsOutputFailure.NotConfirmed,
+            "OBS did not report the stream active."
+        );
+    }
+
+    private ObsStreamResult StopStreamCore(Action ensureConnected)
+    {
+        EnsureIdentified(ensureConnected);
+        if (!socket.IsConnected)
+        {
+            return ObsStreamResult.Failed(
+                ObsOutputFailure.Disconnected,
+                "OBS websocket disconnected."
+            );
+        }
+
+        if (!socket.IsStreamActive())
+        {
+            return ObsStreamResult.ConfirmedInactive();
+        }
+
+        logger.LogInformation("Stopping OBS stream.");
+        socket.StopStream();
+        if (!socket.IsStreamActive())
+        {
+            return ObsStreamResult.ConfirmedInactive();
+        }
+
+        ObsOutputFailure waited = WaitUntil(() => ProbeStream(active: false), budget.StopTimeout);
+        if (waited == ObsOutputFailure.None && !socket.IsStreamActive())
+        {
+            return ObsStreamResult.ConfirmedInactive();
+        }
+
+        if (waited == ObsOutputFailure.Disconnected)
+        {
+            return ObsStreamResult.Failed(
+                ObsOutputFailure.Disconnected,
+                "OBS websocket disconnected before the stream was confirmed inactive."
+            );
+        }
+
+        return ObsStreamResult.Failed(
+            ObsOutputFailure.Timeout,
+            "Timed out waiting for OBS to report the stream inactive."
+        );
+    }
+
+    private ObsOutputFailure? ProbeStream(bool active)
+    {
+        if (!socket.IsConnected)
+        {
+            return ObsOutputFailure.Disconnected;
+        }
+
+        if (socket.IsStreamActive() == active)
+        {
+            return ObsOutputFailure.None;
+        }
+
+        return null;
     }
 
     private ObsRecordingResult StartCore(

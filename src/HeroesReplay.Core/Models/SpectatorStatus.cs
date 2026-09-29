@@ -33,6 +33,13 @@ public sealed class SpectatorStatus
     public bool ObsSession { get; set; }
     public bool? ConnectivityOnline { get; set; }
     public string Connectivity { get; set; }
+    public bool? ObsProcessRunning { get; set; }
+    public bool? ObsWebsocketIdentified { get; set; }
+    public string ObsSceneDesired { get; set; }
+    public string ObsSceneActual { get; set; }
+    public bool? ObsStreamDesired { get; set; }
+    public bool? ObsStreamActive { get; set; }
+    public string ObsDetail { get; set; }
     public SpectatorFocusStatus Focus { get; set; }
 }
 

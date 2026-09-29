@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using OBSWebsocketDotNet;
 using OBSWebsocketDotNet.Communication;
 using OBSWebsocketDotNet.Types;
@@ -47,7 +48,15 @@ internal interface IObsRecordSocket
     event EventHandler<ObsRecordSignal> RecordSignal;
 }
 
-internal sealed class ObsWebsocketRecordSocket : IObsRecordSocket
+internal interface IObsSession : IObsRecordSocket
+{
+    void Connect(string endpoint, string password, TimeSpan identifyTimeout);
+    void Disconnect();
+    void SelectProgramScene(string sceneName);
+    string ProgramScene { get; }
+}
+
+internal sealed class ObsWebsocketRecordSocket : IObsSession
 {
     private readonly OBSWebsocket obs;
 
@@ -84,6 +93,56 @@ internal sealed class ObsWebsocketRecordSocket : IObsRecordSocket
     public void StartStream() => obs.StartStream();
 
     public void StopStream() => obs.StopStream();
+
+    public string ProgramScene => obs.GetCurrentProgramScene();
+
+    public void SelectProgramScene(string sceneName) => obs.SetCurrentProgramScene(sceneName);
+
+    public void Connect(string endpoint, string password, TimeSpan identifyTimeout)
+    {
+        if (obs.IsIdentified)
+        {
+            return;
+        }
+
+        using var identified = new ManualResetEventSlim(false);
+        EventHandler handler = (_, _) => identified.Set();
+        obs.Connected += handler;
+        try
+        {
+            if (!obs.IsConnected)
+            {
+                obs.ConnectAsync(endpoint, password ?? string.Empty);
+            }
+
+            if (obs.IsIdentified)
+            {
+                return;
+            }
+
+            if (!identified.Wait(identifyTimeout))
+            {
+                throw new TimeoutException(
+                    "OBS websocket at "
+                        + endpoint
+                        + " did not identify in time. "
+                        + "OBS Studio 28+ uses obs-websocket 5 on port 4455 (Tools > WebSocket Server Settings)."
+                );
+            }
+        }
+        finally
+        {
+            obs.Connected -= handler;
+        }
+    }
+
+    public void Disconnect()
+    {
+        if (obs.IsConnected)
+        {
+            obs.Disconnect();
+        }
+    }
 
     private void OnRecordStateChanged(object sender, RecordStateChangedEventArgs args)
     {

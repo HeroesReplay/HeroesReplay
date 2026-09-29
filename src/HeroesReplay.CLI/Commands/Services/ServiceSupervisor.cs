@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Threading;
 using HeroesReplay.CLI;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Processes;
 
 namespace HeroesReplay.CLI.Commands.Services;
@@ -133,9 +134,7 @@ public static class ServiceSupervisor
             lockPath,
             new ServiceLock { StartedAt = DateTimeOffset.UtcNow, Processes = started }
         );
-        Console.WriteLine(
-            "Twitch ingest was not started. Streaming stays at OBS:StreamingEnabled."
-        );
+        Console.WriteLine(TwitchIngestGuard.NotStartedMessage);
         Console.WriteLine(
             $"OpenTelemetry export: {AspireDashboardHost.OtlpGrpcEndpoint} (Aspire dashboard {AspireDashboardHost.UiUrl})."
         );
@@ -151,10 +150,12 @@ public static class ServiceSupervisor
         Action<TimeSpan> wait = null,
         Action clearStopFile = null,
         Action stopSpectatedGame = null,
-        Func<int, ServiceProcessProbe> probeOrNull = null
+        Func<int, ServiceProcessProbe> probeOrNull = null,
+        Func<ObsShutdownPlan, ObsStreamResult> confirmStream = null
     )
     {
         requestGracefulStop?.Invoke();
+        RequestStreamShutdown(confirmStream);
         ServiceLock snapshot = ServiceLockStore.TryLoad(lockPath);
         bool hadSpectate = snapshot?.Processes?.Any(record => record?.Name == "spectate") == true;
         TimeSpan budget = gracefulWait ?? TimeSpan.FromSeconds(20);
@@ -264,8 +265,10 @@ public static class ServiceSupervisor
         }
         else
         {
+            string obs = ObsStatus.Describe(spectator);
             Console.WriteLine(
                 $"Spectator status: phase={spectator.Phase} running={spectator.SpectatorRunning} stale={spectator.SnapshotStale} replay={spectator.ReplayId} map={spectator.Map} timer={spectator.Timer}"
+                    + (obs == null ? "" : " " + obs)
             );
             if (spectator.CompletedReplayId.HasValue)
             {
@@ -281,6 +284,45 @@ public static class ServiceSupervisor
         }
 
         return living.Count == expected ? 0 : 1;
+    }
+
+    private static void RequestStreamShutdown(Func<ObsShutdownPlan, ObsStreamResult> confirmStream)
+    {
+        ObsShutdownPlan plan = ObsServiceStop.PlanForServicesCommand();
+        if (plan.CloseProcess)
+        {
+            Console.Error.WriteLine(
+                "Refusing to close OBS. This command does not own the process."
+            );
+            return;
+        }
+
+        if (confirmStream == null)
+        {
+            return;
+        }
+
+        try
+        {
+            ObsStreamResult stream = confirmStream(plan);
+            if (
+                stream != null
+                && !stream.Succeeded
+                && stream.Failure != ObsOutputFailure.NotRequested
+            )
+            {
+                Console.Error.WriteLine(
+                    "OBS stream was not confirmed inactive ("
+                        + stream.Failure
+                        + "). "
+                        + stream.Detail
+                );
+            }
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("OBS stream was not confirmed inactive. " + e.Message);
+        }
     }
 
     private static string Validate(string role, string exePath, ServiceStartupHandshake handshake)

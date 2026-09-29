@@ -18,6 +18,12 @@ public class OBSSettings
     /// </summary>
     public bool StreamingEnabled { get; set; }
 
+    /// <summary>
+    /// When true, shutdown may close an OBS process this coordinator launched.
+    /// A process that was already running is never closed. Default false.
+    /// </summary>
+    public bool CloseOwnedOnStop { get; set; }
+
     public bool RecordRequestedReplays { get; set; }
     public string InfoFileName { get; set; }
     public string WebSocketEndpoint { get; set; }

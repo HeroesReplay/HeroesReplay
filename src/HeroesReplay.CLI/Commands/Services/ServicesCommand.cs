@@ -89,7 +89,8 @@ public class ServicesCommand : Command
                     Thread.Sleep,
                     () => ServiceStopFile.Clear(),
                     StopSpectatedGame,
-                    ServiceProcessProbe.TryFromProcess
+                    ServiceProcessProbe.TryFromProcess,
+                    ObsServiceStop.DelegateToSpectator
                 );
                 return Task.FromResult(code);
             }

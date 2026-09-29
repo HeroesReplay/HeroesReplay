@@ -17,4 +17,5 @@ public interface IObsController
     ObsStreamResult StartStreaming();
     ObsStreamResult StopStreaming();
     bool IsStreaming();
+    ObsRuntimeSnapshot ReadObsState();
 }

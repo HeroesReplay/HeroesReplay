@@ -21,6 +21,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     private readonly IHeroesProfileResume heroesProfileResume;
     private readonly IReplayResume replayResume;
     private readonly Func<bool> gameIsRunning;
+    private readonly Func<string> machineName;
     private readonly object gate = new();
     private int failCount;
     private int recoverCount;
@@ -36,7 +37,8 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         IObsController obsController = null,
         IHeroesProfileResume heroesProfileResume = null,
         IReplayResume replayResume = null,
-        Func<bool> gameIsRunning = null
+        Func<bool> gameIsRunning = null,
+        Func<string> machineName = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -49,6 +51,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         this.heroesProfileResume = heroesProfileResume;
         this.replayResume = replayResume;
         this.gameIsRunning = gameIsRunning;
+        this.machineName = machineName ?? (() => Environment.MachineName);
         IsOnline = true;
         Last = new ConnectivitySnapshot
         {
@@ -128,6 +131,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             }
         }
 
+        ReconcileDesiredStream();
         string detail = snapshot.Describe();
         if (changed != null || lastWrittenOnline != IsOnline || lastWrittenDetail != detail)
         {
@@ -137,6 +141,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             {
                 status.ConnectivityOnline = IsOnline;
                 status.Connectivity = detail;
+                ObsStatus.Copy(status, obsController?.ReadObsState());
             });
         }
 
@@ -186,30 +191,42 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
 
         bool probeTwitch = SessionMedia.ShouldStream(settings.OBS);
         logger.LogInformation(
-            "Connectivity watchdog probing {Host} and Heroes Profile every {Interval}. TwitchWebsite={TwitchWebsite}. StreamingEnabled={StreamingEnabled}.",
+            "Connectivity watchdog probing {Host} and Heroes Profile every {Interval}. TwitchWebsite={TwitchWebsite}. StreamingEnabled={StreamingEnabled}. NativeReconnectOwnsShortOutages={NativeReconnect}.",
             Settings.InternetHost,
             ProbeInterval(),
             probeTwitch ? Settings.TwitchUri : "skipped",
-            probeTwitch
+            probeTwitch,
+            true
         );
 
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            try
+            ReconcileDesiredStream();
+            while (!cancellationToken.IsCancellationRequested)
             {
-                ConnectivitySnapshot snapshot = await ProbeAsync(cancellationToken)
-                    .ConfigureAwait(false);
-                Apply(snapshot);
-                await Task.Delay(ProbeInterval(), cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    ConnectivitySnapshot snapshot = await ProbeAsync(cancellationToken)
+                        .ConfigureAwait(false);
+                    Apply(snapshot);
+                    await Task.Delay(ProbeInterval(), cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception e)
+                {
+                    logger.LogWarning(e, "Connectivity probe failed.");
+                    await Task.Delay(ProbeInterval(), cancellationToken).ConfigureAwait(false);
+                }
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        }
+        finally
+        {
+            if (cancellationToken.IsCancellationRequested)
             {
-                break;
-            }
-            catch (Exception e)
-            {
-                logger.LogWarning(e, "Connectivity probe failed.");
-                await Task.Delay(ProbeInterval(), cancellationToken).ConfigureAwait(false);
+                StopStreamForShutdown();
             }
         }
     }
@@ -283,21 +300,22 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
 
     private void HandleStream(ConnectivityResume.Decision decision)
     {
-        if (obsController == null || !SessionMedia.ShouldStream(settings.OBS))
+        if (obsController == null || decision.StartStream == decision.StopStream)
+        {
+            return;
+        }
+
+        if (!IngestAllowed())
         {
             return;
         }
 
         try
         {
-            if (decision.StartStream)
-            {
-                obsController.StartStreaming();
-            }
-            else
-            {
-                obsController.StopStreaming();
-            }
+            ObsStreamResult result = decision.StopStream
+                ? obsController.StopStreaming()
+                : obsController.StartStreaming();
+            LogStream(result, decision.StopStream ? "stop" : "start");
         }
         catch (Exception e)
         {
@@ -307,5 +325,75 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
                 decision.StartStream ? "start" : "stop"
             );
         }
+    }
+
+    private void ReconcileDesiredStream()
+    {
+        if (obsController == null || !IsOnline || !IngestAllowed())
+        {
+            return;
+        }
+
+        try
+        {
+            if (obsController.IsStreaming())
+            {
+                return;
+            }
+
+            LogStream(obsController.StartStreaming(), "reconcile");
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "OBS stream reconcile failed.");
+        }
+    }
+
+    private void StopStreamForShutdown()
+    {
+        if (obsController == null || !IngestAllowed())
+        {
+            return;
+        }
+
+        try
+        {
+            LogStream(obsController.StopStreaming(), "shutdown");
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not confirm the OBS stream inactive during shutdown.");
+        }
+    }
+
+    private bool IngestAllowed() =>
+        TwitchIngestGuard.Allows(Machine(), SessionMedia.ShouldStream(settings.OBS));
+
+    private string Machine()
+    {
+        try
+        {
+            return machineName();
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not read the machine name. Twitch ingest stays off.");
+            return null;
+        }
+    }
+
+    private void LogStream(ObsStreamResult result, string action)
+    {
+        if (result == null || result.Succeeded || result.Failure == ObsOutputFailure.NotRequested)
+        {
+            return;
+        }
+
+        logger.LogWarning(
+            "OBS stream {Action} was not confirmed ({Failure}). {Detail}",
+            action,
+            result.Failure,
+            result.Detail
+        );
     }
 }

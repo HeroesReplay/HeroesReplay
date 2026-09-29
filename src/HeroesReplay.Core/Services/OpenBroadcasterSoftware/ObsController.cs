@@ -24,7 +24,7 @@ public class ObsController : IObsController
     private readonly AppSettings settings;
     private readonly OBSWebsocket obs;
     private readonly CancellationTokenProvider tokenProvider;
-    private readonly RecordingSession recording;
+    private readonly ObsCoordinator coordinator;
     private bool replayInfoHidden;
 
     public ObsController(
@@ -41,17 +41,25 @@ public class ObsController : IObsController
         this.obs = obs ?? throw new ArgumentNullException(nameof(obs));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
-        recording = new RecordingSession(
+        var socket = new ObsWebsocketRecordSocket(this.obs);
+        coordinator = new ObsCoordinator(
             logger,
-            new ObsWebsocketRecordSocket(this.obs),
-            ObsRecordingBudget.Default
+            settings,
+            socket,
+            new WindowsObsProcess(),
+            new RecordingSession(logger, socket, ObsRecordingBudget.Default),
+            () => Environment.MachineName,
+            ObsBackoff.Default,
+            Thread.Sleep,
+            TimeSpan.FromSeconds(10),
+            PatchInstalledCollection
         );
     }
 
     public void BeginSession()
     {
         PatchInstalledCollection();
-        ConnectAndWait();
+        coordinator.EnsureIdentified();
     }
 
     private void PatchInstalledCollection()
@@ -81,7 +89,7 @@ public class ObsController : IObsController
 
     public void EndSession()
     {
-        DisconnectQuietly();
+        coordinator.Disconnect();
     }
 
     public void ConfigureFromContext()
@@ -141,53 +149,20 @@ public class ObsController : IObsController
         string reason = SessionMedia.HasRequestor(context.Current?.LoadedReplay)
             ? "viewer request"
             : "every replay";
-        return recording.StartRecording(ShouldRecord, EnsureConnected, CurrentReplayId, reason);
+        return coordinator.StartRecording(ShouldRecord, CurrentReplayId, reason);
     }
 
-    public ObsRecordingResult StopRecording() =>
-        recording.StopRecording(EnsureConnected, CurrentReplayId);
+    public ObsRecordingResult StopRecording() => coordinator.StopRecording(CurrentReplayId);
 
-    public ObsStreamResult StartStreaming()
-    {
-        if (!SessionMedia.ShouldStream(settings.OBS))
-        {
-            logger.LogDebug("Skipping OBS StartStream because OBS:StreamingEnabled is false.");
-            return ObsStreamResult.NotRequested();
-        }
+    public ObsStreamResult StartStreaming() => coordinator.ReconcileStream().Stream;
 
-        return recording.StartStreaming(EnsureConnected);
-    }
+    public ObsStreamResult StopStreaming() => coordinator.Shutdown().Stream;
 
-    public ObsStreamResult StopStreaming()
-    {
-        if (!SessionMedia.ShouldStream(settings.OBS))
-        {
-            logger.LogDebug("Skipping OBS StopStream because OBS:StreamingEnabled is false.");
-            return ObsStreamResult.NotRequested();
-        }
-
-        return recording.StopStreaming(EnsureConnected);
-    }
+    public ObsRuntimeSnapshot ReadObsState() => coordinator.State;
 
     private int? CurrentReplayId => context.Current?.LoadedReplay?.ReplayId;
 
-    public bool IsStreaming()
-    {
-        try
-        {
-            if (!obs.IsIdentified)
-            {
-                return false;
-            }
-
-            return obs.GetStreamStatus().IsActive;
-        }
-        catch (Exception e)
-        {
-            logger.LogDebug(e, "Could not read OBS stream status.");
-            return false;
-        }
-    }
+    public bool IsStreaming() => coordinator.IsStreaming();
 
     public void UpdateReplayInfoVisibility(TimeSpan matchTime)
     {
@@ -601,106 +576,7 @@ public class ObsController : IObsController
             .Find(source => source.InputName.Equals(name, StringComparison.OrdinalIgnoreCase));
     }
 
-    private void EnsureConnected()
-    {
-        if (!obs.IsIdentified)
-        {
-            ConnectAndWait();
-        }
-    }
-
-    private void EnsureObsProcess()
-    {
-        if (Process.GetProcessesByName("obs64").Length > 0)
-        {
-            return;
-        }
-
-        string path = settings.OBS.ExecutablePath;
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                "obs-studio",
-                "bin",
-                "64bit",
-                "obs64.exe"
-            );
-        }
-
-        if (!File.Exists(path))
-        {
-            logger.LogWarning("OBS is not running and {Path} was not found.", path);
-            return;
-        }
-
-        logger.LogWarning("OBS is not running; starting {Path}.", path);
-        Process.Start(
-            new ProcessStartInfo
-            {
-                FileName = path,
-                WorkingDirectory = Path.GetDirectoryName(path),
-                UseShellExecute = true,
-            }
-        );
-        Thread.Sleep(TimeSpan.FromSeconds(5));
-    }
-
-    private void ConnectAndWait()
-    {
-        EnsureObsProcess();
-        if (obs.IsIdentified)
-        {
-            return;
-        }
-
-        using var identified = new ManualResetEventSlim(false);
-        EventHandler handler = (_, _) => identified.Set();
-        obs.Connected += handler;
-
-        try
-        {
-            if (!obs.IsConnected)
-            {
-                obs.ConnectAsync(
-                    settings.OBS.WebSocketEndpoint,
-                    settings.OBS.WebSocketPassword ?? string.Empty
-                );
-            }
-
-            if (obs.IsIdentified)
-            {
-                return;
-            }
-
-            if (!identified.Wait(TimeSpan.FromSeconds(10)))
-            {
-                throw new TimeoutException(
-                    $"OBS websocket at {settings.OBS.WebSocketEndpoint} did not identify in time. "
-                        + "OBS Studio 28+ uses obs-websocket 5 on port 4455 (Tools > WebSocket Server Settings)."
-                );
-            }
-        }
-        finally
-        {
-            obs.Connected -= handler;
-        }
-    }
-
-    private void DisconnectQuietly()
-    {
-        try
-        {
-            if (obs.IsConnected)
-            {
-                obs.Disconnect();
-            }
-        }
-        catch (Exception e)
-        {
-            logger.LogDebug(e, "OBS disconnect failed.");
-        }
-    }
+    private void EnsureConnected() => coordinator.EnsureIdentified();
 
     private void OnRetry(DelegateResult<bool> wrappedResult, TimeSpan timeSpan)
     {

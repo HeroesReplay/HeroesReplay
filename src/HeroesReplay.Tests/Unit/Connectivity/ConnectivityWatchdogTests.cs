@@ -78,12 +78,115 @@ public class ConnectivityWatchdogTests
     }
 
     [Fact]
-    public void Apply_RestartsStreamOnlyWhenStreamingEnabled()
+    public void Apply_RepairsStoppedStreamWithoutAnInternetEdge()
     {
-        using Fixture fixture = CreateFixture(streamingEnabled: true);
-        DropThenRestore(fixture);
-        Assert.Equal(1, fixture.Obs.StopCalls);
+        using Fixture fixture = CreateFixture(
+            streamingEnabled: true,
+            hostName: TwitchIngestGuard.ProductionHost
+        );
+        Assert.False(fixture.Obs.IsStreaming());
+
+        bool edge = fixture.Watchdog.Apply(OkSnapshot());
+
+        Assert.False(edge);
+        Assert.True(fixture.Watchdog.IsOnline);
         Assert.Equal(1, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+        Assert.True(fixture.Obs.IsStreaming());
+
+        Assert.False(fixture.Watchdog.Apply(OkSnapshot()));
+        Assert.Equal(1, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
+    public void Apply_ShortOutageDoesNotStopTheStream()
+    {
+        using Fixture fixture = CreateFixture(
+            streamingEnabled: true,
+            hostName: TwitchIngestGuard.ProductionHost
+        );
+        fixture.Obs.Streaming = true;
+
+        DropThenRestore(fixture);
+
+        Assert.Equal(0, fixture.Obs.StopCalls);
+        Assert.Equal(0, fixture.Obs.StartCalls);
+        Assert.True(fixture.Obs.IsStreaming());
+        Assert.True(fixture.Resume.IsPending);
+    }
+
+    [Fact]
+    public void Apply_DevelopmentHostDoesNotStart()
+    {
+        using Fixture fixture = CreateFixture(
+            streamingEnabled: true,
+            hostName: TwitchIngestGuard.DevelopmentHost
+        );
+
+        Assert.False(fixture.Watchdog.Apply(OkSnapshot()));
+        DropThenRestore(fixture);
+
+        Assert.Equal(0, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
+    public void Apply_ProductionHostWithStreamingDisabled_DoesNotStart()
+    {
+        using Fixture fixture = CreateFixture(
+            streamingEnabled: false,
+            hostName: TwitchIngestGuard.ProductionHost
+        );
+
+        Assert.False(fixture.Watchdog.Apply(OkSnapshot()));
+        DropThenRestore(fixture);
+
+        Assert.Equal(0, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
+    public void Apply_UnreadableMachineName_DoesNotStart()
+    {
+        using Fixture fixture = CreateFixture(
+            streamingEnabled: true,
+            machineName: () => throw new InvalidOperationException("unnamed")
+        );
+
+        Assert.False(fixture.Watchdog.Apply(OkSnapshot()));
+        Assert.Equal(0, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
+    public void Apply_CopiesDesiredVersusActualObsState()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: false);
+        fixture.Obs.State = new ObsRuntimeSnapshot
+        {
+            ProcessRunning = true,
+            WebsocketIdentified = true,
+            SceneDesired = "waiting-screen",
+            SceneActual = "game-scene",
+            StreamDesired = true,
+            StreamActive = false,
+            Stream = ObsStreamResult.Failed(ObsOutputFailure.NotConfirmed, "not live"),
+        };
+
+        Assert.False(fixture.Watchdog.Apply(OkSnapshot()));
+
+        var status = fixture.Store.Read();
+        Assert.Equal(true, status.ObsProcessRunning);
+        Assert.Equal(true, status.ObsWebsocketIdentified);
+        Assert.Equal("waiting-screen", status.ObsSceneDesired);
+        Assert.Equal("game-scene", status.ObsSceneActual);
+        Assert.Equal(true, status.ObsStreamDesired);
+        Assert.Equal(false, status.ObsStreamActive);
+        Assert.Equal("not live", status.ObsDetail);
+        Assert.Contains("stream desired=True", ObsStatus.Describe(status));
+        Assert.Contains("active=False", ObsStatus.Describe(status));
+        Assert.Equal(0, fixture.Obs.StartCalls);
     }
 
     [Fact]
@@ -147,6 +250,25 @@ public class ConnectivityWatchdogTests
         Assert.True(fixture.Probe.TwitchCalls >= 1);
         Assert.True(fixture.Probe.InternetCalls >= 1);
         Assert.True(fixture.Probe.HeroesProfileCalls >= 1);
+        Assert.Equal(0, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProductionHost_ConfirmsStopOnCancelWithoutStarting()
+    {
+        using Fixture fixture = CreateFixture(
+            streamingEnabled: true,
+            hostName: TwitchIngestGuard.ProductionHost
+        );
+        fixture.Obs.Streaming = true;
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await fixture.Watchdog.RunAsync(cts.Token);
+
+        Assert.Equal(0, fixture.Obs.StartCalls);
+        Assert.True(fixture.Obs.StopCalls >= 1);
+        Assert.False(fixture.Obs.IsStreaming());
     }
 
     [Fact]
@@ -230,7 +352,12 @@ public class ConnectivityWatchdogTests
             HeroesProfile = true,
         };
 
-    private static Fixture CreateFixture(bool streamingEnabled, bool gameRunning = true)
+    private static Fixture CreateFixture(
+        bool streamingEnabled,
+        bool gameRunning = true,
+        string hostName = TwitchIngestGuard.DevelopmentHost,
+        Func<string> machineName = null
+    )
     {
         string path = Path.Combine(
             Path.GetTempPath(),
@@ -264,7 +391,8 @@ public class ConnectivityWatchdogTests
             obs,
             resume,
             replays,
-            () => gameRunning
+            () => gameRunning,
+            machineName ?? (() => hostName)
         );
         return new Fixture(path, resumePath, probe, obs, watchdog, resume, store, replays);
     }
@@ -347,6 +475,8 @@ public class ConnectivityWatchdogTests
     {
         public int StartCalls { get; private set; }
         public int StopCalls { get; private set; }
+        public bool Streaming { get; set; }
+        public ObsRuntimeSnapshot State { get; set; }
 
         public void BeginSession() { }
 
@@ -371,15 +501,19 @@ public class ConnectivityWatchdogTests
         public ObsStreamResult StartStreaming()
         {
             StartCalls++;
-            return ObsStreamResult.Success();
+            Streaming = true;
+            return ObsStreamResult.ConfirmedActive();
         }
 
         public ObsStreamResult StopStreaming()
         {
             StopCalls++;
-            return ObsStreamResult.Success();
+            Streaming = false;
+            return ObsStreamResult.ConfirmedInactive();
         }
 
-        public bool IsStreaming() => StartCalls > StopCalls;
+        public bool IsStreaming() => Streaming;
+
+        public ObsRuntimeSnapshot ReadObsState() => State;
     }
 }
