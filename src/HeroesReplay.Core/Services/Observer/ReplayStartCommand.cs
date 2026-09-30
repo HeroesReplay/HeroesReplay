@@ -37,6 +37,21 @@ public sealed record ReplayStartCommand(string FileName, string Arguments, strin
         );
     }
 
+    public static ReplayStartCommand MatchingExe(string exePath, string replayPath)
+    {
+        if (string.IsNullOrWhiteSpace(exePath))
+        {
+            throw new ArgumentException("Heroes exe is required.", nameof(exePath));
+        }
+
+        if (string.IsNullOrWhiteSpace(replayPath))
+        {
+            throw new ArgumentException("Replay path is required.", nameof(replayPath));
+        }
+
+        return new ReplayStartCommand(exePath, Quote(replayPath), Path.GetDirectoryName(exePath));
+    }
+
     public static ReplayStartCommand HeroClient(string battleNetPath)
     {
         if (string.IsNullOrWhiteSpace(battleNetPath))

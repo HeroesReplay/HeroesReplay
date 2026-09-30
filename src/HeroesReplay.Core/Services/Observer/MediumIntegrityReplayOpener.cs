@@ -56,6 +56,23 @@ public sealed class MediumIntegrityReplayOpener : IReplayOpener
         );
     }
 
+    public void OpenMatching(string exePath, string replayPath)
+    {
+        AllowInstalledClients();
+        ReplayStartCommand command = ReplayStartCommand.MatchingExe(exePath, replayPath);
+        string source = MediumIntegrityProcess.Start(
+            command.FileName,
+            command.Arguments,
+            command.WorkingDirectory
+        );
+        logger.LogInformation(
+            "Opened {Replay} with the matching client {FileName} using {Source}.",
+            replayPath,
+            command.FileName,
+            source
+        );
+    }
+
     private void AllowInstalledClients()
     {
         IReadOnlyList<InstalledClient> clients = InstalledClientCatalog.Clients(

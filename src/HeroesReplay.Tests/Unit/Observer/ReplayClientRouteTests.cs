@@ -138,6 +138,34 @@ public class ReplayClientRouteTests
     }
 
     [Fact]
+    public void Decide_MatchingPreviousPatchWithoutHomeOpensThatExe()
+    {
+        Assert.Equal(
+            ReplayLaunchAuth.OpenMatchingBuild,
+            ReplayClientRoute.Decide(
+                ReplayClientPatch.Previous,
+                RunningClientBuild.Matches,
+                homeScreen: false,
+                replayPresented: false
+            )
+        );
+    }
+
+    [Fact]
+    public void Decide_MatchingCurrentPatchWithoutHomeWaitsForTheSignedInMenu()
+    {
+        Assert.Equal(
+            ReplayLaunchAuth.Wait,
+            ReplayClientRoute.Decide(
+                ReplayClientPatch.Current,
+                RunningClientBuild.Matches,
+                homeScreen: false,
+                replayPresented: false
+            )
+        );
+    }
+
+    [Fact]
     public void Decide_MatchingMatchIsLeftAlone()
     {
         Assert.Equal(
@@ -175,6 +203,68 @@ public class ReplayClientRouteTests
                 RunningClientBuild.None,
                 homeScreen: false,
                 replayPresented: false
+            )
+        );
+    }
+
+    [Fact]
+    public void OpenMatchingBuildNow_OpensABlankMatchingClientOnce()
+    {
+        Assert.True(
+            ReplayClientRoute.OpenMatchingBuildNow(
+                ReplayClientRoute.Decide(
+                    ReplayClientPatch.Previous,
+                    RunningClientBuild.Matches,
+                    homeScreen: false,
+                    replayPresented: false
+                ),
+                alreadyOpened: false,
+                windowBlank: ClientRelaunch.IsBlankClientWindow("", 1280, 720)
+            )
+        );
+    }
+
+    [Fact]
+    public void OpenMatchingBuildNow_SkipsThePreparingDialog()
+    {
+        Assert.False(
+            ReplayClientRoute.OpenMatchingBuildNow(
+                ReplayLaunchAuth.OpenMatchingBuild,
+                alreadyOpened: false,
+                windowBlank: ClientRelaunch.IsBlankClientWindow("Preparing game data", 403, 139)
+            )
+        );
+    }
+
+    [Fact]
+    public void OpenMatchingBuildNow_DoesNotOpenTwiceOrThroughTheSwitcher()
+    {
+        Assert.False(
+            ReplayClientRoute.OpenMatchingBuildNow(
+                ReplayLaunchAuth.OpenMatchingBuild,
+                alreadyOpened: true,
+                windowBlank: true
+            )
+        );
+        Assert.False(
+            ReplayClientRoute.OpenMatchingBuildNow(
+                ReplayLaunchAuth.OpenInstalledBuild,
+                alreadyOpened: false,
+                windowBlank: true
+            )
+        );
+        Assert.False(
+            ReplayClientRoute.OpenMatchingBuildNow(
+                ReplayLaunchAuth.Wait,
+                alreadyOpened: false,
+                windowBlank: true
+            )
+        );
+        Assert.False(
+            ReplayClientRoute.OpenMatchingBuildNow(
+                ReplayLaunchAuth.OpenFromHome,
+                alreadyOpened: false,
+                windowBlank: true
             )
         );
     }

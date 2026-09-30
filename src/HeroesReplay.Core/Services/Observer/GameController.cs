@@ -244,10 +244,21 @@ public class GameController : IGameController
             return new ReplayBoot(auth, true);
         }
 
+        if (auth == ReplayLaunchAuth.OpenMatchingBuild)
+        {
+            logger.LogInformation(
+                "Matching Heroes client is up without the home screen or the match clock. Opening the replay on that client. Battle.net was not clicked."
+            );
+            await OpenOnMatchingClientAsync(replayPath, replayVersion).ConfigureAwait(false);
+            return new ReplayBoot(auth, false);
+        }
+
         if (auth == ReplayLaunchAuth.Wait)
         {
             logger.LogInformation(
-                "Matching Heroes client is up without the home screen or the match clock. The replay file stays closed."
+                running == RunningClientBuild.Unreadable
+                    ? "The running Heroes version could not be read. The replay file stays closed."
+                    : "Matching current-patch client is up without the home screen or the match clock. The replay file stays closed until the signed-in menu is visible."
             );
             return new ReplayBoot(auth, false);
         }
@@ -398,6 +409,7 @@ public class GameController : IGameController
         DateTimeOffset started = DateTimeOffset.UtcNow;
         DateTimeOffset deadline = started.Add(ClientRelaunch.ColdBootLimit);
         bool clientAlreadyRunning = boot.Auth == ReplayLaunchAuth.Wait;
+        bool openedOnMatchingExe = boot.Auth == ReplayLaunchAuth.OpenMatchingBuild;
 
         async Task<bool> HoldForGameDataDownloadAsync(string primary, string later)
         {
@@ -497,6 +509,7 @@ public class GameController : IGameController
                 }
 
                 openedFromHome = false;
+                openedOnMatchingExe = false;
                 blankTiming = false;
                 continue;
             }
@@ -563,6 +576,7 @@ public class GameController : IGameController
                 await RestartForObserverInterfaceAsync(replayPath).ConfigureAwait(false);
                 interfaceRestarted = true;
                 openedFromHome = false;
+                openedOnMatchingExe = false;
                 sawGameDataStartup = false;
                 loggedPreparing = false;
                 blankTiming = false;
@@ -599,6 +613,33 @@ public class GameController : IGameController
             }
 
             bool blank = ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
+            if (
+                ReplayClientRoute.OpenMatchingBuildNow(
+                    ReplayClientRoute.Decide(
+                        launchPatch,
+                        runningBuild,
+                        home,
+                        replayPresented: false
+                    ),
+                    openedOnMatchingExe || openedFromHome,
+                    blank
+                )
+            )
+            {
+                logger.LogInformation(
+                    "Matching Heroes client is up without the home screen or the match clock. Opening the replay on that client. Battle.net was not clicked."
+                );
+                await OpenOnMatchingClientAsync(replayPath, replayVersion).ConfigureAwait(false);
+                openedOnMatchingExe = true;
+                clientAlreadyRunning = false;
+                sawGameDataStartup = false;
+                loggedPreparing = false;
+                blankTiming = false;
+                started = DateTimeOffset.UtcNow;
+                deadline = ClientRelaunch.DeadlineAfterInterfaceRestart(started);
+                continue;
+            }
+
             if (
                 ClientRelaunch.KeepsWaitingForGameData(
                     startup,
@@ -645,7 +686,7 @@ public class GameController : IGameController
                 if (
                     ClientRelaunch.ShouldRelaunchBlankWindow(
                         IsLaunched(),
-                        openedFromHome,
+                        openedFromHome || openedOnMatchingExe,
                         blank,
                         DateTimeOffset.UtcNow - blankSince,
                         blankRelaunches,
@@ -674,6 +715,7 @@ public class GameController : IGameController
                     }
 
                     openedFromHome = false;
+                    openedOnMatchingExe = false;
                     blankTiming = false;
                 }
             }
@@ -747,6 +789,44 @@ public class GameController : IGameController
         CloseIdleSwitcher();
         replayFileOpened = true;
         replayOpener.Open(replayPath);
+    }
+
+    private async Task OpenOnMatchingClientAsync(string replayPath, string replayVersion)
+    {
+        string exe = InstalledClientCatalog.FindExe(
+            InstalledClientCatalog.Clients(settings.Location?.GameInstallDirectory),
+            replayVersion
+        );
+        if (string.IsNullOrWhiteSpace(exe))
+        {
+            logger.LogWarning(
+                "The matching Heroes client for {Version} is not installed. The replay file was not opened.",
+                replayVersion
+            );
+            return;
+        }
+
+        if (IsGameProcessRunning())
+        {
+            logger.LogInformation(
+                "Closing Heroes so the matching client can open the replay. Battle.net was not clicked."
+            );
+            Kill();
+            replayFileOpened = false;
+            await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token)
+                .ConfigureAwait(false);
+            if (IsGameProcessRunning())
+            {
+                logger.LogWarning(
+                    "Heroes is still running. The matching client was not started. Battle.net was not clicked."
+                );
+                return;
+            }
+        }
+
+        CloseIdleSwitcher();
+        replayFileOpened = true;
+        replayOpener.OpenMatching(exe, replayPath);
     }
 
     private void CloseIdleSwitcher()

@@ -24,6 +24,7 @@ public enum ReplayLaunchAuth
     AuthenticateCurrent,
     OpenFromHome,
     OpenInstalledBuild,
+    OpenMatchingBuild,
     Wait,
     AlreadyInMatch,
     Unavailable,
@@ -38,7 +39,9 @@ public enum ReplaySignInRecovery
 
 /// <summary>
 /// The newest installed client signs in through Battle.net, then opens the replay.
-/// An older installed build, including an older iteration of the same patch line, is started by HeroesSwitcher.
+/// An older installed build, including an older iteration of the same patch line, is started by HeroesSwitcher
+/// when that exe is not already running. A matching older exe that is up without the home screen or the match
+/// clock is started again with the replay path. HeroesSwitcher would open the newest exe and drop that path.
 /// Battle.net Play always starts the newest client. A different build number is not that client.
 /// </summary>
 public static class ReplayClientRoute
@@ -139,6 +142,12 @@ public static class ReplayClientRoute
             return ReplayLaunchAuth.OpenFromHome;
         }
 
+        // The current patch still waits for the signed-in home screen. A direct open skips SSO.
+        if (running == RunningClientBuild.Matches && patch == ReplayClientPatch.Previous)
+        {
+            return ReplayLaunchAuth.OpenMatchingBuild;
+        }
+
         if (running == RunningClientBuild.Matches)
         {
             return ReplayLaunchAuth.Wait;
@@ -165,5 +174,17 @@ public static class ReplayClientRoute
         }
 
         return ReplaySignInRecovery.LaunchCurrent;
+    }
+
+    /// <summary>
+    /// One open for a matching older exe whose window is already blank. A later pass in the same wait does not open again.
+    /// </summary>
+    public static bool OpenMatchingBuildNow(
+        ReplayLaunchAuth auth,
+        bool alreadyOpened,
+        bool windowBlank
+    )
+    {
+        return auth == ReplayLaunchAuth.OpenMatchingBuild && !alreadyOpened && windowBlank;
     }
 }

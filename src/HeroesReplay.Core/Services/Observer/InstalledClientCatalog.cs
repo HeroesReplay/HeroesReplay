@@ -76,4 +76,22 @@ public static class InstalledClientCatalog
 
         return clients;
     }
+
+    public static string FindExe(IEnumerable<InstalledClient> clients, string version)
+    {
+        if (clients == null || string.IsNullOrWhiteSpace(version))
+        {
+            return null;
+        }
+
+        foreach (InstalledClient client in clients)
+        {
+            if (ReplayClientRoute.SameBuild(client.Version, version))
+            {
+                return client.ExePath;
+            }
+        }
+
+        return null;
+    }
 }
