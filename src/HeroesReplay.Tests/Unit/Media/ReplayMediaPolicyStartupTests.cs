@@ -176,7 +176,7 @@ public class ReplayMediaPolicyStartupTests
 
         Assert.Equal(ReplayRecordingMode.All, settings.RecordingMode);
         Assert.Equal(ReplayPublicationMode.AllEligible, settings.PublicationMode);
-        AssertProductionFilesDoNotSelectAMode();
+        AssertBaseFileDoesNotSelectAMode();
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public class ReplayMediaPolicyStartupTests
         Assert.True(app.OBS.RecordingEnabled);
         Assert.True(app.YouTube.Enabled);
         Assert.True(app.YouTube.DryRun);
-        AssertProductionFilesDoNotSelectAMode();
+        AssertBaseFileDoesNotSelectAMode();
     }
 
     [Fact]
@@ -263,13 +263,15 @@ public class ReplayMediaPolicyStartupTests
         Assert.Equal(ReplayMediaReason.ConfigurationInvalid, decision.PublicationReason);
     }
 
-    private static void AssertProductionFilesDoNotSelectAMode()
+    private static void AssertBaseFileDoesNotSelectAMode()
     {
         AssertModesAbsent(Path.Combine(AppContext.BaseDirectory, "appsettings.json"));
         string production = FindRepoFile(
             Path.Combine("src", "HeroesReplay.CLI", "appsettings.prod.json")
         );
-        string text = AssertModesAbsent(production);
+        string text = File.ReadAllText(production);
+        Assert.Contains("\"RecordingMode\": \"All\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"PublicationMode\": \"AllEligible\"", text, StringComparison.Ordinal);
         Assert.Contains("\"RecordingEnabled\": true", text, StringComparison.Ordinal);
         Assert.Contains("\"DryRun\": false", text, StringComparison.Ordinal);
     }

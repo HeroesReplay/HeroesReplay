@@ -77,11 +77,7 @@ public class GameManager : IGameManager
         MediaRetention.SweepAndLog(settings, logger);
         await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
         MediaPolicySnapshot preLaunch = await mediaPolicy
-            .RecordPreLaunchAsync(
-                loadedReplay,
-                settings.ReplayMedia,
-                CancellationToken.None
-            )
+            .RecordPreLaunchAsync(loadedReplay, settings.ReplayMedia, CancellationToken.None)
             .ConfigureAwait(false);
         ApplyPreLaunchPolicy(loadedReplay, preLaunch);
         await contextSetter.SetContextAsync(loadedReplay);
@@ -652,7 +648,8 @@ public class GameManager : IGameManager
             int publishedInWindow = PublishedThisDay(settings);
             PublicationAdmitResult admit = PublicationAdmit.Decide(
                 snapshot?.Decision,
-                publishedInWindow
+                publishedInWindow,
+                settings?.ReplayMedia
             );
             loadedReplay.PolicyAllowsPublication = admit.Allow;
             logger.LogInformation(

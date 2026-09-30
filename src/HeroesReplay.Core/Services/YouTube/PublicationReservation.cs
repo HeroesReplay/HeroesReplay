@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using HeroesReplay.Core.Services.Media;
 using HeroesReplay.Core.Services.Queue;
 
 namespace HeroesReplay.Core.Services.YouTube;
@@ -40,7 +41,9 @@ public static class PublicationReservation
         string hero,
         string lastHero,
         DateTimeOffset? lastHeroUtc,
-        string workKey
+        string workKey,
+        ReplayMediaPolicySettings settings = null,
+        PublicationSendFacts facts = null
     )
     {
         if (string.IsNullOrWhiteSpace(path) || !IsWorkKey(workKey))
@@ -81,15 +84,23 @@ public static class PublicationReservation
             }
         }
 
+        PublicationSendFacts send =
+            facts
+            ?? new PublicationSendFacts
+            {
+                Criteria = requested ? ReplayMediaPriority.Requested : ReplayMediaPriority.Ordinary,
+                RecordedAtUtc = recordedAtUtc,
+            };
+        bool isRequest = send.Criteria == ReplayMediaPriority.Requested;
         PublicationDecision decision = PublicationSchedule.Decide(
+            settings ?? PublicationSchedule.CanarySettings(),
+            send,
             productionHost,
             insertsThisQuotaDay,
             now,
             last,
             times,
             requestedInDay + reservedRequests,
-            requested,
-            recordedAtUtc,
             map,
             lastMap,
             lastMapUtc,
@@ -99,7 +110,7 @@ public static class PublicationReservation
         );
         if (!decision.Allow)
         {
-            if (decision.Reason == "stale" && !requested)
+            if (decision.Reason == "stale" && !isRequest)
             {
                 ledger.Terminal.Add(workKey);
                 Write(path, ledger);
@@ -120,7 +131,7 @@ public static class PublicationReservation
             {
                 WorkKey = workKey,
                 At = now,
-                Requested = requested,
+                Requested = isRequest,
             }
         );
         Write(path, ledger);

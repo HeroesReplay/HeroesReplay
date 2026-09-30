@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
+using HeroesReplay.Core.Services.YouTube;
 
 namespace HeroesReplay.Core.Services.Media;
 
 /// <summary>
 /// History-independent recording and publication rules.
 /// Defaults record nothing and publish nothing. Invalid values fail closed.
+/// Algorithm defaults match the canary publication schedule until a key is set.
 /// </summary>
 public class ReplayMediaPolicySettings
 {
@@ -13,6 +16,24 @@ public class ReplayMediaPolicySettings
     public ReplayRecordingMode RecordingMode { get; set; } = ReplayRecordingMode.Disabled;
 
     public ReplayPublicationMode PublicationMode { get; set; } = ReplayPublicationMode.Disabled;
+
+    /// <summary>Binder failures. Empty when the section was valid or absent.</summary>
+    public IReadOnlyList<string> LoadErrors { get; set; } = Array.Empty<string>();
+
+    public int MaxPublicPerDay { get; set; } = PublicationSchedule.MaxPublicPerDay;
+
+    public int MaxPublicPerWeek { get; set; } = PublicationSchedule.MaxPublicPerWeek;
+
+    public TimeSpan MinimumPublicInterval { get; set; } = PublicationSchedule.MinimumInterval;
+
+    public TimeSpan MapCooldown { get; set; } = PublicationSchedule.DiversityCooldown;
+
+    public TimeSpan FeaturedHeroCooldown { get; set; } = PublicationSchedule.DiversityCooldown;
+
+    public int ReservedRequestSlotsPerDay { get; set; } =
+        PublicationSchedule.ReservedRequestSlotsPerDay;
+
+    public int MaxInsertsPerQuotaDay { get; set; } = PublicationSchedule.MaxInsertsPerQuotaDay;
 
     /// <summary>When true, <see cref="MinimumGameVersion"/> is required and off-patch replays are rejected.</summary>
     public bool RequireCurrentPatch { get; set; }
@@ -28,7 +49,7 @@ public class ReplayMediaPolicySettings
     /// <summary>Null means MMR is not a high-skill signal. A replay qualifies when MMR is at least this value.</summary>
     public int? MinimumHighSkillMmr { get; set; }
 
-    public TimeSpan OrdinaryCandidateMaxAge { get; set; } = TimeSpan.FromDays(3);
+    public TimeSpan OrdinaryCandidateMaxAge { get; set; } = PublicationSchedule.OrdinaryMaxAge;
 
     public TimeSpan HighSkillCandidateMaxAge { get; set; } = TimeSpan.FromDays(7);
 

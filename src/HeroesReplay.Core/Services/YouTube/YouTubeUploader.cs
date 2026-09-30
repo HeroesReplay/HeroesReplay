@@ -174,7 +174,8 @@ public class YouTubeUploader : IYouTubeUploader
             settings.YouTube,
             Environment.MachineName,
             DateTimeOffset.UtcNow,
-            lastPublicUtc
+            lastPublicUtc,
+            PublishInterval(settings.ReplayMedia)
         );
 
         if (!string.IsNullOrWhiteSpace(entry.VideoId))
@@ -211,7 +212,10 @@ public class YouTubeUploader : IYouTubeUploader
 
         DateTimeOffset dispatchedAt = DateTimeOffset.UtcNow;
         bool liveSend = settings.YouTube.Enabled != false && !settings.YouTube.DryRun;
-        if (liveSend && !ReservePublicationSlot(entry, recording.FullName))
+        if (
+            liveSend
+            && !await ReservePublicationSlot(entry, recording.FullName).ConfigureAwait(false)
+        )
         {
             return;
         }
@@ -556,7 +560,7 @@ public class YouTubeUploader : IYouTubeUploader
         LogPublicationHealth(pending.Count, pending);
     }
 
-    private bool ReservePublicationSlot(YouTubeEntry entry, string path)
+    private async Task<bool> ReservePublicationSlot(YouTubeEntry entry, string path)
     {
         EnsureLedger();
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -567,6 +571,7 @@ public class YouTubeUploader : IYouTubeUploader
             insertsToday = 0;
         }
 
+        PublicationSendFacts facts = await ReadSendFactsAsync(entry).ConfigureAwait(false);
         bool production = TwitchIngestGuard.IsProductionHost(Environment.MachineName);
         string ledgerPath =
             settings.Location?.DataDirectory == null
@@ -580,15 +585,17 @@ public class YouTubeUploader : IYouTubeUploader
             lastPublicUtc,
             publicAtUtc,
             RequestedInDay(now),
-            entry?.Requested == true,
-            entry?.RecordedAtUtc,
+            facts.Criteria == ReplayMediaPriority.Requested,
+            facts.RecordedAtUtc,
             entry?.Map,
             lastMap,
             lastMapUtc,
             entry?.Hero,
             lastHero,
             lastHeroUtc,
-            WorkKey(entry, path)
+            WorkKey(entry, path),
+            settings.ReplayMedia,
+            facts
         );
         if (reserved.Kind == PublicationReservation.Terminal)
         {
@@ -645,15 +652,57 @@ public class YouTubeUploader : IYouTubeUploader
         return key.Length <= 80 ? key.ToString() : key.ToString(0, 80);
     }
 
+    private async Task<PublicationSendFacts> ReadSendFactsAsync(YouTubeEntry entry)
+    {
+        DateTimeOffset? recorded = entry?.RecordedAtUtc;
+        if (entry?.ReplayId is not int replayId || replayId <= 0)
+        {
+            return PublicationSendFacts.Unverified(recorded);
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.Location?.DataDirectory))
+        {
+            return PublicationSendFacts.Unverified(recorded);
+        }
+
+        var outbox = new UploadOutbox(MediaPolicyAttemptLog.AttemptsRoot(settings));
+        UploadAttemptResult loaded = await outbox
+            .LoadAsync(
+                "replay-" + replayId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                CancellationToken.None
+            )
+            .ConfigureAwait(false);
+        if (!loaded.Succeeded)
+        {
+            return PublicationSendFacts.Unverified(recorded);
+        }
+
+        return PublicationSendFacts.FromDecision(
+            MediaPolicyManifest.ToDecision(loaded.Manifest),
+            recorded
+        );
+    }
+
+    private static TimeSpan? PublishInterval(ReplayMediaPolicySettings media)
+    {
+        if (!PublicationSchedule.ConfigurationAllowsSend(media))
+        {
+            return null;
+        }
+
+        return media.MinimumPublicInterval;
+    }
+
     private void LogPublicationHealth(int pending, IReadOnlyList<string> candidates)
     {
         EnsureLedger();
         DateTimeOffset now = DateTimeOffset.UtcNow;
+        ReplayMediaPolicySettings media = settings.ReplayMedia ?? new ReplayMediaPolicySettings();
         PublicationHealthReport health = PublicationHealth.Summarize(
             pending,
             insertsToday,
             deferredBySchedule,
-            insertsToday >= PublicationSchedule.MaxInsertsPerQuotaDay,
+            insertsToday >= media.MaxInsertsPerQuotaDay,
             "1",
             PublicationSchedule.PublishedIn(publicAtUtc, now, TimeSpan.FromHours(24)),
             PublicationSchedule.PublishedIn(publicAtUtc, now, TimeSpan.FromDays(7)),
@@ -675,16 +724,14 @@ public class YouTubeUploader : IYouTubeUploader
             return;
         }
 
-        int reserved = PublicationSchedule.ReservedRequestSlotsPerDay - RequestedInDay(now);
+        int reserved = media.ReservedRequestSlotsPerDay - RequestedInDay(now);
         if (reserved < 0)
         {
             reserved = 0;
         }
 
         DateTimeOffset next =
-            lastPublicUtc == null
-                ? now
-                : lastPublicUtc.Value.Add(PublicationSchedule.MinimumInterval);
+            lastPublicUtc == null ? now : lastPublicUtc.Value.Add(media.MinimumPublicInterval);
         PublicationHealth.WriteStatus(
             Path.Combine(settings.Location.DataDirectory, "publication-status.txt"),
             health,

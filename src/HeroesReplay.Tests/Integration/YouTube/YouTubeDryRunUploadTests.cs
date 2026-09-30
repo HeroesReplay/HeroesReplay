@@ -77,14 +77,26 @@ public class YouTubeDryRunUploadTests
             Assert.Contains("Volskaya Foundry - 65389750", receipt, StringComparison.Ordinal);
             Assert.Contains("\"Simulated\": true", receipt, StringComparison.Ordinal);
             Assert.False(File.Exists(Path.Combine(directory, "client_secrets.json")));
-            var outbox = new UploadOutbox(MediaPolicyAttemptLog.AttemptsRoot(settings));
-            UploadAttemptResult saved = await outbox.LoadAsync(
-                "replay-65389750",
-                CancellationToken.None
-            );
-            Assert.True(saved.Succeeded, saved.Reason);
-            Assert.Equal(UploadAttemptState.DryRunSimulated, saved.Manifest.State);
-            Assert.Null(saved.Manifest.VideoId);
+            string attemptsRoot = MediaPolicyAttemptLog.AttemptsRoot(settings);
+            var outbox = new UploadOutbox(attemptsRoot);
+            string[] attempts = Directory.GetDirectories(attemptsRoot);
+            Assert.NotEmpty(attempts);
+            foreach (string attemptDirectory in attempts)
+            {
+                UploadAttemptResult saved = await outbox.LoadAsync(
+                    Path.GetFileName(attemptDirectory),
+                    CancellationToken.None
+                );
+                Assert.True(saved.Succeeded, saved.Reason);
+                Assert.StartsWith(
+                    "replay-65389750",
+                    saved.Manifest.AttemptId,
+                    StringComparison.Ordinal
+                );
+                Assert.Equal(65389750, saved.Manifest.ReplayId);
+                Assert.Equal(UploadAttemptState.DryRunSimulated, saved.Manifest.State);
+                Assert.Null(saved.Manifest.VideoId);
+            }
         }
         finally
         {

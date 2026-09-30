@@ -54,4 +54,14 @@ public static class ReplayMediaConfigurationError
     public const string RequestedMaxAgeTooLarge = "requested-max-age-too-large";
     public const string HighSkillMmrNegative = "high-skill-mmr-negative";
     public const string HighSkillRankInvalid = "high-skill-rank-invalid";
+    public const string PublicDayCapNegative = "public-day-cap-negative";
+    public const string PublicWeekCapNegative = "public-week-cap-negative";
+    public const string MinimumPublicIntervalNegative = "minimum-public-interval-negative";
+    public const string MinimumPublicIntervalTooLarge = "minimum-public-interval-too-large";
+    public const string MapCooldownNegative = "map-cooldown-negative";
+    public const string MapCooldownTooLarge = "map-cooldown-too-large";
+    public const string FeaturedHeroCooldownNegative = "featured-hero-cooldown-negative";
+    public const string FeaturedHeroCooldownTooLarge = "featured-hero-cooldown-too-large";
+    public const string ReservedRequestSlotsNegative = "reserved-request-slots-negative";
+    public const string InsertQuotaNegative = "insert-quota-negative";
 }

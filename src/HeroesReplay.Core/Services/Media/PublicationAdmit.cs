@@ -6,9 +6,10 @@ namespace HeroesReplay.Core.Services.Media;
 public readonly record struct PublicationAdmitResult(bool Allow, string Reason);
 
 /// <summary>
-/// Curated ordinary matches stay local. An ordinary match older than three days
-/// stays local even in AllEligible. Notable and high-skill matches are admitted
-/// only while the rolling day is under the publication cap. A requested match stays eligible.
+/// Curated ordinary matches stay local. An ordinary match older than the configured
+/// ordinary max age stays local even in AllEligible. Notable and high-skill matches
+/// are admitted only while the rolling day is under the publication cap. A requested
+/// match stays eligible for a later send.
 /// </summary>
 public static class PublicationAdmit
 {
@@ -17,10 +18,31 @@ public static class PublicationAdmit
         int alreadyPublishedInWindow
     )
     {
+        return Decide(decision, alreadyPublishedInWindow, null);
+    }
+
+    public static PublicationAdmitResult Decide(
+        ReplayMediaDecision decision,
+        int alreadyPublishedInWindow,
+        ReplayMediaPolicySettings settings
+    )
+    {
         if (decision == null || !decision.PublicationCandidate)
         {
             return Withhold(decision == null ? null : decision.PublicationReason);
         }
+
+        if (settings != null && !PublicationSchedule.ConfigurationAllowsSend(settings))
+        {
+            return Withhold(ReplayMediaReason.ConfigurationInvalid);
+        }
+
+        int dayCap =
+            settings == null ? PublicationSchedule.MaxPublicPerDay : settings.MaxPublicPerDay;
+        TimeSpan ordinaryAge =
+            settings == null
+                ? PublicationSchedule.OrdinaryMaxAge
+                : settings.OrdinaryCandidateMaxAge;
 
         if (decision.PublicationMode == ReplayPublicationMode.Disabled)
         {
@@ -34,7 +56,7 @@ public static class PublicationAdmit
 
         if (decision.PublicationMode == ReplayPublicationMode.AllEligible)
         {
-            if (OrdinaryIsOlderThanThreeDays(decision))
+            if (OrdinaryIsOlderThan(decision, ordinaryAge))
             {
                 return Withhold(ReplayMediaReason.Expired);
             }
@@ -60,7 +82,7 @@ public static class PublicationAdmit
             return Withhold(ReplayMediaReason.NotSelected);
         }
 
-        if (alreadyPublishedInWindow >= PublicationSchedule.MaxPublicPerDay)
+        if (alreadyPublishedInWindow >= dayCap)
         {
             return Withhold(ReplayMediaReason.NotSelected);
         }
@@ -68,12 +90,9 @@ public static class PublicationAdmit
         return Admit(decision.PublicationReason);
     }
 
-    private static bool OrdinaryIsOlderThanThreeDays(ReplayMediaDecision decision)
+    private static bool OrdinaryIsOlderThan(ReplayMediaDecision decision, TimeSpan maximumAge)
     {
-        if (
-            decision.Priority != ReplayMediaPriority.Ordinary
-            || decision.GameDateUtc == null
-        )
+        if (decision.Priority != ReplayMediaPriority.Ordinary || decision.GameDateUtc == null)
         {
             return false;
         }
@@ -85,7 +104,7 @@ public static class PublicationAdmit
             return false;
         }
 
-        return evaluated - played > PublicationSchedule.OrdinaryMaxAge;
+        return evaluated - played > maximumAge;
     }
 
     private static PublicationAdmitResult Admit(string reason)

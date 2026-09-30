@@ -23,7 +23,8 @@ public static class UploadStaging
         YouTubeSettings youtube,
         string hostName,
         DateTimeOffset? nowUtc,
-        DateTimeOffset? lastPublicUtc
+        DateTimeOffset? lastPublicUtc,
+        TimeSpan? minimumInterval = null
     )
     {
         YouTubeListing.StampForHost(entry, youtube, hostName);
@@ -46,7 +47,8 @@ public static class UploadStaging
             entry.PublishAtUtc = PublicationSchedule.NextPublishAt(
                 desiredFinal,
                 nowUtc.Value,
-                lastPublicUtc
+                lastPublicUtc,
+                minimumInterval
             );
         }
     }

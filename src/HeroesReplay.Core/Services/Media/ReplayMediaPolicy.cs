@@ -95,6 +95,44 @@ public static class ReplayMediaPolicy
             ReplayMediaConfigurationError.RequestedMaxAgeNegative,
             ReplayMediaConfigurationError.RequestedMaxAgeTooLarge
         );
+        AddAge(
+            errors,
+            settings.MinimumPublicInterval,
+            ReplayMediaConfigurationError.MinimumPublicIntervalNegative,
+            ReplayMediaConfigurationError.MinimumPublicIntervalTooLarge
+        );
+        AddAge(
+            errors,
+            settings.MapCooldown,
+            ReplayMediaConfigurationError.MapCooldownNegative,
+            ReplayMediaConfigurationError.MapCooldownTooLarge
+        );
+        AddAge(
+            errors,
+            settings.FeaturedHeroCooldown,
+            ReplayMediaConfigurationError.FeaturedHeroCooldownNegative,
+            ReplayMediaConfigurationError.FeaturedHeroCooldownTooLarge
+        );
+        AddCount(
+            errors,
+            settings.MaxPublicPerDay,
+            ReplayMediaConfigurationError.PublicDayCapNegative
+        );
+        AddCount(
+            errors,
+            settings.MaxPublicPerWeek,
+            ReplayMediaConfigurationError.PublicWeekCapNegative
+        );
+        AddCount(
+            errors,
+            settings.ReservedRequestSlotsPerDay,
+            ReplayMediaConfigurationError.ReservedRequestSlotsNegative
+        );
+        AddCount(
+            errors,
+            settings.MaxInsertsPerQuotaDay,
+            ReplayMediaConfigurationError.InsertQuotaNegative
+        );
 
         if (settings.MinimumHighSkillMmr is int mmrFloor && mmrFloor < 0)
         {
@@ -744,6 +782,14 @@ public static class ReplayMediaPolicy
         if (age > TimeSpan.FromDays(MaxCandidateAgeDays))
         {
             errors.Add(tooLarge);
+        }
+    }
+
+    private static void AddCount(List<string> errors, int value, string negative)
+    {
+        if (value < 0)
+        {
+            errors.Add(negative);
         }
     }
 

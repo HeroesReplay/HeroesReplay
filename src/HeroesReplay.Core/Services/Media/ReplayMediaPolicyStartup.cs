@@ -52,6 +52,7 @@ public static class ReplayMediaPolicyStartup
         }
 
         errors = found.Count == 0 ? Array.Empty<string>() : found.ToArray();
+        settings.LoadErrors = errors;
         return settings;
     }
 
@@ -172,6 +173,48 @@ public static class ReplayMediaPolicyStartup
             value => settings.RequestedCandidateMaxAge = value,
             errors
         );
+        ApplyCount(
+            section,
+            nameof(ReplayMediaPolicySettings.MaxPublicPerDay),
+            value => settings.MaxPublicPerDay = value,
+            errors
+        );
+        ApplyCount(
+            section,
+            nameof(ReplayMediaPolicySettings.MaxPublicPerWeek),
+            value => settings.MaxPublicPerWeek = value,
+            errors
+        );
+        ApplyAge(
+            section,
+            nameof(ReplayMediaPolicySettings.MinimumPublicInterval),
+            value => settings.MinimumPublicInterval = value,
+            errors
+        );
+        ApplyAge(
+            section,
+            nameof(ReplayMediaPolicySettings.MapCooldown),
+            value => settings.MapCooldown = value,
+            errors
+        );
+        ApplyAge(
+            section,
+            nameof(ReplayMediaPolicySettings.FeaturedHeroCooldown),
+            value => settings.FeaturedHeroCooldown = value,
+            errors
+        );
+        ApplyCount(
+            section,
+            nameof(ReplayMediaPolicySettings.ReservedRequestSlotsPerDay),
+            value => settings.ReservedRequestSlotsPerDay = value,
+            errors
+        );
+        ApplyCount(
+            section,
+            nameof(ReplayMediaPolicySettings.MaxInsertsPerQuotaDay),
+            value => settings.MaxInsertsPerQuotaDay = value,
+            errors
+        );
     }
 
     private static void ApplyBool(
@@ -187,6 +230,34 @@ public static class ReplayMediaPolicyStartup
         }
 
         if (!bool.TryParse(section[key], out bool value))
+        {
+            errors.Add(Unreadable + ":" + key);
+            return;
+        }
+
+        assign(value);
+    }
+
+    private static void ApplyCount(
+        IConfigurationSection section,
+        string key,
+        Action<int> assign,
+        List<string> errors
+    )
+    {
+        if (!Present(section, key))
+        {
+            return;
+        }
+
+        if (
+            !int.TryParse(
+                section[key],
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out int value
+            )
+        )
         {
             errors.Add(Unreadable + ":" + key);
             return;
