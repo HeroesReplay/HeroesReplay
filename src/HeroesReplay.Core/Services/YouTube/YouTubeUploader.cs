@@ -71,7 +71,7 @@ public class YouTubeUploader : IYouTubeUploader
         catch (OperationCanceledException)
         {
             logger.LogInformation(
-                "Upload of {Path} was interrupted and will be sent on the next start.",
+                "Upload of {Path} was interrupted. It stays pending until an operator retries it.",
                 e.FullPath
             );
         }
@@ -204,10 +204,17 @@ public class YouTubeUploader : IYouTubeUploader
         }
 
         DateTimeOffset dispatchedAt = DateTimeOffset.UtcNow;
+        bool liveSend = settings.YouTube.Enabled != false && !settings.YouTube.DryRun;
+        if (liveSend && !ReservePublicationSlot(entry, recording.FullName))
+        {
+            return;
+        }
+
+        string attemptId = AttemptId(entry, recording);
         var outbox = new UploadOutbox(MediaPolicyAttemptLog.AttemptsRoot(settings));
         SavedDispatch saved = await outbox
             .SaveDispatchAsync(
-                AttemptId(entry, recording),
+                attemptId,
                 entry.ReplayId,
                 recording.FullName,
                 recording.Length,
@@ -216,7 +223,8 @@ public class YouTubeUploader : IYouTubeUploader
                 settings.YouTube.Enabled != false,
                 settings.YouTube.DryRun,
                 dispatchedAt,
-                token
+                token,
+                operatorRetry: false
             )
             .ConfigureAwait(false);
         UploadAttemptResult dispatched = saved.Result;
@@ -230,49 +238,46 @@ public class YouTubeUploader : IYouTubeUploader
             return;
         }
 
-        if (saved.AlreadySettled)
+        if (!saved.MaySend)
         {
+            if (dispatched.Manifest.State == UploadAttemptState.Disabled)
+            {
+                logger.LogInformation(
+                    "YouTube is disabled. {Path} stays pending.",
+                    recording.FullName
+                );
+                return;
+            }
+
+            if (
+                !saved.AlreadySettled
+                && dispatched.Manifest.State == UploadAttemptState.DryRunSimulated
+            )
+            {
+                logger.LogInformation(
+                    "Dry run for {Path} ({Bytes} bytes) as {Title}. YouTube is not called.",
+                    recording.FullName,
+                    recording.Length,
+                    entry.Title
+                );
+                await CompleteDryRunAsync(recording, entry, token).ConfigureAwait(false);
+                return;
+            }
+
+            if (dispatched.Manifest.State == UploadAttemptState.AmbiguousUpload)
+            {
+                logger.LogInformation(
+                    "Upload of {Path} stopped mid-send. It stays pending until an operator retries it. YouTube was not called.",
+                    recording.FullName
+                );
+                return;
+            }
+
             logger.LogInformation(
                 "Upload of {Path} is already {State}. It stays pending. YouTube was not called.",
                 recording.FullName,
                 dispatched.Manifest.State
             );
-            return;
-        }
-
-        if (dispatched.Manifest.State == UploadAttemptState.Disabled)
-        {
-            logger.LogInformation("YouTube is disabled. {Path} stays pending.", recording.FullName);
-            return;
-        }
-
-        if (
-            settings.YouTube.DryRun
-            || dispatched.Manifest.State == UploadAttemptState.DryRunSimulated
-        )
-        {
-            logger.LogInformation(
-                "Dry run for {Path} ({Bytes} bytes) as {Title}. YouTube is not called.",
-                recording.FullName,
-                recording.Length,
-                entry.Title
-            );
-            await CompleteDryRunAsync(recording, entry, token).ConfigureAwait(false);
-            return;
-        }
-
-        if (dispatched.Manifest.State != UploadAttemptState.Uploading)
-        {
-            logger.LogInformation(
-                "Upload of {Path} is {State}. It stays pending.",
-                recording.FullName,
-                dispatched.Manifest.State
-            );
-            return;
-        }
-
-        if (!ReservePublicationSlot(entry, recording.FullName))
-        {
             return;
         }
 
@@ -326,32 +331,63 @@ public class YouTubeUploader : IYouTubeUploader
             uploaded = video;
             videosInsertRequest_ResponseReceived(video);
         };
-        IUploadProgress result = await videosInsertRequest.UploadAsync(token).ConfigureAwait(false);
-
-        if (result.Status == UploadStatus.Completed)
+        IUploadProgress result;
+        try
         {
-            if (!string.IsNullOrWhiteSpace(uploaded?.Id))
+            result = await videosInsertRequest.UploadAsync(token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await RecordInterruptedSendAsync(outbox, attemptId).ConfigureAwait(false);
+            if (ex is OperationCanceledException)
             {
-                entry.VideoId = uploaded.Id;
-                entry.ActualPrivacyStatus = string.IsNullOrWhiteSpace(
-                    uploaded.Status?.PrivacyStatus
+                throw;
+            }
+
+            logger.LogError(
+                ex,
+                "Upload of {Path} stopped mid-send. It stays pending until an operator retries it.",
+                recording.FullName
+            );
+            return;
+        }
+
+        if (result.Status == UploadStatus.Completed && !string.IsNullOrWhiteSpace(uploaded?.Id))
+        {
+            entry.VideoId = uploaded.Id;
+            entry.ActualPrivacyStatus = string.IsNullOrWhiteSpace(uploaded.Status?.PrivacyStatus)
+                ? UploadVisibility.Staged
+                : uploaded.Status.PrivacyStatus;
+            await File.WriteAllTextAsync(
+                    entryFile.FullName,
+                    JsonSerializer.Serialize(
+                        entry,
+                        new JsonSerializerOptions { WriteIndented = true }
+                    ),
+                    token
                 )
-                    ? UploadVisibility.Staged
-                    : uploaded.Status.PrivacyStatus;
-                await File.WriteAllTextAsync(
-                        entryFile.FullName,
-                        JsonSerializer.Serialize(
-                            entry,
-                            new JsonSerializerOptions { WriteIndented = true }
-                        ),
-                        token
-                    )
-                    .ConfigureAwait(false);
-                logger.LogInformation(
-                    "Saved YouTube video id {VideoId} for replay {ReplayId} at {Privacy}.",
-                    entry.VideoId,
-                    entry.ReplayId,
-                    entry.ActualPrivacyStatus
+                .ConfigureAwait(false);
+            logger.LogInformation(
+                "Saved YouTube video id {VideoId} for replay {ReplayId} at {Privacy}.",
+                entry.VideoId,
+                entry.ReplayId,
+                entry.ActualPrivacyStatus
+            );
+            UploadAttemptResult recorded = await outbox
+                .CompleteAsync(
+                    attemptId,
+                    uploaded.Id,
+                    DateTimeOffset.UtcNow,
+                    CancellationToken.None
+                )
+                .ConfigureAwait(false);
+            if (!recorded.Succeeded)
+            {
+                logger.LogWarning(
+                    "Could not record video {VideoId} for {Attempt} ({Reason}).",
+                    uploaded.Id,
+                    attemptId,
+                    recorded.Reason
                 );
             }
 
@@ -384,9 +420,34 @@ public class YouTubeUploader : IYouTubeUploader
         }
         else
         {
-            throw new InvalidOperationException(
-                $"YouTube upload status {result.Status}: {result.Exception?.Message}"
+            await RecordInterruptedSendAsync(outbox, attemptId).ConfigureAwait(false);
+            logger.LogWarning(
+                "Upload of {Path} stopped mid-send ({Status}). It stays pending until an operator retries it.",
+                recording.FullName,
+                result.Status
             );
+        }
+    }
+
+    private async Task RecordInterruptedSendAsync(UploadOutbox outbox, string attemptId)
+    {
+        try
+        {
+            UploadAttemptResult marked = await outbox
+                .MarkAmbiguousAsync(attemptId, DateTimeOffset.UtcNow, CancellationToken.None)
+                .ConfigureAwait(false);
+            if (!marked.Succeeded)
+            {
+                logger.LogWarning(
+                    "Could not record the interrupted upload {Attempt} ({Reason}).",
+                    attemptId,
+                    marked.Reason
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not record the interrupted upload {Attempt}.", attemptId);
         }
     }
 
@@ -415,7 +476,7 @@ public class YouTubeUploader : IYouTubeUploader
             catch (OperationCanceledException)
             {
                 logger.LogInformation(
-                    "Upload of {Path} was interrupted and will be sent on the next start.",
+                    "Upload of {Path} was interrupted. It stays pending until an operator retries it.",
                     path
                 );
                 return;

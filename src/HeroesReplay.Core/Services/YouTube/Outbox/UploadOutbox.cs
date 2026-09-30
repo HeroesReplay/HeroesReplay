@@ -10,6 +10,12 @@ public sealed class SavedDispatch
 {
     public UploadAttemptResult Result { get; init; }
     public bool AlreadySettled { get; init; }
+
+    /// <summary>
+    /// True only when this call moved the attempt to Uploading and the caller may insert once.
+    /// An interrupted send does not set this until an operator retries it.
+    /// </summary>
+    public bool MaySend { get; init; }
 }
 
 public sealed class UploadOutbox
@@ -231,7 +237,8 @@ public sealed class UploadOutbox
         bool youtubeEnabled,
         bool dryRun,
         DateTimeOffset at,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        bool operatorRetry = false
     )
     {
         UploadAttemptResult preview = UploadDispatch.ForFile(
@@ -246,19 +253,47 @@ public sealed class UploadOutbox
         );
         if (!preview.Succeeded)
         {
-            return new SavedDispatch { Result = preview, AlreadySettled = false };
+            return Held(preview);
         }
 
         UploadAttemptResult loaded = await LoadAsync(attemptId, cancellationToken)
             .ConfigureAwait(false);
         if (!loaded.Succeeded && loaded.Reason != UploadAttemptReasons.ManifestMissing)
         {
-            return new SavedDispatch { Result = loaded, AlreadySettled = false };
+            return Held(loaded);
+        }
+
+        if (loaded.Succeeded && loaded.Manifest.State == UploadAttemptState.Uploading)
+        {
+            return await ResumeInterruptedSendAsync(
+                    attemptId,
+                    loaded,
+                    operatorRetry,
+                    youtubeEnabled,
+                    dryRun,
+                    at,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+
+        if (loaded.Succeeded && loaded.Manifest.State == UploadAttemptState.AmbiguousUpload)
+        {
+            return await RetryAmbiguousSendAsync(
+                    attemptId,
+                    loaded,
+                    operatorRetry,
+                    youtubeEnabled,
+                    dryRun,
+                    at,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
         }
 
         if (loaded.Succeeded && IsSettled(loaded.Manifest.State))
         {
-            return new SavedDispatch { Result = loaded, AlreadySettled = true };
+            return Settled(loaded);
         }
 
         if (!loaded.Succeeded)
@@ -272,7 +307,7 @@ public sealed class UploadOutbox
                 .ConfigureAwait(false);
             if (!created.Succeeded)
             {
-                return new SavedDispatch { Result = created, AlreadySettled = false };
+                return Held(created);
             }
 
             loaded = created;
@@ -316,15 +351,101 @@ public sealed class UploadOutbox
                 .ConfigureAwait(false);
         }
 
-        return new SavedDispatch { Result = loaded, AlreadySettled = false };
+        return Held(loaded);
+    }
+
+    private async Task<SavedDispatch> ResumeInterruptedSendAsync(
+        string attemptId,
+        UploadAttemptResult loaded,
+        bool operatorRetry,
+        bool youtubeEnabled,
+        bool dryRun,
+        DateTimeOffset at,
+        CancellationToken cancellationToken
+    )
+    {
+        if (UploadAttemptReceipt.HasExactText(loaded.Manifest.VideoId))
+        {
+            UploadAttemptResult completed = await CompleteAsync(
+                    attemptId,
+                    loaded.Manifest.VideoId,
+                    at,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            return Settled(completed);
+        }
+
+        UploadAttemptResult ambiguous = await MarkAmbiguousAsync(attemptId, at, cancellationToken)
+            .ConfigureAwait(false);
+        if (!ambiguous.Succeeded || !operatorRetry)
+        {
+            return Held(ambiguous);
+        }
+
+        return await RetryAmbiguousSendAsync(
+                attemptId,
+                ambiguous,
+                operatorRetry: true,
+                youtubeEnabled,
+                dryRun,
+                at,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    private async Task<SavedDispatch> RetryAmbiguousSendAsync(
+        string attemptId,
+        UploadAttemptResult loaded,
+        bool operatorRetry,
+        bool youtubeEnabled,
+        bool dryRun,
+        DateTimeOffset at,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!operatorRetry)
+        {
+            return Settled(loaded);
+        }
+
+        UploadAttemptResult retried = await DispatchAsync(
+                attemptId,
+                youtubeEnabled,
+                dryRun,
+                operatorRetry: true,
+                at,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        return Held(retried);
+    }
+
+    private static SavedDispatch Settled(UploadAttemptResult result)
+    {
+        return new SavedDispatch
+        {
+            Result = result,
+            AlreadySettled = true,
+            MaySend = false,
+        };
+    }
+
+    private static SavedDispatch Held(UploadAttemptResult result)
+    {
+        return new SavedDispatch
+        {
+            Result = result,
+            AlreadySettled = false,
+            MaySend = result.Succeeded && result.Manifest?.State == UploadAttemptState.Uploading,
+        };
     }
 
     private static bool IsSettled(UploadAttemptState state)
     {
         return state == UploadAttemptState.DryRunSimulated
             || state == UploadAttemptState.Disabled
-            || state == UploadAttemptState.Uploading
-            || state == UploadAttemptState.Uploaded
-            || state == UploadAttemptState.AmbiguousUpload;
+            || state == UploadAttemptState.Uploaded;
     }
 }

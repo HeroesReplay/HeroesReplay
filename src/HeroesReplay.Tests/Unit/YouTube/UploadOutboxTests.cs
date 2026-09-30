@@ -270,13 +270,132 @@ public class UploadOutboxTests
 
         Assert.True(first.Result.Succeeded, first.Result.Reason);
         Assert.False(first.AlreadySettled);
+        Assert.False(first.MaySend);
         Assert.Equal(UploadAttemptState.DryRunSimulated, first.Result.Manifest.State);
         Assert.True(File.Exists(outbox.ManifestPath("replay-7")));
         Assert.True(second.Result.Succeeded, second.Result.Reason);
         Assert.True(second.AlreadySettled);
+        Assert.False(second.MaySend);
         Assert.Equal(UploadAttemptState.DryRunSimulated, second.Result.Manifest.State);
         Assert.Equal(first.Result.Manifest.Revision, second.Result.Manifest.Revision);
         Assert.Null(second.Result.Manifest.VideoId);
+    }
+
+    [Fact]
+    public async Task InterruptedUpload_DoesNotSendAgainUntilAnOperatorRetries()
+    {
+        using var temp = new TempAttempts();
+        var outbox = new UploadOutbox(temp.Root);
+        string mediaPath = Path.Combine(temp.Root, "match.mp4");
+        const string mediaHash = "len-128";
+
+        SavedDispatch started = await outbox.SaveDispatchAsync(
+            "replay-11",
+            11,
+            mediaPath,
+            128,
+            mediaHash,
+            youtubeEnabled: true,
+            dryRun: false,
+            Stamp,
+            CancellationToken.None
+        );
+        SavedDispatch interrupted = await outbox.SaveDispatchAsync(
+            "replay-11",
+            11,
+            Path.Combine(temp.Root, "other.mp4"),
+            64,
+            "other-hash",
+            youtubeEnabled: true,
+            dryRun: false,
+            Stamp.AddMinutes(1),
+            CancellationToken.None
+        );
+        SavedDispatch ordinary = await outbox.SaveDispatchAsync(
+            "replay-11",
+            11,
+            mediaPath,
+            128,
+            mediaHash,
+            youtubeEnabled: true,
+            dryRun: false,
+            Stamp.AddMinutes(2),
+            CancellationToken.None
+        );
+        SavedDispatch dryRetry = await outbox.SaveDispatchAsync(
+            "replay-11",
+            11,
+            mediaPath,
+            128,
+            mediaHash,
+            youtubeEnabled: true,
+            dryRun: true,
+            Stamp.AddMinutes(3),
+            CancellationToken.None,
+            operatorRetry: true
+        );
+        SavedDispatch disabledRetry = await outbox.SaveDispatchAsync(
+            "replay-11",
+            11,
+            mediaPath,
+            128,
+            mediaHash,
+            youtubeEnabled: false,
+            dryRun: false,
+            Stamp.AddMinutes(4),
+            CancellationToken.None,
+            operatorRetry: true
+        );
+        SavedDispatch allowed = await outbox.SaveDispatchAsync(
+            "replay-11",
+            11,
+            Path.Combine(temp.Root, "other.mp4"),
+            64,
+            "other-hash",
+            youtubeEnabled: true,
+            dryRun: false,
+            Stamp.AddMinutes(5),
+            CancellationToken.None,
+            operatorRetry: true
+        );
+        UploadAttemptManifest reloaded = await ReloadAsync(
+            new UploadOutbox(temp.Root),
+            "replay-11"
+        );
+
+        Assert.True(started.Result.Succeeded, started.Result.Reason);
+        Assert.True(started.MaySend);
+        Assert.False(started.AlreadySettled);
+        Assert.Equal(UploadAttemptState.Uploading, started.Result.Manifest.State);
+        Assert.Equal(mediaPath, started.Result.Manifest.MediaPath);
+        Assert.True(interrupted.Result.Succeeded, interrupted.Result.Reason);
+        Assert.False(interrupted.MaySend);
+        Assert.False(interrupted.AlreadySettled);
+        Assert.Equal(UploadAttemptState.AmbiguousUpload, interrupted.Result.Manifest.State);
+        Assert.Equal(mediaPath, interrupted.Result.Manifest.MediaPath);
+        Assert.Equal(mediaHash, interrupted.Result.Manifest.MediaHash);
+        Assert.Null(interrupted.Result.Manifest.VideoId);
+        Assert.True(ordinary.AlreadySettled);
+        Assert.False(ordinary.MaySend);
+        Assert.Equal(UploadAttemptState.AmbiguousUpload, ordinary.Result.Manifest.State);
+        Assert.False(dryRetry.Result.Succeeded);
+        Assert.False(dryRetry.MaySend);
+        Assert.Equal(UploadAttemptReasons.DryRun, dryRetry.Result.Reason);
+        Assert.Equal(UploadAttemptState.AmbiguousUpload, dryRetry.Result.Manifest.State);
+        Assert.False(disabledRetry.Result.Succeeded);
+        Assert.False(disabledRetry.MaySend);
+        Assert.Equal(UploadAttemptReasons.YoutubeDisabled, disabledRetry.Result.Reason);
+        Assert.Equal(UploadAttemptState.AmbiguousUpload, disabledRetry.Result.Manifest.State);
+        Assert.True(allowed.Result.Succeeded, allowed.Result.Reason);
+        Assert.True(allowed.MaySend);
+        Assert.False(allowed.AlreadySettled);
+        Assert.Equal(UploadAttemptState.Uploading, allowed.Result.Manifest.State);
+        Assert.Equal(mediaPath, allowed.Result.Manifest.MediaPath);
+        Assert.Equal(mediaHash, allowed.Result.Manifest.MediaHash);
+        Assert.Null(allowed.Result.Manifest.VideoId);
+        Assert.Equal(UploadAttemptState.Uploading, reloaded.State);
+        Assert.Equal(mediaPath, reloaded.MediaPath);
+        Assert.Null(reloaded.VideoId);
     }
 
     [Fact]
