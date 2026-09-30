@@ -7,24 +7,26 @@ namespace HeroesReplay.Tests.Unit.Observer;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class ReportHandoffTests
 {
+    [Fact]
+    public void ShouldCutReport_MapLoading_StopsTheReport()
+    {
+        Assert.True(ReportHandoff.ShouldCutReport(mapLoading: true, matchClock: null));
+    }
+
     [Theory]
+    [InlineData(-30)]
     [InlineData(0)]
-    [InlineData(1)]
     [InlineData(120)]
-    public void ShouldCutReport_RunningClock_StopsTheReport(int seconds)
+    public void ShouldCutReport_VisibleClock_StopsTheReport(int seconds)
     {
-        Assert.True(ReportHandoff.ShouldCutReport(TimeSpan.FromSeconds(seconds)));
+        Assert.True(
+            ReportHandoff.ShouldCutReport(mapLoading: false, TimeSpan.FromSeconds(seconds))
+        );
     }
 
     [Fact]
-    public void ShouldCutReport_DraftCountdown_KeepsTheReport()
+    public void ShouldCutReport_ClientStillStarting_KeepsTheReport()
     {
-        Assert.False(ReportHandoff.ShouldCutReport(TimeSpan.FromSeconds(-30)));
-    }
-
-    [Fact]
-    public void ShouldCutReport_NoClock_KeepsTheReport()
-    {
-        Assert.False(ReportHandoff.ShouldCutReport(null));
+        Assert.False(ReportHandoff.ShouldCutReport(mapLoading: false, matchClock: null));
     }
 }

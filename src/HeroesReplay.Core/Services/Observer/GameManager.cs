@@ -280,7 +280,7 @@ public class GameManager : IGameManager
                         if (cutReport.IsCancellationRequested)
                         {
                             logger.LogInformation(
-                                "The next match clock is running. Switching to the game scene so spectating starts now."
+                                "The next map is loading or its clock is visible. Switching to the game scene so spectating starts now."
                             );
                         }
                         else
@@ -520,8 +520,6 @@ public class GameManager : IGameManager
         }
 
         bool loggedReadFailure = false;
-        bool loggedLoading = false;
-        bool sawLoading = false;
         bool reopenedFromHome = false;
         DateTimeOffset reopenAt = DateTimeOffset.UtcNow.AddSeconds(25);
         DateTimeOffset readyBy = DateTimeOffset.UtcNow.AddMinutes(3);
@@ -551,10 +549,10 @@ public class GameManager : IGameManager
             }
 
             TimeSpan? matchClock = gameController.TryReadMatchClock();
-            if (ReportHandoff.ShouldCutReport(matchClock))
+            if (ReportHandoff.ShouldCutReport(mapLoading: false, matchClock))
             {
                 logger.LogInformation(
-                    "Next replay {ReplayId} match clock is {Clock}. The report stops so spectating starts at this clock.",
+                    "Next replay {ReplayId} match clock is {Clock}. The report stops so OBS shows the game through the countdown.",
                     next.ReplayId,
                     matchClock
                 );
@@ -562,20 +560,12 @@ public class GameManager : IGameManager
                 return NextMatchLaunch.Presented;
             }
 
+            bool mapLoading = false;
             try
             {
-                if (await gameController.IsReplayPresentedAsync(next).ConfigureAwait(false))
-                {
-                    sawLoading = true;
-                    if (!loggedLoading)
-                    {
-                        loggedLoading = true;
-                        logger.LogInformation(
-                            "Next replay {ReplayId} is on the loading screen. The report continues until the match clock starts.",
-                            next.ReplayId
-                        );
-                    }
-                }
+                mapLoading = await gameController
+                    .IsReplayPresentedAsync(next)
+                    .ConfigureAwait(false);
             }
             catch (Exception e)
             {
@@ -590,17 +580,18 @@ public class GameManager : IGameManager
                 }
             }
 
+            if (ReportHandoff.ShouldCutReport(mapLoading, matchClock))
+            {
+                logger.LogInformation(
+                    "Next replay {ReplayId} is on the map loading screen or the on-screen timer. The report stops so OBS shows the game.",
+                    next.ReplayId
+                );
+                cutReport.Cancel();
+                return NextMatchLaunch.Presented;
+            }
+
             if (report.IsCompleted)
             {
-                if (sawLoading)
-                {
-                    logger.LogInformation(
-                        "Report scenes finished. Next replay {ReplayId} is on the loading screen. OBS can show the game.",
-                        next.ReplayId
-                    );
-                    return NextMatchLaunch.Presented;
-                }
-
                 break;
             }
 
