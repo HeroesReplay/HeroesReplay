@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Twitch;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 using TwitchLib.PubSub.Events;
@@ -30,15 +31,30 @@ public class OnRewardRedeemedHandler : IOnRewardHandler
         this.rewards = rewards;
     }
 
+    public string RecordedStatus { get; private set; }
+
+    public string Record(RewardTerminal terminal)
+    {
+        RecordedStatus = RewardRedemptionStatus.Decide(terminal);
+        logger.LogInformation(
+            "Redemption disposition {Status} ({Terminal}). Twitch was not called.",
+            RecordedStatus,
+            terminal
+        );
+        return RecordedStatus;
+    }
+
     public void Handle(OnRewardRedeemedArgs args)
     {
         if (args == null)
         {
+            Record(RewardTerminal.InvalidInput);
             return;
         }
 
         if (args.RedemptionId != Guid.Empty && !IsFirstDelivery(args.RedemptionId))
         {
+            Record(RewardTerminal.Duplicate);
             logger.LogInformation(
                 "Ignoring duplicate redemption {RedemptionId} for '{Title}'.",
                 args.RedemptionId,
@@ -67,6 +83,7 @@ public class OnRewardRedeemedHandler : IOnRewardHandler
         }
         else
         {
+            Record(RewardTerminal.UnavailableReplay);
             logger.LogWarning(
                 $"Could not handle reward '{args.RewardTitle}' because it was not found"
             );

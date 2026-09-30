@@ -407,13 +407,14 @@ public class GameManager : IGameManager
             return;
         }
 
+        string status = RewardRedemptionStatus.Decide(RewardRedemptionStatus.FromOutcome(outcome));
         string path = Path.Combine(settings.Location.DataDirectory, "redemption-dispositions.txt");
         RedemptionDispositionLog.Append(path, loaded.ReplayId, redemptionId, end);
         logger.LogInformation(
-            "Redemption {RedemptionId} for replay {ReplayId} is {End}. Twitch was not called.",
+            "Redemption {RedemptionId} for replay {ReplayId} is {Status}. Twitch was not called.",
             redemptionId,
             loaded.ReplayId,
-            end
+            status
         );
     }
 

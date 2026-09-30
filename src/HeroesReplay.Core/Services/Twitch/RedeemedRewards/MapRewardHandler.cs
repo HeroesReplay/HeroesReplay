@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Twitch;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Interfaces;
@@ -60,6 +61,16 @@ public class MapRewardHandler : IRewardHandler
                     RewardResponse response = await queue.EnqueueItemAsync(
                         rewardRequestFactory.Create(reward, args)
                     );
+                    string queued = RewardRedemptionStatus.ForQueue(response);
+                    if (queued != null)
+                    {
+                        logger.LogInformation(
+                            "Redemption {RedemptionId} is {Status}. Twitch was not called.",
+                            args.RedemptionId,
+                            queued
+                        );
+                    }
+
                     if (response.Duplicate)
                     {
                         logger.LogInformation(

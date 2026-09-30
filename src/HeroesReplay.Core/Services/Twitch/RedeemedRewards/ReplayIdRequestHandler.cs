@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Services.Twitch;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Interfaces;
@@ -75,6 +76,16 @@ public class ReplayIdRequestHandler : IRewardHandler
                     RewardResponse response = await queue.EnqueueItemAsync(
                         requestFactory.Create(reward, args)
                     );
+                    string queued = RewardRedemptionStatus.ForQueue(response);
+                    if (queued != null)
+                    {
+                        logger.LogInformation(
+                            "Redemption {RedemptionId} is {Status}. Twitch was not called.",
+                            args.RedemptionId,
+                            queued
+                        );
+                    }
+
                     if (response.Duplicate)
                     {
                         logger.LogInformation(
@@ -100,6 +111,11 @@ public class ReplayIdRequestHandler : IRewardHandler
         }
         else
         {
+            logger.LogInformation(
+                "Redemption {RedemptionId} is {Status}. Twitch was not called.",
+                args.RedemptionId,
+                RewardRedemptionStatus.Decide(RewardTerminal.InvalidInput)
+            );
             twitchClient.SendMessage(
                 settings.Twitch.Channel,
                 $"{args.DisplayName}, your request is invalid.",
