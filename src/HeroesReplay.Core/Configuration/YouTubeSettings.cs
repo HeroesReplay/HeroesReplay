@@ -26,4 +26,9 @@ public class YouTubeSettings
     /// </summary>
     public string TitlePrefix { get; set; }
     public string EntryFileNameUploaded { get; set; }
+
+    /// <summary>
+    /// Display name of the current patch playlist. Blank uses the patch number.
+    /// </summary>
+    public string SeasonName { get; set; }
 }

@@ -76,8 +76,14 @@ public class GameManager : IGameManager
     {
         MediaRetention.SweepAndLog(settings, logger);
         await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
-        // Observe-only. The snapshot does not start recording or choose the upload file.
-        await RecordPreLaunchAsync(loadedReplay).ConfigureAwait(false);
+        MediaPolicySnapshot preLaunch = await mediaPolicy
+            .RecordPreLaunchAsync(
+                loadedReplay,
+                settings.ReplayMedia,
+                CancellationToken.None
+            )
+            .ConfigureAwait(false);
+        ApplyPreLaunchPolicy(loadedReplay, preLaunch);
         await contextSetter.SetContextAsync(loadedReplay);
         bool obsSession = false;
         bool enteredMatch = false;
@@ -245,7 +251,6 @@ public class GameManager : IGameManager
 
             if (enteredMatch)
             {
-                // Observe-only. Eligibility stays on the attempt manifest and does not publish.
                 await RecordPublicationAsync(loadedReplay, stopped).ConfigureAwait(false);
                 ReplayShutdown.CaptureEndThenKill(gameController, logger);
             }
@@ -610,30 +615,61 @@ public class GameManager : IGameManager
         return NextMatchLaunch.ProcessOnly;
     }
 
-    private Task RecordPreLaunchAsync(LoadedReplay loadedReplay)
+    private static void ApplyPreLaunchPolicy(LoadedReplay loaded, MediaPolicySnapshot snapshot)
     {
-        return mediaPolicy.RecordPreLaunchAsync(
-            loadedReplay,
-            settings.ReplayMedia,
-            CancellationToken.None
-        );
+        if (loaded == null)
+        {
+            return;
+        }
+
+        loaded.PolicyAllowsRecording = snapshot?.Decision?.Record == true;
+        loaded.PolicyAllowsPublication = false;
     }
 
-    private Task RecordPublicationAsync(LoadedReplay loadedReplay, ObsRecordingResult recording)
+    private async Task RecordPublicationAsync(
+        LoadedReplay loadedReplay,
+        ObsRecordingResult recording
+    )
     {
-        return mediaPolicy.RecordPublicationAsync(
-            loadedReplay,
-            new MediaPublicationFacts
-            {
-                Outcome = spectator.Outcome,
-                MatchClockSeen = spectator.MatchClockSeen,
-                HudSamples = recordingClock.SampleCount,
-                RecordedFor = recordingClock.Elapsed,
-                Recording = recording,
-                AlreadyPublished = loadedReplay?.AlreadyOnYouTube == true,
-            },
-            CancellationToken.None
-        );
+        MediaPolicySnapshot snapshot = await mediaPolicy
+            .RecordPublicationAsync(
+                loadedReplay,
+                new MediaPublicationFacts
+                {
+                    Outcome = spectator.Outcome,
+                    MatchClockSeen = spectator.MatchClockSeen,
+                    HudSamples = recordingClock.SampleCount,
+                    RecordedFor = recordingClock.Elapsed,
+                    Recording = recording,
+                    AlreadyPublished = loadedReplay?.AlreadyOnYouTube == true,
+                },
+                CancellationToken.None
+            )
+            .ConfigureAwait(false);
+        if (loadedReplay != null)
+        {
+            loadedReplay.PolicyAllowsPublication =
+                snapshot?.Decision?.PublicationCandidate == true;
+        }
+
+        string directory = context.Current?.Directory?.FullName;
+        bool wrote = await YouTubeEntryWriter
+            .WriteIfAllowedAsync(
+                directory,
+                settings.YouTube?.EntryFileName,
+                loadedReplay,
+                settings.YouTube,
+                isCompleteRecording: true,
+                CancellationToken.None
+            )
+            .ConfigureAwait(false);
+        if (wrote)
+        {
+            logger.LogInformation(
+                "Wrote the YouTube entry for replay {ReplayId} after the publication decision.",
+                loadedReplay?.ReplayId
+            );
+        }
     }
 
     private async Task MarkExistingYouTubeVideoAsync(LoadedReplay loadedReplay)

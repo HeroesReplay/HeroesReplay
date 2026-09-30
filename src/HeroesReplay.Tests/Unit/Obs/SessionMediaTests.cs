@@ -91,6 +91,42 @@ public class SessionMediaTests
         Assert.True(SessionMedia.ShouldWriteYouTubeEntry(youtube, replay));
     }
 
+    [Fact]
+    public void PolicyRefusal_BlocksAnOwnedRecordingAndTheYouTubeEntry()
+    {
+        var obs = new OBSSettings { RecordingEnabled = true };
+        var youtube = new YouTubeSettings { Enabled = true };
+        var replay = new LoadedReplay
+        {
+            ReplayId = 42,
+            PolicyAllowsRecording = false,
+            PolicyAllowsPublication = false,
+        };
+
+        Assert.False(SessionMedia.ShouldRecord(obs, replay));
+        Assert.False(SessionMedia.ShouldWriteYouTubeEntry(youtube, replay));
+    }
+
+    [Fact]
+    public void PolicyApproval_StillRequiresTheObsAndYouTubeSwitches()
+    {
+        var replay = new LoadedReplay
+        {
+            ReplayId = 42,
+            PolicyAllowsRecording = true,
+            PolicyAllowsPublication = true,
+        };
+
+        Assert.False(SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = false }, replay));
+        Assert.True(SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = true }, replay));
+        Assert.False(
+            SessionMedia.ShouldWriteYouTubeEntry(new YouTubeSettings { Enabled = false }, replay)
+        );
+        Assert.True(
+            SessionMedia.ShouldWriteYouTubeEntry(new YouTubeSettings { Enabled = true }, replay)
+        );
+    }
+
     private static LoadedReplay ReplayIdLoaded(bool recordAndUpload) =>
         new()
         {

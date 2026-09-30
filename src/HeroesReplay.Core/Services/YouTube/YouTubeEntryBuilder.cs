@@ -8,7 +8,14 @@ namespace HeroesReplay.Core.Services.YouTube;
 
 public static class YouTubeEntryBuilder
 {
-    public static YouTubeEntry Create(LoadedReplay loaded, YouTubeSettings youtube)
+    public static YouTubeEntry Create(LoadedReplay loaded, YouTubeSettings youtube) =>
+        Create(loaded, youtube, isCompleteRecording: false);
+
+    public static YouTubeEntry Create(
+        LoadedReplay loaded,
+        YouTubeSettings youtube,
+        bool isCompleteRecording
+    )
     {
         ReplayMediaPolicyInput facts = ReplayMediaFacts.From(loaded, false, false, false);
         var input = new FullMatchMetadataInput
@@ -27,7 +34,7 @@ public static class YouTubeEntryBuilder
             RecordAndUpload = facts.RecordAndUpload,
             RequestedBy = facts.RequestedBy,
             NotableEvents = facts.NotableEvents,
-            IsCompleteRecording = false,
+            IsCompleteRecording = isCompleteRecording,
         };
         FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(
             input,
@@ -47,11 +54,10 @@ public static class YouTubeEntryBuilder
             lines.AddRange(metadata.DescriptionLines);
         }
 
-        lines.Add("Hashtags: #HeroesOfTheStorm #SaltySadism");
-
         return new YouTubeEntry
         {
             ReplayId = metadata.ReplayId ?? facts.ReplayId,
+            TemplateVersion = metadata.TemplateVersion,
             Map = metadata.Map,
             GameType = metadata.GameMode,
             Rank = metadata.Rank,

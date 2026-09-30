@@ -42,6 +42,11 @@ public static class SessionMedia
             return false;
         }
 
+        if (replay?.PolicyAllowsRecording == false)
+        {
+            return false;
+        }
+
         if (obs.RecordingEnabled)
         {
             return true;
@@ -53,6 +58,11 @@ public static class SessionMedia
     public static bool ShouldWriteYouTubeEntry(YouTubeSettings youtube, LoadedReplay replay)
     {
         if (youtube == null || replay?.AlreadyOnYouTube == true)
+        {
+            return false;
+        }
+
+        if (replay?.PolicyAllowsPublication == false)
         {
             return false;
         }

@@ -46,6 +46,12 @@ public static class YouTubeLibraryPlanner
     public static IReadOnlyList<YouTubeLibraryItem> Roll(
         IEnumerable<YouTubeEntry> entries,
         string currentPatchLine
+    ) => Roll(entries, currentPatchLine, seasonName: null);
+
+    public static IReadOnlyList<YouTubeLibraryItem> Roll(
+        IEnumerable<YouTubeEntry> entries,
+        string currentPatchLine,
+        string seasonName
     )
     {
         if (entries == null)
@@ -58,7 +64,7 @@ public static class YouTubeLibraryPlanner
         var items = new List<YouTubeLibraryItem>();
         foreach (YouTubeEntry entry in entries)
         {
-            if (entry == null || !PatchPlaylist.MayFile(entry.PrivacyStatus))
+            if (!PatchPlaylist.MayFile(entry))
             {
                 continue;
             }
@@ -69,7 +75,7 @@ public static class YouTubeLibraryPlanner
             }
 
             string videoId = entry.VideoId.Trim();
-            string playlist = PatchPlaylist.Name(entry.GameVersion, line);
+            string playlist = PatchPlaylist.Name(entry.GameVersion, line, seasonName);
             string key = playlist + "\n" + videoId;
             if (!seen.Add(key))
             {

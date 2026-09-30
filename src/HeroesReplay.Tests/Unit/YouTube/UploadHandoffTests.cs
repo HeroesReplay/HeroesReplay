@@ -150,4 +150,28 @@ public class UploadHandoffTests
         Assert.Equal(PatchPlaylist.Unknown, rolled[2].PlaylistTitle);
         Assert.DoesNotContain(rolled, item => item.VideoId == "test");
     }
+
+    [Fact]
+    public void Roll_FilesAPrivateStagingEntryOnceYouTubeReportsItPublic()
+    {
+        var rolled = YouTubeLibraryPlanner.Roll(
+            new[]
+            {
+                new YouTubeEntry
+                {
+                    VideoId = "staged",
+                    PrivacyStatus = "private",
+                    ActualPrivacyStatus = "public",
+                    GameVersion = "2.57.0.98304",
+                    ReplayId = 9,
+                },
+            },
+            "2.57",
+            "Season 2026"
+        );
+
+        YouTubeLibraryItem item = Assert.Single(rolled);
+        Assert.Equal("Season 2026", item.PlaylistTitle);
+        Assert.Equal("staged", item.VideoId);
+    }
 }

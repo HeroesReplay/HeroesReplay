@@ -15,7 +15,7 @@ public class LibraryCommand : Command
     public LibraryCommand()
         : base(
             "library",
-            "File uploaded matches into map playlists. Polls until stopped. Not part of services start. Dry-run does not call YouTube."
+            "File uploaded matches into map and patch playlists. The uploader does this during services start. This command polls until stopped. Dry-run does not call YouTube."
         )
     {
         var onceOption = new Option<bool>("--once")

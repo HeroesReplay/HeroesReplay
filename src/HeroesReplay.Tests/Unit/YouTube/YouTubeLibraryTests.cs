@@ -126,6 +126,59 @@ public class YouTubeLibraryTests
         }
     }
 
+    [Fact]
+    public async Task RunOnce_FilesOneVideoIntoTheMapPlaylistAndThePatchPlaylist()
+    {
+        string directory = TempDirectory();
+        try
+        {
+            WriteEntry(
+                directory,
+                new YouTubeEntry
+                {
+                    ReplayId = 9,
+                    VideoId = "video-9",
+                    Map = "Cursed Hollow",
+                    GameType = "Quick Match",
+                    PrivacyStatus = "private",
+                    ActualPrivacyStatus = "public",
+                    GameVersion = "2.57.0.98304",
+                }
+            );
+            var client = new RecordingPlaylistClient { FailOnInsert = 2 };
+            var library = new YouTubeLibrary(
+                NullLogger<YouTubeLibrary>.Instance,
+                new AppSettings
+                {
+                    Location = new LocationSettings { DataDirectory = directory },
+                    Spectate = new SpectateSettings { MinimumGameVersion = "2.57.0.98304" },
+                    YouTube = new YouTubeSettings
+                    {
+                        DryRun = false,
+                        EntryFileNameUploaded = "youtube-entry-uploaded.json",
+                        SeasonName = "Season 2026",
+                    },
+                },
+                client
+            );
+
+            await library.RunOnceAsync(CancellationToken.None);
+
+            Assert.Equal(("pl-0", "video-9"), client.Inserted[0]);
+            Assert.Contains("Cursed Hollow - Quick Match", client.Created);
+            string cache = await File.ReadAllTextAsync(
+                Path.Combine(directory, YouTubeLibrary.CacheFileName)
+            );
+            Assert.Contains("Cursed Hollow - Quick Match", cache, StringComparison.Ordinal);
+            Assert.Contains("video-9", cache, StringComparison.Ordinal);
+            Assert.DoesNotContain("Season 2026", cache, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static YouTubeLibrary Library(
         string directory,
         bool dryRun,
@@ -171,6 +224,7 @@ public class YouTubeLibraryTests
     {
         public List<string> Created { get; } = new();
         public List<(string PlaylistId, string VideoId)> Inserted { get; } = new();
+        public int FailOnInsert { get; set; }
 
         public Task<string> FindOrCreateAsync(string title, CancellationToken cancellationToken)
         {
@@ -185,6 +239,11 @@ public class YouTubeLibraryTests
         )
         {
             Inserted.Add((playlistId, videoId));
+            if (FailOnInsert > 0 && Inserted.Count >= FailOnInsert)
+            {
+                throw new InvalidOperationException("playlist insert failed");
+            }
+
             return Task.CompletedTask;
         }
     }

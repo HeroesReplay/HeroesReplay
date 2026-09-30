@@ -1,4 +1,5 @@
 using System;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core.Services.YouTube;
@@ -11,7 +12,10 @@ public static class PatchPlaylist
 {
     public const string Unknown = "Unknown patch";
 
-    public static string Name(string replayVersion, string currentLine)
+    public static string Name(string replayVersion, string currentLine) =>
+        Name(replayVersion, currentLine, seasonName: null);
+
+    public static string Name(string replayVersion, string currentLine, string seasonName)
     {
         string line = GameVersionOrder.PatchLine(replayVersion);
         if (string.IsNullOrWhiteSpace(line))
@@ -24,7 +28,7 @@ public static class PatchPlaylist
             && string.Equals(line, currentLine.Trim(), StringComparison.Ordinal)
         )
         {
-            return "Patch " + line;
+            return string.IsNullOrWhiteSpace(seasonName) ? "Patch " + line : seasonName.Trim();
         }
 
         return "Patch " + line + " archive";
@@ -33,5 +37,15 @@ public static class PatchPlaylist
     public static bool MayFile(string privacyStatus)
     {
         return string.Equals(privacyStatus, "public", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool MayFile(YouTubeEntry entry)
+    {
+        if (entry == null)
+        {
+            return false;
+        }
+
+        return MayFile(entry.ActualPrivacyStatus) || MayFile(entry.PrivacyStatus);
     }
 }

@@ -48,7 +48,7 @@ public class YouTubeLibrary : IYouTubeLibrary
         string patchLine = GameVersionOrder.PatchLine(settings.Spectate?.MinimumGameVersion);
         IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Combine(
             YouTubeLibraryPlanner.Select(entries),
-            YouTubeLibraryPlanner.Roll(entries, patchLine)
+            YouTubeLibraryPlanner.Roll(entries, patchLine, settings.YouTube?.SeasonName)
         );
         if (settings.YouTube?.DryRun != false)
         {
@@ -62,18 +62,34 @@ public class YouTubeLibrary : IYouTubeLibrary
         }
 
         YouTubePlaylistCache cache = LoadCache();
-        int filed = await FileAsync(items, cache, playlists, cancellationToken)
+        int filed = await FileAsync(
+                items,
+                cache,
+                playlists,
+                cancellationToken,
+                () => SaveCache(cache)
+            )
             .ConfigureAwait(false);
-        SaveCache(cache);
         logger.LogInformation("YouTube library filed {Count} videos into playlists.", filed);
         return 0;
+    }
+
+    public Task<int> FileAsync(
+        IReadOnlyList<YouTubeLibraryItem> items,
+        YouTubePlaylistCache cache,
+        IYouTubePlaylistClient client,
+        CancellationToken cancellationToken
+    )
+    {
+        return FileAsync(items, cache, client, cancellationToken, persist: null);
     }
 
     public async Task<int> FileAsync(
         IReadOnlyList<YouTubeLibraryItem> items,
         YouTubePlaylistCache cache,
         IYouTubePlaylistClient client,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        Action persist
     )
     {
         if (items == null || items.Count == 0)
@@ -89,7 +105,13 @@ public class YouTubeLibrary : IYouTubeLibrary
         foreach (YouTubeLibraryItem item in items)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (item == null || string.IsNullOrWhiteSpace(item.VideoId) || !filed.Add(item.VideoId))
+            if (item == null || string.IsNullOrWhiteSpace(item.VideoId))
+            {
+                continue;
+            }
+
+            string filedKey = (item.PlaylistTitle ?? string.Empty) + "\n" + item.VideoId.Trim();
+            if (!filed.Add(filedKey))
             {
                 continue;
             }
@@ -110,8 +132,9 @@ public class YouTubeLibrary : IYouTubeLibrary
                 await client
                     .InsertAsync(playlistId, item.VideoId, cancellationToken)
                     .ConfigureAwait(false);
-                cache.FiledVideoIds.Add(item.VideoId);
+                cache.FiledVideoIds.Add(filedKey);
                 count++;
+                persist?.Invoke();
                 logger.LogInformation(
                     "Filed {VideoId} into {Playlist}.",
                     item.VideoId,
@@ -124,7 +147,7 @@ public class YouTubeLibrary : IYouTubeLibrary
             }
             catch (Exception exception)
             {
-                filed.Remove(item.VideoId);
+                filed.Remove(filedKey);
                 logger.LogWarning(
                     exception,
                     "Could not file {VideoId} into {Playlist}.",
@@ -242,10 +265,13 @@ public class YouTubeLibrary : IYouTubeLibrary
             Directory.CreateDirectory(directory);
         }
 
-        File.WriteAllText(
-            path,
-            JsonSerializer.Serialize(cache, new JsonSerializerOptions { WriteIndented = true })
+        string json = JsonSerializer.Serialize(
+            cache,
+            new JsonSerializerOptions { WriteIndented = true }
         );
+        string temp = path + ".tmp";
+        File.WriteAllText(temp, json);
+        File.Move(temp, path, overwrite: true);
     }
 
     private string CachePath()

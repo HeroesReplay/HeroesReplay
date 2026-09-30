@@ -150,13 +150,36 @@ public class YouTubeEntryBuilderTests
             entry.DescriptionLines,
             line => line.StartsWith("Blue:", System.StringComparison.Ordinal)
         );
-        int tags = System.Array.IndexOf(
-            entry.DescriptionLines,
-            "Hashtags: #HeroesOfTheStorm #SaltySadism"
-        );
         Assert.Equal("Twitch: http://twitch.tv/saltysadism", entry.DescriptionLines[0]);
         Assert.True(roster > 0);
-        Assert.True(tags > roster);
+        Assert.DoesNotContain(
+            entry.DescriptionLines,
+            line => line.Contains("Hashtags:", System.StringComparison.Ordinal)
+        );
+        Assert.Equal(FullMatchMetadataBuilder.TemplateVersion, entry.TemplateVersion);
+    }
+
+    [Fact]
+    public void Create_CompleteRecording_SaysFullMatchAndKeepsTheTemplateVersion()
+    {
+        var loaded = new LoadedReplay
+        {
+            ReplayId = 42,
+            HeroesProfileReplay = new HeroesProfileReplay { Id = 42, Map = "Cursed Hollow" },
+        };
+
+        YouTubeEntry entry = YouTubeEntryBuilder.Create(
+            loaded,
+            new YouTubeSettings { PrivacyStatus = "private" },
+            isCompleteRecording: true
+        );
+
+        Assert.Equal(FullMatchMetadataBuilder.TemplateVersion, entry.TemplateVersion);
+        Assert.Contains("Full match.", entry.DescriptionLines);
+        Assert.DoesNotContain(
+            entry.DescriptionLines,
+            line => line.Contains('#', System.StringComparison.Ordinal)
+        );
     }
 
     [Fact]
