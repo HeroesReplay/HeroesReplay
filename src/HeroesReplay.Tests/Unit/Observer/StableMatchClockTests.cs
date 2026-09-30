@@ -214,6 +214,64 @@ public class StableMatchClockTests
         Assert.True(memory.WideReads > scans);
     }
 
+    [Fact]
+    public void SameCellIsStale_EightSecondsWithoutAStep_IsStale()
+    {
+        DateTimeOffset changed = new DateTimeOffset(2026, 9, 30, 17, 49, 39, TimeSpan.Zero);
+        DateTimeOffset later = changed.AddSeconds(9);
+
+        Assert.False(StableMatchClock.SameCellIsStale(double.NaN, 339.6, changed, later));
+        Assert.False(StableMatchClock.SameCellIsStale(339.6, 339.6, default, later));
+        Assert.False(StableMatchClock.SameCellIsStale(339.6, 339.86, changed, later));
+        Assert.False(
+            StableMatchClock.SameCellIsStale(
+                339.6,
+                339.6,
+                changed,
+                changed.AddSeconds(8) - TimeSpan.FromMilliseconds(1)
+            )
+        );
+        Assert.True(StableMatchClock.SameCellIsStale(339.6, 339.6, changed, changed.AddSeconds(8)));
+        Assert.True(StableMatchClock.SameCellIsStale(339.6, 339.85, changed, changed.AddSeconds(8)));
+    }
+
+    [Fact]
+    public void Read_LockedCellStopsMoving_ReportsStalledUntilItMoves()
+    {
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new DateTimeOffset(2026, 9, 30, 17, 49, 39, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        StableClockModule module = Module(21, SmallModule, "2.55.17.97771");
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 339);
+        Assert.Equal("confirming", clock.Read(module, memory.Read).Reason);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 340);
+        StableClockSample locked = clock.Read(module, memory.Read);
+        Assert.True(locked.Ok);
+        Assert.Equal("ok", locked.Reason);
+        Assert.True(clock.IsLocked);
+        int scans = memory.WideReads;
+
+        now = now.AddSeconds(7);
+        StableClockSample holding = clock.Read(module, memory.Read);
+        Assert.True(holding.Ok);
+        Assert.Equal("ok", holding.Reason);
+
+        now = now.AddSeconds(1);
+        StableClockSample stalled = clock.Read(module, memory.Read);
+        Assert.False(stalled.Ok);
+        Assert.Equal("stalled", stalled.Reason);
+        Assert.Equal(340, stalled.Seconds, precision: 2);
+        Assert.True(clock.IsLocked);
+        Assert.Equal(scans, memory.WideReads);
+
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 341);
+        StableClockSample moved = clock.Read(module, memory.Read);
+        Assert.True(moved.Ok);
+        Assert.Equal("ok", moved.Reason);
+        Assert.Equal(341, moved.Seconds, precision: 2);
+    }
+
     private static StableClockModule Module(int pid, long size, string version)
     {
         return new StableClockModule(pid, ModuleBase, size, version);

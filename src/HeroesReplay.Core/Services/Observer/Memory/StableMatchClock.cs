@@ -42,7 +42,11 @@ public sealed class StableMatchClock : IDisposable
     private bool hasSample;
     private int lastTicks;
     private float lastScale;
+    private double lastOkSeconds = double.NaN;
+    private DateTimeOffset lastOkChange;
     private string attachReason = "no-process";
+
+    internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
 
     internal bool IsLocked => located;
 
@@ -126,7 +130,41 @@ public sealed class StableMatchClock : IDisposable
             return new StableClockSample(false, reason, ticks, speed, seconds);
         }
 
+        if (SameCellIsStale(lastOkSeconds, seconds, lastOkChange, UtcNow()))
+        {
+            return new StableClockSample(false, "stalled", ticks, speed, seconds);
+        }
+
+        if (double.IsNaN(lastOkSeconds) || seconds > lastOkSeconds + 0.25)
+        {
+            lastOkSeconds = seconds;
+            lastOkChange = UtcNow();
+        }
+
         return new StableClockSample(true, "ok", ticks, speed, seconds);
+    }
+
+    /// <summary>
+    /// A locked cell that stops moving is not the HUD. OCR has to read the screen.
+    /// </summary>
+    public static bool SameCellIsStale(
+        double previousSeconds,
+        double seconds,
+        DateTimeOffset changedAt,
+        DateTimeOffset now
+    )
+    {
+        if (double.IsNaN(previousSeconds) || changedAt == default)
+        {
+            return false;
+        }
+
+        if (seconds > previousSeconds + 0.25)
+        {
+            return false;
+        }
+
+        return now - changedAt >= TimeSpan.FromSeconds(8);
     }
 
     public void Dispose()
@@ -464,6 +502,8 @@ public sealed class StableMatchClock : IDisposable
         hasSample = false;
         lastTicks = 0;
         lastScale = 0;
+        lastOkSeconds = double.NaN;
+        lastOkChange = default;
         attachReason = "no-process";
     }
 
