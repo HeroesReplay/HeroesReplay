@@ -521,7 +521,8 @@ public class YouTubeUploader : IYouTubeUploader
         IReadOnlyList<string> pending = PendingYouTubeUpload.Find(
             settings.ContextsDirectory,
             settings.YouTube.EntryFileName,
-            settings.YouTube.EntryFileNameUploaded
+            settings.YouTube.EntryFileNameUploaded,
+            PendingYouTubeUpload.AttemptsDirectory(settings.Location?.DataDirectory)
         );
         if (pending.Count == 0)
         {
