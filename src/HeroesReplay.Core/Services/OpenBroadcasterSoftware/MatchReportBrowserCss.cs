@@ -17,6 +17,14 @@ public static class MatchReportBrowserCss
         + "xalatath-scoreboard,void-glitch,void-fallen-splash,void-stage-up,void-hidden-eye,void-whispers,mobile-nav-hack"
         + "{display:none!important;}";
 
+    /// <summary>
+    /// Team Advanced HP MMR tables. The same wrapper also holds Team Advanced Stats.
+    /// Talent builds use a different width class and stay visible.
+    /// </summary>
+    public const string AdvancedMmr =
+        "div[class~=\"max-sm:text-sm\"][class~=\"max-w-[1500px]\"][class~=\"mx-auto\"][class~=\"my-5\"]"
+        + "{display:none!important;}";
+
     private const string ReplayLink =
         " a[href*='/Match/Single/'],a[href*='replayID=']{font-size:0!important;color:transparent!important;pointer-events:none!important;}";
 
@@ -24,6 +32,7 @@ public static class MatchReportBrowserCss
     {
         string extra = configured ?? string.Empty;
         extra += ReplayLink;
+        extra += AdvancedMmr;
         if (hideHeader)
         {
             extra += Header;

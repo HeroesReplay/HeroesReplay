@@ -107,7 +107,7 @@
         "height": 7200,
         "shutdown": false,
         "restart_when_active": true,
-        "css": "html, body { background-color: #0b0e14 !important; margin: 0 !important; } #main-menu,.main-navigation-wrapper,.alt-acct-nav,#mobile-toggle,horizontal-banner-ad,rich-media-ad,dynamic-banner-ad,takeover-ad,xalatath-scoreboard,void-glitch,void-fallen-splash,void-stage-up,void-hidden-eye,void-whispers,mobile-nav-hack{display:none!important;}"
+        "css": "html, body { background-color: #0b0e14 !important; margin: 0 !important; } #main-menu,.main-navigation-wrapper,.alt-acct-nav,#mobile-toggle,horizontal-banner-ad,rich-media-ad,dynamic-banner-ad,takeover-ad,xalatath-scoreboard,void-glitch,void-fallen-splash,void-stage-up,void-hidden-eye,void-whispers,mobile-nav-hack{display:none!important;} div[class~=\"max-sm:text-sm\"][class~=\"max-w-[1500px]\"][class~=\"mx-auto\"][class~=\"my-5\"]{display:none!important;}"
       },
       "mixers": 255,
       "sync": 0,

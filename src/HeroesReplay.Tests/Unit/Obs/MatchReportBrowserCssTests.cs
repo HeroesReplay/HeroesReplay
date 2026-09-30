@@ -16,6 +16,9 @@ public class MatchReportBrowserCssTests
         Assert.Contains(".alt-acct-nav", css);
         Assert.Contains("xalatath-scoreboard", css);
         Assert.Contains("horizontal-banner-ad", css);
+        Assert.Contains("max-sm:text-sm", css);
+        Assert.Contains("max-w-[1500px]", css);
+        Assert.Contains("my-5", css);
         Assert.DoesNotContain("single-match", css);
     }
 
