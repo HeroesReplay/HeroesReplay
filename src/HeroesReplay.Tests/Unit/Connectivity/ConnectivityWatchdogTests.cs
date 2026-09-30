@@ -204,6 +204,7 @@ public class ConnectivityWatchdogTests
         Assert.True(snapshot.HeroesProfile);
         Assert.False(snapshot.Healthy);
         Assert.Equal(1, fixture.Probe.TwitchCalls);
+        Assert.Equal(0, fixture.Probe.HeroesProfileCalls);
     }
 
     [Fact]
@@ -213,7 +214,7 @@ public class ConnectivityWatchdogTests
         ConnectivitySnapshot skipped = await off.Watchdog.ProbeAsync(CancellationToken.None);
         Assert.Equal(0, off.Probe.TwitchCalls);
         Assert.Equal(1, off.Probe.InternetCalls);
-        Assert.Equal(1, off.Probe.HeroesProfileCalls);
+        Assert.Equal(0, off.Probe.HeroesProfileCalls);
         Assert.False(skipped.TwitchProbed);
         Assert.False(skipped.Twitch);
         Assert.True(skipped.Internet);
@@ -238,7 +239,7 @@ public class ConnectivityWatchdogTests
         await fixture.Watchdog.RunAsync(cts.Token);
         Assert.Equal(0, fixture.Probe.TwitchCalls);
         Assert.Equal(1, fixture.Probe.InternetCalls);
-        Assert.Equal(1, fixture.Probe.HeroesProfileCalls);
+        Assert.Equal(0, fixture.Probe.HeroesProfileCalls);
     }
 
     [Fact]
@@ -249,7 +250,7 @@ public class ConnectivityWatchdogTests
         await fixture.Watchdog.RunAsync(cts.Token);
         Assert.True(fixture.Probe.TwitchCalls >= 1);
         Assert.True(fixture.Probe.InternetCalls >= 1);
-        Assert.True(fixture.Probe.HeroesProfileCalls >= 1);
+        Assert.Equal(0, fixture.Probe.HeroesProfileCalls);
         Assert.Equal(0, fixture.Obs.StartCalls);
         Assert.Equal(0, fixture.Obs.StopCalls);
     }

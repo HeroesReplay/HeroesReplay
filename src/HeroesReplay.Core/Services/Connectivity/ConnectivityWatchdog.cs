@@ -93,17 +93,13 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             twitch = await probe.ProbeTwitchAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        bool heroesProfile = await probe
-            .ProbeHeroesProfileAsync(cancellationToken)
-            .ConfigureAwait(false);
-
         return new ConnectivitySnapshot
         {
             At = DateTimeOffset.UtcNow,
             Internet = internet,
             Twitch = twitch,
             TwitchProbed = probeTwitch,
-            HeroesProfile = heroesProfile,
+            HeroesProfile = true,
         };
     }
 
@@ -208,7 +204,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
 
         bool probeTwitch = SessionMedia.ShouldStream(settings.OBS);
         logger.LogInformation(
-            "Connectivity watchdog probing {Host} and Heroes Profile every {Interval}. TwitchWebsite={TwitchWebsite}. StreamingEnabled={StreamingEnabled}. NativeReconnectOwnsShortOutages={NativeReconnect}.",
+            "Connectivity watchdog probing {Host} every {Interval}. The Heroes Profile website is not probed. TwitchWebsite={TwitchWebsite}. StreamingEnabled={StreamingEnabled}. NativeReconnectOwnsShortOutages={NativeReconnect}.",
             Settings.InternetHost,
             ProbeInterval(),
             probeTwitch ? Settings.TwitchUri : "skipped",
