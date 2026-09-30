@@ -36,6 +36,10 @@ public class ReplayQueuePickTests
         Directory.CreateDirectory(Path.Combine(root, "Standard"));
         Directory.CreateDirectory(Path.Combine(root, "Requests"));
         File.WriteAllText(Path.Combine(root, SpectateQueue.SpectatedFileName), string.Empty);
+        File.WriteAllText(
+            Path.Combine(root, SpectateQueue.BelowFloorFileName),
+            "20" + Environment.NewLine
+        );
         File.WriteAllBytes(
             Path.Combine(root, "Standard", "10_Storm League_Map_.StormReplay"),
             new byte[] { 1 }
@@ -57,13 +61,14 @@ public class ReplayQueuePickTests
                 RequestsCacheDirectoryName = "Requests",
             },
             StormReplay = new StormReplaySettings { Seperator = "_" },
+            Spectate = new SpectateSettings { MinimumGameVersion = "2.57.0.98285" },
         };
         var loader = new VersionLoader(
             new Dictionary<int, string>
             {
                 [10] = "2.57.0.98285",
-                [20] = "2.57.0.98304",
-                [30] = "2.57.0.98285",
+                [20] = "2.55.17.98025",
+                [30] = "2.57.0.98304",
             }
         );
         var provider = new ReplayCacheProvider(
@@ -79,19 +84,21 @@ public class ReplayQueuePickTests
         try
         {
             LoadedReplay first = await provider.TryLoadNextReplayAsync();
-            Assert.Equal(20, first.ReplayId);
+            Assert.Equal(30, first.ReplayId);
             Assert.Equal("2.57.0.98304", first.Replay.ReplayVersion);
             Assert.Equal(2, loader.Loads);
 
             LoadedReplay second = await provider.TryLoadNextReplayAsync();
-            Assert.Null(second);
+            Assert.Equal(20, second.ReplayId);
+            Assert.Equal("2.55.17.98025", second.Replay.ReplayVersion);
             Assert.Equal(3, loader.Loads);
-            Assert.False(File.Exists(Path.Combine(root, SpectateQueue.DeferredFileName)));
+            string deferred = File.ReadAllText(Path.Combine(root, SpectateQueue.DeferredFileName));
+            Assert.Contains("10 ", deferred);
             string spectated = File.ReadAllText(
                 Path.Combine(root, SpectateQueue.SpectatedFileName)
             );
             Assert.DoesNotContain("10", spectated);
-            Assert.DoesNotContain("30", spectated);
+            Assert.DoesNotContain("20", spectated);
         }
         finally
         {

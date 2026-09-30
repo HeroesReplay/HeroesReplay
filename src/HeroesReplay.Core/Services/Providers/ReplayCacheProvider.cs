@@ -34,6 +34,9 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private readonly Dictionary<int, DateTimeOffset> deferredUntil = new();
     private readonly Dictionary<int, string> knownVersion = new();
     private readonly HashSet<int> announcedMissing = new();
+    private readonly HashSet<int> belowFloorIds = new();
+    private int scanSkipped;
+    private bool deferredDirty;
     private LoadedReplay staged;
     private int? heldBackId;
     private bool seeded;
@@ -89,7 +92,8 @@ public sealed class ReplayCacheProvider : IReplayProvider
             installedVersionSource != null
                 ? installedVersionSource()
                 : InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory);
-        int newlySkipped = 0;
+        scanSkipped = 0;
+        deferredDirty = false;
 
         List<FileInfo> candidates = Directory
             .EnumerateFiles(
@@ -118,7 +122,60 @@ public sealed class ReplayCacheProvider : IReplayProvider
             })
             .ToList();
 
-        foreach (FileInfo next in candidates)
+        List<FileInfo> fresh = new();
+        List<FileInfo> older = new();
+        foreach (FileInfo candidate in candidates)
+        {
+            replayHelper.TryGetReplayId(candidate.Name, out int id);
+            if (belowFloorIds.Contains(id))
+            {
+                older.Add(candidate);
+            }
+            else
+            {
+                fresh.Add(candidate);
+            }
+        }
+
+        older.Sort(
+            (left, right) =>
+            {
+                replayHelper.TryGetReplayId(right.Name, out int rightId);
+                replayHelper.TryGetReplayId(left.Name, out int leftId);
+                return rightId.CompareTo(leftId);
+            }
+        );
+
+        LoadedReplay chosen = await TakeFirstLaunchableAsync(fresh, installed, activity, true)
+            .ConfigureAwait(false);
+        if (chosen == null)
+        {
+            chosen = await TakeFirstLaunchableAsync(older, installed, activity, false)
+                .ConfigureAwait(false);
+        }
+
+        if (deferredDirty)
+        {
+            WriteDefers();
+        }
+
+        LogSkippedMissing(scanSkipped);
+        if (chosen == null)
+        {
+            activity?.SetTag("replay.empty", true);
+        }
+
+        return chosen;
+    }
+
+    private async Task<LoadedReplay> TakeFirstLaunchableAsync(
+        List<FileInfo> files,
+        IReadOnlyList<string> installed,
+        Activity activity,
+        bool deferWhenMissing
+    )
+    {
+        foreach (FileInfo next in files)
         {
             replayHelper.TryGetReplayId(next.Name, out int replayId);
             if (
@@ -126,9 +183,13 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 && !ReplayQueuePick.CanLaunch(cachedVersion, installed)
             )
             {
-                if (announcedMissing.Add(replayId))
+                if (deferWhenMissing)
                 {
-                    newlySkipped++;
+                    NoteMissing(replayId);
+                }
+                else if (announcedMissing.Add(replayId))
+                {
+                    scanSkipped++;
                 }
 
                 continue;
@@ -153,30 +214,15 @@ public sealed class ReplayCacheProvider : IReplayProvider
             knownVersion[replayId] = replay.ReplayVersion ?? string.Empty;
             if (!ReplayQueuePick.CanLaunch(replay.ReplayVersion, installed))
             {
-                if (announcedMissing.Add(replayId))
+                if (deferWhenMissing)
                 {
-                    newlySkipped++;
+                    NoteMissing(replayId);
+                }
+                else if (announcedMissing.Add(replayId))
+                {
+                    scanSkipped++;
                 }
 
-                continue;
-            }
-
-            if (
-                !IsRequest(next)
-                && !ReplayFloor.Allows(
-                    replay.ReplayVersion,
-                    settings.Spectate?.VersionsSupported,
-                    settings.Spectate?.MinimumGameVersion
-                )
-            )
-            {
-                played.Add(replayId);
-                AppendBelowFloor(replayId);
-                logger.LogInformation(
-                    "Replay {ReplayId} ({Version}) is below the client floor. It stays on disk and is not marked spectated.",
-                    replayId,
-                    replay.ReplayVersion
-                );
                 continue;
             }
 
@@ -195,7 +241,6 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 replayId,
                 next.FullName
             );
-            LogSkippedMissing(newlySkipped);
             HeroesProfileReplay profile = RankFromFile(next.Name, replayId, replay.Map);
             if (profile != null)
             {
@@ -214,9 +259,22 @@ public sealed class ReplayCacheProvider : IReplayProvider
             };
         }
 
-        LogSkippedMissing(newlySkipped);
-        activity?.SetTag("replay.empty", true);
         return null;
+    }
+
+    private void NoteMissing(int replayId)
+    {
+        if (!played.Add(replayId))
+        {
+            return;
+        }
+
+        deferredUntil[replayId] = DateTimeOffset.UtcNow.Add(ReplayRetryPlan.DeferFor);
+        deferredDirty = true;
+        if (announcedMissing.Add(replayId))
+        {
+            scanSkipped++;
+        }
     }
 
     private void LogSkippedMissing(int newlySkipped)
@@ -388,7 +446,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
         {
             if (int.TryParse(line, out int id))
             {
-                played.Add(id);
+                belowFloorIds.Add(id);
             }
         }
     }
