@@ -186,7 +186,17 @@ public class Engine : IEngine
                         frontAttempts.Remove(deferredId);
                     }
 
-                    gameManager.ReleaseClientAfterDefer();
+                    if (ReplayRetryPlan.ClosesClientAfterDefer(gameManager.LastOutcome))
+                    {
+                        gameManager.ReleaseClientAfterDefer();
+                    }
+                    else
+                    {
+                        logger.LogInformation(
+                            "Replay {ReplayId} left the front. The Heroes client stays open.",
+                            loadedReplay.ReplayId
+                        );
+                    }
                     replayProvider.Defer(loadedReplay);
                     logger.LogWarning(
                         "Replay {ReplayId} was not a match ({Session}) after {Attempt} attempts. It leaves the front of the queue. Spectate stays up.",

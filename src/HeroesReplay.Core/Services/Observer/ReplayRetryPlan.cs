@@ -39,4 +39,16 @@ public static class ReplayRetryPlan
 
         return ReplayRetryAction.Front;
     }
+
+    /// <summary>
+    /// A missing build did not start a client. A launch that is still downloading
+    /// is that client doing its job. Neither one is closed. A version-mismatch dialog is.
+    /// </summary>
+    public static bool ClosesClientAfterDefer(MatchOutcome outcome)
+    {
+        return outcome != MatchOutcome.BuildNotInstalled
+            && outcome != MatchOutcome.LoadTimedOut
+            && outcome != MatchOutcome.None
+            && outcome != MatchOutcome.VerifiedCompleted;
+    }
 }

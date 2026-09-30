@@ -34,6 +34,23 @@ public class ReplayRetryPlanTests
         );
     }
 
+    [Theory]
+    [InlineData(MatchOutcome.BuildNotInstalled, false)]
+    [InlineData(MatchOutcome.LoadTimedOut, false)]
+    [InlineData(MatchOutcome.None, false)]
+    [InlineData(MatchOutcome.VerifiedCompleted, false)]
+    [InlineData(MatchOutcome.VersionMismatch, true)]
+    [InlineData(MatchOutcome.RegionUnavailable, true)]
+    [InlineData(MatchOutcome.ClientHung, true)]
+    [InlineData(MatchOutcome.ClientCrashed, true)]
+    public void ClosesClientAfterDefer_LeavesADownloadAndAMissingBuildAlone(
+        MatchOutcome outcome,
+        bool closes
+    )
+    {
+        Assert.Equal(closes, ReplayRetryPlan.ClosesClientAfterDefer(outcome));
+    }
+
     [Fact]
     public void Decide_DefersAMissingBuildImmediately()
     {
