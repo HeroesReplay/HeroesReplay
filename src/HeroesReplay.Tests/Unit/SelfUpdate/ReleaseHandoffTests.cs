@@ -218,7 +218,8 @@ public class ReleaseHandoffTests
             Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
             Assert.Same(run, finished);
             await run;
-            Assert.Contains(101, provider.Requeued);
+            Assert.Equal(new[] { 101 }, provider.Deferred.ToArray());
+            Assert.Empty(provider.Requeued);
             Assert.Empty(provider.SpectatedIds);
         }
         finally
@@ -266,7 +267,8 @@ public class ReleaseHandoffTests
             Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
             Assert.Same(run, finished);
             await run;
-            Assert.Contains(101, provider.Requeued);
+            Assert.Equal(new[] { 101 }, provider.Deferred.ToArray());
+            Assert.Empty(provider.Requeued);
             Assert.Empty(provider.SpectatedIds);
             SpectatorStatus read = status.Read();
             Assert.Null(read.CompletedAt);
@@ -318,7 +320,8 @@ public class ReleaseHandoffTests
             Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
             Assert.Same(run, finished);
             await run;
-            Assert.Contains(101, provider.Requeued);
+            Assert.Equal(new[] { 101 }, provider.Deferred.ToArray());
+            Assert.Empty(provider.Requeued);
             Assert.Empty(provider.SpectatedIds);
             SpectatorStatus read = status.Read();
             Assert.Null(read.CompletedAt);
