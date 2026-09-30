@@ -993,6 +993,86 @@ public class UploadOutboxTests
         Assert.False(UploadAttemptReceipt.IsProduction(loaded));
     }
 
+    [Fact]
+    public async Task InterruptedSend_KeepsAUniqueContextAndDoesNotInsertAgain()
+    {
+        using var temp = new TempAttempts();
+        var outbox = new UploadOutbox(temp.Root);
+        string mediaPath = Path.Combine(temp.Root, "match.mp4");
+        const string sessionUri =
+            "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&upload_id=test-session";
+        string firstContext = UploadAttemptIds.NewContext(44, Stamp);
+        string laterContext = UploadAttemptIds.NewContext(44, Stamp.AddSeconds(1));
+
+        SavedDispatch started = await outbox.SaveDispatchAsync(
+            firstContext,
+            44,
+            mediaPath,
+            128,
+            "len-128",
+            youtubeEnabled: true,
+            dryRun: false,
+            Stamp,
+            CancellationToken.None
+        );
+        UploadAttemptResult noted = await outbox.NoteSessionAsync(
+            firstContext,
+            sessionUri,
+            Stamp.AddMinutes(1),
+            CancellationToken.None
+        );
+        SavedDispatch ordinary = await outbox.SaveDispatchAsync(
+            firstContext,
+            44,
+            mediaPath,
+            128,
+            "len-128",
+            youtubeEnabled: true,
+            dryRun: false,
+            Stamp.AddMinutes(2),
+            CancellationToken.None
+        );
+        string reused = await new UploadOutbox(temp.Root).ContextForReplayAsync(
+            44,
+            Stamp.AddMinutes(3),
+            CancellationToken.None
+        );
+        UploadAttemptManifest reloaded = await ReloadAsync(
+            new UploadOutbox(temp.Root),
+            firstContext
+        );
+        UploadAttemptResult prepared = UploadAttemptMachine.NoteSession(
+            new UploadAttemptManifest
+            {
+                Schema = UploadAttemptManifest.SchemaVersion,
+                AttemptId = "replay-1",
+                State = UploadAttemptState.UploadPending,
+                MediaPath = mediaPath,
+                MediaSize = 128,
+                MediaHash = "len-128",
+                Revision = 1,
+                UpdatedAtUtc = Stamp,
+            },
+            sessionUri,
+            Stamp
+        );
+
+        Assert.NotEqual(firstContext, laterContext);
+        Assert.StartsWith("replay-44-", firstContext, StringComparison.Ordinal);
+        Assert.NotEqual("replay-44", firstContext);
+        Assert.True(started.MaySend);
+        Assert.True(noted.Succeeded, noted.Reason);
+        Assert.Equal(sessionUri, noted.Manifest.SessionUri);
+        Assert.False(ordinary.MaySend);
+        Assert.Equal(UploadAttemptState.AmbiguousUpload, ordinary.Result.Manifest.State);
+        Assert.Equal(sessionUri, ordinary.Result.Manifest.SessionUri);
+        Assert.Equal(firstContext, reused);
+        Assert.Equal(sessionUri, reloaded.SessionUri);
+        Assert.Equal(UploadAttemptState.AmbiguousUpload, reloaded.State);
+        Assert.False(prepared.Succeeded);
+        Assert.Equal(1, Directory.GetDirectories(temp.Root).Length);
+    }
+
     private static async Task<UploadAttemptManifest> ReachPendingAsync(
         UploadOutbox outbox,
         string attemptId,

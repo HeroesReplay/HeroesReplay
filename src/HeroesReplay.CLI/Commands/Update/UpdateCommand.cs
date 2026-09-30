@@ -20,6 +20,49 @@ public class UpdateCommand : Command
     {
         Subcommands.Add(CheckCommand());
         Subcommands.Add(PreserveMinReplayIdCommand());
+        Subcommands.Add(ReleaseHealthCommand());
+    }
+
+    private static Command ReleaseHealthCommand()
+    {
+        var command = new Command(
+            "release-health",
+            "Exit 0 when role-ready.txt says every role has been ready for the stabilization window."
+        );
+        Option<string> roleFile = new("--role-file")
+        {
+            Description =
+                "role-ready.txt written by the running roles. A missing file is not ready.",
+            Required = true,
+        };
+        command.Options.Add(roleFile);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(ReleaseHealthExit(parseResult.GetValue(roleFile)));
+            }
+        );
+        return command;
+    }
+
+    private static int ReleaseHealthExit(string path)
+    {
+        string text = null;
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            try
+            {
+                text = File.ReadAllText(path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine("Could not read role-ready.txt.");
+                return 1;
+            }
+        }
+
+        return ReleaseHealth.MayDiscardRoleFile(text, DateTimeOffset.UtcNow) ? 0 : 1;
     }
 
     private static Command PreserveMinReplayIdCommand()

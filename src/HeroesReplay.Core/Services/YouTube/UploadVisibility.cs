@@ -24,4 +24,36 @@ public static class UploadVisibility
 
         return string.Equals(desiredFinal, "public", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// The insert stays private. A public listing can carry the time YouTube should publish it.
+    /// </summary>
+    public static DateTimeOffset? PublishAt(string desiredFinal, DateTimeOffset? whenUtc)
+    {
+        if (!string.Equals(desiredFinal, "public", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (whenUtc == null || whenUtc.Value.Offset != TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        return whenUtc;
+    }
+
+    /// <summary>
+    /// True while the listing should become public and YouTube still reports something else.
+    /// A private video id is not public.
+    /// </summary>
+    public static bool ReconcileUntilPublic(string actualStatus, string desiredFinal)
+    {
+        if (!string.Equals(desiredFinal, "public", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !CountsAsPublic(actualStatus, desiredFinal);
+    }
 }

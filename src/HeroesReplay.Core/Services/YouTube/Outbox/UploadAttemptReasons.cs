@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 
 namespace HeroesReplay.Core.Services.YouTube.Outbox;
 
@@ -56,6 +58,65 @@ public static class UploadAttemptIds
         }
 
         return !IsReservedDeviceName(attemptId);
+    }
+
+    public static string NewContext(int? replayId, DateTimeOffset utc)
+    {
+        if (utc.Offset != TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        string stamp = utc.UtcDateTime.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+        if (replayId is > 0)
+        {
+            return "replay-" + replayId.Value.ToString(CultureInfo.InvariantCulture) + "-" + stamp;
+        }
+
+        return "file-" + stamp;
+    }
+
+    public static string SelectContext(
+        IReadOnlyList<UploadAttemptManifest> open,
+        int? replayId,
+        DateTimeOffset utc
+    )
+    {
+        if (replayId is > 0 && open != null)
+        {
+            foreach (UploadAttemptManifest manifest in open)
+            {
+                if (manifest == null || manifest.ReplayId != replayId)
+                {
+                    continue;
+                }
+
+                if (
+                    manifest.State == UploadAttemptState.Uploading
+                    || manifest.State == UploadAttemptState.AmbiguousUpload
+                )
+                {
+                    return manifest.AttemptId;
+                }
+            }
+        }
+
+        return NewContext(replayId, utc);
+    }
+
+    public static bool IsSessionUri(string value)
+    {
+        if (!UploadAttemptReceipt.HasExactText(value) || value.Length > 2048)
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(value, UriKind.Absolute, out Uri uri))
+        {
+            return false;
+        }
+
+        return uri.Scheme == Uri.UriSchemeHttps;
     }
 
     private static bool IsReservedDeviceName(string attemptId)

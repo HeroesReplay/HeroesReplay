@@ -1,4 +1,5 @@
 using System;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Services.Connectivity;
 using Xunit;
 
@@ -67,5 +68,13 @@ public class OutageModeTests
                 )
             )
         );
+    }
+
+    [Fact]
+    public void MayStartReplay_PausesAnExtendedOutageBeforeTheNextLaunch()
+    {
+        Assert.False(Engine.MayStartReplay(false, TimeSpan.FromHours(2), TimeSpan.Zero));
+        Assert.True(Engine.MayStartReplay(true, TimeSpan.Zero, TimeSpan.Zero));
+        Assert.True(Engine.MayStartReplay(false, TimeSpan.FromMinutes(5), TimeSpan.Zero));
     }
 }

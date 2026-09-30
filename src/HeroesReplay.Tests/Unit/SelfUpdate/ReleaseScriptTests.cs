@@ -22,6 +22,9 @@ public class ReleaseScriptTests
         Assert.Contains("preserve-min-replay-id", script);
         Assert.Contains("Protect-MinReplayId (Join-Path $source 'heroesreplay.exe')", script);
         Assert.Contains("stabilization window", script);
+        Assert.Contains("role-ready.txt", script);
+        Assert.Contains("update release-health", script);
+        Assert.DoesNotContain("CreationTime", script);
     }
 
     private static string FindScript([CallerFilePath] string sourceFile = "")

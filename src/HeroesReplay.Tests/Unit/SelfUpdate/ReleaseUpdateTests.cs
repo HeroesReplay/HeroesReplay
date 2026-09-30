@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
+using HeroesReplay.CLI.Commands;
 using HeroesReplay.Core.Services.SelfUpdate;
 using Xunit;
 
@@ -102,6 +104,57 @@ public class ReleaseUpdateTests
             )
         );
         Assert.True(ReleaseHealth.MayDiscardPrevious(true, ReleaseHealth.StabilizeFor));
+    }
+
+    [Fact]
+    public void MayDiscardRoleFile_WaitsForReadyRolesInsteadOfFolderAge()
+    {
+        DateTimeOffset since = new(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
+        string text = ReleaseHealth.FormatRoleFile(since);
+
+        Assert.False(ReleaseHealth.MayDiscardRoleFile(null, since.AddMinutes(3)));
+        Assert.False(ReleaseHealth.MayDiscardRoleFile("", since.AddMinutes(3)));
+        Assert.False(ReleaseHealth.MayDiscardRoleFile("roles=ready", since.AddMinutes(3)));
+        Assert.False(ReleaseHealth.MayDiscardRoleFile(text, since.AddMinutes(1)));
+        Assert.True(ReleaseHealth.MayDiscardRoleFile(text, since.Add(ReleaseHealth.StabilizeFor)));
+    }
+
+    [Fact]
+    public async Task ReleaseHealthCommand_RefusesAMissingRoleFile()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-role-cmd-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(root);
+        string path = Path.Combine(root, "role-ready.txt");
+        try
+        {
+            int missing = await new HeroesReplayCommand()
+                .Parse("update release-health --role-file " + path)
+                .InvokeAsync();
+            File.WriteAllText(path, ReleaseHealth.FormatRoleFile(DateTimeOffset.UtcNow));
+            int early = await new HeroesReplayCommand()
+                .Parse("update release-health --role-file " + path)
+                .InvokeAsync();
+            File.WriteAllText(
+                path,
+                ReleaseHealth.FormatRoleFile(
+                    DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(3))
+                )
+            );
+            int ready = await new HeroesReplayCommand()
+                .Parse("update release-health --role-file " + path)
+                .InvokeAsync();
+
+            Assert.Equal(1, missing);
+            Assert.Equal(1, early);
+            Assert.Equal(0, ready);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
+            }
+        }
     }
 
     [Fact]

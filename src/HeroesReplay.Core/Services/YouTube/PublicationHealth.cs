@@ -1,3 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
+using HeroesReplay.Core.Services.Queue;
+
 namespace HeroesReplay.Core.Services.YouTube;
 
 public sealed class PublicationHealthReport
@@ -65,5 +71,61 @@ public static class PublicationHealth
             PublishedWeek = publishedWeek < 0 ? 0 : publishedWeek,
             StuckPrivate = stuckPrivate < 0 ? 0 : stuckPrivate,
         };
+    }
+
+    public static void WriteStatus(
+        string path,
+        PublicationHealthReport report,
+        IReadOnlyList<string> candidates,
+        int reservedCapacity,
+        DateTimeOffset? nextSlot
+    )
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var builder = new StringBuilder();
+        builder.Append("pending=").Append(report?.Pending ?? 0).AppendLine();
+        builder.Append("uploaded=").Append(report?.Uploaded ?? 0).AppendLine();
+        builder.Append("deferred=").Append(report?.Deferred ?? 0).AppendLine();
+        builder.Append("published-day=").Append(report?.PublishedDay ?? 0).AppendLine();
+        builder.Append("published-week=").Append(report?.PublishedWeek ?? 0).AppendLine();
+        builder.Append("stuck-private=").Append(report?.StuckPrivate ?? 0).AppendLine();
+        builder.Append("limit=").Append(report?.Limit ?? "none").AppendLine();
+        builder.Append("policy=").Append(report?.PolicyVersion ?? "1").AppendLine();
+        builder.Append("candidates=");
+        if (candidates != null)
+        {
+            bool first = true;
+            foreach (string candidate in candidates)
+            {
+                if (string.IsNullOrWhiteSpace(candidate))
+                {
+                    continue;
+                }
+
+                if (!first)
+                {
+                    builder.Append(',');
+                }
+
+                first = false;
+                builder.Append(candidate.Trim());
+            }
+        }
+
+        builder.AppendLine();
+        int reserved = reservedCapacity < 0 ? 0 : reservedCapacity;
+        builder.Append("reserved=").Append(reserved).AppendLine();
+        builder.Append("next=");
+        if (nextSlot != null)
+        {
+            builder.Append(nextSlot.Value.ToString("o", CultureInfo.InvariantCulture));
+        }
+
+        builder.AppendLine();
+        DurableFile.Replace(path, builder.ToString());
     }
 }

@@ -9,6 +9,7 @@ using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Services.Queue;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -87,6 +88,15 @@ public class ReplayQueuePickTests
             Assert.Equal(30, first.ReplayId);
             Assert.Equal("2.57.0.98304", first.Replay.ReplayVersion);
             Assert.Equal(2, loader.Loads);
+            string lease30 = Path.Combine(root, "leases", "30.txt");
+            string leased = File.ReadAllText(lease30);
+            Assert.Contains("state=Leased", leased);
+            Assert.Contains("replay=30", leased);
+            Assert.True(ReplayLease.Take(lease30, 30));
+            string reread = File.ReadAllText(lease30);
+            Assert.Contains("state=Leased", reread);
+            Assert.Contains("replay=30", reread);
+            Assert.False(File.Exists(Path.Combine(root, "leases", "10.txt")));
 
             LoadedReplay second = await provider.TryLoadNextReplayAsync();
             Assert.Equal(20, second.ReplayId);

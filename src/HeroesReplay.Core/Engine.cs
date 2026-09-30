@@ -133,9 +133,30 @@ public class Engine : IEngine
         }
     }
 
+    public static bool MayStartReplay(bool internetUp, TimeSpan downFor, TimeSpan stableFor)
+    {
+        return OutageMode.MaySpectate(OutageMode.Decide(internetUp, downFor, stableFor));
+    }
+
     private async Task<bool> SpectateOneAsync()
     {
         using Activity replayActivity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay");
+        if (
+            !MayStartReplay(
+                connectivityWatchdog.IsOnline,
+                connectivityWatchdog.DownFor,
+                TimeSpan.Zero
+            )
+        )
+        {
+            logger.LogInformation(
+                "Spectate stays paused while the outage is extended. The next replay is not loaded."
+            );
+            await Task.Delay(OutageMode.PauseDelay, consoleTokenProvider.Token)
+                .ConfigureAwait(false);
+            return true;
+        }
+
         LoadedReplay loadedReplay = await TakeResumedReplayAsync().ConfigureAwait(false);
         if (loadedReplay != null)
         {

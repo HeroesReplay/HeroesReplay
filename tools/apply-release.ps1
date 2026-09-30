@@ -128,8 +128,10 @@ Protect-MinReplayId (Join-Path $source 'heroesreplay.exe') (Join-Path $InstallDi
 
 $previous = "$InstallDir.previous"
 if (Test-Path -LiteralPath $previous) {
-    $age = (Get-Date) - (Get-Item -LiteralPath $previous).CreationTime
-    if ($age.TotalMinutes -lt 2) {
+    $roleFile = Join-Path $InstallDir 'role-ready.txt'
+    $healthExe = Join-Path $source 'heroesreplay.exe'
+    & $healthExe update release-health --role-file $roleFile
+    if ($LASTEXITCODE -ne 0) {
         Write-Host "Previous install is still inside the stabilization window."
         Clear-ServiceStop
         exit 1

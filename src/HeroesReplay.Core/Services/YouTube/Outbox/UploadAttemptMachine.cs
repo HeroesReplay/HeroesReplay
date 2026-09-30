@@ -50,7 +50,7 @@ public static class UploadAttemptMachine
             return UploadAttemptResult.Failure(UploadAttemptReasons.IllegalTransition, current);
         }
 
-        return Advance(current, UploadAttemptState.Recording, at, null, 0, null, null, null);
+        return Advance(current, UploadAttemptState.Recording, at, null, 0, null, null, null, null);
     }
 
     public static UploadAttemptResult FinalizeMedia(
@@ -85,6 +85,7 @@ public static class UploadAttemptMachine
             mediaSize,
             mediaHash,
             null,
+            null,
             null
         );
     }
@@ -115,6 +116,7 @@ public static class UploadAttemptMachine
             current.MediaPath,
             current.MediaSize,
             current.MediaHash,
+            null,
             null,
             null
         );
@@ -209,6 +211,49 @@ public static class UploadAttemptMachine
         }
 
         return CopyForward(current, UploadAttemptState.AmbiguousUpload, at, null);
+    }
+
+    public static UploadAttemptResult NoteSession(
+        UploadAttemptManifest current,
+        string sessionUri,
+        DateTimeOffset at
+    )
+    {
+        UploadAttemptResult rejected = RejectClockOrMissing(current, at);
+        if (rejected != null)
+        {
+            return rejected;
+        }
+
+        if (current.State != UploadAttemptState.Uploading || !UploadAttemptReceipt.IsBound(current))
+        {
+            return UploadAttemptResult.Failure(UploadAttemptReasons.IllegalTransition, current);
+        }
+
+        if (!UploadAttemptIds.IsSessionUri(sessionUri))
+        {
+            return UploadAttemptResult.Failure(UploadAttemptReasons.IllegalTransition, current);
+        }
+
+        if (
+            UploadAttemptReceipt.HasExactText(current.SessionUri)
+            && !string.Equals(current.SessionUri, sessionUri, StringComparison.Ordinal)
+        )
+        {
+            return UploadAttemptResult.Failure(UploadAttemptReasons.IllegalTransition, current);
+        }
+
+        return Advance(
+            current,
+            UploadAttemptState.Uploading,
+            at,
+            current.MediaPath,
+            current.MediaSize,
+            current.MediaHash,
+            null,
+            null,
+            sessionUri
+        );
     }
 
     public static UploadAttemptResult Complete(
@@ -386,7 +431,34 @@ public static class UploadAttemptMachine
             return UploadAttemptReasons.IllegalTransition;
         }
 
+        if (!SessionMatches(current, proposed))
+        {
+            return UploadAttemptReasons.IllegalTransition;
+        }
+
         return null;
+    }
+
+    private static bool SessionMatches(
+        UploadAttemptManifest current,
+        UploadAttemptManifest proposed
+    )
+    {
+        if (
+            current.State == UploadAttemptState.Uploading
+            && proposed.State == UploadAttemptState.Uploading
+        )
+        {
+            if (!UploadAttemptIds.IsSessionUri(proposed.SessionUri))
+            {
+                return false;
+            }
+
+            return !UploadAttemptReceipt.HasExactText(current.SessionUri)
+                || string.Equals(current.SessionUri, proposed.SessionUri, StringComparison.Ordinal);
+        }
+
+        return string.Equals(current.SessionUri, proposed.SessionUri, StringComparison.Ordinal);
     }
 
     private static UploadAttemptResult RejectClockOrMissing(
@@ -433,7 +505,8 @@ public static class UploadAttemptMachine
             current.MediaSize,
             current.MediaHash,
             videoId,
-            receiptKind
+            receiptKind,
+            current.SessionUri
         );
     }
 
@@ -445,7 +518,8 @@ public static class UploadAttemptMachine
         long mediaSize,
         string mediaHash,
         string videoId,
-        string receiptKind
+        string receiptKind,
+        string sessionUri
     )
     {
         return UploadAttemptResult.Success(
@@ -463,6 +537,7 @@ public static class UploadAttemptMachine
                 UpdatedAtUtc = at,
                 ReceiptKind = receiptKind,
                 Policy = current.Policy,
+                SessionUri = sessionUri,
             }
         );
     }
@@ -483,7 +558,8 @@ public static class UploadAttemptMachine
                     || to == UploadAttemptState.Disabled;
             case UploadAttemptState.Uploading:
                 return to == UploadAttemptState.Uploaded
-                    || to == UploadAttemptState.AmbiguousUpload;
+                    || to == UploadAttemptState.AmbiguousUpload
+                    || to == UploadAttemptState.Uploading;
             case UploadAttemptState.AmbiguousUpload:
                 return to == UploadAttemptState.Uploading || to == UploadAttemptState.Uploaded;
             default:

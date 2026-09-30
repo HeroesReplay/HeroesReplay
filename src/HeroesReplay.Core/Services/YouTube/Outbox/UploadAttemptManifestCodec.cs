@@ -132,6 +132,17 @@ public static class UploadAttemptManifestCodec
             return UploadAttemptResult.Failure(UploadAttemptReasons.ManifestCorrupt, null);
         }
 
+        if (
+            !TryOptionalString(
+                root,
+                UploadAttemptManifest.SessionUriProperty,
+                out string sessionUri
+            )
+        )
+        {
+            return UploadAttemptResult.Failure(UploadAttemptReasons.ManifestCorrupt, null);
+        }
+
         var manifest = new UploadAttemptManifest
         {
             Schema = schema,
@@ -146,6 +157,7 @@ public static class UploadAttemptManifestCodec
             UpdatedAtUtc = updatedAtUtc,
             ReceiptKind = EmptyToNull(receiptKind),
             Policy = policy,
+            SessionUri = EmptyToNull(sessionUri),
         };
 
         if (!IsInternallyConsistent(manifest))
@@ -158,6 +170,11 @@ public static class UploadAttemptManifestCodec
 
     private static bool IsInternallyConsistent(UploadAttemptManifest manifest)
     {
+        if (!SessionShapeIsValid(manifest))
+        {
+            return false;
+        }
+
         bool early =
             manifest.State == UploadAttemptState.Prepared
             || manifest.State == UploadAttemptState.Recording;
@@ -188,6 +205,20 @@ public static class UploadAttemptManifestCodec
 
         return !UploadAttemptReceipt.HasExactText(manifest.VideoId)
             && !UploadAttemptReceipt.HasExactText(manifest.ReceiptKind);
+    }
+
+    private static bool SessionShapeIsValid(UploadAttemptManifest manifest)
+    {
+        if (!UploadAttemptReceipt.HasExactText(manifest.SessionUri))
+        {
+            return string.IsNullOrEmpty(manifest.SessionUri);
+        }
+
+        bool permitted =
+            manifest.State == UploadAttemptState.Uploading
+            || manifest.State == UploadAttemptState.AmbiguousUpload
+            || manifest.State == UploadAttemptState.Uploaded;
+        return permitted && UploadAttemptIds.IsSessionUri(manifest.SessionUri);
     }
 
     private static bool TryState(JsonElement root, out UploadAttemptState state)

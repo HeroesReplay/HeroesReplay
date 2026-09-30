@@ -226,6 +226,13 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 continue;
             }
 
+            string leasePath = ReplayLease.PathFor(settings.Location?.DataDirectory, replayId);
+            if (!ReplayLease.Take(leasePath, replayId))
+            {
+                logger.LogWarning("Replay {ReplayId} was not leased. It stays queued.", replayId);
+                continue;
+            }
+
             played.Add(replayId);
             HeroesReplayTelemetry.TagReplay(
                 activity,

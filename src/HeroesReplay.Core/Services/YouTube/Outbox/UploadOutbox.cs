@@ -124,6 +124,42 @@ public sealed class UploadOutbox
         );
     }
 
+    public Task<string> ContextForReplayAsync(
+        int? replayId,
+        DateTimeOffset at,
+        CancellationToken cancellationToken
+    )
+    {
+        return ContextForReplayAsync(store, replayId, at, cancellationToken);
+    }
+
+    private static async Task<string> ContextForReplayAsync(
+        UploadAttemptStore store,
+        int? replayId,
+        DateTimeOffset at,
+        CancellationToken cancellationToken
+    )
+    {
+        IReadOnlyList<UploadAttemptManifest> open = await store
+            .ListOpenAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return UploadAttemptIds.SelectContext(open, replayId, at);
+    }
+
+    public Task<UploadAttemptResult> NoteSessionAsync(
+        string attemptId,
+        string sessionUri,
+        DateTimeOffset at,
+        CancellationToken cancellationToken
+    )
+    {
+        return store.UpdateAsync(
+            attemptId,
+            current => UploadAttemptMachine.NoteSession(current, sessionUri, at),
+            cancellationToken
+        );
+    }
+
     public Task<UploadAttemptResult> MarkAmbiguousAsync(
         string attemptId,
         DateTimeOffset at,

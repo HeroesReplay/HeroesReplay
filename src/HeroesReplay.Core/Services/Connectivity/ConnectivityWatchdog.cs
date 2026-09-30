@@ -63,6 +63,23 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     }
 
     public bool IsOnline { get; private set; }
+
+    public TimeSpan DownFor
+    {
+        get
+        {
+            lock (gate)
+            {
+                if (IsOnline)
+                {
+                    return TimeSpan.Zero;
+                }
+
+                return TimeSpan.FromSeconds(15 * (long)failCount);
+            }
+        }
+    }
+
     public ConnectivitySnapshot Last { get; private set; }
     public event EventHandler<ConnectivityChangedEventArgs> Changed;
 
@@ -267,9 +284,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             return;
         }
 
-        TimeSpan downFor = IsOnline
-            ? TimeSpan.Zero
-            : TimeSpan.FromSeconds(15 * (long)failCount);
+        TimeSpan downFor = DownFor;
         OperatingMode mode = OutageMode.Decide(IsOnline, downFor, TimeSpan.Zero);
         if (!OutageMode.MaySpectate(mode))
         {

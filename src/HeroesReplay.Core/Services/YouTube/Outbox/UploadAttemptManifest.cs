@@ -18,6 +18,7 @@ public sealed class UploadAttemptManifest
     public const string UpdatedAtUtcProperty = "UpdatedAtUtc";
     public const string ReceiptKindProperty = "ReceiptKind";
     public const string PolicyProperty = "Policy";
+    public const string SessionUriProperty = "SessionUri";
 
     [JsonPropertyName(SchemaProperty)]
     public int Schema { get; init; }
@@ -57,6 +58,11 @@ public sealed class UploadAttemptManifest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public UploadAttemptPolicy Policy { get; init; }
 
+    /// <summary>Resumable upload URI. Present only after a send has started.</summary>
+    [JsonPropertyName(SessionUriProperty)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string SessionUri { get; init; }
+
     public UploadAttemptManifest WithRevision(long revision)
     {
         return new UploadAttemptManifest
@@ -73,6 +79,7 @@ public sealed class UploadAttemptManifest
             UpdatedAtUtc = UpdatedAtUtc,
             ReceiptKind = ReceiptKind,
             Policy = Policy,
+            SessionUri = SessionUri,
         };
     }
 
@@ -92,6 +99,7 @@ public sealed class UploadAttemptManifest
             UpdatedAtUtc = UpdatedAtUtc,
             ReceiptKind = ReceiptKind,
             Policy = policy,
+            SessionUri = SessionUri,
         };
     }
 }

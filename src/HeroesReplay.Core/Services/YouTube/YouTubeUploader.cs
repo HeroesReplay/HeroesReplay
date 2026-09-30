@@ -210,8 +210,20 @@ public class YouTubeUploader : IYouTubeUploader
             return;
         }
 
-        string attemptId = AttemptId(entry, recording);
         var outbox = new UploadOutbox(MediaPolicyAttemptLog.AttemptsRoot(settings));
+        string attemptId = await outbox
+            .ContextForReplayAsync(entry.ReplayId, dispatchedAt, token)
+            .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(attemptId))
+        {
+            logger.LogWarning(
+                "Upload of {Path} was not dispatched ({Reason}). It stays pending.",
+                recording.FullName,
+                UploadAttemptReasons.AttemptIdInvalid
+            );
+            return;
+        }
+
         SavedDispatch saved = await outbox
             .SaveDispatchAsync(
                 attemptId,
@@ -293,6 +305,16 @@ public class YouTubeUploader : IYouTubeUploader
         );
 
         string insertPrivacy = UploadVisibility.InsertStatus(entry.PrivacyStatus);
+        DateTimeOffset? publishAt = UploadVisibility.PublishAt(
+            entry.DesiredPrivacyStatus,
+            entry.PublishAtUtc
+        );
+        var videoStatus = new VideoStatus { PrivacyStatus = insertPrivacy };
+        if (publishAt != null)
+        {
+            videoStatus.PublishAtDateTimeOffset = publishAt.Value;
+        }
+
         var video = new Video
         {
             Snippet = new VideoSnippet
@@ -302,7 +324,7 @@ public class YouTubeUploader : IYouTubeUploader
                 Tags = entry.Tags,
                 CategoryId = entry.CategoryId,
             },
-            Status = new VideoStatus { PrivacyStatus = insertPrivacy },
+            Status = videoStatus,
         };
 
         logger.LogInformation(
@@ -325,19 +347,42 @@ public class YouTubeUploader : IYouTubeUploader
             "video/*"
         );
         Video uploaded = null;
+        string capturedSession = null;
         videosInsertRequest.ProgressChanged += videosInsertRequest_ProgressChanged;
+        videosInsertRequest.UploadSessionData += session =>
+        {
+            if (
+                session?.UploadUri != null
+                && UploadAttemptIds.IsSessionUri(session.UploadUri.AbsoluteUri)
+            )
+            {
+                capturedSession = session.UploadUri.AbsoluteUri;
+            }
+        };
         videosInsertRequest.ResponseReceived += video =>
         {
             uploaded = video;
             videosInsertRequest_ResponseReceived(video);
         };
+        bool resume = UploadAttemptIds.IsSessionUri(dispatched.Manifest?.SessionUri);
         IUploadProgress result;
         try
         {
-            result = await videosInsertRequest.UploadAsync(token).ConfigureAwait(false);
+            if (resume)
+            {
+                result = await videosInsertRequest
+                    .ResumeAsync(new Uri(dispatched.Manifest.SessionUri), token)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                result = await videosInsertRequest.UploadAsync(token).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
+            await NoteSessionIfPresentAsync(outbox, attemptId, capturedSession)
+                .ConfigureAwait(false);
             await RecordInterruptedSendAsync(outbox, attemptId).ConfigureAwait(false);
             if (ex is OperationCanceledException)
             {
@@ -352,6 +397,7 @@ public class YouTubeUploader : IYouTubeUploader
             return;
         }
 
+        await NoteSessionIfPresentAsync(outbox, attemptId, capturedSession).ConfigureAwait(false);
         if (result.Status == UploadStatus.Completed && !string.IsNullOrWhiteSpace(uploaded?.Id))
         {
             entry.VideoId = uploaded.Id;
@@ -396,6 +442,20 @@ public class YouTubeUploader : IYouTubeUploader
             lastInsertUtc = DateTimeOffset.UtcNow;
             RememberUploaded(entry);
             if (
+                UploadVisibility.ReconcileUntilPublic(
+                    entry.ActualPrivacyStatus,
+                    entry.DesiredPrivacyStatus
+                )
+            )
+            {
+                stuckPrivate++;
+                logger.LogInformation(
+                    "Replay {ReplayId} uploaded as {Privacy}. It stays pending until YouTube reports public.",
+                    entry.ReplayId,
+                    entry.ActualPrivacyStatus ?? UploadVisibility.Staged
+                );
+            }
+            else if (
                 UploadVisibility.CountsAsPublic(
                     entry.ActualPrivacyStatus,
                     entry.DesiredPrivacyStatus
@@ -407,9 +467,8 @@ public class YouTubeUploader : IYouTubeUploader
             }
             else
             {
-                stuckPrivate++;
                 logger.LogInformation(
-                    "Replay {ReplayId} uploaded as {Privacy}. It stays pending until YouTube reports public.",
+                    "Replay {ReplayId} uploaded as {Privacy}. A private video is not treated as public.",
                     entry.ReplayId,
                     entry.ActualPrivacyStatus ?? UploadVisibility.Staged
                 );
@@ -487,7 +546,7 @@ public class YouTubeUploader : IYouTubeUploader
             }
         }
 
-        LogPublicationHealth(pending.Count);
+        LogPublicationHealth(pending.Count, pending);
     }
 
     private bool ReservePublicationSlot(YouTubeEntry entry, string path)
@@ -502,7 +561,12 @@ public class YouTubeUploader : IYouTubeUploader
         }
 
         bool production = TwitchIngestGuard.IsProductionHost(Environment.MachineName);
-        PublicationDecision decision = PublicationSchedule.Decide(
+        string ledgerPath =
+            settings.Location?.DataDirectory == null
+                ? null
+                : Path.Combine(settings.Location.DataDirectory, "publication-reservations.txt");
+        PublicationReservationResult reserved = PublicationReservation.TryReserve(
+            ledgerPath,
             production,
             insertsToday,
             now,
@@ -516,9 +580,20 @@ public class YouTubeUploader : IYouTubeUploader
             lastMapUtc,
             entry?.Hero,
             lastHero,
-            lastHeroUtc
+            lastHeroUtc,
+            WorkKey(entry, path)
         );
-        if (decision.Allow)
+        if (reserved.Kind == PublicationReservation.Terminal)
+        {
+            logger.LogInformation(
+                "Upload of {Path} is past the publication window ({Reason}). It is not reserved again.",
+                path,
+                reserved.Reason
+            );
+            return false;
+        }
+
+        if (reserved.Allow)
         {
             return true;
         }
@@ -527,13 +602,43 @@ public class YouTubeUploader : IYouTubeUploader
         logger.LogInformation(
             "Upload of {Path} waits for the publication schedule ({Reason}). It stays pending.",
             path,
-            decision.Reason
+            reserved.Reason
         );
-        LogPublicationHealth(1);
+        LogPublicationHealth(1, new[] { path });
         return false;
     }
 
-    private void LogPublicationHealth(int pending)
+    private static string WorkKey(YouTubeEntry entry, string path)
+    {
+        if (entry?.ReplayId is > 0)
+        {
+            return "replay-"
+                + entry.ReplayId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        string name = Path.GetFileName(path) ?? "recording";
+        var key = new System.Text.StringBuilder("file-");
+        foreach (char character in name)
+        {
+            bool allowed =
+                (character >= 'a' && character <= 'z')
+                || (character >= 'A' && character <= 'Z')
+                || (character >= '0' && character <= '9');
+            if (allowed)
+            {
+                key.Append(character);
+            }
+        }
+
+        if (key.Length == "file-".Length)
+        {
+            key.Append("recording");
+        }
+
+        return key.Length <= 80 ? key.ToString() : key.ToString(0, 80);
+    }
+
+    private void LogPublicationHealth(int pending, IReadOnlyList<string> candidates)
     {
         EnsureLedger();
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -558,6 +663,68 @@ public class YouTubeUploader : IYouTubeUploader
             health.Limit,
             health.PolicyVersion
         );
+        if (string.IsNullOrWhiteSpace(settings.Location?.DataDirectory))
+        {
+            return;
+        }
+
+        int reserved = PublicationSchedule.ReservedRequestSlotsPerDay - RequestedInDay(now);
+        if (reserved < 0)
+        {
+            reserved = 0;
+        }
+
+        DateTimeOffset next =
+            lastPublicUtc == null
+                ? now
+                : lastPublicUtc.Value.Add(PublicationSchedule.MinimumInterval);
+        PublicationHealth.WriteStatus(
+            Path.Combine(settings.Location.DataDirectory, "publication-status.txt"),
+            health,
+            candidates,
+            reserved,
+            next
+        );
+    }
+
+    private async Task NoteSessionIfPresentAsync(
+        UploadOutbox outbox,
+        string attemptId,
+        string sessionUri
+    )
+    {
+        if (!UploadAttemptIds.IsSessionUri(sessionUri))
+        {
+            return;
+        }
+
+        try
+        {
+            UploadAttemptResult noted = await outbox
+                .NoteSessionAsync(
+                    attemptId,
+                    sessionUri,
+                    DateTimeOffset.UtcNow,
+                    CancellationToken.None
+                )
+                .ConfigureAwait(false);
+            if (!noted.Succeeded)
+            {
+                logger.LogWarning(
+                    "Could not record the resumable session for {Attempt} ({Reason}).",
+                    attemptId,
+                    noted.Reason
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Could not record the resumable session for {Attempt}.",
+                attemptId
+            );
+        }
     }
 
     private async Task ProcessOnceAsync(string recordingPath)
@@ -781,38 +948,6 @@ public class YouTubeUploader : IYouTubeUploader
         {
             logger.LogWarning(ex, "YouTube library pass did not finish. Uploads continue.");
         }
-    }
-
-    private static string AttemptId(YouTubeEntry entry, FileInfo recording)
-    {
-        if (entry?.ReplayId is > 0)
-        {
-            return "replay-"
-                + entry.ReplayId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        string name = recording?.Name ?? "recording";
-        var id = new System.Text.StringBuilder("file-");
-        foreach (char character in name)
-        {
-            bool allowed =
-                (character >= 'a' && character <= 'z')
-                || (character >= 'A' && character <= 'Z')
-                || (character >= '0' && character <= '9');
-            if (allowed)
-            {
-                id.Append(character);
-            }
-        }
-
-        if (id.Length == "file-".Length)
-        {
-            id.Append("recording");
-        }
-
-        return id.Length <= UploadAttemptIds.MaxLength
-            ? id.ToString()
-            : id.ToString(0, UploadAttemptIds.MaxLength);
     }
 
     private void EnsureLedger()
