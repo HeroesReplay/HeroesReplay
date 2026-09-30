@@ -169,7 +169,13 @@ public class YouTubeUploader : IYouTubeUploader
                 : entry.PrivacyStatus;
         }
 
-        UploadStaging.Apply(entry, settings.YouTube, Environment.MachineName);
+        UploadStaging.Apply(
+            entry,
+            settings.YouTube,
+            Environment.MachineName,
+            DateTimeOffset.UtcNow,
+            lastPublicUtc
+        );
 
         if (!string.IsNullOrWhiteSpace(entry.VideoId))
         {

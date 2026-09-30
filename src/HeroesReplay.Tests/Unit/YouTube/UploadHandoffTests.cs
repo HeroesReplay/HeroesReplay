@@ -55,6 +55,58 @@ public class UploadHandoffTests
     }
 
     [Fact]
+    public void Apply_SchedulesPublishAtWhenTheProductionListingShouldBePublic()
+    {
+        DateTimeOffset now = new(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
+        DateTimeOffset last = now.AddHours(-1);
+        var entry = new YouTubeEntry
+        {
+            Title = "Volskaya Foundry - 1",
+            PrivacyStatus = "public",
+            DesiredPrivacyStatus = "public",
+        };
+
+        UploadStaging.Apply(
+            entry,
+            new YouTubeSettings { PrivacyStatus = "public" },
+            TwitchIngestGuard.ProductionHost,
+            now,
+            last
+        );
+
+        Assert.Equal("private", entry.PrivacyStatus);
+        Assert.Equal(last.Add(PublicationSchedule.MinimumInterval), entry.PublishAtUtc);
+        Assert.Equal(
+            entry.PublishAtUtc,
+            UploadVisibility.PublishAt(entry.DesiredPrivacyStatus, entry.PublishAtUtc)
+        );
+    }
+
+    [Fact]
+    public void Apply_DoesNotSchedulePublishAtOnAPreliveHost()
+    {
+        DateTimeOffset now = new(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
+        var entry = new YouTubeEntry
+        {
+            Title = "Volskaya Foundry - 1",
+            PrivacyStatus = "public",
+            DesiredPrivacyStatus = "public",
+        };
+
+        UploadStaging.Apply(
+            entry,
+            new YouTubeSettings { PrivacyStatus = "public" },
+            "ASA-SERVER",
+            now,
+            null
+        );
+
+        Assert.Equal("private", entry.PrivacyStatus);
+        Assert.StartsWith("[TEST]", entry.Title, StringComparison.Ordinal);
+        Assert.Null(entry.PublishAtUtc);
+    }
+
+    [Fact]
     public void MayUpload_SpacesProductionAndCapsTheQuotaDay()
     {
         DateTimeOffset now = new(2026, 9, 29, 18, 0, 0, TimeSpan.Zero);

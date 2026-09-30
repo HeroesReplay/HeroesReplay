@@ -179,6 +179,40 @@ public static class PublicationSchedule
         return count;
     }
 
+    /// <summary>
+    /// A public listing is inserted private and carries the next UTC time YouTube should
+    /// publish it. A private listing has no publish time. The next time is now, unless the
+    /// previous public video was inside the minimum interval.
+    /// </summary>
+    public static DateTimeOffset? NextPublishAt(
+        string desiredFinal,
+        DateTimeOffset nowUtc,
+        DateTimeOffset? lastPublicUtc
+    )
+    {
+        if (!string.Equals(desiredFinal, "public", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (nowUtc.Offset != TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        DateTimeOffset when = nowUtc;
+        if (lastPublicUtc != null && lastPublicUtc.Value.Offset == TimeSpan.Zero)
+        {
+            DateTimeOffset earliest = lastPublicUtc.Value.Add(MinimumInterval);
+            if (earliest > when)
+            {
+                when = earliest;
+            }
+        }
+
+        return UploadVisibility.PublishAt(desiredFinal, when);
+    }
+
     public static DateTimeOffset QuotaDayStart(DateTimeOffset utc)
     {
         TimeZoneInfo pacific = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");

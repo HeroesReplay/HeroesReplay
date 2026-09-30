@@ -160,6 +160,31 @@ public class PublicationScheduleTests
     }
 
     [Fact]
+    public void NextPublishAt_InsertsPrivateAndSchedulesTheNextPublicTime()
+    {
+        DateTimeOffset recent = Now.AddHours(-1);
+        DateTimeOffset spaced = Now.Add(-PublicationSchedule.MinimumInterval).AddHours(-1);
+        DateTimeOffset local = new(2026, 9, 30, 19, 0, 0, TimeSpan.FromHours(1));
+
+        Assert.Equal("private", UploadVisibility.InsertStatus("public"));
+        Assert.Null(PublicationSchedule.NextPublishAt("private", Now, null));
+        Assert.Equal(Now, PublicationSchedule.NextPublishAt("public", Now, null));
+        Assert.Equal(
+            recent.Add(PublicationSchedule.MinimumInterval),
+            PublicationSchedule.NextPublishAt("public", Now, recent)
+        );
+        Assert.Equal(Now, PublicationSchedule.NextPublishAt("public", Now, spaced));
+        Assert.Null(PublicationSchedule.NextPublishAt("public", local, null));
+        Assert.Equal(
+            recent.Add(PublicationSchedule.MinimumInterval),
+            UploadVisibility.PublishAt(
+                "public",
+                PublicationSchedule.NextPublishAt("public", Now, recent)
+            )
+        );
+    }
+
+    [Fact]
     public void PublishedIn_CountsOnlyTimesInsideTheWindow()
     {
         var times = new List<DateTimeOffset>
