@@ -62,7 +62,8 @@ public static class ServiceRoleChecks
         HeroesProfileApiSettings heroesProfile,
         YouTubeSettings youtube,
         bool contextWritable,
-        bool oauthPresent
+        bool oauthPresent,
+        bool? gameDataReady = null
     )
     {
         return new ServiceRoleFacts
@@ -81,6 +82,7 @@ public static class ServiceRoleChecks
             {
                 CredentialOk = HasSecret(heroesProfile?.ApiKey),
                 CacheWritable = cacheWritable,
+                GameDataReady = gameDataReady,
             },
             YouTube = YouTubeFrom(youtube, contextWritable, oauthPresent),
         };
@@ -92,13 +94,115 @@ public static class ServiceRoleChecks
         bool tokenOk = HasSecret(twitch?.AccessToken) && HasSecret(twitch?.ClientId);
         bool rewardsRequired = twitch != null && (twitch.EnablePubSub || twitch.EnableRequests);
         bool predictionsRequired = twitch != null && twitch.EnablePredictions;
+        bool scopesOk = tokenOk && ScopesCover(twitch?.GrantedScopes, twitch);
         return new TwitchStartupFacts
         {
             TokenOk = tokenOk,
-            ScopesOk = tokenOk,
+            ScopesOk = scopesOk,
             RewardsOk = !rewardsRequired || tokenOk,
             PredictionsOk = !predictionsRequired || tokenOk,
         };
+    }
+
+    /// <summary>
+    /// Chat, EventSub redemptions, and predictions are covered only by the scopes supplied here.
+    /// This does not call Helix or the token validator.
+    /// </summary>
+    public static bool ScopesCover(string granted, TwitchSettings twitch)
+    {
+        if (twitch == null)
+        {
+            return false;
+        }
+
+        bool chatOk =
+            !twitch.EnableChatBot
+            || HasScope(granted, "chat:edit")
+            || HasScope(granted, "user:write:chat");
+        bool eventSubOk =
+            !(twitch.EnablePubSub || twitch.EnableRequests)
+            || HasScope(granted, "channel:read:redemptions")
+            || HasScope(granted, "channel:manage:redemptions");
+        bool predictionsOk =
+            !twitch.EnablePredictions || HasScope(granted, "channel:manage:predictions");
+        return chatOk && eventSubOk && predictionsOk;
+    }
+
+    /// <summary>
+    /// Heroes Profile hero data and the map catalog are both present. Callers pass the facts;
+    /// this does not download game data.
+    /// </summary>
+    public static bool HeroesProfileGameDataReady(bool heroDataFilePresent, bool mapCatalogPresent)
+    {
+        return heroDataFilePresent && mapCatalogPresent;
+    }
+
+    public static bool HeroDataFilePresent(string heroesDataPath)
+    {
+        if (string.IsNullOrWhiteSpace(heroesDataPath) || !Directory.Exists(heroesDataPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            foreach (
+                string _ in Directory.EnumerateFiles(
+                    heroesDataPath,
+                    "herodata_*.json",
+                    SearchOption.AllDirectories
+                )
+            )
+            {
+                return true;
+            }
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    public static bool MapCatalogPresent(MapSettings maps)
+    {
+        if (maps?.Catalog == null)
+        {
+            return false;
+        }
+
+        foreach (MapDefinition item in maps.Catalog)
+        {
+            if (item != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasScope(string granted, string name)
+    {
+        if (string.IsNullOrWhiteSpace(granted) || string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        string[] parts = granted.Split(
+            new[] { ' ', ',', ';' },
+            StringSplitOptions.RemoveEmptyEntries
+        );
+        foreach (string part in parts)
+        {
+            if (string.Equals(part.Trim(), name, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static YouTubeStartupFacts YouTubeFrom(

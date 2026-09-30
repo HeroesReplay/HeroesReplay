@@ -140,6 +140,82 @@ public class ServiceProcessReadinessTests
     }
 
     [Fact]
+    public void TwitchFrom_RequiresScopesForChatEventSubAndPredictions()
+    {
+        var twitch = new TwitchSettings
+        {
+            AccessToken = "present",
+            ClientId = "present",
+            EnableChatBot = true,
+            EnableRequests = true,
+            EnablePredictions = true,
+        };
+
+        Assert.False(ServiceRoleChecks.ScopesCover(null, twitch));
+        TwitchStartupFacts missing = ServiceRoleChecks.TwitchFrom(twitch);
+        Assert.True(missing.TokenOk);
+        Assert.False(missing.ScopesOk);
+        Assert.Contains("scopes", ServiceRoleChecks.TwitchFailure(missing));
+
+        twitch.GrantedScopes = "chat:edit channel:read:redemptions channel:manage:predictions";
+        Assert.True(ServiceRoleChecks.ScopesCover(twitch.GrantedScopes, twitch));
+        TwitchStartupFacts covered = ServiceRoleChecks.TwitchFrom(twitch);
+        Assert.True(covered.ScopesOk);
+        Assert.True(covered.RewardsOk);
+        Assert.True(covered.PredictionsOk);
+        Assert.Null(ServiceRoleChecks.TwitchFailure(covered));
+    }
+
+    [Fact]
+    public void Describe_FailsWhenHeroesProfileGameDataIsNotReady()
+    {
+        Assert.False(ServiceRoleChecks.HeroesProfileGameDataReady(false, true));
+        Assert.False(ServiceRoleChecks.HeroesProfileGameDataReady(true, false));
+        Assert.True(ServiceRoleChecks.HeroesProfileGameDataReady(true, true));
+        Assert.False(ServiceRoleChecks.MapCatalogPresent(null));
+        Assert.True(
+            ServiceRoleChecks.MapCatalogPresent(
+                new MapSettings { Catalog = new[] { new MapDefinition { Name = "Alterac Pass" } } }
+            )
+        );
+
+        ServiceRoleFacts facts = ServiceRoleChecks.Describe(
+            @"C:\heroesreplay\heroesreplay.exe",
+            privilegeOk: true,
+            ocrResult: new object(),
+            captureOk: true,
+            pathsOk: true,
+            obsOk: true,
+            twitch: new TwitchSettings { AccessToken = "present", ClientId = "present" },
+            cacheWritable: true,
+            heroesProfile: new HeroesProfileApiSettings { ApiKey = "present" },
+            youtube: new YouTubeSettings { Enabled = false },
+            contextWritable: true,
+            oauthPresent: false,
+            gameDataReady: ServiceRoleChecks.HeroesProfileGameDataReady(false, true)
+        );
+
+        Assert.False(facts.Download.GameDataReady);
+        Assert.Contains("game data", ServiceRoleChecks.DownloadFailure(facts.Download));
+        Assert.Null(ServiceRoleChecks.YouTubeFailure(facts.YouTube));
+        Assert.Contains(
+            "heroesreplay",
+            ServiceRoleChecks.SpectateFailure(
+                "cmd.exe",
+                new SpectateStartupFacts
+                {
+                    LaunchPath = "cmd.exe",
+                    PrivilegeOk = true,
+                    OcrResult = new object(),
+                    CaptureOk = true,
+                    PathsOk = true,
+                    ObsOk = true,
+                }
+            )
+        );
+    }
+
+    [Fact]
     public void YouTubeFrom_DryRunDoesNotRequireOAuth()
     {
         YouTubeStartupFacts facts = ServiceRoleChecks.YouTubeFrom(

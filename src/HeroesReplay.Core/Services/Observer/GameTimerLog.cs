@@ -9,6 +9,7 @@ public sealed class GameTimerLog
     private readonly ILogger<GameTimerLog> logger;
     private string lastSource = "";
     private string lastReason = "";
+    private string lastTelemetry;
     private TimeSpan? lastTimer;
 
     public GameTimerLog(ILogger<GameTimerLog> logger)
@@ -29,6 +30,10 @@ public sealed class GameTimerLog
         bool changed =
             reading.Source != lastSource
             || reading.Reason != lastReason
+            || ClockTelemetry.Changed(
+                new ClockTelemetryReport(lastTelemetry, lastReason),
+                new ClockTelemetryReport(reading.Telemetry, reading.Reason)
+            )
             || (reading.Time.HasValue && Moved(reading.Time.Value, lastTimer));
         if (!changed)
         {
@@ -60,6 +65,7 @@ public sealed class GameTimerLog
 
         lastSource = reading.Source;
         lastReason = reading.Reason;
+        lastTelemetry = reading.Telemetry;
         if (reading.Time.HasValue)
         {
             lastTimer = reading.Time.Value;

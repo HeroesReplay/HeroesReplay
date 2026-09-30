@@ -24,6 +24,7 @@ public class FallbackGameTimerTests
 
         Assert.Equal("memory", chosen.Source);
         Assert.Equal(TimeSpan.FromSeconds(12), chosen.Time);
+        Assert.Equal(ClockTelemetry.Describe(true, true, "ok").State, chosen.Telemetry);
     }
 
     [Fact]
@@ -38,6 +39,7 @@ public class FallbackGameTimerTests
         Assert.Equal("ocr", chosen.Source);
         Assert.Equal("near-zero", chosen.Reason);
         Assert.Equal(TimeSpan.FromSeconds(8), chosen.Time);
+        Assert.Equal(ClockTelemetry.Describe(true, false, "near-zero").State, chosen.Telemetry);
     }
 
     [Fact]

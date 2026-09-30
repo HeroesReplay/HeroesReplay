@@ -25,6 +25,10 @@ internal static class ServiceRoleStartup
             bool oauthRequired = youtubeEnabled && settings.YouTube.DryRun == false;
             string secretsPath = ServiceRoleChecks.YouTubeSecretsPath(settings);
             bool oauthPresent = oauthRequired && secretsPath != null && File.Exists(secretsPath);
+            bool gameDataReady = ServiceRoleChecks.HeroesProfileGameDataReady(
+                ServiceRoleChecks.HeroDataFilePresent(settings.HeroesDataPath),
+                ServiceRoleChecks.MapCatalogPresent(settings.Maps)
+            );
             ServiceRoleFacts facts = ServiceRoleChecks.Describe(
                 exe,
                 new AdminChecker().IsAdministrator(),
@@ -46,7 +50,8 @@ internal static class ServiceRoleStartup
                 settings.HeroesProfileApi,
                 settings.YouTube,
                 contextWritable,
-                oauthPresent
+                oauthPresent,
+                gameDataReady
             );
             return new ServiceStartupHandshake
             {

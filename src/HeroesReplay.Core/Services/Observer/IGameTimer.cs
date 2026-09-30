@@ -17,5 +17,6 @@ public readonly record struct GameTimerReading(
     string Reason,
     TimeSpan? Time,
     int Ticks = 0,
-    float Scale = 0
+    float Scale = 0,
+    string Telemetry = null
 );

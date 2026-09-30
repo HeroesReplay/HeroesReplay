@@ -44,17 +44,27 @@ public sealed class FallbackGameTimer : IGameTimer
     {
         if (IsPlayable(memory))
         {
-            return memory;
+            bool locked = string.Equals(memory.Reason, "ok", StringComparison.Ordinal);
+            return memory with
+            {
+                Telemetry = ClockTelemetry.Describe(true, locked, memory.Reason).State,
+            };
         }
 
+        string fallback = ClockTelemetry.Describe(true, false, memory.Reason).State;
         if (screenshots.Ok && IsPlayable(screenshots))
         {
-            return screenshots with { Reason = memory.Ok ? "memory-unplayable" : memory.Reason };
+            return screenshots with
+            {
+                Reason = memory.Ok ? "memory-unplayable" : memory.Reason,
+                Telemetry = fallback,
+            };
         }
 
         return screenshots with
         {
             Reason = string.IsNullOrWhiteSpace(memory.Reason) ? screenshots.Reason : memory.Reason,
+            Telemetry = fallback,
         };
     }
 

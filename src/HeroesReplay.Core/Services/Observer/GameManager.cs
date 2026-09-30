@@ -648,8 +648,19 @@ public class GameManager : IGameManager
             .ConfigureAwait(false);
         if (loadedReplay != null)
         {
-            loadedReplay.PolicyAllowsPublication =
-                snapshot?.Decision?.PublicationCandidate == true;
+            int publishedInWindow = PublishedThisDay(settings);
+            PublicationAdmitResult admit = PublicationAdmit.Decide(
+                snapshot?.Decision,
+                publishedInWindow
+            );
+            loadedReplay.PolicyAllowsPublication = admit.Allow;
+            logger.LogInformation(
+                "Replay {ReplayId} publication admit {Admit} reason {PublicationReason} published in window {PublishedInWindow}.",
+                loadedReplay.ReplayId,
+                admit.Allow,
+                admit.Reason,
+                publishedInWindow
+            );
         }
 
         string directory = context.Current?.Directory?.FullName;
@@ -670,6 +681,21 @@ public class GameManager : IGameManager
                 loadedReplay?.ReplayId
             );
         }
+    }
+
+    private static int PublishedThisDay(AppSettings settings)
+    {
+        PublicationLedger ledger = PublicationLedgerStore.Load(settings?.Location?.DataDirectory);
+        if (ledger?.PublicAtUtc == null)
+        {
+            return 0;
+        }
+
+        return PublicationSchedule.PublishedIn(
+            ledger.PublicAtUtc,
+            DateTimeOffset.UtcNow,
+            TimeSpan.FromHours(24)
+        );
     }
 
     private async Task MarkExistingYouTubeVideoAsync(LoadedReplay loadedReplay)

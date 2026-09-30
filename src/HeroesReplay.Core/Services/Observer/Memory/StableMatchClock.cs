@@ -45,6 +45,14 @@ public sealed class StableMatchClock : IDisposable
     private double lastOkSeconds = double.NaN;
     private DateTimeOffset lastOkChange;
     private string attachReason = "no-process";
+    private ClockTelemetryReport lastReport;
+    private int telemetryEmissions;
+
+    internal ClockTelemetryReport LastTelemetry { get; private set; }
+
+    internal ClockTelemetryReport DiscoveryTelemetry { get; private set; }
+
+    internal int TelemetryEmissions => telemetryEmissions;
 
     internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
 
@@ -79,28 +87,29 @@ public sealed class StableMatchClock : IDisposable
     {
         if (module.ProcessId <= 0)
         {
-            return new StableClockSample(false, "no-process", 0, 0, 0);
+            return Finish(new StableClockSample(false, "no-process", 0, 0, 0));
         }
 
         if (module.BaseAddress <= 0 || module.Size <= 0)
         {
-            return new StableClockSample(false, "no-module", 0, 0, 0);
+            return Finish(new StableClockSample(false, "no-module", 0, 0, 0));
         }
 
         if (read == null)
         {
-            return new StableClockSample(false, "read-failed", 0, 0, 0);
+            return Finish(new StableClockSample(false, "read-failed", 0, 0, 0));
         }
 
         UseModule(module);
         if (!discovered)
         {
+            ReportTelemetry(attachReason);
             Discover(read);
         }
 
         if (tickRva == 0 || speedRva == 0)
         {
-            return new StableClockSample(false, attachReason, 0, 0, 0);
+            return Finish(new StableClockSample(false, attachReason, 0, 0, 0));
         }
 
         int ticks = 0;
@@ -110,29 +119,29 @@ public sealed class StableMatchClock : IDisposable
             || !TryReadSingle(read, moduleBase + speedRva, out speed)
         )
         {
-            return new StableClockSample(false, "read-failed", ticks, speed, 0);
+            return Finish(new StableClockSample(false, "read-failed", ticks, speed, 0));
         }
 
         if (!MatchTickClock.TrySeconds(ticks, speed, out double seconds))
         {
             hasSample = false;
-            return new StableClockSample(false, "bad-scale", ticks, speed, seconds);
+            return Finish(new StableClockSample(false, "bad-scale", ticks, speed, seconds));
         }
 
         // Zero is also the menu. Leave that second to OCR so a dead read cannot freeze the clock.
         if (Math.Abs(seconds) < 0.5)
         {
-            return new StableClockSample(false, "near-zero", ticks, speed, seconds);
+            return Finish(new StableClockSample(false, "near-zero", ticks, speed, seconds));
         }
 
         if (!located && !TryConfirm(ticks, speed, seconds, out string reason))
         {
-            return new StableClockSample(false, reason, ticks, speed, seconds);
+            return Finish(new StableClockSample(false, reason, ticks, speed, seconds));
         }
 
         if (SameCellIsStale(lastOkSeconds, seconds, lastOkChange, UtcNow()))
         {
-            return new StableClockSample(false, "stalled", ticks, speed, seconds);
+            return Finish(new StableClockSample(false, "stalled", ticks, speed, seconds));
         }
 
         if (double.IsNaN(lastOkSeconds) || seconds > lastOkSeconds + 0.25)
@@ -141,7 +150,30 @@ public sealed class StableMatchClock : IDisposable
             lastOkChange = UtcNow();
         }
 
-        return new StableClockSample(true, "ok", ticks, speed, seconds);
+        return Finish(new StableClockSample(true, "ok", ticks, speed, seconds));
+    }
+
+    private StableClockSample Finish(StableClockSample sample)
+    {
+        ReportTelemetry(sample.Reason);
+        return sample;
+    }
+
+    private void ReportTelemetry(string reason)
+    {
+        ClockTelemetryReport report = ClockTelemetry.Describe(discovered, located, reason);
+        if (!discovered)
+        {
+            DiscoveryTelemetry = report;
+        }
+
+        if (ClockTelemetry.Changed(lastReport, report))
+        {
+            lastReport = report;
+            telemetryEmissions++;
+        }
+
+        LastTelemetry = report;
     }
 
     /// <summary>
@@ -194,6 +226,8 @@ public sealed class StableMatchClock : IDisposable
         version = fileVersion;
         discovered = false;
         located = false;
+        lastReport = default;
+        DiscoveryTelemetry = default;
         tickRva = 0;
         speedRva = 0;
         hasSample = false;
@@ -505,6 +539,10 @@ public sealed class StableMatchClock : IDisposable
         lastOkSeconds = double.NaN;
         lastOkChange = default;
         attachReason = "no-process";
+        lastReport = default;
+        DiscoveryTelemetry = default;
+        LastTelemetry = default;
+        telemetryEmissions = 0;
     }
 
     private static class Native
