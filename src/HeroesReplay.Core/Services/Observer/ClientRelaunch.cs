@@ -103,6 +103,19 @@ public static class ClientRelaunch
         return openedOnMatchingExe && runningBuildDiffers;
     }
 
+    /// <summary>
+    /// The matching exe was started with the replay path and no Heroes process stayed up.
+    /// Waiting out the cold-boot limit leaves an empty desktop. The next replay starts.
+    /// </summary>
+    public static bool MatchingOpenLeftNoProcess(
+        bool openedOnMatchingExe,
+        bool processRunning,
+        TimeSpan sinceOpen
+    )
+    {
+        return openedOnMatchingExe && !processRunning && sinceOpen >= RetryIfNoProcess;
+    }
+
     public static DateTimeOffset ExtendForGameDataStartup(
         DateTimeOffset started,
         DateTimeOffset deadline,

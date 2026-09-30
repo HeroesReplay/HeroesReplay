@@ -219,7 +219,37 @@ public class ReplayClientRouteTests
                     replayPresented: false
                 ),
                 alreadyOpened: false,
-                windowBlank: ClientRelaunch.IsBlankClientWindow("", 1280, 720)
+                windowBlank: ClientRelaunch.IsBlankClientWindow("", 1280, 720),
+                gameDataStillStarting: false
+            )
+        );
+    }
+
+    [Fact]
+    public void OpenMatchingBuildNow_LeavesTheClientUpWhileGameDataStartupIsStillBlank()
+    {
+        bool blank = ClientRelaunch.IsBlankClientWindow("", 1280, 720);
+        bool stillStarting = ClientRelaunch.KeepsWaitingForGameData(
+            startupText: false,
+            sawStartup: true,
+            windowBlank: blank,
+            clientAlreadyRunning: false,
+            clientBuildMatches: true
+        );
+
+        Assert.True(blank);
+        Assert.True(stillStarting);
+        Assert.False(
+            ReplayClientRoute.OpenMatchingBuildNow(
+                ReplayClientRoute.Decide(
+                    ReplayClientPatch.Previous,
+                    RunningClientBuild.Matches,
+                    homeScreen: false,
+                    replayPresented: false
+                ),
+                alreadyOpened: false,
+                windowBlank: blank,
+                gameDataStillStarting: stillStarting
             )
         );
     }
@@ -231,7 +261,8 @@ public class ReplayClientRouteTests
             ReplayClientRoute.OpenMatchingBuildNow(
                 ReplayLaunchAuth.OpenMatchingBuild,
                 alreadyOpened: false,
-                windowBlank: ClientRelaunch.IsBlankClientWindow("Preparing game data", 403, 139)
+                windowBlank: ClientRelaunch.IsBlankClientWindow("Preparing game data", 403, 139),
+                gameDataStillStarting: false
             )
         );
     }
@@ -243,28 +274,32 @@ public class ReplayClientRouteTests
             ReplayClientRoute.OpenMatchingBuildNow(
                 ReplayLaunchAuth.OpenMatchingBuild,
                 alreadyOpened: true,
-                windowBlank: true
+                windowBlank: true,
+                gameDataStillStarting: false
             )
         );
         Assert.False(
             ReplayClientRoute.OpenMatchingBuildNow(
                 ReplayLaunchAuth.OpenInstalledBuild,
                 alreadyOpened: false,
-                windowBlank: true
+                windowBlank: true,
+                gameDataStillStarting: false
             )
         );
         Assert.False(
             ReplayClientRoute.OpenMatchingBuildNow(
                 ReplayLaunchAuth.Wait,
                 alreadyOpened: false,
-                windowBlank: true
+                windowBlank: true,
+                gameDataStillStarting: false
             )
         );
         Assert.False(
             ReplayClientRoute.OpenMatchingBuildNow(
                 ReplayLaunchAuth.OpenFromHome,
                 alreadyOpened: false,
-                windowBlank: true
+                windowBlank: true,
+                gameDataStillStarting: false
             )
         );
     }

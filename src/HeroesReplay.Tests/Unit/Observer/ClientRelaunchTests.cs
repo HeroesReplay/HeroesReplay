@@ -180,6 +180,39 @@ public class ClientRelaunchTests
     }
 
     [Fact]
+    public void MatchingOpenLeftNoProcess_StartsTheNextReplayWhenNothingStayedUp()
+    {
+        Assert.False(
+            ClientRelaunch.MatchingOpenLeftNoProcess(
+                openedOnMatchingExe: true,
+                processRunning: false,
+                sinceOpen: ClientRelaunch.RetryIfNoProcess - TimeSpan.FromMilliseconds(1)
+            )
+        );
+        Assert.True(
+            ClientRelaunch.MatchingOpenLeftNoProcess(
+                openedOnMatchingExe: true,
+                processRunning: false,
+                sinceOpen: ClientRelaunch.RetryIfNoProcess
+            )
+        );
+        Assert.False(
+            ClientRelaunch.MatchingOpenLeftNoProcess(
+                openedOnMatchingExe: true,
+                processRunning: true,
+                sinceOpen: ClientRelaunch.RetryIfNoProcess
+            )
+        );
+        Assert.False(
+            ClientRelaunch.MatchingOpenLeftNoProcess(
+                openedOnMatchingExe: false,
+                processRunning: false,
+                sinceOpen: ClientRelaunch.RetryIfNoProcess
+            )
+        );
+    }
+
+    [Fact]
     public void ExtendForGameDataStartup_SlidesTheDeadlineWithoutPassingTheCap()
     {
         DateTimeOffset started = new(2026, 9, 29, 21, 0, 0, TimeSpan.Zero);

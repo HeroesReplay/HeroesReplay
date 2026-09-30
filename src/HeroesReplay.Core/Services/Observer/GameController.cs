@@ -456,6 +456,20 @@ public class GameController : IGameController
 
         while (DateTimeOffset.UtcNow < deadline)
         {
+            if (
+                ClientRelaunch.MatchingOpenLeftNoProcess(
+                    openedOnMatchingExe,
+                    IsGameProcessRunning(),
+                    DateTimeOffset.UtcNow - started
+                )
+            )
+            {
+                logger.LogInformation(
+                    "The matching client did not stay open. The next replay starts. Battle.net was not clicked."
+                );
+                return new ColdBoot(RetryDisconnect: false, ClientHoldReason.ClientNotReady);
+            }
+
             WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
             string text = window.Text;
             if (BattleNetDisconnect.IsShown(text))
@@ -649,6 +663,13 @@ public class GameController : IGameController
             }
 
             bool blank = ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
+            bool gameDataStillStarting = ClientRelaunch.KeepsWaitingForGameData(
+                startup,
+                sawGameDataStartup,
+                blank,
+                clientAlreadyRunning,
+                matchingBuild
+            );
             if (
                 !oweAhliObs
                 && ReplayClientRoute.OpenMatchingBuildNow(
@@ -659,7 +680,8 @@ public class GameController : IGameController
                         replayPresented: false
                     ),
                     openedOnMatchingExe || openedFromHome,
-                    blank
+                    blank,
+                    gameDataStillStarting
                 )
             )
             {
@@ -677,15 +699,7 @@ public class GameController : IGameController
                 continue;
             }
 
-            if (
-                ClientRelaunch.KeepsWaitingForGameData(
-                    startup,
-                    sawGameDataStartup,
-                    blank,
-                    clientAlreadyRunning,
-                    matchingBuild
-                )
-            )
+            if (gameDataStillStarting)
             {
                 DateTimeOffset extended = ClientRelaunch.ExtendForGameDataStartup(
                     started,

@@ -178,13 +178,20 @@ public static class ReplayClientRoute
 
     /// <summary>
     /// One open for a matching older exe whose window is already blank. A later pass in the same wait does not open again.
+    /// A blank frame while that exe is still calculating game data is the startup. Opening the replay would close the only client.
     /// </summary>
     public static bool OpenMatchingBuildNow(
         ReplayLaunchAuth auth,
         bool alreadyOpened,
-        bool windowBlank
+        bool windowBlank,
+        bool gameDataStillStarting
     )
     {
+        if (gameDataStillStarting)
+        {
+            return false;
+        }
+
         return auth == ReplayLaunchAuth.OpenMatchingBuild && !alreadyOpened && windowBlank;
     }
 }
