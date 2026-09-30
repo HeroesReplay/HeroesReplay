@@ -5,7 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Media;
 using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.Services.YouTube.Outbox;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -15,7 +17,7 @@ namespace HeroesReplay.Tests.Integration.YouTube;
 public class YouTubeDryRunUploadTests
 {
     [Fact]
-    public async Task ProcessRecording_DryRun_MarksTheEntryUploadedWithoutCallingYouTube()
+    public async Task ProcessRecording_DryRun_KeepsTheEntryPendingAndSavesTheAttempt()
     {
         string directory = Path.Combine(
             Path.GetTempPath(),
@@ -38,40 +40,51 @@ public class YouTubeDryRunUploadTests
                 },
                 PrivacyStatus = "public",
                 CategoryId = "20",
+                ReplayId = 65389750,
             };
             await File.WriteAllTextAsync(
                 Path.Combine(directory, "youtube-entry.json"),
                 JsonSerializer.Serialize(entry)
             );
 
+            var settings = new AppSettings
+            {
+                YouTube = new YouTubeSettings
+                {
+                    DryRun = true,
+                    Enabled = true,
+                    EntryFileName = "youtube-entry.json",
+                    EntryFileNameUploaded = "youtube-entry-uploaded.json",
+                    ReadyStableReads = 1,
+                    ReadyPollMilliseconds = 20,
+                },
+                Location = new LocationSettings { DataDirectory = directory },
+            };
             var uploader = new YouTubeUploader(
                 NullLogger<YouTubeUploader>.Instance,
-                new AppSettings
-                {
-                    YouTube = new YouTubeSettings
-                    {
-                        DryRun = true,
-                        Enabled = true,
-                        EntryFileName = "youtube-entry.json",
-                        EntryFileNameUploaded = "youtube-entry-uploaded.json",
-                        ReadyStableReads = 1,
-                        ReadyPollMilliseconds = 20,
-                    },
-                    Location = new LocationSettings { DataDirectory = directory },
-                },
+                settings,
                 new CancellationTokenSource()
             );
 
             await uploader.ProcessRecording(recordingPath);
+            await uploader.ProcessRecording(recordingPath);
 
-            Assert.False(File.Exists(Path.Combine(directory, "youtube-entry.json")));
-            Assert.True(File.Exists(Path.Combine(directory, "youtube-entry-uploaded.json")));
+            Assert.True(File.Exists(Path.Combine(directory, "youtube-entry.json")));
+            Assert.False(File.Exists(Path.Combine(directory, "youtube-entry-uploaded.json")));
             string receipt = await File.ReadAllTextAsync(
                 Path.Combine(directory, "youtube-dry-run.json")
             );
             Assert.Contains("Volskaya Foundry - 65389750", receipt, StringComparison.Ordinal);
             Assert.Contains("\"Simulated\": true", receipt, StringComparison.Ordinal);
             Assert.False(File.Exists(Path.Combine(directory, "client_secrets.json")));
+            var outbox = new UploadOutbox(MediaPolicyAttemptLog.AttemptsRoot(settings));
+            UploadAttemptResult saved = await outbox.LoadAsync(
+                "replay-65389750",
+                CancellationToken.None
+            );
+            Assert.True(saved.Succeeded, saved.Reason);
+            Assert.Equal(UploadAttemptState.DryRunSimulated, saved.Manifest.State);
+            Assert.Null(saved.Manifest.VideoId);
         }
         finally
         {

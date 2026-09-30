@@ -6,6 +6,12 @@ using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.YouTube.Outbox;
 
+public sealed class SavedDispatch
+{
+    public UploadAttemptResult Result { get; init; }
+    public bool AlreadySettled { get; init; }
+}
+
 public sealed class UploadOutbox
 {
     private readonly UploadAttemptStore store;
@@ -210,5 +216,115 @@ public sealed class UploadOutbox
         }
 
         return UploadAttemptMachine.SelectBoundMedia(loaded.Manifest);
+    }
+
+    /// <summary>
+    /// Persists the same walk <see cref="UploadDispatch.ForFile"/> decides in memory.
+    /// A manifest that already left the pending state is returned unchanged.
+    /// </summary>
+    public async Task<SavedDispatch> SaveDispatchAsync(
+        string attemptId,
+        int? replayId,
+        string mediaPath,
+        long mediaSize,
+        string mediaHash,
+        bool youtubeEnabled,
+        bool dryRun,
+        DateTimeOffset at,
+        CancellationToken cancellationToken
+    )
+    {
+        UploadAttemptResult preview = UploadDispatch.ForFile(
+            attemptId,
+            replayId,
+            mediaPath,
+            mediaSize,
+            mediaHash,
+            youtubeEnabled,
+            dryRun,
+            at
+        );
+        if (!preview.Succeeded)
+        {
+            return new SavedDispatch { Result = preview, AlreadySettled = false };
+        }
+
+        UploadAttemptResult loaded = await LoadAsync(attemptId, cancellationToken)
+            .ConfigureAwait(false);
+        if (!loaded.Succeeded && loaded.Reason != UploadAttemptReasons.ManifestMissing)
+        {
+            return new SavedDispatch { Result = loaded, AlreadySettled = false };
+        }
+
+        if (loaded.Succeeded && IsSettled(loaded.Manifest.State))
+        {
+            return new SavedDispatch { Result = loaded, AlreadySettled = true };
+        }
+
+        if (!loaded.Succeeded)
+        {
+            UploadAttemptResult created = await PrepareAsync(
+                    attemptId,
+                    replayId,
+                    at,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            if (!created.Succeeded)
+            {
+                return new SavedDispatch { Result = created, AlreadySettled = false };
+            }
+
+            loaded = created;
+        }
+
+        if (loaded.Manifest.State == UploadAttemptState.Prepared)
+        {
+            loaded = await BeginRecordingAsync(attemptId, at, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (loaded.Succeeded && loaded.Manifest.State == UploadAttemptState.Recording)
+        {
+            loaded = await FinalizeMediaAsync(
+                    attemptId,
+                    mediaPath,
+                    mediaSize,
+                    mediaHash,
+                    at,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+
+        if (loaded.Succeeded && loaded.Manifest.State == UploadAttemptState.MediaFinalized)
+        {
+            loaded = await MarkUploadPendingAsync(attemptId, at, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (loaded.Succeeded && loaded.Manifest.State == UploadAttemptState.UploadPending)
+        {
+            loaded = await DispatchAsync(
+                    attemptId,
+                    youtubeEnabled,
+                    dryRun,
+                    operatorRetry: false,
+                    at,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+
+        return new SavedDispatch { Result = loaded, AlreadySettled = false };
+    }
+
+    private static bool IsSettled(UploadAttemptState state)
+    {
+        return state == UploadAttemptState.DryRunSimulated
+            || state == UploadAttemptState.Disabled
+            || state == UploadAttemptState.Uploading
+            || state == UploadAttemptState.Uploaded
+            || state == UploadAttemptState.AmbiguousUpload;
     }
 }

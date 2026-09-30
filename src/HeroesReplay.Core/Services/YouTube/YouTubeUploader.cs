@@ -14,6 +14,7 @@ using Google.Apis.YouTube.v3;
 using Google.Apis.YouTube.v3.Data;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Media;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.YouTube.Outbox;
@@ -203,22 +204,38 @@ public class YouTubeUploader : IYouTubeUploader
         }
 
         DateTimeOffset dispatchedAt = DateTimeOffset.UtcNow;
-        UploadAttemptResult dispatched = UploadDispatch.ForFile(
-            AttemptId(entry, recording),
-            entry.ReplayId,
-            recording.FullName,
-            recording.Length,
-            "len-" + recording.Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            settings.YouTube.Enabled != false,
-            settings.YouTube.DryRun,
-            dispatchedAt
-        );
+        var outbox = new UploadOutbox(MediaPolicyAttemptLog.AttemptsRoot(settings));
+        SavedDispatch saved = await outbox
+            .SaveDispatchAsync(
+                AttemptId(entry, recording),
+                entry.ReplayId,
+                recording.FullName,
+                recording.Length,
+                "len-"
+                    + recording.Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                settings.YouTube.Enabled != false,
+                settings.YouTube.DryRun,
+                dispatchedAt,
+                token
+            )
+            .ConfigureAwait(false);
+        UploadAttemptResult dispatched = saved.Result;
         if (!dispatched.Succeeded)
         {
             logger.LogWarning(
                 "Upload of {Path} was not dispatched ({Reason}). It stays pending.",
                 recording.FullName,
                 dispatched.Reason
+            );
+            return;
+        }
+
+        if (saved.AlreadySettled)
+        {
+            logger.LogInformation(
+                "Upload of {Path} is already {State}. It stays pending. YouTube was not called.",
+                recording.FullName,
+                dispatched.Manifest.State
             );
             return;
         }
@@ -240,7 +257,7 @@ public class YouTubeUploader : IYouTubeUploader
                 recording.Length,
                 entry.Title
             );
-            await CompleteDryRunAsync(recording, entryFile, entry, token).ConfigureAwait(false);
+            await CompleteDryRunAsync(recording, entry, token).ConfigureAwait(false);
             return;
         }
 
@@ -628,7 +645,6 @@ public class YouTubeUploader : IYouTubeUploader
 
     private async Task CompleteDryRunAsync(
         FileInfo recording,
-        FileInfo entryFile,
         YouTubeEntry entry,
         CancellationToken token
     )
@@ -652,7 +668,6 @@ public class YouTubeUploader : IYouTubeUploader
             entry.Title,
             recording.Length
         );
-        MarkEntryUploaded(entryFile, recording.Directory);
         MediaRetention.SweepAndLog(settings, logger);
     }
 

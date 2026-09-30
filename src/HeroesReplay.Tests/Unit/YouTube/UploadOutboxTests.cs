@@ -239,6 +239,47 @@ public class UploadOutboxTests
     }
 
     [Fact]
+    public async Task SaveDispatch_PersistsDryRunAndLeavesTheSecondCallSettled()
+    {
+        using var temp = new TempAttempts();
+        var outbox = new UploadOutbox(temp.Root);
+        string mediaPath = Path.Combine(temp.Root, "clip.mp4");
+
+        SavedDispatch first = await outbox.SaveDispatchAsync(
+            "replay-7",
+            7,
+            mediaPath,
+            128,
+            "len-128",
+            youtubeEnabled: true,
+            dryRun: true,
+            Stamp,
+            CancellationToken.None
+        );
+        SavedDispatch second = await outbox.SaveDispatchAsync(
+            "replay-7",
+            7,
+            mediaPath,
+            128,
+            "len-128",
+            youtubeEnabled: true,
+            dryRun: false,
+            Stamp.AddMinutes(1),
+            CancellationToken.None
+        );
+
+        Assert.True(first.Result.Succeeded, first.Result.Reason);
+        Assert.False(first.AlreadySettled);
+        Assert.Equal(UploadAttemptState.DryRunSimulated, first.Result.Manifest.State);
+        Assert.True(File.Exists(outbox.ManifestPath("replay-7")));
+        Assert.True(second.Result.Succeeded, second.Result.Reason);
+        Assert.True(second.AlreadySettled);
+        Assert.Equal(UploadAttemptState.DryRunSimulated, second.Result.Manifest.State);
+        Assert.Equal(first.Result.Manifest.Revision, second.Result.Manifest.Revision);
+        Assert.Null(second.Result.Manifest.VideoId);
+    }
+
+    [Fact]
     public async Task Disabled_NeverUploads()
     {
         using var temp = new TempAttempts();
