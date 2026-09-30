@@ -18,6 +18,20 @@ public class ClientScreenTextTests
     }
 
     [Fact]
+    public void IsGameDataDownload_MatchesTheVersionDataDialog()
+    {
+        Assert.True(
+            ClientScreenText.IsGameDataDownload(
+                "DOWNLOADING All data files must be fully downloaded to load this version of the game. Calculating... CANCEL"
+            )
+        );
+        Assert.False(ClientScreenText.IsGameDataDownload("Preparing game data"));
+        Assert.False(ClientScreenText.IsGameDataDownload("DOWNLOADING"));
+        Assert.False(ClientScreenText.IsGameDataDownload(null));
+        Assert.False(ClientScreenText.IsGameDataDownload("   "));
+    }
+
+    [Fact]
     public void IsLoginForm_MatchesTheBattleNetEmailForm()
     {
         const string text = "Email or Phone Password Keep me logged in Log in Battle.net Account";

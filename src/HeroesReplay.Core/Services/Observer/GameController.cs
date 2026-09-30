@@ -13,6 +13,7 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Shared;
@@ -35,6 +36,7 @@ public class GameController : IGameController
     private readonly IObsController obsController;
     private readonly IGameCapture capture;
     private readonly IReplayOpener replayOpener;
+    private readonly StormClientConfigurator clientConfigurator;
 
     private readonly object controllerLock = new object();
     private Process cachedProcess;
@@ -66,6 +68,7 @@ public class GameController : IGameController
         IObsController obsController,
         IGameCapture capture,
         IReplayOpener replayOpener,
+        StormClientConfigurator clientConfigurator,
         OcrEngine engine,
         CancellationTokenProvider tokenProvider
     )
@@ -77,6 +80,8 @@ public class GameController : IGameController
             obsController ?? throw new ArgumentNullException(nameof(obsController));
         this.capture = capture ?? throw new ArgumentNullException(nameof(capture));
         this.replayOpener = replayOpener ?? throw new ArgumentNullException(nameof(replayOpener));
+        this.clientConfigurator =
+            clientConfigurator ?? throw new ArgumentNullException(nameof(clientConfigurator));
         this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
@@ -380,6 +385,9 @@ public class GameController : IGameController
         bool loggedMismatch = false;
         bool loggedPreparing = false;
         bool sawGameDataStartup = false;
+        bool sawGameDataDownload = false;
+        bool loggedDownload = false;
+        int dataRestarts = 0;
         int blankRelaunches = 0;
         bool blankTiming = false;
         DateTimeOffset blankSince = default;
@@ -411,6 +419,33 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, hold);
             }
 
+            bool downloadVisible = ClientScreenText.IsGameDataDownload(text);
+            if (downloadVisible)
+            {
+                sawGameDataDownload = true;
+                DateTimeOffset extended = ClientInterfacePlan.ExtendForGameDataDownload(
+                    started,
+                    deadline,
+                    DateTimeOffset.UtcNow
+                );
+                if (extended > deadline)
+                {
+                    deadline = extended;
+                }
+
+                if (!loggedDownload)
+                {
+                    loggedDownload = true;
+                    logger.LogInformation(
+                        "Heroes is downloading game data for this client. AhliObs is applied again after that download. Battle.net was not clicked."
+                    );
+                }
+
+                await Task.Delay(settings.OCR.CheckSleepDuration, tokenProvider.Token)
+                    .ConfigureAwait(false);
+                continue;
+            }
+
             bool loading = searchTerms.Any(word =>
                 !string.IsNullOrWhiteSpace(word)
                 && text.Contains(word, StringComparison.OrdinalIgnoreCase)
@@ -440,7 +475,33 @@ public class GameController : IGameController
                 continue;
             }
 
-            if (!openedFromHome && !loading && !timer && await IsHomeScreen().ConfigureAwait(false))
+            bool home =
+                !openedFromHome && !loading && !timer && await IsHomeScreen().ConfigureAwait(false);
+            bool startup = ClientScreenText.IsGameDataStartup(text);
+            if (
+                ClientInterfacePlan.RestartAfterGameData(
+                    sawGameDataDownload,
+                    downloadVisible: false,
+                    startup,
+                    loading || timer || home,
+                    dataRestarts
+                )
+            )
+            {
+                dataRestarts++;
+                logger.LogInformation(
+                    "Heroes finished downloading game data. Restarting the client so AhliObs loads. Battle.net was not clicked."
+                );
+                await RestartForObserverInterfaceAsync(replayPath).ConfigureAwait(false);
+                openedFromHome = false;
+                sawGameDataStartup = false;
+                loggedPreparing = false;
+                blankTiming = false;
+                clientAlreadyRunning = false;
+                continue;
+            }
+
+            if (home)
             {
                 openedFromHome = true;
                 OpenReplayFromHome(replayPath);
@@ -458,7 +519,6 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
-            bool startup = ClientScreenText.IsGameDataStartup(text);
             if (startup)
             {
                 sawGameDataStartup = true;
@@ -551,6 +611,37 @@ public class GameController : IGameController
             RetryDisconnect: false,
             ClientRelaunch.ColdBootHold(openedFromHome, replayFileOpened, sawGameDataStartup)
         );
+    }
+
+    private async Task RestartForObserverInterfaceAsync(string replayPath)
+    {
+        Kill();
+        replayFileOpened = false;
+        await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token).ConfigureAwait(false);
+        try
+        {
+            ClientConfigureResult result = clientConfigurator.Configure();
+            logger.LogInformation(
+                "Applied windowed 1080p, background audio, and AhliObs after the game-data download. Interface copied: {Copied}.",
+                result.InterfaceCopied
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not write AhliObs after the game-data download.");
+        }
+
+        if (launchPatch == ReplayClientPatch.Previous)
+        {
+            logger.LogInformation(
+                "Opening the previous-patch replay again through HeroesSwitcher. Battle.net Play was not used."
+            );
+            replayFileOpened = true;
+            replayOpener.Open(replayPath);
+            return;
+        }
+
+        await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
     }
 
     private async Task RestartAuthenticatedClientAsync()
@@ -671,9 +762,12 @@ public class GameController : IGameController
                 }
 
                 string text = await RecognizeFrameAsync(frame).ConfigureAwait(false);
-                if (ClientScreenText.IsGameDataStartup(text))
+                if (
+                    ClientScreenText.IsGameDataStartup(text)
+                    || ClientScreenText.IsGameDataDownload(text)
+                )
                 {
-                    return ClientScreenText.GameDataStartup;
+                    return text;
                 }
             }
             catch (Exception e)

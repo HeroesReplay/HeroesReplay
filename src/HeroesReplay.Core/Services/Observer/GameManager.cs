@@ -114,6 +114,10 @@ public class GameManager : IGameManager
             EnsureWindowedClient();
             recordingClock.Reset();
             ClientHoldReason hold = await gameController.LaunchAsync().ConfigureAwait(false);
+            if (hold == ClientHoldReason.None)
+            {
+                RememberInterfaceBuild();
+            }
             if (hold != ClientHoldReason.None)
             {
                 spectator.RecordHold(hold);
@@ -712,9 +716,24 @@ public class GameManager : IGameManager
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.client.configure");
         ClientStatusResult status = clientConfigurator.GetStatus();
+        string newest = ClientInterfacePlan.Newest(
+            InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory)
+        );
+        bool buildSealed = ClientInterfacePlan.IsSealed(
+            ClientInterfaceSeal.Read(
+                ClientInterfaceSeal.FilePath(settings.Location?.DataDirectory)
+            ),
+            newest
+        );
+        ClientPresetAction action = ClientInterfacePlan.Preset(
+            status.MatchesPreset,
+            status.HotSRunning,
+            buildSealed
+        );
         activity?.SetTag("client.matches_preset", status.MatchesPreset);
         activity?.SetTag("client.hots_running", status.HotSRunning);
-        if (status.MatchesPreset)
+        activity?.SetTag("client.interface_action", action.ToString());
+        if (action == ClientPresetAction.Keep)
         {
             logger.LogInformation(
                 "Heroes client already windowed 1080p with background audio and AhliObs."
@@ -722,7 +741,7 @@ public class GameManager : IGameManager
             return;
         }
 
-        if (status.HotSRunning)
+        if (action == ClientPresetAction.LeaveRunning)
         {
             logger.LogWarning(
                 "Heroes client is not windowed 1080p with background audio and AhliObs ({Mismatches}). Quit the game and run `heroesreplay client configure`, then relaunch windowed.",
@@ -733,9 +752,21 @@ public class GameManager : IGameManager
 
         ClientConfigureResult result = clientConfigurator.Configure();
         logger.LogInformation(
-            "Applied windowed 1080p, background audio, and AhliObs to {Variables}. Interface copied: {Copied}.",
+            "Applied windowed 1080p, background audio, and AhliObs to {Variables}. Interface copied: {Copied}. Installed build {Build}.",
             result.VariablesPath,
-            result.InterfaceCopied
+            result.InterfaceCopied,
+            newest ?? "(unknown)"
+        );
+    }
+
+    private void RememberInterfaceBuild()
+    {
+        string newest = ClientInterfacePlan.Newest(
+            InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory)
+        );
+        ClientInterfaceSeal.Write(
+            ClientInterfaceSeal.FilePath(settings.Location?.DataDirectory),
+            newest
         );
     }
 }
