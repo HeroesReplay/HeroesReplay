@@ -157,6 +157,7 @@ public class GameController : IGameController
     {
         replayFileOpened = true;
         logger.LogInformation("Client is on the home screen. Opening the replay.");
+        CloseIdleSwitcher();
         replayOpener.Open(replayPath);
     }
 
@@ -282,6 +283,7 @@ public class GameController : IGameController
                 "Opening previous-patch replay {Version} through HeroesSwitcher. Battle.net Play was not used.",
                 replayVersion
             );
+            CloseIdleSwitcher();
             replayFileOpened = true;
             replayOpener.Open(replayPath);
             return new ReplayBoot(auth, false);
@@ -387,7 +389,9 @@ public class GameController : IGameController
         bool sawGameDataStartup = false;
         bool sawGameDataDownload = false;
         bool loggedDownload = false;
+        bool loggedHandoff = false;
         int dataRestarts = 0;
+        bool interfaceRestarted = false;
         int blankRelaunches = 0;
         bool blankTiming = false;
         DateTimeOffset blankSince = default;
@@ -507,13 +511,25 @@ public class GameController : IGameController
                     && laterText.Contains(word, StringComparison.OrdinalIgnoreCase)
                 );
             bool startup = ClientScreenText.IsGameDataStartup(text, laterText);
+            RunningClientBuild runningBuild = ReadRunningBuild(replayVersion);
+            bool differentBuild = runningBuild == RunningClientBuild.Differs;
+            bool matchingBuild = runningBuild == RunningClientBuild.Matches;
+            if (differentBuild && !loggedHandoff)
+            {
+                loggedHandoff = true;
+                logger.LogInformation(
+                    "HeroesSwitcher started a different build. Waiting for the replay's client. Battle.net was not clicked."
+                );
+            }
+
             if (
                 ClientInterfacePlan.RestartAfterGameData(
                     sawGameDataDownload,
                     downloadVisible: ClientScreenText.IsGameDataDownload(text, laterText),
                     startup,
                     loading || laterLoading || timer || home,
-                    dataRestarts
+                    dataRestarts,
+                    matchingBuild
                 )
             )
             {
@@ -522,27 +538,33 @@ public class GameController : IGameController
                     "Heroes finished downloading game data. Restarting the client so AhliObs loads. Battle.net was not clicked."
                 );
                 await RestartForObserverInterfaceAsync(replayPath).ConfigureAwait(false);
+                interfaceRestarted = true;
                 openedFromHome = false;
                 sawGameDataStartup = false;
                 loggedPreparing = false;
                 blankTiming = false;
                 clientAlreadyRunning = false;
+                started = DateTimeOffset.UtcNow;
+                deadline = ClientRelaunch.DeadlineAfterInterfaceRestart(started);
+                logger.LogInformation(
+                    "AhliObs restart opened a new client. The launch wait starts again. Battle.net was not clicked."
+                );
                 continue;
             }
 
-            if (home)
+            if (home && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, true))
             {
                 openedFromHome = true;
                 OpenReplayFromHome(replayPath);
             }
 
-            if (loading || laterLoading)
+            if (ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, loading || laterLoading))
             {
                 ShowGameScene("loading screen");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
-            if (timer)
+            if (ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, timer))
             {
                 ShowGameScene("timer visible");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
@@ -603,7 +625,8 @@ public class GameController : IGameController
                         openedFromHome,
                         blank,
                         DateTimeOffset.UtcNow - blankSince,
-                        blankRelaunches
+                        blankRelaunches,
+                        !differentBuild
                     )
                 )
                 {
@@ -638,7 +661,14 @@ public class GameController : IGameController
 
         return new ColdBoot(
             RetryDisconnect: false,
-            ClientRelaunch.ColdBootHold(openedFromHome, replayFileOpened, sawGameDataStartup)
+            ClientRelaunch.ColdBootHold(
+                openedFromHome,
+                replayFileOpened,
+                sawGameDataStartup,
+                interfaceRestarted,
+                IsGameProcessRunning(),
+                ReadRunningBuild(replayVersion) != RunningClientBuild.Differs
+            )
         );
     }
 
@@ -647,6 +677,7 @@ public class GameController : IGameController
         Kill();
         replayFileOpened = false;
         await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token).ConfigureAwait(false);
+        CloseIdleSwitcher();
         try
         {
             ClientConfigureResult result = clientConfigurator.Configure();
@@ -678,6 +709,7 @@ public class GameController : IGameController
         Kill();
         replayFileOpened = false;
         await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token).ConfigureAwait(false);
+        CloseIdleSwitcher();
         await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
     }
 
@@ -689,8 +721,60 @@ public class GameController : IGameController
         logger.LogInformation(
             "Opening the previous-patch replay again through HeroesSwitcher. Battle.net Play was not used."
         );
+        CloseIdleSwitcher();
         replayFileOpened = true;
         replayOpener.Open(replayPath);
+    }
+
+    private void CloseIdleSwitcher()
+    {
+        Process[] switchers = Process.GetProcessesByName("HeroesSwitcher_x64");
+        try
+        {
+            bool switcherRunning = false;
+            foreach (Process switcher in switchers)
+            {
+                try
+                {
+                    if (!switcher.HasExited)
+                    {
+                        switcherRunning = true;
+                        break;
+                    }
+                }
+                catch (InvalidOperationException) { }
+            }
+
+            if (!ClientRelaunch.ShouldCloseSwitcher(IsGameProcessRunning(), switcherRunning))
+            {
+                return;
+            }
+
+            foreach (Process switcher in switchers)
+            {
+                try
+                {
+                    if (!switcher.HasExited)
+                    {
+                        switcher.Kill(entireProcessTree: true);
+                        switcher.WaitForExit(5000);
+                    }
+                }
+                catch (InvalidOperationException) { }
+                catch (Win32Exception) { }
+            }
+
+            logger.LogInformation(
+                "Closing HeroesSwitcher because Heroes is not running. Battle.net was not clicked."
+            );
+        }
+        finally
+        {
+            foreach (Process switcher in switchers)
+            {
+                switcher.Dispose();
+            }
+        }
     }
 
     private readonly record struct WindowRead(string Text, int Width, int Height);

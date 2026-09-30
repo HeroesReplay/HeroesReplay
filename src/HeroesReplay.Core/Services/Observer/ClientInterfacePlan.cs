@@ -46,19 +46,31 @@ public static class ClientInterfacePlan
     /// <summary>
     /// The download screen always uses the stock client chrome. Restart once after it
     /// clears so the next process reads AhliObs with the game data already present.
+    /// HeroesSwitcher first starts the newest exe, which then starts the replay's exe.
+    /// A download dialog on that newer exe is the handoff and must not be restarted.
     /// </summary>
     public static bool RestartAfterGameData(
         bool sawDownload,
         bool downloadVisible,
         bool gameDataStartup,
         bool replayVisible,
-        int restarts
+        int restarts,
+        bool clientBuildMatches = true
     )
     {
-        return sawDownload
+        return clientBuildMatches
+            && sawDownload
             && !downloadVisible
             && (gameDataStartup || replayVisible)
             && restarts < MaxDataRestarts;
+    }
+
+    /// <summary>
+    /// A loading screen on the newest exe is the version handoff, not the replay.
+    /// </summary>
+    public static bool MayAcceptReplayScreen(bool clientBuildMatches, bool screenVisible)
+    {
+        return clientBuildMatches && screenVisible;
     }
 
     public static DateTimeOffset ExtendForGameDataDownload(

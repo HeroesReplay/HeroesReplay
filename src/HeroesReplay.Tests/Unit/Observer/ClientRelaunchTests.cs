@@ -148,7 +148,9 @@ public class ClientRelaunchTests
             ClientRelaunch.ColdBootHold(
                 openedFromHome: false,
                 replayFileOpened: false,
-                sawStartup: false
+                sawStartup: false,
+                interfaceRestarted: false,
+                processRunning: true
             )
         );
         Assert.Equal(
@@ -156,7 +158,9 @@ public class ClientRelaunchTests
             ClientRelaunch.ColdBootHold(
                 openedFromHome: false,
                 replayFileOpened: true,
-                sawStartup: true
+                sawStartup: true,
+                interfaceRestarted: false,
+                processRunning: true
             )
         );
         Assert.Equal(
@@ -164,7 +168,9 @@ public class ClientRelaunchTests
             ClientRelaunch.ColdBootHold(
                 openedFromHome: true,
                 replayFileOpened: true,
-                sawStartup: true
+                sawStartup: true,
+                interfaceRestarted: false,
+                processRunning: true
             )
         );
         Assert.Equal(
@@ -172,7 +178,90 @@ public class ClientRelaunchTests
             ClientRelaunch.ColdBootHold(
                 openedFromHome: false,
                 replayFileOpened: true,
-                sawStartup: false
+                sawStartup: false,
+                interfaceRestarted: false,
+                processRunning: true
+            )
+        );
+        Assert.Equal(
+            ClientHoldReason.ClientNotReady,
+            ClientRelaunch.ColdBootHold(
+                openedFromHome: false,
+                replayFileOpened: true,
+                sawStartup: false,
+                interfaceRestarted: true,
+                processRunning: true
+            )
+        );
+        Assert.Equal(
+            ClientHoldReason.ClientNotReady,
+            ClientRelaunch.ColdBootHold(
+                openedFromHome: false,
+                replayFileOpened: true,
+                sawStartup: false,
+                interfaceRestarted: false,
+                processRunning: false
+            )
+        );
+        Assert.Equal(
+            ClientHoldReason.ClientNotReady,
+            ClientRelaunch.ColdBootHold(
+                openedFromHome: true,
+                replayFileOpened: true,
+                sawStartup: false,
+                interfaceRestarted: true,
+                processRunning: true
+            )
+        );
+        Assert.Equal(
+            ClientHoldReason.ClientNotReady,
+            ClientRelaunch.ColdBootHold(
+                openedFromHome: false,
+                replayFileOpened: true,
+                sawStartup: false,
+                interfaceRestarted: false,
+                processRunning: true,
+                clientBuildMatches: false
+            )
+        );
+    }
+
+    [Fact]
+    public void ShouldCloseSwitcher_OnlyWhenHeroesIsAlreadyGone()
+    {
+        Assert.True(
+            ClientRelaunch.ShouldCloseSwitcher(heroesRunning: false, switcherRunning: true)
+        );
+        Assert.False(
+            ClientRelaunch.ShouldCloseSwitcher(heroesRunning: true, switcherRunning: true)
+        );
+        Assert.False(
+            ClientRelaunch.ShouldCloseSwitcher(heroesRunning: false, switcherRunning: false)
+        );
+    }
+
+    [Fact]
+    public void DeadlineAfterInterfaceRestart_GivesTheNewProcessAFullColdBoot()
+    {
+        DateTimeOffset now = new(2026, 9, 30, 1, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(
+            now.Add(ClientRelaunch.ColdBootLimit),
+            ClientRelaunch.DeadlineAfterInterfaceRestart(now)
+        );
+    }
+
+    [Fact]
+    public void ShouldRelaunchBlankWindow_DoesNotKillTheHandoffBuild()
+    {
+        Assert.False(
+            ClientRelaunch.ShouldRelaunchBlankWindow(
+                processRunning: true,
+                replayOpened: false,
+                windowBlank: true,
+                blankFor: ClientRelaunch.BlankWindowLimit,
+                blankRelaunches: 0,
+                clientBuildMatches: false
             )
         );
     }

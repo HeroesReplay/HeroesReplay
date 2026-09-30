@@ -93,6 +93,34 @@ public class ClientInterfacePlanTests
     }
 
     [Fact]
+    public void RestartAfterGameData_LeavesTheNewestExeAloneWhileItHandsOff()
+    {
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: true,
+                downloadVisible: false,
+                gameDataStartup: true,
+                replayVisible: false,
+                restarts: 0,
+                clientBuildMatches: false
+            )
+        );
+        Assert.True(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: true,
+                downloadVisible: false,
+                gameDataStartup: true,
+                replayVisible: false,
+                restarts: 0,
+                clientBuildMatches: true
+            )
+        );
+        Assert.False(ClientInterfacePlan.MayAcceptReplayScreen(false, true));
+        Assert.True(ClientInterfacePlan.MayAcceptReplayScreen(true, true));
+        Assert.False(ClientInterfacePlan.MayAcceptReplayScreen(true, false));
+    }
+
+    [Fact]
     public void ExtendForGameDataDownload_MovesTheDeadlineForward()
     {
         DateTimeOffset started = new(2026, 9, 30, 0, 0, 0, TimeSpan.Zero);

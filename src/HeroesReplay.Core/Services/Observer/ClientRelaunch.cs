@@ -48,14 +48,29 @@ public static class ClientRelaunch
         bool replayOpened,
         bool windowBlank,
         TimeSpan blankFor,
-        int blankRelaunches
+        int blankRelaunches,
+        bool clientBuildMatches = true
     )
     {
         return processRunning
+            && clientBuildMatches
             && !replayOpened
             && windowBlank
             && blankRelaunches < MaxBlankRelaunches
             && blankFor >= BlankWindowLimit;
+    }
+
+    /// <summary>
+    /// A switcher left behind after Heroes exits swallows the next open.
+    /// </summary>
+    public static bool ShouldCloseSwitcher(bool heroesRunning, bool switcherRunning)
+    {
+        return switcherRunning && !heroesRunning;
+    }
+
+    public static DateTimeOffset DeadlineAfterInterfaceRestart(DateTimeOffset now)
+    {
+        return now.Add(ColdBootLimit);
     }
 
     /// <summary>
@@ -96,9 +111,24 @@ public static class ClientRelaunch
     public static ClientHoldReason ColdBootHold(
         bool openedFromHome,
         bool replayFileOpened,
-        bool sawStartup
+        bool sawStartup,
+        bool interfaceRestarted,
+        bool processRunning,
+        bool clientBuildMatches = true
     )
     {
+        if (!processRunning || !clientBuildMatches)
+        {
+            return ClientHoldReason.ClientNotReady;
+        }
+
+        // The AhliObs restart opens the replay file and clears the startup flag.
+        // That timeout is the new process still coming up, not a match.
+        if (interfaceRestarted)
+        {
+            return ClientHoldReason.ClientNotReady;
+        }
+
         if (openedFromHome)
         {
             return ClientHoldReason.None;
