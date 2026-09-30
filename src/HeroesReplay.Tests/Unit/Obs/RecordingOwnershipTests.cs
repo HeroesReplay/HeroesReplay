@@ -71,6 +71,56 @@ public class RecordingOwnershipTests
     }
 
     [Fact]
+    public void Start_ForeignRecording_SetsTheDirectoryAfterThatRecordingStops()
+    {
+        var socket = new FakeObsSocket
+        {
+            Recording = true,
+            RecordingAfterStart = true,
+            StopPath = Path.Combine(Path.GetTempPath(), "foreign-session.mkv"),
+        };
+        RecordingSession session = Session(socket);
+        int prepared = 0;
+
+        ObsRecordingResult started = session.StartRecording(
+            Record,
+            Noop,
+            7,
+            "unit",
+            () =>
+            {
+                prepared++;
+                Assert.Equal(1, socket.StopCalls);
+                Assert.Equal(0, socket.StartCalls);
+            }
+        );
+
+        Assert.True(started.Owned);
+        Assert.Equal(1, prepared);
+        Assert.Equal(1, socket.StartCalls);
+    }
+
+    [Fact]
+    public void Start_ForeignRecordingThatStaysActive_DoesNotPrepareTheNextDirectory()
+    {
+        var socket = new FakeObsSocket { Recording = true, KeepRecordingOnStop = true };
+        RecordingSession session = Session(socket);
+        int prepared = 0;
+
+        ObsRecordingResult started = session.StartRecording(
+            Record,
+            Noop,
+            7,
+            "unit",
+            () => prepared++
+        );
+
+        Assert.Equal(ObsOutputFailure.AlreadyRecording, started.Failure);
+        Assert.Equal(0, prepared);
+        Assert.Equal(0, socket.StartCalls);
+    }
+
+    [Fact]
     public void Stop_ReturnsThePathObsReported()
     {
         var socket = new FakeObsSocket { RecordingAfterStart = true };

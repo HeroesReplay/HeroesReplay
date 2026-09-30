@@ -41,7 +41,8 @@ internal sealed class RecordingSession
         Func<bool> shouldRecord,
         Action ensureConnected,
         int? replayId,
-        string reason
+        string reason,
+        Action prepareOutput = null
     )
     {
         if (shouldRecord != null && !shouldRecord())
@@ -59,7 +60,7 @@ internal sealed class RecordingSession
 
         var attempt = new Attempt();
         ObsRecordingResult result = Execute(
-            () => StartCore(attempt, ensureConnected, replayId, reason),
+            () => StartCore(attempt, ensureConnected, replayId, reason, prepareOutput),
             error => ObsRecordingResult.Failed(ObsOutputFailure.RequestError, error.Message),
             "start OBS recording"
         );
@@ -221,7 +222,8 @@ internal sealed class RecordingSession
         Attempt attempt,
         Action ensureConnected,
         int? replayId,
-        string reason
+        string reason,
+        Action prepareOutput
     )
     {
         if (ownsRecording)
@@ -283,6 +285,9 @@ internal sealed class RecordingSession
         {
             return ConfirmStarted(replayId);
         }
+
+        // A directory change is ignored while another recording is still active.
+        prepareOutput?.Invoke();
 
         if (!attempt.Called)
         {

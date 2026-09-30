@@ -149,7 +149,39 @@ public class ObsController : IObsController
         string reason = SessionMedia.HasRequestor(context.Current?.LoadedReplay)
             ? "viewer request"
             : "every replay";
-        return coordinator.StartRecording(ShouldRecord, CurrentReplayId, reason);
+        return coordinator.StartRecording(
+            ShouldRecord,
+            CurrentReplayId,
+            reason,
+            () => SetRecordDirectoryForCurrentReplay()
+        );
+    }
+
+    private void SetRecordDirectoryForCurrentReplay()
+    {
+        string directory = context.Current?.Directory?.FullName;
+        if (!ShouldRecord() || string.IsNullOrWhiteSpace(directory))
+        {
+            return;
+        }
+
+        try
+        {
+            obs.SetRecordDirectory(directory);
+            logger.LogInformation(
+                "OBS record directory for replay {ReplayId} is {Directory}.",
+                CurrentReplayId,
+                directory
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Could not set the OBS record directory for replay {ReplayId}.",
+                CurrentReplayId
+            );
+        }
     }
 
     public ObsRecordingResult StopRecording() => coordinator.StopRecording(CurrentReplayId);

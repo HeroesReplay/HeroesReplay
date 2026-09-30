@@ -84,10 +84,21 @@ internal sealed class ObsCoordinator
         }
     }
 
-    public ObsRecordingResult StartRecording(Func<bool> shouldRecord, int? replayId, string reason)
+    public ObsRecordingResult StartRecording(
+        Func<bool> shouldRecord,
+        int? replayId,
+        string reason,
+        Action prepareOutput = null
+    )
     {
         recordingDesired = shouldRecord == null || shouldRecord();
-        return recording.StartRecording(shouldRecord, EnsureIdentified, replayId, reason);
+        return recording.StartRecording(
+            shouldRecord,
+            EnsureIdentified,
+            replayId,
+            reason,
+            prepareOutput
+        );
     }
 
     public ObsRecordingResult StopRecording(int? replayId) =>
