@@ -10,13 +10,13 @@ public enum ReplayRetryAction
 }
 
 /// <summary>
-/// A replay that never becomes a verified match stays queued, but it must not
-/// sit at the front forever. After a few attempts the next replay runs, and this
-/// one is eligible again only after <see cref="DeferFor"/>.
+/// A replay that never becomes a verified match must not sit at the front.
+/// The first miss leaves the front so the next replay starts, and this one is
+/// eligible again only after <see cref="DeferFor"/>.
 /// </summary>
 public static class ReplayRetryPlan
 {
-    public const int MaxFrontAttempts = 2;
+    public const int MaxFrontAttempts = 1;
 
     public static readonly TimeSpan DeferFor = TimeSpan.FromMinutes(30);
 

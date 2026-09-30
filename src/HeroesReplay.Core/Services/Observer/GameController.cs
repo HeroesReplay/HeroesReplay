@@ -539,6 +539,14 @@ public class GameController : IGameController
             RunningClientBuild runningBuild = ReadRunningBuild(replayVersion);
             bool differentBuild = runningBuild == RunningClientBuild.Differs;
             bool matchingBuild = runningBuild == RunningClientBuild.Matches;
+            if (ClientRelaunch.MatchingOpenLostTheBuild(openedOnMatchingExe, differentBuild))
+            {
+                logger.LogInformation(
+                    "The matching client did not stay open. The next replay starts. Battle.net was not clicked."
+                );
+                return new ColdBoot(RetryDisconnect: false, ClientHoldReason.ClientNotReady);
+            }
+
             if (differentBuild && !loggedHandoff)
             {
                 loggedHandoff = true;
@@ -645,7 +653,8 @@ public class GameController : IGameController
                     startup,
                     sawGameDataStartup,
                     blank,
-                    clientAlreadyRunning
+                    clientAlreadyRunning,
+                    matchingBuild
                 )
             )
             {

@@ -24,9 +24,14 @@ public class ReplayRetryPlanTests
     [InlineData(MatchOutcome.ClientCrashed)]
     [InlineData(MatchOutcome.VersionMismatch)]
     [InlineData(MatchOutcome.RegionUnavailable)]
-    public void Decide_KeepsTheFirstFailureAtTheFront(MatchOutcome outcome)
+    public void Decide_LeavesTheFrontOnTheFirstMiss(MatchOutcome outcome)
     {
-        Assert.Equal(ReplayRetryAction.Front, ReplayRetryPlan.Decide(outcome, attempt: 1));
+        Assert.Equal(1, ReplayRetryPlan.MaxFrontAttempts);
+        Assert.Equal(ReplayRetryAction.Defer, ReplayRetryPlan.Decide(outcome, attempt: 1));
+        Assert.Equal(
+            ReplayRetryAction.Front,
+            ReplayRetryPlan.Decide(outcome, attempt: ReplayRetryPlan.MaxFrontAttempts - 1)
+        );
     }
 
     [Fact]

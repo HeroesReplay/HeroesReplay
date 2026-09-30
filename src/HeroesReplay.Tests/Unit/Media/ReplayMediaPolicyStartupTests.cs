@@ -176,27 +176,77 @@ public class ReplayMediaPolicyStartupTests
 
         Assert.Equal(ReplayRecordingMode.All, settings.RecordingMode);
         Assert.Equal(ReplayPublicationMode.AllEligible, settings.PublicationMode);
-        AssertShippedFilesDoNotSelectAMode();
+        AssertProductionFilesDoNotSelectAMode();
     }
 
     [Fact]
-    public void ShippedSettings_StayDisabledAndKeepCurrentRecordingFlags()
+    public void DevSettings_RecordAFreshOrdinaryReplay()
     {
-        string basePath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         string devPath = Path.Combine(AppContext.BaseDirectory, "appsettings.dev.json");
+        string sourcePath = FindRepoFile(
+            Path.Combine("src", "HeroesReplay.CLI", "appsettings.dev.json")
+        );
         IConfiguration configuration = new ConfigurationBuilder()
-            .AddJsonFile(basePath)
+            .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"))
             .AddJsonFile(devPath)
             .Build();
 
-        AppSettings settings = ServiceCollectionExtensions.BindSettings(configuration);
+        ReplayMediaPolicySettings settings = ReplayMediaPolicyStartup.Require(configuration);
+        ReplayMediaDecision decision = ReplayMediaPolicy.Evaluate(
+            new ReplayMediaPolicyInput
+            {
+                ReplayId = 65550001,
+                GameDateUtc = Now,
+                GameVersion = "2.57.0.98304",
+                Map = "Volskaya Foundry",
+                GameMode = "Storm League",
+            },
+            settings,
+            Now
+        );
 
-        Assert.Equal(ReplayRecordingMode.Disabled, settings.ReplayMedia.RecordingMode);
-        Assert.Equal(ReplayPublicationMode.Disabled, settings.ReplayMedia.PublicationMode);
-        Assert.True(settings.OBS.RecordingEnabled);
-        Assert.True(settings.YouTube.Enabled);
-        Assert.True(settings.YouTube.DryRun);
-        AssertShippedFilesDoNotSelectAMode();
+        Assert.True(decision.Record);
+        Assert.NotEqual(ReplayMediaReason.RecordingDisabled, decision.RecordingReason);
+        Assert.Equal(ReplayMediaReason.RecordedAll, decision.RecordingReason);
+        Assert.False(decision.PublicationCandidate);
+        Assert.Equal(ReplayMediaReason.AwaitingCompletion, decision.PublicationReason);
+        AssertModesSelected(devPath);
+        AssertModesSelected(sourcePath);
+
+        AppSettings app = ServiceCollectionExtensions.BindSettings(configuration);
+        Assert.Equal(ReplayRecordingMode.All, app.ReplayMedia.RecordingMode);
+        Assert.Equal(ReplayPublicationMode.AllEligible, app.ReplayMedia.PublicationMode);
+        Assert.True(app.OBS.RecordingEnabled);
+        Assert.True(app.YouTube.Enabled);
+        Assert.True(app.YouTube.DryRun);
+        AssertProductionFilesDoNotSelectAMode();
+    }
+
+    [Fact]
+    public void BaseSettings_StayRecordingDisabled()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.json"))
+            .Build();
+
+        ReplayMediaPolicySettings settings = ReplayMediaPolicyStartup.Require(configuration);
+        ReplayMediaDecision decision = ReplayMediaPolicy.Evaluate(
+            new ReplayMediaPolicyInput
+            {
+                ReplayId = 65550001,
+                GameDateUtc = Now,
+                GameVersion = "2.57.0.98304",
+                Map = "Volskaya Foundry",
+                GameMode = "Storm League",
+            },
+            settings,
+            Now
+        );
+
+        Assert.False(decision.Record);
+        Assert.Equal(ReplayMediaReason.RecordingDisabled, decision.RecordingReason);
+        Assert.Equal(ReplayRecordingMode.Disabled, settings.RecordingMode);
+        Assert.Equal(ReplayPublicationMode.Disabled, settings.PublicationMode);
     }
 
     private static void AssertNotEligible(ReplayMediaPolicySettings settings)
@@ -213,16 +263,22 @@ public class ReplayMediaPolicyStartupTests
         Assert.Equal(ReplayMediaReason.ConfigurationInvalid, decision.PublicationReason);
     }
 
-    private static void AssertShippedFilesDoNotSelectAMode()
+    private static void AssertProductionFilesDoNotSelectAMode()
     {
         AssertModesAbsent(Path.Combine(AppContext.BaseDirectory, "appsettings.json"));
-        AssertModesAbsent(Path.Combine(AppContext.BaseDirectory, "appsettings.dev.json"));
         string production = FindRepoFile(
             Path.Combine("src", "HeroesReplay.CLI", "appsettings.prod.json")
         );
         string text = AssertModesAbsent(production);
         Assert.Contains("\"RecordingEnabled\": true", text, StringComparison.Ordinal);
         Assert.Contains("\"DryRun\": false", text, StringComparison.Ordinal);
+    }
+
+    private static void AssertModesSelected(string path)
+    {
+        string text = File.ReadAllText(path);
+        Assert.Contains("\"RecordingMode\": \"All\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"PublicationMode\": \"AllEligible\"", text, StringComparison.Ordinal);
     }
 
     private static string AssertModesAbsent(string path)

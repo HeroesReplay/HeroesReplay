@@ -438,14 +438,14 @@ public sealed class ReplayCacheProvider : IReplayProvider
     }
 
     private string PlayedPath() =>
-        Path.Combine(settings.Location.DataDirectory, "spectated-ids.txt");
+        Path.Combine(settings.Location.DataDirectory, SpectateQueue.SpectatedFileName);
 
     private string DeferPath() =>
-        Path.Combine(settings.Location.DataDirectory, "deferred-replays.txt");
+        Path.Combine(settings.Location.DataDirectory, SpectateQueue.DeferredFileName);
 
     private string QuarantinePath() =>
-        Path.Combine(settings.Location.DataDirectory, "quarantine-ids.txt");
+        Path.Combine(settings.Location.DataDirectory, SpectateQueue.QuarantineFileName);
 
     private string BelowFloorPath() =>
-        Path.Combine(settings.Location.DataDirectory, "below-floor-ids.txt");
+        Path.Combine(settings.Location.DataDirectory, SpectateQueue.BelowFloorFileName);
 }

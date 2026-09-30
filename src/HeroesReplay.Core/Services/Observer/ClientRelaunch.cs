@@ -74,17 +74,33 @@ public static class ClientRelaunch
     }
 
     /// <summary>
-    /// While Heroes is calculating game data, a black full-size window is that same startup.
+    /// While the replay's own client is calculating game data, a black full-size window is that same startup.
     /// A matching client that was already running is the same wait: killing it starts the calculation over.
+    /// A different build is not that calculation. Extending the wait there leaves the screen idle.
     /// </summary>
     public static bool KeepsWaitingForGameData(
         bool startupText,
         bool sawStartup,
         bool windowBlank,
-        bool clientAlreadyRunning
+        bool clientAlreadyRunning,
+        bool clientBuildMatches = true
     )
     {
+        if (!clientBuildMatches)
+        {
+            return false;
+        }
+
         return startupText || (sawStartup && windowBlank) || (clientAlreadyRunning && windowBlank);
+    }
+
+    /// <summary>
+    /// The matching exe was started with the replay path and a different build is what stayed up.
+    /// The next replay starts. Another game-data extension would be a gap with no match.
+    /// </summary>
+    public static bool MatchingOpenLostTheBuild(bool openedOnMatchingExe, bool runningBuildDiffers)
+    {
+        return openedOnMatchingExe && runningBuildDiffers;
     }
 
     public static DateTimeOffset ExtendForGameDataStartup(

@@ -278,7 +278,7 @@ public class GameManager : IGameManager
     public void ReleaseClientAfterDefer()
     {
         logger.LogWarning(
-            "Closing Heroes after repeated attempts without a match clock. Battle.net was not clicked."
+            "Closing Heroes so the next replay can start. Battle.net was not clicked."
         );
         gameController.Kill();
     }

@@ -478,38 +478,48 @@ public class HeroesProfileProvider : IReplayProvider
 
     private int UnspectatedOnDisk()
     {
-        var played = new HashSet<int>();
-        string playedPath = Path.Combine(settings.Location.DataDirectory, "spectated-ids.txt");
-        if (File.Exists(playedPath))
-        {
-            foreach (string line in File.ReadLines(playedPath))
-            {
-                if (int.TryParse(line, out int id))
-                {
-                    played.Add(id);
-                }
-            }
-        }
-
         if (!StandardDirectory.Exists)
         {
             return 0;
         }
 
-        int waiting = 0;
+        var onDisk = new List<int>();
         foreach (FileInfo file in StandardDirectory.GetFiles(settings.StormReplay.WildCard))
         {
-            if (replayHelper.TryGetReplayId(file.Name, out int id) && !played.Contains(id))
+            if (replayHelper.TryGetReplayId(file.Name, out int id))
             {
-                waiting++;
-                if (waiting >= CachedReplayLimit)
-                {
-                    return waiting;
-                }
+                onDisk.Add(id);
             }
         }
 
-        return waiting;
+        return SpectateQueue.CountWaiting(onDisk, ReadNotWaitingIds(), CachedReplayLimit);
+    }
+
+    private List<int> ReadNotWaitingIds()
+    {
+        var ids = new List<int>();
+        ReadIds(ids, SpectateQueue.SpectatedFileName);
+        ReadIds(ids, SpectateQueue.BelowFloorFileName);
+        ReadIds(ids, SpectateQueue.QuarantineFileName);
+        ReadIds(ids, SpectateQueue.DeferredFileName);
+        return ids;
+    }
+
+    private void ReadIds(List<int> ids, string fileName)
+    {
+        string path = Path.Combine(settings.Location.DataDirectory, fileName);
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        foreach (string line in File.ReadLines(path))
+        {
+            if (SpectateQueue.TryParseId(line, out int id))
+            {
+                ids.Add(id);
+            }
+        }
     }
 
     private int CachedReplayLimit =>

@@ -119,6 +119,67 @@ public class ClientRelaunchTests
     }
 
     [Fact]
+    public void KeepsWaitingForGameData_DoesNotExtendADifferentBuild()
+    {
+        Assert.False(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: true,
+                sawStartup: false,
+                windowBlank: false,
+                clientAlreadyRunning: false,
+                clientBuildMatches: false
+            )
+        );
+        Assert.False(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: false,
+                sawStartup: true,
+                windowBlank: true,
+                clientAlreadyRunning: true,
+                clientBuildMatches: false
+            )
+        );
+        Assert.True(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: true,
+                sawStartup: false,
+                windowBlank: false,
+                clientAlreadyRunning: false,
+                clientBuildMatches: true
+            )
+        );
+    }
+
+    [Fact]
+    public void MatchingOpenLostTheBuild_StartsTheNextReplayWhenTheExeDidNotStay()
+    {
+        Assert.True(
+            ClientRelaunch.MatchingOpenLostTheBuild(
+                openedOnMatchingExe: true,
+                runningBuildDiffers: true
+            )
+        );
+        Assert.False(
+            ClientRelaunch.MatchingOpenLostTheBuild(
+                openedOnMatchingExe: true,
+                runningBuildDiffers: false
+            )
+        );
+        Assert.False(
+            ClientRelaunch.MatchingOpenLostTheBuild(
+                openedOnMatchingExe: false,
+                runningBuildDiffers: true
+            )
+        );
+        Assert.False(
+            ClientRelaunch.MatchingOpenLostTheBuild(
+                openedOnMatchingExe: false,
+                runningBuildDiffers: false
+            )
+        );
+    }
+
+    [Fact]
     public void ExtendForGameDataStartup_SlidesTheDeadlineWithoutPassingTheCap()
     {
         DateTimeOffset started = new(2026, 9, 29, 21, 0, 0, TimeSpan.Zero);
