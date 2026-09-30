@@ -1,3 +1,4 @@
+using System;
 using HeroesReplay.Core.Services.YouTube;
 
 namespace HeroesReplay.Core.Services.Media;
@@ -5,8 +6,9 @@ namespace HeroesReplay.Core.Services.Media;
 public readonly record struct PublicationAdmitResult(bool Allow, string Reason);
 
 /// <summary>
-/// Curated ordinary matches stay local. Notable and high-skill matches are admitted
-/// only while the rolling day is under the publication cap. AllEligible stays eligible.
+/// Curated ordinary matches stay local. An ordinary match older than three days
+/// stays local even in AllEligible. Notable and high-skill matches are admitted
+/// only while the rolling day is under the publication cap. A requested match stays eligible.
 /// </summary>
 public static class PublicationAdmit
 {
@@ -25,11 +27,18 @@ public static class PublicationAdmit
             return Withhold(ReplayMediaReason.PublicationDisabled);
         }
 
-        if (
-            decision.Priority == ReplayMediaPriority.Requested
-            || decision.PublicationMode == ReplayPublicationMode.AllEligible
-        )
+        if (decision.Priority == ReplayMediaPriority.Requested)
         {
+            return Admit(decision.PublicationReason);
+        }
+
+        if (decision.PublicationMode == ReplayPublicationMode.AllEligible)
+        {
+            if (OrdinaryIsOlderThanThreeDays(decision))
+            {
+                return Withhold(ReplayMediaReason.Expired);
+            }
+
             return Admit(decision.PublicationReason);
         }
 
@@ -57,6 +66,26 @@ public static class PublicationAdmit
         }
 
         return Admit(decision.PublicationReason);
+    }
+
+    private static bool OrdinaryIsOlderThanThreeDays(ReplayMediaDecision decision)
+    {
+        if (
+            decision.Priority != ReplayMediaPriority.Ordinary
+            || decision.GameDateUtc == null
+        )
+        {
+            return false;
+        }
+
+        DateTime evaluated = decision.EvaluatedAtUtc;
+        DateTime played = decision.GameDateUtc.Value;
+        if (evaluated == default || evaluated < played)
+        {
+            return false;
+        }
+
+        return evaluated - played > PublicationSchedule.OrdinaryMaxAge;
     }
 
     private static PublicationAdmitResult Admit(string reason)

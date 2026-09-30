@@ -1,3 +1,4 @@
+using System;
 using HeroesReplay.Core.Services.Media;
 using HeroesReplay.Core.Services.YouTube;
 using Xunit;
@@ -68,6 +69,52 @@ public class PublicationAdmitTests
     }
 
     [Fact]
+    public void Decide_WithholdsAnOrdinaryAllEligibleCandidateOlderThanThreeDays()
+    {
+        DateTime played = new DateTime(2026, 9, 27, 12, 0, 0, DateTimeKind.Utc);
+        PublicationAdmitResult stale = PublicationAdmit.Decide(
+            Decision(
+                ReplayPublicationMode.AllEligible,
+                ReplayMediaPriority.Ordinary,
+                true,
+                ReplayMediaReason.EligibleAll,
+                played,
+                played + PublicationSchedule.OrdinaryMaxAge + TimeSpan.FromTicks(1)
+            ),
+            0
+        );
+        PublicationAdmitResult atLimit = PublicationAdmit.Decide(
+            Decision(
+                ReplayPublicationMode.AllEligible,
+                ReplayMediaPriority.Ordinary,
+                true,
+                ReplayMediaReason.EligibleAll,
+                played,
+                played + PublicationSchedule.OrdinaryMaxAge
+            ),
+            0
+        );
+        PublicationAdmitResult requested = PublicationAdmit.Decide(
+            Decision(
+                ReplayPublicationMode.AllEligible,
+                ReplayMediaPriority.Requested,
+                true,
+                ReplayMediaReason.EligibleRequested,
+                played,
+                played + PublicationSchedule.OrdinaryMaxAge + TimeSpan.FromDays(1)
+            ),
+            0
+        );
+
+        Assert.False(stale.Allow);
+        Assert.Equal(ReplayMediaReason.Expired, stale.Reason);
+        Assert.True(atLimit.Allow);
+        Assert.Equal(ReplayMediaReason.EligibleAll, atLimit.Reason);
+        Assert.True(requested.Allow);
+        Assert.Equal(ReplayMediaReason.EligibleRequested, requested.Reason);
+    }
+
+    [Fact]
     public void Decide_WithholdsCuratedOrdinary()
     {
         PublicationAdmitResult result = PublicationAdmit.Decide(
@@ -125,7 +172,9 @@ public class PublicationAdmitTests
         ReplayPublicationMode mode,
         ReplayMediaPriority priority,
         bool candidate,
-        string reason
+        string reason,
+        DateTime? gameDateUtc = null,
+        DateTime? evaluatedAtUtc = null
     )
     {
         return new ReplayMediaDecision
@@ -135,6 +184,8 @@ public class PublicationAdmitTests
             Priority = priority,
             PublicationReason = reason,
             SchedulerCurationRequired = candidate && mode == ReplayPublicationMode.Curated,
+            GameDateUtc = gameDateUtc,
+            EvaluatedAtUtc = evaluatedAtUtc ?? default,
         };
     }
 }
