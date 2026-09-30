@@ -5,6 +5,9 @@ public sealed class PublicationHealthReport
     public int Pending { get; init; }
     public int Uploaded { get; init; }
     public int Deferred { get; init; }
+    public int PublishedDay { get; init; }
+    public int PublishedWeek { get; init; }
+    public int StuckPrivate { get; init; }
     public string Limit { get; init; }
     public string PolicyVersion { get; init; }
 }
@@ -20,7 +23,10 @@ public static class PublicationHealth
         int uploaded,
         int deferred,
         bool quotaExhausted,
-        string policyVersion
+        string policyVersion,
+        int publishedDay = 0,
+        int publishedWeek = 0,
+        int stuckPrivate = 0
     )
     {
         if (pending < 0)
@@ -55,6 +61,9 @@ public static class PublicationHealth
             Deferred = deferred,
             Limit = limit,
             PolicyVersion = string.IsNullOrWhiteSpace(policyVersion) ? "1" : policyVersion.Trim(),
+            PublishedDay = publishedDay < 0 ? 0 : publishedDay,
+            PublishedWeek = publishedWeek < 0 ? 0 : publishedWeek,
+            StuckPrivate = stuckPrivate < 0 ? 0 : stuckPrivate,
         };
     }
 }

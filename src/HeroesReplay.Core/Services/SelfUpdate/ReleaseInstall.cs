@@ -154,7 +154,12 @@ public static class ReleaseInstall
         }
     }
 
-    public static void Swap(string installDirectory, string stagedDirectory)
+    public static void Swap(
+        string installDirectory,
+        string stagedDirectory,
+        bool allRolesReady = true,
+        TimeSpan? healthyFor = null
+    )
     {
         if (LooksLikeSourceBuild(installDirectory))
         {
@@ -166,6 +171,14 @@ public static class ReleaseInstall
         string previous = installDirectory.TrimEnd(Path.DirectorySeparatorChar) + ".previous";
         if (Directory.Exists(previous))
         {
+            TimeSpan healthy = healthyFor ?? TimeSpan.Zero;
+            if (!ReleaseHealth.MayDiscardPrevious(allRolesReady, healthy))
+            {
+                throw new InvalidOperationException(
+                    "The previous install is still inside the stabilization window."
+                );
+            }
+
             Directory.Delete(previous, recursive: true);
         }
 

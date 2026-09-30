@@ -138,6 +138,66 @@ public class ReplayClientRouteTests
     }
 
     [Fact]
+    public void OpensTheMatchingBuildAgain_LeavesAReplayTheReportAlreadyOpened()
+    {
+        Assert.False(
+            ReplayClientRoute.OpensTheMatchingBuildAgain(
+                ReplayLaunchAuth.OpenMatchingBuild,
+                sameReplayAlreadyOpened: true
+            )
+        );
+        Assert.True(
+            ReplayClientRoute.OpensTheMatchingBuildAgain(
+                ReplayLaunchAuth.OpenMatchingBuild,
+                sameReplayAlreadyOpened: false
+            )
+        );
+        Assert.False(
+            ReplayClientRoute.OpensTheMatchingBuildAgain(
+                ReplayLaunchAuth.OpenInstalledBuild,
+                sameReplayAlreadyOpened: true
+            )
+        );
+    }
+
+    [Fact]
+    public void TreatsAsMatchingOpen_EndsTheWaitWhenThatProcessExits()
+    {
+        Assert.True(
+            ReplayClientRoute.TreatsAsMatchingOpen(ReplayLaunchAuth.Wait, replayFileOpened: true)
+        );
+        Assert.True(
+            ReplayClientRoute.TreatsAsMatchingOpen(
+                ReplayLaunchAuth.OpenMatchingBuild,
+                replayFileOpened: false
+            )
+        );
+        Assert.False(
+            ReplayClientRoute.TreatsAsMatchingOpen(
+                ReplayLaunchAuth.OpenInstalledBuild,
+                replayFileOpened: true
+            )
+        );
+        Assert.False(
+            ReplayClientRoute.TreatsAsMatchingOpen(ReplayLaunchAuth.Wait, replayFileOpened: false)
+        );
+        Assert.True(
+            ClientRelaunch.MatchingOpenLeftNoProcess(
+                openedOnMatchingExe: true,
+                processRunning: false,
+                sinceOpen: ClientRelaunch.RetryIfNoProcess
+            )
+        );
+        Assert.False(
+            ClientRelaunch.MatchingOpenLeftNoProcess(
+                openedOnMatchingExe: false,
+                processRunning: false,
+                sinceOpen: ClientRelaunch.RetryIfNoProcess
+            )
+        );
+    }
+
+    [Fact]
     public void Decide_MatchingPreviousPatchWithoutHomeOpensThroughTheSwitcher()
     {
         Assert.Equal(

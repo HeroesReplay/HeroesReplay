@@ -43,6 +43,7 @@ public class GameController : IGameController
     private IntPtr cachedHandle;
     private string lastRejectedTimer;
     private bool replayFileOpened;
+    private string openedReplayPath;
     private ReplayClientPatch launchPatch = ReplayClientPatch.Current;
 
     public bool ReplayFileOpened => replayFileOpened;
@@ -139,6 +140,11 @@ public class GameController : IGameController
     )
     {
         ReplayBoot boot = await BeginReplayAsync(replayPath, replayVersion).ConfigureAwait(false);
+        if (replayFileOpened || boot.Auth == ReplayLaunchAuth.AlreadyInMatch)
+        {
+            openedReplayPath = replayPath;
+        }
+
         return boot.OpenedFromHome || boot.Auth == ReplayLaunchAuth.AlreadyInMatch;
     }
 
@@ -151,6 +157,13 @@ public class GameController : IGameController
 
         OpenReplayFromHome(replayPath);
         return true;
+    }
+
+    private bool SameReplayAlreadyOpening(string replayPath)
+    {
+        return !string.IsNullOrWhiteSpace(openedReplayPath)
+            && !string.IsNullOrWhiteSpace(replayPath)
+            && string.Equals(openedReplayPath, replayPath, StringComparison.OrdinalIgnoreCase);
     }
 
     private void OpenReplayFromHome(string replayPath)
@@ -246,10 +259,23 @@ public class GameController : IGameController
 
         if (auth == ReplayLaunchAuth.OpenMatchingBuild)
         {
+            replayFileOpened = true;
+            if (
+                !ReplayClientRoute.OpensTheMatchingBuildAgain(
+                    auth,
+                    SameReplayAlreadyOpening(replayPath)
+                )
+            )
+            {
+                logger.LogInformation(
+                    "Matching Heroes client is already opening this replay. The file is not opened again. The client was not closed."
+                );
+                return new ReplayBoot(ReplayLaunchAuth.Wait, false);
+            }
+
             logger.LogInformation(
                 "Matching Heroes client is already running. Opening the replay through HeroesSwitcher. The client was not closed."
             );
-            replayFileOpened = true;
             replayOpener.Open(replayPath);
             return new ReplayBoot(ReplayLaunchAuth.Wait, false);
         }
@@ -414,7 +440,10 @@ public class GameController : IGameController
             || (boot.Auth == ReplayLaunchAuth.Wait && replayFileOpened);
         bool clientAlreadyRunning =
             boot.Auth == ReplayLaunchAuth.Wait || boot.Auth == ReplayLaunchAuth.OpenInstalledBuild;
-        bool openedOnMatchingExe = boot.Auth == ReplayLaunchAuth.OpenMatchingBuild;
+        bool openedOnMatchingExe = ReplayClientRoute.TreatsAsMatchingOpen(
+            boot.Auth,
+            replayFileOpened
+        );
         bool checkedLaunchFile = false;
         int defaultHudCorrections = 0;
         string expectedInterface =

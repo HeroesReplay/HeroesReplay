@@ -263,6 +263,18 @@ public class HeroesProfileProvider : IReplayProvider
                 }
 
                 fileInfo.Refresh();
+                try
+                {
+                    CachedRequestReward.Write(fileInfo.FullName, item);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    logger.LogWarning(
+                        e,
+                        "Could not store the request beside replay {ReplayId}.",
+                        item.HeroesProfileReplay?.Id
+                    );
+                }
 
                 Replay replay = await replayLoader
                     .LoadAsync(fileInfo.FullName)

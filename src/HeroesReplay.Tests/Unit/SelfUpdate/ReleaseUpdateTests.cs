@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using HeroesReplay.Core.Services.SelfUpdate;
 using Xunit;
@@ -72,10 +73,62 @@ public class ReleaseUpdateTests
             ReleaseInstall.Swap(install, prepared);
 
             Assert.Equal("new", File.ReadAllText(Path.Combine(install, "heroesreplay.exe")));
-            Assert.Equal("secret", File.ReadAllText(Path.Combine(install, "appsettings.secrets.json")));
+            Assert.Equal(
+                "secret",
+                File.ReadAllText(Path.Combine(install, "appsettings.secrets.json"))
+            );
             Assert.False(File.Exists(Path.Combine(install, "obs", "Default", "service.json")));
             Assert.Equal("65268119", File.ReadAllText(Path.Combine(data, "spectated-ids.txt")));
             Assert.Equal("[]", File.ReadAllText(Path.Combine(data, "requests.json")));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void MayDiscardPrevious_WaitsUntilTheStackHasBeenHealthy()
+    {
+        Assert.False(ReleaseHealth.MayDiscardPrevious(false, ReleaseHealth.StabilizeFor));
+        Assert.False(ReleaseHealth.MayDiscardPrevious(true, TimeSpan.FromMinutes(-1)));
+        Assert.False(
+            ReleaseHealth.MayDiscardPrevious(
+                true,
+                ReleaseHealth.StabilizeFor.Subtract(TimeSpan.FromTicks(1))
+            )
+        );
+        Assert.True(ReleaseHealth.MayDiscardPrevious(true, ReleaseHealth.StabilizeFor));
+    }
+
+    [Fact]
+    public void Swap_KeepsThePreviousInstallInsideTheStabilizationWindow()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-window-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string staged = Path.Combine(root, "staged");
+        string previous = install + ".previous";
+        try
+        {
+            Directory.CreateDirectory(install);
+            Directory.CreateDirectory(staged);
+            Directory.CreateDirectory(previous);
+            File.WriteAllText(Path.Combine(install, "heroesreplay.exe"), "old");
+            File.WriteAllText(Path.Combine(staged, "heroesreplay.exe"), "new");
+            File.WriteAllText(Path.Combine(previous, "marker.txt"), "keep");
+
+            Assert.Throws<InvalidOperationException>(() => ReleaseInstall.Swap(install, staged));
+            Assert.Equal("keep", File.ReadAllText(Path.Combine(previous, "marker.txt")));
+            Assert.Equal("old", File.ReadAllText(Path.Combine(install, "heroesreplay.exe")));
+
+            ReleaseInstall.Swap(install, staged, healthyFor: ReleaseHealth.StabilizeFor);
+
+            Assert.Equal("new", File.ReadAllText(Path.Combine(install, "heroesreplay.exe")));
+            Assert.Equal("old", File.ReadAllText(Path.Combine(previous, "heroesreplay.exe")));
+            Assert.False(File.Exists(Path.Combine(previous, "marker.txt")));
         }
         finally
         {
@@ -100,14 +153,18 @@ public class ReleaseUpdateTests
             ReleaseInstall.CopyObsScenesIfClosed(install, appData, obsIsRunning: true);
 
             Assert.False(
-                File.Exists(Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json"))
+                File.Exists(
+                    Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json")
+                )
             );
 
             ReleaseInstall.CopyObsScenesIfClosed(install, appData, obsIsRunning: false);
 
             Assert.Equal(
                 "{\"scenes\":[]}",
-                File.ReadAllText(Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json"))
+                File.ReadAllText(
+                    Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json")
+                )
             );
         }
         finally
@@ -122,7 +179,11 @@ public class ReleaseUpdateTests
     [Fact]
     public void LooksLikeSourceBuild_RefusesTheWorktree()
     {
-        Assert.True(ReleaseInstall.LooksLikeSourceBuild(@"C:\heroesreplay\worktrees\develop\src\HeroesReplay.CLI\bin"));
+        Assert.True(
+            ReleaseInstall.LooksLikeSourceBuild(
+                @"C:\heroesreplay\worktrees\develop\src\HeroesReplay.CLI\bin"
+            )
+        );
         Assert.False(ReleaseInstall.LooksLikeSourceBuild(@"C:\heroesreplay\app"));
     }
 }

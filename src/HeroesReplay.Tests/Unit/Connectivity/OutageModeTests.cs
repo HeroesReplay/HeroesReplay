@@ -45,4 +45,27 @@ public class OutageModeTests
         Assert.True(OutageMode.MayDownload(OperatingMode.Recovering));
         Assert.False(OutageMode.MayDownload(OperatingMode.ExtendedOutage));
     }
+
+    [Fact]
+    public void MaySpectate_PausesOnlyTheExtendedOutage()
+    {
+        Assert.True(OutageMode.MaySpectate(OperatingMode.Online));
+        Assert.True(OutageMode.MaySpectate(OperatingMode.ShortOutage));
+        Assert.True(OutageMode.MaySpectate(OperatingMode.Recovering));
+        Assert.False(OutageMode.MaySpectate(OperatingMode.ExtendedOutage));
+        Assert.False(
+            OutageMode.MaySpectate(
+                OutageMode.Decide(false, OutageMode.ExtendedAfter, TimeSpan.Zero)
+            )
+        );
+        Assert.True(
+            OutageMode.MaySpectate(
+                OutageMode.Decide(
+                    false,
+                    OutageMode.ExtendedAfter.Subtract(TimeSpan.FromSeconds(1)),
+                    TimeSpan.Zero
+                )
+            )
+        );
+    }
 }

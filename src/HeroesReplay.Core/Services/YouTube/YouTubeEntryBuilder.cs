@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
@@ -57,9 +58,32 @@ public static class YouTubeEntryBuilder
             GameVersion = facts.GameVersion,
             Title = YouTubeListing.ApplyMarker(metadata.Title, youtube?.TitlePrefix),
             PrivacyStatus = youtube?.PrivacyStatus ?? "public",
+            Requested = facts.ViewerRequested,
+            Hero = facts.FocusHero,
+            RecordedAtUtc = ToUtc(facts.GameDateUtc),
             CategoryId = metadata.CategoryId,
             DescriptionLines = lines.ToArray(),
             Tags = metadata.Tags == null ? [] : [.. metadata.Tags],
         };
+    }
+
+    private static DateTimeOffset? ToUtc(DateTime? played)
+    {
+        if (played == null || played.Value == default)
+        {
+            return null;
+        }
+
+        DateTime value = played.Value;
+        if (value.Kind == DateTimeKind.Local)
+        {
+            value = value.ToUniversalTime();
+        }
+        else if (value.Kind != DateTimeKind.Utc)
+        {
+            value = DateTime.SpecifyKind(value, DateTimeKind.Utc);
+        }
+
+        return new DateTimeOffset(value);
     }
 }

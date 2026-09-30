@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;
@@ -20,11 +21,12 @@ public class ReleaseScriptTests
         Assert.Contains("robocopy.exe", script);
         Assert.Contains("preserve-min-replay-id", script);
         Assert.Contains("Protect-MinReplayId (Join-Path $source 'heroesreplay.exe')", script);
+        Assert.Contains("stabilization window", script);
     }
 
-    private static string FindScript()
+    private static string FindScript([CallerFilePath] string sourceFile = "")
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        var dir = new DirectoryInfo(Path.GetDirectoryName(sourceFile) ?? AppContext.BaseDirectory);
         while (dir != null)
         {
             string candidate = Path.Combine(dir.FullName, "tools", "apply-release.ps1");

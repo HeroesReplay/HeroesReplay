@@ -267,6 +267,19 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
             return;
         }
 
+        TimeSpan downFor = IsOnline
+            ? TimeSpan.Zero
+            : TimeSpan.FromSeconds(15 * (long)failCount);
+        OperatingMode mode = OutageMode.Decide(IsOnline, downFor, TimeSpan.Zero);
+        if (!OutageMode.MaySpectate(mode))
+        {
+            logger.LogInformation(
+                "Spectate stays paused ({Mode}). The current replay is not marked played.",
+                mode
+            );
+            return;
+        }
+
         SpectatorStatus status = statusStore.Read();
         bool running =
             gameIsRunning != null

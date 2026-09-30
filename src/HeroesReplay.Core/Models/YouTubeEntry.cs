@@ -1,3 +1,5 @@
+using System;
+
 namespace HeroesReplay.Core.Models;
 
 public class YouTubeEntry
@@ -26,4 +28,9 @@ public class YouTubeEntry
     */
     public string CategoryId { get; set; }
     public string PrivacyStatus { get; set; } // unlisted, private, public
+    public string DesiredPrivacyStatus { get; set; }
+    public string ActualPrivacyStatus { get; set; }
+    public bool Requested { get; set; }
+    public string Hero { get; set; }
+    public DateTimeOffset? RecordedAtUtc { get; set; }
 }

@@ -78,4 +78,115 @@ public class YouTubeDryRunUploadTests
             Directory.Delete(directory, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task ProcessRecording_PrivateVideoId_StaysPending()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "heroesreplay-youtube-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string recordingPath = Path.Combine(directory, "match.mp4");
+            await File.WriteAllBytesAsync(
+                recordingPath,
+                new byte[] { 0, 0, 0, 24, 102, 116, 121, 112 }
+            );
+            await File.WriteAllTextAsync(
+                Path.Combine(directory, "youtube-entry.json"),
+                JsonSerializer.Serialize(
+                    new YouTubeEntry
+                    {
+                        Title = "Volskaya Foundry - 65389750",
+                        VideoId = "staged-private",
+                        PrivacyStatus = "public",
+                        ActualPrivacyStatus = "private",
+                        ReplayId = 65389750,
+                    }
+                )
+            );
+
+            var uploader = new YouTubeUploader(
+                NullLogger<YouTubeUploader>.Instance,
+                new AppSettings
+                {
+                    YouTube = new YouTubeSettings
+                    {
+                        DryRun = true,
+                        Enabled = true,
+                        EntryFileName = "youtube-entry.json",
+                        EntryFileNameUploaded = "youtube-entry-uploaded.json",
+                        ReadyStableReads = 1,
+                        ReadyPollMilliseconds = 20,
+                    },
+                    Location = new LocationSettings { DataDirectory = directory },
+                },
+                new CancellationTokenSource()
+            );
+
+            await uploader.ProcessRecording(recordingPath);
+
+            Assert.True(File.Exists(Path.Combine(directory, "youtube-entry.json")));
+            Assert.False(File.Exists(Path.Combine(directory, "youtube-entry-uploaded.json")));
+            Assert.False(File.Exists(Path.Combine(directory, "youtube-dry-run.json")));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ProcessRecording_DisabledYouTube_StaysPending()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "heroesreplay-youtube-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string recordingPath = Path.Combine(directory, "match.mp4");
+            await File.WriteAllBytesAsync(
+                recordingPath,
+                new byte[] { 0, 0, 0, 24, 102, 116, 121, 112 }
+            );
+            await File.WriteAllTextAsync(
+                Path.Combine(directory, "youtube-entry.json"),
+                JsonSerializer.Serialize(
+                    new YouTubeEntry { Title = "Volskaya", PrivacyStatus = "public" }
+                )
+            );
+
+            var uploader = new YouTubeUploader(
+                NullLogger<YouTubeUploader>.Instance,
+                new AppSettings
+                {
+                    YouTube = new YouTubeSettings
+                    {
+                        DryRun = true,
+                        Enabled = false,
+                        EntryFileName = "youtube-entry.json",
+                        EntryFileNameUploaded = "youtube-entry-uploaded.json",
+                        ReadyStableReads = 1,
+                        ReadyPollMilliseconds = 20,
+                    },
+                    Location = new LocationSettings { DataDirectory = directory },
+                },
+                new CancellationTokenSource()
+            );
+
+            await uploader.ProcessRecording(recordingPath);
+
+            Assert.True(File.Exists(Path.Combine(directory, "youtube-entry.json")));
+            Assert.False(File.Exists(Path.Combine(directory, "youtube-entry-uploaded.json")));
+            Assert.False(File.Exists(Path.Combine(directory, "youtube-dry-run.json")));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }

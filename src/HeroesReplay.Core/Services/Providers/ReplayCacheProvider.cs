@@ -168,7 +168,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 FileInfo = next,
                 Replay = replay,
                 ReplayId = replayId,
-                RewardQueueItem = null,
+                RewardQueueItem = CachedRequestReward.Read(next.FullName),
                 HeroesProfileReplay = profile,
             };
         }

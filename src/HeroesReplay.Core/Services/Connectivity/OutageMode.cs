@@ -56,4 +56,9 @@ public static class OutageMode
     {
         return mode != OperatingMode.ExtendedOutage;
     }
+
+    public static bool MaySpectate(OperatingMode mode)
+    {
+        return mode != OperatingMode.ExtendedOutage;
+    }
 }

@@ -178,6 +178,28 @@ public static class ReplayClientRoute
     }
 
     /// <summary>
+    /// The report scenes already handed this replay to HeroesSwitcher and that matching exe is still up.
+    /// Opening the file again restarts a client that is already loading.
+    /// </summary>
+    public static bool OpensTheMatchingBuildAgain(
+        ReplayLaunchAuth auth,
+        bool sameReplayAlreadyOpened
+    )
+    {
+        return auth == ReplayLaunchAuth.OpenMatchingBuild && !sameReplayAlreadyOpened;
+    }
+
+    /// <summary>
+    /// A matching-build open returns Wait after the file is opened. That wait still owns the process:
+    /// if it exits, the launch ends. An older-build handoff is a different step and keeps its own wait.
+    /// </summary>
+    public static bool TreatsAsMatchingOpen(ReplayLaunchAuth auth, bool replayFileOpened)
+    {
+        return auth == ReplayLaunchAuth.OpenMatchingBuild
+            || (auth == ReplayLaunchAuth.Wait && replayFileOpened);
+    }
+
+    /// <summary>
     /// A direct exe launch is not used. HeroesSwitcher already has the replay path.
     /// </summary>
     public static bool OpenMatchingBuildNow(

@@ -128,6 +128,13 @@ Protect-MinReplayId (Join-Path $source 'heroesreplay.exe') (Join-Path $InstallDi
 
 $previous = "$InstallDir.previous"
 if (Test-Path -LiteralPath $previous) {
+    $age = (Get-Date) - (Get-Item -LiteralPath $previous).CreationTime
+    if ($age.TotalMinutes -lt 2) {
+        Write-Host "Previous install is still inside the stabilization window."
+        Clear-ServiceStop
+        exit 1
+    }
+
     Remove-Item -LiteralPath $previous -Recurse -Force
 }
 
@@ -200,5 +207,5 @@ catch {
 }
 
 if (Test-Path -LiteralPath $previous) {
-    Remove-Item -LiteralPath $previous -Recurse -Force
+    Write-Host "Previous install kept at $previous until the new stack has been healthy."
 }
