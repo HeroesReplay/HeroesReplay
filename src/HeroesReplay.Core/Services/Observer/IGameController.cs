@@ -11,6 +11,7 @@ public interface IGameController
     Task<bool> StartAuthenticatedReplayAsync(string replayPath, string replayVersion = null);
     Task<bool> OpenReplayFromHomeScreenAsync(string replayPath);
     Task<TimeSpan?> TryGetTimerAsync();
+    TimeSpan? TryReadMatchClock();
     Task<bool> IsReplayPresentedAsync(LoadedReplay replay);
     Task<bool> TrySeeEndScreenAsync(bool nearCore);
     void SendFocus(int player);

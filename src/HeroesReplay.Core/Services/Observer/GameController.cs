@@ -39,6 +39,7 @@ public class GameController : IGameController
     private readonly StormClientConfigurator clientConfigurator;
 
     private readonly object controllerLock = new object();
+    private readonly StableMatchClock matchClock = new();
     private Process cachedProcess;
     private IntPtr cachedHandle;
     private string lastRejectedTimer;
@@ -1245,6 +1246,30 @@ public class GameController : IGameController
 
         logger.LogInformation("OBS game-scene ({Reason}).", reason);
         obsController.SwapToGameScene();
+    }
+
+    public TimeSpan? TryReadMatchClock()
+    {
+        Process process = GetGameProcess();
+        if (process == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (!matchClock.TryRead(process, out TimeSpan time))
+            {
+                return null;
+            }
+
+            return time;
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not read the match clock.");
+            return null;
+        }
     }
 
     public async Task<TimeSpan?> TryGetTimerAsync()

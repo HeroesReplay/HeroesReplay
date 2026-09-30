@@ -485,7 +485,8 @@ public class ConnectivityWatchdogTests
 
         public void ConfigureFromContext() { }
 
-        public Task CycleReportAsync() => Task.CompletedTask;
+        public Task CycleReportAsync(CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
 
         public void SwapToGameScene() { }
 

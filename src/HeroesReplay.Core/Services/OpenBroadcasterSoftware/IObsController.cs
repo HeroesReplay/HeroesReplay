@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware;
@@ -8,7 +9,7 @@ public interface IObsController
     void BeginSession();
     void EndSession();
     void ConfigureFromContext();
-    Task CycleReportAsync();
+    Task CycleReportAsync(CancellationToken cancellationToken = default);
     void SwapToGameScene();
     void UpdateReplayInfoVisibility(TimeSpan matchTime);
     void SwapToWaitingScene();

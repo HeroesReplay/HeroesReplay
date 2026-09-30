@@ -55,9 +55,9 @@ public class ReportScenesTests
 
             if (name == "match-report")
             {
-                Assert.Equal("00:01:55", scene.GetProperty("DisplayTime").GetString());
+                Assert.Equal("00:01:45", scene.GetProperty("DisplayTime").GetString());
                 Assert.Equal(
-                    53.217,
+                    58.286,
                     MatchReportPace.ScrollSpeedY(
                         TimeSpan.Parse(scene.GetProperty("DisplayTime").GetString())
                     ),

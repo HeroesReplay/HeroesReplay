@@ -270,7 +270,7 @@ public class ObsController : IObsController
             });
     }
 
-    public async Task CycleReportAsync()
+    public async Task CycleReportAsync(CancellationToken cancellationToken = default)
     {
         if (!context.Current.LoadedReplay.ReplayId.HasValue)
         {
@@ -280,43 +280,67 @@ public class ObsController : IObsController
             return;
         }
 
-        await Policy
-            .Handle<Exception>()
-            .OrResult(false)
-            .WaitAndRetryAsync(
-                retryCount: 5,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(5),
-                onRetry: OnRetry
-            )
-            .ExecuteAsync(
-                async t =>
-                {
-                    EnsureConnected();
-
-                    List<InputBasicInfo> sourceList = obs.GetInputList();
-
-                    foreach (
-                        ReportScene segment in settings.OBS.ReportScenes.Where(scene =>
-                            scene.Enabled && !IsMissingLocalFile(scene)
-                        )
-                    )
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+            tokenProvider.Token,
+            cancellationToken
+        );
+        try
+        {
+            await Policy
+                .Handle<Exception>(exception => exception is not OperationCanceledException)
+                .OrResult(false)
+                .WaitAndRetryAsync(
+                    retryCount: 5,
+                    sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(5),
+                    onRetry: OnRetry
+                )
+                .ExecuteAsync(
+                    async t =>
                     {
-                        TrySetBrowserSourceSegment(sourceList, segment);
-                    }
+                        if (t.IsCancellationRequested)
+                        {
+                            return true;
+                        }
 
-                    foreach (
-                        ReportScene source in settings.OBS.ReportScenes.Where(scene =>
-                            scene.Enabled && !IsMissingLocalFile(scene)
+                        EnsureConnected();
+
+                        List<InputBasicInfo> sourceList = obs.GetInputList();
+
+                        foreach (
+                            ReportScene segment in settings.OBS.ReportScenes.Where(scene =>
+                                scene.Enabled && !IsMissingLocalFile(scene)
+                            )
                         )
-                    )
-                    {
-                        await TryCycleSceneAsync(source).ConfigureAwait(false);
-                    }
+                        {
+                            TrySetBrowserSourceSegment(sourceList, segment);
+                        }
 
-                    return true;
-                },
-                tokenProvider.Token
-            );
+                        foreach (
+                            ReportScene source in settings.OBS.ReportScenes.Where(scene =>
+                                scene.Enabled && !IsMissingLocalFile(scene)
+                            )
+                        )
+                        {
+                            if (t.IsCancellationRequested)
+                            {
+                                logger.LogInformation(
+                                    "Remaining report scenes stop because the next match clock is running."
+                                );
+                                return true;
+                            }
+
+                            await TryCycleSceneAsync(source, t).ConfigureAwait(false);
+                        }
+
+                        return true;
+                    },
+                    linked.Token
+                );
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            logger.LogInformation("Report scenes stopped because the next match clock is running.");
+        }
     }
 
     private bool IsMissingLocalFile(ReportScene scene)
@@ -343,7 +367,10 @@ public class ObsController : IObsController
         return true;
     }
 
-    private async Task<bool> TryCycleSceneAsync(ReportScene source)
+    private async Task<bool> TryCycleSceneAsync(
+        ReportScene source,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -351,9 +378,17 @@ public class ObsController : IObsController
             logger.LogInformation($"set scene to: {source.SceneName}");
             if (source.DisplayTime > TimeSpan.Zero)
             {
-                await Task.Delay(source.DisplayTime).ConfigureAwait(false);
+                await Task.Delay(source.DisplayTime, cancellationToken).ConfigureAwait(false);
             }
 
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogInformation(
+                "Report scene {Scene} stopped because the next match clock is running.",
+                source.SceneName
+            );
             return true;
         }
         catch (Exception e)

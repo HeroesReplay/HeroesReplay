@@ -63,6 +63,8 @@ public sealed class StubController : IGameController
 
     public Task<bool> IsReplayPresentedAsync(LoadedReplay replay) => Task.FromResult(false);
 
+    public TimeSpan? TryReadMatchClock() => null;
+
     public Task<TimeSpan?> TryGetTimerAsync()
     {
         if (timers.Count == 0)

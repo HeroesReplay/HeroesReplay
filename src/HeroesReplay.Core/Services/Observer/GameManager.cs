@@ -264,17 +264,32 @@ public class GameManager : IGameManager
             )
             {
                 Task<LoadedReplay> nextLoad = InvokeNextLoad(whileReporting);
-                Task report = obsController.CycleReportAsync();
-                Task<NextMatchLaunch> launch = LaunchNextDuringReportAsync(nextLoad);
+                using var cutReport = new CancellationTokenSource();
+                Task report = obsController.CycleReportAsync(cutReport.Token);
+                Task<NextMatchLaunch> launch = LaunchNextDuringReportAsync(
+                    nextLoad,
+                    report,
+                    cutReport
+                );
                 await Task.WhenAll(report, launch).ConfigureAwait(false);
                 NextMatchLaunch nextMatch = await launch.ConfigureAwait(false);
                 if (ReplayLoadCue.SelectsGameScene(nextMatch))
                 {
                     try
                     {
-                        logger.LogInformation(
-                            "Report scenes finished and the next match is loaded. Switching to the game scene."
-                        );
+                        if (cutReport.IsCancellationRequested)
+                        {
+                            logger.LogInformation(
+                                "The next match clock is running. Switching to the game scene so spectating starts now."
+                            );
+                        }
+                        else
+                        {
+                            logger.LogInformation(
+                                "Report scenes finished and the next match is loaded. Switching to the game scene."
+                            );
+                        }
+
                         obsController.SwapToGameScene();
                     }
                     catch (Exception e)
@@ -432,7 +447,11 @@ public class GameManager : IGameManager
         }
     }
 
-    private async Task<NextMatchLaunch> LaunchNextDuringReportAsync(Task<LoadedReplay> nextLoad)
+    private async Task<NextMatchLaunch> LaunchNextDuringReportAsync(
+        Task<LoadedReplay> nextLoad,
+        Task report,
+        CancellationTokenSource cutReport
+    )
     {
         if (settings.Capture?.Method == CaptureMethod.None)
         {
@@ -501,6 +520,8 @@ public class GameManager : IGameManager
         }
 
         bool loggedReadFailure = false;
+        bool loggedLoading = false;
+        bool sawLoading = false;
         bool reopenedFromHome = false;
         DateTimeOffset reopenAt = DateTimeOffset.UtcNow.AddSeconds(25);
         DateTimeOffset readyBy = DateTimeOffset.UtcNow.AddMinutes(3);
@@ -529,15 +550,31 @@ public class GameManager : IGameManager
                 return NextMatchLaunch.NotStarted;
             }
 
+            TimeSpan? matchClock = gameController.TryReadMatchClock();
+            if (ReportHandoff.ShouldCutReport(matchClock))
+            {
+                logger.LogInformation(
+                    "Next replay {ReplayId} match clock is {Clock}. The report stops so spectating starts at this clock.",
+                    next.ReplayId,
+                    matchClock
+                );
+                cutReport.Cancel();
+                return NextMatchLaunch.Presented;
+            }
+
             try
             {
                 if (await gameController.IsReplayPresentedAsync(next).ConfigureAwait(false))
                 {
-                    logger.LogInformation(
-                        "Next replay {ReplayId} is on the loading screen or the match clock. The report scenes finish before OBS shows the game.",
-                        next.ReplayId
-                    );
-                    return NextMatchLaunch.Presented;
+                    sawLoading = true;
+                    if (!loggedLoading)
+                    {
+                        loggedLoading = true;
+                        logger.LogInformation(
+                            "Next replay {ReplayId} is on the loading screen. The report continues until the match clock starts.",
+                            next.ReplayId
+                        );
+                    }
                 }
             }
             catch (Exception e)
@@ -551,6 +588,20 @@ public class GameManager : IGameManager
                         next.ReplayId
                     );
                 }
+            }
+
+            if (report.IsCompleted)
+            {
+                if (sawLoading)
+                {
+                    logger.LogInformation(
+                        "Report scenes finished. Next replay {ReplayId} is on the loading screen. OBS can show the game.",
+                        next.ReplayId
+                    );
+                    return NextMatchLaunch.Presented;
+                }
+
+                break;
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
