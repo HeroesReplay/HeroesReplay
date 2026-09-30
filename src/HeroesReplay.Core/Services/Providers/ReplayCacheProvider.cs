@@ -30,7 +30,10 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private readonly CancellationTokenProvider tokenProvider;
     private readonly AppSettings settings;
     private readonly HashSet<int> played = new();
+    private Func<IReadOnlyList<string>> installedVersionSource;
     private readonly Dictionary<int, DateTimeOffset> deferredUntil = new();
+    private readonly Dictionary<int, string> knownVersion = new();
+    private readonly HashSet<int> announcedMissing = new();
     private LoadedReplay staged;
     private int? heldBackId;
     private bool seeded;
@@ -56,6 +59,11 @@ public sealed class ReplayCacheProvider : IReplayProvider
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
     }
 
+    internal void UseInstalledVersions(Func<IReadOnlyList<string>> source)
+    {
+        installedVersionSource = source;
+    }
+
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
@@ -77,6 +85,11 @@ public sealed class ReplayCacheProvider : IReplayProvider
 
         Seed();
         ReleaseExpiredDefers();
+        IReadOnlyList<string> installed =
+            installedVersionSource != null
+                ? installedVersionSource()
+                : InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory);
+        int newlySkipped = 0;
 
         List<FileInfo> candidates = Directory
             .EnumerateFiles(
@@ -108,6 +121,19 @@ public sealed class ReplayCacheProvider : IReplayProvider
         foreach (FileInfo next in candidates)
         {
             replayHelper.TryGetReplayId(next.Name, out int replayId);
+            if (
+                knownVersion.TryGetValue(replayId, out string cachedVersion)
+                && !ReplayQueuePick.CanLaunch(cachedVersion, installed)
+            )
+            {
+                if (announcedMissing.Add(replayId))
+                {
+                    newlySkipped++;
+                }
+
+                continue;
+            }
+
             Replay replay = await loader.LoadAsync(next.FullName).ConfigureAwait(false);
             if (replay == null)
             {
@@ -119,6 +145,17 @@ public sealed class ReplayCacheProvider : IReplayProvider
                         "Replay {ReplayId} could not be parsed. It is quarantined and is not marked spectated.",
                         replayId
                     );
+                }
+
+                continue;
+            }
+
+            knownVersion[replayId] = replay.ReplayVersion ?? string.Empty;
+            if (!ReplayQueuePick.CanLaunch(replay.ReplayVersion, installed))
+            {
+                if (announcedMissing.Add(replayId))
+                {
+                    newlySkipped++;
                 }
 
                 continue;
@@ -158,6 +195,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 replayId,
                 next.FullName
             );
+            LogSkippedMissing(newlySkipped);
             HeroesProfileReplay profile = RankFromFile(next.Name, replayId, replay.Map);
             if (profile != null)
             {
@@ -176,8 +214,22 @@ public sealed class ReplayCacheProvider : IReplayProvider
             };
         }
 
+        LogSkippedMissing(newlySkipped);
         activity?.SetTag("replay.empty", true);
         return null;
+    }
+
+    private void LogSkippedMissing(int newlySkipped)
+    {
+        if (newlySkipped <= 0)
+        {
+            return;
+        }
+
+        logger.LogInformation(
+            "Skipped {Count} replay(s) whose Heroes build is not installed. They stay queued. The waiting scene was not used.",
+            newlySkipped
+        );
     }
 
     public void Requeue(LoadedReplay replay)

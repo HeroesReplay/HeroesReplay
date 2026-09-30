@@ -181,7 +181,17 @@ public class GameManager : IGameManager
                     status.Timer = null;
                     status.Outcome = spectator.Outcome.ToString();
                 });
-                ParkWaitingScene();
+                if (hold == ClientHoldReason.BuildNotInstalled)
+                {
+                    logger.LogInformation(
+                        "Replay {ReplayId} stays queued. The waiting scene was not used.",
+                        loadedReplay?.ReplayId
+                    );
+                }
+                else
+                {
+                    ParkWaitingScene();
+                }
                 RecordRedemption(loadedReplay, spectator.Outcome);
                 return ReplaySession.Classify(spectator.Outcome);
             }
