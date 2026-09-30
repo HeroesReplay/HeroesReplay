@@ -417,7 +417,8 @@ public class GameController : IGameController
         bool openedOnMatchingExe = boot.Auth == ReplayLaunchAuth.OpenMatchingBuild;
         bool checkedLaunchFile = false;
         int defaultHudCorrections = 0;
-        string expectedInterface = settings.Client?.ReplayInterface ?? "AhliObs 0.75";
+        string expectedInterface =
+            settings.Client?.ReplayInterface ?? ClientSettings.AhliObsInterfaceFile;
 
         async Task<bool> HoldForGameDataDownloadAsync(string primary, string later)
         {

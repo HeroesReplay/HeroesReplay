@@ -33,11 +33,11 @@ public class ClientInterfacePlanTests
     }
 
     [Theory]
-    [InlineData("AhliObs 0.75", "AhliObs 0.75.StormInterface", true)]
-    [InlineData("AhliObs 0.75", "", true)]
-    [InlineData("AhliObs 0.75", null, true)]
-    [InlineData("AhliObs 0.75", "AhliObs 0.75", false)]
-    public void LoadsDefaultHud_RejectsTheStormInterfaceSuffix(
+    [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75", true)]
+    [InlineData("AhliObs 0.75.StormInterface", "", true)]
+    [InlineData("AhliObs 0.75.StormInterface", null, true)]
+    [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75.StormInterface", false)]
+    public void LoadsDefaultHud_BareDropdownNameIsTheDefaultHud(
         string expected,
         string actual,
         bool loadsDefault

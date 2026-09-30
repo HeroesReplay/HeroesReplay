@@ -64,8 +64,8 @@ public static class StormVariablesEditor
     }
 
     /// <summary>
-    /// The Options dropdown stores "AhliObs 0.75". A .StormInterface suffix makes the client
-    /// look for a double extension and fall back to Default, so a suffixed value is not a match.
+    /// Variables.txt stores the interface file name, including .StormInterface.
+    /// The Options dropdown hides that extension. The bare label is a different value.
     /// </summary>
     public static bool InterfaceNameEquals(string expected, string actual)
     {

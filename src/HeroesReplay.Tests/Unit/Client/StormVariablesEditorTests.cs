@@ -29,8 +29,8 @@ public class StormVariablesEditorTests
             ["windowwidth"] = "1920",
             ["windowheight"] = "1080",
             ["windowstate"] = "1",
-            ["observerinterface"] = "AhliObs 0.75",
-            ["replayinterface"] = "AhliObs 0.75",
+            ["observerinterface"] = ClientSettings.AhliObsInterfaceFile,
+            ["replayinterface"] = ClientSettings.AhliObsInterfaceFile,
         };
 
         string result = StormVariablesEditor.Apply(existing, updates);
@@ -42,8 +42,8 @@ public class StormVariablesEditorTests
         Assert.Equal("1920", parsed["windowwidth"]);
         Assert.Equal("1080", parsed["windowheight"]);
         Assert.Equal("1", parsed["windowstate"]);
-        Assert.Equal("AhliObs 0.75", parsed["observerinterface"]);
-        Assert.Equal("AhliObs 0.75", parsed["replayinterface"]);
+        Assert.Equal(ClientSettings.AhliObsInterfaceFile, parsed["observerinterface"]);
+        Assert.Equal(ClientSettings.AhliObsInterfaceFile, parsed["replayinterface"]);
         Assert.Equal("Direct3D11", parsed["GraphicsApi"]);
     }
 
@@ -64,10 +64,9 @@ public class StormVariablesEditorTests
         Assert.Equal("1080", parsed["windowheight"]);
         Assert.Equal("1", parsed["windowstate"]);
         Assert.Equal("true", parsed["soundglobal"]);
-        Assert.Equal("AhliObs 0.75", parsed["observerinterface"]);
-        Assert.Equal("AhliObs 0.75", parsed["replayinterface"]);
+        Assert.Equal(ClientSettings.AhliObsInterfaceFile, parsed["observerinterface"]);
+        Assert.Equal(ClientSettings.AhliObsInterfaceFile, parsed["replayinterface"]);
         Assert.Equal("Direct3D11", parsed["GraphicsApi"]);
-        Assert.DoesNotContain(".StormInterface", parsed["observerinterface"]);
     }
 
     [Theory]
@@ -76,7 +75,7 @@ public class StormVariablesEditorTests
     [InlineData("AhliObs 0.75", "AhliObs 0.75.StormInterface", false)]
     [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75", false)]
     [InlineData("AhliObs 0.75.StormInterface", "AhliObs 0.75.StormInterface", true)]
-    public void InterfaceNameEquals_MatchesTheDropdownNameExactly(
+    public void InterfaceNameEquals_MatchesTheInterfaceFileNameExactly(
         string expected,
         string actual,
         bool same

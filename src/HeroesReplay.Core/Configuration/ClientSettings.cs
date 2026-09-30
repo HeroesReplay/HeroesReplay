@@ -16,9 +16,11 @@ public class ClientSettings
     public string WindowWidth { get; set; } = "1920";
     public string WindowHeight { get; set; } = "1080";
     public string WindowState { get; set; } = "1";
-    public string ObserverInterface { get; set; } = "AhliObs 0.75";
-    public string ReplayInterface { get; set; } = "AhliObs 0.75";
-    public string InterfaceFileName { get; set; } = "AhliObs 0.75.StormInterface";
+    public const string AhliObsInterfaceFile = "AhliObs 0.75.StormInterface";
+
+    public string ObserverInterface { get; set; } = AhliObsInterfaceFile;
+    public string ReplayInterface { get; set; } = AhliObsInterfaceFile;
+    public string InterfaceFileName { get; set; } = AhliObsInterfaceFile;
 
     /// <summary>Play in Background. Account Variables.txt overrides the root file after login.</summary>
     public string SoundGlobal { get; set; } = "true";

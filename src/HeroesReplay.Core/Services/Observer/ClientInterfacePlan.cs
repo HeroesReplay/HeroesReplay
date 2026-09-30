@@ -47,11 +47,15 @@ public static class ClientInterfacePlan
     }
 
     /// <summary>
-    /// The dropdown name is "AhliObs 0.75". A .StormInterface suffix loads the default HUD.
+    /// The client loads AhliObs only when this value is the interface file name
+    /// "AhliObs 0.75.StormInterface". The dropdown label without that extension loads the default HUD.
     /// </summary>
-    public static bool LoadsDefaultHud(string expectedDropdownName, string valueTheClientReads)
+    public static bool LoadsDefaultHud(string expectedInterfaceFile, string valueTheClientReads)
     {
-        return !StormVariablesEditor.InterfaceNameEquals(expectedDropdownName, valueTheClientReads);
+        return !StormVariablesEditor.InterfaceNameEquals(
+            expectedInterfaceFile,
+            valueTheClientReads
+        );
     }
 
     public static ClientPresetAction Preset(
