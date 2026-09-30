@@ -374,11 +374,52 @@ public class ReleaseHandoffTests
 
         Assert.Equal(new int?[] { 101 }, game.Spectated.ToArray());
         Assert.Equal(new[] { 101 }, provider.SpectatedIds.ToArray());
+        Assert.Equal(new[] { 101 }, provider.Held.ToArray());
         Assert.Empty(provider.Requeued);
         SpectatorStatus read = status.Read();
         Assert.Equal(new DateTimeOffset(2026, 9, 29, 12, 0, 0, TimeSpan.Zero), read.CompletedAt);
         Assert.Equal(101, read.CompletedReplayId);
         Assert.Equal(0, read.CompletedWinnerTeam);
+    }
+
+    [Fact]
+    public async Task HoldBack_SkipsTheReplayStillInSession()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-hold-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(Path.Combine(root, "Requests"));
+        Directory.CreateDirectory(Path.Combine(root, "Standard"));
+        File.WriteAllBytes(
+            Path.Combine(root, "Requests", "10_Quick Match_Map_.StormReplay"),
+            Array.Empty<byte>()
+        );
+        File.WriteAllBytes(
+            Path.Combine(root, "Requests", "20_Quick Match_Map_.StormReplay"),
+            Array.Empty<byte>()
+        );
+        AppSettings settings = CacheSettings(root);
+        try
+        {
+            ReplayCacheProvider plain = Cache(settings);
+            LoadedReplay lowest = await plain.TryLoadNextReplayAsync();
+            Assert.Equal(10, lowest.ReplayId);
+
+            ReplayCacheProvider held = Cache(settings);
+            held.Requeue(new LoadedReplay { ReplayId = 10 });
+            held.HoldBack(10);
+            LoadedReplay next = await held.TryLoadNextReplayAsync();
+            Assert.Equal(20, next.ReplayId);
+
+            held.MarkSpectated(new LoadedReplay { ReplayId = 10 });
+            LoadedReplay after = await held.TryLoadNextReplayAsync();
+            Assert.Null(after);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -541,6 +582,16 @@ public class ReleaseHandoffTests
         }
 
         public List<int> SpectatedIds { get; } = new();
+
+        public List<int> Held { get; } = new();
+
+        public void HoldBack(int replayId)
+        {
+            if (replayId > 0)
+            {
+                Held.Add(replayId);
+            }
+        }
 
         public void Requeue(LoadedReplay replay)
         {

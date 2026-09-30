@@ -32,6 +32,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private readonly HashSet<int> played = new();
     private readonly Dictionary<int, DateTimeOffset> deferredUntil = new();
     private LoadedReplay staged;
+    private int? heldBackId;
     private bool seeded;
 
     public bool ContinuesWhenEmpty => true;
@@ -59,7 +60,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
         activity?.SetTag("replay.source", "cache");
-        if (staged != null)
+        if (staged != null && !IsHeld(staged.ReplayId))
         {
             LoadedReplay ready = staged;
             staged = null;
@@ -92,7 +93,9 @@ public sealed class ReplayCacheProvider : IReplayProvider
             )
             .Select(path => new FileInfo(path))
             .Where(file =>
-                replayHelper.TryGetReplayId(file.Name, out int id) && !played.Contains(id)
+                replayHelper.TryGetReplayId(file.Name, out int id)
+                && !played.Contains(id)
+                && !IsHeld(id)
             )
             .OrderBy(file => IsRequest(file) ? 0 : 1)
             .ThenBy(file =>
@@ -185,6 +188,11 @@ public sealed class ReplayCacheProvider : IReplayProvider
         }
 
         played.Remove(replayId);
+        if (heldBackId == replayId)
+        {
+            heldBackId = null;
+        }
+
         string path = PlayedPath();
         if (File.Exists(path))
         {
@@ -229,6 +237,28 @@ public sealed class ReplayCacheProvider : IReplayProvider
 
         played.Add(replayId);
         AppendPlayed(replayId);
+        if (staged?.ReplayId == replayId)
+        {
+            staged = null;
+        }
+
+        if (heldBackId == replayId)
+        {
+            heldBackId = null;
+        }
+    }
+
+    public void HoldBack(int replayId)
+    {
+        if (replayId > 0)
+        {
+            heldBackId = replayId;
+        }
+    }
+
+    private bool IsHeld(int? replayId)
+    {
+        return replayId is int id && heldBackId is int held && id == held;
     }
 
     private void Seed()

@@ -29,6 +29,7 @@ public class HeroesProfileProvider : IReplayProvider
     private readonly IRequestQueue requestQueue;
     private readonly IHeroesProfileResume heroesProfileResume;
     private LoadedReplay staged;
+    private int? heldBackId;
     private int minReplayId;
 
     public bool ContinuesWhenEmpty => true;
@@ -195,10 +196,18 @@ public class HeroesProfileProvider : IReplayProvider
 
     public void MarkSpectated(LoadedReplay replay) { }
 
+    public void HoldBack(int replayId)
+    {
+        if (replayId > 0)
+        {
+            heldBackId = replayId;
+        }
+    }
+
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
-        if (staged != null)
+        if (staged != null && staged.ReplayId != heldBackId)
         {
             LoadedReplay ready = staged;
             staged = null;

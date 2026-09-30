@@ -170,7 +170,7 @@ public class Engine : IEngine
                     loadedReplay,
                     () =>
                     {
-                        nextLoad = StartNextLoad();
+                        nextLoad = StartNextLoad(loadedReplay);
                         return nextLoad ?? Task.FromResult<LoadedReplay>(null);
                     }
                 )
@@ -285,7 +285,7 @@ public class Engine : IEngine
         return attempt;
     }
 
-    private Task<LoadedReplay> StartNextLoad()
+    private Task<LoadedReplay> StartNextLoad(LoadedReplay current)
     {
         if (replayResume.HasPending())
         {
@@ -293,6 +293,11 @@ public class Engine : IEngine
                 "A replay is waiting to resume. The next file stays in the queue."
             );
             return null;
+        }
+
+        if (current?.ReplayId is int replayId && replayId > 0)
+        {
+            replayProvider.HoldBack(replayId);
         }
 
         logger.LogInformation("Loading the next replay during the report scenes.");

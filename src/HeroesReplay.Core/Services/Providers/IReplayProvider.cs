@@ -30,5 +30,10 @@ public interface IReplayProvider
     /// </summary>
     void MarkSpectated(LoadedReplay replay);
 
+    /// <summary>
+    /// This replay is still the current session. The next load must not return it.
+    /// </summary>
+    void HoldBack(int replayId);
+
     bool ContinuesWhenEmpty { get; }
 }

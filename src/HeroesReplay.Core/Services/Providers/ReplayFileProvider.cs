@@ -21,6 +21,7 @@ public sealed class ReplayFileProvider : IReplayProvider
     private readonly bool playOnce;
     private readonly int? playerIndex;
     private LoadedReplay staged;
+    private int? heldBackId;
 
     public bool ContinuesWhenEmpty => !playOnce;
 
@@ -51,7 +52,7 @@ public sealed class ReplayFileProvider : IReplayProvider
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
-        if (staged != null)
+        if (staged != null && staged.ReplayId != heldBackId)
         {
             LoadedReplay ready = staged;
             staged = null;
@@ -170,4 +171,12 @@ public sealed class ReplayFileProvider : IReplayProvider
     }
 
     public void MarkSpectated(LoadedReplay replay) { }
+
+    public void HoldBack(int replayId)
+    {
+        if (replayId > 0)
+        {
+            heldBackId = replayId;
+        }
+    }
 }
