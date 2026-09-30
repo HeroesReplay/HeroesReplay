@@ -138,7 +138,7 @@ public class ReplayClientRouteTests
     }
 
     [Fact]
-    public void Decide_MatchingPreviousPatchWithoutHomeOpensThatExe()
+    public void Decide_MatchingPreviousPatchWithoutHomeOpensThroughTheSwitcher()
     {
         Assert.Equal(
             ReplayLaunchAuth.OpenMatchingBuild,
@@ -208,9 +208,9 @@ public class ReplayClientRouteTests
     }
 
     [Fact]
-    public void OpenMatchingBuildNow_OpensABlankMatchingClientOnce()
+    public void OpenMatchingBuildNow_LeavesABlankMatchingClientRunning()
     {
-        Assert.True(
+        Assert.False(
             ReplayClientRoute.OpenMatchingBuildNow(
                 ReplayClientRoute.Decide(
                     ReplayClientPatch.Previous,

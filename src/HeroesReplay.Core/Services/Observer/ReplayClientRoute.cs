@@ -39,10 +39,10 @@ public enum ReplaySignInRecovery
 
 /// <summary>
 /// The newest installed client signs in through Battle.net, then opens the replay.
-/// An older installed build, including an older iteration of the same patch line, is started by HeroesSwitcher
-/// when that exe is not already running. A matching older exe that is up without the home screen or the match
-/// clock is started again with the replay path. HeroesSwitcher would open the newest exe and drop that path.
-/// Battle.net Play always starts the newest client. A different build number is not that client.
+/// An older installed build, including an older iteration of the same patch line, is opened by
+/// HeroesSwitcher with the .StormReplay path. That is the same open Explorer uses. The process
+/// HeroesSwitcher starts is left running while it downloads game data. Battle.net Play always
+/// starts the newest client. A different build number is not that client.
 /// </summary>
 public static class ReplayClientRoute
 {
@@ -142,7 +142,8 @@ public static class ReplayClientRoute
             return ReplayLaunchAuth.OpenFromHome;
         }
 
-        // The current patch still waits for the signed-in home screen. A direct open skips SSO.
+        // The matching older exe is already up. Open the .StormReplay through HeroesSwitcher
+        // and leave that process running. A direct exe launch is not used.
         if (running == RunningClientBuild.Matches && patch == ReplayClientPatch.Previous)
         {
             return ReplayLaunchAuth.OpenMatchingBuild;
@@ -177,8 +178,7 @@ public static class ReplayClientRoute
     }
 
     /// <summary>
-    /// One open for a matching older exe whose window is already blank. A later pass in the same wait does not open again.
-    /// A blank frame while that exe is still calculating game data is the startup. Opening the replay would close the only client.
+    /// A direct exe launch is not used. HeroesSwitcher already has the replay path.
     /// </summary>
     public static bool OpenMatchingBuildNow(
         ReplayLaunchAuth auth,
@@ -187,11 +187,10 @@ public static class ReplayClientRoute
         bool gameDataStillStarting
     )
     {
-        if (gameDataStillStarting)
-        {
-            return false;
-        }
-
-        return auth == ReplayLaunchAuth.OpenMatchingBuild && !alreadyOpened && windowBlank;
+        _ = auth;
+        _ = alreadyOpened;
+        _ = windowBlank;
+        _ = gameDataStillStarting;
+        return false;
     }
 }

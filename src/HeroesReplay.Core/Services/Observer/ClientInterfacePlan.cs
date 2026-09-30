@@ -13,9 +13,8 @@ public enum ClientPresetAction
 }
 
 /// <summary>
-/// A newly installed Heroes build, and a build that just downloaded its game data,
-/// must receive AhliObs before a replay is allowed to stay on screen.
-/// Text that already names AhliObs is not proof the running process loaded it.
+/// AhliObs is written before Heroes starts. A client HeroesSwitcher already launched
+/// is left running through its data download. Text that names AhliObs is not the HUD.
 /// </summary>
 public static class ClientInterfacePlan
 {
@@ -44,12 +43,9 @@ public static class ClientInterfacePlan
     }
 
     /// <summary>
-    /// The download screen and "Preparing game data" use the stock client chrome.
-    /// Restart once after that clears so the next process reads AhliObs with the game
-    /// data already present. HeroesSwitcher first starts the newest exe, which then
-    /// starts the replay's exe. A download or preparing screen on that newer exe is
-    /// the handoff and must not be restarted. Preparing game data on the replay's own
-    /// exe still restarts once, before the loading screen or match clock is accepted.
+    /// HeroesSwitcher owns the process it started, including the data download and
+    /// "Preparing game data". AhliObs is written before that process starts.
+    /// Closing it here leaves no client.
     /// </summary>
     public static bool RestartAfterGameData(
         bool sawDownload,
@@ -61,17 +57,14 @@ public static class ClientInterfacePlan
         bool sawGameDataStartup = false
     )
     {
-        if (!clientBuildMatches || downloadVisible || restarts >= MaxDataRestarts)
-        {
-            return false;
-        }
-
-        if (sawDownload && (gameDataStartup || replayVisible))
-        {
-            return true;
-        }
-
-        return sawGameDataStartup && replayVisible && !gameDataStartup;
+        _ = sawDownload;
+        _ = downloadVisible;
+        _ = gameDataStartup;
+        _ = replayVisible;
+        _ = restarts;
+        _ = clientBuildMatches;
+        _ = sawGameDataStartup;
+        return false;
     }
 
     /// <summary>
@@ -99,8 +92,7 @@ public static class ClientInterfacePlan
     }
 
     /// <summary>
-    /// The matching exe has shown game-data startup and still owes its one AhliObs
-    /// restart. Do not treat this frame as the match.
+    /// A switcher-launched client is not held back for a second start.
     /// </summary>
     public static bool OwesObserverRestart(
         bool clientBuildMatches,
@@ -109,9 +101,11 @@ public static class ClientInterfacePlan
         int restarts
     )
     {
-        return clientBuildMatches
-            && restarts < MaxDataRestarts
-            && (sawGameDataStartup || gameDataStartup);
+        _ = clientBuildMatches;
+        _ = sawGameDataStartup;
+        _ = gameDataStartup;
+        _ = restarts;
+        return false;
     }
 
     /// <summary>

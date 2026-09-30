@@ -361,7 +361,7 @@ public class ClientRelaunchTests
     }
 
     [Fact]
-    public void ShouldRelaunchBlankWindow_OnceTheFullSizeWindowStaysBlank()
+    public void ShouldRelaunchBlankWindow_LeavesAFullSizeBlankWindowRunning()
     {
         Assert.False(
             ClientRelaunch.ShouldRelaunchBlankWindow(
@@ -372,13 +372,46 @@ public class ClientRelaunchTests
                 blankRelaunches: 0
             )
         );
-        Assert.True(
+        Assert.False(
             ClientRelaunch.ShouldRelaunchBlankWindow(
                 processRunning: true,
                 replayOpened: false,
                 windowBlank: true,
                 blankFor: ClientRelaunch.BlankWindowLimit,
                 blankRelaunches: 0
+            )
+        );
+    }
+
+    [Fact]
+    public void KeepsWaitingForSwitcherHandoff_WhileTheNewestExeIsStillUp()
+    {
+        Assert.True(
+            ClientRelaunch.KeepsWaitingForSwitcherHandoff(
+                openedThroughSwitcher: true,
+                differentBuild: true,
+                processRunning: true
+            )
+        );
+        Assert.False(
+            ClientRelaunch.KeepsWaitingForSwitcherHandoff(
+                openedThroughSwitcher: false,
+                differentBuild: true,
+                processRunning: true
+            )
+        );
+        Assert.False(
+            ClientRelaunch.KeepsWaitingForSwitcherHandoff(
+                openedThroughSwitcher: true,
+                differentBuild: false,
+                processRunning: true
+            )
+        );
+        Assert.False(
+            ClientRelaunch.KeepsWaitingForSwitcherHandoff(
+                openedThroughSwitcher: true,
+                differentBuild: true,
+                processRunning: false
             )
         );
     }

@@ -43,6 +43,10 @@ public static class ClientRelaunch
         return string.IsNullOrWhiteSpace(text) && width >= 1000 && height >= 700;
     }
 
+    /// <summary>
+    /// A blank full-size window is the client still starting, or still downloading data.
+    /// HeroesSwitcher started that process. It is not closed from this check.
+    /// </summary>
     public static bool ShouldRelaunchBlankWindow(
         bool processRunning,
         bool replayOpened,
@@ -52,12 +56,13 @@ public static class ClientRelaunch
         bool clientBuildMatches = true
     )
     {
-        return processRunning
-            && clientBuildMatches
-            && !replayOpened
-            && windowBlank
-            && blankRelaunches < MaxBlankRelaunches
-            && blankFor >= BlankWindowLimit;
+        _ = processRunning;
+        _ = replayOpened;
+        _ = windowBlank;
+        _ = blankFor;
+        _ = blankRelaunches;
+        _ = clientBuildMatches;
+        return false;
     }
 
     /// <summary>
@@ -92,6 +97,19 @@ public static class ClientRelaunch
         }
 
         return startupText || (sawStartup && windowBlank) || (clientAlreadyRunning && windowBlank);
+    }
+
+    /// <summary>
+    /// HeroesSwitcher starts the newest exe, then switches to the replay's build.
+    /// That newer process is the handoff. It stays up while the older client's data downloads.
+    /// </summary>
+    public static bool KeepsWaitingForSwitcherHandoff(
+        bool openedThroughSwitcher,
+        bool differentBuild,
+        bool processRunning
+    )
+    {
+        return openedThroughSwitcher && processRunning && differentBuild;
     }
 
     /// <summary>

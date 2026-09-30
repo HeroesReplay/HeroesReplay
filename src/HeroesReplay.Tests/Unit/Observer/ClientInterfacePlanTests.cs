@@ -31,24 +31,22 @@ public class ClientInterfacePlanTests
     }
 
     [Theory]
-    [InlineData(true, false, true, false, 0, true)]
-    [InlineData(true, false, false, true, 0, true)]
-    [InlineData(true, true, true, true, 0, false)]
-    [InlineData(true, false, false, false, 0, false)]
-    [InlineData(false, false, true, true, 0, false)]
-    [InlineData(true, false, true, true, 1, false)]
-    [InlineData(true, false, true, false, 2, false)]
-    public void RestartAfterGameData_RestartsOnceAfterTheDownloadScreenClears(
+    [InlineData(true, false, true, false, 0)]
+    [InlineData(true, false, false, true, 0)]
+    [InlineData(true, true, true, true, 0)]
+    [InlineData(true, false, false, false, 0)]
+    [InlineData(false, false, true, true, 0)]
+    [InlineData(true, false, true, true, 1)]
+    [InlineData(true, false, true, false, 2)]
+    public void RestartAfterGameData_LeavesTheSwitcherClientRunning(
         bool sawDownload,
         bool downloadVisible,
         bool gameDataStartup,
         bool replayVisible,
-        int restarts,
-        bool expected
+        int restarts
     )
     {
-        Assert.Equal(
-            expected,
+        Assert.False(
             ClientInterfacePlan.RestartAfterGameData(
                 sawDownload,
                 downloadVisible,
@@ -105,7 +103,7 @@ public class ClientInterfacePlanTests
                 clientBuildMatches: false
             )
         );
-        Assert.True(
+        Assert.False(
             ClientInterfacePlan.RestartAfterGameData(
                 sawDownload: true,
                 downloadVisible: false,
@@ -124,7 +122,7 @@ public class ClientInterfacePlanTests
     }
 
     [Fact]
-    public void MatchingExe_RestartsOnceAfterPreparingGameDataBeforeTheReplayIsAccepted()
+    public void MatchingExe_StaysUpAfterPreparingGameData()
     {
         bool latched = ClientInterfacePlan.LatchGameDataStartup(
             alreadyLatched: false,
@@ -152,7 +150,7 @@ public class ClientInterfacePlanTests
                 sawGameDataStartup: latched
             )
         );
-        Assert.True(
+        Assert.False(
             ClientInterfacePlan.OwesObserverRestart(true, latched, gameDataStartup: true, 0)
         );
 
@@ -175,7 +173,7 @@ public class ClientInterfacePlanTests
                 sawGameDataStartup: latched
             )
         );
-        Assert.True(
+        Assert.False(
             ClientInterfacePlan.OwesObserverRestart(true, latched, gameDataStartup: true, 0)
         );
 
@@ -185,7 +183,7 @@ public class ClientInterfacePlanTests
             clientBuildMatches: true,
             differentBuild: false
         );
-        Assert.True(
+        Assert.False(
             ClientInterfacePlan.RestartAfterGameData(
                 sawDownload: false,
                 downloadVisible: false,

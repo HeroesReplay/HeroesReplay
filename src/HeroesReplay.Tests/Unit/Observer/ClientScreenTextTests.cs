@@ -32,7 +32,7 @@ public class ClientScreenTextTests
     }
 
     [Fact]
-    public void IsGameDataDownload_LaterSampleStillRestartsAfterTheDialogClears()
+    public void IsGameDataDownload_LaterSampleLeavesTheClientRunning()
     {
         const string dialog =
             "DOWNLOADING All data files must be fully downloaded to load this version of the game. CANCEL";
@@ -51,7 +51,7 @@ public class ClientScreenTextTests
                 restarts: 0
             )
         );
-        Assert.True(
+        Assert.False(
             ClientInterfacePlan.RestartAfterGameData(
                 sawDownload: ClientScreenText.IsGameDataDownload(string.Empty, dialog),
                 downloadVisible: ClientScreenText.IsGameDataDownload(

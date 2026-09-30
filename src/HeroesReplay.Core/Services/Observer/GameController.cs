@@ -247,10 +247,11 @@ public class GameController : IGameController
         if (auth == ReplayLaunchAuth.OpenMatchingBuild)
         {
             logger.LogInformation(
-                "Matching Heroes client is up without the home screen or the match clock. Opening the replay on that client. Battle.net was not clicked."
+                "Matching Heroes client is already running. Opening the replay through HeroesSwitcher. The client was not closed."
             );
-            await OpenOnMatchingClientAsync(replayPath, replayVersion).ConfigureAwait(false);
-            return new ReplayBoot(auth, false);
+            replayFileOpened = true;
+            replayOpener.Open(replayPath);
+            return new ReplayBoot(ReplayLaunchAuth.Wait, false);
         }
 
         if (auth == ReplayLaunchAuth.Wait)
@@ -269,7 +270,7 @@ public class GameController : IGameController
             return new ReplayBoot(auth, true);
         }
 
-        if (running == RunningClientBuild.Differs)
+        if (running == RunningClientBuild.Differs && auth != ReplayLaunchAuth.OpenInstalledBuild)
         {
             logger.LogInformation(
                 "Closing the running Heroes client because it is not replay build {Version}.",
@@ -291,7 +292,7 @@ public class GameController : IGameController
         if (auth == ReplayLaunchAuth.OpenInstalledBuild)
         {
             logger.LogInformation(
-                "Opening previous-patch replay {Version} through HeroesSwitcher. Battle.net Play was not used.",
+                "Opening previous-patch replay {Version} through HeroesSwitcher. The running client was not closed. Battle.net Play was not used.",
                 replayVersion
             );
             CloseIdleSwitcher();
@@ -408,7 +409,11 @@ public class GameController : IGameController
         DateTimeOffset blankSince = default;
         DateTimeOffset started = DateTimeOffset.UtcNow;
         DateTimeOffset deadline = started.Add(ClientRelaunch.ColdBootLimit);
-        bool clientAlreadyRunning = boot.Auth == ReplayLaunchAuth.Wait;
+        bool openedThroughSwitcher =
+            boot.Auth == ReplayLaunchAuth.OpenInstalledBuild
+            || (boot.Auth == ReplayLaunchAuth.Wait && replayFileOpened);
+        bool clientAlreadyRunning =
+            boot.Auth == ReplayLaunchAuth.Wait || boot.Auth == ReplayLaunchAuth.OpenInstalledBuild;
         bool openedOnMatchingExe = boot.Auth == ReplayLaunchAuth.OpenMatchingBuild;
 
         async Task<bool> HoldForGameDataDownloadAsync(string primary, string later)
@@ -445,7 +450,7 @@ public class GameController : IGameController
             {
                 loggedDownload = true;
                 logger.LogInformation(
-                    "Heroes is downloading game data for this client. AhliObs is applied again after that download. Battle.net was not clicked."
+                    "Heroes is downloading game data for this client. The client stays open. Battle.net was not clicked."
                 );
             }
 
@@ -567,6 +572,25 @@ public class GameController : IGameController
                 logger.LogInformation(
                     "HeroesSwitcher started a different build. Waiting for the replay's client. Battle.net was not clicked."
                 );
+            }
+
+            if (
+                ClientRelaunch.KeepsWaitingForSwitcherHandoff(
+                    openedThroughSwitcher,
+                    differentBuild,
+                    IsGameProcessRunning()
+                )
+            )
+            {
+                DateTimeOffset handoffUntil = ClientInterfacePlan.ExtendForGameDataDownload(
+                    started,
+                    deadline,
+                    DateTimeOffset.UtcNow
+                );
+                if (handoffUntil > deadline)
+                {
+                    deadline = handoffUntil;
+                }
             }
 
             if (
