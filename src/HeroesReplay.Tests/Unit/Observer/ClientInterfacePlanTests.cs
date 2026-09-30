@@ -118,6 +118,9 @@ public class ClientInterfacePlanTests
         Assert.False(ClientInterfacePlan.MayAcceptReplayScreen(false, true));
         Assert.True(ClientInterfacePlan.MayAcceptReplayScreen(true, true));
         Assert.False(ClientInterfacePlan.MayAcceptReplayScreen(true, false));
+        Assert.False(ClientInterfacePlan.DownloadBelongsToReplayClient(true, false));
+        Assert.True(ClientInterfacePlan.DownloadBelongsToReplayClient(true, true));
+        Assert.False(ClientInterfacePlan.DownloadBelongsToReplayClient(false, true));
     }
 
     [Fact]

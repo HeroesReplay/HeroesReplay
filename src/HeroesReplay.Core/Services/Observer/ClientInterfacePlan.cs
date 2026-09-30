@@ -73,6 +73,15 @@ public static class ClientInterfacePlan
         return clientBuildMatches && screenVisible;
     }
 
+    /// <summary>
+    /// A download dialog on the newest exe is that handoff. It must not arm an AhliObs restart
+    /// that then fires when the replay's own exe appears.
+    /// </summary>
+    public static bool DownloadBelongsToReplayClient(bool sawDownload, bool clientBuildMatches)
+    {
+        return sawDownload && clientBuildMatches;
+    }
+
     public static DateTimeOffset ExtendForGameDataDownload(
         DateTimeOffset started,
         DateTimeOffset deadline,

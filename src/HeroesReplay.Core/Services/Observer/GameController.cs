@@ -406,6 +406,18 @@ public class GameController : IGameController
                 return false;
             }
 
+            if (
+                !ClientInterfacePlan.DownloadBelongsToReplayClient(
+                    true,
+                    ReadRunningBuild(replayVersion) == RunningClientBuild.Matches
+                )
+            )
+            {
+                await Task.Delay(settings.OCR.CheckSleepDuration, tokenProvider.Token)
+                    .ConfigureAwait(false);
+                return true;
+            }
+
             sawGameDataDownload = true;
             DateTimeOffset extended = ClientInterfacePlan.ExtendForGameDataDownload(
                 started,
@@ -520,6 +532,17 @@ public class GameController : IGameController
                 logger.LogInformation(
                     "HeroesSwitcher started a different build. Waiting for the replay's client. Battle.net was not clicked."
                 );
+            }
+
+            if (
+                !ClientInterfacePlan.DownloadBelongsToReplayClient(
+                    sawGameDataDownload,
+                    matchingBuild
+                )
+            )
+            {
+                sawGameDataDownload = false;
+                loggedDownload = false;
             }
 
             if (
