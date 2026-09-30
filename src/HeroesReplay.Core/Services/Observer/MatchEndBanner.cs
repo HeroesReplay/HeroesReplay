@@ -30,6 +30,15 @@ public static class MatchEndBanner
             return true;
         }
 
+        // Award titles such as Guardian and Siege Master. A camp tooltip does not say these.
+        if (
+            text.Contains("SIEGE MASTER", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("Team Fight Damage", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return true;
+        }
+
         if (!nearCore)
         {
             return false;
@@ -37,4 +46,10 @@ public static class MatchEndBanner
 
         return Regex.IsMatch(text, @"\b(VICTORY|DEFEAT)\b", RegexOptions.IgnoreCase);
     }
+
+    /// <summary>
+    /// The launch wait already read this window. An award screen ends that wait.
+    /// Victory and defeat still need the core, so a camp tooltip does not.
+    /// </summary>
+    public static bool EndsLaunchWait(string windowText) => IsEnd(windowText, nearCore: false);
 }

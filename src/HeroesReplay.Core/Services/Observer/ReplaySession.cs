@@ -5,6 +5,12 @@ public enum ReplaySessionKind
     Played,
     Held,
     Unplayed,
+
+    /// <summary>
+    /// The client was already on the award screen. Report scenes run and the next replay loads.
+    /// This replay was not spectated, so it stays available.
+    /// </summary>
+    AwardFinished,
 }
 
 /// <summary>
@@ -20,6 +26,11 @@ public static class ReplaySession
             return ReplaySessionKind.Played;
         }
 
+        if (outcome == MatchOutcome.AwardScreen)
+        {
+            return ReplaySessionKind.AwardFinished;
+        }
+
         if (
             outcome == MatchOutcome.VersionMismatch
             || outcome == MatchOutcome.RegionUnavailable
@@ -32,5 +43,6 @@ public static class ReplaySession
         return ReplaySessionKind.Unplayed;
     }
 
-    public static bool StaysQueued(ReplaySessionKind kind) => kind != ReplaySessionKind.Played;
+    public static bool StaysQueued(ReplaySessionKind kind) =>
+        kind != ReplaySessionKind.Played && kind != ReplaySessionKind.AwardFinished;
 }

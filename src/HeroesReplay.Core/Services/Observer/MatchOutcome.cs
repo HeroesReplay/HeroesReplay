@@ -16,6 +16,7 @@ public enum MatchOutcome
     LoadTimedOut,
     Stopped,
     Canceled,
+    AwardScreen,
 }
 
 /// <summary>
@@ -51,6 +52,11 @@ public sealed class MatchCompletion
         if (hold == ClientHoldReason.ClientNotReady)
         {
             return MatchOutcome.LoadTimedOut;
+        }
+
+        if (hold == ClientHoldReason.AwardScreen)
+        {
+            return MatchOutcome.AwardScreen;
         }
 
         return MatchOutcome.None;

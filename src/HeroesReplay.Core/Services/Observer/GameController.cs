@@ -502,6 +502,12 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, hold);
             }
 
+            if (MatchEndBanner.EndsLaunchWait(text))
+            {
+                logger.LogInformation("The client is on the award screen. This replay is over.");
+                return new ColdBoot(RetryDisconnect: false, ClientHoldReason.AwardScreen);
+            }
+
             if (await HoldForGameDataDownloadAsync(text, null).ConfigureAwait(false))
             {
                 continue;

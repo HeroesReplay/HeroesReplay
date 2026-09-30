@@ -114,11 +114,40 @@ public class GameManager : IGameManager
             EnsureWindowedClient();
             recordingClock.Reset();
             ClientHoldReason hold = await gameController.LaunchAsync().ConfigureAwait(false);
-            if (hold == ClientHoldReason.None)
+            if (hold == ClientHoldReason.AwardScreen)
+            {
+                logger.LogInformation(
+                    "The client is on the award screen. Replay {ReplayId} is over. Report scenes start and the next replay loads.",
+                    loadedReplay?.ReplayId
+                );
+                spectator.RecordHold(hold);
+                if (settings.OBS.Enabled)
+                {
+                    obsController.BeginSession();
+                    obsSession = true;
+                    statusStore.Patch(status => status.ObsSession = true);
+                    obsController.ConfigureFromContext();
+                }
+
+                enteredMatch = true;
+            }
+            else if (hold == ClientHoldReason.None)
             {
                 RememberInterfaceBuild();
+                if (settings.OBS.Enabled)
+                {
+                    obsController.BeginSession();
+                    obsSession = true;
+                    statusStore.Patch(status => status.ObsSession = true);
+                    obsController.ConfigureFromContext();
+                    await StartRecordingWhenMatchIsVisible(loadedReplay).ConfigureAwait(false);
+                }
+
+                enteredMatch = true;
+                await spectator.SpectateAsync().ConfigureAwait(false);
+                activity?.SetTag("session.outcome", spectator.Outcome.ToString());
             }
-            if (hold != ClientHoldReason.None)
+            else if (hold != ClientHoldReason.None)
             {
                 spectator.RecordHold(hold);
                 await RecordPublicationAsync(loadedReplay, recording: null).ConfigureAwait(false);
@@ -156,19 +185,6 @@ public class GameManager : IGameManager
                 RecordRedemption(loadedReplay, spectator.Outcome);
                 return ReplaySession.Classify(spectator.Outcome);
             }
-
-            if (settings.OBS.Enabled)
-            {
-                obsController.BeginSession();
-                obsSession = true;
-                statusStore.Patch(status => status.ObsSession = true);
-                obsController.ConfigureFromContext();
-                await StartRecordingWhenMatchIsVisible(loadedReplay).ConfigureAwait(false);
-            }
-
-            enteredMatch = true;
-            await spectator.SpectateAsync().ConfigureAwait(false);
-            activity?.SetTag("session.outcome", spectator.Outcome.ToString());
         }
         finally
         {
@@ -227,8 +243,15 @@ public class GameManager : IGameManager
 
         try
         {
-            // A crash or a hold must not preload another replay. Only a verified match moves on.
-            if (enteredMatch && obsSession && spectator.Outcome == MatchOutcome.VerifiedCompleted)
+            // A verified match or an award screen preloads the next replay and runs the report scenes.
+            if (
+                enteredMatch
+                && obsSession
+                && (
+                    spectator.Outcome == MatchOutcome.VerifiedCompleted
+                    || spectator.Outcome == MatchOutcome.AwardScreen
+                )
+            )
             {
                 Task<LoadedReplay> nextLoad = InvokeNextLoad(whileReporting);
                 Task report = obsController.CycleReportAsync();

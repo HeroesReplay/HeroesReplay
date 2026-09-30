@@ -25,6 +25,23 @@ public class MatchEndBannerTests
         Assert.True(MatchEndBanner.IsEnd(text, nearCore: true));
     }
 
+    [Fact]
+    public void AwardBoardEndsTheLaunchWait()
+    {
+        const string text =
+            "GUARDIAN 40% of Team Fight Damage Soaked SIEGE MASTER 34% of Team's Structure Damage CLUTCH";
+
+        Assert.True(MatchEndBanner.IsEnd(text, nearCore: false));
+        Assert.True(MatchEndBanner.EndsLaunchWait(text));
+        Assert.True(MatchEndBanner.EndsLaunchWait("SIEGE MASTER"));
+        Assert.False(MatchEndBanner.EndsLaunchWait("18:53"));
+        Assert.False(MatchEndBanner.EndsLaunchWait("WELCOME TO ALTERAC PASS"));
+        Assert.False(
+            MatchEndBanner.EndsLaunchWait("Defeat or bribe this camp to gain Mercenaries")
+        );
+        Assert.False(MatchEndBanner.EndsLaunchWait("VICTORY"));
+    }
+
     [Theory]
     [InlineData("Defeat or bribe this camp to gain Mercenaries")]
     [InlineData("")]

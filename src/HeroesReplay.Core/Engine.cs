@@ -222,16 +222,28 @@ public class Engine : IEngine
                 return true;
             }
 
-            if (loadedReplay.ReplayId is int playedId)
+            if (session == ReplaySessionKind.AwardFinished)
             {
-                frontAttempts.Remove(playedId);
+                replayProvider.Requeue(loadedReplay);
+                logger.LogInformation(
+                    "Replay {ReplayId} was still on the award screen, so it stays queued. The next replay continues.",
+                    loadedReplay.ReplayId
+                );
+            }
+            else
+            {
+                if (loadedReplay.ReplayId is int playedId)
+                {
+                    frontAttempts.Remove(playedId);
+                }
+
+                WorkState completed = WorkState.VerifiedCompleted;
+                if (WorkEnvelope.CountsAsPlayed(completed))
+                {
+                    replayProvider.MarkSpectated(loadedReplay);
+                }
             }
 
-            WorkState completed = WorkState.VerifiedCompleted;
-            if (WorkEnvelope.CountsAsPlayed(completed))
-            {
-                replayProvider.MarkSpectated(loadedReplay);
-            }
             await StorePreparedNextAsync(nextLoad).ConfigureAwait(false);
             if (await releaseUpdate.TryStageAsync(consoleTokenProvider.Token).ConfigureAwait(false))
             {

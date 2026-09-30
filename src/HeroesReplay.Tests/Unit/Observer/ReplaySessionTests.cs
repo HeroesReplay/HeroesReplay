@@ -53,6 +53,16 @@ public class ReplaySessionTests
     }
 
     [Fact]
+    public void FromHold_AwardScreenMovesOnWithoutConsumingTheReplay()
+    {
+        MatchOutcome outcome = MatchCompletion.FromHold(ClientHoldReason.AwardScreen);
+
+        Assert.Equal(MatchOutcome.AwardScreen, outcome);
+        Assert.Equal(ReplaySessionKind.AwardFinished, ReplaySession.Classify(outcome));
+        Assert.False(ReplaySession.StaysQueued(ReplaySessionKind.AwardFinished));
+    }
+
+    [Fact]
     public void FromHold_ClientNotReadyStaysQueuedWithoutADialogHold()
     {
         MatchOutcome outcome = MatchCompletion.FromHold(ClientHoldReason.ClientNotReady);

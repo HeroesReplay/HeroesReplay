@@ -47,6 +47,7 @@ public class ClientHoldTests
         Assert.True(ClientHold.LeavesClientOpen(ClientHoldReason.BuildNotInstalled));
         Assert.True(ClientHold.LeavesClientOpen(ClientHoldReason.ClientNotReady));
         Assert.False(ClientHold.LeavesClientOpen(ClientHoldReason.None));
+        Assert.False(ClientHold.LeavesClientOpen(ClientHoldReason.AwardScreen));
     }
 
     [Fact]
