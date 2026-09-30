@@ -1420,20 +1420,13 @@ public class GameController : IGameController
         }
 
         Rectangle dimensions = capture.GetClientSize(handle);
-        int width = dimensions.Width;
-        int height = dimensions.Height;
-        // 1920x1080: the MM:SS digits sit at about x=910, y=14, 100x48.
-        // y=22 and height 32 clipped the bottom of the digits, so OCR never returned a time.
-        int cropWidth = Math.Clamp(width * 100 / 1920, 80, 110);
-        int cropHeight = Math.Clamp(height * 48 / 1080, 36, 56);
-        int top = Math.Clamp(height * 14 / 1080, 8, 24);
-        int start = Math.Max(0, (width - cropWidth) / 2);
-        if (start + cropWidth > width)
+        Rectangle crop = HudTimerCrop.ForClient(dimensions.Width, dimensions.Height);
+        if (crop.Width <= 0 || crop.Height <= 0)
         {
-            cropWidth = width - start;
+            return null;
         }
 
-        return capture.Capture(handle, new Rectangle(start, top, cropWidth, cropHeight));
+        return capture.Capture(handle, crop);
     }
 
     private static async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
