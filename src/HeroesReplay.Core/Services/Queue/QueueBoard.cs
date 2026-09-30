@@ -30,11 +30,13 @@ public static class QueueBoard
         html.Append(
             "html,body{margin:0;background:#0b0e14;color:#e8eef7;font-family:Segoe UI,sans-serif;}"
         );
-        html.Append("h1{font-size:64px;margin:40px 56px 12px;}");
-        html.Append("p.lead{font-size:28px;margin:0 56px 28px;color:#9aabc0;}");
-        html.Append("ol{font-size:36px;line-height:1.45;margin:0 72px 48px;}");
+        html.Append("h1{font-size:64px;margin:28px 56px 8px;}");
+        html.Append("p.lead{font-size:28px;margin:0 56px 16px;color:#9aabc0;}");
+        html.Append("p.help{font-size:26px;line-height:1.35;margin:0 56px 12px;color:#c5d2e0;}");
+        html.Append("span.label{color:#f2d38a;}");
+        html.Append("ol{font-size:32px;line-height:1.4;margin:8px 72px 24px;}");
         html.Append(
-            ".who{color:#f2d38a;} .map{color:#e8eef7;} .meta{color:#9aabc0;font-size:28px;}"
+            ".who{color:#f2d38a;} .map{color:#e8eef7;} .meta{color:#9aabc0;font-size:26px;}"
         );
         html.Append("</style></head><body><h1>Replay queue</h1>");
         int count = items?.Count ?? 0;
@@ -42,11 +44,10 @@ public static class QueueBoard
             .Append(count)
             .Append(count == 1 ? " request" : " requests")
             .Append(" waiting</p>");
+        AppendHowTo(html);
         if (count == 0)
         {
-            html.Append(
-                "<p class=\"lead\">The queue is empty. Redeem a replay with channel points.</p>"
-            );
+            html.Append("<p class=\"lead\">The queue is empty.</p>");
         }
         else
         {
@@ -89,6 +90,19 @@ public static class QueueBoard
         string temp = path + ".tmp";
         File.WriteAllText(temp, html.ToString());
         File.Move(temp, path, overwrite: true);
+    }
+
+    private static void AppendHowTo(StringBuilder html)
+    {
+        html.Append(
+            "<p class=\"help\"><span class=\"label\">Redeem a replay.</span> Use the channel-point reward and enter the replay number.</p>"
+        );
+        html.Append(
+            "<p class=\"help\"><span class=\"label\">Follow one hero.</span> Enter replayId,player, for example 12345678,3. That follows the third hero. Slots are 1 to 9, and 0 is the tenth hero. Send it before that match starts.</p>"
+        );
+        html.Append(
+            "<p class=\"help\"><span class=\"label\">Coaching view.</span> The camera stays on that hero while they are alive, through fights, camps, and rotations, and uses the normal view while they are dead. Use it to review a player, coach, or show one person's game.</p>"
+        );
     }
 
     private static string Encode(string value)
