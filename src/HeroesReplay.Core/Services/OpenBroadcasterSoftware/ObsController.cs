@@ -491,25 +491,11 @@ public class ObsController : IObsController
 
     private void ApplyReportBrowserCss(JObject browserSettings)
     {
-        string extra =
-            (settings.OBS.ReportBrowserCss ?? string.Empty)
-            + " a[href*='/Match/Single/'],a[href*='replayID=']{font-size:0!important;color:transparent!important;pointer-events:none!important;}"
-            + " header,.header,.navbar,.top-nav,.site-header,#site-header,.page-header,[class*='main-menu'],[class*='site-nav']{display:none!important;}"
-            + " .match-page{display:block!important;}";
-        if (string.IsNullOrWhiteSpace(extra))
-        {
-            return;
-        }
-
-        string current = browserSettings["css"]?.ToString() ?? string.Empty;
-        if (current.Contains(extra, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        browserSettings["css"] = string.IsNullOrWhiteSpace(current)
-            ? extra
-            : current + "\n" + extra;
+        browserSettings["css"] = MatchReportBrowserCss.Apply(
+            browserSettings["css"]?.ToString(),
+            settings.OBS.ReportBrowserCss,
+            settings.OBS.HideReportHeader
+        );
     }
 
     private bool ShowRankImage()

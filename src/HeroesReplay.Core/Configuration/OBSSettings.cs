@@ -32,6 +32,11 @@ public class OBSSettings
     public string WaitingSceneName { get; set; }
     public IEnumerable<ReportScene> ReportScenes { get; set; }
     public string ReportBrowserCss { get; set; }
+
+    /// <summary>
+    /// When true, the match-report browser source hides the Heroes Profile site menu and the event banner above the match.
+    /// </summary>
+    public bool HideReportHeader { get; set; } = true;
     public IEnumerable<string> RankImagesSourceNames { get; set; }
 
     public string InfoSourceName { get; set; }
