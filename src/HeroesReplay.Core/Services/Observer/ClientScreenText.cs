@@ -19,6 +19,20 @@ public static class ClientScreenText
             && text.Contains(GameDataDownload, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// One wait reads the main window and can read another window before it decides.
+    /// The download dialog counts when either sample shows it.
+    /// </summary>
+    public static bool IsGameDataDownload(string primary, string later)
+    {
+        return IsGameDataDownload(primary) || IsGameDataDownload(later);
+    }
+
+    public static bool IsGameDataStartup(string primary, string later)
+    {
+        return IsGameDataStartup(primary) || IsGameDataStartup(later);
+    }
+
     public static bool IsLoginForm(string text)
     {
         if (string.IsNullOrWhiteSpace(text))

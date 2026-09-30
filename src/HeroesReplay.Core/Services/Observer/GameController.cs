@@ -394,6 +394,38 @@ public class GameController : IGameController
         DateTimeOffset started = DateTimeOffset.UtcNow;
         DateTimeOffset deadline = started.Add(ClientRelaunch.ColdBootLimit);
         bool clientAlreadyRunning = boot.Auth == ReplayLaunchAuth.Wait;
+
+        async Task<bool> HoldForGameDataDownloadAsync(string primary, string later)
+        {
+            if (!ClientScreenText.IsGameDataDownload(primary, later))
+            {
+                return false;
+            }
+
+            sawGameDataDownload = true;
+            DateTimeOffset extended = ClientInterfacePlan.ExtendForGameDataDownload(
+                started,
+                deadline,
+                DateTimeOffset.UtcNow
+            );
+            if (extended > deadline)
+            {
+                deadline = extended;
+            }
+
+            if (!loggedDownload)
+            {
+                loggedDownload = true;
+                logger.LogInformation(
+                    "Heroes is downloading game data for this client. AhliObs is applied again after that download. Battle.net was not clicked."
+                );
+            }
+
+            await Task.Delay(settings.OCR.CheckSleepDuration, tokenProvider.Token)
+                .ConfigureAwait(false);
+            return true;
+        }
+
         while (DateTimeOffset.UtcNow < deadline)
         {
             WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
@@ -419,30 +451,8 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, hold);
             }
 
-            bool downloadVisible = ClientScreenText.IsGameDataDownload(text);
-            if (downloadVisible)
+            if (await HoldForGameDataDownloadAsync(text, null).ConfigureAwait(false))
             {
-                sawGameDataDownload = true;
-                DateTimeOffset extended = ClientInterfacePlan.ExtendForGameDataDownload(
-                    started,
-                    deadline,
-                    DateTimeOffset.UtcNow
-                );
-                if (extended > deadline)
-                {
-                    deadline = extended;
-                }
-
-                if (!loggedDownload)
-                {
-                    loggedDownload = true;
-                    logger.LogInformation(
-                        "Heroes is downloading game data for this client. AhliObs is applied again after that download. Battle.net was not clicked."
-                    );
-                }
-
-                await Task.Delay(settings.OCR.CheckSleepDuration, tokenProvider.Token)
-                    .ConfigureAwait(false);
                 continue;
             }
 
@@ -475,15 +485,34 @@ public class GameController : IGameController
                 continue;
             }
 
-            bool home =
-                !openedFromHome && !loading && !timer && await IsHomeScreen().ConfigureAwait(false);
-            bool startup = ClientScreenText.IsGameDataStartup(text);
+            string laterText = null;
+            bool home = false;
+            if (!openedFromHome && !loading && !timer && IsGameProcessRunning())
+            {
+                WordScan homeScan = await ScanPrimaryAsync(settings.OCR.HomeScreenText)
+                    .ConfigureAwait(false);
+                laterText = homeScan.Text;
+                home = homeScan.Found;
+            }
+
+            if (await HoldForGameDataDownloadAsync(text, laterText).ConfigureAwait(false))
+            {
+                continue;
+            }
+
+            bool laterLoading =
+                !string.IsNullOrWhiteSpace(laterText)
+                && searchTerms.Any(word =>
+                    !string.IsNullOrWhiteSpace(word)
+                    && laterText.Contains(word, StringComparison.OrdinalIgnoreCase)
+                );
+            bool startup = ClientScreenText.IsGameDataStartup(text, laterText);
             if (
                 ClientInterfacePlan.RestartAfterGameData(
                     sawGameDataDownload,
-                    downloadVisible: false,
+                    downloadVisible: ClientScreenText.IsGameDataDownload(text, laterText),
                     startup,
-                    loading || timer || home,
+                    loading || laterLoading || timer || home,
                     dataRestarts
                 )
             )
@@ -507,7 +536,7 @@ public class GameController : IGameController
                 OpenReplayFromHome(replayPath);
             }
 
-            if (loading)
+            if (loading || laterLoading)
             {
                 ShowGameScene("loading screen");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
@@ -665,6 +694,8 @@ public class GameController : IGameController
     }
 
     private readonly record struct WindowRead(string Text, int Width, int Height);
+
+    private readonly record struct WordScan(bool Found, string Text);
 
     private async Task<string> ReadWindowTextAsync()
     {
@@ -1007,9 +1038,16 @@ public class GameController : IGameController
         return null;
     }
 
-    private async Task<bool> IsHomeScreen() =>
-        IsGameProcessRunning()
-        && await ContainsAnyAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
+    private async Task<bool> IsHomeScreen()
+    {
+        if (!IsGameProcessRunning())
+        {
+            return false;
+        }
+
+        WordScan scan = await ScanPrimaryAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
+        return scan.Found;
+    }
 
     private bool IsGameProcessRunning()
     {
@@ -1040,53 +1078,52 @@ public class GameController : IGameController
     private async Task<bool> IsReplay() =>
         IsLaunched() && (await TryGetTimerAsync().ConfigureAwait(false)) != null;
 
-    private async Task<bool> ContainsAnyAsync(IEnumerable<string> words)
+    private async Task<WordScan> ScanPrimaryAsync(IEnumerable<string> words)
     {
         if (!TryGetGameHandle(out IntPtr handle))
         {
-            return false;
+            return new WordScan(false, string.Empty);
         }
 
-        using (Bitmap frame = capture.Capture(handle))
+        using Bitmap frame = capture.Capture(handle);
+        if (frame == null)
         {
-            if (frame == null)
+            return new WordScan(false, string.Empty);
+        }
+
+        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
+            .ConfigureAwait(false);
+        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
+        string recognized = result?.Text ?? string.Empty;
+        logger.LogInformation(
+            "Window OCR ({Width}x{Height}): {Text}",
+            frame.Width,
+            frame.Height,
+            string.IsNullOrWhiteSpace(recognized) ? "(empty)" : recognized
+        );
+
+        if (words != null)
+        {
+            foreach (string word in words)
             {
-                return false;
-            }
-
-            using (
-                SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
-                    .ConfigureAwait(false)
-            )
-            {
-                OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-                logger.LogInformation(
-                    "Window OCR ({Width}x{Height}): {Text}",
-                    frame.Width,
-                    frame.Height,
-                    string.IsNullOrWhiteSpace(result.Text) ? "(empty)" : result.Text
-                );
-
-                foreach (var word in words)
+                if (
+                    !string.IsNullOrWhiteSpace(word)
+                    && recognized.Contains(word, StringComparison.OrdinalIgnoreCase)
+                )
                 {
-                    if (result.Text.Contains(word, StringComparison.OrdinalIgnoreCase))
-                    {
-                        logger.LogInformation("{Word} has been found.", word);
-                        return true;
-                    }
-                }
-
-                if (settings.Capture.SaveCaptureFailureCondition)
-                {
-                    Directory.CreateDirectory(settings.CapturesPath);
-                    frame.Save(
-                        Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp")
-                    );
+                    logger.LogInformation("{Word} has been found.", word);
+                    return new WordScan(true, recognized);
                 }
             }
         }
 
-        return false;
+        if (settings.Capture.SaveCaptureFailureCondition)
+        {
+            Directory.CreateDirectory(settings.CapturesPath);
+            frame.Save(Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
+        }
+
+        return new WordScan(false, recognized);
     }
 
     public void SendFocus(int index)

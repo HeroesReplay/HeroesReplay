@@ -32,6 +32,43 @@ public class ClientScreenTextTests
     }
 
     [Fact]
+    public void IsGameDataDownload_LaterSampleStillRestartsAfterTheDialogClears()
+    {
+        const string dialog =
+            "DOWNLOADING All data files must be fully downloaded to load this version of the game. CANCEL";
+
+        Assert.True(ClientScreenText.IsGameDataDownload(string.Empty, dialog));
+        Assert.True(ClientScreenText.IsGameDataDownload("Preparing game data", dialog));
+        Assert.False(ClientScreenText.IsGameDataDownload(string.Empty, "Preparing game data"));
+        Assert.False(ClientScreenText.IsGameDataDownload(null, null));
+        Assert.True(ClientScreenText.IsGameDataStartup(string.Empty, "Preparing game data"));
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: ClientScreenText.IsGameDataDownload(string.Empty, dialog),
+                downloadVisible: ClientScreenText.IsGameDataDownload(string.Empty, dialog),
+                gameDataStartup: ClientScreenText.IsGameDataStartup(string.Empty, dialog),
+                replayVisible: false,
+                restarts: 0
+            )
+        );
+        Assert.True(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: ClientScreenText.IsGameDataDownload(string.Empty, dialog),
+                downloadVisible: ClientScreenText.IsGameDataDownload(
+                    string.Empty,
+                    "Preparing game data"
+                ),
+                gameDataStartup: ClientScreenText.IsGameDataStartup(
+                    string.Empty,
+                    "Preparing game data"
+                ),
+                replayVisible: false,
+                restarts: 0
+            )
+        );
+    }
+
+    [Fact]
     public void IsLoginForm_MatchesTheBattleNetEmailForm()
     {
         const string text = "Email or Phone Password Keep me logged in Log in Battle.net Account";
