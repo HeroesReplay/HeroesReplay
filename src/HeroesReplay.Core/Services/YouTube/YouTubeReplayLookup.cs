@@ -13,6 +13,7 @@ public sealed class YouTubeReplayLookup : IYouTubeReplayLookup
     private readonly ILogger<YouTubeReplayLookup> logger;
     private readonly AppSettings settings;
     private readonly IYouTubeVideoSearch search;
+    private DateTimeOffset searchPausedUntil;
 
     public YouTubeReplayLookup(
         ILogger<YouTubeReplayLookup> logger,
@@ -48,6 +49,11 @@ public sealed class YouTubeReplayLookup : IYouTubeReplayLookup
             return true;
         }
 
+        if (DateTimeOffset.UtcNow < searchPausedUntil)
+        {
+            return false;
+        }
+
         try
         {
             foreach (
@@ -74,6 +80,16 @@ public sealed class YouTubeReplayLookup : IYouTubeReplayLookup
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
+            if (YouTubeSearchQuota.IsExhausted(e))
+            {
+                searchPausedUntil = YouTubeSearchQuota.ResumeAt(DateTimeOffset.UtcNow);
+                logger.LogWarning(
+                    "YouTube search quota is exhausted. Duplicate checks use the local catalog until {ResumeAt:o}. Recording stays on.",
+                    searchPausedUntil
+                );
+                return false;
+            }
+
             logger.LogWarning(
                 e,
                 "Could not search YouTube for replay {ReplayId}. Recording stays on.",

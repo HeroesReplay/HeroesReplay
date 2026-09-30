@@ -23,7 +23,6 @@ public class ReplayRetryPlanTests
     [InlineData(MatchOutcome.LoadTimedOut)]
     [InlineData(MatchOutcome.ClientCrashed)]
     [InlineData(MatchOutcome.VersionMismatch)]
-    [InlineData(MatchOutcome.RegionUnavailable)]
     public void Decide_LeavesTheFrontOnTheFirstMiss(MatchOutcome outcome)
     {
         Assert.Equal(1, ReplayRetryPlan.MaxFrontAttempts);
@@ -40,7 +39,7 @@ public class ReplayRetryPlanTests
     [InlineData(MatchOutcome.None, false)]
     [InlineData(MatchOutcome.VerifiedCompleted, false)]
     [InlineData(MatchOutcome.VersionMismatch, true)]
-    [InlineData(MatchOutcome.RegionUnavailable, true)]
+    [InlineData(MatchOutcome.RegionUnavailable, false)]
     [InlineData(MatchOutcome.ClientHung, true)]
     [InlineData(MatchOutcome.ClientCrashed, true)]
     public void ClosesClientAfterDefer_LeavesADownloadAndAMissingBuildAlone(
@@ -63,12 +62,25 @@ public class ReplayRetryPlanTests
     [Theory]
     [InlineData(MatchOutcome.LoadTimedOut)]
     [InlineData(MatchOutcome.ClientHung)]
-    [InlineData(MatchOutcome.RegionUnavailable)]
     public void Decide_DefersAfterTheFrontBudgetSoTheNextReplayCanRun(MatchOutcome outcome)
     {
         Assert.Equal(
             ReplayRetryAction.Defer,
             ReplayRetryPlan.Decide(outcome, ReplayRetryPlan.MaxFrontAttempts)
         );
+    }
+
+    [Fact]
+    public void Decide_KeepsARegionDialogOnTheSameReplay()
+    {
+        Assert.Equal(
+            ReplayRetryAction.Front,
+            ReplayRetryPlan.Decide(MatchOutcome.RegionUnavailable, attempt: 1)
+        );
+        Assert.Equal(
+            ReplayRetryAction.Front,
+            ReplayRetryPlan.Decide(MatchOutcome.RegionUnavailable, attempt: 4)
+        );
+        Assert.False(ReplayRetryPlan.ClosesClientAfterDefer(MatchOutcome.RegionUnavailable));
     }
 }

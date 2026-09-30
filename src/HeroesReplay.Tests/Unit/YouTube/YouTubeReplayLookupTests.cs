@@ -86,6 +86,70 @@ public class YouTubeReplayLookupTests
         );
     }
 
+    [Fact]
+    public async Task AlreadyUploaded_PausesSearchAfterTheQuotaResponse()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "hr-yt-quota-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        var search = new QuotaSearch();
+        var lookup = new YouTubeReplayLookup(
+            NullLogger<YouTubeReplayLookup>.Instance,
+            new AppSettings
+            {
+                Location = new LocationSettings { DataDirectory = directory },
+                YouTube = new YouTubeSettings(),
+            },
+            search
+        );
+        var replay = new LoadedReplay { ReplayId = 65542021 };
+
+        try
+        {
+            Assert.False(await lookup.AlreadyUploadedAsync(replay, CancellationToken.None));
+            Assert.False(await lookup.AlreadyUploadedAsync(replay, CancellationToken.None));
+            Assert.Equal(1, search.Calls);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SearchQuota_ResumesOnTheNextPacificDay()
+    {
+        DateTimeOffset now = new DateTimeOffset(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
+        Assert.True(
+            YouTubeSearchQuota.IsExhausted(new InvalidOperationException("Quota exceeded"))
+        );
+        Assert.False(
+            YouTubeSearchQuota.IsExhausted(new InvalidOperationException("socket closed"))
+        );
+        Assert.Equal(
+            PublicationSchedule.QuotaDayStart(now).AddDays(1),
+            YouTubeSearchQuota.ResumeAt(now)
+        );
+    }
+
+    private sealed class QuotaSearch : IYouTubeVideoSearch
+    {
+        public int Calls { get; private set; }
+
+        public Task<IReadOnlyList<YouTubeVideoText>> SearchAsync(
+            int replayId,
+            CancellationToken cancellationToken
+        )
+        {
+            Calls++;
+            throw new InvalidOperationException(
+                "HttpStatusCode is TooManyRequests. Quota exceeded for quota metric 'Search Queries'."
+            );
+        }
+    }
+
     private sealed class CountingSearch : IYouTubeVideoSearch
     {
         private readonly YouTubeVideoText video;

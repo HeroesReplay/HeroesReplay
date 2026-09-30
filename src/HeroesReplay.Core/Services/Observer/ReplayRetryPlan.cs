@@ -13,6 +13,7 @@ public enum ReplayRetryAction
 /// A replay that never becomes a verified match must not sit at the front.
 /// The first miss leaves the front so the next replay starts, and this one is
 /// eligible again only after <see cref="DeferFor"/>.
+/// A region-unavailable dialog is the exception: that replay stays at the front.
 /// </summary>
 public static class ReplayRetryPlan
 {
@@ -32,6 +33,12 @@ public static class ReplayRetryPlan
             return ReplayRetryAction.Defer;
         }
 
+        // The region dialog is the same client. Keep this replay and leave Heroes open.
+        if (outcome == MatchOutcome.RegionUnavailable)
+        {
+            return ReplayRetryAction.Front;
+        }
+
         if (attempt >= MaxFrontAttempts)
         {
             return ReplayRetryAction.Defer;
@@ -42,10 +49,16 @@ public static class ReplayRetryPlan
 
     /// <summary>
     /// A missing build did not start a client. A launch that is still downloading
-    /// is that client doing its job. Neither one is closed. A version-mismatch dialog is.
+    /// is that client doing its job. A region-unavailable dialog stays up so the
+    /// same client can be tried again. A version-mismatch dialog is closed.
     /// </summary>
     public static bool ClosesClientAfterDefer(MatchOutcome outcome)
     {
+        if (outcome == MatchOutcome.RegionUnavailable)
+        {
+            return false;
+        }
+
         return outcome != MatchOutcome.BuildNotInstalled
             && outcome != MatchOutcome.LoadTimedOut
             && outcome != MatchOutcome.None
