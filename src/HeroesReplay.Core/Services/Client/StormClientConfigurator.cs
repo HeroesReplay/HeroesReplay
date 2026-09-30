@@ -70,6 +70,24 @@ public sealed class StormClientConfigurator
         );
     }
 
+    public ReplayInterfaceValues ReadReplayInterfaces()
+    {
+        string gameFolder = AppSettings.UserGameFolderPath;
+        string root = ReadReplayInterface(Path.Combine(gameFolder, "Variables.txt"));
+        string account = null;
+        foreach (string accountVariables in EnumerateAccountVariables(gameFolder))
+        {
+            string value = ReadReplayInterface(accountVariables);
+            if (!string.IsNullOrEmpty(value))
+            {
+                account = value;
+                break;
+            }
+        }
+
+        return new ReplayInterfaceValues(root, account);
+    }
+
     public ClientStatusResult GetStatus()
     {
         ClientSettings client =
@@ -165,6 +183,18 @@ public sealed class StormClientConfigurator
         return string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase);
     }
 
+    private static string ReadReplayInterface(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        Dictionary<string, string> values = StormVariablesEditor.Parse(File.ReadAllText(path));
+        values.TryGetValue("replayinterface", out string value);
+        return value;
+    }
+
     private static string[] EnumerateAccountVariables(string gameFolder)
     {
         string accounts = Path.Combine(gameFolder, "Accounts");
@@ -224,6 +254,8 @@ public sealed class StormClientConfigurator
         }
     }
 }
+
+public readonly record struct ReplayInterfaceValues(string Root, string Account);
 
 public sealed record ClientConfigureResult(
     string VariablesPath,

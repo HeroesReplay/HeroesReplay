@@ -415,6 +415,9 @@ public class GameController : IGameController
         bool clientAlreadyRunning =
             boot.Auth == ReplayLaunchAuth.Wait || boot.Auth == ReplayLaunchAuth.OpenInstalledBuild;
         bool openedOnMatchingExe = boot.Auth == ReplayLaunchAuth.OpenMatchingBuild;
+        bool checkedLaunchFile = false;
+        int defaultHudCorrections = 0;
+        string expectedInterface = settings.Client?.ReplayInterface ?? "AhliObs 0.75";
 
         async Task<bool> HoldForGameDataDownloadAsync(string primary, string later)
         {
@@ -558,6 +561,66 @@ public class GameController : IGameController
             RunningClientBuild runningBuild = ReadRunningBuild(replayVersion);
             bool differentBuild = runningBuild == RunningClientBuild.Differs;
             bool matchingBuild = runningBuild == RunningClientBuild.Matches;
+            if (
+                !checkedLaunchFile
+                && !IsGameProcessRunning()
+                && openedThroughSwitcher
+                && LaunchFileLoadsDefaultHud(launchPatch, expectedInterface)
+            )
+            {
+                try
+                {
+                    clientConfigurator.Configure();
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    logger.LogWarning(e, "Could not write AhliObs while Heroes was stopped.");
+                }
+            }
+
+            if (matchingBuild && !checkedLaunchFile)
+            {
+                checkedLaunchFile = true;
+                ReplayInterfaceValues launchFile = clientConfigurator.ReadReplayInterfaces();
+                string actualInterface = ClientInterfacePlan.ReplayInterfaceForLaunch(
+                    launchPatch,
+                    launchFile.Root,
+                    launchFile.Account
+                );
+                if (ClientInterfacePlan.LoadsDefaultHud(expectedInterface, actualInterface))
+                {
+                    if (defaultHudCorrections >= 1)
+                    {
+                        logger.LogWarning(
+                            "The client read replayinterface={Actual} and the HUD stays the default. The replay stops. Battle.net was not clicked.",
+                            actualInterface ?? "(missing)"
+                        );
+                        return new ColdBoot(
+                            RetryDisconnect: false,
+                            ClientHoldReason.ClientNotReady
+                        );
+                    }
+
+                    defaultHudCorrections++;
+                    checkedLaunchFile = false;
+                    logger.LogWarning(
+                        "This client reads replayinterface={Actual}. That loads the default HUD. Closing the client and writing {Expected}.",
+                        actualInterface ?? "(missing)",
+                        expectedInterface
+                    );
+                    await RestartForObserverInterfaceAsync(replayPath).ConfigureAwait(false);
+                    interfaceRestarted = true;
+                    openedFromHome = false;
+                    openedOnMatchingExe = false;
+                    sawGameDataStartup = false;
+                    loggedPreparing = false;
+                    blankTiming = false;
+                    clientAlreadyRunning = false;
+                    started = DateTimeOffset.UtcNow;
+                    deadline = ClientRelaunch.DeadlineAfterInterfaceRestart(started);
+                    continue;
+                }
+            }
             if (ClientRelaunch.MatchingOpenLostTheBuild(openedOnMatchingExe, differentBuild))
             {
                 logger.LogInformation(
@@ -811,6 +874,17 @@ public class GameController : IGameController
                 ReadRunningBuild(replayVersion) != RunningClientBuild.Differs
             )
         );
+    }
+
+    private bool LaunchFileLoadsDefaultHud(ReplayClientPatch patch, string expected)
+    {
+        ReplayInterfaceValues values = clientConfigurator.ReadReplayInterfaces();
+        string actual = ClientInterfacePlan.ReplayInterfaceForLaunch(
+            patch,
+            values.Root,
+            values.Account
+        );
+        return ClientInterfacePlan.LoadsDefaultHud(expected, actual);
     }
 
     private async Task RestartForObserverInterfaceAsync(string replayPath)

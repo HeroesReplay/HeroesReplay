@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core.Services.Observer;
@@ -21,6 +22,37 @@ public static class ClientInterfacePlan
     public const int MaxDataRestarts = 1;
     public static readonly TimeSpan GameDataDownloadExtension = TimeSpan.FromMinutes(3);
     public static readonly TimeSpan GameDataDownloadCap = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// A previous-patch client does not log in, so it reads the root Variables.txt.
+    /// A signed-in current-patch client reads the account file when that file exists.
+    /// </summary>
+    public static string ReplayInterfaceForLaunch(
+        ReplayClientPatch patch,
+        string rootReplayInterface,
+        string accountReplayInterface
+    )
+    {
+        if (patch == ReplayClientPatch.Previous)
+        {
+            return rootReplayInterface;
+        }
+
+        if (!string.IsNullOrEmpty(accountReplayInterface))
+        {
+            return accountReplayInterface;
+        }
+
+        return rootReplayInterface;
+    }
+
+    /// <summary>
+    /// The dropdown name is "AhliObs 0.75". A .StormInterface suffix loads the default HUD.
+    /// </summary>
+    public static bool LoadsDefaultHud(string expectedDropdownName, string valueTheClientReads)
+    {
+        return !StormVariablesEditor.InterfaceNameEquals(expectedDropdownName, valueTheClientReads);
+    }
 
     public static ClientPresetAction Preset(
         bool presetMatches,

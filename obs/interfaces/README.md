@@ -16,7 +16,7 @@ HotS stores the **live** observer/replay UI on the Battle.net **account** file:
 
 `Documents\Heroes of the Storm\Accounts\<id>\Variables.txt`
 
-The in-game dropdown name is **AhliObs 0.75** (no extension). `client configure` writes that. The game may persist `AhliObs 0.75.StormInterface`; both are treated as a match.
+The in-game dropdown name is **AhliObs 0.75** (no extension). `client configure` writes that. A value of `AhliObs 0.75.StormInterface` makes the client look for a double extension and load the default HUD. It is not a match.
 
 ```
 observerinterface=AhliObs 0.75

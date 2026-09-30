@@ -9,6 +9,44 @@ namespace HeroesReplay.Tests.Unit.Observer;
 public class ClientInterfacePlanTests
 {
     [Theory]
+    [InlineData(
+        ReplayClientPatch.Previous,
+        "AhliObs 0.75.StormInterface",
+        "AhliObs 0.75",
+        "AhliObs 0.75.StormInterface"
+    )]
+    [InlineData(
+        ReplayClientPatch.Current,
+        "AhliObs 0.75.StormInterface",
+        "AhliObs 0.75",
+        "AhliObs 0.75"
+    )]
+    [InlineData(ReplayClientPatch.Current, "AhliObs 0.75", null, "AhliObs 0.75")]
+    public void ReplayInterfaceForLaunch_PreviousPatchReadsTheRootFile(
+        ReplayClientPatch patch,
+        string root,
+        string account,
+        string expected
+    )
+    {
+        Assert.Equal(expected, ClientInterfacePlan.ReplayInterfaceForLaunch(patch, root, account));
+    }
+
+    [Theory]
+    [InlineData("AhliObs 0.75", "AhliObs 0.75.StormInterface", true)]
+    [InlineData("AhliObs 0.75", "", true)]
+    [InlineData("AhliObs 0.75", null, true)]
+    [InlineData("AhliObs 0.75", "AhliObs 0.75", false)]
+    public void LoadsDefaultHud_RejectsTheStormInterfaceSuffix(
+        string expected,
+        string actual,
+        bool loadsDefault
+    )
+    {
+        Assert.Equal(loadsDefault, ClientInterfacePlan.LoadsDefaultHud(expected, actual));
+    }
+
+    [Theory]
     [InlineData(true, false, true, ClientPresetAction.Keep)]
     [InlineData(true, false, false, ClientPresetAction.Write)]
     [InlineData(false, false, true, ClientPresetAction.Write)]
