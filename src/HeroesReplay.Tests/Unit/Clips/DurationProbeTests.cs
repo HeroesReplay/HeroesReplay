@@ -1,4 +1,5 @@
 using HeroesReplay.Core.Services.Clips;
+using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Clips;
@@ -36,6 +37,21 @@ public class DurationProbeTests
     public void FfprobeDidNotStart_IsNotRetried()
     {
         Assert.False(MatchClipExporter.RetryDurationProbe("ffprobe did not start."));
+    }
+
+    [Fact]
+    public void OwnedRecordingDurationLog_NamesTheFileSpectateOwns()
+    {
+        const string owned = @"C:\heroesreplay\Data\Contexts\65581722\match.mp4";
+        const string context = @"C:\heroesreplay\Data\Contexts\65581722";
+        string chosen = RecordingOwnership.SelectFinalizedFile(owned, context);
+
+        string line = MatchClipExporter.OwnedRecordingDurationLog(owned, context, 181.5);
+
+        Assert.Equal(owned, chosen);
+        Assert.Equal("Read duration 181.5s of owned recording " + chosen + ".", line);
+        Assert.Null(MatchClipExporter.OwnedRecordingDurationLog(" ", context, 181.5));
+        Assert.Null(MatchClipExporter.OwnedRecordingDurationLog(owned, context, null));
     }
 
     [Fact]

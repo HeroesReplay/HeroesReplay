@@ -88,6 +88,12 @@ public static class MatchClipExporter
             return;
         }
 
+        string ownedDuration = OwnedRecordingDurationLog(match, contextDirectory, recordingSeconds);
+        if (!string.IsNullOrWhiteSpace(ownedDuration))
+        {
+            logger?.LogInformation("{OwnedDuration}", ownedDuration);
+        }
+
         string clipRoot = Path.Combine(contextDirectory, "clips");
         Directory.CreateDirectory(clipRoot);
         var written = new List<object>();
@@ -276,6 +282,30 @@ public static class MatchClipExporter
     }
 
     public static bool RetryDurationProbe(string error) => !IsMissingTool(error);
+
+    public static string OwnedRecordingDurationLog(
+        string outputPath,
+        string contextDirectory,
+        double? durationSeconds
+    )
+    {
+        string owned = RecordingOwnership.SelectFinalizedFile(outputPath, contextDirectory);
+        if (
+            string.IsNullOrWhiteSpace(owned)
+            || durationSeconds is not double seconds
+            || seconds < 0
+        )
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "Read duration {0:0.0}s of owned recording {1}.",
+            seconds,
+            owned
+        );
+    }
 
     private static bool IsMissingTool(string error) =>
         !string.IsNullOrWhiteSpace(error)
