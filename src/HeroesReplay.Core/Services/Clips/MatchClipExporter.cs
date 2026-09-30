@@ -70,7 +70,7 @@ public static class MatchClipExporter
         for (int attempt = 1; attempt <= 5; attempt++)
         {
             (recordingSeconds, probeError) = ProbeDurationSeconds(match);
-            if (recordingSeconds != null || IsMissingTool(probeError))
+            if (recordingSeconds != null || !RetryDurationProbe(probeError))
             {
                 break;
             }
@@ -275,11 +275,14 @@ public static class MatchClipExporter
         }
     }
 
+    public static bool RetryDurationProbe(string error) => !IsMissingTool(error);
+
     private static bool IsMissingTool(string error) =>
         !string.IsNullOrWhiteSpace(error)
         && (
-            error.Contains("not found", StringComparison.OrdinalIgnoreCase)
+            error.Contains("ffprobe was not found", StringComparison.OrdinalIgnoreCase)
             || error.Contains("cannot find the file", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("ffprobe did not start", StringComparison.OrdinalIgnoreCase)
         );
 
     private static (double? Seconds, string Error) ProbeDurationSeconds(string path)
