@@ -246,7 +246,8 @@
         "capture_mode": "window",
         "capture_cursor": false,
         "limit_framerate": true,
-        "hook_rate": 1
+        "hook_rate": 1,
+        "priority": 0
       },
       "mixers": 0,
       "sync": 0,
