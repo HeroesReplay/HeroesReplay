@@ -39,10 +39,12 @@ public class ReportScenesTests
             if (name == "prediction-report")
             {
                 Assert.EndsWith("prediction-report.html", url, StringComparison.OrdinalIgnoreCase);
+                Assert.Equal("00:00:10", scene.GetProperty("DisplayTime").GetString());
             }
             else if (name == "request-queue")
             {
                 Assert.EndsWith("queue.html", url, StringComparison.OrdinalIgnoreCase);
+                Assert.Equal("00:00:10", scene.GetProperty("DisplayTime").GetString());
             }
             else
             {
