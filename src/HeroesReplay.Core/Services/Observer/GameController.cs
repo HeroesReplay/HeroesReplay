@@ -46,6 +46,8 @@ public class GameController : IGameController
     private bool replayFileOpened;
     private string openedReplayPath;
     private ReplayClientPatch launchPatch = ReplayClientPatch.Current;
+    private int? launcherRecoveryReplayId;
+    private int launcherRecoveryAttempt;
 
     public bool ReplayFileOpened => replayFileOpened;
 
@@ -133,6 +135,25 @@ public class GameController : IGameController
         }
 
         return ClientHoldReason.None;
+    }
+
+    private LauncherRecoveryAction NextLauncherRecovery(ClientHoldReason hold)
+    {
+        if (hold != ClientHoldReason.VersionMismatch)
+        {
+            return LauncherRecoveryAction.None;
+        }
+
+        int? replayId = context.Current?.LoadedReplay?.ReplayId;
+        if (launcherRecoveryReplayId != replayId)
+        {
+            launcherRecoveryReplayId = replayId;
+            launcherRecoveryAttempt = 0;
+        }
+
+        LauncherRecoveryAction action = LauncherRecoveryPlan.Decide(hold, launcherRecoveryAttempt);
+        launcherRecoveryAttempt++;
+        return action;
     }
 
     public async Task<bool> StartAuthenticatedReplayAsync(
@@ -520,13 +541,24 @@ public class GameController : IGameController
             ClientHoldReason hold = ClientHold.Classify(text);
             if (hold != ClientHoldReason.None)
             {
+                LauncherRecoveryAction recovery = NextLauncherRecovery(hold);
                 if (!loggedMismatch)
                 {
                     loggedMismatch = true;
-                    logger.LogWarning(
-                        "Heroes is on the {Hold} dialog. The replay stays queued and this client stays open.",
-                        hold
-                    );
+                    if (recovery == LauncherRecoveryAction.None)
+                    {
+                        logger.LogWarning(
+                            "Heroes is on the {Hold} dialog. The replay stays queued and this client stays open.",
+                            hold
+                        );
+                    }
+                    else
+                    {
+                        logger.LogWarning(
+                            "Heroes is on the version mismatch dialog. Launcher plan {Action}. The replay stays queued. Battle.net was not clicked. Update was not clicked.",
+                            recovery
+                        );
+                    }
                 }
 
                 return new ColdBoot(RetryDisconnect: false, hold);

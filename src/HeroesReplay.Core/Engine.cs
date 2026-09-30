@@ -199,6 +199,40 @@ public class Engine : IEngine
             if (ReplaySession.StaysQueued(session))
             {
                 int attempt = NextFrontAttempt(loadedReplay);
+                if (gameManager.LastOutcome == MatchOutcome.VersionMismatch)
+                {
+                    LauncherRecoveryAction recovery = LauncherRecoveryPlan.Decide(
+                        ClientHoldReason.VersionMismatch,
+                        attempt - 1
+                    );
+                    if (recovery == LauncherRecoveryAction.RestartLauncher)
+                    {
+                        replayProvider.Requeue(loadedReplay);
+                        logger.LogWarning(
+                            "Replay {ReplayId} is on the version mismatch dialog. Launcher plan {Action}. The replay stays leased. Battle.net was not clicked. Update was not clicked.",
+                            loadedReplay.ReplayId,
+                            recovery
+                        );
+                        await Task
+                            .Delay(ClientHold.RetryAfter, consoleTokenProvider.Token)
+                            .ConfigureAwait(false);
+                        return true;
+                    }
+
+                    if (loadedReplay.ReplayId is int mismatchId)
+                    {
+                        frontAttempts.Remove(mismatchId);
+                    }
+
+                    replayProvider.Defer(loadedReplay);
+                    logger.LogWarning(
+                        "Replay {ReplayId} is on the version mismatch dialog. Launcher plan {Action}. The replay stays leased and leaves the front. Battle.net was not clicked. Update was not clicked.",
+                        loadedReplay.ReplayId,
+                        recovery
+                    );
+                    return true;
+                }
+
                 ReplayRetryAction action = ReplayRetryPlan.Decide(gameManager.LastOutcome, attempt);
                 if (action == ReplayRetryAction.Defer)
                 {
