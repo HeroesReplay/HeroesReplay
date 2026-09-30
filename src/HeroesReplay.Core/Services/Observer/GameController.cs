@@ -566,21 +566,38 @@ public class GameController : IGameController
                 loggedDownload = false;
             }
 
+            sawGameDataStartup = ClientInterfacePlan.LatchGameDataStartup(
+                sawGameDataStartup,
+                startup,
+                matchingBuild,
+                differentBuild
+            );
+            bool replayVisible = loading || laterLoading || timer || home;
             if (
                 ClientInterfacePlan.RestartAfterGameData(
                     sawGameDataDownload,
                     downloadVisible: ClientScreenText.IsGameDataDownload(text, laterText),
                     startup,
-                    loading || laterLoading || timer || home,
+                    replayVisible,
                     dataRestarts,
-                    matchingBuild
+                    matchingBuild,
+                    sawGameDataStartup
                 )
             )
             {
                 dataRestarts++;
-                logger.LogInformation(
-                    "Heroes finished downloading game data. Restarting the client so AhliObs loads. Battle.net was not clicked."
-                );
+                if (sawGameDataDownload)
+                {
+                    logger.LogInformation(
+                        "Heroes finished downloading game data. Restarting the client so AhliObs loads. Battle.net was not clicked."
+                    );
+                }
+                else
+                {
+                    logger.LogInformation(
+                        "Heroes finished preparing game data. Restarting the client so AhliObs loads. Battle.net was not clicked."
+                    );
+                }
                 await RestartForObserverInterfaceAsync(replayPath).ConfigureAwait(false);
                 interfaceRestarted = true;
                 openedFromHome = false;
@@ -597,32 +614,44 @@ public class GameController : IGameController
                 continue;
             }
 
-            if (home && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, true))
+            bool oweAhliObs = ClientInterfacePlan.OwesObserverRestart(
+                matchingBuild,
+                sawGameDataStartup,
+                startup,
+                dataRestarts
+            );
+            if (
+                home
+                && !oweAhliObs
+                && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, true)
+            )
             {
                 openedFromHome = true;
                 OpenReplayFromHome(replayPath);
             }
 
-            if (ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, loading || laterLoading))
+            if (
+                !oweAhliObs
+                && ClientInterfacePlan.MayAcceptReplayScreen(
+                    !differentBuild,
+                    loading || laterLoading
+                )
+            )
             {
                 ShowGameScene("loading screen");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
-            if (ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, timer))
+            if (!oweAhliObs && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, timer))
             {
                 ShowGameScene("timer visible");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
-            if (startup)
-            {
-                sawGameDataStartup = true;
-            }
-
             bool blank = ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
             if (
-                ReplayClientRoute.OpenMatchingBuildNow(
+                !oweAhliObs
+                && ReplayClientRoute.OpenMatchingBuildNow(
                     ReplayClientRoute.Decide(
                         launchPatch,
                         runningBuild,

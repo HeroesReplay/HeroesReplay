@@ -44,10 +44,12 @@ public static class ClientInterfacePlan
     }
 
     /// <summary>
-    /// The download screen always uses the stock client chrome. Restart once after it
-    /// clears so the next process reads AhliObs with the game data already present.
-    /// HeroesSwitcher first starts the newest exe, which then starts the replay's exe.
-    /// A download dialog on that newer exe is the handoff and must not be restarted.
+    /// The download screen and "Preparing game data" use the stock client chrome.
+    /// Restart once after that clears so the next process reads AhliObs with the game
+    /// data already present. HeroesSwitcher first starts the newest exe, which then
+    /// starts the replay's exe. A download or preparing screen on that newer exe is
+    /// the handoff and must not be restarted. Preparing game data on the replay's own
+    /// exe still restarts once, before the loading screen or match clock is accepted.
     /// </summary>
     public static bool RestartAfterGameData(
         bool sawDownload,
@@ -55,14 +57,61 @@ public static class ClientInterfacePlan
         bool gameDataStartup,
         bool replayVisible,
         int restarts,
-        bool clientBuildMatches = true
+        bool clientBuildMatches = true,
+        bool sawGameDataStartup = false
+    )
+    {
+        if (!clientBuildMatches || downloadVisible || restarts >= MaxDataRestarts)
+        {
+            return false;
+        }
+
+        if (sawDownload && (gameDataStartup || replayVisible))
+        {
+            return true;
+        }
+
+        return sawGameDataStartup && replayVisible && !gameDataStartup;
+    }
+
+    /// <summary>
+    /// Remember "Preparing game data" only while the running exe is the replay's build.
+    /// An unreadable sample keeps that latch. A different build clears it.
+    /// </summary>
+    public static bool LatchGameDataStartup(
+        bool alreadyLatched,
+        bool gameDataStartup,
+        bool clientBuildMatches,
+        bool differentBuild
+    )
+    {
+        if (gameDataStartup && clientBuildMatches)
+        {
+            return true;
+        }
+
+        if (differentBuild)
+        {
+            return false;
+        }
+
+        return alreadyLatched;
+    }
+
+    /// <summary>
+    /// The matching exe has shown game-data startup and still owes its one AhliObs
+    /// restart. Do not treat this frame as the match.
+    /// </summary>
+    public static bool OwesObserverRestart(
+        bool clientBuildMatches,
+        bool sawGameDataStartup,
+        bool gameDataStartup,
+        int restarts
     )
     {
         return clientBuildMatches
-            && sawDownload
-            && !downloadVisible
-            && (gameDataStartup || replayVisible)
-            && restarts < MaxDataRestarts;
+            && restarts < MaxDataRestarts
+            && (sawGameDataStartup || gameDataStartup);
     }
 
     /// <summary>

@@ -124,6 +124,139 @@ public class ClientInterfacePlanTests
     }
 
     [Fact]
+    public void MatchingExe_RestartsOnceAfterPreparingGameDataBeforeTheReplayIsAccepted()
+    {
+        bool latched = ClientInterfacePlan.LatchGameDataStartup(
+            alreadyLatched: false,
+            gameDataStartup: true,
+            clientBuildMatches: false,
+            differentBuild: true
+        );
+        Assert.False(latched);
+
+        latched = ClientInterfacePlan.LatchGameDataStartup(
+            latched,
+            gameDataStartup: true,
+            clientBuildMatches: true,
+            differentBuild: false
+        );
+        Assert.True(latched);
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: false,
+                downloadVisible: false,
+                gameDataStartup: true,
+                replayVisible: false,
+                restarts: 0,
+                clientBuildMatches: true,
+                sawGameDataStartup: latched
+            )
+        );
+        Assert.True(
+            ClientInterfacePlan.OwesObserverRestart(true, latched, gameDataStartup: true, 0)
+        );
+
+        latched = ClientInterfacePlan.LatchGameDataStartup(
+            latched,
+            gameDataStartup: false,
+            clientBuildMatches: false,
+            differentBuild: false
+        );
+        Assert.True(latched);
+
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: false,
+                downloadVisible: false,
+                gameDataStartup: true,
+                replayVisible: true,
+                restarts: 0,
+                clientBuildMatches: true,
+                sawGameDataStartup: latched
+            )
+        );
+        Assert.True(
+            ClientInterfacePlan.OwesObserverRestart(true, latched, gameDataStartup: true, 0)
+        );
+
+        latched = ClientInterfacePlan.LatchGameDataStartup(
+            latched,
+            gameDataStartup: false,
+            clientBuildMatches: true,
+            differentBuild: false
+        );
+        Assert.True(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: false,
+                downloadVisible: false,
+                gameDataStartup: false,
+                replayVisible: true,
+                restarts: 0,
+                clientBuildMatches: true,
+                sawGameDataStartup: latched
+            )
+        );
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: false,
+                downloadVisible: false,
+                gameDataStartup: false,
+                replayVisible: true,
+                restarts: 0,
+                clientBuildMatches: false,
+                sawGameDataStartup: true
+            )
+        );
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: false,
+                downloadVisible: true,
+                gameDataStartup: false,
+                replayVisible: true,
+                restarts: 0,
+                clientBuildMatches: true,
+                sawGameDataStartup: true
+            )
+        );
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: false,
+                downloadVisible: false,
+                gameDataStartup: false,
+                replayVisible: true,
+                restarts: 1,
+                clientBuildMatches: true,
+                sawGameDataStartup: true
+            )
+        );
+        Assert.False(
+            ClientInterfacePlan.OwesObserverRestart(true, true, gameDataStartup: false, 1)
+        );
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: false,
+                downloadVisible: false,
+                gameDataStartup: false,
+                replayVisible: true,
+                restarts: 0,
+                clientBuildMatches: true,
+                sawGameDataStartup: false
+            )
+        );
+        Assert.False(
+            ClientInterfacePlan.OwesObserverRestart(true, false, gameDataStartup: false, 0)
+        );
+        Assert.False(
+            ClientInterfacePlan.LatchGameDataStartup(
+                alreadyLatched: true,
+                gameDataStartup: false,
+                clientBuildMatches: false,
+                differentBuild: true
+            )
+        );
+    }
+
+    [Fact]
     public void ExtendForGameDataDownload_MovesTheDeadlineForward()
     {
         DateTimeOffset started = new(2026, 9, 30, 0, 0, 0, TimeSpan.Zero);
