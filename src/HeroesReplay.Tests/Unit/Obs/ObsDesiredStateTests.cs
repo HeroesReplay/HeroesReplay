@@ -485,7 +485,7 @@ public class ObsDesiredStateTests
         Assert.Equal(0, socket.StartRecordCalls);
         Assert.Equal(ObsOutputFailure.NotOwned, stopped.Failure);
         Assert.Null(stopped.OutputPath);
-        Assert.Equal(0, socket.StopRecordCalls);
+        Assert.Equal(1, socket.StopRecordCalls);
         Assert.Equal(0, socket.StartStreamCalls);
         Assert.Equal(0, harness.Process.LaunchCalls);
     }

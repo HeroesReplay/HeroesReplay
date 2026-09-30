@@ -240,16 +240,47 @@ internal sealed class RecordingSession
             );
         }
 
-        if (socket.IsRecording())
+        if (socket.IsRecording() && !attempt.Called)
         {
-            if (!attempt.Called)
+            if (!attempt.ForeignStopRequested)
             {
-                return ObsRecordingResult.Failed(
-                    ObsOutputFailure.AlreadyRecording,
-                    "OBS is already recording. This process will not adopt it."
+                logger.LogInformation(
+                    "OBS is already recording. Replay {ReplayId} will stop that recording without closing OBS, then start its own. The existing file is not adopted.",
+                    replayId
                 );
+                socket.StopRecord();
+                attempt.ForeignStopRequested = true;
             }
 
+            if (socket.IsRecording())
+            {
+                ObsOutputFailure released = WaitUntil(ProbeForeignStopped, budget.StopTimeout);
+                if (
+                    released == ObsOutputFailure.Disconnected
+                    || DisconnectSeen()
+                    || !socket.IsConnected
+                )
+                {
+                    return ObsRecordingResult.Failed(
+                        ObsOutputFailure.Disconnected,
+                        "OBS websocket disconnected before the existing recording stopped."
+                    );
+                }
+
+                if (socket.IsRecording())
+                {
+                    return ObsRecordingResult.Failed(
+                        ObsOutputFailure.AlreadyRecording,
+                        "OBS kept a recording this process did not start. It was not adopted, and OBS was not closed."
+                    );
+                }
+            }
+
+            ClearFlags();
+        }
+
+        if (socket.IsRecording())
+        {
             return ConfirmStarted(replayId);
         }
 
@@ -456,6 +487,21 @@ internal sealed class RecordingSession
         {
             throw new TimeoutException("OBS websocket did not identify.");
         }
+    }
+
+    private ObsOutputFailure? ProbeForeignStopped()
+    {
+        if (DisconnectSeen() || !socket.IsConnected)
+        {
+            return ObsOutputFailure.Disconnected;
+        }
+
+        if (!socket.IsRecording())
+        {
+            return ObsOutputFailure.None;
+        }
+
+        return null;
     }
 
     private ObsOutputFailure? ProbeStart()
@@ -698,5 +744,7 @@ internal sealed class RecordingSession
     private sealed class Attempt
     {
         public bool Called { get; set; }
+
+        public bool ForeignStopRequested { get; set; }
     }
 }

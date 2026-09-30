@@ -10,6 +10,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Twitch.Rewards;
@@ -458,6 +459,9 @@ public class HeroesProfileProvider : IReplayProvider
 
     private async Task<HeroesProfileReplay> ListOnceAsync()
     {
+        IReadOnlyList<string> installed = InstalledClientCatalog.FileVersions(
+            settings.Location?.GameInstallDirectory
+        );
         for (int pageIndex = 0; pageIndex < 40; pageIndex++)
         {
             provider.Token.ThrowIfCancellationRequested();
@@ -465,7 +469,8 @@ public class HeroesProfileProvider : IReplayProvider
             ReplayListing page = await heroesProfileService
                 .ListPageAsync(currentMin)
                 .ConfigureAwait(false);
-            HeroesProfileReplay found = page
+            ReplayListing launchable = ReplayDownloadPick.Launchable(page, installed);
+            HeroesProfileReplay found = launchable
                 ?.Playable?.Where(replay =>
                     replay != null
                     && replay.Id > currentMin
@@ -480,7 +485,7 @@ public class HeroesProfileProvider : IReplayProvider
                 return found;
             }
 
-            int? next = ReplayListCursor.AfterRejectedPage(currentMin, page);
+            int? next = ReplayListCursor.AfterRejectedPage(currentMin, launchable);
             if (next is not int advanced)
             {
                 return null;

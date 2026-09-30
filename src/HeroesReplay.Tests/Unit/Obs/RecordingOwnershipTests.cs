@@ -28,9 +28,35 @@ public class RecordingOwnershipTests
     }
 
     [Fact]
-    public void Start_AlreadyRecording_IsNotAdoptedOrStopped()
+    public void Start_ForeignRecording_StopsItAndOwnsTheNextFile()
     {
-        var socket = new FakeObsSocket { Recording = true };
+        string foreign = Path.Combine(Path.GetTempPath(), "foreign-session.mkv");
+        var socket = new FakeObsSocket
+        {
+            Recording = true,
+            RecordingAfterStart = true,
+            StopPath = foreign,
+        };
+        RecordingSession session = Session(socket);
+
+        ObsRecordingResult started = session.StartRecording(Record, Noop, 7, "unit");
+
+        Assert.True(started.Succeeded);
+        Assert.True(started.Owned);
+        Assert.Null(started.OutputPath);
+        Assert.NotEqual(foreign, started.OutputPath);
+        Assert.Equal(1, socket.StopCalls);
+        Assert.Equal(1, socket.StartCalls);
+        ObsRecordingResult stopped = session.StopRecording(Noop, 7);
+        Assert.True(stopped.Succeeded);
+        Assert.Equal(foreign, stopped.OutputPath);
+        Assert.Equal(2, socket.StopCalls);
+    }
+
+    [Fact]
+    public void Start_ForeignRecordingThatStaysActive_IsNotAdopted()
+    {
+        var socket = new FakeObsSocket { Recording = true, KeepRecordingOnStop = true };
         RecordingSession session = Session(socket);
 
         ObsRecordingResult started = session.StartRecording(Record, Noop, 7, "unit");
@@ -38,10 +64,10 @@ public class RecordingOwnershipTests
         Assert.False(started.Succeeded);
         Assert.False(started.Owned);
         Assert.Equal(ObsOutputFailure.AlreadyRecording, started.Failure);
+        Assert.Equal(1, socket.StopCalls);
         Assert.Equal(0, socket.StartCalls);
-        ObsRecordingResult stopped = session.StopRecording(Noop, 7);
-        Assert.Equal(ObsOutputFailure.NotOwned, stopped.Failure);
-        Assert.Equal(0, socket.StopCalls);
+        Assert.Equal(ObsOutputFailure.NotOwned, session.StopRecording(Noop, 7).Failure);
+        Assert.Equal(1, socket.StopCalls);
     }
 
     [Fact]
@@ -94,7 +120,7 @@ public class RecordingOwnershipTests
         Assert.Equal(ObsOutputFailure.AlreadyRecording, again.Failure);
         Assert.Equal(1, socket.StartCalls);
         Assert.Equal(ObsOutputFailure.NotOwned, session.StopRecording(Noop, 7).Failure);
-        Assert.Equal(1, socket.StopCalls);
+        Assert.Equal(2, socket.StopCalls);
     }
 
     [Fact]
