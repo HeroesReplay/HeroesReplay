@@ -456,4 +456,91 @@ public class ClientRelaunchTests
             )
         );
     }
+
+    [Fact]
+    public void KeepsWaitingForGameData_StopsExtendingOnceTheBlackWindowHasLastedTheLimit()
+    {
+        Assert.False(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: false,
+                sawStartup: true,
+                windowBlank: true,
+                clientAlreadyRunning: false,
+                blankFor: ClientRelaunch.BlankWindowLimit
+            )
+        );
+        Assert.False(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: false,
+                sawStartup: false,
+                windowBlank: true,
+                clientAlreadyRunning: true,
+                blankFor: ClientRelaunch.BlankWindowLimit
+            )
+        );
+        Assert.True(
+            ClientRelaunch.KeepsWaitingForGameData(
+                startupText: true,
+                sawStartup: true,
+                windowBlank: false,
+                clientAlreadyRunning: false,
+                blankFor: ClientRelaunch.BlankWindowLimit
+            )
+        );
+    }
+
+    [Fact]
+    public void BlankLaunchIsBroken_ClosesAMatchingClientThatStayedBlack()
+    {
+        Assert.True(
+            ClientRelaunch.BlankLaunchIsBroken(
+                processRunning: true,
+                windowBlank: true,
+                startupOrDownloadVisible: false,
+                blankFor: ClientRelaunch.BlankWindowLimit,
+                clientBuildMatches: true
+            )
+        );
+        Assert.False(
+            ClientRelaunch.BlankLaunchIsBroken(
+                processRunning: true,
+                windowBlank: true,
+                startupOrDownloadVisible: false,
+                blankFor: ClientRelaunch.BlankWindowLimit - TimeSpan.FromMilliseconds(1),
+                clientBuildMatches: true
+            )
+        );
+    }
+
+    [Fact]
+    public void BlankLaunchIsBroken_LeavesStartupAndTheHandoffBuildAlone()
+    {
+        Assert.False(
+            ClientRelaunch.BlankLaunchIsBroken(
+                processRunning: true,
+                windowBlank: true,
+                startupOrDownloadVisible: true,
+                blankFor: ClientRelaunch.BlankWindowLimit,
+                clientBuildMatches: true
+            )
+        );
+        Assert.False(
+            ClientRelaunch.BlankLaunchIsBroken(
+                processRunning: true,
+                windowBlank: true,
+                startupOrDownloadVisible: false,
+                blankFor: ClientRelaunch.BlankWindowLimit,
+                clientBuildMatches: false
+            )
+        );
+        Assert.False(
+            ClientRelaunch.BlankLaunchIsBroken(
+                processRunning: false,
+                windowBlank: true,
+                startupOrDownloadVisible: false,
+                blankFor: ClientRelaunch.BlankWindowLimit,
+                clientBuildMatches: true
+            )
+        );
+    }
 }

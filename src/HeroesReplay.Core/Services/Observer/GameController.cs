@@ -751,13 +751,77 @@ public class GameController : IGameController
             }
 
             bool blank = ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
+            if (!blank)
+            {
+                blankTiming = false;
+            }
+            else if (!blankTiming)
+            {
+                blankTiming = true;
+                blankSince = DateTimeOffset.UtcNow;
+            }
+
+            TimeSpan blankFor = blankTiming ? DateTimeOffset.UtcNow - blankSince : TimeSpan.Zero;
+            bool startupOrDownload =
+                startup || ClientScreenText.IsGameDataDownload(text, laterText);
             bool gameDataStillStarting = ClientRelaunch.KeepsWaitingForGameData(
                 startup,
                 sawGameDataStartup,
                 blank,
                 clientAlreadyRunning,
-                matchingBuild
+                matchingBuild,
+                blankFor
             );
+            if (
+                ClientRelaunch.BlankLaunchIsBroken(
+                    IsGameProcessRunning(),
+                    blank,
+                    startupOrDownload,
+                    blankFor,
+                    matchingBuild
+                )
+            )
+            {
+                ReplaySignInRecovery recovery = ReplayClientRoute.Recover(
+                    launchPatch,
+                    blankRelaunches
+                );
+                blankRelaunches++;
+                if (recovery == ReplaySignInRecovery.OpenPreviousBuild)
+                {
+                    logger.LogWarning(
+                        "Previous-patch window stayed black with no menu and no game-data text. Opening that build again through HeroesSwitcher."
+                    );
+                    await ReopenPreviousBuildAsync(replayPath).ConfigureAwait(false);
+                }
+                else if (recovery == ReplaySignInRecovery.LaunchCurrent)
+                {
+                    logger.LogWarning(
+                        "Signed-in client stayed on a black window. Closing it and asking Battle.net to start Heroes again."
+                    );
+                    await RestartAuthenticatedClientAsync(ClientRelaunch.SettleAfterBrokenWindow)
+                        .ConfigureAwait(false);
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Signed-in client stayed on a black window. Closing it so the next replay can start. Battle.net was not clicked."
+                    );
+                    Kill();
+                    replayFileOpened = false;
+                    return new ColdBoot(RetryDisconnect: false, ClientHoldReason.ClientNotReady);
+                }
+
+                openedFromHome = false;
+                openedOnMatchingExe = false;
+                blankTiming = false;
+                clientAlreadyRunning = false;
+                sawGameDataStartup = false;
+                loggedPreparing = false;
+                started = DateTimeOffset.UtcNow;
+                deadline = ClientRelaunch.DeadlineAfterInterfaceRestart(started);
+                continue;
+            }
             if (
                 !oweAhliObs
                 && ReplayClientRoute.OpenMatchingBuildNow(
@@ -808,27 +872,15 @@ public class GameController : IGameController
                             : "Matching Heroes client is still starting. The launch wait continues."
                     );
                 }
-
-                blankTiming = false;
             }
-            else if (!blank)
+            else if (blank)
             {
-                blankTiming = false;
-            }
-            else
-            {
-                if (!blankTiming)
-                {
-                    blankTiming = true;
-                    blankSince = DateTimeOffset.UtcNow;
-                }
-
                 if (
                     ClientRelaunch.ShouldRelaunchBlankWindow(
                         IsLaunched(),
                         openedFromHome || openedOnMatchingExe,
                         blank,
-                        DateTimeOffset.UtcNow - blankSince,
+                        blankFor,
                         blankRelaunches,
                         !differentBuild
                     )
@@ -920,11 +972,12 @@ public class GameController : IGameController
         await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
     }
 
-    private async Task RestartAuthenticatedClientAsync()
+    private async Task RestartAuthenticatedClientAsync(TimeSpan? settle = null)
     {
         Kill();
         replayFileOpened = false;
-        await Task.Delay(ClientRelaunch.SettleAfterExit, tokenProvider.Token).ConfigureAwait(false);
+        await Task.Delay(settle ?? ClientRelaunch.SettleAfterExit, tokenProvider.Token)
+            .ConfigureAwait(false);
         CloseIdleSwitcher();
         await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
     }

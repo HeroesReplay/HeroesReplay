@@ -10,8 +10,9 @@ namespace HeroesReplay.Core.Services.Observer;
 public static class ClientRelaunch
 {
     public static readonly TimeSpan SettleAfterExit = TimeSpan.FromSeconds(8);
+    public static readonly TimeSpan SettleAfterBrokenWindow = TimeSpan.FromSeconds(20);
     public static readonly TimeSpan RetryIfNoProcess = TimeSpan.FromSeconds(15);
-    public static readonly TimeSpan BlankWindowLimit = TimeSpan.FromSeconds(90);
+    public static readonly TimeSpan BlankWindowLimit = TimeSpan.FromMinutes(4);
     public static readonly TimeSpan ColdBootLimit = TimeSpan.FromMinutes(4);
     public static readonly TimeSpan GameDataStartupExtension = TimeSpan.FromMinutes(3);
     public static readonly TimeSpan GameDataStartupCap = TimeSpan.FromMinutes(12);
@@ -88,7 +89,8 @@ public static class ClientRelaunch
         bool sawStartup,
         bool windowBlank,
         bool clientAlreadyRunning,
-        bool clientBuildMatches = true
+        bool clientBuildMatches = true,
+        TimeSpan blankFor = default
     )
     {
         if (!clientBuildMatches)
@@ -96,7 +98,40 @@ public static class ClientRelaunch
             return false;
         }
 
-        return startupText || (sawStartup && windowBlank) || (clientAlreadyRunning && windowBlank);
+        if (startupText)
+        {
+            return true;
+        }
+
+        // A black window is the startup calculation only for a short while.
+        // After that it is not still preparing, and extending the wait leaves the screen idle.
+        if (blankFor >= BlankWindowLimit)
+        {
+            return false;
+        }
+
+        return (sawStartup && windowBlank) || (clientAlreadyRunning && windowBlank);
+    }
+
+    /// <summary>
+    /// The matching client has a full-size window and no menu, loading, or game-data text
+    /// for the whole cold-boot limit. That process is not a match.
+    /// A different build is the switcher handoff and stays up.
+    /// A signed-in client can stay black for a few minutes before the menu is readable.
+    /// </summary>
+    public static bool BlankLaunchIsBroken(
+        bool processRunning,
+        bool windowBlank,
+        bool startupOrDownloadVisible,
+        TimeSpan blankFor,
+        bool clientBuildMatches
+    )
+    {
+        return processRunning
+            && clientBuildMatches
+            && windowBlank
+            && !startupOrDownloadVisible
+            && blankFor >= BlankWindowLimit;
     }
 
     /// <summary>
