@@ -1,8 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Status;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Interfaces;
@@ -16,6 +18,7 @@ public sealed class StatusPredictionWatcher
     private readonly SpectatorStatusStore statusStore;
     private readonly IMatchPredictionService predictions;
     private readonly ITwitchClient twitchClient;
+    private readonly HashSet<string> settled = new(StringComparer.Ordinal);
 
     public StatusPredictionWatcher(
         ILogger<StatusPredictionWatcher> logger,
@@ -114,7 +117,12 @@ public sealed class StatusPredictionWatcher
             return;
         }
 
-        PredictionSignal signal = tracker.Observe(status, DateTimeOffset.UtcNow);
+        PredictionSignal signal = DecideObserved(
+            tracker.Observe(status, DateTimeOffset.UtcNow),
+            status,
+            settled
+        );
+
         switch (signal.Kind)
         {
             case PredictionSignalKind.Open:
@@ -160,6 +168,114 @@ public sealed class StatusPredictionWatcher
                 );
                 AnnouncePredictionDisabled();
                 break;
+        }
+    }
+
+    public static PredictionSignal DecideObserved(
+        PredictionSignal observed,
+        SpectatorStatus status,
+        ISet<string> settled
+    )
+    {
+        if (status == null)
+        {
+            return observed;
+        }
+
+        string settlementKey = observed.ReplayId + ":" + observed.Attempt;
+        bool alreadySettled =
+            (
+                observed.Kind is PredictionSignalKind.Resolve or PredictionSignalKind.Cancel
+            )
+            && settled != null
+            && settled.Contains(settlementKey);
+        bool matchClockSeen =
+            string.Equals(
+                status.Outcome,
+                nameof(MatchOutcome.VerifiedCompleted),
+                StringComparison.Ordinal
+            ) || !string.IsNullOrWhiteSpace(status.Timer);
+        PredictionSignal decided = ApplyDecision(
+            observed,
+            status.Outcome,
+            matchClockSeen,
+            alreadySettled
+        );
+        if (
+            settled != null
+            && decided.Kind is PredictionSignalKind.Resolve or PredictionSignalKind.Cancel
+        )
+        {
+            settled.Add(settlementKey);
+        }
+
+        return decided;
+    }
+
+    public static PredictionSignal ApplyDecision(
+        PredictionSignal observed,
+        string outcome,
+        bool matchClockSeen,
+        bool alreadySettled
+    )
+    {
+        if (
+            observed.Kind is not (PredictionSignalKind.Resolve or PredictionSignalKind.Cancel)
+        )
+        {
+            return observed;
+        }
+
+        MatchOutcome parsed = ParseOutcome(outcome);
+        PredictionSignalKind decided = PredictionSessionTracker.DecideSession(
+            ReplaySession.Classify(parsed),
+            matchClockSeen,
+            observed.WinnerTeam,
+            Fault(parsed),
+            alreadySettled
+        );
+        if (decided == PredictionSignalKind.None)
+        {
+            return default;
+        }
+
+        int? winner = decided == PredictionSignalKind.Resolve ? observed.WinnerTeam : null;
+        return new PredictionSignal(
+            decided,
+            observed.ReplayId,
+            observed.Map,
+            winner,
+            observed.Attempt
+        );
+    }
+
+    private static MatchOutcome ParseOutcome(string outcome)
+    {
+        if (
+            !string.IsNullOrWhiteSpace(outcome)
+            && Enum.TryParse(outcome, ignoreCase: false, out MatchOutcome parsed)
+            && Enum.IsDefined(typeof(MatchOutcome), parsed)
+        )
+        {
+            return parsed;
+        }
+
+        return MatchOutcome.None;
+    }
+
+    private static PredictionSessionFault Fault(MatchOutcome outcome)
+    {
+        switch (outcome)
+        {
+            case MatchOutcome.ClientCrashed:
+                return PredictionSessionFault.Crash;
+            case MatchOutcome.Stopped:
+            case MatchOutcome.Canceled:
+                return PredictionSessionFault.Stop;
+            case MatchOutcome.VersionMismatch:
+                return PredictionSessionFault.VersionMismatch;
+            default:
+                return PredictionSessionFault.None;
         }
     }
 
