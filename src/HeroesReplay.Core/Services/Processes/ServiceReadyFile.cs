@@ -47,7 +47,7 @@ public static class ServiceReadyFile
             Nonce = record.Nonce,
             Version = record.Version,
             ReadyAt = now,
-            HeartbeatAt = now,
+            HeartbeatAt = now.AddTicks(1),
         };
     }
 
@@ -76,9 +76,46 @@ public static class ServiceReadyFile
                 Nonce = nonce,
                 Version = version,
                 ReadyAt = now,
-                HeartbeatAt = now,
             }
         );
+    }
+
+    public static void ReportHeartbeatFromEnvironment()
+    {
+        string nonce = Environment.GetEnvironmentVariable(NonceVariable);
+        if (!IsSafeNonce(nonce))
+        {
+            return;
+        }
+
+        TryWriteHeartbeat(
+            new ServiceProcessRecord
+            {
+                Name = Environment.GetEnvironmentVariable(RoleVariable),
+                Nonce = nonce,
+            },
+            DateTimeOffset.UtcNow
+        );
+    }
+
+    public static bool TryWriteHeartbeat(
+        ServiceProcessRecord record,
+        DateTimeOffset at,
+        string directory = null
+    )
+    {
+        ServiceReadyReport existing = TryRead(record, directory);
+        if (existing?.ReadyAt == null)
+        {
+            return false;
+        }
+
+        DateTimeOffset heartbeat = at > existing.ReadyAt.Value
+            ? at
+            : existing.ReadyAt.Value.AddTicks(1);
+        existing.HeartbeatAt = heartbeat;
+        Report(existing, directory);
+        return true;
     }
 
     public static void Report(ServiceReadyReport report, string directory = null)

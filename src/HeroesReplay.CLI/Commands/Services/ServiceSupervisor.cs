@@ -352,21 +352,29 @@ public static class ServiceSupervisor
         while (true)
         {
             ServiceReadyReport report = handshake.TryReadReady(record);
+            bool exited = !ServiceProcessPlan.IsHeroesReplay(processNameOrNull(record.Pid));
             // A ready report wins over a process-name miss so tests can report ready without a live PID.
             if (IsReady(record, report))
             {
-                record.ReadyAt = report.ReadyAt ?? DateTimeOffset.UtcNow;
-                record.HeartbeatAt = report.HeartbeatAt ?? record.ReadyAt;
-                if (!string.IsNullOrWhiteSpace(report.Version))
+                if (ServiceChildHeartbeat.ExitCode(report, exited) == 1)
                 {
-                    record.Version = report.Version;
+                    Fail(handshake, $"{record.Name} failed: exited before heartbeat.");
+                    return false;
                 }
 
-                return true;
-            }
+                if (ServiceChildHeartbeat.FollowsReady(report))
+                {
+                    record.ReadyAt = report.ReadyAt ?? DateTimeOffset.UtcNow;
+                    record.HeartbeatAt = report.HeartbeatAt;
+                    if (!string.IsNullOrWhiteSpace(report.Version))
+                    {
+                        record.Version = report.Version;
+                    }
 
-            string processName = processNameOrNull(record.Pid);
-            if (!ServiceProcessPlan.IsHeroesReplay(processName))
+                    return true;
+                }
+            }
+            else if (exited)
             {
                 Fail(handshake, $"{record.Name} failed: exited before ready.");
                 return false;
@@ -374,7 +382,12 @@ public static class ServiceSupervisor
 
             if (handshake.ReadyTimeout <= TimeSpan.Zero || DateTimeOffset.UtcNow >= deadline)
             {
-                Fail(handshake, $"{record.Name} failed: ready timed out.");
+                Fail(
+                    handshake,
+                    IsReady(record, report)
+                        ? $"{record.Name} failed: heartbeat timed out."
+                        : $"{record.Name} failed: ready timed out."
+                );
                 return false;
             }
 

@@ -637,6 +637,76 @@ public class ServiceSupervisorTests
     }
 
     [Fact]
+    public void Start_ChildExitAfterReadyBeforeHeartbeat_Returns1()
+    {
+        string path = TempLock();
+        try
+        {
+            var stopped = new List<int>();
+            var messages = new List<string>();
+            DateTimeOffset readyAt = new DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
+            int code = ServiceSupervisor.Start(
+                path,
+                Exe,
+                pid => null,
+                (name, arguments) => 41,
+                handshake: new ServiceStartupHandshake
+                {
+                    TryReadReady = record =>
+                        new ServiceReadyReport
+                        {
+                            Role = record.Name,
+                            Nonce = record.Nonce,
+                            ReadyAt = readyAt,
+                        },
+                    ReadyTimeout = TimeSpan.FromSeconds(30),
+                    Wait = _ => throw new InvalidOperationException("should not wait after exit"),
+                    StopStarted = stopped.Add,
+                    Report = messages.Add,
+                }
+            );
+
+            Assert.Equal(1, code);
+            Assert.Equal(
+                1,
+                ServiceChildHeartbeat.ExitCode(
+                    new ServiceReadyReport { ReadyAt = readyAt },
+                    processExited: true
+                )
+            );
+            Assert.Equal(
+                0,
+                ServiceChildHeartbeat.ExitCode(
+                    new ServiceReadyReport
+                    {
+                        ReadyAt = readyAt,
+                        HeartbeatAt = readyAt.AddSeconds(1),
+                    },
+                    processExited: true
+                )
+            );
+            Assert.Equal(
+                0,
+                ServiceChildHeartbeat.ExitCode(
+                    new ServiceReadyReport { ReadyAt = readyAt },
+                    processExited: false
+                )
+            );
+            Assert.Equal(new[] { 41 }, stopped);
+            Assert.Null(ServiceLockStore.TryLoad(path));
+            Assert.Contains(
+                messages,
+                message =>
+                    message.Contains("spectate") && message.Contains("exited before heartbeat")
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Start_TimesOutWhenChildNeverBecomesReady()
     {
         string path = TempLock();

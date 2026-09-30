@@ -35,6 +35,7 @@ public class SpectateHeroesProfileApiCommand : Command
         using IServiceScope scope = provider.CreateScope();
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
         ServiceReadyFile.ReportFromEnvironment("spectate");
+        ServiceReadyFile.ReportHeartbeatFromEnvironment();
         await engine.RunAsync();
     }
 }

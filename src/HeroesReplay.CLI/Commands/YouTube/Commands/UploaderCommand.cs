@@ -34,6 +34,7 @@ public class UploaderCommand : Command
         using IServiceScope scope = provider.CreateScope();
         IYouTubeUploader uploader = scope.ServiceProvider.GetRequiredService<IYouTubeUploader>();
         ServiceReadyFile.ReportFromEnvironment("youtube");
+        ServiceReadyFile.ReportHeartbeatFromEnvironment();
         await uploader.ListenAsync();
     }
 }

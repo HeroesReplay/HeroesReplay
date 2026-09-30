@@ -48,6 +48,7 @@ public class DownloadCommand : Command
             ILogger<DownloadCommand>
         >();
         ServiceReadyFile.ReportFromEnvironment("download");
+        ServiceReadyFile.ReportHeartbeatFromEnvironment();
         int failures = 0;
         while (!stop.Token.IsCancellationRequested)
         {

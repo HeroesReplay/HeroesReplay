@@ -366,6 +366,45 @@ public class ServiceProcessReadinessTests
         }
     }
 
+    [Fact]
+    public void TryWriteHeartbeat_IsLaterThanTheReadyFile()
+    {
+        string root = TempDir();
+        try
+        {
+            DateTimeOffset readyAt = new DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
+            var record = new ServiceProcessRecord { Name = "spectate", Nonce = "beat123" };
+            ServiceReadyFile.Report(
+                new ServiceReadyReport
+                {
+                    Role = "spectate",
+                    Nonce = "beat123",
+                    Version = "9",
+                    ReadyAt = readyAt,
+                },
+                root
+            );
+
+            Assert.False(
+                ServiceReadyFile.TryWriteHeartbeat(
+                    new ServiceProcessRecord { Name = "spectate", Nonce = "missing" },
+                    readyAt.AddSeconds(1),
+                    root
+                )
+            );
+            Assert.True(ServiceReadyFile.TryWriteHeartbeat(record, readyAt, root));
+
+            ServiceReadyReport read = ServiceReadyFile.TryRead(record, root);
+            Assert.Equal(readyAt, read.ReadyAt);
+            Assert.Equal(readyAt.AddTicks(1), read.HeartbeatAt);
+            Assert.True(ServiceChildHeartbeat.FollowsReady(read));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string TempDir()
     {
         string path = Path.Combine(
