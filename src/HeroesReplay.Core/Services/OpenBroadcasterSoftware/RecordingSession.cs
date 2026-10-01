@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
+using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Logging;
-using Polly;
 
 namespace HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 
@@ -579,17 +579,17 @@ internal sealed class RecordingSession
     {
         try
         {
-            return Policy
-                .Handle<Exception>()
-                .WaitAndRetry(
+            return ResilienceRetry
+                .Constant<T>(
                     budget.RetryCount,
-                    _ => budget.RetryDelay,
-                    (exception, _, attempt, _) =>
+                    budget.RetryDelay,
+                    outcome => outcome.Exception != null,
+                    args =>
                         logger.LogWarning(
-                            exception,
+                            args.Outcome.Exception,
                             "Could not {Operation} (attempt {Attempt}).",
                             operation,
-                            attempt
+                            args.AttemptNumber + 1
                         )
                 )
                 .Execute(action);

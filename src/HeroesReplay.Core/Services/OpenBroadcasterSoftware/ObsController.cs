@@ -234,14 +234,7 @@ public class ObsController : IObsController
 
     public void SwapToGameScene()
     {
-        Policy
-            .Handle<Exception>()
-            .OrResult(false)
-            .WaitAndRetry(
-                retryCount: 5,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(5),
-                onRetry: OnRetry
-            )
+        SceneRetry()
             .Execute(() =>
             {
                 try
@@ -276,14 +269,7 @@ public class ObsController : IObsController
 
     public void SwapToWaitingScene()
     {
-        Policy
-            .Handle<Exception>()
-            .OrResult(false)
-            .WaitAndRetry(
-                retryCount: 5,
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(5),
-                onRetry: OnRetry
-            )
+        SceneRetry()
             .Execute(() =>
             {
                 try
@@ -318,56 +304,9 @@ public class ObsController : IObsController
         );
         try
         {
-            await Policy
-                .Handle<Exception>(exception => exception is not OperationCanceledException)
-                .OrResult(false)
-                .WaitAndRetryAsync(
-                    retryCount: 5,
-                    sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(5),
-                    onRetry: OnRetry
-                )
-                .ExecuteAsync(
-                    async t =>
-                    {
-                        if (t.IsCancellationRequested)
-                        {
-                            return true;
-                        }
-
-                        EnsureConnected();
-
-                        List<InputBasicInfo> sourceList = obs.GetInputList();
-
-                        foreach (
-                            ReportScene segment in settings.OBS.ReportScenes.Where(scene =>
-                                scene.Enabled && !IsMissingLocalFile(scene)
-                            )
-                        )
-                        {
-                            TrySetBrowserSourceSegment(sourceList, segment);
-                        }
-
-                        foreach (
-                            ReportScene source in settings.OBS.ReportScenes.Where(scene =>
-                                scene.Enabled && !IsMissingLocalFile(scene)
-                            )
-                        )
-                        {
-                            if (t.IsCancellationRequested)
-                            {
-                                logger.LogInformation(
-                                    "Remaining report scenes stop because the next match clock is running."
-                                );
-                                return true;
-                            }
-
-                            await TryCycleSceneAsync(source, t).ConfigureAwait(false);
-                        }
-
-                        return true;
-                    },
-                    linked.Token
-                );
+            await SceneRetry()
+                .ExecuteAsync(t => new ValueTask<bool>(CycleOnceAsync(t)), linked.Token)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -631,16 +570,62 @@ public class ObsController : IObsController
 
     private void EnsureConnected() => coordinator.EnsureIdentified();
 
-    private void OnRetry(DelegateResult<bool> wrappedResult, TimeSpan timeSpan)
+    private ResiliencePipeline<bool> SceneRetry() =>
+        ResilienceRetry.Constant<bool>(
+            retries: 5,
+            delay: TimeSpan.FromSeconds(5),
+            retry: outcome => ResilienceRetry.Failed(outcome, succeeded => succeeded == false),
+            onRetry: args =>
+            {
+                if (args.Outcome.Exception != null)
+                {
+                    logger.LogWarning(args.Outcome.Exception, "Could not control OBS");
+                }
+                else
+                {
+                    logger.LogWarning("Could not control OBS");
+                }
+            }
+        );
+
+    private async Task<bool> CycleOnceAsync(CancellationToken cancellationToken)
     {
-        if (wrappedResult.Exception != null)
+        if (cancellationToken.IsCancellationRequested)
         {
-            logger.LogWarning(wrappedResult.Exception, "Could not control OBS");
+            return true;
         }
-        else
+
+        EnsureConnected();
+
+        List<InputBasicInfo> sourceList = obs.GetInputList();
+
+        foreach (
+            ReportScene segment in settings.OBS.ReportScenes.Where(scene =>
+                scene.Enabled && !IsMissingLocalFile(scene)
+            )
+        )
         {
-            logger.LogWarning("Could not control OBS");
+            TrySetBrowserSourceSegment(sourceList, segment);
         }
+
+        foreach (
+            ReportScene source in settings.OBS.ReportScenes.Where(scene =>
+                scene.Enabled && !IsMissingLocalFile(scene)
+            )
+        )
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                logger.LogInformation(
+                    "Remaining report scenes stop because the next match clock is running."
+                );
+                return true;
+            }
+
+            await TryCycleSceneAsync(source, cancellationToken).ConfigureAwait(false);
+        }
+
+        return true;
     }
 
     private bool ShouldRecord() =>

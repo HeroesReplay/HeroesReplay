@@ -15,7 +15,6 @@ using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
-using Polly;
 
 namespace HeroesReplay.Core.Services.Providers;
 
@@ -415,11 +414,16 @@ public class HeroesProfileProvider : IReplayProvider
     {
         try
         {
-            HeroesProfileReplay found = await Policy
-                .Handle<Exception>()
-                .OrResult<HeroesProfileReplay>(replay => replay == null)
-                .WaitAndRetryAsync(60, retry => settings.HeroesProfileApi.APIRetryWaitTime)
-                .ExecuteAsync(_ => ListOnceAsync(), provider.Token)
+            HeroesProfileReplay found = await ResilienceRetry
+                .Constant<HeroesProfileReplay>(
+                    retries: 60,
+                    delay: settings.HeroesProfileApi.APIRetryWaitTime,
+                    retry: outcome => ResilienceRetry.Failed(outcome, replay => replay == null)
+                )
+                .ExecuteAsync(
+                    _ => new ValueTask<HeroesProfileReplay>(ListOnceAsync()),
+                    provider.Token
+                )
                 .ConfigureAwait(false);
 
             if (found == null && heroesProfileResume != null && heroesProfileResume.Consume())

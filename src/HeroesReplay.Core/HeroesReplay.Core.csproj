@@ -10,16 +10,17 @@
         <PackageReference Include="Google.Apis.YouTube.v3" />
         <PackageReference Include="Heroes.Element" />
         <PackageReference Include="Heroes.ReplayParser" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
         <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" />
         <PackageReference Include="Microsoft.Extensions.Http" />
+        <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
         <PackageReference Include="Microsoft.Extensions.Options" />
+        <PackageReference Include="Microsoft.Extensions.Resilience" />
         <PackageReference Include="Newtonsoft.Json" />
         <PackageReference Include="obs-websocket-dotnet" />
         <PackageReference Include="PInvoke.User32" />
-        <PackageReference Include="Polly" />
-        <PackageReference Include="Polly.Caching.Memory" />
         <PackageReference Include="TwitchLib" />
     </ItemGroup>
 
