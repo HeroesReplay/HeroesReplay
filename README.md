@@ -4,6 +4,8 @@ Automated spectator for Heroes of the Storm `.StormReplay` files. It parses a re
 
 Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Modernized to **.NET 10 LTS**. The product vision and the 24/7 cycle are in [docs/vision.md](docs/vision.md). What the YouTube uploader records, publishes, and files is in [docs/youtube-uploader.md](docs/youtube-uploader.md).
 
+`develop` is the default branch. A clone checks it out, and day-to-day work lands there. `master` is only the production branch. Merging into `master` runs the release workflow and publishes `heroesreplay-win-x64.zip`: the executable, `appsettings.json`, `appsettings.prod.json`, and the OBS scene collection. The stream PC installs that zip. It does not build from this checkout.
+
 ## What it does
 
 1. Load a local `.StormReplay`, a directory of them, or download Storm League games from Heroes Profile (HTTPS, not AWS S3).

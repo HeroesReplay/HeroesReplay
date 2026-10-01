@@ -43,7 +43,9 @@ Improve the spectator and the tools around it. The work is to prove, validate, a
 
 ## Dev loop
 
-One task at a time. A GitHub issue, or one concrete bug. Do not start a second task, and do not merge to `master`, while it is open. Branch work lands on `develop`.
+One task at a time. A GitHub issue, or one concrete bug. Do not start a second task, and do not merge to `master`, while it is open.
+
+`develop` is the GitHub default branch. A clone checks it out, and branch work lands there. `master` is only for a production build: the win-x64 executable, prod settings, and the OBS collection. Merging to `master` is what publishes that release. Do not put day-to-day commits on `master`.
 
 Stop at the earliest phase that can prove the change.
 
