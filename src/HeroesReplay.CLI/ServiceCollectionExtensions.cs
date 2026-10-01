@@ -34,8 +34,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OBSWebsocketDotNet;
-using Polly.Caching;
-using Polly.Caching.Memory;
 using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
@@ -61,7 +59,6 @@ public static class ServiceCollectionExtensions
         return services
             .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-youtube")
             .AddMemoryCache()
-            .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
@@ -124,7 +121,6 @@ public static class ServiceCollectionExtensions
         return services
             .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-check")
             .AddMemoryCache()
-            .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
                 builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole()
             )
@@ -235,7 +231,6 @@ public static class ServiceCollectionExtensions
             .AddSingleton(settings)
             .AddSingleton<IObserverPanelRequests, ObserverPanelRequests>()
             .AddSingleton(new CancellationTokenProvider(token))
-            .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
@@ -337,7 +332,6 @@ public static class ServiceCollectionExtensions
         return services
             .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-spectate")
             .AddMemoryCache()
-            .AddSingleton<IAsyncCacheProvider, MemoryCacheProvider>()
             .AddLogging(builder =>
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
@@ -505,10 +499,19 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddHeroesProfileKiotaClient(this IServiceCollection services)
     {
+        services
+            .AddHttpClient(
+                HeroesProfileHttp.ClientName,
+                client => client.Timeout = Timeout.InfiniteTimeSpan
+            )
+            .AddResilienceHandler(HeroesProfileHttp.ClientName, HeroesProfileHttp.Configure);
+
         return services.AddSingleton(sp =>
         {
             HeroesProfileApiSettings api = sp.GetRequiredService<AppSettings>().HeroesProfileApi;
-            return HeroesProfileClientFactory.Create(api.ApiKey, api.ExternalV1BaseUri);
+            HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
+                .CreateClient(HeroesProfileHttp.ClientName);
+            return HeroesProfileClientFactory.Create(api.ApiKey, httpClient, api.ExternalV1BaseUri);
         });
     }
 

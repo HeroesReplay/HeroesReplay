@@ -141,7 +141,7 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 - `spectate file` plays the queue **once**. Heroes Profile provider loops.
 - Never commit `appsettings.secrets.json`, user `*.StormReplay` dumps, or large `*.mp4`.
 - Package versions live in `Directory.Packages.props`. Do not pin .NET 11 / CommandLine 3 prereleases.
-- Polly cache still uses v7 `Policy.CacheAsync`. Do not bump Polly to 8 without replacing that cache.
+- Heroes Profile HTTP retries use `Microsoft.Extensions.Http.Resilience` on the Kiota `HttpClient`. Other retries use `Microsoft.Extensions.Resilience` pipelines. Replay cache is `IMemoryCache`. Do not add a direct Polly package reference.
 
 ## Verification
 

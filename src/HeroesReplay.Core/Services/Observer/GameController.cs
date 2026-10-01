@@ -18,7 +18,6 @@ using HeroesReplay.Core.Services.Context;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Shared;
 using Microsoft.Extensions.Logging;
-using Polly;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
@@ -1747,15 +1746,27 @@ public class GameController : IGameController
         ClearProcessCache();
         try
         {
-            bool killed = Policy
-                .Handle<Win32Exception>()
-                .Or<InvalidOperationException>()
-                .Or<NotSupportedException>()
-                .OrResult(false)
-                .WaitAndRetry(
-                    retryCount: 5,
-                    sleepDurationProvider: retry => TimeSpan.FromSeconds(Math.Pow(2, retry)),
-                    OnRetry
+            bool killed = ResilienceRetry
+                .WithDelay<bool>(
+                    retries: 5,
+                    delayForAttempt: ResilienceRetry.ProcessKillDelay,
+                    retry: outcome =>
+                        ResilienceRetry.Failed(
+                            outcome,
+                            error =>
+                                error
+                                    is Win32Exception
+                                        or InvalidOperationException
+                                        or NotSupportedException,
+                            result => result == false
+                        ),
+                    onRetry: args =>
+                    {
+                        if (args.Outcome.Exception != null)
+                        {
+                            logger.LogError(args.Outcome.Exception, "Could not kill game process.");
+                        }
+                    }
                 )
                 .Execute(() =>
                 {
@@ -1903,14 +1914,6 @@ public class GameController : IGameController
 
             ClearProcessCache();
             throw;
-        }
-    }
-
-    private void OnRetry(DelegateResult<bool> result, TimeSpan arg2)
-    {
-        if (result.Exception != null)
-        {
-            logger.LogError(result.Exception, "Could not kill game process.");
         }
     }
 

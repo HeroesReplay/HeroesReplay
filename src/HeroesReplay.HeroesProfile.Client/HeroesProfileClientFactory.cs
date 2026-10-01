@@ -13,6 +13,20 @@ public static class HeroesProfileClientFactory
 
     public static HeroesProfileClient Create(string apiKey, Uri baseUri = null)
     {
+        return Create(apiKey, new HttpClient { Timeout = TimeSpan.FromMinutes(2) }, baseUri);
+    }
+
+    public static HeroesProfileClient Create(
+        string apiKey,
+        HttpClient httpClient,
+        Uri baseUri = null
+    )
+    {
+        if (httpClient == null)
+        {
+            throw new ArgumentNullException(nameof(httpClient));
+        }
+
         Uri resolved = baseUri ?? DefaultBaseUri;
         IAuthenticationProvider authentication = string.IsNullOrWhiteSpace(apiKey)
             ? new AnonymousAuthenticationProvider()
@@ -20,7 +34,6 @@ public static class HeroesProfileClientFactory
                 new HeroesProfileAccessTokenProvider(apiKey, new[] { resolved.Host })
             );
 
-        var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
         var adapter = new HttpClientRequestAdapter(authentication, httpClient: httpClient)
         {
             BaseUrl = resolved.ToString().TrimEnd('/'),
