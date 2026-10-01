@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using HeroesReplay.Core;
@@ -29,5 +30,58 @@ public class HeroesReplayTelemetryTests
         Assert.Contains("heroesreplay.focus.swap", names);
         Assert.Equal(parent.Context.TraceId, child.Context.TraceId);
         Assert.Equal(parent.Context.SpanId, child.ParentSpanId);
+    }
+
+    [Fact]
+    public void JoinReplaySession_ChildKeepsParentTraceIdAndReplayId()
+    {
+        using ActivityListener listener = new()
+        {
+            ShouldListenTo = source => source.Name == HeroesReplayTelemetry.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        const int replayId = 424242;
+        Activity previous = Activity.Current;
+        try
+        {
+            using Activity parent = HeroesReplayTelemetry.BeginReplaySession(replayId);
+            string session = HeroesReplayTelemetry.FormatSession(parent, replayId);
+            ActivityTraceId traceId = parent.TraceId;
+            ActivitySpanId spanId = parent.SpanId;
+            Assert.True(HeroesReplayTelemetry.TryParseSession(session, out int parsedId, out _));
+            Assert.Equal(replayId, parsedId);
+            parent.Dispose();
+            Activity.Current = null;
+
+            using Activity child = HeroesReplayTelemetry.JoinReplaySession(
+                session,
+                "heroesreplay.session.joined"
+            );
+            Assert.NotNull(child);
+            Assert.Equal(traceId, child.TraceId);
+            Assert.Equal(spanId, child.ParentSpanId);
+            Assert.Equal(replayId, Convert.ToInt32(parent.GetTagItem("replay.id")));
+            Assert.Equal(replayId, Convert.ToInt32(child.GetTagItem("replay.id")));
+        }
+        finally
+        {
+            Activity.Current = previous;
+        }
+    }
+
+    [Fact]
+    public void JoinReplaySession_RejectsUnparsedSession()
+    {
+        Assert.False(
+            HeroesReplayTelemetry.TryParseSession("not-a-session", out int replayId, out _)
+        );
+        Assert.Equal(0, replayId);
+        Assert.Null(
+            HeroesReplayTelemetry.JoinReplaySession("not-a-session", "heroesreplay.session.joined")
+        );
+        Assert.Null(HeroesReplayTelemetry.FormatSession(null, 424242));
     }
 }

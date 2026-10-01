@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Observer;
@@ -19,6 +20,7 @@ public sealed class StatusPredictionWatcher
     private readonly IMatchPredictionService predictions;
     private readonly ITwitchClient twitchClient;
     private readonly HashSet<string> settled = new(StringComparer.Ordinal);
+    private readonly HashSet<int> joinedReplaySessions = new();
 
     public StatusPredictionWatcher(
         ILogger<StatusPredictionWatcher> logger,
@@ -33,6 +35,23 @@ public sealed class StatusPredictionWatcher
         this.statusStore = statusStore ?? throw new ArgumentNullException(nameof(statusStore));
         this.predictions = predictions ?? throw new ArgumentNullException(nameof(predictions));
         this.twitchClient = twitchClient ?? throw new ArgumentNullException(nameof(twitchClient));
+    }
+
+    private void JoinReplaySession(int? replayId)
+    {
+        if (replayId is not int id || id <= 0 || !joinedReplaySessions.Add(id))
+        {
+            return;
+        }
+
+        using Activity joined = ReplaySessionFile.Join(id, "heroesreplay.session.joined");
+        if (joined == null)
+        {
+            joinedReplaySessions.Remove(id);
+            return;
+        }
+
+        logger.LogInformation("Replay session {ReplayId} trace {TraceId}.", id, joined.TraceId);
     }
 
     public async Task WatchAsync(CancellationToken cancellationToken)
@@ -117,6 +136,7 @@ public sealed class StatusPredictionWatcher
             return;
         }
 
+        JoinReplaySession(status.ReplayId);
         PredictionSignal signal = DecideObserved(
             tracker.Observe(status, DateTimeOffset.UtcNow),
             status,
@@ -184,9 +204,7 @@ public sealed class StatusPredictionWatcher
 
         string settlementKey = observed.ReplayId + ":" + observed.Attempt;
         bool alreadySettled =
-            (
-                observed.Kind is PredictionSignalKind.Resolve or PredictionSignalKind.Cancel
-            )
+            (observed.Kind is PredictionSignalKind.Resolve or PredictionSignalKind.Cancel)
             && settled != null
             && settled.Contains(settlementKey);
         bool matchClockSeen =
@@ -219,9 +237,7 @@ public sealed class StatusPredictionWatcher
         bool alreadySettled
     )
     {
-        if (
-            observed.Kind is not (PredictionSignalKind.Resolve or PredictionSignalKind.Cancel)
-        )
+        if (observed.Kind is not (PredictionSignalKind.Resolve or PredictionSignalKind.Cancel))
         {
             return observed;
         }

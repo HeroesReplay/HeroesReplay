@@ -25,7 +25,7 @@ public class OtelCommand : Command
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
-                bool listening = AspireDashboardHost.EnsureRunning();
+                bool listening = AspireDashboardHost.EnsureRunning(openWhenAlreadyListening: true);
                 return Task.FromResult(listening ? 0 : 1);
             }
         );

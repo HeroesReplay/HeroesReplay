@@ -84,7 +84,7 @@ public static class AspireDashboardHost
         }
     }
 
-    public static bool EnsureRunning()
+    public static bool EnsureRunning(bool openWhenAlreadyListening = false)
     {
         try
         {
@@ -107,6 +107,11 @@ public static class AspireDashboardHost
                     Console.WriteLine(
                         $"Aspire dashboard is already listening. UI {UiUrl}. OTLP gRPC {OtlpGrpcEndpoint}."
                     );
+                    if (openWhenAlreadyListening)
+                    {
+                        TryOpenDashboard(OpenInBrowser, Log);
+                    }
+
                     return true;
                 }
 
@@ -128,7 +133,9 @@ public static class AspireDashboardHost
                     Directory.GetCurrentDirectory(),
                     Log,
                     Thread.Sleep,
-                    StartupBudget
+                    StartupBudget,
+                    openWhenAlreadyListening,
+                    OpenInBrowser
                 );
                 return result.Listening;
             }
@@ -160,7 +167,9 @@ public static class AspireDashboardHost
         string pathFallbackDirectory,
         Action<string> log,
         Action<TimeSpan> wait,
-        TimeSpan startupBudget
+        TimeSpan startupBudget,
+        bool openWhenAlreadyListening = false,
+        Action<string> openBrowser = null
     )
     {
         ArgumentNullException.ThrowIfNull(otlpListening);
@@ -173,6 +182,11 @@ public static class AspireDashboardHost
             string already =
                 $"Aspire dashboard is already listening. UI {UiUrl}. OTLP gRPC {OtlpGrpcEndpoint}.";
             log(already);
+            if (openWhenAlreadyListening)
+            {
+                TryOpenDashboard(openBrowser, log);
+            }
+
             return new DashboardEnsureResult(true, false, already);
         }
 
@@ -217,6 +231,7 @@ public static class AspireDashboardHost
                     $"Aspire dashboard is up. UI {UiUrl}. OTLP gRPC {OtlpGrpcEndpoint}. "
                     + "CLI processes export logs, metrics, and traces there.";
                 log(up);
+                TryOpenDashboard(openBrowser, log);
                 return new DashboardEnsureResult(true, true, up);
             }
 
@@ -679,6 +694,29 @@ public static class AspireDashboardHost
         }
     }
 
+    private static void TryOpenDashboard(Action<string> openBrowser, Action<string> log)
+    {
+        if (openBrowser == null)
+        {
+            return;
+        }
+
+        try
+        {
+            log($"Opening {UiUrl}.");
+            openBrowser(UiUrl);
+        }
+        catch (Exception e)
+        {
+            log($"Could not open {UiUrl}. {e.Message}");
+        }
+    }
+
+    private static void OpenInBrowser(string url)
+    {
+        Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+    }
+
     private static void Log(string message)
     {
         if (
@@ -686,6 +724,7 @@ public static class AspireDashboardHost
             || message.Contains("not listening", StringComparison.Ordinal)
             || message.Contains("exited before", StringComparison.Ordinal)
             || message.Contains("Continuing without", StringComparison.Ordinal)
+            || message.Contains("Could not open", StringComparison.Ordinal)
         )
         {
             Console.Error.WriteLine(message);

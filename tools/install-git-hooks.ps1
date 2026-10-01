@@ -3,6 +3,11 @@
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 
+# A git hook exports GIT_DIR. Git then treats the process directory as the work
+# tree, and a CLI build started by the hook would look for tools under
+# src/HeroesReplay.CLI instead of the repository root.
+Remove-Item Env:GIT_DIR, Env:GIT_WORK_TREE, Env:GIT_INDEX_FILE, Env:GIT_PREFIX, Env:GIT_COMMON_DIR -ErrorAction SilentlyContinue
+
 $root = (git rev-parse --show-toplevel).Trim()
 if (-not $root) {
     throw 'Run from inside the HeroesReplay git clone.'

@@ -409,6 +409,185 @@ public class AspireDashboardHostTests
         Assert.Equal("aspire missing", decision.Error);
     }
 
+    [Fact]
+    public void Ensure_WhenTheDashboardComesUp_OpensTheDashboardUrl()
+    {
+        bool started = false;
+        var opened = new List<string>();
+        var lines = new List<string>();
+        DashboardEnsureResult result = AspireDashboardHost.Ensure(
+            () => started,
+            invocation =>
+            {
+                started = true;
+                return new AspireProcessStart(42, null, null);
+            },
+            pid => true,
+            Array.Empty<string>(),
+            path => false,
+            aspireOnPath: true,
+            pathFallbackDirectory: @"C:\repo",
+            lines.Add,
+            wait: _ => { },
+            startupBudget: TimeSpan.FromMinutes(5),
+            openBrowser: opened.Add
+        );
+
+        Assert.True(result.Listening);
+        Assert.True(result.Launched);
+        Assert.Equal(new[] { AspireDashboardHost.UiUrl }, opened);
+        Assert.Contains(lines, line => line == "Opening http://127.0.0.1:18888.");
+    }
+
+    [Fact]
+    public void Ensure_WhenAlreadyListening_DoesNotOpenTheBrowser()
+    {
+        var opened = new List<string>();
+        DashboardEnsureResult result = AspireDashboardHost.Ensure(
+            () => true,
+            invocation => throw new InvalidOperationException("should not start"),
+            pid => true,
+            Array.Empty<string>(),
+            path => false,
+            aspireOnPath: false,
+            pathFallbackDirectory: null,
+            log: _ => { },
+            wait: _ => { },
+            startupBudget: TimeSpan.Zero,
+            openBrowser: opened.Add
+        );
+
+        Assert.True(result.Listening);
+        Assert.False(result.Launched);
+        Assert.Empty(opened);
+    }
+
+    [Fact]
+    public void Ensure_WhenAlreadyListeningAndRequested_OpensTheDashboardUrl()
+    {
+        var opened = new List<string>();
+        var lines = new List<string>();
+        DashboardEnsureResult result = AspireDashboardHost.Ensure(
+            () => true,
+            invocation => throw new InvalidOperationException("should not start"),
+            pid => true,
+            Array.Empty<string>(),
+            path => false,
+            aspireOnPath: false,
+            pathFallbackDirectory: null,
+            lines.Add,
+            wait: _ => { },
+            startupBudget: TimeSpan.Zero,
+            openWhenAlreadyListening: true,
+            openBrowser: opened.Add
+        );
+
+        Assert.True(result.Listening);
+        Assert.False(result.Launched);
+        Assert.Equal(new[] { "http://127.0.0.1:18888" }, opened);
+        Assert.Contains(lines, line => line == "Opening http://127.0.0.1:18888.");
+    }
+
+    [Fact]
+    public void Ensure_WhenStartFails_DoesNotOpenTheBrowser()
+    {
+        var opened = new List<string>();
+        DashboardEnsureResult result = AspireDashboardHost.Ensure(
+            () => false,
+            invocation => new AspireProcessStart(null, "restore failed", null),
+            pid => true,
+            Array.Empty<string>(),
+            path => false,
+            aspireOnPath: true,
+            pathFallbackDirectory: @"C:\repo",
+            log: _ => { },
+            wait: _ => { },
+            startupBudget: TimeSpan.Zero,
+            openBrowser: opened.Add
+        );
+
+        Assert.False(result.Listening);
+        Assert.False(result.Launched);
+        Assert.Empty(opened);
+    }
+
+    [Fact]
+    public void Ensure_WhenTheBrowserThrows_StillReportsTheDashboardListening()
+    {
+        bool started = false;
+        var lines = new List<string>();
+        DashboardEnsureResult result = AspireDashboardHost.Ensure(
+            () => started,
+            invocation =>
+            {
+                started = true;
+                return new AspireProcessStart(42, null, null);
+            },
+            pid => true,
+            Array.Empty<string>(),
+            path => false,
+            aspireOnPath: true,
+            pathFallbackDirectory: @"C:\repo",
+            lines.Add,
+            wait: _ => { },
+            startupBudget: TimeSpan.FromMinutes(5),
+            openBrowser: _ => throw new InvalidOperationException("browser blocked")
+        );
+
+        Assert.True(result.Listening);
+        Assert.True(result.Launched);
+        Assert.Contains(
+            lines,
+            line => line.Contains("Could not open http://127.0.0.1:18888. browser blocked")
+        );
+    }
+
+    [Fact]
+    public void Ensure_WhenTheProcessExitsBeforeThePortOpens_DoesNotOpenTheBrowser()
+    {
+        var opened = new List<string>();
+        DashboardEnsureResult result = AspireDashboardHost.Ensure(
+            () => false,
+            invocation => new AspireProcessStart(7, null, null),
+            pid => false,
+            Array.Empty<string>(),
+            path => false,
+            aspireOnPath: true,
+            pathFallbackDirectory: @"C:\repo",
+            log: _ => { },
+            wait: _ => throw new InvalidOperationException("should not wait"),
+            startupBudget: TimeSpan.FromMinutes(5),
+            openBrowser: opened.Add
+        );
+
+        Assert.False(result.Listening);
+        Assert.True(result.Launched);
+        Assert.Empty(opened);
+    }
+
+    [Fact]
+    public void Ensure_WhenThePortNeverOpens_DoesNotOpenTheBrowser()
+    {
+        var opened = new List<string>();
+        DashboardEnsureResult result = AspireDashboardHost.Ensure(
+            () => false,
+            invocation => new AspireProcessStart(7, null, null),
+            pid => true,
+            Array.Empty<string>(),
+            path => false,
+            aspireOnPath: true,
+            pathFallbackDirectory: @"C:\repo",
+            log: _ => { },
+            wait: _ => { },
+            startupBudget: TimeSpan.Zero,
+            openBrowser: opened.Add
+        );
+
+        Assert.False(result.Listening);
+        Assert.True(result.Launched);
+        Assert.Empty(opened);
+    }
+
     private static string NewManifestRoot()
     {
         string root = Path.Combine(Path.GetTempPath(), $"aspire-manifest-{Guid.NewGuid():N}");

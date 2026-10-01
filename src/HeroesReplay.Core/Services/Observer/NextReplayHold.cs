@@ -7,7 +7,7 @@ namespace HeroesReplay.Core.Services.Observer;
 /// </summary>
 public static class NextReplayHold
 {
-    public static readonly TimeSpan Default = TimeSpan.FromMinutes(1);
+    public static readonly TimeSpan Default = TimeSpan.FromSeconds(90);
 
     public static TimeSpan Duration(TimeSpan configured)
     {

@@ -12,6 +12,7 @@ using HeroesReplay.Core.Services.HeroesProfile;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Services.Status;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 
@@ -352,11 +353,12 @@ public class HeroesProfileProvider : IReplayProvider
 
     private async Task DownloadReplayAsync(HeroesProfileReplay replay, FileInfo fileInfo)
     {
-        using Activity activity = HeroesReplayTelemetry.ActivitySource.StartActivity(
-            "heroesreplay.replay.download"
+        using Activity session = HeroesReplayTelemetry.BeginReplaySession(replay.Id);
+        using Activity activity = HeroesReplayTelemetry.StartSpan(
+            "heroesreplay.replay.download",
+            session
         );
-        activity?.SetTag("replay.id", replay.Id);
-        activity?.SetTag("replay.map", replay.Map);
+        HeroesReplayTelemetry.TagReplay(activity, map: replay.Map, replayId: replay.Id);
 
         try
         {
@@ -370,6 +372,16 @@ public class HeroesProfileProvider : IReplayProvider
                 replay.Id
             );
             await WriteDownloadAsync(replay, fileInfo).ConfigureAwait(false);
+        }
+
+        ReplaySessionFile.Publish(session, replay.Id);
+        if (session != null)
+        {
+            logger.LogInformation(
+                "Replay session {ReplayId} trace {TraceId}.",
+                replay.Id,
+                session.TraceId
+            );
         }
     }
 

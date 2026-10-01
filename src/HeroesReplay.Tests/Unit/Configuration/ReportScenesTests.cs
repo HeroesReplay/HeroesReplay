@@ -13,8 +13,8 @@ public class ReportScenesTests
 {
     private static readonly string[] ExpectedScenes =
     {
-        "prediction-report",
         "match-report",
+        "prediction-report",
         "request-queue",
     };
 
@@ -73,7 +73,7 @@ public class ReportScenesTests
         Assert.Equal(ExpectedScenes, names);
         Assert.Equal(ExpectedScenes.Length, names.Distinct().Count());
         Assert.Equal(
-            "00:01:00",
+            "00:01:30",
             document.RootElement.GetProperty("OBS").GetProperty("BeforeNextReplay").GetString()
         );
     }

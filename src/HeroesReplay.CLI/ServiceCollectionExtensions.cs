@@ -129,9 +129,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
             .AddSingleton<StormClientConfigurator>()
             .AddSingleton(new CancellationTokenProvider(token))
-            .AddHeroesProfileKiotaClient()
-            .AddHttpClient<IHeroesProfileService, HeroesProfileService>()
-            .Services.AddTwitchExtensionClient()
+            .AddHeroesProfileService()
+            .AddTwitchExtensionClient()
             .AddSingleton<OBSWebsocket>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
             .AddSingleton<IApiSettings>(serviceProvider =>
@@ -264,9 +263,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<ITwitchRewardsManager, TwitchRewardsManager>()
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
-            .AddHeroesProfileKiotaClient()
-            .AddHttpClient<HeroesProfileService>()
-            .Services.AddSingleton<IHeroesProfileService, HeroesProfileService>()
+            .AddHeroesProfileService()
             .AddSingleton<ITwitchPubSub, TwitchPubSub>()
             .AddSingleton<ITwitchAPI, TwitchAPI>()
             .AddSingleton<EventSubRewardListener>()
@@ -405,9 +402,7 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton<IReplayContext>(provider => provider.GetRequiredService<ReplayContext>())
             .AddTwitchExtensionClient()
-            .AddHeroesProfileKiotaClient()
-            .AddHttpClient<HeroesProfileService>()
-            .Services.AddSingleton<IHeroesProfileService, HeroesProfileService>()
+            .AddHeroesProfileService()
             .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
             .AddSingleton<IContextFileManager, ContextFileManager>()
             .AddSingleton<IOnMessageHandler, OnMessageReceivedHandler>()
@@ -495,6 +490,13 @@ public static class ServiceCollectionExtensions
             )
         );
         return services;
+    }
+
+    public static IServiceCollection AddHeroesProfileService(this IServiceCollection services)
+    {
+        return services
+            .AddHeroesProfileKiotaClient()
+            .AddSingleton<IHeroesProfileService, HeroesProfileService>();
     }
 
     private static IServiceCollection AddHeroesProfileKiotaClient(this IServiceCollection services)

@@ -271,7 +271,7 @@ public class YouTubeTitleTests
         );
         string prodText = File.ReadAllText(prod);
         Assert.Contains("\"Xal'atath\"", prodText, StringComparison.Ordinal);
-        Assert.Contains("\"BeforeNextReplay\": \"00:01:00\"", prodText, StringComparison.Ordinal);
+        Assert.Contains("\"BeforeNextReplay\": \"00:01:30\"", prodText, StringComparison.Ordinal);
     }
 
     private static LoadedReplay ReplayWith(params string[] heroes)

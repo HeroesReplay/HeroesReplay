@@ -17,6 +17,7 @@ using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Media;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Retention;
+using HeroesReplay.Core.Services.Status;
 using HeroesReplay.Core.Services.YouTube.Outbox;
 using Microsoft.Extensions.Logging;
 
@@ -48,6 +49,7 @@ public class YouTubeUploader : IYouTubeUploader
     private string lastHero;
     private DateTimeOffset? lastHeroUtc;
     private bool ledgerLoaded;
+    private readonly HashSet<int> joinedReplaySessions = new();
 
     public YouTubeUploader(
         ILogger<YouTubeUploader> logger,
@@ -60,6 +62,34 @@ public class YouTubeUploader : IYouTubeUploader
         this.settings = settings;
         this.cancellationTokenSource = cancellationTokenSource;
         this.library = library;
+    }
+
+    private void JoinKnownReplaySessions()
+    {
+        foreach (int id in ReplaySessionFile.ReadIds())
+        {
+            JoinReplaySession(id);
+        }
+    }
+
+    private void JoinReplaySession(int? replayId)
+    {
+        if (replayId is not int id || id <= 0 || !joinedReplaySessions.Add(id))
+        {
+            return;
+        }
+
+        using System.Diagnostics.Activity joined = ReplaySessionFile.Join(
+            id,
+            "heroesreplay.session.joined"
+        );
+        if (joined == null)
+        {
+            joinedReplaySessions.Remove(id);
+            return;
+        }
+
+        logger.LogInformation("Replay session {ReplayId} trace {TraceId}.", id, joined.TraceId);
     }
 
     private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
@@ -107,13 +137,28 @@ public class YouTubeUploader : IYouTubeUploader
         );
         try
         {
+            JoinKnownReplaySessions();
             await SendPendingAsync().ConfigureAwait(false);
             await FileLibraryAsync().ConfigureAwait(false);
             DateTimeOffset drained = DateTimeOffset.UtcNow;
             while (!cancellationTokenSource.IsCancellationRequested)
             {
-                await Task.Delay(UploadDrain.Poll, cancellationTokenSource.Token)
-                    .ConfigureAwait(false);
+                TimeSpan waited = TimeSpan.Zero;
+                while (
+                    waited < UploadDrain.Poll && !cancellationTokenSource.IsCancellationRequested
+                )
+                {
+                    TimeSpan slice = TimeSpan.FromSeconds(2);
+                    if (waited + slice > UploadDrain.Poll)
+                    {
+                        slice = UploadDrain.Poll - waited;
+                    }
+
+                    await Task.Delay(slice, cancellationTokenSource.Token).ConfigureAwait(false);
+                    waited += slice;
+                    JoinKnownReplaySessions();
+                }
+
                 DateTimeOffset now = DateTimeOffset.UtcNow;
                 if (!UploadDrain.ShouldDrain(settings.YouTube.DryRun, drained, now))
                 {
@@ -161,6 +206,7 @@ public class YouTubeUploader : IYouTubeUploader
             return;
         }
 
+        JoinReplaySession(entry.ReplayId);
         YouTubeListing.StampForHost(entry, settings.YouTube, Environment.MachineName);
         if (string.IsNullOrWhiteSpace(entry.DesiredPrivacyStatus))
         {

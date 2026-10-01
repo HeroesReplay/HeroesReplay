@@ -34,9 +34,9 @@ public class OBSSettings
     /// <summary>
     /// Minimum wait after the previous game exits, before the next replay launches.
     /// Report scenes finish in this time. When they finish first, the waiting scene
-    /// stays up for the rest. Zero launches immediately. Default one minute.
+    /// stays up for the rest. Zero launches immediately. Default 90 seconds.
     /// </summary>
-    public TimeSpan BeforeNextReplay { get; set; } = TimeSpan.FromMinutes(1);
+    public TimeSpan BeforeNextReplay { get; set; } = TimeSpan.FromSeconds(90);
     public IEnumerable<ReportScene> ReportScenes { get; set; }
     public string ReportBrowserCss { get; set; }
 

@@ -77,6 +77,16 @@ public class GameManager : IGameManager
         Func<Task<LoadedReplay>> whileReporting
     )
     {
+        using Activity replaySession = ReplaySessionFile.Open(loadedReplay?.ReplayId);
+        if (replaySession != null && loadedReplay?.ReplayId is int openedReplayId)
+        {
+            logger.LogInformation(
+                "Replay session {ReplayId} trace {TraceId}.",
+                openedReplayId,
+                replaySession.TraceId
+            );
+        }
+
         MediaRetention.SweepAndLog(settings, logger);
         await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
         MediaPolicySnapshot preLaunch = await mediaPolicy
@@ -633,7 +643,7 @@ public class GameManager : IGameManager
         }
 
         logger.LogInformation(
-            "Waiting {Hold} before launching the next replay so prediction-report, match-report, and request-queue can finish.",
+            "Waiting {Hold} before launching the next replay so match-report, prediction-report, and request-queue can finish.",
             hold
         );
         Task pause = Task.Delay(hold);
