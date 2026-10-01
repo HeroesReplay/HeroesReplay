@@ -51,6 +51,11 @@ public class YouTubeUploader : IYouTubeUploader
     private bool ledgerLoaded;
     private readonly HashSet<int> joinedReplaySessions = new();
 
+    /// <summary>
+    /// Tests point this at a temp file. Production uses the shared session file.
+    /// </summary>
+    internal string ReplaySessionFilePath { get; set; }
+
     public YouTubeUploader(
         ILogger<YouTubeUploader> logger,
         AppSettings settings,
@@ -66,30 +71,39 @@ public class YouTubeUploader : IYouTubeUploader
 
     private void JoinKnownReplaySessions()
     {
-        foreach (int id in ReplaySessionFile.ReadIds())
+        foreach (int id in ReplaySessionFile.ReadIds(ReplaySessionFilePath))
         {
-            JoinReplaySession(id);
+            using System.Diagnostics.Activity session = HoldReplaySession(id);
+            if (session == null)
+            {
+                continue;
+            }
         }
     }
 
-    private void JoinReplaySession(int? replayId)
+    private System.Diagnostics.Activity HoldReplaySession(int? replayId)
     {
-        if (replayId is not int id || id <= 0 || !joinedReplaySessions.Add(id))
+        if (replayId is not int id || id <= 0)
         {
-            return;
+            return null;
         }
 
-        using System.Diagnostics.Activity joined = ReplaySessionFile.Join(
+        System.Diagnostics.Activity joined = ReplaySessionFile.Join(
             id,
-            "heroesreplay.session.joined"
+            "heroesreplay.session.joined",
+            ReplaySessionFilePath
         );
         if (joined == null)
         {
-            joinedReplaySessions.Remove(id);
-            return;
+            return null;
         }
 
-        logger.LogInformation("Replay session {ReplayId} trace {TraceId}.", id, joined.TraceId);
+        if (joinedReplaySessions.Add(id))
+        {
+            logger.LogInformation("Replay session {ReplayId} trace {TraceId}.", id, joined.TraceId);
+        }
+
+        return joined;
     }
 
     private async void FileSystemWatcher_Created(object sender, FileSystemEventArgs e)
@@ -206,7 +220,8 @@ public class YouTubeUploader : IYouTubeUploader
             return;
         }
 
-        JoinReplaySession(entry.ReplayId);
+        using System.Diagnostics.Activity replaySession = HoldReplaySession(entry.ReplayId);
+        HeroesReplayTelemetry.TagReplay(replaySession, replayId: entry.ReplayId);
         YouTubeListing.StampForHost(entry, settings.YouTube, Environment.MachineName);
         if (string.IsNullOrWhiteSpace(entry.DesiredPrivacyStatus))
         {

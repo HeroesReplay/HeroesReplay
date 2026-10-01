@@ -22,6 +22,11 @@ public sealed class StatusPredictionWatcher
     private readonly HashSet<string> settled = new(StringComparer.Ordinal);
     private readonly HashSet<int> joinedReplaySessions = new();
 
+    /// <summary>
+    /// Tests point this at a temp file. Production uses the shared session file.
+    /// </summary>
+    internal string ReplaySessionFilePath { get; set; }
+
     public StatusPredictionWatcher(
         ILogger<StatusPredictionWatcher> logger,
         AppSettings settings,
@@ -44,7 +49,11 @@ public sealed class StatusPredictionWatcher
             return;
         }
 
-        using Activity joined = ReplaySessionFile.Join(id, "heroesreplay.session.joined");
+        using Activity joined = ReplaySessionFile.Join(
+            id,
+            "heroesreplay.session.joined",
+            ReplaySessionFilePath
+        );
         if (joined == null)
         {
             joinedReplaySessions.Remove(id);
@@ -124,7 +133,7 @@ public sealed class StatusPredictionWatcher
         }
     }
 
-    private async Task StepAsync(
+    internal async Task StepAsync(
         PredictionSessionTracker tracker,
         CancellationToken cancellationToken
     )
@@ -142,6 +151,17 @@ public sealed class StatusPredictionWatcher
             status,
             settled
         );
+        using Activity prediction = signal.Kind switch
+        {
+            PredictionSignalKind.None => null,
+            _ when status.ReplayId is int replayId => ReplaySessionFile.Join(
+                replayId,
+                "heroesreplay.session.joined",
+                ReplaySessionFilePath
+            ),
+            _ => null,
+        };
+        HeroesReplayTelemetry.TagReplay(prediction, replayId: status.ReplayId);
 
         switch (signal.Kind)
         {
