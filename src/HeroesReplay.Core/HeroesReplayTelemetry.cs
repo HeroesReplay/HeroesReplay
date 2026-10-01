@@ -67,7 +67,24 @@ public static class HeroesReplayTelemetry
 
     public static Activity BeginReplaySession(int replayId)
     {
-        Activity activity = StartSpan("heroesreplay.session");
+        Activity activity = ActivitySource.CreateActivity(
+            "heroesreplay.session",
+            ActivityKind.Internal
+        );
+        if (activity == null)
+        {
+            return null;
+        }
+
+        // CreateActivity would otherwise adopt Activity.Current and reuse the process
+        // trace for every replay. A remote parent gives this replay its own trace id.
+        // Stop still restores the process activity that was current.
+        ActivityTraceId traceId = ActivityTraceId.CreateRandom();
+        ActivitySpanId remoteParent = ActivitySpanId.CreateRandom();
+        activity.SetParentId(
+            string.Create(CultureInfo.InvariantCulture, $"00-{traceId}-{remoteParent}-01")
+        );
+        activity.Start();
         TagReplay(activity, replayId: replayId);
         return activity;
     }

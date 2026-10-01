@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Services.Client;
@@ -40,17 +41,6 @@ public static class BattleNetLauncherCheck
                 );
             }
 
-            var capture = new PrintWindowCapture(NullLogger<PrintWindowCapture>.Instance);
-            using Bitmap bitmap = capture.Capture(window.MainWindowHandle);
-            if (bitmap == null)
-            {
-                return new CheckCommand.CheckResult(
-                    "battlenet",
-                    false,
-                    "Could not capture the Battle.net window."
-                );
-            }
-
             if (engine == null)
             {
                 return new CheckCommand.CheckResult(
@@ -60,9 +50,31 @@ public static class BattleNetLauncherCheck
                 );
             }
 
-            string text = await RecognizeAsync(engine, bitmap).ConfigureAwait(false);
+            string text = null;
+            bool captured = false;
+            for (int attempt = 0; attempt < 3 && string.IsNullOrWhiteSpace(text); attempt++)
+            {
+                using Bitmap bitmap = CaptureAware(window.MainWindowHandle);
+                if (bitmap == null)
+                {
+                    continue;
+                }
+
+                captured = true;
+                text = await RecognizeAsync(engine, bitmap).ConfigureAwait(false);
+            }
+
+            if (!captured)
+            {
+                return new CheckCommand.CheckResult(
+                    "battlenet",
+                    false,
+                    "Could not capture the Battle.net window."
+                );
+            }
+
             string button = LauncherButtonText.Classify(text);
-            if (button is "Play" or "Update" or "Updating")
+            if (button is "Play" or "Playing" or "Update" or "Updating")
             {
                 return new CheckCommand.CheckResult(
                     "battlenet",
@@ -97,6 +109,25 @@ public static class BattleNetLauncherCheck
         }
     }
 
+    private static Bitmap CaptureAware(IntPtr handle)
+    {
+        // The launcher sits on a per-monitor DPI screen. PrintWindow from an
+        // unaware thread returns the virtualized frame, and OCR reads no text.
+        IntPtr previous = Native.SetThreadDpiAwarenessContext(Native.PerMonitorAwareV2);
+        try
+        {
+            var capture = new PrintWindowCapture(NullLogger<PrintWindowCapture>.Instance);
+            return capture.Capture(handle);
+        }
+        finally
+        {
+            if (previous != IntPtr.Zero)
+            {
+                Native.SetThreadDpiAwarenessContext(previous);
+            }
+        }
+    }
+
     private static async Task<string> RecognizeAsync(OcrEngine engine, Bitmap bitmap)
     {
         using var stream = new InMemoryRandomAccessStream();
@@ -113,5 +144,13 @@ public static class BattleNetLauncherCheck
             OcrResult result = await engine.RecognizeAsync(software);
             return result?.Text;
         }
+    }
+
+    private static class Native
+    {
+        public static readonly IntPtr PerMonitorAwareV2 = new(-4);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
     }
 }

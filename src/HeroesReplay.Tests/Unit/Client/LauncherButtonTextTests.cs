@@ -8,6 +8,8 @@ public class LauncherButtonTextTests
 {
     [Theory]
     [InlineData("Heroes of the Storm Play", "Play")]
+    [InlineData("Heroes of the Storm Playing Now", "Playing")]
+    [InlineData("HOME GAMES Playing Now", "Playing")]
     [InlineData("Update", "Update")]
     [InlineData("Updating 42%", "Updating")]
     [InlineData("Update and Play", "Update")]

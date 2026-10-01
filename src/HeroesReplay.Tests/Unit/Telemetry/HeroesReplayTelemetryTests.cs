@@ -33,6 +33,49 @@ public class HeroesReplayTelemetryTests
     }
 
     [Fact]
+    public void BeginReplaySession_StartsItsOwnTraceWhenAnotherActivityIsCurrent()
+    {
+        using ActivityListener listener = new()
+        {
+            ShouldListenTo = source => source.Name == HeroesReplayTelemetry.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        Activity previous = Activity.Current;
+        using var ambient = new Activity("process");
+        ambient.SetIdFormat(ActivityIdFormat.W3C);
+        ambient.Start();
+        try
+        {
+            using Activity session = HeroesReplayTelemetry.BeginReplaySession(424242);
+            Assert.NotNull(session);
+            Assert.NotEqual(ambient.TraceId, session.TraceId);
+            Assert.NotEqual(ambient.SpanId, session.ParentSpanId);
+            Assert.Equal(424242, Convert.ToInt32(session.GetTagItem("replay.id")));
+
+            string stored = HeroesReplayTelemetry.FormatSession(session, 424242);
+            session.Dispose();
+            Assert.Same(ambient, Activity.Current);
+
+            using Activity joined = HeroesReplayTelemetry.JoinReplaySession(
+                stored,
+                "heroesreplay.session.joined"
+            );
+            Assert.NotNull(joined);
+            Assert.Equal(session.TraceId, joined.TraceId);
+            Assert.NotEqual(ambient.TraceId, joined.TraceId);
+            Assert.Equal(424242, Convert.ToInt32(joined.GetTagItem("replay.id")));
+        }
+        finally
+        {
+            ambient.Stop();
+            Activity.Current = previous;
+        }
+    }
+
+    [Fact]
     public void JoinReplaySession_ChildKeepsParentTraceIdAndReplayId()
     {
         using ActivityListener listener = new()

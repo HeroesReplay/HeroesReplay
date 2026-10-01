@@ -80,7 +80,7 @@ public class CheckCommand : Command
         Subcommands.Add(
             Build(
                 "twitch-extension",
-                "Call Heroes Profile GET /api/twitch/v1/uploader/whoami with the uploader key (issue 49).",
+                "Report TwitchExtension:Enabled, or call uploader/whoami when the extension is on (issue 49).",
                 CheckTwitchExtensionAsync
             )
         );
@@ -614,6 +614,14 @@ public class CheckCommand : Command
         {
             using var provider = CreateProvider(cancellationToken);
             AppSettings settings = provider.GetRequiredService<AppSettings>();
+            CheckResult disabled = TwitchExtensionDisabled(
+                settings.TwitchExtension?.Enabled == true
+            );
+            if (disabled != null)
+            {
+                return disabled;
+            }
+
             if (string.IsNullOrWhiteSpace(settings.TwitchExtension?.ApiKey))
             {
                 return new CheckResult(
@@ -646,6 +654,16 @@ public class CheckCommand : Command
         {
             return Fail("twitch-extension", e);
         }
+    }
+
+    public static CheckResult TwitchExtensionDisabled(bool enabled)
+    {
+        if (enabled)
+        {
+            return null;
+        }
+
+        return new CheckResult("twitch-extension", true, "Twitch extension is disabled.");
     }
 
     public static Task<CheckResult> CheckClientAsync(CancellationToken cancellationToken)

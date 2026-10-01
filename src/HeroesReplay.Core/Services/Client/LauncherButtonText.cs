@@ -24,6 +24,11 @@ public static class LauncherButtonText
             return "Update";
         }
 
+        if (Regex.IsMatch(text, @"\bPlaying\b", RegexOptions.IgnoreCase))
+        {
+            return "Playing";
+        }
+
         if (Regex.IsMatch(text, @"\bPlay\b", RegexOptions.IgnoreCase))
         {
             return "Play";
