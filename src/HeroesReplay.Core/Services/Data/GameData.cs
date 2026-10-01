@@ -335,6 +335,12 @@ public class GameData : IGameData
         }
     }
 
+    /// <summary>The herodata file the spectator will load: the highest build under the cache, or null.</summary>
+    public static string NewestHeroData(string root)
+    {
+        return NewestDocument(root, "herodata_*.json", skipMapStrings: false);
+    }
+
     private static string NewestDocument(string root, string pattern, bool skipMapStrings)
     {
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
@@ -417,15 +423,26 @@ public class GameData : IGameData
     private async Task DownloadIfEmptyAsync()
     {
         logger.LogInformation("Downloading heroes-data2 if needed.");
-
-        if (HasHeroesData2(settings.HeroesDataPath))
+        if (!await EnsureDownloadedAsync(force: false).ConfigureAwait(false))
         {
             logger.LogDebug("heroes-data2 is already present. No download needed.");
-            return;
+        }
+    }
+
+    /// <summary>
+    /// Downloads the latest heroes-data2 release into the cache when it is missing, or always when
+    /// <paramref name="force"/> is set (a new game patch). Extraction overwrites; the newest build wins.
+    /// Returns true when a release was downloaded.
+    /// </summary>
+    public async Task<bool> EnsureDownloadedAsync(bool force)
+    {
+        if (!force && HasHeroesData2(settings.HeroesDataPath))
+        {
+            return false;
         }
 
         logger.LogInformation(
-            "heroes-data2 is not in {Path}. Downloading the latest HeroesToolChest/heroes-data2 release.",
+            "Downloading the latest HeroesToolChest/heroes-data2 release into {Path}.",
             settings.HeroesDataPath
         );
         Directory.CreateDirectory(settings.HeroesDataPath);
@@ -486,6 +503,8 @@ public class GameData : IGameData
                 }
             }
         }
+
+        return true;
     }
 
     /// <summary>

@@ -54,6 +54,8 @@ public static class ServiceSupervisor
         }
 
         clearStopFile?.Invoke();
+        // A start that does not finish must not leave an older "ready" behind.
+        handshake.RolesReady?.Invoke(null);
         try
         {
             ensureDashboard?.Invoke();
@@ -133,6 +135,7 @@ public static class ServiceSupervisor
             lockPath,
             new ServiceLock { StartedAt = DateTimeOffset.UtcNow, Processes = started }
         );
+        handshake.RolesReady?.Invoke(DateTimeOffset.UtcNow);
         Console.WriteLine(TwitchIngestGuard.NotStartedMessage);
         Console.WriteLine(
             $"OpenTelemetry export: {AspireDashboardHost.OtlpGrpcEndpoint} (Aspire dashboard {AspireDashboardHost.UiUrl})."

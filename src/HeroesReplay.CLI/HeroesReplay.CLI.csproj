@@ -52,7 +52,7 @@
             <Link>apply-release.ps1</Link>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Include="..\..\tools\ensure-secrets.ps1;..\..\tools\fill-secrets-from-op.ps1">
+        <None Include="..\..\tools\ensure-secrets.ps1;..\..\tools\fill-secrets-from-op.ps1;..\..\tools\register-autostart.ps1">
             <Link>%(Filename)%(Extension)</Link>
             <CopyToOutputDirectory>Never</CopyToOutputDirectory>
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

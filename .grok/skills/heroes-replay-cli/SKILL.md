@@ -25,6 +25,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `spectate file [--file path]` | Play one `.StormReplay` or each file in a directory, then exit. Starts the Aspire dashboard when OTLP :4317 is down; dashboard failure does not fail the replay. |
 | `spectate heroesprofile` | Play `.StormReplay` files already in `Data\Standard` and `Data\Requests`. Does not call Heroes Profile. Same dashboard startup as `spectate file`. |
 | `heroesprofile download` | List and download Storm League replays into `Data\Standard` and `Data\Requests`. Does not launch the game. |
+| `data status` / `data download [--force]` | heroes-data2 cache in `Data\HeroesData`. `download` fetches the latest release when the cache is empty; `--force` fetches it again after a game patch. `services start` also downloads it when the cache is empty, because the download role checks for it before any role runs. |
 | `services start` | Start spectate, `twitch connect`, `heroesprofile download`, and `youtube uploader` as separate processes. Logs under `%LOCALAPPDATA%\HeroesReplay\logs`. Does not start Twitch ingest. Starts the Aspire dashboard first when OTLP :4317 is not listening; a dashboard failure does not fail the services. |
 | `services stop` | Write `services.stop`, wait up to 20s, kill any `heroesreplay` pid still recorded, and close Heroes of the Storm. Do not leave the game client open after this. |
 | `services status` | Which of those processes are still alive, plus `status.json`. |

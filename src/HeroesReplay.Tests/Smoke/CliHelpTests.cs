@@ -42,6 +42,19 @@ public class CliHelpTests
     }
 
     [Fact]
+    public void DataHelp_HasStatusAndDownloadWithForce()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("data download --force");
+        Assert.Empty(result.Errors);
+        Assert.Empty(root.Parse("data --help").Errors);
+        Command data = root.Subcommands.Single(c => c.Name == "data");
+        Assert.Contains(data.Subcommands, c => c.Name == "status");
+        Command download = data.Subcommands.Single(c => c.Name == "download");
+        Assert.Contains(download.Options, o => o.Name == "--force");
+    }
+
+    [Fact]
     public void ClientHelp_HasConfigureAndStatus()
     {
         var root = new HeroesReplayCommand();

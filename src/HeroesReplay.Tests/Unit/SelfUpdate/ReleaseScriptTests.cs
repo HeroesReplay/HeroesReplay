@@ -27,6 +27,18 @@ public class ReleaseScriptTests
         Assert.DoesNotContain("CreationTime", script);
     }
 
+    [Fact]
+    public void ApplyRelease_LogsClosesTheMcpServerAndRestartsWhenNotYetStable()
+    {
+        string script = File.ReadAllText(FindScript());
+
+        Assert.Contains("apply-release.log", script);
+        Assert.Contains(@"-match '\smcp(\s|$)'", script);
+        int gate = script.IndexOf("stabilization window", StringComparison.Ordinal);
+        int exit = script.IndexOf("exit 1", gate, StringComparison.Ordinal);
+        Assert.Contains("Start-HeroesReplayStack", script.Substring(gate, exit - gate));
+    }
+
     private static string FindScript([CallerFilePath] string sourceFile = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(sourceFile) ?? AppContext.BaseDirectory);

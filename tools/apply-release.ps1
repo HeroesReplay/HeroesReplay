@@ -91,9 +91,27 @@ function Restore-PreviousInstall([string]$Previous) {
     }
 }
 
+# The spectator starts this script hidden. Keep a log so a failed update can be read afterwards.
+$logDir = Join-Path $env:LOCALAPPDATA 'HeroesReplay\logs'
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+try {
+    Start-Transcript -Path (Join-Path $logDir 'apply-release.log') -Append | Out-Null
+}
+catch {
+}
+
 if ($WaitForPid -gt 0) {
     Wait-Process -Id $WaitForPid -ErrorAction SilentlyContinue
 }
+
+# An agent's `heroesreplay mcp` server only reads status. It holds the install's files open
+# and never exits on services.stop, so close it here. The agent's client starts it again.
+Get-CimInstance Win32_Process -Filter "Name='heroesreplay.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match '\smcp(\s|$)' } |
+    ForEach-Object {
+        Write-Host "Stopping heroesreplay mcp pid $($_.ProcessId) so the install can be replaced."
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
 
 $deadline = (Get-Date).AddMinutes(2)
 while ((Get-Process heroesreplay -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
@@ -132,8 +150,9 @@ if (Test-Path -LiteralPath $previous) {
     $healthExe = Join-Path $source 'heroesreplay.exe'
     & $healthExe update release-health --role-file $roleFile
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Previous install is still inside the stabilization window."
+        Write-Host "Previous install is still inside the stabilization window. Restarting the current build."
         Clear-ServiceStop
+        Start-HeroesReplayStack
         exit 1
     }
 

@@ -267,6 +267,69 @@ public class ServiceSupervisorTests
     }
 
     [Fact]
+    public void Start_MarksRolesReadyAfterEveryRoleIsReady()
+    {
+        string path = TempLock();
+        try
+        {
+            var marks = new List<DateTimeOffset?>();
+            int launched = 0;
+            ServiceStartupHandshake handshake = ServiceStartupHandshake.ReadyNow();
+            handshake.RolesReady = since =>
+            {
+                Assert.True(since == null || launched == 4);
+                marks.Add(since);
+            };
+            DateTimeOffset before = DateTimeOffset.UtcNow;
+            int code = ServiceSupervisor.Start(
+                path,
+                @"C:\heroesreplay\heroesreplay.exe",
+                pid => null,
+                (name, arguments) => 300 + ++launched,
+                handshake: handshake
+            );
+
+            Assert.Equal(0, code);
+            Assert.Equal(2, marks.Count);
+            Assert.Null(marks[0]);
+            Assert.NotNull(marks[1]);
+            Assert.True(marks[1] >= before);
+            Assert.Equal(TimeSpan.Zero, marks[1].Value.Offset);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Start_ClearsRolesReadyAndDoesNotMarkItWhenARoleFails()
+    {
+        string path = TempLock();
+        try
+        {
+            var marks = new List<DateTimeOffset?>();
+            ServiceStartupHandshake handshake = ServiceStartupHandshake.ReadyNow();
+            handshake.RolesReady = marks.Add;
+            handshake.StopStarted = _ => { };
+            int code = ServiceSupervisor.Start(
+                path,
+                @"C:\heroesreplay\heroesreplay.exe",
+                pid => null,
+                (name, arguments) => name == "twitch" ? null : 400,
+                handshake: handshake
+            );
+
+            Assert.Equal(1, code);
+            Assert.Equal(new DateTimeOffset?[] { null }, marks);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Start_RollsBackWhenAProcessDoesNotStart()
     {
         string path = TempLock();
@@ -652,13 +715,12 @@ public class ServiceSupervisorTests
                 (name, arguments) => 41,
                 handshake: new ServiceStartupHandshake
                 {
-                    TryReadReady = record =>
-                        new ServiceReadyReport
-                        {
-                            Role = record.Name,
-                            Nonce = record.Nonce,
-                            ReadyAt = readyAt,
-                        },
+                    TryReadReady = record => new ServiceReadyReport
+                    {
+                        Role = record.Name,
+                        Nonce = record.Nonce,
+                        ReadyAt = readyAt,
+                    },
                     ReadyTimeout = TimeSpan.FromSeconds(30),
                     Wait = _ => throw new InvalidOperationException("should not wait after exit"),
                     StopStarted = stopped.Add,

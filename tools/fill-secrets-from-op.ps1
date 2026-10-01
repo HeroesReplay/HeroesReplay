@@ -74,6 +74,16 @@ $j = [ordered]@{
     }
 }
 
+# `services start` refuses the Twitch role unless Twitch:GrantedScopes covers chat, redemptions,
+# and predictions. Ask Twitch which scopes this token really has.
+try {
+    $validate = Invoke-RestMethod -Uri 'https://id.twitch.tv/oauth2/validate' -Headers @{ Authorization = "OAuth $($j.Twitch.AccessToken)" }
+    $j.Twitch.GrantedScopes = (@($validate.scopes) -join ' ')
+}
+catch {
+    Write-Warning "Twitch token validate failed ($($_.Exception.Message)). Twitch:GrantedScopes was not written; the Twitch role will not start until the token is replaced."
+}
+
 $j | ConvertTo-Json -Depth 8 | Set-Content $dest -Encoding utf8
 
 if ($cli) {

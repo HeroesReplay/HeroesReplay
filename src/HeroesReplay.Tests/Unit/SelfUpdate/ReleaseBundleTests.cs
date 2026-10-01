@@ -15,6 +15,7 @@ public class ReleaseBundleTests
     [InlineData(@"deploy\production\.grok\config.toml")]
     [InlineData(@"tools\ensure-secrets.ps1")]
     [InlineData(@"tools\fill-secrets-from-op.ps1")]
+    [InlineData(@"tools\register-autostart.ps1")]
     public void ProductionAgentFiles_ArePublishedWithTheRelease(string relativePath)
     {
         string root = FindRepoRoot();

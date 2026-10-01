@@ -46,8 +46,9 @@ The zip carries everything an agent needs to run production without the repo. Th
 | `CLAUDE.md` | `deploy/production/CLAUDE.md` | `@AGENTS.md`, so Claude Code loads the same runbook. |
 | `.mcp.json` | `deploy/production/.mcp.json` | Claude Code MCP servers. |
 | `.grok/config.toml` | `deploy/production/.grok/config.toml` | Grok MCP servers. |
-| `ensure-secrets.ps1` | `tools/ensure-secrets.ps1` | Puts `appsettings.secrets.json` beside the exe: install file, then `C:\heroesreplay\secrets`, then 1Password. Backs up a good file. Prints lengths only. |
+| `ensure-secrets.ps1` | `tools/ensure-secrets.ps1` | Puts `appsettings.secrets.json` beside the exe: install file, then `C:\heroesreplay\secrets`, then 1Password. Validates the Twitch token and writes `Twitch:GrantedScopes` from it (the Twitch role needs them). The newer of install and backup wins. Prints names, lengths, and scopes only. |
 | `fill-secrets-from-op.ps1` | `tools/fill-secrets-from-op.ps1` | Without a git clone it writes beside the exe, or to `-Destination`. |
+| `register-autostart.ps1` | `tools/register-autostart.ps1` | Writes `start-live.cmd` and the `HeroesReplay-live` logon task that `apply-release.ps1` restarts through. Nothing else creates them. |
 
 Start the agent in `C:\heroesreplay\app`. When the runbook changes, merge to `master`; the next self-update replaces it on the machine.
 

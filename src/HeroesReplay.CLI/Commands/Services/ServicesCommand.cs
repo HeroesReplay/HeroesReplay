@@ -6,9 +6,13 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Processes;
+using HeroesReplay.Core.Services.SelfUpdate;
 using HeroesReplay.Core.Services.Status;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HeroesReplay.CLI.Commands.Services;
 
@@ -36,6 +40,7 @@ public class ServicesCommand : Command
             {
                 string exe = Environment.ProcessPath;
                 PatchObsCollection(exe);
+                EnsureHeroesData();
                 ServiceStartupHandshake handshake;
                 try
                 {
@@ -53,6 +58,7 @@ public class ServicesCommand : Command
                 handshake.StopStarted = Kill;
                 handshake.Probe = ServiceProcessProbe.TryFromProcess;
                 handshake.Wait = Thread.Sleep;
+                handshake.RolesReady = since => WriteRoleReadyFile(exe, since);
                 int code = ServiceSupervisor.Start(
                     ServiceLockStore.DefaultPath,
                     exe,
@@ -69,6 +75,52 @@ public class ServicesCommand : Command
             }
         );
         return command;
+    }
+
+    // The download role's startup check needs herodata before any role runs, and on a fresh
+    // install nothing has fetched it yet. A failure here is reported by that check.
+    private static void EnsureHeroesData()
+    {
+        try
+        {
+            AppSettings settings = ServiceCollectionExtensions.LoadAppSettings();
+            if (GameData.NewestHeroData(settings.HeroesDataPath) != null)
+            {
+                return;
+            }
+
+            Console.WriteLine(
+                $"heroes-data2 is missing in {settings.HeroesDataPath}. Downloading."
+            );
+            new GameData(NullLogger<GameData>.Instance, settings)
+                .EnsureDownloadedAsync(force: false)
+                .GetAwaiter()
+                .GetResult();
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"heroes-data2 download failed: {e.Message}");
+        }
+    }
+
+    private static void WriteRoleReadyFile(string exe, DateTimeOffset? since)
+    {
+        string path = Path.Combine(Path.GetDirectoryName(exe) ?? "", ReleaseHealth.RoleFileName);
+        try
+        {
+            if (since == null)
+            {
+                File.Delete(path);
+            }
+            else
+            {
+                File.WriteAllText(path, ReleaseHealth.FormatRoleFile(since.Value));
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"Could not update {path}: {e.Message}");
+        }
     }
 
     private static Command StopCommand()

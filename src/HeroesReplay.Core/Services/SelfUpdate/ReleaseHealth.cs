@@ -9,6 +9,8 @@ namespace HeroesReplay.Core.Services.SelfUpdate;
 /// </summary>
 public static class ReleaseHealth
 {
+    public const string RoleFileName = "role-ready.txt";
+
     public static readonly TimeSpan StabilizeFor = TimeSpan.FromMinutes(2);
 
     public static bool MayDiscardPrevious(bool allRolesReady, TimeSpan healthyFor)
