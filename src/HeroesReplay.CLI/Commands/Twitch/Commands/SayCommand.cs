@@ -69,6 +69,8 @@ public class SayCommand : Command
 
     private static bool HasJoined(ITwitchClient client)
     {
-        return client.IsConnected && client.JoinedChannels != null && client.JoinedChannels.Count > 0;
+        return client.IsConnected
+            && client.JoinedChannels != null
+            && client.JoinedChannels.Count > 0;
     }
 }

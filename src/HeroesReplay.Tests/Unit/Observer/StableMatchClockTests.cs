@@ -232,7 +232,9 @@ public class StableMatchClockTests
             )
         );
         Assert.True(StableMatchClock.SameCellIsStale(339.6, 339.6, changed, changed.AddSeconds(8)));
-        Assert.True(StableMatchClock.SameCellIsStale(339.6, 339.85, changed, changed.AddSeconds(8)));
+        Assert.True(
+            StableMatchClock.SameCellIsStale(339.6, 339.85, changed, changed.AddSeconds(8))
+        );
     }
 
     [Fact]

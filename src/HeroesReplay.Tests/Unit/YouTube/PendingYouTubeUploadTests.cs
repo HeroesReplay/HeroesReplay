@@ -193,11 +193,7 @@ public class PendingYouTubeUploadTests
     private static UploadAttemptManifest BoundManifest(string mediaPath)
     {
         DateTimeOffset at = new DateTimeOffset(2026, 9, 28, 3, 0, 0, TimeSpan.Zero);
-        UploadAttemptResult prepared = UploadAttemptMachine.Prepare(
-            "replay-bound",
-            65536854,
-            at
-        );
+        UploadAttemptResult prepared = UploadAttemptMachine.Prepare("replay-bound", 65536854, at);
         UploadAttemptResult recording = UploadAttemptMachine.BeginRecording(
             prepared.Manifest,
             at.AddSeconds(1)

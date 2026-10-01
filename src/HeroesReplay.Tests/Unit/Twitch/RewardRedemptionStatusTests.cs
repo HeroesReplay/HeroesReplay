@@ -58,10 +58,7 @@ public class RewardRedemptionStatusTests
             RewardRedemptionStatus.Canceled,
             RewardRedemptionStatus.ForQueue(new RewardResponse(false, "error"))
         );
-        Assert.Equal(
-            RewardRedemptionStatus.Canceled,
-            RewardRedemptionStatus.ForQueue(null)
-        );
+        Assert.Equal(RewardRedemptionStatus.Canceled, RewardRedemptionStatus.ForQueue(null));
     }
 
     [Fact]
