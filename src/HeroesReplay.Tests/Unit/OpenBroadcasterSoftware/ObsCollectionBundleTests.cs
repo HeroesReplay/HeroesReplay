@@ -106,10 +106,14 @@ public class ObsCollectionBundleTests
         Assert.True(inspection.Ok, inspection.Message);
         Assert.Equal(profileBefore, File.ReadAllText(profilePath));
 
-        string rewritten = ObsCollectionPaths.Rewrite(json, obsDirectory, @"C:\heroesreplay\Data");
+        string rewritten = ObsCollectionPaths.Rewrite(
+            json,
+            @"C:\heroesreplay\app\obs",
+            @"C:\heroesreplay\Data"
+        );
         Assert.False(ObsCollectionPaths.ContainsCheckoutPath(rewritten));
         Assert.Contains(
-            obsDirectory.Replace('\\', '/') + "/Ranks/bronze.png",
+            "C:/heroesreplay/app/obs/Ranks/bronze.png",
             rewritten.Replace('\\', '/'),
             StringComparison.OrdinalIgnoreCase
         );
