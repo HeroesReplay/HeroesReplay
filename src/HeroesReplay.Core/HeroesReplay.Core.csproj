@@ -8,6 +8,7 @@
 
     <ItemGroup>
         <PackageReference Include="Google.Apis.YouTube.v3" />
+        <PackageReference Include="Heroes.Element" />
         <PackageReference Include="Heroes.ReplayParser" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
         <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" />

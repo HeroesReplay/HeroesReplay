@@ -117,7 +117,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `C:\heroesreplay\Data\Standard` | Heroes Profile downloaded `.StormReplay` files |
 | `C:\heroesreplay\Data\Requests` | Twitch-requested downloads |
 | `C:\heroesreplay\Data\Contexts` | Per-replay context + OBS recordings (`RecFilePath`) |
-| `C:\heroesreplay\Data\HeroesData` | heroes-data JSON cache |
+| `C:\heroesreplay\Data\HeroesData` | heroes-data2 JSON cache (Heroes.Element). Downloaded from HeroesToolChest/heroes-data2 when that cache is missing |
 | `C:\heroesreplay\secrets` | Local backup of gitignored `appsettings.secrets.json` |
 | `%USERPROFILE%\Documents\Heroes of the Storm\Interfaces` | AhliObs (`client configure`) |
 | `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` |

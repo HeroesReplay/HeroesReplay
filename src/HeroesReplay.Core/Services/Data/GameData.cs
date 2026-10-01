@@ -11,25 +11,21 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Heroes.Element;
+using Heroes.LocaleText;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using Microsoft.Extensions.Logging;
 using static Heroes.ReplayParser.Unit;
+using ElementHero = Heroes.Element.Models.Hero;
+using ElementUnit = Heroes.Element.Models.Unit;
 
 namespace HeroesReplay.Core.Services.Data;
 
 public class GameData : IGameData
 {
-    private const string ScalingLinkIdProperty = "scalingLinkId";
-    private const string HeroUnitsProperty = "heroUnits";
-    private const string UnitIdProperty = "unitId";
-    private const string DescriptorsProperty = "descriptors";
-    private const string AttributesProperty = "attributes";
     private const string ObjectNameSeperator = "-";
-
-    private const string HeroData = "herodata_";
-    private const string UnitData = "unitdata_";
 
     private const string AttributeMapBoss = "MapBoss";
     private const string AttributeMapCreature = "MapCreature";
@@ -64,66 +60,69 @@ public class GameData : IGameData
 
     private async Task LoadHeroesAsync()
     {
-        var file = Directory
-            .GetFiles(settings.HeroesDataPath, "herodata_*.json", SearchOption.AllDirectories)
-            .OrderByDescending(x => int.Parse(Path.GetFileName(x).Split('_')[1]))
-            .FirstOrDefault();
-
-        var heroData = await File.ReadAllTextAsync(file);
-
-        Dictionary<string, string> roles = ReadRoles();
-        List<Hero> heroes = new List<Hero>();
-
-        using (JsonDocument document = JsonDocument.Parse(heroData))
+        string file = NewestDocument(settings.HeroesDataPath, "herodata_*.json", false);
+        if (file == null)
         {
-            foreach (JsonProperty hero in document.RootElement.EnumerateObject())
-            {
-                if (hero.Value.ValueKind == JsonValueKind.Object)
-                {
-                    heroes.Add(
-                        new Hero(
-                            hero.Name,
-                            hero.Value.GetProperty("unitId").GetString(),
-                            hero.Value.GetProperty("hyperlinkId").GetString(),
-                            hero.Value.GetProperty("attributeId").GetString(),
-                            ReadDescriptors(hero.Value),
-                            RoleFor(roles, hero.Name),
-                            ReadReleaseDate(hero.Value)
-                        )
-                    );
-                }
-            }
+            throw new FileNotFoundException(
+                "heroes-data2 herodata JSON was not found.",
+                settings.HeroesDataPath
+            );
         }
 
-        Heroes = new ReadOnlyCollection<Hero>(heroes);
-    }
+        string gamestringsPath = NewestDocument(
+            settings.HeroesDataPath,
+            "gamestrings_*_enus.json",
+            true
+        );
+        GameStringsDocument gamestrings = null;
+        if (gamestringsPath == null)
+        {
+            logger.LogWarning(
+                "No English heroes-data2 gamestrings file found. Hero roles are unavailable."
+            );
+        }
+        else
+        {
+            gamestrings = GameStringsDocument.Load(
+                JsonDocument.Parse(
+                    await File.ReadAllTextAsync(gamestringsPath).ConfigureAwait(false)
+                )
+            );
+        }
 
-    private static IReadOnlyList<string> ReadDescriptors(JsonElement hero)
-    {
-        if (
-            !hero.TryGetProperty(DescriptorsProperty, out JsonElement descriptors)
-            || descriptors.ValueKind != JsonValueKind.Array
+        using (gamestrings)
+        using (
+            HeroDataDocument catalog = HeroDataDocument.Load(
+                JsonDocument.Parse(await File.ReadAllTextAsync(file).ConfigureAwait(false)),
+                gamestrings
+            )
         )
         {
-            return Array.Empty<string>();
-        }
-
-        var tags = new List<string>();
-        foreach (JsonElement tag in descriptors.EnumerateArray())
-        {
-            if (tag.ValueKind != JsonValueKind.String)
+            var heroes = new List<Hero>();
+            foreach (ElementHero hero in catalog.GetElements())
             {
-                continue;
+                heroes.Add(
+                    new Hero(
+                        Plain(hero.Name) ?? hero.Id,
+                        hero.UnitId,
+                        hero.HyperlinkId,
+                        hero.AttributeId,
+                        hero.HeroPlayStyles == null
+                            ? Array.Empty<string>()
+                            : hero.HeroPlayStyles.ToArray(),
+                        Plain(hero.ExpandedRole),
+                        ReleaseDay(hero.ReleaseDate)
+                    )
+                );
             }
 
-            string text = tag.GetString();
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                tags.Add(text.Trim());
-            }
+            Heroes = new ReadOnlyCollection<Hero>(heroes);
+            logger.LogInformation(
+                "Loaded {Count} heroes from heroes-data2 file {File}.",
+                heroes.Count,
+                file
+            );
         }
-
-        return tags;
     }
 
     internal static DateTime? ReadReleaseDate(JsonElement hero)
@@ -154,113 +153,247 @@ public class GameData : IGameData
         return DateTime.SpecifyKind(day, DateTimeKind.Utc);
     }
 
-    private Dictionary<string, string> ReadRoles()
+    private static DateTime? ReleaseDay(DateOnly? day)
     {
-        string file = Directory
-            .GetFiles(
-                settings.HeroesDataPath,
-                "gamestrings_*_enus.json",
-                SearchOption.AllDirectories
-            )
-            .OrderByDescending(BuildNumber)
-            .FirstOrDefault();
-        if (file == null)
+        if (day == null)
         {
-            logger.LogWarning("No English gamestrings file found. Hero roles are unavailable.");
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            return null;
         }
 
-        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(file));
-        if (!TryRoleMap(document.RootElement, out JsonElement map))
-        {
-            logger.LogWarning("Gamestrings file {File} has no hero role map.", file);
-            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        var roles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (JsonProperty entry in map.EnumerateObject())
-        {
-            if (entry.Value.ValueKind != JsonValueKind.String)
-            {
-                continue;
-            }
-
-            string role = entry.Value.GetString();
-            if (!string.IsNullOrWhiteSpace(entry.Name) && !string.IsNullOrWhiteSpace(role))
-            {
-                roles[entry.Name.Trim()] = role.Trim();
-            }
-        }
-
-        return roles;
+        return DateTime.SpecifyKind(day.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
     }
 
-    private static bool TryRoleMap(JsonElement root, out JsonElement map)
+    private static string Plain(GameStringText text)
     {
-        if (
-            TryObject(root, "items", out JsonElement items)
-            && TryObject(items, "hero", out JsonElement hero)
-            && TryObject(hero, "expandedRole", out map)
-        )
+        if (text == null)
         {
-            return true;
+            return null;
         }
 
-        if (
-            TryObject(root, "unit", out JsonElement unit)
-            && TryObject(unit, "expandedrole", out map)
-        )
-        {
-            return true;
-        }
-
-        if (
-            TryObject(root, "hero", out JsonElement legacyHero)
-            && TryObject(legacyHero, "expandedRole", out map)
-        )
-        {
-            return true;
-        }
-
-        map = default;
-        return false;
+        string value = text.PlainText;
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
-    private static bool TryObject(JsonElement parent, string name, out JsonElement child)
+    internal static int BuildNumber(string path)
     {
-        if (parent.ValueKind == JsonValueKind.Object)
+        string name = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+        int value = 0;
+        int build = 0;
+        bool inNumber = false;
+        foreach (char c in name)
         {
-            foreach (JsonProperty property in parent.EnumerateObject())
+            if (c >= '0' && c <= '9')
+            {
+                inNumber = true;
+                value = (value * 10) + (c - '0');
+            }
+            else if (inNumber)
+            {
+                build = value;
+                value = 0;
+                inNumber = false;
+            }
+        }
+
+        return inNumber ? value : build;
+    }
+
+    internal readonly struct HeroesDataArchive
+    {
+        public HeroesDataArchive(string fileName, Uri uri)
+        {
+            FileName = fileName;
+            Uri = uri;
+        }
+
+        public string FileName { get; }
+        public Uri Uri { get; }
+    }
+
+    internal static bool TrySelectArchive(JsonElement release, out HeroesDataArchive archive)
+    {
+        archive = default;
+        HeroesDataArchive? noMaps = null;
+        HeroesDataArchive? full = null;
+        if (
+            release.ValueKind == JsonValueKind.Object
+            && release.TryGetProperty("assets", out JsonElement assets)
+            && assets.ValueKind == JsonValueKind.Array
+        )
+        {
+            foreach (JsonElement asset in assets.EnumerateArray())
             {
                 if (
-                    string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
-                    && property.Value.ValueKind == JsonValueKind.Object
+                    !asset.TryGetProperty("name", out JsonElement nameElement)
+                    || nameElement.ValueKind != JsonValueKind.String
+                    || !asset.TryGetProperty("browser_download_url", out JsonElement urlElement)
+                    || urlElement.ValueKind != JsonValueKind.String
                 )
                 {
-                    child = property.Value;
-                    return true;
+                    continue;
+                }
+
+                string name = nameElement.GetString();
+                string url = urlElement.GetString();
+                if (
+                    string.IsNullOrWhiteSpace(name)
+                    || string.IsNullOrWhiteSpace(url)
+                    || !name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    continue;
+                }
+
+                var candidate = new HeroesDataArchive(name, new Uri(url));
+                if (name.Contains("heroes-data-no-maps-", StringComparison.OrdinalIgnoreCase))
+                {
+                    noMaps = candidate;
+                }
+                else if (name.StartsWith("heroes-data-", StringComparison.OrdinalIgnoreCase))
+                {
+                    full = candidate;
                 }
             }
         }
 
-        child = default;
+        if (noMaps.HasValue)
+        {
+            archive = noMaps.Value;
+            return true;
+        }
+
+        if (full.HasValue)
+        {
+            archive = full.Value;
+            return true;
+        }
+
+        if (
+            release.ValueKind == JsonValueKind.Object
+            && release.TryGetProperty("name", out JsonElement releaseName)
+            && releaseName.ValueKind == JsonValueKind.String
+            && release.TryGetProperty("zipball_url", out JsonElement zipball)
+            && zipball.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(releaseName.GetString())
+            && !string.IsNullOrWhiteSpace(zipball.GetString())
+        )
+        {
+            archive = new HeroesDataArchive(releaseName.GetString(), new Uri(zipball.GetString()));
+            return true;
+        }
+
         return false;
     }
 
-    private static string RoleFor(Dictionary<string, string> roles, string heroName)
+    internal static bool HasHeroesData2(string path)
     {
-        if (roles != null && heroName != null && roles.TryGetValue(heroName, out string role))
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
         {
-            return role;
+            return false;
         }
 
-        return null;
+        foreach (
+            string file in Directory.EnumerateFiles(
+                path,
+                "herodata_*.json",
+                SearchOption.AllDirectories
+            )
+        )
+        {
+            if (IsHeroesData2Document(file))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
-    private static int BuildNumber(string path)
+    internal static bool IsHeroesData2Document(string path)
     {
-        string[] parts = Path.GetFileName(path).Split('_');
-        return parts.Length > 1 && int.TryParse(parts[1], out int build) ? build : 0;
+        try
+        {
+            using (FileStream stream = File.OpenRead(path))
+            {
+                byte[] buffer = new byte[512];
+                int read = stream.Read(buffer, 0, buffer.Length);
+                if (read <= 0)
+                {
+                    return false;
+                }
+
+                string head = Encoding.UTF8.GetString(buffer, 0, read);
+                return head.Contains("\"itemsType\"", StringComparison.Ordinal);
+            }
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static string NewestDocument(string root, string pattern, bool skipMapStrings)
+    {
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+        {
+            return null;
+        }
+
+        string best = null;
+        int bestBuild = -1;
+        foreach (string file in Directory.GetFiles(root, pattern, SearchOption.AllDirectories))
+        {
+            string name = Path.GetFileName(file);
+            if (skipMapStrings && name.Contains("mapdata", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!IsHeroesData2Document(file))
+            {
+                continue;
+            }
+
+            int build = BuildNumber(file);
+            if (
+                best == null
+                || build > bestBuild
+                || (
+                    build == bestBuild
+                    && string.Compare(file, best, StringComparison.OrdinalIgnoreCase) > 0
+                )
+            )
+            {
+                best = file;
+                bestBuild = build;
+            }
+        }
+
+        return best;
+    }
+
+    private static string ObjectName(string id)
+    {
+        if (id != null && id.Contains(ObjectNameSeperator))
+        {
+            return id.Split(ObjectNameSeperator)[1];
+        }
+
+        return id;
+    }
+
+    private static string MapToken(string id)
+    {
+        if (id != null && id.Contains(ObjectNameSeperator))
+        {
+            return id.Split(ObjectNameSeperator)[0];
+        }
+
+        return string.Empty;
     }
 
     private Task LoadMapsAsync()
@@ -284,91 +417,72 @@ public class GameData : IGameData
 
     private async Task DownloadIfEmptyAsync()
     {
-        logger.LogInformation("Downloading heroes-data if needed.");
+        logger.LogInformation("Downloading heroes-data2 if needed.");
 
-        var release = settings.HeroesToolChest.HeroesDataReleaseUri;
-
-        if (
-            Directory.Exists(settings.HeroesDataPath)
-            && Directory
-                .EnumerateFiles(settings.HeroesDataPath, "*.json", SearchOption.AllDirectories)
-                .Any()
-        )
+        if (HasHeroesData2(settings.HeroesDataPath))
         {
-            logger.LogDebug("Heroes Data exists. No need to download HeroesToolChest hero-data.");
+            logger.LogDebug("heroes-data2 is already present. No download needed.");
+            return;
         }
-        else
+
+        logger.LogInformation(
+            "heroes-data2 is not in {Path}. Downloading the latest HeroesToolChest/heroes-data2 release.",
+            settings.HeroesDataPath
+        );
+        Directory.CreateDirectory(settings.HeroesDataPath);
+
+        using (var client = new HttpClient())
         {
-            logger.LogDebug(
-                $"heroes-data does not exists. Downloading files to: {settings.HeroesDataPath}"
+            client.DefaultRequestHeaders.UserAgent.Add(
+                new ProductInfoHeaderValue("HeroesReplay", "1.0")
             );
 
-            Directory.CreateDirectory(settings.HeroesDataPath);
-
-            using (var client = new HttpClient())
+            if (
+                settings.Github != null
+                && !string.IsNullOrWhiteSpace(settings.Github.User)
+                && !string.IsNullOrWhiteSpace(settings.Github.AccessToken)
+            )
             {
-                client.DefaultRequestHeaders.UserAgent.Add(
-                    new ProductInfoHeaderValue("HeroesReplay", "1.0")
+                var base64 = Convert.ToBase64String(
+                    Encoding.UTF8.GetBytes($"{settings.Github.User}:{settings.Github.AccessToken}")
                 );
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                    "Basic",
+                    base64
+                );
+            }
 
-                if (
-                    settings.Github != null
-                    && !string.IsNullOrWhiteSpace(settings.Github.User)
-                    && !string.IsNullOrWhiteSpace(settings.Github.AccessToken)
-                )
+            Uri release = settings.HeroesToolChest.HeroesDataReleaseUri;
+            using (
+                HttpResponseMessage response = await client.GetAsync(release).ConfigureAwait(false)
+            )
+            {
+                response.EnsureSuccessStatusCode();
+                string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                using (JsonDocument document = JsonDocument.Parse(json))
                 {
-                    var base64 = Convert.ToBase64String(
-                        Encoding.UTF8.GetBytes(
-                            $"{settings.Github.User}:{settings.Github.AccessToken}"
-                        )
-                    );
-                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                        "Basic",
-                        base64
-                    );
-                }
-
-                var response = await client.GetAsync(release).ConfigureAwait(false);
-                var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-                using (var document = JsonDocument.Parse(json))
-                {
-                    if (
-                        document.RootElement.TryGetProperty("name", out JsonElement commit)
-                        && document.RootElement.TryGetProperty("zipball_url", out JsonElement link)
-                    )
+                    if (!TrySelectArchive(document.RootElement, out HeroesDataArchive archive))
                     {
-                        var name = commit.GetString();
-                        var uri = link.GetString();
+                        throw new InvalidOperationException(
+                            "The heroes-data2 release did not include a data zip."
+                        );
+                    }
 
-                        using (
-                            var data = await client
-                                .GetStreamAsync(new Uri(uri))
-                                .ConfigureAwait(false)
-                        )
-                        {
-                            using (
-                                var write = File.OpenWrite(
-                                    Path.Combine(settings.HeroesDataPath, name)
-                                )
-                            )
-                            {
-                                await data.CopyToAsync(write).ConfigureAwait(false);
-                                logger.LogInformation("Saving heroes-data...");
-                                await write.FlushAsync().ConfigureAwait(false);
-                            }
-                        }
+                    string zipPath = Path.Combine(settings.HeroesDataPath, archive.FileName);
+                    using (
+                        Stream data = await client.GetStreamAsync(archive.Uri).ConfigureAwait(false)
+                    )
+                    using (FileStream write = File.Create(zipPath))
+                    {
+                        await data.CopyToAsync(write).ConfigureAwait(false);
+                        logger.LogInformation("Saving heroes-data2 {File}.", archive.FileName);
+                    }
 
-                        using (
-                            var reader = File.OpenRead(Path.Combine(settings.HeroesDataPath, name))
-                        )
-                        {
-                            using (ZipArchive zip = new ZipArchive(reader))
-                            {
-                                logger.LogInformation("Extracting heroes-data...");
-                                zip.ExtractToDirectory(settings.HeroesDataPath);
-                            }
-                        }
+                    using (FileStream reader = File.OpenRead(zipPath))
+                    using (ZipArchive zip = new ZipArchive(reader))
+                    {
+                        logger.LogInformation("Extracting heroes-data2...");
+                        zip.ExtractToDirectory(settings.HeroesDataPath, true);
                     }
                 }
             }
@@ -386,231 +500,55 @@ public class GameData : IGameData
         var coreUnits = new HashSet<string>();
         var vehicleUnits = new HashSet<string>();
 
-        var files = Directory
-            .GetFiles(settings.HeroesDataPath, "*.json", SearchOption.AllDirectories)
-            .Where(x => x.Contains(HeroData) || x.Contains(UnitData))
-            .OrderByDescending(x => x.Contains(HeroData))
-            .ThenBy(x => x.Contains(UnitData));
-
-        foreach (var file in files)
+        string heroFile = NewestDocument(settings.HeroesDataPath, "herodata_*.json", false);
+        if (heroFile != null)
         {
             using (
-                var document = JsonDocument.Parse(
-                    await File.ReadAllTextAsync(file).ConfigureAwait(false),
-                    new JsonDocumentOptions() { AllowTrailingCommas = true }
+                HeroDataDocument heroes = HeroDataDocument.Load(
+                    JsonDocument.Parse(await File.ReadAllTextAsync(heroFile).ConfigureAwait(false))
                 )
             )
             {
-                foreach (var o in document.RootElement.EnumerateObject())
+                foreach (ElementHero hero in heroes.GetElements())
                 {
-                    if (
-                        o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement core)
-                        && settings.HeroesToolChest.CoreScalingLinkId.Equals(core.GetString())
-                    )
+                    RecordScaling(hero.Id, hero.ScalingLinkIds, coreUnits, vehicleUnits);
+                    if (!string.IsNullOrWhiteSpace(hero.UnitId))
                     {
-                        coreUnits.Add(
-                            o.Name.Contains(ObjectNameSeperator)
-                                ? o.Name.Split(ObjectNameSeperator)[1]
-                                : o.Name
-                        );
-                    }
-                    else if (
-                        o.Value.TryGetProperty(ScalingLinkIdProperty, out JsonElement vehicle)
-                        && settings.HeroesToolChest.VehicleScalingLinkIds.Contains(
-                            vehicle.GetString()
-                        )
-                    )
-                    {
-                        vehicleUnits.Add(
-                            o.Name.Contains(ObjectNameSeperator)
-                                ? o.Name.Split(ObjectNameSeperator)[1]
-                                : o.Name
-                        );
+                        unitGroups[hero.UnitId] = UnitGroup.Hero;
                     }
 
-                    if (o.Value.TryGetProperty(UnitIdProperty, out var unitId))
+                    if (hero.HeroUnits != null)
                     {
-                        var descriptors = new List<string>();
-
-                        if (o.Value.TryGetProperty(DescriptorsProperty, out var descriptorsElement))
+                        foreach (string heroUnitId in hero.HeroUnits.Keys)
                         {
-                            descriptors.AddRange(
-                                descriptorsElement.EnumerateArray().Select(x => x.GetString())
-                            );
-                        }
-
-                        unitGroups[unitId.GetString()] = UnitGroup.Hero;
-
-                        if (o.Value.TryGetProperty(HeroUnitsProperty, out var heroUnits))
-                        {
-                            foreach (var hu in heroUnits.EnumerateArray())
-                            {
-                                foreach (var huo in hu.EnumerateObject())
-                                {
-                                    unitGroups[huo.Name] = UnitGroup.Hero;
-                                }
-                            }
+                            unitGroups[heroUnitId] = UnitGroup.Hero;
                         }
                     }
-                    else
-                    {
-                        var name = o.Name.Contains(ObjectNameSeperator)
-                            ? o.Name.Split(ObjectNameSeperator)[1]
-                            : o.Name;
-                        var map = o.Name.Contains(ObjectNameSeperator)
-                            ? o.Name.Split(ObjectNameSeperator)[0]
-                            : string.Empty;
+                }
+            }
+        }
 
-                        List<string> attributes = new List<string>();
-                        List<string> descriptors = new List<string>();
-
-                        if (o.Value.TryGetProperty(AttributesProperty, out var attributesElement))
-                            attributes.AddRange(
-                                attributesElement.EnumerateArray().Select(x => x.GetString())
-                            );
-
-                        if (o.Value.TryGetProperty(DescriptorsProperty, out var descriptorsElement))
-                            descriptors.AddRange(
-                                descriptorsElement.EnumerateArray().Select(x => x.GetString())
-                            );
-
-                        if (
-                            !ignoreUnits.Any(i => name.Contains(i))
-                            && MatchesAny(name, settings.HeroesToolChest.BossContains)
-                        )
-                        {
-                            bossUnits.Add(name);
-                            unitGroups[name] = UnitGroup.MercenaryCamp;
-                            continue;
-                        }
-
-                        if (
-                            !ignoreUnits.Any(i => name.Contains(i))
-                            && MatchesAny(name, settings.HeroesToolChest.CampContains)
-                        )
-                        {
-                            unitGroups[name] = UnitGroup.MercenaryCamp;
-                            continue;
-                        }
-
-                        if (
-                            !ignoreUnits.Any(i => name.Contains(i))
-                            && MatchesAny(name, settings.HeroesToolChest.VehicleContains)
-                        )
-                        {
-                            vehicleUnits.Add(name);
-                            unitGroups[name] = UnitGroup.MapObjective;
-                            continue;
-                        }
-
-                        if (
-                            attributes.Contains(AttributeMapBoss)
-                            && name.EndsWith(UnitNameDefender)
-                            && !ignoreUnits.Any(i => name.Contains(i))
-                        )
-                        {
-                            bossUnits.Add(name);
-                            unitGroups[name] = UnitGroup.MercenaryCamp;
-                            continue;
-                        }
-
-                        if (
-                            attributes.Contains(AttributeMapBoss)
-                            && name.EndsWith(UnitNameLaner)
-                            && !ignoreUnits.Any(i => name.Contains(i))
-                        )
-                        {
-                            unitGroups[name] = UnitGroup.MercenaryCamp;
-                            continue;
-                        }
-
-                        if (
-                            attributes.Count == 1
-                            && attributes.Contains(AttributeMerc)
-                            && !ignoreUnits.Any(i => name.Contains(i))
-                        )
-                        {
-                            unitGroups[name] = UnitGroup.MercenaryCamp;
-                            continue;
-                        }
-
-                        if (
-                            settings.HeroesToolChest.ObjectiveContains.Any(unitName =>
-                                name.Contains(unitName)
-                            )
-                        )
-                        {
-                            unitGroups[name] = UnitGroup.MapObjective;
-                            continue;
-                        }
-
-                        if (
-                            (
-                                attributes.Contains(AttributeMapCreature)
-                                || attributes.Contains(AttributeMapBoss)
-                            )
-                            && !(name.EndsWith(UnitNameLaner) || name.EndsWith(UnitNameDefender))
-                            && !ignoreUnits.Any(i => name.Contains(i))
-                        )
-                        {
-                            unitGroups[name] = UnitGroup.MapObjective;
-                            continue;
-                        }
-
-                        if (
-                            name.Contains(UnitNamePayload)
-                            && "hanamuradata".Contains(map)
-                            && !ignoreUnits.Any(i => name.Contains(i))
-                        )
-                        {
-                            unitGroups[name] = UnitGroup.MapObjective;
-                            continue;
-                        }
-
-                        if (
-                            attributes.Contains(AttributeHeroic)
-                            && descriptors.Contains(DescriptorPowerfulLaner)
-                            && !ignoreUnits.Any(i => name.Contains(i))
-                        )
-                        {
-                            unitGroups[name] = UnitGroup.MapObjective;
-                            continue;
-                        }
-
-                        if (
-                            attributes.Contains(AttributeStructure)
-                            && !ignoreUnits.Any(i => name.Contains(i))
-                        )
-                        {
-                            unitGroups[name] = UnitGroup.Structures;
-                            continue;
-                        }
-
-                        if (
-                            attributes.Count == 1
-                            && attributes.Contains(AttributeMinion)
-                            && name.EndsWith(AttributeMinion)
-                            && !ignoreUnits.Any(i => name.Contains(i))
-                        )
-                        {
-                            unitGroups[name] = UnitGroup.Minions;
-                            continue;
-                        }
-
-                        if (unitGroups.FirstOrDefault(c => o.Name.Contains(c.Key)).Key != null)
-                        {
-                            unitGroups[name] = name.Contains(HeroicTalent)
-                                ? UnitGroup.HeroTalentSelection
-                                : UnitGroup.HeroAbilityUse;
-                            continue;
-                        }
-
-                        if (!unitGroups.ContainsKey(name))
-                        {
-                            unitGroups[name] = UnitGroup.Miscellaneous;
-                            continue;
-                        }
-                    }
+        string unitFile = NewestDocument(settings.HeroesDataPath, "unitdata_*.json", false);
+        if (unitFile != null)
+        {
+            using (
+                UnitDataDocument units = UnitDataDocument.Load(
+                    JsonDocument.Parse(await File.ReadAllTextAsync(unitFile).ConfigureAwait(false))
+                )
+            )
+            {
+                foreach (ElementUnit unit in units.GetElements())
+                {
+                    RecordScaling(unit.Id, unit.ScalingLinkIds, coreUnits, vehicleUnits);
+                    ClassifyUnit(
+                        unit.Id,
+                        unit.Attributes,
+                        unit.HeroPlayStyles,
+                        ignoreUnits,
+                        unitGroups,
+                        bossUnits,
+                        vehicleUnits
+                    );
                 }
             }
         }
@@ -619,6 +557,195 @@ public class GameData : IGameData
         BossUnits = new ReadOnlyCollection<string>(bossUnits.ToList());
         CoreUnits = new ReadOnlyCollection<string>(coreUnits.ToList());
         VehicleUnits = new ReadOnlyCollection<string>(vehicleUnits.ToList());
+    }
+
+    private void RecordScaling(
+        string id,
+        IEnumerable<string> links,
+        HashSet<string> coreUnits,
+        HashSet<string> vehicleUnits
+    )
+    {
+        if (links == null)
+        {
+            return;
+        }
+
+        string name = ObjectName(id);
+        bool core = false;
+        bool vehicle = false;
+        foreach (string link in links)
+        {
+            if (
+                !string.IsNullOrWhiteSpace(settings.HeroesToolChest.CoreScalingLinkId)
+                && string.Equals(
+                    link,
+                    settings.HeroesToolChest.CoreScalingLinkId,
+                    StringComparison.Ordinal
+                )
+            )
+            {
+                core = true;
+            }
+            else if (
+                settings.HeroesToolChest.VehicleScalingLinkIds != null
+                && settings.HeroesToolChest.VehicleScalingLinkIds.Contains(link)
+            )
+            {
+                vehicle = true;
+            }
+        }
+
+        if (core)
+        {
+            coreUnits.Add(name);
+        }
+        else if (vehicle)
+        {
+            vehicleUnits.Add(name);
+        }
+    }
+
+    private void ClassifyUnit(
+        string fullId,
+        ICollection<string> attributes,
+        ICollection<string> descriptors,
+        List<string> ignoreUnits,
+        Dictionary<string, UnitGroup> unitGroups,
+        HashSet<string> bossUnits,
+        HashSet<string> vehicleUnits
+    )
+    {
+        attributes = attributes ?? (ICollection<string>)Array.Empty<string>();
+        descriptors = descriptors ?? (ICollection<string>)Array.Empty<string>();
+        string name = ObjectName(fullId);
+        string map = MapToken(fullId);
+
+        if (
+            !ignoreUnits.Any(i => name.Contains(i))
+            && MatchesAny(name, settings.HeroesToolChest.BossContains)
+        )
+        {
+            bossUnits.Add(name);
+            unitGroups[name] = UnitGroup.MercenaryCamp;
+            return;
+        }
+
+        if (
+            !ignoreUnits.Any(i => name.Contains(i))
+            && MatchesAny(name, settings.HeroesToolChest.CampContains)
+        )
+        {
+            unitGroups[name] = UnitGroup.MercenaryCamp;
+            return;
+        }
+
+        if (
+            !ignoreUnits.Any(i => name.Contains(i))
+            && MatchesAny(name, settings.HeroesToolChest.VehicleContains)
+        )
+        {
+            vehicleUnits.Add(name);
+            unitGroups[name] = UnitGroup.MapObjective;
+            return;
+        }
+
+        if (
+            attributes.Contains(AttributeMapBoss)
+            && name.EndsWith(UnitNameDefender)
+            && !ignoreUnits.Any(i => name.Contains(i))
+        )
+        {
+            bossUnits.Add(name);
+            unitGroups[name] = UnitGroup.MercenaryCamp;
+            return;
+        }
+
+        if (
+            attributes.Contains(AttributeMapBoss)
+            && name.EndsWith(UnitNameLaner)
+            && !ignoreUnits.Any(i => name.Contains(i))
+        )
+        {
+            unitGroups[name] = UnitGroup.MercenaryCamp;
+            return;
+        }
+
+        if (
+            attributes.Count == 1
+            && attributes.Contains(AttributeMerc)
+            && !ignoreUnits.Any(i => name.Contains(i))
+        )
+        {
+            unitGroups[name] = UnitGroup.MercenaryCamp;
+            return;
+        }
+
+        if (settings.HeroesToolChest.ObjectiveContains.Any(unitName => name.Contains(unitName)))
+        {
+            unitGroups[name] = UnitGroup.MapObjective;
+            return;
+        }
+
+        if (
+            (attributes.Contains(AttributeMapCreature) || attributes.Contains(AttributeMapBoss))
+            && !(name.EndsWith(UnitNameLaner) || name.EndsWith(UnitNameDefender))
+            && !ignoreUnits.Any(i => name.Contains(i))
+        )
+        {
+            unitGroups[name] = UnitGroup.MapObjective;
+            return;
+        }
+
+        if (
+            name.Contains(UnitNamePayload)
+            && "hanamuradata".Contains(map)
+            && !ignoreUnits.Any(i => name.Contains(i))
+        )
+        {
+            unitGroups[name] = UnitGroup.MapObjective;
+            return;
+        }
+
+        if (
+            attributes.Contains(AttributeHeroic)
+            && descriptors.Contains(DescriptorPowerfulLaner)
+            && !ignoreUnits.Any(i => name.Contains(i))
+        )
+        {
+            unitGroups[name] = UnitGroup.MapObjective;
+            return;
+        }
+
+        if (attributes.Contains(AttributeStructure) && !ignoreUnits.Any(i => name.Contains(i)))
+        {
+            unitGroups[name] = UnitGroup.Structures;
+            return;
+        }
+
+        if (
+            attributes.Count == 1
+            && attributes.Contains(AttributeMinion)
+            && name.EndsWith(AttributeMinion)
+            && !ignoreUnits.Any(i => name.Contains(i))
+        )
+        {
+            unitGroups[name] = UnitGroup.Minions;
+            return;
+        }
+
+        if (unitGroups.FirstOrDefault(c => fullId.Contains(c.Key)).Key != null)
+        {
+            unitGroups[name] = name.Contains(HeroicTalent)
+                ? UnitGroup.HeroTalentSelection
+                : UnitGroup.HeroAbilityUse;
+            return;
+        }
+
+        if (!unitGroups.ContainsKey(name))
+        {
+            unitGroups[name] = UnitGroup.Miscellaneous;
+        }
     }
 
     public UnitGroup GetUnitGroup(string name)

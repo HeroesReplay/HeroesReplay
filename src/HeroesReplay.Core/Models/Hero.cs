@@ -14,7 +14,7 @@ public class Hero
     /// </summary>
     public string AttributeId { get; }
 
-    /// <summary>herodata descriptors such as RoleTank, SoloLaner, and AllyHealer.</summary>
+    /// <summary>herodata playstyles such as Ganker, TowerPusher, and PowerfulLaner.</summary>
     public IReadOnlyList<string> Descriptors { get; }
 
     /// <summary>Current hero-select role: Tank, Bruiser, Melee Assassin, Ranged Assassin, Healer, or Support.</summary>
