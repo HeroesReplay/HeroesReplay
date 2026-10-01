@@ -21,7 +21,6 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     private readonly IHeroesProfileResume heroesProfileResume;
     private readonly IReplayResume replayResume;
     private readonly Func<bool> gameIsRunning;
-    private readonly Func<string> machineName;
     private readonly object gate = new();
     private int failCount;
     private int recoverCount;
@@ -37,8 +36,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         IObsController obsController = null,
         IHeroesProfileResume heroesProfileResume = null,
         IReplayResume replayResume = null,
-        Func<bool> gameIsRunning = null,
-        Func<string> machineName = null
+        Func<bool> gameIsRunning = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -51,7 +49,6 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         this.heroesProfileResume = heroesProfileResume;
         this.replayResume = replayResume;
         this.gameIsRunning = gameIsRunning;
-        this.machineName = machineName ?? (() => Environment.MachineName);
         IsOnline = true;
         Last = new ConnectivitySnapshot
         {
@@ -390,21 +387,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         }
     }
 
-    private bool IngestAllowed() =>
-        TwitchIngestGuard.Allows(Machine(), SessionMedia.ShouldStream(settings.OBS));
-
-    private string Machine()
-    {
-        try
-        {
-            return machineName();
-        }
-        catch (Exception e)
-        {
-            logger.LogDebug(e, "Could not read the machine name. Twitch ingest stays off.");
-            return null;
-        }
-    }
+    private bool IngestAllowed() => SessionMedia.ShouldStream(settings.OBS);
 
     private void LogStream(ObsStreamResult result, string action)
     {

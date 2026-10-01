@@ -1,18 +1,16 @@
 using System;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 
 namespace HeroesReplay.Core.Services.YouTube;
 
 /// <summary>
-/// Prelive uploads on any machine other than the production host stay private and
-/// carry a [TEST] marker so those listings can be deleted later.
+/// The title marker and the listing come from configuration, not the machine name.
+/// <c>appsettings.dev.json</c> sets <c>TitlePrefix</c> [TEST] and <c>PrivacyStatus</c>
+/// private so prelive listings can be deleted later. <c>appsettings.prod.json</c> is public.
 /// </summary>
 public static class YouTubeListing
 {
-    public const string PreliveMarker = "[TEST]";
-
     public static string ApplyMarker(string title, string prefix)
     {
         if (string.IsNullOrWhiteSpace(prefix))
@@ -30,23 +28,28 @@ public static class YouTubeListing
         return string.IsNullOrEmpty(body) ? marker : marker + " " + body;
     }
 
-    public static void StampForHost(YouTubeEntry entry, YouTubeSettings youtube, string hostName)
+    /// <summary>
+    /// True when <c>YouTube:PrivacyStatus</c> is public, which is also the default when unset.
+    /// Only a public listing is paced by the publication budgets.
+    /// </summary>
+    public static bool IsPublic(YouTubeSettings youtube)
+    {
+        string privacy = youtube?.PrivacyStatus;
+        return string.IsNullOrWhiteSpace(privacy)
+            || string.Equals(privacy.Trim(), "public", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static void Stamp(YouTubeEntry entry, YouTubeSettings youtube)
     {
         if (entry == null)
         {
             return;
         }
 
-        if (TwitchIngestGuard.IsProductionHost(hostName))
+        entry.Title = ApplyMarker(entry.Title, youtube?.TitlePrefix);
+        if (!IsPublic(youtube))
         {
-            entry.Title = ApplyMarker(entry.Title, youtube?.TitlePrefix);
-            return;
+            entry.PrivacyStatus = youtube.PrivacyStatus.Trim();
         }
-
-        string marker = string.IsNullOrWhiteSpace(youtube?.TitlePrefix)
-            ? PreliveMarker
-            : youtube.TitlePrefix;
-        entry.Title = ApplyMarker(entry.Title, marker);
-        entry.PrivacyStatus = "private";
     }
 }

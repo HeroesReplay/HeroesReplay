@@ -2,7 +2,7 @@
 
 This is what the uploader does with a replay on the develop line. The next game on the Twitch stream is chosen by the Heroes Profile download queue and by Twitch requests. The score below does not pick that game, and it does not pick which pending file uploads next.
 
-Production is `HEROES_REPLAY_ENV=prod` on `DESKTOP-8SJE72`. Configuration is `appsettings.json`, then `appsettings.secrets.json`, then `appsettings.prod.json`, then any `HEROES_REPLAY_` environment variable. A later layer wins for one key. `HEROES_REPLAY_ReplayMedia__MaxPublicPerDay` overrides `ReplayMedia:MaxPublicPerDay`.
+Production is `HEROES_REPLAY_ENV=prod` (`DESKTOP-8SJEK72`). The environment decides, not the machine name. Configuration is `appsettings.json`, then `appsettings.secrets.json`, then `appsettings.prod.json`, then any `HEROES_REPLAY_` environment variable. A later layer wins for one key. `HEROES_REPLAY_ReplayMedia__MaxPublicPerDay` overrides `ReplayMedia:MaxPublicPerDay`.
 
 ## Production settings
 
@@ -95,7 +95,7 @@ The day count at this step is `Data`'s publication ledger of videos already obse
 
 The uploader watches `Data\Contexts` for an mp4. It also retries pending files every 5 minutes. A dry-run process does not retry on that timer. It writes `youtube-dry-run.json` and does not call YouTube.
 
-On `DESKTOP-8SJE72`, a verified replay is sent only when every line below allows it. The first refusal wins.
+When `YouTube:PrivacyStatus` is public (production), a verified replay is sent only when every line below allows it. The first refusal wins.
 
 1. Configuration is valid.
 2. The replay is not already published, incomplete, or uncorrelated.
@@ -112,7 +112,7 @@ On `DESKTOP-8SJE72`, a verified replay is sent only when every line below allows
 
 A paid request skips the map, rank, and hero checks. Its slot still records the map, the rank, the focus hero, and the roster, so the next ordinary replay sees them. A refusal for `map`, `rank`, or `hero` stays pending. The uploader tries the next pending file on the same pass. Nothing sorts the queue by a score.
 
-Any other machine, including `ASA-SERVER`, still stops at the quota. It does not apply the day cap, the week cap, the interval, or the map, rank, and hero checks. Its title is marked `[TEST]` unless `YouTube:TitlePrefix` is set, and the listing stays private.
+A private listing (`YouTube:PrivacyStatus` private, as in `appsettings.dev.json`) still stops at the quota. It does not apply the day cap, the week cap, the interval, or the map, rank, and hero checks. The listing stays private and the title carries `YouTube:TitlePrefix` (`[TEST]` in dev).
 
 One replay id takes one publication slot, stored in `Data\publication-reservations.txt`. A retry of that same id does not take a second slot. An older line with only the time, the request flag, and the replay id still counts for the day, the week, and the interval. An ordinary replay that is too old is not retried. Any other refusal stays pending until a later pass.
 
@@ -124,7 +124,7 @@ A granted send that fails still keeps its slot. The retry is allowed through tha
 
 The spectator plays the next queued replay as soon as the previous session ends. YouTube does not follow that clock.
 
-On the production host a new replay is sent at most every 2 hours, at most 6 in any rolling 24 hours, and at most 30 in any rolling 7 days. The same map, the same rank tier, or a roster that shares 4 or more heroes with uploads from the last 8 hours waits, and the next different pending file is tried instead. Non-requests stop once 4 of those 6 are used. A paid request can take a remaining slot until 2 requests have already been sent in that day, and it is not held for map, rank, or heroes. The quota cap is 80 inserts per Pacific day, shared by full matches and clips.
+With the production settings a new replay is sent at most every 2 hours, at most 6 in any rolling 24 hours, and at most 30 in any rolling 7 days. The same map, the same rank tier, or a roster that shares 4 or more heroes with uploads from the last 8 hours waits, and the next different pending file is tried instead. Non-requests stop once 4 of those 6 are used. A paid request can take a remaining slot until 2 requests have already been sent in that day, and it is not held for map, rank, or heroes. The quota cap is 80 inserts per Pacific day, shared by full matches and clips.
 
 ## What the video contains
 

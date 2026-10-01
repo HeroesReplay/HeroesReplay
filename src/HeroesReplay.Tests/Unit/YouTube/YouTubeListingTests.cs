@@ -23,28 +23,42 @@ public class YouTubeListingTests
     }
 
     [Fact]
-    public void Stamp_OnThisKindOfMachine_IsPrivateAndMarked()
+    public void Stamp_WithTheDevSettings_IsPrivateAndMarked()
     {
         var entry = new YouTubeEntry { Title = "Cursed Hollow - 1", PrivacyStatus = "public" };
 
-        YouTubeListing.StampForHost(entry, new YouTubeSettings(), "ASA-SERVER");
+        YouTubeListing.Stamp(
+            entry,
+            new YouTubeSettings { PrivacyStatus = "private", TitlePrefix = "[TEST]" }
+        );
 
         Assert.Equal("private", entry.PrivacyStatus);
         Assert.Equal("[TEST] Cursed Hollow - 1", entry.Title);
     }
 
     [Fact]
-    public void Stamp_OnTheProductionHost_KeepsTheConfiguredListing()
+    public void Stamp_WithTheProdSettings_KeepsTheConfiguredListing()
     {
         var entry = new YouTubeEntry { Title = "Cursed Hollow - 1", PrivacyStatus = "public" };
 
-        YouTubeListing.StampForHost(
-            entry,
-            new YouTubeSettings { PrivacyStatus = "public" },
-            "DESKTOP-8SJE72"
-        );
+        YouTubeListing.Stamp(entry, new YouTubeSettings { PrivacyStatus = "public" });
 
         Assert.Equal("public", entry.PrivacyStatus);
         Assert.Equal("Cursed Hollow - 1", entry.Title);
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("public", true)]
+    [InlineData(" Public ", true)]
+    [InlineData("private", false)]
+    [InlineData("unlisted", false)]
+    public void IsPublic_ReadsThePrivacySetting(string privacy, bool expected)
+    {
+        Assert.Equal(
+            expected,
+            YouTubeListing.IsPublic(new YouTubeSettings { PrivacyStatus = privacy })
+        );
     }
 }

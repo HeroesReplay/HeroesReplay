@@ -15,7 +15,6 @@ internal sealed class ObsCoordinator
     private readonly IObsSession socket;
     private readonly IObsProcess process;
     private readonly RecordingSession recording;
-    private readonly Func<string> machineName;
     private readonly ObsBackoff backoff;
     private readonly Action<TimeSpan> wait;
     private readonly TimeSpan identifyTimeout;
@@ -33,7 +32,6 @@ internal sealed class ObsCoordinator
         IObsSession socket,
         IObsProcess process,
         RecordingSession recording,
-        Func<string> machineName,
         ObsBackoff backoff,
         Action<TimeSpan> wait,
         TimeSpan identifyTimeout,
@@ -45,7 +43,6 @@ internal sealed class ObsCoordinator
         this.socket = socket ?? throw new ArgumentNullException(nameof(socket));
         this.process = process ?? throw new ArgumentNullException(nameof(process));
         this.recording = recording ?? throw new ArgumentNullException(nameof(recording));
-        this.machineName = machineName ?? (() => Environment.MachineName);
         this.backoff = backoff ?? ObsBackoff.Default;
         this.wait = wait;
         this.identifyTimeout =
@@ -55,7 +52,7 @@ internal sealed class ObsCoordinator
 
     public ObsRuntimeSnapshot State { get; private set; }
 
-    public bool StreamIsDesired() => ObsDesired.StreamIsDesired(settings.OBS, Machine());
+    public bool StreamIsDesired() => ObsDesired.StreamIsDesired(settings.OBS);
 
     public void EnsureIdentified()
     {
@@ -339,7 +336,6 @@ internal sealed class ObsCoordinator
     {
         State = ObsDesired.Capture(
             settings.OBS,
-            Machine(),
             ReadRunning(),
             process.IsOwned,
             lastLaunch,
@@ -407,21 +403,7 @@ internal sealed class ObsCoordinator
         }
     }
 
-    private string Machine()
-    {
-        try
-        {
-            return machineName();
-        }
-        catch (Exception e)
-        {
-            logger.LogDebug(e, "Could not read the machine name. Twitch ingest stays off.");
-            return null;
-        }
-    }
-
-    private string Refusal() =>
-        TwitchIngestGuard.Refusal(Machine(), SessionMedia.ShouldStream(settings.OBS));
+    private string Refusal() => TwitchIngestGuard.Refusal(SessionMedia.ShouldStream(settings.OBS));
 
     private string Endpoint() =>
         string.IsNullOrWhiteSpace(settings.OBS?.WebSocketEndpoint)

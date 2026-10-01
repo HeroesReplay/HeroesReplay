@@ -42,7 +42,7 @@ Improve the spectator and the tools around it. The work is to prove, validate, a
 
 **ASA-SERVER is the development machine.** Sessions here exist only to test a change. Stop the process when the check is done. Do not leave a match, or the game client, running for its own sake. Do not treat this box as the broadcast.
 
-**DESKTOP-8SJE72 is the production machine.** That is where real spectating and the live stream happen. Do not kill, rebuild, or experiment there without a scheduled downtime.
+**DESKTOP-8SJEK72 is the production machine.** That is where real spectating and the live stream happen. Do not kill, rebuild, or experiment there without a scheduled downtime.
 
 ## Dev loop
 
@@ -85,16 +85,19 @@ OBS game capture also sees the frame when the window is covered, because it hook
 
 ## Environments
 
+The environment variable and its appsettings overlay decide behavior. Code never compares the machine name: Twitch ingest follows `OBS:StreamingEnabled`, and the YouTube title marker, privacy, and publication budgets follow `YouTube:TitlePrefix` and `YouTube:PrivacyStatus`. The hostnames below only tell an agent which box it is on.
+
 | | **dev** | **live** |
 | --- | --- | --- |
-| Hostname | `ASA-SERVER` | `DESKTOP-8SJE72` |
+| Config | `HEROES_REPLAY_ENV=dev` (`appsettings.dev.json`) | `HEROES_REPLAY_ENV=prod` (`appsettings.prod.json`) |
+| Hostname | `ASA-SERVER` | `DESKTOP-8SJEK72` |
 | Role | Develop, prove, and harden the spectator, CLI, and services. Not a broadcast. | Real spectating and the 24/7 Twitch stream (`saltysadism`). Intel Arc A310 guest vs this live box. |
 | Repo | `C:\heroesreplay\HeroesReplay` | Same path. A release install rewrites OBS assets under its own `obs` folder (`C:\heroesreplay\app\obs`), not this checkout. |
 | Stream | **Do not go live.** OBS, predictions, chat, rewards, and requested-replay recording/YouTube are for testing only. | Production ingest. Do not experiment on the live stream. |
 | Upgrades | Safe to stop spectate, rebuild, reboot the guest (not Unraid/Tower). | Schedule **downtime** before pull, rebuild, client/OBS upgrades, or reboots. |
 | Spectator engine | **Normal** to kill `heroesreplay`, quit HotS, rebuild Release, and relaunch only long enough to prove a change. Stop when the proof is done. | Do **not** kill/rebuild/restart the spectator as a routine. This is the production spectate. |
 
-On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\HeroesReplay\status.json` and `Data\Contexts\<id>\end.png` if the client was closed. Do not keep spectating after that. On **DESKTOP-8SJE72**, ask before stopping anything.
+On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\HeroesReplay\status.json` and `Data\Contexts\<id>\end.png` if the client was closed. Do not keep spectating after that. On **DESKTOP-8SJEK72**, ask before stopping anything.
 
 ### Maps, modes, client
 
@@ -128,7 +131,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 
 `Location:DataDirectory` is `C:\heroesreplay\Data`. Contexts are `Data\Contexts` (not a sibling of Data). Do not copy OBS `service.json` (stream key).
 
-Detect with `hostname`. If `DESKTOP-8SJE72`, ask before stopping `heroesreplay` / HotS / OBS, and do not start a Twitch stream from a test build. If `ASA-SERVER`, do not SSH to Unraid (`Tower` / 192.168.1.102), do not bind the host 3090/iGPU, and do not reboot Tower.
+Detect with `hostname`. If `DESKTOP-8SJEK72`, ask before stopping `heroesreplay` / HotS / OBS, and do not start a Twitch stream from a test build. If `ASA-SERVER`, do not SSH to Unraid (`Tower` / 192.168.1.102), do not bind the host 3090/iGPU, and do not reboot Tower.
 
 New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/bootstrap-workstation.ps1` (skill `op-service-account`).
 

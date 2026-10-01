@@ -1,7 +1,6 @@
 using System;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.YouTube;
 using Xunit;
 
@@ -31,7 +30,10 @@ public class UploadHandoffTests
     {
         var entry = new YouTubeEntry { Title = "Volskaya Foundry - 1", PrivacyStatus = "public" };
 
-        UploadStaging.Apply(entry, new YouTubeSettings { TitlePrefix = "[TEST]" }, "ASA-SERVER");
+        UploadStaging.Apply(
+            entry,
+            new YouTubeSettings { PrivacyStatus = "private", TitlePrefix = "[TEST]" }
+        );
 
         Assert.Equal(UploadStaging.InitialPrivacy, entry.PrivacyStatus);
         Assert.StartsWith("[TEST]", entry.Title, StringComparison.Ordinal);
@@ -39,15 +41,11 @@ public class UploadHandoffTests
     }
 
     [Fact]
-    public void Apply_InsertsPrivateOnTheProductionHostToo()
+    public void Apply_InsertsPrivateWhenTheListingIsPublicToo()
     {
         var entry = new YouTubeEntry { Title = "Volskaya Foundry - 1", PrivacyStatus = "public" };
 
-        UploadStaging.Apply(
-            entry,
-            new YouTubeSettings { PrivacyStatus = "public" },
-            TwitchIngestGuard.ProductionHost
-        );
+        UploadStaging.Apply(entry, new YouTubeSettings { PrivacyStatus = "public" });
 
         Assert.Equal("private", entry.PrivacyStatus);
         Assert.False(UploadStaging.AllowsPublicReceipt("private"));
@@ -66,13 +64,7 @@ public class UploadHandoffTests
             DesiredPrivacyStatus = "public",
         };
 
-        UploadStaging.Apply(
-            entry,
-            new YouTubeSettings { PrivacyStatus = "public" },
-            TwitchIngestGuard.ProductionHost,
-            now,
-            last
-        );
+        UploadStaging.Apply(entry, new YouTubeSettings { PrivacyStatus = "public" }, now, last);
 
         Assert.Equal("private", entry.PrivacyStatus);
         Assert.Equal(last.Add(PublicationSchedule.MinimumInterval), entry.PublishAtUtc);
@@ -83,7 +75,7 @@ public class UploadHandoffTests
     }
 
     [Fact]
-    public void Apply_DoesNotSchedulePublishAtOnAPreliveHost()
+    public void Apply_DoesNotSchedulePublishAtForAPrivateListing()
     {
         DateTimeOffset now = new(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
         var entry = new YouTubeEntry
@@ -95,8 +87,7 @@ public class UploadHandoffTests
 
         UploadStaging.Apply(
             entry,
-            new YouTubeSettings { PrivacyStatus = "public" },
-            "ASA-SERVER",
+            new YouTubeSettings { PrivacyStatus = "private", TitlePrefix = "[TEST]" },
             now,
             null
         );
