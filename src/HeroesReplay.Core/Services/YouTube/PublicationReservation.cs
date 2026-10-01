@@ -43,7 +43,9 @@ public static class PublicationReservation
         DateTimeOffset? lastHeroUtc,
         string workKey,
         ReplayMediaPolicySettings settings = null,
-        PublicationSendFacts facts = null
+        PublicationSendFacts facts = null,
+        string rank = null,
+        IReadOnlyList<string> heroes = null
     )
     {
         if (string.IsNullOrWhiteSpace(path) || !IsWorkKey(workKey))
@@ -59,6 +61,11 @@ public static class PublicationReservation
 
         if (Holds(ledger, workKey))
         {
+            if (Enrich(ledger, workKey, map, rank, hero, heroes))
+            {
+                Write(path, ledger);
+            }
+
             return Result(Granted, "reserved");
         }
 
@@ -70,6 +77,7 @@ public static class PublicationReservation
 
         DateTimeOffset? last = lastPublicUtc;
         int reservedRequests = 0;
+        var recent = new List<PublicationSample>();
         foreach (Slot slot in ledger.Reserved)
         {
             times.Add(slot.At);
@@ -82,6 +90,17 @@ public static class PublicationReservation
             {
                 reservedRequests++;
             }
+
+            recent.Add(
+                new PublicationSample
+                {
+                    At = slot.At,
+                    Map = slot.Map,
+                    Rank = slot.Rank,
+                    Hero = slot.Hero,
+                    Heroes = slot.Heroes,
+                }
+            );
         }
 
         PublicationSendFacts send =
@@ -106,7 +125,10 @@ public static class PublicationReservation
             lastMapUtc,
             hero,
             lastHero,
-            lastHeroUtc
+            lastHeroUtc,
+            rank,
+            heroes,
+            recent
         );
         if (!decision.Allow)
         {
@@ -132,6 +154,10 @@ public static class PublicationReservation
                 WorkKey = workKey,
                 At = now,
                 Requested = isRequest,
+                Map = BlankToNull(map),
+                Rank = BlankToNull(rank),
+                Hero = BlankToNull(hero),
+                Heroes = CopyHeroes(heroes),
             }
         );
         Write(path, ledger);
@@ -221,7 +247,7 @@ public static class PublicationReservation
             }
 
             string[] parts = line.Split('|');
-            if (parts.Length != 4 || !IsWorkKey(parts[3]))
+            if ((parts.Length != 4 && parts.Length != 8) || !IsWorkKey(parts[3]))
             {
                 continue;
             }
@@ -239,14 +265,21 @@ public static class PublicationReservation
                 continue;
             }
 
-            ledger.Reserved.Add(
-                new Slot
-                {
-                    At = at,
-                    Requested = parts[2] == "1",
-                    WorkKey = parts[3],
-                }
-            );
+            var slot = new Slot
+            {
+                At = at,
+                Requested = parts[2] == "1",
+                WorkKey = parts[3],
+            };
+            if (parts.Length == 8)
+            {
+                slot.Map = Unescape(parts[4]);
+                slot.Rank = Unescape(parts[5]);
+                slot.Hero = Unescape(parts[6]);
+                slot.Heroes = SplitHeroes(parts[7]);
+            }
+
+            ledger.Reserved.Add(slot);
         }
 
         return ledger;
@@ -263,6 +296,14 @@ public static class PublicationReservation
             builder.Append(slot.Requested ? '1' : '0');
             builder.Append('|');
             builder.Append(slot.WorkKey);
+            builder.Append('|');
+            builder.Append(Escape(slot.Map));
+            builder.Append('|');
+            builder.Append(Escape(slot.Rank));
+            builder.Append('|');
+            builder.Append(Escape(slot.Hero));
+            builder.Append('|');
+            builder.Append(JoinHeroes(slot.Heroes));
             builder.AppendLine();
         }
 
@@ -282,10 +323,168 @@ public static class PublicationReservation
         public HashSet<string> Terminal { get; } = new(StringComparer.Ordinal);
     }
 
+    private static bool Enrich(
+        Ledger ledger,
+        string workKey,
+        string map,
+        string rank,
+        string hero,
+        IReadOnlyList<string> heroes
+    )
+    {
+        Slot held = null;
+        foreach (Slot slot in ledger.Reserved)
+        {
+            if (string.Equals(slot.WorkKey, workKey, StringComparison.Ordinal))
+            {
+                held = slot;
+                break;
+            }
+        }
+
+        if (held == null)
+        {
+            return false;
+        }
+
+        bool changed = false;
+        if (string.IsNullOrWhiteSpace(held.Map) && !string.IsNullOrWhiteSpace(map))
+        {
+            held.Map = map.Trim();
+            changed = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(held.Rank) && !string.IsNullOrWhiteSpace(rank))
+        {
+            held.Rank = rank.Trim();
+            changed = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(held.Hero) && !string.IsNullOrWhiteSpace(hero))
+        {
+            held.Hero = hero.Trim();
+            changed = true;
+        }
+
+        List<string> incoming = CopyHeroes(heroes);
+        if (incoming != null && (held.Heroes == null || incoming.Count > held.Heroes.Count))
+        {
+            held.Heroes = incoming;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static string BlankToNull(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string Escape(string value)
+    {
+        return string.IsNullOrEmpty(value) ? string.Empty : Uri.EscapeDataString(value);
+    }
+
+    private static string Unescape(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            string text = Uri.UnescapeDataString(value);
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch (UriFormatException)
+        {
+            return null;
+        }
+    }
+
+    private static string JoinHeroes(IReadOnlyList<string> heroes)
+    {
+        if (heroes == null || heroes.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>();
+        foreach (string hero in heroes)
+        {
+            if (string.IsNullOrWhiteSpace(hero))
+            {
+                continue;
+            }
+
+            parts.Add(Uri.EscapeDataString(hero.Trim()));
+        }
+
+        return string.Join(",", parts);
+    }
+
+    private static List<string> SplitHeroes(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return null;
+        }
+
+        var heroes = new List<string>();
+        foreach (string part in value.Split(','))
+        {
+            if (part.Length == 0)
+            {
+                continue;
+            }
+
+            string hero = Unescape(part);
+            if (hero != null)
+            {
+                heroes.Add(hero);
+            }
+        }
+
+        return heroes.Count == 0 ? null : heroes;
+    }
+
+    private static List<string> CopyHeroes(IReadOnlyList<string> heroes)
+    {
+        if (heroes == null || heroes.Count == 0)
+        {
+            return null;
+        }
+
+        var copy = new List<string>();
+        foreach (string hero in heroes)
+        {
+            if (string.IsNullOrWhiteSpace(hero) || copy.Count >= 16)
+            {
+                continue;
+            }
+
+            string trimmed = hero.Trim();
+            if (trimmed.Length > 40)
+            {
+                trimmed = trimmed.Substring(0, 40);
+            }
+
+            copy.Add(trimmed);
+        }
+
+        return copy.Count == 0 ? null : copy;
+    }
+
     private sealed class Slot
     {
-        public string WorkKey { get; init; }
-        public DateTimeOffset At { get; init; }
-        public bool Requested { get; init; }
+        public string WorkKey { get; set; }
+        public DateTimeOffset At { get; set; }
+        public bool Requested { get; set; }
+        public string Map { get; set; }
+        public string Rank { get; set; }
+        public string Hero { get; set; }
+        public List<string> Heroes { get; set; }
     }
 }

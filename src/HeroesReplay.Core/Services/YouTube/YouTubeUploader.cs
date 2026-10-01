@@ -595,7 +595,9 @@ public class YouTubeUploader : IYouTubeUploader
             lastHeroUtc,
             WorkKey(entry, path),
             settings.ReplayMedia,
-            facts
+            facts,
+            entry?.Rank,
+            entry?.Heroes
         );
         if (reserved.Kind == PublicationReservation.Terminal)
         {

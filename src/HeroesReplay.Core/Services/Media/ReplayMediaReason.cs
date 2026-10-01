@@ -62,6 +62,9 @@ public static class ReplayMediaConfigurationError
     public const string MapCooldownTooLarge = "map-cooldown-too-large";
     public const string FeaturedHeroCooldownNegative = "featured-hero-cooldown-negative";
     public const string FeaturedHeroCooldownTooLarge = "featured-hero-cooldown-too-large";
+    public const string RankCooldownNegative = "rank-cooldown-negative";
+    public const string RankCooldownTooLarge = "rank-cooldown-too-large";
+    public const string SharedHeroesNegative = "shared-heroes-negative";
     public const string ReservedRequestSlotsNegative = "reserved-request-slots-negative";
     public const string InsertQuotaNegative = "insert-quota-negative";
 }

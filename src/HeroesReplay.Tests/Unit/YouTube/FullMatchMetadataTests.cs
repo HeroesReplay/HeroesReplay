@@ -42,6 +42,7 @@ public class FullMatchMetadataTests
                 Rank = "Master",
                 AverageMmr = 3100,
                 FocusHero = "Greymane",
+                NamedPlayer = true,
                 RecordAndUpload = true,
                 RequestedBy = "ViewerZZ",
                 IsCompleteRecording = true,
@@ -52,10 +53,9 @@ public class FullMatchMetadataTests
 
         Assert.NotEqual(ordinary.Title, requested.Title);
         Assert.NotEqual(ordinary.Description, requested.Description);
-        Assert.Contains("111", ordinary.Title);
-        Assert.Contains("Dragon Shire", ordinary.Title);
-        Assert.Contains("Li-Ming", ordinary.Title);
-        Assert.Contains("Diamond 3", ordinary.Title);
+        Assert.Equal("Dragon Shire - Storm League - Diamond 3 - 111", ordinary.Title);
+        Assert.DoesNotContain("Li-Ming", ordinary.Title, StringComparison.Ordinal);
+        Assert.DoesNotContain("MMR", ordinary.Title, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Pentakill", ordinary.Title, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("full match", ordinary.Title, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("222", ordinary.Description);
@@ -66,19 +66,19 @@ public class FullMatchMetadataTests
         );
         Assert.DoesNotContain("ViewerZZ", ordinary.Description);
         Assert.DoesNotContain("Full match.", ordinary.Description);
-        Assert.Contains("222", requested.Title);
-        Assert.Contains("Greymane", requested.Title);
-        Assert.Contains("Alterac Pass", requested.Title);
-        Assert.Contains("Pentakill", requested.Title);
-        Assert.Contains("Requested", requested.Title);
-        Assert.Contains("Full match", requested.Title);
+        Assert.Equal(
+            "Greymane requested by ViewerZZ - Alterac Pass - Storm League - Master - 222",
+            requested.Title
+        );
+        Assert.DoesNotContain("Pentakill", requested.Title, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("full match", requested.Title, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MMR", requested.Title, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("replayID=222", requested.Description);
         Assert.Contains("2026-09-02 21:15", requested.Description);
         Assert.Contains("Greymane pentakill", requested.Description);
         Assert.Contains("Requested by: ViewerZZ", requested.Description);
         Assert.Contains("Full match.", requested.Description);
-        Assert.Contains("Average MMR: 3100", requested.Description);
-        Assert.DoesNotContain("ViewerZZ", requested.Title);
+        Assert.DoesNotContain("MMR", requested.Description, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class FullMatchMetadataTests
         Assert.Equal(first.Description, second.Description);
         Assert.Equal(first.Tags, second.Tags);
         Assert.Equal(FullMatchMetadataBuilder.TemplateVersion, first.TemplateVersion);
-        Assert.Equal("1", first.TemplateVersion);
+        Assert.Equal("4", first.TemplateVersion);
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public class FullMatchMetadataTests
         Assert.False(empty.ClaimsFullMatch);
         Assert.False(missing.ClaimsPentakill);
         Assert.False(missing.ClaimsTeamWipe);
-        Assert.Equal("1", missing.TemplateVersion);
+        Assert.Equal("4", missing.TemplateVersion);
         Assert.Null(missing.ReplayId);
         Assert.Null(missing.HeroesProfileUrl);
     }
@@ -218,7 +218,8 @@ public class FullMatchMetadataTests
         Assert.DoesNotContain("full match", hidden.Title, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("full match", hidden.Description, StringComparison.OrdinalIgnoreCase);
         Assert.True(shown.ClaimsFullMatch);
-        Assert.Contains("Full match", shown.Title);
+        Assert.DoesNotContain("full match", shown.Title, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Dragon Shire - Storm League - Diamond 3 - 65389750", shown.Title);
         Assert.Contains("Full match.", shown.DescriptionLines);
     }
 
@@ -240,9 +241,13 @@ public class FullMatchMetadataTests
             new FullMatchMetadataOptions { IncludeRequestAttribution = false }
         );
 
-        Assert.Contains("Requested", shown.Title);
+        Assert.Equal(
+            "Requested by ViewerZZ - Dragon Shire - Storm League - Diamond 3 - 65389750",
+            shown.Title
+        );
+        Assert.DoesNotContain("Li-Ming", shown.Title, StringComparison.Ordinal);
         Assert.Contains("Requested by: ViewerZZ", shown.Description);
-        Assert.DoesNotContain("ViewerZZ", shown.Title);
+        Assert.Equal("Dragon Shire - Storm League - Diamond 3 - 65389750", hidden.Title);
         Assert.DoesNotContain("Requested", hidden.Title);
         Assert.DoesNotContain("ViewerZZ", hidden.Description);
     }
@@ -270,10 +275,11 @@ public class FullMatchMetadataTests
         FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(input, null);
 
         Assert.Contains("Rank: Master 1", metadata.DescriptionLines);
-        Assert.Contains("Average MMR: 3121", metadata.DescriptionLines);
+        Assert.DoesNotContain("MMR", metadata.Description, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MMR", metadata.Title, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(3121, metadata.AverageMmr);
         Assert.Contains("Master", metadata.Tags);
-        Assert.Contains("Master", metadata.Title);
+        Assert.Contains("Master 1", metadata.Title);
     }
 
     [Fact]
@@ -312,8 +318,10 @@ public class FullMatchMetadataTests
         Assert.True(metadata.ClaimsPentakill);
         Assert.True(metadata.ClaimsTeamWipe);
         Assert.False(metadata.ClaimsFullMatch);
-        Assert.Contains("Pentakill", metadata.Title);
-        Assert.Contains("team wipe", metadata.Title, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Pentakill", metadata.Title, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("team wipe", metadata.Title, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Li-Ming", metadata.Title, StringComparison.Ordinal);
+        Assert.Equal("Dragon Shire - Storm League - Diamond 3 - 65389750", metadata.Title);
         Assert.Contains("Li-Ming pentakill", metadata.Description);
         Assert.Contains("Featured: Johanna", metadata.DescriptionLines);
         Assert.Contains("Pentakill", metadata.Tags);
@@ -340,7 +348,8 @@ public class FullMatchMetadataTests
 
         Assert.True(metadata.ClaimsTeamWipe);
         Assert.False(metadata.ClaimsPentakill);
-        Assert.Contains("Team wipe", metadata.Title);
+        Assert.DoesNotContain("team wipe", metadata.Title, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("team wipe", metadata.Description, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("pentakill", metadata.Title, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(
             "pentakill",

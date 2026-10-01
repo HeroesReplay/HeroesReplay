@@ -119,7 +119,7 @@ public class PublicationScheduleTests
     }
 
     [Fact]
-    public void Decide_PenalizesARepeatedMapOrHeroAndStillAllowsIt()
+    public void Decide_DefersARepeatedMapOrHero()
     {
         PublicationDecision map = Decide(
             map: "Tomb of the Spider Queen",
@@ -131,6 +131,11 @@ public class PublicationScheduleTests
             lastMap: "Tomb of the Spider Queen",
             lastMapAt: Now.Add(-PublicationSchedule.DiversityCooldown)
         );
+        PublicationDecision hero = Decide(
+            hero: "Li-Ming",
+            lastHero: "li-ming",
+            lastHeroAt: Now.AddHours(-1)
+        );
         PublicationDecision both = Decide(
             map: "Alterac",
             lastMap: "Alterac",
@@ -139,15 +144,73 @@ public class PublicationScheduleTests
             lastHero: "li-ming",
             lastHeroAt: Now.AddHours(-1)
         );
+        PublicationDecision requested = Decide(
+            requested: true,
+            map: "Alterac",
+            lastMap: "Alterac",
+            lastMapAt: Now.AddHours(-1)
+        );
 
-        Assert.True(map.Allow);
-        Assert.Equal("cooldown", map.Reason);
-        Assert.Equal(1, map.Penalty);
+        Assert.False(map.Allow);
+        Assert.Equal("map", map.Reason);
         Assert.True(cooled.Allow);
         Assert.Equal("ready", cooled.Reason);
-        Assert.Equal(0, cooled.Penalty);
-        Assert.True(both.Allow);
-        Assert.Equal(2, both.Penalty);
+        Assert.False(hero.Allow);
+        Assert.Equal("hero", hero.Reason);
+        Assert.False(both.Allow);
+        Assert.Equal("map", both.Reason);
+        Assert.True(requested.Allow);
+        Assert.Equal("ready", requested.Reason);
+    }
+
+    [Fact]
+    public void Decide_DefersARepeatedRankTierAndAFamiliarRoster()
+    {
+        var recent = new List<PublicationSample>
+        {
+            new()
+            {
+                At = Now.AddHours(-2),
+                Map = "Towers of Doom",
+                Rank = "Diamond 1",
+                Heroes = new[] { "Johanna", "Li-Ming", "Muradin", "ETC", "Rehgar" },
+            },
+        };
+        PublicationDecision rank = Decide(map: "Dragon Shire", rank: "Diamond 3", recent: recent);
+        PublicationDecision rankCooled = Decide(
+            map: "Dragon Shire",
+            rank: "Diamond 3",
+            recent: new[]
+            {
+                new PublicationSample
+                {
+                    At = Now.Add(-PublicationSchedule.DiversityCooldown),
+                    Map = "Towers of Doom",
+                    Rank = "Diamond 1",
+                },
+            }
+        );
+        PublicationDecision roster = Decide(
+            map: "Sky Temple",
+            rank: "Gold 2",
+            heroes: new[] { "Johanna", "Li-Ming", "Muradin", "ETC", "Illidan" },
+            recent: recent
+        );
+        PublicationDecision few = Decide(
+            map: "Sky Temple",
+            rank: "Gold 2",
+            heroes: new[] { "Johanna", "Li-Ming", "Muradin", "Illidan", "Abathur" },
+            recent: recent
+        );
+
+        Assert.False(rank.Allow);
+        Assert.Equal("rank", rank.Reason);
+        Assert.True(rankCooled.Allow);
+        Assert.Equal("ready", rankCooled.Reason);
+        Assert.False(roster.Allow);
+        Assert.Equal("hero", roster.Reason);
+        Assert.True(few.Allow);
+        Assert.Equal("ready", few.Reason);
     }
 
     [Fact]
@@ -211,7 +274,10 @@ public class PublicationScheduleTests
         DateTimeOffset? lastMapAt = null,
         string hero = null,
         string lastHero = null,
-        DateTimeOffset? lastHeroAt = null
+        DateTimeOffset? lastHeroAt = null,
+        string rank = null,
+        IReadOnlyList<string> heroes = null,
+        IReadOnlyList<PublicationSample> recent = null
     )
     {
         return PublicationSchedule.Decide(
@@ -228,7 +294,10 @@ public class PublicationScheduleTests
             lastMapAt,
             hero,
             lastHero,
-            lastHeroAt
+            lastHeroAt,
+            rank,
+            heroes,
+            recent
         );
     }
 

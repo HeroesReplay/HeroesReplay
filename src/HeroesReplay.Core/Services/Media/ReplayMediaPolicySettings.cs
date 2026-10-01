@@ -28,7 +28,12 @@ public class ReplayMediaPolicySettings
 
     public TimeSpan MapCooldown { get; set; } = PublicationSchedule.DiversityCooldown;
 
+    public TimeSpan RankCooldown { get; set; } = PublicationSchedule.DiversityCooldown;
+
     public TimeSpan FeaturedHeroCooldown { get; set; } = PublicationSchedule.DiversityCooldown;
+
+    /// <summary>Roster overlap that defers an ordinary upload. Zero disables the roster check.</summary>
+    public int MaxSharedHeroes { get; set; } = PublicationSchedule.MaxSharedHeroes;
 
     public int ReservedRequestSlotsPerDay { get; set; } =
         PublicationSchedule.ReservedRequestSlotsPerDay;

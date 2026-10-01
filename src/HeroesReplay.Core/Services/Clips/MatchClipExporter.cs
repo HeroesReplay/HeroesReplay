@@ -221,6 +221,8 @@ public static class MatchClipExporter
                     : $"Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID={id}",
             }.WhereNotEmpty(),
             Tags = new[] { clip.Kind, clip.Hero, map }.WhereNotEmpty(),
+            Hero = string.IsNullOrWhiteSpace(clip.Hero) ? null : clip.Hero.Trim(),
+            Heroes = string.IsNullOrWhiteSpace(clip.Hero) ? null : new[] { clip.Hero.Trim() },
         };
         File.WriteAllText(
             Path.Combine(folder, name),

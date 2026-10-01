@@ -14,7 +14,8 @@ public static class YouTubeEntryBuilder
     public static YouTubeEntry Create(
         LoadedReplay loaded,
         YouTubeSettings youtube,
-        bool isCompleteRecording
+        bool isCompleteRecording,
+        IReadOnlyList<Hero> heroCatalog = null
     )
     {
         ReplayMediaPolicyInput facts = ReplayMediaFacts.From(loaded, false, false, false);
@@ -31,8 +32,10 @@ public static class YouTubeEntryBuilder
             AverageMmr = facts.AverageMmr,
             FocusHero = facts.FocusHero,
             Roster = facts.Roster,
+            HeroCatalog = heroCatalog,
             RecordAndUpload = facts.RecordAndUpload,
             RequestedBy = facts.RequestedBy,
+            NamedPlayer = loaded?.RewardQueueItem?.Request?.PlayerIndex != null,
             NotableEvents = facts.NotableEvents,
             IsCompleteRecording = isCompleteRecording,
         };
@@ -45,6 +48,7 @@ public static class YouTubeEntryBuilder
                 CategoryId = string.IsNullOrWhiteSpace(youtube?.CategoryId)
                     ? "20"
                     : youtube.CategoryId,
+                Titles = youtube?.Titles,
             }
         );
 
@@ -66,11 +70,31 @@ public static class YouTubeEntryBuilder
             PrivacyStatus = youtube?.PrivacyStatus ?? "public",
             Requested = facts.ViewerRequested,
             Hero = facts.FocusHero,
+            Heroes = HeroNames(facts.Roster),
             RecordedAtUtc = ToUtc(facts.GameDateUtc),
             CategoryId = metadata.CategoryId,
             DescriptionLines = lines.ToArray(),
             Tags = metadata.Tags == null ? [] : [.. metadata.Tags],
         };
+    }
+
+    private static string[] HeroNames(IReadOnlyList<ReplayMediaPlayer> roster)
+    {
+        if (roster == null || roster.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var names = new List<string>();
+        foreach (ReplayMediaPlayer player in roster)
+        {
+            if (player != null && !string.IsNullOrWhiteSpace(player.Hero))
+            {
+                names.Add(player.Hero.Trim());
+            }
+        }
+
+        return names.ToArray();
     }
 
     private static DateTimeOffset? ToUtc(DateTime? played)

@@ -30,6 +30,13 @@ public class OBSSettings
     public string WebSocketPassword { get; set; }
     public string GameSceneName { get; set; }
     public string WaitingSceneName { get; set; }
+
+    /// <summary>
+    /// Minimum wait after the previous game exits, before the next replay launches.
+    /// Report scenes finish in this time. When they finish first, the waiting scene
+    /// stays up for the rest. Zero launches immediately. Default one minute.
+    /// </summary>
+    public TimeSpan BeforeNextReplay { get; set; } = TimeSpan.FromMinutes(1);
     public IEnumerable<ReportScene> ReportScenes { get; set; }
     public string ReportBrowserCss { get; set; }
 

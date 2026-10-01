@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Media;
@@ -12,6 +13,7 @@ public sealed class FullMatchMetadataOptions
     public bool IncludeSpoilers { get; init; }
     public bool IncludeRequestAttribution { get; init; } = true;
     public string CategoryId { get; init; } = "20";
+    public YouTubeTitleSettings Titles { get; init; }
 }
 
 public sealed record FullMatchMetadataInput
@@ -27,8 +29,12 @@ public sealed record FullMatchMetadataInput
     public double? AverageMmr { get; init; }
     public string FocusHero { get; init; }
     public IReadOnlyList<ReplayMediaPlayer> Roster { get; init; }
+    public IReadOnlyList<Hero> HeroCatalog { get; init; }
     public bool RecordAndUpload { get; init; }
     public string RequestedBy { get; init; }
+
+    /// <summary>True only when the reward named a player slot. A focus hero alone does not change the title.</summary>
+    public bool NamedPlayer { get; init; }
     public IReadOnlyList<TeamKillClip> NotableEvents { get; init; }
 
     /// <summary>Caller sets this only after completion and media validation. It is not inferred.</summary>
@@ -59,7 +65,7 @@ public sealed class FullMatchMetadata
 
 public static class FullMatchMetadataBuilder
 {
-    public const string TemplateVersion = "1";
+    public const string TemplateVersion = "4";
     public const int TitleMaxCharacters = 100;
     public const int DescriptionMaxCharacters = 5000;
     public const int TagMaxCharacters = 30;
@@ -79,6 +85,7 @@ public static class FullMatchMetadataBuilder
         }
 
         string category = Clean(options.CategoryId, 16) ?? "20";
+        YouTubeTitleSettings titles = options.Titles ?? new YouTubeTitleSettings();
         if (input == null)
         {
             return Empty(category);
@@ -98,7 +105,6 @@ public static class FullMatchMetadataBuilder
         string focus = Clean(input.FocusHero, 40);
         string build = Clean(input.GameVersion, 40);
         string requestor = options.IncludeRequestAttribution ? Clean(input.RequestedBy, 40) : null;
-        bool attributeRequest = input.RecordAndUpload && options.IncludeRequestAttribution;
         if (!input.RecordAndUpload)
         {
             requestor = null;
@@ -107,22 +113,33 @@ public static class FullMatchMetadataBuilder
         TeamKillClip[] events = ReplayMediaEvidence.Accepted(input.NotableEvents);
         bool pentakill = ReplayMediaEvidence.HasKind(events, TeamKillClips.PentakillKind);
         bool teamWipe = ReplayMediaEvidence.HasKind(events, TeamKillClips.TeamWipeKind);
-        string eventHero =
-            ReplayMediaEvidence.FirstHero(events, TeamKillClips.PentakillKind)
-            ?? ReplayMediaEvidence.FirstHero(events, TeamKillClips.TeamWipeKind);
-        eventHero = Clean(eventHero, 40);
-        string headlineHero = eventHero ?? focus;
         int? mmr = RoundedMmr(input.AverageMmr);
         string describedWhen = DateLabel(input.GameDateUtc);
         string winner = options.IncludeSpoilers ? Clean(input.Winner, 80) : null;
+        string draft = HeroDraft.Phrase(input.HeroCatalog, input.Roster, titles);
+        string featuredHero = HeroFeature.Select(
+            titles,
+            input.HeroCatalog,
+            input.Roster,
+            input.GameDateUtc
+        );
+        bool namedLead = input.NamedPlayer && titles.NamedPlayerTitles && focus != null;
+        if (namedLead && featuredHero != null && HeroDraft.SameName(featuredHero, focus))
+        {
+            featuredHero = null;
+        }
 
-        string title = ComposeTitle(
-            Prefix(input.IsCompleteRecording, attributeRequest, pentakill, teamWipe),
-            Subject(headlineHero, map),
+        string feature = FeatureSegment(titles, featuredHero);
+        string title = TitleFor(
+            titles,
+            input.NamedPlayer,
+            map,
             mode,
             rank,
-            mmr == null ? null : mmr.Value.ToString(CultureInfo.InvariantCulture) + " MMR",
-            TitleDate(input.GameDateUtc),
+            focus,
+            requestor,
+            feature,
+            draft,
             replayText
         );
 
@@ -139,11 +156,9 @@ public static class FullMatchMetadataBuilder
         AddLine(lines, map == null ? null : "Map: " + map);
         AddLine(lines, mode == null ? null : "Mode: " + mode);
         AddLine(lines, rank == null ? null : "Rank: " + rank);
-        AddLine(
-            lines,
-            mmr == null ? null : "Average MMR: " + mmr.Value.ToString(CultureInfo.InvariantCulture)
-        );
         AddLine(lines, focus == null ? null : "Featured: " + focus);
+        AddLine(lines, draft == null ? null : "Draft: " + draft);
+        AddLine(lines, featuredHero == null ? null : "Featuring: " + featuredHero);
         AddLine(lines, Highlights(events));
         AddLine(lines, requestor == null ? null : "Requested by: " + requestor);
         string resultLine = winner == null ? null : "Result: " + winner;
@@ -193,161 +208,108 @@ public static class FullMatchMetadataBuilder
         };
     }
 
-    private static string Prefix(bool full, bool requested, bool pentakill, bool teamWipe)
+    private static string FeatureSegment(YouTubeTitleSettings titles, string hero)
     {
-        string events = null;
-        if (pentakill && teamWipe)
+        if (string.IsNullOrWhiteSpace(hero))
         {
-            events = "pentakill and team wipe";
-        }
-        else if (pentakill)
-        {
-            events = "pentakill";
-        }
-        else if (teamWipe)
-        {
-            events = "team wipe";
+            return null;
         }
 
-        string left = null;
-        if (full && requested)
-        {
-            left = "Full match: Requested";
-        }
-        else if (full)
-        {
-            left = "Full match";
-        }
-        else if (requested)
-        {
-            left = "Requested";
-        }
-
-        if (left == null)
-        {
-            return events == null ? null : Capitalize(events);
-        }
-
-        if (events == null)
-        {
-            return left;
-        }
-
-        return left + ": " + Capitalize(events);
+        string prefix =
+            titles == null || string.IsNullOrWhiteSpace(titles.FeaturePrefix)
+                ? "Ft."
+                : titles.FeaturePrefix.Trim();
+        return prefix + " " + hero.Trim();
     }
 
-    private static string Capitalize(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return value;
-        }
-
-        if (value.Length == 1)
-        {
-            return value.ToUpperInvariant();
-        }
-
-        return char.ToUpperInvariant(value[0]) + value.Substring(1);
-    }
-
-    private static string Subject(string hero, string map)
-    {
-        if (hero != null && map != null)
-        {
-            return hero + " on " + map;
-        }
-
-        return hero ?? map;
-    }
-
-    private static string ComposeTitle(
-        string prefix,
-        string subject,
+    private static string TitleFor(
+        YouTubeTitleSettings titles,
+        bool namedPlayer,
+        string map,
         string mode,
         string rank,
-        string mmr,
-        string date,
+        string hero,
+        string requestor,
+        string feature,
+        string draft,
         string replayId
     )
     {
-        string[][] attempts =
+        bool named = namedPlayer && titles.NamedPlayerTitles && hero != null;
+        bool requested = requestor != null && titles.RequestedByTitles;
+        if (named && requested)
         {
-            new[] { prefix, subject, mode, rank, mmr, date, replayId },
-            new[] { prefix, subject, mode, rank, date, replayId },
-            new[] { prefix, subject, mode, rank, replayId },
-            new[] { prefix, subject, mode, replayId },
-            new[] { prefix, subject, replayId },
-            new[] { subject, replayId },
-            new[] { prefix, replayId },
-            new[] { replayId },
-        };
-        foreach (string[] parts in attempts)
-        {
-            string title = JoinParts(parts);
-            if (title.Length > 0 && title.Length <= TitleMaxCharacters)
-            {
-                return title;
-            }
+            return ComposeTitle(
+                hero + " requested by " + requestor,
+                feature,
+                map,
+                mode,
+                rank,
+                draft,
+                replayId
+            );
         }
 
-        return TruncateKeepingId(JoinParts(new[] { prefix, subject }), replayId);
+        if (named)
+        {
+            return ComposeTitle(hero, feature, map, mode, rank, draft, replayId);
+        }
+
+        if (requested)
+        {
+            return ComposeTitle(
+                "Requested by " + requestor,
+                feature,
+                map,
+                mode,
+                rank,
+                draft,
+                replayId
+            );
+        }
+
+        return ComposeTitle(feature, map, mode, rank, draft, replayId);
     }
 
-    private static string JoinParts(IReadOnlyList<string> parts)
+    private static string ComposeTitle(params string[] parts)
     {
-        var kept = new List<string>();
+        var current = new List<string>();
         if (parts != null)
         {
             foreach (string part in parts)
             {
                 if (!string.IsNullOrWhiteSpace(part))
                 {
-                    kept.Add(part.Trim());
+                    current.Add(part.Trim());
                 }
             }
         }
 
-        return string.Join(" - ", kept);
-    }
-
-    private static string TruncateKeepingId(string head, string replayId)
-    {
-        if (string.IsNullOrEmpty(replayId))
+        while (current.Count > 1)
         {
-            if (string.IsNullOrEmpty(head))
+            string title = string.Join(" - ", current);
+            if (title.Length <= TitleMaxCharacters)
             {
-                return string.Empty;
+                return title;
             }
 
-            return head.Length <= TitleMaxCharacters
-                ? head
-                : head.Substring(0, TitleMaxCharacters).TrimEnd();
+            if (current.Count > 2)
+            {
+                current.RemoveAt(current.Count - 2);
+            }
+            else
+            {
+                current.RemoveAt(0);
+            }
         }
 
-        if (replayId.Length >= TitleMaxCharacters)
+        if (current.Count == 0)
         {
-            return replayId.Substring(0, TitleMaxCharacters);
+            return string.Empty;
         }
 
-        string suffix = " - " + replayId;
-        if (string.IsNullOrEmpty(head))
-        {
-            return replayId;
-        }
-
-        int room = TitleMaxCharacters - suffix.Length;
-        if (head.Length > room)
-        {
-            head = head.Substring(0, room).TrimEnd();
-        }
-
-        if (head.Length == 0)
-        {
-            return replayId;
-        }
-
-        return head + suffix;
+        string only = current[0];
+        return only.Length <= TitleMaxCharacters ? only : only.Substring(0, TitleMaxCharacters);
     }
 
     private static string Highlights(IReadOnlyList<TeamKillClip> events)
@@ -579,16 +541,6 @@ public static class FullMatchMetadataBuilder
         }
 
         return value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-    }
-
-    private static string TitleDate(DateTime? gameDate)
-    {
-        if (gameDate is not DateTime value || value.Kind == DateTimeKind.Local)
-        {
-            return null;
-        }
-
-        return value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
     private static bool Has(string text, string phrase)

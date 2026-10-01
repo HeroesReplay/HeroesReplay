@@ -253,7 +253,57 @@ public class YouTubeEntryBuilderTests
 
         YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
 
-        Assert.Equal("Illidan on Dragon Shire - Storm League - Diamond 3 - 1", entry.Title);
+        Assert.Equal("Illidan - Dragon Shire - Storm League - Diamond 3 - 1", entry.Title);
         Assert.DoesNotContain("Full match", entry.Title, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("MMR", entry.Title, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Create_NamesTheRequestedPlayerAndTheTwitchLogin()
+    {
+        var loaded = new LoadedReplay
+        {
+            ReplayId = 1,
+            Replay = new Replay
+            {
+                Map = "Dragon Shire",
+                Players = new[] { new Player { Character = "Illidan" } },
+            },
+            HeroesProfileReplay = new HeroesProfileReplay
+            {
+                Id = 1,
+                Map = "Dragon Shire",
+                GameType = "Storm League",
+                Rank = "Diamond 3",
+                AverageMmr = 2500,
+            },
+            RewardQueueItem = new RewardQueueItem
+            {
+                Request = new RewardRequest
+                {
+                    ReplayId = 1,
+                    PlayerIndex = 0,
+                    Login = "ViewerZZ",
+                    RecordAndUpload = true,
+                },
+            },
+        };
+
+        YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
+
+        Assert.Equal(
+            "Illidan requested by ViewerZZ - Dragon Shire - Storm League - Diamond 3 - 1",
+            entry.Title
+        );
+        Assert.DoesNotContain("MMR", entry.Title, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            entry.DescriptionLines,
+            line => line.Contains("MMR", System.StringComparison.OrdinalIgnoreCase)
+        );
+        Assert.Contains(
+            entry.DescriptionLines,
+            line => line.Contains("Requested by: ViewerZZ", System.StringComparison.Ordinal)
+        );
+        Assert.Contains("Illidan", entry.Heroes);
     }
 }

@@ -72,5 +72,9 @@ public class ReportScenesTests
 
         Assert.Equal(ExpectedScenes, names);
         Assert.Equal(ExpectedScenes.Length, names.Distinct().Count());
+        Assert.Equal(
+            "00:01:00",
+            document.RootElement.GetProperty("OBS").GetProperty("BeforeNextReplay").GetString()
+        );
     }
 }

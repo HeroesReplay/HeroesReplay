@@ -9,6 +9,7 @@ using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Client;
 using HeroesReplay.Core.Services.Clips;
 using HeroesReplay.Core.Services.Context;
+using HeroesReplay.Core.Services.Data;
 using HeroesReplay.Core.Services.Media;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Retention;
@@ -33,6 +34,7 @@ public class GameManager : IGameManager
     private readonly RecordingClock recordingClock;
     private readonly ILogger<GameManager> logger;
     private readonly MediaPolicyAttemptLog mediaPolicy;
+    private readonly IGameData gameData;
 
     public GameManager(
         AppSettings settings,
@@ -46,7 +48,8 @@ public class GameManager : IGameManager
         IYouTubeReplayLookup youTubeReplayLookup,
         RecordingClock recordingClock,
         ILogger<GameManager> logger,
-        MediaPolicyAttemptLog mediaPolicy
+        MediaPolicyAttemptLog mediaPolicy,
+        IGameData gameData
     )
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -67,6 +70,7 @@ public class GameManager : IGameManager
             recordingClock ?? throw new ArgumentNullException(nameof(recordingClock));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.mediaPolicy = mediaPolicy ?? throw new ArgumentNullException(nameof(mediaPolicy));
+        this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
     }
 
     public async Task<ReplaySessionKind> LaunchAndSpectate(
@@ -493,6 +497,10 @@ public class GameManager : IGameManager
             ClientRelaunch.SettleAfterExit.TotalSeconds
         );
         await Task.Delay(ClientRelaunch.SettleAfterExit).ConfigureAwait(false);
+        TimeSpan beforeNext = NextReplayHold.Duration(
+            settings.OBS?.BeforeNextReplay ?? NextReplayHold.Default
+        );
+        await HoldBeforeNextLaunchAsync(report, beforeNext).ConfigureAwait(false);
 
         try
         {
@@ -592,7 +600,7 @@ public class GameManager : IGameManager
                 return NextMatchLaunch.Presented;
             }
 
-            if (report.IsCompleted)
+            if (NextReplayHold.StopWhenReportEnds(beforeNext) && report.IsCompleted)
             {
                 break;
             }
@@ -610,6 +618,74 @@ public class GameManager : IGameManager
             next.ReplayId
         );
         return NextMatchLaunch.ProcessOnly;
+    }
+
+    private async Task HoldBeforeNextLaunchAsync(Task report, TimeSpan hold)
+    {
+        if (hold <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        logger.LogInformation(
+            "Waiting {Hold} before launching the next replay so prediction-report, match-report, and request-queue can finish.",
+            hold
+        );
+        Task pause = Task.Delay(hold);
+        Task finished = await Task.WhenAny(pause, report).ConfigureAwait(false);
+        if (ReferenceEquals(finished, report))
+        {
+            await ObserveReportAsync(report).ConfigureAwait(false);
+            ShowWaitingSceneBeforeNextLaunch();
+            await pause.ConfigureAwait(false);
+            return;
+        }
+
+        if (!report.IsCompleted)
+        {
+            logger.LogInformation(
+                "The pause elapsed and a report scene is still on screen. The next replay waits until that cycle finishes."
+            );
+            await ObserveReportAsync(report).ConfigureAwait(false);
+        }
+
+        ShowWaitingSceneBeforeNextLaunch();
+    }
+
+    private async Task ObserveReportAsync(Task report)
+    {
+        try
+        {
+            await report.ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Report scenes ended before the next replay launched.");
+        }
+    }
+
+    private void ShowWaitingSceneBeforeNextLaunch()
+    {
+        if (!settings.OBS.Enabled || string.IsNullOrWhiteSpace(settings.OBS.WaitingSceneName))
+        {
+            return;
+        }
+
+        try
+        {
+            obsController.SwapToWaitingScene();
+            logger.LogInformation(
+                "Selected {Scene} until the next match reaches the loading screen.",
+                settings.OBS.WaitingSceneName
+            );
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Could not switch OBS to the waiting scene before the next replay."
+            );
+        }
     }
 
     private static void ApplyPreLaunchPolicy(LoadedReplay loaded, MediaPolicySnapshot snapshot)
@@ -669,7 +745,8 @@ public class GameManager : IGameManager
                 loadedReplay,
                 settings.YouTube,
                 isCompleteRecording: true,
-                CancellationToken.None
+                CancellationToken.None,
+                gameData.Heroes
             )
             .ConfigureAwait(false);
         if (wrote)

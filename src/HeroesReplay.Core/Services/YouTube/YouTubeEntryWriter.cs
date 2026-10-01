@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -16,7 +17,8 @@ public static class YouTubeEntryWriter
         LoadedReplay loaded,
         YouTubeSettings youtube,
         bool isCompleteRecording,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        IReadOnlyList<Hero> heroCatalog = null
     )
     {
         if (!SessionMedia.ShouldWriteYouTubeEntry(youtube, loaded))
@@ -29,7 +31,12 @@ public static class YouTubeEntryWriter
             return false;
         }
 
-        YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, youtube, isCompleteRecording);
+        YouTubeEntry entry = YouTubeEntryBuilder.Create(
+            loaded,
+            youtube,
+            isCompleteRecording,
+            heroCatalog
+        );
         Directory.CreateDirectory(directory);
         string path = Path.Combine(directory, fileName);
         string json = JsonSerializer.Serialize(

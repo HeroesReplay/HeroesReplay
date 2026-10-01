@@ -126,7 +126,12 @@ public class ContextFileManager : IContextFileManager
 
         try
         {
-            YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, settings.YouTube);
+            YouTubeEntry entry = YouTubeEntryBuilder.Create(
+                loaded,
+                settings.YouTube,
+                isCompleteRecording: false,
+                gameData.Heroes
+            );
 
             string file = Path.Combine(
                 contextData.Directory.FullName,

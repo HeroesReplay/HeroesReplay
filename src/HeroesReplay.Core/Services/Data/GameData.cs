@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -70,6 +71,7 @@ public class GameData : IGameData
 
         var heroData = await File.ReadAllTextAsync(file);
 
+        Dictionary<string, string> roles = ReadRoles();
         List<Hero> heroes = new List<Hero>();
 
         using (JsonDocument document = JsonDocument.Parse(heroData))
@@ -83,7 +85,10 @@ public class GameData : IGameData
                             hero.Name,
                             hero.Value.GetProperty("unitId").GetString(),
                             hero.Value.GetProperty("hyperlinkId").GetString(),
-                            hero.Value.GetProperty("attributeId").GetString()
+                            hero.Value.GetProperty("attributeId").GetString(),
+                            ReadDescriptors(hero.Value),
+                            RoleFor(roles, hero.Name),
+                            ReadReleaseDate(hero.Value)
                         )
                     );
                 }
@@ -91,6 +96,171 @@ public class GameData : IGameData
         }
 
         Heroes = new ReadOnlyCollection<Hero>(heroes);
+    }
+
+    private static IReadOnlyList<string> ReadDescriptors(JsonElement hero)
+    {
+        if (
+            !hero.TryGetProperty(DescriptorsProperty, out JsonElement descriptors)
+            || descriptors.ValueKind != JsonValueKind.Array
+        )
+        {
+            return Array.Empty<string>();
+        }
+
+        var tags = new List<string>();
+        foreach (JsonElement tag in descriptors.EnumerateArray())
+        {
+            if (tag.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            string text = tag.GetString();
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                tags.Add(text.Trim());
+            }
+        }
+
+        return tags;
+    }
+
+    internal static DateTime? ReadReleaseDate(JsonElement hero)
+    {
+        if (
+            !hero.TryGetProperty("releaseDate", out JsonElement value)
+            || value.ValueKind != JsonValueKind.String
+        )
+        {
+            return null;
+        }
+
+        string text = value.GetString();
+        if (
+            string.IsNullOrWhiteSpace(text)
+            || !DateTime.TryParseExact(
+                text.Trim(),
+                "yyyy-MM-dd",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out DateTime day
+            )
+        )
+        {
+            return null;
+        }
+
+        return DateTime.SpecifyKind(day, DateTimeKind.Utc);
+    }
+
+    private Dictionary<string, string> ReadRoles()
+    {
+        string file = Directory
+            .GetFiles(
+                settings.HeroesDataPath,
+                "gamestrings_*_enus.json",
+                SearchOption.AllDirectories
+            )
+            .OrderByDescending(BuildNumber)
+            .FirstOrDefault();
+        if (file == null)
+        {
+            logger.LogWarning("No English gamestrings file found. Hero roles are unavailable.");
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(file));
+        if (!TryRoleMap(document.RootElement, out JsonElement map))
+        {
+            logger.LogWarning("Gamestrings file {File} has no hero role map.", file);
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var roles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (JsonProperty entry in map.EnumerateObject())
+        {
+            if (entry.Value.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            string role = entry.Value.GetString();
+            if (!string.IsNullOrWhiteSpace(entry.Name) && !string.IsNullOrWhiteSpace(role))
+            {
+                roles[entry.Name.Trim()] = role.Trim();
+            }
+        }
+
+        return roles;
+    }
+
+    private static bool TryRoleMap(JsonElement root, out JsonElement map)
+    {
+        if (
+            TryObject(root, "items", out JsonElement items)
+            && TryObject(items, "hero", out JsonElement hero)
+            && TryObject(hero, "expandedRole", out map)
+        )
+        {
+            return true;
+        }
+
+        if (
+            TryObject(root, "unit", out JsonElement unit)
+            && TryObject(unit, "expandedrole", out map)
+        )
+        {
+            return true;
+        }
+
+        if (
+            TryObject(root, "hero", out JsonElement legacyHero)
+            && TryObject(legacyHero, "expandedRole", out map)
+        )
+        {
+            return true;
+        }
+
+        map = default;
+        return false;
+    }
+
+    private static bool TryObject(JsonElement parent, string name, out JsonElement child)
+    {
+        if (parent.ValueKind == JsonValueKind.Object)
+        {
+            foreach (JsonProperty property in parent.EnumerateObject())
+            {
+                if (
+                    string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)
+                    && property.Value.ValueKind == JsonValueKind.Object
+                )
+                {
+                    child = property.Value;
+                    return true;
+                }
+            }
+        }
+
+        child = default;
+        return false;
+    }
+
+    private static string RoleFor(Dictionary<string, string> roles, string heroName)
+    {
+        if (roles != null && heroName != null && roles.TryGetValue(heroName, out string role))
+        {
+            return role;
+        }
+
+        return null;
+    }
+
+    private static int BuildNumber(string path)
+    {
+        string[] parts = Path.GetFileName(path).Split('_');
+        return parts.Length > 1 && int.TryParse(parts[1], out int build) ? build : 0;
     }
 
     private Task LoadMapsAsync()

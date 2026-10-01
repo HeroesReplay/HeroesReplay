@@ -144,6 +144,107 @@ public class PublicationReservationTests
         }
     }
 
+    [Fact]
+    public void TryReserve_DefersTheSameMapAndRankAndStillAcceptsARequest()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-variety-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(root);
+        string path = Path.Combine(root, "publication-reservations.txt");
+        try
+        {
+            File.WriteAllText(
+                path,
+                "reserved|" + Now.AddHours(-3).ToString("o") + "|0|replay-old" + Environment.NewLine
+            );
+            PublicationReservationResult first = Variety(
+                path,
+                Now,
+                false,
+                "replay-1",
+                "Tomb of the Spider Queen",
+                "Diamond 3",
+                new[] { "Johanna", "Anub'arak" }
+            );
+            PublicationReservationResult sameMap = Variety(
+                path,
+                Now.AddHours(3),
+                false,
+                "replay-2",
+                "tomb of the spider queen",
+                "Gold",
+                null
+            );
+            PublicationReservationResult requested = Variety(
+                path,
+                Now.AddHours(3),
+                true,
+                "replay-3",
+                "Tomb of the Spider Queen",
+                "Diamond 1",
+                new[] { "Illidan" }
+            );
+            PublicationReservationResult sameRank = Variety(
+                path,
+                Now.AddHours(6),
+                false,
+                "replay-4",
+                "Sky Temple",
+                "Diamond 2",
+                null
+            );
+            string saved = File.ReadAllText(path);
+
+            Assert.True(first.Allow);
+            Assert.False(sameMap.Allow);
+            Assert.Equal("map", sameMap.Reason);
+            Assert.Equal(0, CountLines(path, "replay-2"));
+            Assert.True(requested.Allow);
+            Assert.False(sameRank.Allow);
+            Assert.Equal("rank", sameRank.Reason);
+            Assert.Contains("replay-old", saved, StringComparison.Ordinal);
+            Assert.Contains("Tomb%20of%20the%20Spider%20Queen", saved, StringComparison.Ordinal);
+            Assert.Contains("Anub%27arak", saved, StringComparison.Ordinal);
+            Assert.Contains("replay-3", saved, StringComparison.Ordinal);
+            Assert.Equal(0, CountLines(path, "replay-4"));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    private static PublicationReservationResult Variety(
+        string path,
+        DateTimeOffset now,
+        bool requested,
+        string workKey,
+        string map,
+        string rank,
+        IReadOnlyList<string> heroes
+    )
+    {
+        return PublicationReservation.TryReserve(
+            path,
+            true,
+            0,
+            now,
+            null,
+            new List<DateTimeOffset>(),
+            0,
+            requested,
+            now,
+            map,
+            null,
+            null,
+            null,
+            null,
+            null,
+            workKey,
+            rank: rank,
+            heroes: heroes
+        );
+    }
+
     private static PublicationReservationResult Reserve(
         string path,
         DateTimeOffset now,

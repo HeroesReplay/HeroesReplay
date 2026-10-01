@@ -199,8 +199,20 @@ public static class ReplayMediaPolicyStartup
         );
         ApplyAge(
             section,
+            nameof(ReplayMediaPolicySettings.RankCooldown),
+            value => settings.RankCooldown = value,
+            errors
+        );
+        ApplyAge(
+            section,
             nameof(ReplayMediaPolicySettings.FeaturedHeroCooldown),
             value => settings.FeaturedHeroCooldown = value,
+            errors
+        );
+        ApplyCount(
+            section,
+            nameof(ReplayMediaPolicySettings.MaxSharedHeroes),
+            value => settings.MaxSharedHeroes = value,
             errors
         );
         ApplyCount(

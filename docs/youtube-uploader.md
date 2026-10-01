@@ -23,7 +23,9 @@ Production is `HEROES_REPLAY_ENV=prod` on `DESKTOP-8SJE72`. Configuration is `ap
   "MinimumPublicInterval": "02:00:00",
   "OrdinaryCandidateMaxAge": "3.00:00:00",
   "MapCooldown": "08:00:00",
+  "RankCooldown": "08:00:00",
   "FeaturedHeroCooldown": "08:00:00",
+  "MaxSharedHeroes": 4,
   "ReservedRequestSlotsPerDay": 2,
   "MaxInsertsPerQuotaDay": 80
 }
@@ -31,7 +33,7 @@ Production is `HEROES_REPLAY_ENV=prod` on `DESKTOP-8SJE72`. Configuration is `ap
 
 `OrdinaryCandidateMaxAge` of `3.00:00:00` is 72 hours. `72:00:00` is 72 days, because that is how .NET reads a time span.
 
-The base `appsettings.json` has the same eight caps and does not select a recording mode or a publication mode, so a process with no overlay records nothing and publishes nothing. Dev (`appsettings.dev.json`) uses the same modes as production, with `YouTube:DryRun` true, `PrivacyStatus` private, and a `[TEST]` title. Dev inherits the caps from the base file.
+The base `appsettings.json` has the same ten algorithm keys and does not select a recording mode or a publication mode, so a process with no overlay records nothing and publishes nothing. Dev (`appsettings.dev.json`) uses the same modes as production, with `YouTube:DryRun` true, `PrivacyStatus` private, and a `[TEST]` title. Dev inherits the caps from the base file.
 
 `PublicationMode` `AllEligible` is the live channel: a paced archive of the Storm League games the stream already plays. `Curated` is the other content policy. It sends a paid request, a pentakill or team wipe, or a high-skill game, and it does not send an ordinary game. High skill does nothing until `MinimumHighSkillRank` or `MinimumHighSkillMmr` is set. Production does not set either, so no replay is high-skill.
 
@@ -104,12 +106,15 @@ On `DESKTOP-8SJE72`, a verified replay is sent only when every line below allows
 7. Reserved request room. With 6 and 2, a non-request stops once 4 videos are in the day. A request may use the last 2, and it stops once 2 requests are already in the day and the ordinary room is full. A request does not skip the day cap, the week cap, the quota, or the interval.
 8. The previous public video is at least `MinimumPublicInterval` ago.
 9. An ordinary replay's game time is inside `OrdinaryCandidateMaxAge`. A request, a notable replay, and a high-skill replay do not use this age at send time. They already expired by their own windows above.
+10. The map was not already reserved inside `MapCooldown`. The check looks at every reserved slot in the window, not only the latest video. Comparison ignores case and surrounding spaces. One earlier upload of that map is enough. The reason is `map`.
+11. The rank tier was not already reserved inside `RankCooldown`. Division is ignored, so Diamond 3 and Diamond 1 are the same tier. An unrecognized rank is compared as written. MMR is not part of this check. The reason is `rank`.
+12. Heroes. A focus hero that was the focus of a reserved upload inside `FeaturedHeroCooldown` waits. Separately, when at least `MaxSharedHeroes` heroes from this replay (4 unless configured otherwise, and 0 turns this roster check off) appear anywhere in reserved uploads inside that window, the replay waits. One shared hero does not wait. The reason is `hero`.
 
-Any other machine, including `ASA-SERVER`, still stops at the quota. It does not apply the day cap, the week cap, or the interval. Its title is marked `[TEST]` unless `YouTube:TitlePrefix` is set, and the listing stays private.
+A paid request skips the map, rank, and hero checks. Its slot still records the map, the rank, the focus hero, and the roster, so the next ordinary replay sees them. A refusal for `map`, `rank`, or `hero` stays pending. The uploader tries the next pending file on the same pass. Nothing sorts the queue by a score.
 
-`MapCooldown` and `FeaturedHeroCooldown` do not block a send. A repeat of the same map or featured hero inside the cooldown is still uploaded. The decision is marked cooldown. Nothing sorts the queue by that mark.
+Any other machine, including `ASA-SERVER`, still stops at the quota. It does not apply the day cap, the week cap, the interval, or the map, rank, and hero checks. Its title is marked `[TEST]` unless `YouTube:TitlePrefix` is set, and the listing stays private.
 
-One replay id takes one publication slot, stored in `Data\publication-reservations.txt`. A retry of that same id does not take a second slot. An ordinary replay that is too old is not retried. Any other refusal stays pending until a later pass.
+One replay id takes one publication slot, stored in `Data\publication-reservations.txt`. A retry of that same id does not take a second slot. An older line with only the time, the request flag, and the replay id still counts for the day, the week, and the interval. An ordinary replay that is too old is not retried. Any other refusal stays pending until a later pass.
 
 The insert is private. When the desired privacy is public, the video also gets `publishAt`: now, or the previous public time plus `MinimumPublicInterval` when that is later. The entry is renamed to `youtube-entry-uploaded.json` when YouTube's insert response is already public. A response that is still private leaves the entry pending. This process does not later ask YouTube whether `publishAt` has fired. The reservation written at send time is what the next replay's day, week, and interval checks see.
 
@@ -119,13 +124,26 @@ A granted send that fails still keeps its slot. The retry is allowed through tha
 
 The spectator plays the next queued replay as soon as the previous session ends. YouTube does not follow that clock.
 
-On the production host a new replay is sent at most every 2 hours, at most 6 in any rolling 24 hours, and at most 30 in any rolling 7 days. Non-requests stop once 4 of those 6 are used. A paid request can take a remaining slot until 2 requests have already been sent in that day. The quota cap is 80 inserts per Pacific day, shared by full matches and clips.
+On the production host a new replay is sent at most every 2 hours, at most 6 in any rolling 24 hours, and at most 30 in any rolling 7 days. The same map, the same rank tier, or a roster that shares 4 or more heroes with uploads from the last 8 hours waits, and the next different pending file is tried instead. Non-requests stop once 4 of those 6 are used. A paid request can take a remaining slot until 2 requests have already been sent in that day, and it is not held for map, rank, or heroes. The quota cap is 80 inserts per Pacific day, shared by full matches and clips.
 
 ## What the video contains
 
-A full match title is built from the pieces that fit in 100 characters, in this order: a prefix, hero on map, mode, rank, average MMR, UTC date, replay id. The prefix is `Full match`, plus `Requested` and `pentakill` or `team wipe` when those are true. Example shape: `Full match: Pentakill - Li-Ming on Alterac Pass - Storm League - Diamond - 2800 MMR - 2026-10-01 - 65550001`.
+A full match title is one line of at most 100 characters. It does not name a pentakill, a team wipe, a date, or an MMR. Those events are not a title, because one streak does not describe the match.
 
-The description starts with `Twitch: http://twitch.tv/saltysadism`, then `Full match.`, the replay id, the Heroes Profile match link, date, build, map, mode, rank, average MMR, featured hero, the pentakill or team wipe, and the requestor when it was a paid upload. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, and those events.
+- Ordinary: `Volskaya Foundry - Storm League - Diamond - 65389750`.
+- A reward that names a player: `Illidan requested by ViewerZZ - Dragon Shire - Storm League - Diamond 3 - 65550001`. With no Twitch login: `Illidan - Dragon Shire - Storm League - Diamond 3 - 65550001`.
+- A paid upload that does not name a player: `Requested by ViewerZZ - Dragon Shire - Storm League - Diamond 3 - 65550001`.
+- A new hero in the match: `Ft. Xal'atath - Volskaya Foundry - Storm League - Diamond - 65389750`. Ft. means featuring. One hero only. When the reward already leads with that hero, the title does not say her twice.
+
+There is no parsed MVP hero, so a title does not say MVP. The heroes in the title come from the parsed replay: each player's character, or the attribute id when the character is blank.
+
+A draft note is added before the replay id when the current hero-select roles are not one tank, one bruiser, one healer, and a ranged assassin. Those roles are Tank, Bruiser, Melee Assassin, Ranged Assassin, Healer, and Support. Johanna plus Chen is a tank and a bruiser, so that draft is left alone. The note is the whole match when both teams share it (`Cursed Hollow - Storm League - Diamond - No healer - 65550001`) and names the team when they differ (`Blue no tank, Red double healer`). A hero the catalog cannot match, or a hero with no current role, suppresses that team's note. A normal draft adds nothing.
+
+`YouTube:Titles` in `appsettings.json` and `appsettings.prod.json` turns each form on or off: `DraftNotes`, `NamedPlayerTitles`, `RequestedByTitles`, and `FeatureNewHeroes`. Each draft note has its own switch (`NoTankOrHealer`, `NoHealer`, `DoubleHealer`, `TripleHealer`, `DoubleBruiserWithoutTank`, `NoTank`, `DoubleTank`, `TripleBruiser`, `DoubleSupport`, `NoRangedAssassin`). The six role labels are in the same section. Turning a form off leaves the map, mode, rank, and replay id.
+
+A hero is featured when its name is in `RecentHeroes`, or when the catalog `releaseDate` is within `RecentHeroDays` (60) of the match. `RecentHeroDays` of 0 or less uses the name list only. The newest release date wins. A name on the list is still featured when the local catalog does not have that hero yet. Xal'atath is on the list. The description adds `Featuring: Xal'atath` when the title does. Clips are unchanged.
+
+The description starts with `Twitch: http://twitch.tv/saltysadism`, then `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note, `Featuring:` when a new hero is in the title, the pentakill or team wipe as a highlight, and the requestor when it was a paid upload. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, and those events.
 
 Pentakill and team-wipe clips are separate full-frame cuts under the context `clips` folder, 12 seconds before the streak and 8 seconds after it on the match clock. Each clip has its own `youtube-entry.json` and can be inserted as its own video. It uses the parent replay's class and the parent replay's one publication slot. Each insert still counts toward the quota. Clip titles look like `Li-Ming - pentakill - Alterac Pass - 65550001`.
 

@@ -4,6 +4,16 @@ using HeroesReplay.Core.Services.Media;
 
 namespace HeroesReplay.Core.Services.YouTube;
 
+/// <summary>One recent upload the diversity check can see. Older reservation lines have none of these fields.</summary>
+public sealed class PublicationSample
+{
+    public DateTimeOffset At { get; init; }
+    public string Map { get; init; }
+    public string Rank { get; init; }
+    public string Hero { get; init; }
+    public IReadOnlyList<string> Heroes { get; init; }
+}
+
 /// <summary>
 /// Public hosts wait for the rolling interval. A prelive host still uploads private
 /// listings, and both hosts stop at the videos.insert quota-day cap.
@@ -67,6 +77,7 @@ public static class PublicationSchedule
     public const int MaxPublicPerDay = 6;
     public const int MaxPublicPerWeek = 30;
     public const int ReservedRequestSlotsPerDay = 2;
+    public const int MaxSharedHeroes = 4;
     public static readonly TimeSpan OrdinaryMaxAge = TimeSpan.FromHours(72);
     public static readonly TimeSpan DiversityCooldown = TimeSpan.FromHours(8);
 
@@ -84,7 +95,10 @@ public static class PublicationSchedule
         DateTimeOffset? lastMapUtc,
         string hero,
         string lastHero,
-        DateTimeOffset? lastHeroUtc
+        DateTimeOffset? lastHeroUtc,
+        string rank = null,
+        IReadOnlyList<string> heroes = null,
+        IReadOnlyList<PublicationSample> recent = null
     )
     {
         return Decide(
@@ -105,7 +119,10 @@ public static class PublicationSchedule
             lastMapUtc,
             hero,
             lastHero,
-            lastHeroUtc
+            lastHeroUtc,
+            rank,
+            heroes,
+            recent
         );
     }
 
@@ -123,7 +140,10 @@ public static class PublicationSchedule
         DateTimeOffset? lastMapUtc,
         string hero,
         string lastHero,
-        DateTimeOffset? lastHeroUtc
+        DateTimeOffset? lastHeroUtc,
+        string rank = null,
+        IReadOnlyList<string> heroes = null,
+        IReadOnlyList<PublicationSample> recent = null
     )
     {
         if (!ConfigurationAllowsSend(settings))
@@ -211,23 +231,245 @@ public static class PublicationSchedule
             return PublicationDecision.Refused("stale");
         }
 
-        int penalty = 0;
-        if (WithinCooldown(map, lastMap, lastMapUtc, now, settings.MapCooldown))
+        if (!requested)
         {
-            penalty++;
+            PublicationDecision diversity = Diversity(
+                settings,
+                now,
+                map,
+                rank,
+                hero,
+                heroes,
+                lastMap,
+                lastMapUtc,
+                lastHero,
+                lastHeroUtc,
+                recent
+            );
+            if (diversity != null)
+            {
+                return diversity;
+            }
         }
 
-        if (WithinCooldown(hero, lastHero, lastHeroUtc, now, settings.FeaturedHeroCooldown))
+        return PublicationDecision.Granted("ready");
+    }
+
+    private static PublicationDecision Diversity(
+        ReplayMediaPolicySettings settings,
+        DateTimeOffset now,
+        string map,
+        string rank,
+        string hero,
+        IReadOnlyList<string> heroes,
+        string lastMap,
+        DateTimeOffset? lastMapUtc,
+        string lastHero,
+        DateTimeOffset? lastHeroUtc,
+        IReadOnlyList<PublicationSample> recent
+    )
+    {
+        if (MapRepeats(map, lastMap, lastMapUtc, now, settings.MapCooldown, recent))
         {
-            penalty++;
+            return PublicationDecision.Refused("map");
         }
 
-        return new PublicationDecision
+        if (RankRepeats(rank, now, settings.RankCooldown, recent))
         {
-            Allow = true,
-            Reason = penalty == 0 ? "ready" : "cooldown",
-            Penalty = penalty,
-        };
+            return PublicationDecision.Refused("rank");
+        }
+
+        if (
+            HeroRepeats(
+                hero,
+                heroes,
+                lastHero,
+                lastHeroUtc,
+                now,
+                settings.FeaturedHeroCooldown,
+                settings.MaxSharedHeroes,
+                recent
+            )
+        )
+        {
+            return PublicationDecision.Refused("hero");
+        }
+
+        return null;
+    }
+
+    private static bool MapRepeats(
+        string map,
+        string lastMap,
+        DateTimeOffset? lastMapUtc,
+        DateTimeOffset now,
+        TimeSpan cooldown,
+        IReadOnlyList<PublicationSample> recent
+    )
+    {
+        if (WithinCooldown(map, lastMap, lastMapUtc, now, cooldown))
+        {
+            return true;
+        }
+
+        if (recent == null)
+        {
+            return false;
+        }
+
+        foreach (PublicationSample sample in recent)
+        {
+            if (sample != null && WithinCooldown(map, sample.Map, sample.At, now, cooldown))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool RankRepeats(
+        string rank,
+        DateTimeOffset now,
+        TimeSpan cooldown,
+        IReadOnlyList<PublicationSample> recent
+    )
+    {
+        string tier = RankKey(rank);
+        if (tier == null || recent == null)
+        {
+            return false;
+        }
+
+        foreach (PublicationSample sample in recent)
+        {
+            if (sample == null || now < sample.At || now - sample.At >= cooldown)
+            {
+                continue;
+            }
+
+            string previous = RankKey(sample.Rank);
+            if (
+                previous != null
+                && string.Equals(tier, previous, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string RankKey(string rank)
+    {
+        string display = ReplayMediaRanks.Display(rank);
+        if (display != null)
+        {
+            return display;
+        }
+
+        return string.IsNullOrWhiteSpace(rank) ? null : rank.Trim();
+    }
+
+    private static bool HeroRepeats(
+        string hero,
+        IReadOnlyList<string> heroes,
+        string lastHero,
+        DateTimeOffset? lastHeroUtc,
+        DateTimeOffset now,
+        TimeSpan cooldown,
+        int sharedLimit,
+        IReadOnlyList<PublicationSample> recent
+    )
+    {
+        if (WithinCooldown(hero, lastHero, lastHeroUtc, now, cooldown))
+        {
+            return true;
+        }
+
+        if (recent != null && !string.IsNullOrWhiteSpace(hero))
+        {
+            foreach (PublicationSample sample in recent)
+            {
+                if (sample != null && WithinCooldown(hero, sample.Hero, sample.At, now, cooldown))
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (sharedLimit <= 0)
+        {
+            return false;
+        }
+
+        var candidate = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddHero(candidate, hero);
+        if (heroes != null)
+        {
+            foreach (string name in heroes)
+            {
+                AddHero(candidate, name);
+            }
+        }
+
+        if (candidate.Count == 0)
+        {
+            return false;
+        }
+
+        var shown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (
+            !string.IsNullOrWhiteSpace(lastHero)
+            && lastHeroUtc != null
+            && now >= lastHeroUtc.Value
+            && now - lastHeroUtc.Value < cooldown
+        )
+        {
+            AddHero(shown, lastHero);
+        }
+
+        if (recent != null)
+        {
+            foreach (PublicationSample sample in recent)
+            {
+                if (sample == null || now < sample.At || now - sample.At >= cooldown)
+                {
+                    continue;
+                }
+
+                AddHero(shown, sample.Hero);
+                if (sample.Heroes == null)
+                {
+                    continue;
+                }
+
+                foreach (string name in sample.Heroes)
+                {
+                    AddHero(shown, name);
+                }
+            }
+        }
+
+        int shared = 0;
+        foreach (string name in candidate)
+        {
+            if (shown.Contains(name))
+            {
+                shared++;
+            }
+        }
+
+        return shared >= sharedLimit;
+    }
+
+    private static void AddHero(HashSet<string> names, string hero)
+    {
+        if (!string.IsNullOrWhiteSpace(hero))
+        {
+            names.Add(hero.Trim());
+        }
     }
 
     public static ReplayMediaPolicySettings CanarySettings()

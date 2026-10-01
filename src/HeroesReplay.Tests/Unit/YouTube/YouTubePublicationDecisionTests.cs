@@ -388,11 +388,10 @@ public class YouTubePublicationDecisionTests
             lastHeroAt: Now.AddMinutes(-10)
         );
 
-        Assert.True(map.Allow);
-        Assert.Equal(1, map.Penalty);
-        Assert.Equal("cooldown", map.Reason);
-        Assert.True(hero.Allow);
-        Assert.Equal(1, hero.Penalty);
+        Assert.False(map.Allow);
+        Assert.Equal("map", map.Reason);
+        Assert.False(hero.Allow);
+        Assert.Equal("hero", hero.Reason);
     }
 
     [Fact]
@@ -416,7 +415,9 @@ public class YouTubePublicationDecisionTests
             StringComparison.Ordinal
         );
         Assert.Contains("\"MapCooldown\": \"08:00:00\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"RankCooldown\": \"08:00:00\"", text, StringComparison.Ordinal);
         Assert.Contains("\"FeaturedHeroCooldown\": \"08:00:00\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"MaxSharedHeroes\": 4", text, StringComparison.Ordinal);
         Assert.Contains("\"ReservedRequestSlotsPerDay\": 2", text, StringComparison.Ordinal);
         Assert.Contains("\"MaxInsertsPerQuotaDay\": 80", text, StringComparison.Ordinal);
         Assert.DoesNotContain("RecordingMode", text, StringComparison.Ordinal);
@@ -431,7 +432,9 @@ public class YouTubePublicationDecisionTests
         Assert.Equal(TimeSpan.FromHours(2), settings.MinimumPublicInterval);
         Assert.Equal(TimeSpan.FromHours(72), settings.OrdinaryCandidateMaxAge);
         Assert.Equal(TimeSpan.FromHours(8), settings.MapCooldown);
+        Assert.Equal(TimeSpan.FromHours(8), settings.RankCooldown);
         Assert.Equal(TimeSpan.FromHours(8), settings.FeaturedHeroCooldown);
+        Assert.Equal(4, settings.MaxSharedHeroes);
         Assert.Equal(2, settings.ReservedRequestSlotsPerDay);
         Assert.Equal(80, settings.MaxInsertsPerQuotaDay);
     }

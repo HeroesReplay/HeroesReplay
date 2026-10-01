@@ -33,6 +33,7 @@ public class YouTubeEntry
     public string ActualPrivacyStatus { get; set; }
     public bool Requested { get; set; }
     public string Hero { get; set; }
+    public string[] Heroes { get; set; }
     public DateTimeOffset? RecordedAtUtc { get; set; }
     public DateTimeOffset? PublishAtUtc { get; set; }
 }

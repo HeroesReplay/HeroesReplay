@@ -109,9 +109,20 @@ public static class ReplayMediaPolicy
         );
         AddAge(
             errors,
+            settings.RankCooldown,
+            ReplayMediaConfigurationError.RankCooldownNegative,
+            ReplayMediaConfigurationError.RankCooldownTooLarge
+        );
+        AddAge(
+            errors,
             settings.FeaturedHeroCooldown,
             ReplayMediaConfigurationError.FeaturedHeroCooldownNegative,
             ReplayMediaConfigurationError.FeaturedHeroCooldownTooLarge
+        );
+        AddCount(
+            errors,
+            settings.MaxSharedHeroes,
+            ReplayMediaConfigurationError.SharedHeroesNegative
         );
         AddCount(
             errors,
