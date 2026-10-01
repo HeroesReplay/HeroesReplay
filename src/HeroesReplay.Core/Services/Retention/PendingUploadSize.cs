@@ -1,9 +1,15 @@
 using System;
 using System.IO;
+using System.Text.Json;
+using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.YouTube;
 
 namespace HeroesReplay.Core.Services.Retention;
 
+/// <summary>
+/// Bytes of recordings still waiting for a videos.insert. A recording whose entry already
+/// has a VideoId was inserted and only waits for its publishAt, so it is not counted.
+/// </summary>
 public static class PendingUploadSize
 {
     public static long Bytes(
@@ -24,7 +30,11 @@ public static class PendingUploadSize
             try
             {
                 var info = new FileInfo(path);
-                if (info.Exists && info.Length > 0)
+                if (
+                    info.Exists
+                    && info.Length > 0
+                    && !IsInserted(info.DirectoryName, entryFileName)
+                )
                 {
                     total += info.Length;
                 }
@@ -34,5 +44,31 @@ public static class PendingUploadSize
         }
 
         return total;
+    }
+
+    public static bool IsInserted(string directory, string entryFileName)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(entryFileName))
+        {
+            return false;
+        }
+
+        string entryPath = Path.Combine(directory, entryFileName);
+        if (!File.Exists(entryPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            YouTubeEntry entry = JsonSerializer.Deserialize<YouTubeEntry>(
+                File.ReadAllText(entryPath)
+            );
+            return !string.IsNullOrWhiteSpace(entry?.VideoId);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }

@@ -121,7 +121,7 @@ public class GameManager : IGameManager
 
         try
         {
-            await WaitUntilDiskAllowsAsync().ConfigureAwait(false);
+            SkipRecordingUnderDiskPressure(loadedReplay);
             using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.spectate");
             HeroesReplayTelemetry.TagReplay(
                 activity,
@@ -351,30 +351,32 @@ public class GameManager : IGameManager
         gameController.Kill();
     }
 
-    private async Task WaitUntilDiskAllowsAsync()
+    private void SkipRecordingUnderDiskPressure(LoadedReplay loadedReplay)
     {
-        while (true)
+        DiskBacklogDecision decision = SpectateAdmission.Evaluate(MeasureDisk(), settings.Disk);
+        if (SpectateAdmission.MayRecord(decision))
         {
-            DiskBacklogDecision decision = SpectateAdmission.Evaluate(MeasureDisk(), settings.Disk);
-            if (SpectateAdmission.MayStart(decision))
+            if (decision.Pressure == DiskPressure.Warning)
             {
-                if (decision.Pressure == DiskPressure.Warning)
-                {
-                    logger.LogWarning(
-                        "Disk is in warning ({Reason}). Spectate continues.",
-                        decision.Reason
-                    );
-                }
-
-                return;
+                logger.LogWarning(
+                    "Disk is in warning ({Reason}). Spectate and recording continue.",
+                    decision.Reason
+                );
             }
 
-            logger.LogWarning(
-                "Disk {Reason}. New spectating waits. Recordings already on disk stay.",
-                decision.Reason
-            );
-            await Task.Delay(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+            return;
         }
+
+        if (loadedReplay != null)
+        {
+            loadedReplay.PolicyAllowsRecording = false;
+        }
+
+        logger.LogWarning(
+            "Disk {Reason}. Replay {ReplayId} is spectated without a recording. Recordings already on disk stay.",
+            decision.Reason,
+            loadedReplay?.ReplayId
+        );
     }
 
     private DiskBacklogInput MeasureDisk()

@@ -7,7 +7,7 @@ namespace HeroesReplay.Tests.Unit.Retention;
 public class SpectateAdmissionTests
 {
     [Fact]
-    public void MayStart_StopsWhenTheDiskBacklogSaysStopAndContinuesOnAWarning()
+    public void MayRecord_SkipsRecordingWhenTheDiskBacklogSaysStopAndRecordsOnAWarning()
     {
         DiskBacklogSettings settings = SpectateAdmission.DefaultWatermarks();
         DiskBacklogDecision stop = SpectateAdmission.Evaluate(
@@ -36,14 +36,14 @@ public class SpectateAdmissionTests
         );
 
         Assert.Equal(DiskBacklog.FreeBytesLow, stop.Reason);
-        Assert.False(SpectateAdmission.MayStart(stop));
+        Assert.False(SpectateAdmission.MayRecord(stop));
         Assert.Equal(DiskPressure.Warning, warning.Pressure);
-        Assert.True(SpectateAdmission.MayStart(warning));
-        Assert.True(SpectateAdmission.MayStart(room));
+        Assert.True(SpectateAdmission.MayRecord(warning));
+        Assert.True(SpectateAdmission.MayRecord(room));
     }
 
     [Fact]
-    public void MayStart_StopsWhenPendingUploadsReachTheWatermark()
+    public void MayRecord_SkipsRecordingWhenPendingUploadsReachTheWatermark()
     {
         DiskBacklogDecision decision = SpectateAdmission.Evaluate(
             new DiskBacklogInput
@@ -55,6 +55,6 @@ public class SpectateAdmissionTests
         );
 
         Assert.Equal(DiskBacklog.PendingBytesHigh, decision.Reason);
-        Assert.False(SpectateAdmission.MayStart(decision));
+        Assert.False(SpectateAdmission.MayRecord(decision));
     }
 }

@@ -2,7 +2,8 @@ namespace HeroesReplay.Core.Services.Retention;
 
 /// <summary>
 /// The spectate loop asks the disk backlog before it launches another replay.
-/// A stop decision waits. It does not delete recordings.
+/// Disk pressure never stops spectating, because the Twitch stream must keep playing.
+/// A stop decision only skips the recording for that replay. It does not delete recordings.
 /// </summary>
 public static class SpectateAdmission
 {
@@ -27,8 +28,8 @@ public static class SpectateAdmission
         return DiskBacklog.Evaluate(input, settings ?? DefaultWatermarks());
     }
 
-    public static bool MayStart(DiskBacklogDecision decision)
+    public static bool MayRecord(DiskBacklogDecision decision)
     {
-        return decision != null && decision.Pressure != DiskPressure.StopSpectating;
+        return decision != null && decision.Pressure != DiskPressure.SkipRecording;
     }
 }

@@ -53,7 +53,7 @@ public class DiskBacklogTests
         Assert.Equal(DiskPressure.Warning, warn.Pressure);
         Assert.Equal(DiskBacklog.FreeBytesWarning, warn.Reason);
         Assert.Equal(DiskPressure.Warning, justAboveStop.Pressure);
-        Assert.Equal(DiskPressure.StopSpectating, stop.Pressure);
+        Assert.Equal(DiskPressure.SkipRecording, stop.Pressure);
         Assert.Equal(DiskBacklog.FreeBytesLow, stop.Reason);
     }
 
@@ -71,7 +71,7 @@ public class DiskBacklogTests
 
         Assert.Equal(DiskPressure.Warning, warn.Pressure);
         Assert.Equal(DiskBacklog.PendingBytesWarning, warn.Reason);
-        Assert.Equal(DiskPressure.StopSpectating, stop.Pressure);
+        Assert.Equal(DiskPressure.SkipRecording, stop.Pressure);
         Assert.Equal(DiskBacklog.PendingBytesHigh, stop.Reason);
     }
 
@@ -83,7 +83,7 @@ public class DiskBacklogTests
             Settings()
         );
 
-        Assert.Equal(DiskPressure.StopSpectating, decision.Pressure);
+        Assert.Equal(DiskPressure.SkipRecording, decision.Pressure);
         Assert.Equal(DiskBacklog.FreeBytesLow, decision.Reason);
     }
 
@@ -97,7 +97,7 @@ public class DiskBacklogTests
             Settings()
         );
 
-        Assert.Equal(DiskPressure.StopSpectating, decision.Pressure);
+        Assert.Equal(DiskPressure.SkipRecording, decision.Pressure);
         Assert.Equal(DiskBacklog.MalformedInput, decision.Reason);
     }
 
@@ -106,7 +106,7 @@ public class DiskBacklogTests
     {
         DiskBacklogDecision decision = DiskBacklog.Evaluate(null, Settings());
 
-        Assert.Equal(DiskPressure.StopSpectating, decision.Pressure);
+        Assert.Equal(DiskPressure.SkipRecording, decision.Pressure);
         Assert.Equal(DiskBacklog.MalformedInput, decision.Reason);
     }
 
@@ -122,7 +122,7 @@ public class DiskBacklogTests
             backwards
         );
 
-        Assert.Equal(DiskPressure.StopSpectating, decision.Pressure);
+        Assert.Equal(DiskPressure.SkipRecording, decision.Pressure);
         Assert.Equal(DiskBacklog.ConfigurationInvalid, decision.Reason);
     }
 
