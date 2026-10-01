@@ -18,7 +18,13 @@ public static class YouTubeEntryBuilder
         IReadOnlyList<Hero> heroCatalog = null
     )
     {
-        ReplayMediaPolicyInput facts = ReplayMediaFacts.From(loaded, false, false, false);
+        ReplayMediaPolicyInput facts = ReplayMediaFacts.From(
+            loaded,
+            false,
+            false,
+            false,
+            heroCatalog
+        );
         var input = new FullMatchMetadataInput
         {
             ReplayId = facts.ReplayId,

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Threading;
@@ -61,22 +62,30 @@ public sealed class MediaPolicyAttemptLog
     public Task<MediaPolicySnapshot> RecordPreLaunchAsync(
         LoadedReplay loaded,
         ReplayMediaPolicySettings settings,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        IReadOnlyList<Hero> heroes = null
     )
     {
-        return RecordPreLaunchAsync(loaded, settings, DateTime.UtcNow, cancellationToken);
+        return RecordPreLaunchAsync(loaded, settings, DateTime.UtcNow, cancellationToken, heroes);
     }
 
     public async Task<MediaPolicySnapshot> RecordPreLaunchAsync(
         LoadedReplay loaded,
         ReplayMediaPolicySettings settings,
         DateTime utcNow,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        IReadOnlyList<Hero> heroes = null
     )
     {
         try
         {
-            return await RecordPreLaunchCoreAsync(loaded, settings, utcNow, cancellationToken)
+            return await RecordPreLaunchCoreAsync(
+                    loaded,
+                    settings,
+                    utcNow,
+                    cancellationToken,
+                    heroes
+                )
                 .ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -116,13 +125,22 @@ public sealed class MediaPolicyAttemptLog
         LoadedReplay loaded,
         ReplayMediaPolicySettings settings,
         DateTime utcNow,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        IReadOnlyList<Hero> heroes
     )
     {
         string attemptId = MediaPolicyAttemptIds.For(loaded);
         if (attemptId == null || utcNow.Kind != DateTimeKind.Utc)
         {
-            ReplayMediaDecision unstored = Evaluate(loaded, settings, utcNow, false, false, false);
+            ReplayMediaDecision unstored = Evaluate(
+                loaded,
+                settings,
+                utcNow,
+                false,
+                false,
+                false,
+                heroes
+            );
             Log(unstored, reused: false);
             return Snapshot(attemptId, unstored, reused: false, persisted: false);
         }
@@ -158,7 +176,8 @@ public sealed class MediaPolicyAttemptLog
             utcNow,
             duplicates.Published,
             duplicates.Scheduled,
-            duplicates.InOutbox
+            duplicates.InOutbox,
+            heroes
         );
         UploadAttemptResult saved = await SaveAsync(
                 attemptId,
@@ -307,11 +326,12 @@ public sealed class MediaPolicyAttemptLog
         DateTime utcNow,
         bool alreadyPublished,
         bool alreadyScheduled,
-        bool inOutbox
+        bool inOutbox,
+        IReadOnlyList<Hero> heroes
     )
     {
         return ReplayMediaPolicy.Evaluate(
-            ReplayMediaFacts.From(loaded, alreadyPublished, alreadyScheduled, inOutbox),
+            ReplayMediaFacts.From(loaded, alreadyPublished, alreadyScheduled, inOutbox, heroes),
             settings,
             utcNow
         );

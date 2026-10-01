@@ -1,9 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace HeroesReplay.Core.Services.Analysis;
 
-public readonly record struct TeamKillDeath(int Second, string KillerHero, string VictimHero);
+public readonly record struct TeamKillDeath(
+    int Second,
+    string KillerHero,
+    string VictimHero,
+    int KillerKey = -1
+);
+
+public readonly record struct TeamKillBlow(int Second, string Victim);
 
 public readonly record struct TeamKillClip(
     string Kind,
@@ -12,11 +20,12 @@ public readonly record struct TeamKillClip(
     int LastDeathSecond,
     int HudStartSecond,
     int HudEndSecond,
-    string Description
+    string Description,
+    IReadOnlyList<TeamKillBlow> Kills = null
 );
 
 /// <summary>
-/// Pentakill and team-wipe intervals on the match clock, before a recording exists.
+/// Pentakill and team-wipe intervals for one player's hero-unit killing blows.
 /// </summary>
 public static class TeamKillClips
 {
@@ -51,8 +60,7 @@ public static class TeamKillClips
         }
 
         var clips = new List<TeamKillClip>();
-        clips.AddRange(Pentakills(deaths, windowSeconds, leadSeconds, tailSeconds));
-        clips.AddRange(TeamWipes(deaths, windowSeconds, leadSeconds, tailSeconds));
+        clips.AddRange(ByKiller(deaths, windowSeconds, leadSeconds, tailSeconds));
         clips.Sort(
             (left, right) =>
             {
@@ -74,7 +82,7 @@ public static class TeamKillClips
         return clips;
     }
 
-    private static List<TeamKillClip> Pentakills(
+    private static List<TeamKillClip> ByKiller(
         IReadOnlyList<TeamKillDeath> deaths,
         int windowSeconds,
         int leadSeconds,
@@ -92,19 +100,21 @@ public static class TeamKillClips
                 continue;
             }
 
-            if (!byKiller.TryGetValue(death.KillerHero, out List<TeamKillDeath> list))
+            string key = Identity(death);
+            if (!byKiller.TryGetValue(key, out List<TeamKillDeath> list))
             {
                 list = new List<TeamKillDeath>();
-                byKiller[death.KillerHero] = list;
+                byKiller[key] = list;
             }
 
             list.Add(death);
         }
 
         var clips = new List<TeamKillClip>();
-        foreach ((string hero, List<TeamKillDeath> victims) in byKiller)
+        foreach (List<TeamKillDeath> victims in byKiller.Values)
         {
             victims.Sort((left, right) => left.Second.CompareTo(right.Second));
+            string hero = victims[0].KillerHero;
             var seconds = new List<int>(victims.Count);
             foreach (TeamKillDeath victim in victims)
             {
@@ -117,17 +127,35 @@ public static class TeamKillClips
             {
                 if (streak.Kills >= 5)
                 {
+                    TeamKillBlow[] blows = Blows(victims, offset, streak.Kills);
+                    int unique = UniqueVictims(blows);
                     clips.Add(
                         Clip(
                             PentakillKind,
                             hero,
-                            victims[offset].Second,
-                            victims[offset + streak.Kills - 1].Second,
+                            blows[0].Second,
+                            blows[blows.Length - 1].Second,
                             leadSeconds,
                             tailSeconds,
-                            DescribePentakill(hero, victims, offset, streak.Kills)
+                            unique >= 5 ? hero + " pentakill (team wipe)" : hero + " pentakill",
+                            blows
                         )
                     );
+                    if (unique >= 5)
+                    {
+                        clips.Add(
+                            Clip(
+                                TeamWipeKind,
+                                hero,
+                                blows[0].Second,
+                                blows[blows.Length - 1].Second,
+                                leadSeconds,
+                                tailSeconds,
+                                "team wipe",
+                                blows
+                            )
+                        );
+                    }
                 }
 
                 offset += streak.Kills;
@@ -137,110 +165,37 @@ public static class TeamKillClips
         return clips;
     }
 
-    private static string DescribePentakill(
-        string hero,
-        List<TeamKillDeath> victims,
-        int offset,
-        int kills
-    )
+    private static string Identity(TeamKillDeath death)
+    {
+        if (death.KillerKey >= 0)
+        {
+            return death.KillerKey.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return death.KillerHero ?? string.Empty;
+    }
+
+    private static TeamKillBlow[] Blows(List<TeamKillDeath> deaths, int offset, int count)
+    {
+        var blows = new TeamKillBlow[count];
+        for (int i = 0; i < count; i++)
+        {
+            TeamKillDeath death = deaths[offset + i];
+            blows[i] = new TeamKillBlow(death.Second, death.VictimHero);
+        }
+
+        return blows;
+    }
+
+    private static int UniqueVictims(TeamKillBlow[] blows)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        for (int i = 0; i < kills; i++)
+        foreach (TeamKillBlow blow in blows)
         {
-            seen.Add(victims[offset + i].VictimHero);
+            seen.Add(blow.Victim);
         }
 
-        return seen.Count >= 5 ? hero + " pentakill (team wipe)" : hero + " pentakill";
-    }
-
-    private static List<TeamKillClip> TeamWipes(
-        IReadOnlyList<TeamKillDeath> deaths,
-        int windowSeconds,
-        int leadSeconds,
-        int tailSeconds
-    )
-    {
-        var ordered = new List<TeamKillDeath>(deaths.Count);
-        foreach (TeamKillDeath death in deaths)
-        {
-            if (!string.IsNullOrWhiteSpace(death.VictimHero))
-            {
-                ordered.Add(death);
-            }
-        }
-
-        ordered.Sort((left, right) => left.Second.CompareTo(right.Second));
-        var clips = new List<TeamKillClip>();
-        int start = 0;
-        while (start < ordered.Count)
-        {
-            var unique = new HashSet<string>(StringComparer.Ordinal);
-            int end = -1;
-            for (int index = start; index < ordered.Count; index++)
-            {
-                if (ordered[index].Second - ordered[start].Second > windowSeconds)
-                {
-                    break;
-                }
-
-                unique.Add(ordered[index].VictimHero);
-                if (unique.Count >= 5)
-                {
-                    end = index;
-                    break;
-                }
-            }
-
-            if (end < 0)
-            {
-                start++;
-                continue;
-            }
-
-            clips.Add(
-                Clip(
-                    TeamWipeKind,
-                    PrimaryKiller(ordered, start, end),
-                    ordered[start].Second,
-                    ordered[end].Second,
-                    leadSeconds,
-                    tailSeconds,
-                    "team wipe"
-                )
-            );
-            start = end + 1;
-        }
-
-        return clips;
-    }
-
-    private static string PrimaryKiller(List<TeamKillDeath> deaths, int start, int end)
-    {
-        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
-        for (int index = start; index <= end; index++)
-        {
-            string killer = deaths[index].KillerHero;
-            if (string.IsNullOrWhiteSpace(killer))
-            {
-                continue;
-            }
-
-            counts.TryGetValue(killer, out int count);
-            counts[killer] = count + 1;
-        }
-
-        string best = string.Empty;
-        int bestCount = 0;
-        foreach ((string hero, int count) in counts)
-        {
-            if (count > bestCount || (count == bestCount && string.CompareOrdinal(hero, best) < 0))
-            {
-                best = hero;
-                bestCount = count;
-            }
-        }
-
-        return best;
+        return seen.Count;
     }
 
     private static TeamKillClip Clip(
@@ -250,7 +205,8 @@ public static class TeamKillClips
         int lastDeath,
         int leadSeconds,
         int tailSeconds,
-        string description
+        string description,
+        IReadOnlyList<TeamKillBlow> kills
     )
     {
         int start = firstDeath - leadSeconds;
@@ -266,7 +222,8 @@ public static class TeamKillClips
             lastDeath,
             start,
             lastDeath + tailSeconds,
-            description
+            description,
+            kills
         );
     }
 }

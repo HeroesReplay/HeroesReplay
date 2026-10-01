@@ -37,10 +37,15 @@ public class TeamKillClipTests
         Assert.Equal(120, wipe.HudEndSecond);
         Assert.Equal("team wipe", wipe.Description);
         Assert.Equal(TeamKillClips.PentakillKind, clips[0].Kind);
+        Assert.Equal(5, pentakill.Kills.Count);
+        Assert.Equal("Artanis", pentakill.Kills[0].Victim);
+        Assert.Equal(100, pentakill.Kills[0].Second);
+        Assert.Equal("E.T.C.", pentakill.Kills[4].Victim);
+        Assert.Equal(pentakill.Kills[4], wipe.Kills[4]);
     }
 
     [Fact]
-    public void Select_SharedKills_EmitsTeamWipeWithoutPentakill()
+    public void Select_SharedKills_AreNotAClip()
     {
         IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
             new[]
@@ -53,11 +58,24 @@ public class TeamKillClipTests
             }
         );
 
-        TeamKillClip clip = Assert.Single(clips);
-        Assert.Equal(TeamKillClips.TeamWipeKind, clip.Kind);
-        Assert.Equal("Artanis", clip.Hero);
-        Assert.Equal(100, clip.FirstDeathSecond);
-        Assert.Equal(108, clip.LastDeathSecond);
+        Assert.Empty(clips);
+    }
+
+    [Fact]
+    public void Select_SameHeroLabelOnTwoPlayers_AreNotAClip()
+    {
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                new TeamKillDeath(100, "Artanis", "Li-Ming", 0),
+                new TeamKillDeath(102, "Artanis", "Butcher", 0),
+                new TeamKillDeath(104, "Artanis", "Chromie", 0),
+                new TeamKillDeath(106, "Artanis", "Diablo", 1),
+                new TeamKillDeath(108, "Artanis", "E.T.C.", 1),
+            }
+        );
+
+        Assert.Empty(clips);
     }
 
     [Fact]
@@ -97,7 +115,7 @@ public class TeamKillClipTests
     }
 
     [Fact]
-    public void Select_FindsAWipeAfterAnEarlierDeath()
+    public void Select_MixedKillsAfterAnEarlierDeath_AreNotAClip()
     {
         IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
             new[]
@@ -111,12 +129,7 @@ public class TeamKillClipTests
             }
         );
 
-        TeamKillClip clip = Assert.Single(clips);
-        Assert.Equal(TeamKillClips.TeamWipeKind, clip.Kind);
-        Assert.Equal(20, clip.FirstDeathSecond);
-        Assert.Equal(28, clip.LastDeathSecond);
-        Assert.Equal(8, clip.HudStartSecond);
-        Assert.Equal(36, clip.HudEndSecond);
+        Assert.Empty(clips);
     }
 
     [Fact]

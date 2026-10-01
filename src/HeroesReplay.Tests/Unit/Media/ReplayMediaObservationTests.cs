@@ -949,7 +949,8 @@ public class ReplayMediaObservationTests
 
     private static Replay PentakillReplay()
     {
-        Player killer = Hero("Li-Ming", 0, null);
+        var killerUnit = new ReplayUnit { Name = "HeroWizard" };
+        Player killer = Hero("Li-Ming", 0, killerUnit);
         string[] victims = { "Artanis", "Butcher", "Chromie", "Diablo", "E.T.C." };
         var players = new List<Player> { killer };
         int second = 100;
@@ -963,6 +964,7 @@ public class ReplayMediaObservationTests
                     {
                         TimeSpanDied = TimeSpan.FromSeconds(second),
                         PlayerKilledBy = killer,
+                        UnitKilledBy = killerUnit,
                     }
                 )
             );

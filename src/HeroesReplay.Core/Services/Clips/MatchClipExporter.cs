@@ -26,7 +26,8 @@ public static class MatchClipExporter
         RecordingClock clock,
         YouTubeSettings youtube,
         string entryFileName,
-        ILogger logger
+        ILogger logger,
+        IReadOnlyList<Hero> heroes = null
     )
     {
         if (
@@ -39,7 +40,9 @@ public static class MatchClipExporter
             return;
         }
 
-        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(TeamKillDeaths.FromReplay(replay));
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            TeamKillDeaths.FromReplay(replay, heroes)
+        );
         if (clips.Count == 0)
         {
             return;
@@ -185,7 +188,25 @@ public static class MatchClipExporter
             fileStart = start,
             duration,
             file = output,
+            kills = KillRows(clip),
         };
+
+    private static object[] KillRows(TeamKillClip clip)
+    {
+        if (clip.Kills == null || clip.Kills.Count == 0)
+        {
+            return Array.Empty<object>();
+        }
+
+        var rows = new object[clip.Kills.Count];
+        for (int i = 0; i < clip.Kills.Count; i++)
+        {
+            TeamKillBlow blow = clip.Kills[i];
+            rows[i] = new { second = blow.Second, victim = blow.Victim };
+        }
+
+        return rows;
+    }
 
     private static void WriteEntry(
         string folder,

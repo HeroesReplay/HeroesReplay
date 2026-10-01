@@ -68,7 +68,7 @@ Before launch, the replay file is classified. OBS starts recording when the load
 The first matching class wins.
 
 1. **Requested.** The Twitch reward is `RecordAndUpload`. A spectate-only reward is not requested.
-2. **Notable.** The replay has a pentakill or a team wipe. A pentakill is five or more kills by one hero inside 12 seconds. A team wipe is five unique enemy heroes killed by that same hero inside that window. A wipe split across several killers is not one wipe.
+2. **Notable.** The replay has a pentakill or a team wipe. Both come from one player. A pentakill is five or more killing blows by that player, each within 12 seconds of the previous blow. A team wipe is five unique enemy heroes killed by that same player inside that streak. The blow has to be one of that player's own hero units, and the victim has to be an enemy player's hero unit. Lost Vikings and Rexxar with Misha count as that one player. A summon, a structure, a suicide, or a wipe split across several players is not a clip.
 3. **High-skill.** Rank or MMR meets the configured floor. With no floor, this class never matches.
 4. **Ordinary.** Everything else.
 
@@ -145,7 +145,7 @@ A hero is featured when its name is in `RecentHeroes`, or when the catalog `rele
 
 The description starts with `Twitch: http://twitch.tv/saltysadism`, then `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note, `Featuring:` when a new hero is in the title, the pentakill or team wipe as a highlight, and the requestor when it was a paid upload. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, and those events.
 
-Pentakill and team-wipe clips are separate full-frame cuts under the context `clips` folder, 12 seconds before the streak and 8 seconds after it on the match clock. Each clip has its own `youtube-entry.json` and can be inserted as its own video. It uses the parent replay's class and the parent replay's one publication slot. Each insert still counts toward the quota. Clip titles look like `Li-Ming - pentakill - Alterac Pass - 65550001`.
+Pentakill and team-wipe clips are separate full-frame cuts under the context `clips` folder, 12 seconds before the streak and 8 seconds after it on the match clock. `clips.json` in that context lists each cut with the hero and the killing blows (`second` and `victim`). The hero name is the English catalog name when the catalog has that hero. Each clip has its own `youtube-entry.json` and can be inserted as its own video. It uses the parent replay's class and the parent replay's one publication slot. Each insert still counts toward the quota. Clip titles look like `Li-Ming - pentakill - Alterac Pass - 65550001`.
 
 After a successful upload, retention deletes the mp4 on the next sweep. The context folder itself lasts `VideoKeepDays` (3 in production).
 

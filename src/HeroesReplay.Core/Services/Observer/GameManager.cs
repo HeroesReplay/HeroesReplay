@@ -81,7 +81,12 @@ public class GameManager : IGameManager
         MediaRetention.SweepAndLog(settings, logger);
         await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
         MediaPolicySnapshot preLaunch = await mediaPolicy
-            .RecordPreLaunchAsync(loadedReplay, settings.ReplayMedia, CancellationToken.None)
+            .RecordPreLaunchAsync(
+                loadedReplay,
+                settings.ReplayMedia,
+                CancellationToken.None,
+                gameData.Heroes
+            )
             .ConfigureAwait(false);
         ApplyPreLaunchPolicy(loadedReplay, preLaunch);
         await contextSetter.SetContextAsync(loadedReplay);
@@ -234,7 +239,8 @@ public class GameManager : IGameManager
                                 recordingClock,
                                 settings.YouTube,
                                 settings.YouTube?.EntryFileName,
-                                logger
+                                logger,
+                                gameData.Heroes
                             )
                             .ConfigureAwait(false);
                     }

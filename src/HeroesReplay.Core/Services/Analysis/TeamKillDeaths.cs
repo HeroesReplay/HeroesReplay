@@ -2,16 +2,31 @@ using System;
 using System.Collections.Generic;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Extensions;
+using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Services.YouTube;
 
 namespace HeroesReplay.Core.Services.Analysis;
 
 public static class TeamKillDeaths
 {
-    public static IReadOnlyList<TeamKillDeath> FromReplay(Replay replay)
+    public static IReadOnlyList<TeamKillDeath> FromReplay(
+        Replay replay,
+        IReadOnlyList<Hero> heroes = null
+    )
     {
         if (replay?.Players == null)
         {
             return Array.Empty<TeamKillDeath>();
+        }
+
+        var indexOf = new Dictionary<Player, int>();
+        for (int index = 0; index < replay.Players.Length; index++)
+        {
+            Player player = replay.Players[index];
+            if (player != null && !indexOf.ContainsKey(player))
+            {
+                indexOf[player] = index;
+            }
         }
 
         var deaths = new List<TeamKillDeath>();
@@ -22,22 +37,32 @@ public static class TeamKillDeaths
                 continue;
             }
 
+            string victim = HeroName(player, heroes);
+            if (victim == null)
+            {
+                continue;
+            }
+
             foreach (Unit unit in player.HeroUnits)
             {
-                if (unit?.TimeSpanDied == null || unit.PlayerKilledBy == null)
+                if (!IsEnemyHeroUnitBlow(player, unit, out Player killer))
                 {
                     continue;
                 }
 
-                string killer = HeroName(unit.PlayerKilledBy);
-                string victim = HeroName(player);
-                if (killer == null || victim == null)
+                string killerName = HeroName(killer, heroes);
+                if (killerName == null || !indexOf.TryGetValue(killer, out int killerKey))
                 {
                     continue;
                 }
 
                 deaths.Add(
-                    new TeamKillDeath(unit.TimeSpanDied.Value.FloorSeconds(), killer, victim)
+                    new TeamKillDeath(
+                        unit.TimeSpanDied.Value.FloorSeconds(),
+                        killerName,
+                        victim,
+                        killerKey
+                    )
                 );
             }
         }
@@ -45,13 +70,59 @@ public static class TeamKillDeaths
         return deaths;
     }
 
-    private static string HeroName(Player player)
+    /// <summary>
+    /// The dead unit is one player's hero unit, and the killing unit is a different
+    /// player's hero unit on the other team. Summons, structures, and suicides are not blows.
+    /// </summary>
+    private static bool IsEnemyHeroUnitBlow(Player victim, Unit unit, out Player killer)
     {
-        if (!string.IsNullOrWhiteSpace(player?.Character))
+        killer = null;
+        if (unit?.TimeSpanDied == null)
         {
-            return player.Character;
+            return false;
         }
 
-        return string.IsNullOrWhiteSpace(player?.Name) ? null : player.Name;
+        killer = unit.PlayerKilledBy;
+        Unit blow = unit.UnitKilledBy;
+        if (
+            killer == null
+            || ReferenceEquals(killer, victim)
+            || killer.Team == victim.Team
+            || blow == null
+            || killer.HeroUnits == null
+            || !killer.HeroUnits.Contains(blow)
+        )
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string HeroName(Player player, IReadOnlyList<Hero> heroes)
+    {
+        if (player == null)
+        {
+            return null;
+        }
+
+        if (heroes != null && heroes.Count > 0)
+        {
+            Hero match =
+                HeroDraft.Find(heroes, player.HeroAttributeId)
+                ?? HeroDraft.Find(heroes, player.HeroId)
+                ?? HeroDraft.Find(heroes, player.Character);
+            if (!string.IsNullOrWhiteSpace(match?.Name))
+            {
+                return match.Name.Trim();
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(player.Character))
+        {
+            return player.Character.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(player.Name) ? null : player.Name.Trim();
     }
 }

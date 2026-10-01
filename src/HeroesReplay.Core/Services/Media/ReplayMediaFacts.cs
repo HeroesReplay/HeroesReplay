@@ -16,7 +16,8 @@ public static class ReplayMediaFacts
         LoadedReplay loaded,
         bool alreadyPublished,
         bool alreadyScheduled,
-        bool inOutbox
+        bool inOutbox,
+        IReadOnlyList<Hero> heroes = null
     )
     {
         if (loaded == null)
@@ -48,7 +49,7 @@ public static class ReplayMediaFacts
             ViewerRequested = request != null,
             RecordAndUpload = request?.RecordAndUpload == true,
             RequestedBy = FirstText(request?.Login),
-            NotableEvents = TeamKillClips.Select(TeamKillDeaths.FromReplay(replay)),
+            NotableEvents = TeamKillClips.Select(TeamKillDeaths.FromReplay(replay, heroes)),
             AlreadyPublished = alreadyPublished,
             AlreadyScheduled = alreadyScheduled,
             InOutbox = inOutbox,

@@ -332,16 +332,10 @@ public class FullMatchMetadataTests
     [Fact]
     public void TeamWipeWithoutPentakill_DoesNotClaimPentakill()
     {
-        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
-            new[]
-            {
-                Death(100, "Artanis", "Li-Ming"),
-                Death(102, "Artanis", "Butcher"),
-                Death(104, "Artanis", "Chromie"),
-                Death(106, "Butcher", "Diablo"),
-                Death(108, "Chromie", "E.T.C."),
-            }
-        );
+        IReadOnlyList<TeamKillClip> clips = new[]
+        {
+            new TeamKillClip(TeamKillClips.TeamWipeKind, "Artanis", 100, 108, 88, 116, "team wipe"),
+        };
         FullMatchMetadataInput input = Ordinary() with { NotableEvents = clips };
 
         FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(input, null);
