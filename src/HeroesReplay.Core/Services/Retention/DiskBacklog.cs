@@ -4,7 +4,7 @@ public enum DiskPressure
 {
     Normal = 0,
     Warning = 1,
-    StopSpectating = 2,
+    SkipRecording = 2,
 }
 
 /// <summary>
@@ -138,6 +138,6 @@ public static class DiskBacklog
 
     private static DiskBacklogDecision Stop(string reason)
     {
-        return new DiskBacklogDecision { Pressure = DiskPressure.StopSpectating, Reason = reason };
+        return new DiskBacklogDecision { Pressure = DiskPressure.SkipRecording, Reason = reason };
     }
 }
