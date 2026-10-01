@@ -2,6 +2,8 @@
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <EnableNETAnalyzers>false</EnableNETAnalyzers>
+        <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
         <NoWarn>$(NoWarn);CS1591;CS8618;CS8632</NoWarn>
         <RootNamespace>HeroesReplay.HeroesProfile.Client</RootNamespace>
         <Description>

@@ -3,11 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
-using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Analysis;
-using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Services.Context;
 
@@ -16,19 +14,16 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
     public ContextData Previous { get; private set; }
     public ContextData Current { get; private set; }
 
-    private readonly ILogger<ReplayContext> logger;
     private readonly IContextFileManager contextFileManager;
     private readonly IReplayAnalyzer replayAnalyzer;
     private readonly AppSettings settings;
 
     public ReplayContext(
-        ILogger<ReplayContext> logger,
         IContextFileManager contextFileManager,
         IReplayAnalyzer replayAnalyzer,
         AppSettings settings
     )
     {
-        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.contextFileManager = contextFileManager;
         this.replayAnalyzer =
             replayAnalyzer ?? throw new ArgumentNullException(nameof(replayAnalyzer));

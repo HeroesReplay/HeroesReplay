@@ -27,7 +27,10 @@ dotnet test heroes-replay.slnx
 ```powershell
 dotnet test heroes-replay.slnx -p:TestCategory=Integration
 dotnet test heroes-replay.slnx -p:TestCategory=Smoke
+pwsh -File tools/verify.ps1
 ```
+
+`tools/verify.ps1` is the git hook: pre-commit, and pre-push when the update is `develop`. It builds (unused usings and unused private members are errors in `.editorconfig`) and runs `Category=Unit` only. `UnusedSourceTests` fails when a Core or CLI type is not reachable from startup, tests, or the reward/chat handler scan. `HEROESREPLAY_SKIP_VERIFY=1` or `--no-verify` skips the hook. Kiota `Generated/` is not part of that unused-code check.
 
 Secrets: skill `op-service-account`. On a new clone, set user env `OP_SERVICE_ACCOUNT` then `pwsh -File tools/fill-secrets-from-op.ps1`. Never commit or print resolved tokens.
 

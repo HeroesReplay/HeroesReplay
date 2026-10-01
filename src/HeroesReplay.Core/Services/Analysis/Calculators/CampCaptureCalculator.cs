@@ -3,7 +3,6 @@ using System.Linq;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Services.Data;
 
 namespace HeroesReplay.Core.Services.Analysis.Calculators;

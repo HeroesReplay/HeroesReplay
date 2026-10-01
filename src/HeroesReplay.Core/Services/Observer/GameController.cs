@@ -9,7 +9,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
-using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Models;
@@ -40,7 +39,6 @@ public class GameController : IGameController
     private readonly object controllerLock = new object();
     private readonly StableMatchClock matchClock = new();
     private Process cachedProcess;
-    private IntPtr cachedHandle;
     private string lastRejectedTimer;
     private bool replayFileOpened;
     private string openedReplayPath;
@@ -1832,7 +1830,6 @@ public class GameController : IGameController
 
     private void ClearProcessCache()
     {
-        cachedHandle = IntPtr.Zero;
         cachedProcess?.Dispose();
         cachedProcess = null;
     }
@@ -1865,7 +1862,6 @@ public class GameController : IGameController
                     );
                     if (handle != IntPtr.Zero)
                     {
-                        cachedHandle = handle;
                         return true;
                     }
                 }
@@ -1888,7 +1884,6 @@ public class GameController : IGameController
                         minWidth,
                         minHeight
                     );
-                    cachedHandle = handle;
                 }
                 else
                 {

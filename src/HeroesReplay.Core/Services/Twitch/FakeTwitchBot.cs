@@ -1,42 +1,27 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Twitch.ChatMessages;
-using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
-using HeroesReplay.Core.Services.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Models;
-using TwitchLib.PubSub.Events;
 
 namespace HeroesReplay.Core.Services.Twitch;
 
 public class FakeTwitchBot : ITwitchBot
 {
     private readonly ILogger<FakeTwitchBot> logger;
-    private readonly AppSettings settings;
-    private readonly IOnRewardHandler onRewardHandler;
     private readonly IOnMessageHandler onMessageHandler;
-    private readonly ICustomRewardsHolder rewardsHolder;
     private readonly CancellationTokenProvider tokenProvider;
 
     public FakeTwitchBot(
         ILogger<FakeTwitchBot> logger,
-        AppSettings settings,
-        IOnRewardHandler onRewardHandler,
         IOnMessageHandler onMessageHandler,
-        ICustomRewardsHolder rewardsHolder,
         CancellationTokenProvider tokenProvider
     )
     {
         this.logger = logger;
-        this.settings = settings;
-        this.onRewardHandler = onRewardHandler;
         this.onMessageHandler = onMessageHandler;
-        this.rewardsHolder = rewardsHolder;
         this.tokenProvider = tokenProvider;
     }
 
@@ -187,31 +172,6 @@ public class FakeTwitchBot : ITwitchBot
     {
         while (!tokenProvider.Token.IsCancellationRequested)
         {
-            foreach (var reward in rewardsHolder.Rewards)
-            {
-                string message = null;
-
-                if (reward.RewardType == RewardType.ReplayId)
-                    message = "33785849";
-                if (reward.RewardType.HasFlag(RewardType.Rank))
-                    message = Enum.GetName(
-                        typeof(GameRank),
-                        Enum.GetValues(typeof(GameRank))
-                            .Cast<GameRank>()
-                            .OrderBy(x => Guid.NewGuid())
-                            .First()
-                    );
-
-                //onRewardHandler.Handle(new OnRewardRedeemedArgs()
-                //{
-                //    RedemptionId = Guid.NewGuid(),
-                //    Login = "delegate_",
-                //    DisplayName = "Delegate_",
-                //    RewardTitle = reward.Title,
-                //    Message = message
-                //});
-            }
-
             logger.LogDebug("waiting to send reward deemed...");
             await Task.Delay(TimeSpan.FromSeconds(10));
         }

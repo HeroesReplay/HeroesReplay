@@ -1,0 +1,11 @@
+#!/bin/sh
+root=$(git rev-parse --show-toplevel) || exit 1
+script="$root/tools/verify.ps1"
+if [ ! -f "$script" ]; then
+  exit 0
+fi
+if ! command -v pwsh >/dev/null 2>&1; then
+  echo "pre-commit: pwsh is required to run tools/verify.ps1" >&2
+  exit 1
+fi
+exec pwsh -NoProfile -File "$script" -Hook pre-commit

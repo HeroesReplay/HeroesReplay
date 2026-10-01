@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Tests;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Media;

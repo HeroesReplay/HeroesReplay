@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
@@ -267,8 +266,8 @@ public class ReleaseHandoffTests
             Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
             Assert.Same(run, finished);
             await run;
-            Assert.Equal(new[] { 101 }, provider.Deferred.ToArray());
-            Assert.Empty(provider.Requeued);
+            Assert.Empty(provider.Deferred);
+            Assert.Equal(new[] { 101 }, provider.Requeued.ToArray());
             Assert.Empty(provider.SpectatedIds);
             SpectatorStatus read = status.Read();
             Assert.Null(read.CompletedAt);

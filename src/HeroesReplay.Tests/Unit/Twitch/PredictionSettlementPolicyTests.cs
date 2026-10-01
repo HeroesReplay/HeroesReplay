@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using HeroesReplay.Core.Services.Twitch;
 using TwitchLib.Api.Core.Exceptions;
 using Xunit;

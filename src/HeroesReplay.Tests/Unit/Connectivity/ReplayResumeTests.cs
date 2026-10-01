@@ -1,6 +1,5 @@
 using System.IO;
 using HeroesReplay.Core.Services.Connectivity;
-using HeroesReplay.Tests;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Connectivity;

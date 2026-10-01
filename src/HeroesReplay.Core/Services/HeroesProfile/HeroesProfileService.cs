@@ -6,7 +6,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Extensions;
 using HeroesReplay.Core.Models;
@@ -28,12 +27,10 @@ public class HeroesProfileService : IHeroesProfileService
     private readonly CancellationTokenProvider tokenProvider;
     private readonly AppSettings settings;
     private readonly IMemoryCache cache;
-    private readonly HttpClient httpClient;
     private readonly HeroesProfileClient kiotaClient;
 
     public HeroesProfileService(
         ILogger<HeroesProfileService> logger,
-        HttpClient httpClient,
         IMemoryCache cache,
         CancellationTokenProvider tokenProvider,
         AppSettings settings,
@@ -45,7 +42,6 @@ public class HeroesProfileService : IHeroesProfileService
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         this.kiotaClient = kiotaClient ?? throw new ArgumentNullException(nameof(kiotaClient));
     }
 

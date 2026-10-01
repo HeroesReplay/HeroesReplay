@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
-using Polly.Retry;
 using Polly.Timeout;
 
 namespace HeroesReplay.Core.Services.HeroesProfile;

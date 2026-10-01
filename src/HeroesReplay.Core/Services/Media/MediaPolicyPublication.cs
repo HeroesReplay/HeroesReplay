@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using HeroesReplay.Core.Services.Analysis;
 using HeroesReplay.Core.Services.Observer;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Twitch;
 using HeroesReplay.Core.Services.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 using TwitchLib.PubSub.Events;

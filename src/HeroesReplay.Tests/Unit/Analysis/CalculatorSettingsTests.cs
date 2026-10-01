@@ -1,6 +1,5 @@
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Analysis.Calculators;
-using HeroesReplay.Tests;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Analysis;

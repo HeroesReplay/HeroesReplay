@@ -2,7 +2,6 @@ using System;
 using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.CLI;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Processes;

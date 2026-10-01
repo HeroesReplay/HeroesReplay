@@ -10,4 +10,14 @@
             IgnoreExitCode="false"
         />
     </Target>
+
+    <Target
+        Name="InstallGitHooks"
+        BeforeTargets="Build"
+        Condition="'$(DesignTimeBuild)' != 'true' AND '$(CI)' != 'true' AND '$(GITHUB_ACTIONS)' != 'true' AND '$(MSBuildProjectName)' == 'HeroesReplay.CLI'"
+    >
+        <Exec
+            Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)tools\install-git-hooks.ps1&quot;"
+        />
+    </Target>
 </Project>

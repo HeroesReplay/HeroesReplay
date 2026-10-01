@@ -7,7 +7,6 @@ using HeroesReplay.Core.Services.Connectivity;
 using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Status;
-using HeroesReplay.Tests;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

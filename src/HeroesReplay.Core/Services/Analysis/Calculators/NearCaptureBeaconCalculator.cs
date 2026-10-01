@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Extensions;
 
 namespace HeroesReplay.Core.Services.Analysis.Calculators;
 

@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
-using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -12,14 +11,12 @@ namespace HeroesReplay.Core.Services.Providers;
 public class ReplayLoader : IReplayLoader
 {
     private readonly ILogger<ReplayLoader> logger;
-    private readonly AppSettings settings;
 
     private readonly ParseOptions options;
 
     public ReplayLoader(ILogger<ReplayLoader> logger, AppSettings settings)
     {
         this.logger = logger;
-        this.settings = settings;
 
         options = new()
         {

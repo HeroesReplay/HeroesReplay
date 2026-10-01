@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using HeroesReplay.CLI;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Processes;
 using HeroesReplay.Core.Services.Shared;

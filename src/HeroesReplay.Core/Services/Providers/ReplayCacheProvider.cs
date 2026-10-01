@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
-using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.HeroesProfile;
@@ -433,12 +432,6 @@ public sealed class ReplayCacheProvider : IReplayProvider
     {
         Directory.CreateDirectory(settings.Location.DataDirectory);
         File.AppendAllText(QuarantinePath(), replayId + Environment.NewLine);
-    }
-
-    private void AppendBelowFloor(int replayId)
-    {
-        Directory.CreateDirectory(settings.Location.DataDirectory);
-        File.AppendAllText(BelowFloorPath(), replayId + Environment.NewLine);
     }
 
     private void LoadBelowFloor()

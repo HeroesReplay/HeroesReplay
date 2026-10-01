@@ -1,6 +1,5 @@
 using System;
 using System.Text.Json.Serialization;
-using HeroesReplay.Core.Services.HeroesProfile;
 
 namespace HeroesReplay.Core.Models;
 

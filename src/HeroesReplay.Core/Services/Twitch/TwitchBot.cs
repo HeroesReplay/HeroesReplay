@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Services.Shared;
 using HeroesReplay.Core.Services.Twitch.ChatMessages;
-using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Interfaces;

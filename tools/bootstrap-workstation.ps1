@@ -44,6 +44,11 @@ if (Test-Path $fill) {
     & $fill
 }
 
+$hooks = Join-Path $root 'tools\install-git-hooks.ps1'
+if (Test-Path $hooks) {
+    & $hooks
+}
+
 Write-Host 'Layout:'
 Write-Host '  C:\heroesreplay\HeroesReplay     git clone'
 Write-Host '  C:\heroesreplay\Battle.net       Battle.net.exe (winget --location)'

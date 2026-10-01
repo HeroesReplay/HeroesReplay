@@ -13,7 +13,6 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Heroes.Element;
 using Heroes.LocaleText;
-using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using Microsoft.Extensions.Logging;

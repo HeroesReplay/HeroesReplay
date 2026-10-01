@@ -425,14 +425,10 @@ public sealed class UploadAttemptStore
             }
 
             // Replace keeps readers on the previous complete manifest until the new bytes are in place.
+            // Windows can refuse that replace while a scanner still has the destination open.
             if (File.Exists(destination))
             {
-                File.Replace(
-                    temporary,
-                    destination,
-                    destinationBackupFileName: null,
-                    ignoreMetadataErrors: true
-                );
+                ReplaceWhenFree(temporary, destination);
             }
             else
             {
@@ -444,6 +440,28 @@ public sealed class UploadAttemptStore
             if (File.Exists(temporary))
             {
                 File.Delete(temporary);
+            }
+        }
+    }
+
+    private static void ReplaceWhenFree(string temporary, string destination)
+    {
+        const int attempts = 5;
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Replace(
+                    temporary,
+                    destination,
+                    destinationBackupFileName: null,
+                    ignoreMetadataErrors: true
+                );
+                return;
+            }
+            catch (IOException) when (attempt < attempts)
+            {
+                Thread.Sleep(TimeSpan.FromMilliseconds(20 * attempt));
             }
         }
     }

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Data;
