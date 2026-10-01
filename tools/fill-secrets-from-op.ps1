@@ -1,6 +1,10 @@
 # Fills gitignored src/HeroesReplay.CLI/appsettings.secrets.json from the
 # 1Password service account. Requires user env OP_SERVICE_ACCOUNT (ops_...).
+# A release install has no git clone: the copy shipped beside heroesreplay.exe
+# writes appsettings.secrets.json there, or pass -Destination.
 # Does not print secret values. See .grok/skills/op-service-account/SKILL.md.
+param([string]$Destination)
+
 $ErrorActionPreference = 'Stop'
 
 if (-not $env:OP_SERVICE_ACCOUNT_TOKEN) {
@@ -22,16 +26,26 @@ if ($who -notmatch 'SERVICE_ACCOUNT') {
     throw "op whoami is not SERVICE_ACCOUNT. Check OP_SERVICE_ACCOUNT. Output:$who"
 }
 
-$root = git rev-parse --show-toplevel
-if (-not $root) {
-    throw 'Run from inside the HeroesReplay git clone.'
+$cli = $null
+if (-not $Destination -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'heroesreplay.exe'))) {
+    $Destination = Join-Path $PSScriptRoot 'appsettings.secrets.json'
 }
 
-$cli = Join-Path $root 'src/HeroesReplay.CLI'
-$dest = Join-Path $cli 'appsettings.secrets.json'
-$example = Join-Path $cli 'appsettings.secrets.example.json'
-if (-not (Test-Path $example)) {
-    throw "Missing $example"
+if ($Destination) {
+    $dest = $Destination
+}
+else {
+    $root = git rev-parse --show-toplevel 2>$null
+    if (-not $root) {
+        throw 'Run from inside the HeroesReplay git clone, or pass -Destination.'
+    }
+
+    $cli = Join-Path $root 'src/HeroesReplay.CLI'
+    $dest = Join-Path $cli 'appsettings.secrets.json'
+    $example = Join-Path $cli 'appsettings.secrets.example.json'
+    if (-not (Test-Path $example)) {
+        throw "Missing $example"
+    }
 }
 
 function Read-Op([string]$uri) {
@@ -62,9 +76,11 @@ $j = [ordered]@{
 
 $j | ConvertTo-Json -Depth 8 | Set-Content $dest -Encoding utf8
 
-$bins = Get-ChildItem (Join-Path $cli 'bin') -Recurse -Filter appsettings.json -ErrorAction SilentlyContinue
-foreach ($app in $bins) {
-    Copy-Item -Force $dest (Join-Path $app.DirectoryName 'appsettings.secrets.json')
+if ($cli) {
+    $bins = Get-ChildItem (Join-Path $cli 'bin') -Recurse -Filter appsettings.json -ErrorAction SilentlyContinue
+    foreach ($app in $bins) {
+        Copy-Item -Force $dest (Join-Path $app.DirectoryName 'appsettings.secrets.json')
+    }
 }
 
 $ytClientId = Read-Op 'op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Client ID'

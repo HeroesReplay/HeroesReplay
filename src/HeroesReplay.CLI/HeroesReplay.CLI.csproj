@@ -52,6 +52,22 @@
             <Link>apply-release.ps1</Link>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Include="..\..\tools\ensure-secrets.ps1;..\..\tools\fill-secrets-from-op.ps1">
+            <Link>%(Filename)%(Extension)</Link>
+            <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </None>
+        <!-- Production agent runbook and MCP configs. Publish only, so a dev bin never carries the prod AGENTS.md. -->
+        <None Include="..\..\deploy\production\AGENTS.md;..\..\deploy\production\CLAUDE.md;..\..\deploy\production\.mcp.json">
+            <Link>%(Filename)%(Extension)</Link>
+            <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </None>
+        <None Include="..\..\deploy\production\.grok\config.toml">
+            <Link>.grok\config.toml</Link>
+            <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </None>
         <None Include="..\..\obs\interfaces\AhliObs 0.75.StormInterface">
             <Link>Assets\Interfaces\AhliObs 0.75.StormInterface</Link>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

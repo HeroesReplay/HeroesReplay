@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "heroesreplay": {
+      "command": "C:/heroesreplay/app/heroesreplay.exe",
+      "args": ["mcp"],
+      "env": {
+        "HEROES_REPLAY_ENV": "prod"
+      }
+    },
+    "aspire": {
+      "command": "aspire",
+      "args": ["agent", "mcp", "--dashboard-url", "http://127.0.0.1:18888"]
+    }
+  }
+}

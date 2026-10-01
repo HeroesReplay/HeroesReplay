@@ -13,7 +13,7 @@ Production runs the zip attached to a GitHub Release. It does not clone the repo
 
 | Path | What |
 | --- | --- |
-| `C:\heroesreplay\app` | The published exe, `appsettings.json`, `appsettings.prod.json`, `apply-release.ps1`, and `obs\`. This is the directory that gets replaced. |
+| `C:\heroesreplay\app` | The published exe, `appsettings.json`, `appsettings.prod.json`, `apply-release.ps1`, `ensure-secrets.ps1`, the agent runbook (`AGENTS.md`, `CLAUDE.md`, `.mcp.json`, `.grok\config.toml`), and `obs\`. This is the directory that gets replaced. |
 | `C:\heroesreplay\Data` | Queue, replays, `spectated-ids.txt`, `requests.json`, contexts. Not in the zip. An update must not delete or rewrite it. |
 | `C:\heroesreplay\secrets\appsettings.secrets.json` | Tokens. Not in the zip. The helper copies it back to `appsettings.secrets.json` beside the exe. |
 
@@ -38,13 +38,24 @@ After a replay finishes, the spectator compares `version.txt` with the latest re
 
 ## Agent on the production machine
 
-The zip does not yet include an MCP config. A Grok session only sees a server when its working directory, or `~/.grok/config.toml`, names it. The repo `.grok/config.toml` runs `dotnet run --project src/HeroesReplay.CLI`, which does not exist in the published folder.
+The zip carries everything an agent needs to run production without the repo. The sources live in `deploy/production/` and `tools/`, and `HeroesReplay.CLI.csproj` publishes them (publish only, so a dev bin never carries the prod runbook):
 
-Two stdio servers, both already installed separately from the zip:
+| In the install | Source | What |
+| --- | --- | --- |
+| `AGENTS.md` | `deploy/production/AGENTS.md` | Production runbook: preflight, start, status, stop, restart, update, rollback, first install. Grok and other agents read `AGENTS.md`. |
+| `CLAUDE.md` | `deploy/production/CLAUDE.md` | `@AGENTS.md`, so Claude Code loads the same runbook. |
+| `.mcp.json` | `deploy/production/.mcp.json` | Claude Code MCP servers. |
+| `.grok/config.toml` | `deploy/production/.grok/config.toml` | Grok MCP servers. |
+| `ensure-secrets.ps1` | `tools/ensure-secrets.ps1` | Puts `appsettings.secrets.json` beside the exe: install file, then `C:\heroesreplay\secrets`, then 1Password. Backs up a good file. Prints lengths only. |
+| `fill-secrets-from-op.ps1` | `tools/fill-secrets-from-op.ps1` | Without a git clone it writes beside the exe, or to `-Destination`. |
+
+Start the agent in `C:\heroesreplay\app`. When the runbook changes, merge to `master`; the next self-update replaces it on the machine.
+
+Both MCP configs register two stdio servers:
 
 | Server | Command | What the agent gets |
 | --- | --- | --- |
-| Spectator | `C:\heroesreplay\app\heroesreplay.exe mcp` with `HEROES_REPLAY_ENV=prod` | `get_spectator_status`, `get_current_focus`, `check_twitch`, `check_obs`, `check_heroesprofile`, `check_config`. Reads `%LOCALAPPDATA%\HeroesReplay\status.json`. A second process from the one playing the match. |
-| Aspire | `aspire agent mcp --dashboard-url http://127.0.0.1:18888` | On CLI 13.5.4, dashboard-only mode: `list_structured_logs`, `list_traces`, `list_trace_structured_logs`. The dashboard UI stays `http://127.0.0.1:18888`. `list_resources` and start/stop need an AppHost, which this app does not run. |
+| Spectator | `C:\heroesreplay\app\heroesreplay.exe mcp` with `HEROES_REPLAY_ENV=prod` | `get_spectator_status`, `get_current_focus`, `check_twitch`, `check_obs`, `check_heroesprofile`, `check_config`, `check_battlenet`. Reads `%LOCALAPPDATA%\HeroesReplay\status.json`. A second process from the one playing the match. |
+| Aspire | `aspire agent mcp --dashboard-url http://127.0.0.1:18888` | On CLI 13.5.4, dashboard-only mode: `list_structured_logs`, `list_traces`, `list_trace_structured_logs`. `list_resources` and start/stop need an AppHost, which this app does not run. |
 
-`aspire` is the machine dotnet tool (`aspire.cli` 13.5.4), not a file inside the zip. The release should still ship `.mcp.json` next to the exe so an agent started in `C:\heroesreplay\app` finds both commands. `aspire agent init` writes that file for a source tree; it does not know the published exe path.
+`aspire` is the machine dotnet tool (`aspire.cli` 13.5.4), not a file inside the zip.

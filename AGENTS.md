@@ -132,6 +132,8 @@ Detect with `hostname`. If `DESKTOP-8SJE72`, ask before stopping `heroesreplay` 
 
 New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/bootstrap-workstation.ps1` (skill `op-service-account`).
 
+Production does not clone. It runs the release zip in `C:\heroesreplay\app`, and an agent started there reads the shipped runbook. Its source is `deploy/production/AGENTS.md`. When you change a command, a path, or how services start, update that runbook in the same change (skill `release-install`).
+
 ## Hard rules
 
 - Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. WinRT OCR and BitBlt need the Windows TFM.
