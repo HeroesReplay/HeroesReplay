@@ -146,6 +146,18 @@ public static class MediaRetention
 
         foreach (DirectoryInfo dir in new DirectoryInfo(contextsDirectory).GetDirectories())
         {
+            if (
+                !string.Equals(dir.Name, protectedId, StringComparison.OrdinalIgnoreCase)
+                && PendingUploadSize.IsInserted(dir.FullName, "youtube-entry.json")
+            )
+            {
+                // The video is on YouTube. Its entry may wait for publishAt, but the mp4 is not needed.
+                foreach (FileInfo video in dir.GetFiles("*.mp4"))
+                {
+                    DeleteFile(video.FullName, result, warning: null);
+                }
+            }
+
             if (IsProtectedContext(dir, protectedId))
             {
                 continue;

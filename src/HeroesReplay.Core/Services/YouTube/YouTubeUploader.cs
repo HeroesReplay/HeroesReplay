@@ -661,10 +661,11 @@ public class YouTubeUploader : IYouTubeUploader
         if (reserved.Kind == PublicationReservation.Terminal)
         {
             logger.LogInformation(
-                "Upload of {Path} is past the publication window ({Reason}). It is not reserved again.",
+                "Upload of {Path} is past the publication window ({Reason}). It is not reserved again. The recording is deleted.",
                 path,
                 reserved.Reason
             );
+            DeleteRecording(path);
             return false;
         }
 
@@ -1030,6 +1031,21 @@ public class YouTubeUploader : IYouTubeUploader
             "Recorded YouTube upload for replay {ReplayId}. Later spectates will not record it again.",
             replayId.Value
         );
+    }
+
+    private void DeleteRecording(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not delete recording {Path}.", path);
+        }
     }
 
     private void MarkEntryUploaded(FileInfo entryFile, DirectoryInfo directory)

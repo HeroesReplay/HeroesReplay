@@ -33,7 +33,7 @@ public static class PendingUploadSize
                 if (
                     info.Exists
                     && info.Length > 0
-                    && !AlreadyInserted(info.DirectoryName, entryFileName)
+                    && !IsInserted(info.DirectoryName, entryFileName)
                 )
                 {
                     total += info.Length;
@@ -46,7 +46,7 @@ public static class PendingUploadSize
         return total;
     }
 
-    private static bool AlreadyInserted(string directory, string entryFileName)
+    public static bool IsInserted(string directory, string entryFileName)
     {
         if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(entryFileName))
         {

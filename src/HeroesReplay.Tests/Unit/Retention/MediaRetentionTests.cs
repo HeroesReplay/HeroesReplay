@@ -260,6 +260,31 @@ public class MediaRetentionTests
     }
 
     [Fact]
+    public void Sweep_DeletesTheRecordingOfAnInsertedVideoAwaitingPublishAt()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string inserted = library.AddContext("inserted");
+        string waiting = library.AddContext("waiting");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(inserted, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.WriteText(waiting, "youtube-entry.json", "{\"VideoId\":null}");
+        TempLibrary.WriteFile(inserted, "match.mp4", 32, now.AddHours(-1));
+        TempLibrary.WriteFile(waiting, "match.mp4", 32, now.AddHours(-1));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(inserted, now.AddHours(-1));
+        TempLibrary.SetDirectoryTime(waiting, now.AddHours(-1));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.False(File.Exists(Path.Combine(inserted, "match.mp4")));
+        Assert.True(File.Exists(Path.Combine(inserted, "youtube-entry.json")));
+        Assert.True(File.Exists(Path.Combine(waiting, "match.mp4")));
+        Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
+    }
+
+    [Fact]
     public void Sweep_KeepsContextReplayNewerThanVideoKeepDays()
     {
         using TempLibrary library = new TempLibrary();
