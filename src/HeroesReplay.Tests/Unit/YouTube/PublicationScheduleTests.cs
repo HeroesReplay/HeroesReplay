@@ -25,7 +25,7 @@ public class PublicationScheduleTests
         Assert.False(capped.Allow);
         Assert.Equal("quota", capped.Reason);
         Assert.True(under.Allow);
-        Assert.Equal("host", under.Reason);
+        Assert.Equal("private-listing", under.Reason);
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public class PublicationScheduleTests
         PublicationDecision host = Decide(production: false, publicAt: Recent(40));
 
         Assert.True(host.Allow);
-        Assert.Equal("host", host.Reason);
+        Assert.Equal("private-listing", host.Reason);
     }
 
     [Fact]

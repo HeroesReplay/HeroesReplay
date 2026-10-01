@@ -15,7 +15,6 @@ using Google.Apis.YouTube.v3.Data;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
 using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 using HeroesReplay.Core.Services.Retention;
 using HeroesReplay.Core.Services.Status;
 using HeroesReplay.Core.Services.YouTube.Outbox;
@@ -222,7 +221,7 @@ public class YouTubeUploader : IYouTubeUploader
 
         using System.Diagnostics.Activity replaySession = HoldReplaySession(entry.ReplayId);
         HeroesReplayTelemetry.TagReplay(replaySession, replayId: entry.ReplayId);
-        YouTubeListing.StampForHost(entry, settings.YouTube, Environment.MachineName);
+        YouTubeListing.Stamp(entry, settings.YouTube);
         if (string.IsNullOrWhiteSpace(entry.DesiredPrivacyStatus))
         {
             entry.DesiredPrivacyStatus = string.IsNullOrWhiteSpace(entry.PrivacyStatus)
@@ -233,7 +232,6 @@ public class YouTubeUploader : IYouTubeUploader
         UploadStaging.Apply(
             entry,
             settings.YouTube,
-            Environment.MachineName,
             DateTimeOffset.UtcNow,
             lastPublicUtc,
             PublishInterval(settings.ReplayMedia)
@@ -633,14 +631,14 @@ public class YouTubeUploader : IYouTubeUploader
         }
 
         PublicationSendFacts facts = await ReadSendFactsAsync(entry).ConfigureAwait(false);
-        bool production = TwitchIngestGuard.IsProductionHost(Environment.MachineName);
+        bool publicListing = YouTubeListing.IsPublic(settings.YouTube);
         string ledgerPath =
             settings.Location?.DataDirectory == null
                 ? null
                 : Path.Combine(settings.Location.DataDirectory, "publication-reservations.txt");
         PublicationReservationResult reserved = PublicationReservation.TryReserve(
             ledgerPath,
-            production,
+            publicListing,
             insertsToday,
             now,
             lastPublicUtc,

@@ -32,17 +32,17 @@ public static class PublicationSchedule
     }
 
     public static bool MayUpload(
-        bool productionHost,
+        bool publicListing,
         int insertsToday,
         DateTimeOffset now,
         DateTimeOffset? lastInsertUtc
     )
     {
-        return MayUpload(productionHost, insertsToday, now, lastInsertUtc, null);
+        return MayUpload(publicListing, insertsToday, now, lastInsertUtc, null);
     }
 
     public static bool MayUpload(
-        bool productionHost,
+        bool publicListing,
         int insertsToday,
         DateTimeOffset now,
         DateTimeOffset? lastInsertUtc,
@@ -61,7 +61,7 @@ public static class PublicationSchedule
             return false;
         }
 
-        if (!productionHost || lastInsertUtc == null)
+        if (!publicListing || lastInsertUtc == null)
         {
             return true;
         }
@@ -82,7 +82,7 @@ public static class PublicationSchedule
     public static readonly TimeSpan DiversityCooldown = TimeSpan.FromHours(8);
 
     public static PublicationDecision Decide(
-        bool productionHost,
+        bool publicListing,
         int insertsThisQuotaDay,
         DateTimeOffset now,
         DateTimeOffset? lastPublicUtc,
@@ -108,7 +108,7 @@ public static class PublicationSchedule
                 Criteria = requested ? ReplayMediaPriority.Requested : ReplayMediaPriority.Ordinary,
                 RecordedAtUtc = recordedAtUtc,
             },
-            productionHost,
+            publicListing,
             insertsThisQuotaDay,
             now,
             lastPublicUtc,
@@ -129,7 +129,7 @@ public static class PublicationSchedule
     public static PublicationDecision Decide(
         ReplayMediaPolicySettings settings,
         PublicationSendFacts facts,
-        bool productionHost,
+        bool publicListing,
         int insertsThisQuotaDay,
         DateTimeOffset now,
         DateTimeOffset? lastPublicUtc,
@@ -179,9 +179,9 @@ public static class PublicationSchedule
             return PublicationDecision.Refused("quota");
         }
 
-        if (!productionHost)
+        if (!publicListing)
         {
-            return PublicationDecision.Granted("host");
+            return PublicationDecision.Granted("private-listing");
         }
 
         int day = CountSince(publicAtUtc, now, TimeSpan.FromHours(24));

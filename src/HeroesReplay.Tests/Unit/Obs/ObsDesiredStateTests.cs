@@ -28,12 +28,7 @@ public class ObsDesiredStateTests
         );
         var socket = new FakeSession();
         var process = new FakeProcess { Exists = true };
-        Harness harness = Open(
-            TwitchIngestGuard.ProductionHost,
-            Settings(executable),
-            socket,
-            process
-        );
+        Harness harness = Open(Settings(executable), socket, process);
         int obsBefore = CountObs64();
         var clock = Stopwatch.StartNew();
 
@@ -88,7 +83,7 @@ public class ObsDesiredStateTests
             ActivateOnStart = true,
             ProgramScene = "game-scene",
         };
-        Harness harness = Open(TwitchIngestGuard.ProductionHost, Settings(), socket);
+        Harness harness = Open(Settings(), socket);
 
         ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
 
@@ -124,7 +119,7 @@ public class ObsDesiredStateTests
             Streaming = true,
             ProgramScene = "game-scene",
         };
-        Harness harness = Open(TwitchIngestGuard.ProductionHost, Settings(), socket);
+        Harness harness = Open(Settings(), socket);
 
         ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
 
@@ -142,12 +137,7 @@ public class ObsDesiredStateTests
     {
         var socket = new FakeSession { IsIdentified = true, IsConnected = true };
         int patches = 0;
-        Harness harness = Open(
-            TwitchIngestGuard.ProductionHost,
-            Settings(streaming: false),
-            socket,
-            beforeLaunch: () => patches++
-        );
+        Harness harness = Open(Settings(streaming: false), socket, beforeLaunch: () => patches++);
 
         ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
 
@@ -164,56 +154,11 @@ public class ObsDesiredStateTests
         Assert.Equal("OBS streaming is disabled.", snapshot.Stream.Detail);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData("ASA-SERVER")]
-    [InlineData("asa-server")]
-    [InlineData("RANDOM-PC")]
-    public void Reconcile_NonProductionHost_DoesNotStart(string host)
-    {
-        var socket = new FakeSession { IsIdentified = true, IsConnected = true };
-        int patches = 0;
-        Harness harness = Open(host, Settings(), socket, beforeLaunch: () => patches++);
-
-        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
-
-        Assert.Equal(0, patches);
-        Assert.Equal(0, socket.StartStreamCalls);
-        Assert.Equal(0, socket.SelectCalls);
-        Assert.Equal(0, socket.ConnectCalls);
-        Assert.Equal(0, harness.Process.LaunchCalls);
-        Assert.False(snapshot.StreamDesired);
-        Assert.False(snapshot.Stream.Succeeded);
-        Assert.Equal(ObsOutputFailure.NotRequested, snapshot.Stream.Failure);
-        Assert.Equal(TwitchIngestGuard.NotStartedMessage, snapshot.Stream.Detail);
-    }
-
-    [Fact]
-    public void Reconcile_UnreadableMachineName_DoesNotStart()
-    {
-        var socket = new FakeSession { IsIdentified = true, IsConnected = true };
-        Harness harness = Open(
-            TwitchIngestGuard.ProductionHost,
-            Settings(),
-            socket,
-            machineName: () => throw new InvalidOperationException("unnamed")
-        );
-
-        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
-
-        Assert.Equal(0, socket.StartStreamCalls);
-        Assert.Equal(0, harness.Process.LaunchCalls);
-        Assert.Equal(ObsOutputFailure.NotRequested, snapshot.Stream.Failure);
-        Assert.Equal(TwitchIngestGuard.NotStartedMessage, snapshot.Stream.Detail);
-    }
-
     [Fact]
     public void Reconcile_ObsDisabled_DoesNotStart()
     {
         var socket = new FakeSession { IsIdentified = true, IsConnected = true };
-        Harness harness = Open(TwitchIngestGuard.ProductionHost, Settings(enabled: false), socket);
+        Harness harness = Open(Settings(enabled: false), socket);
 
         ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
 
@@ -228,7 +173,7 @@ public class ObsDesiredStateTests
     public void Reconcile_BlankWaitingScene_DoesNotStart()
     {
         var socket = new FakeSession { IsIdentified = true, IsConnected = true };
-        Harness harness = Open(TwitchIngestGuard.ProductionHost, Settings(scene: " "), socket);
+        Harness harness = Open(Settings(scene: " "), socket);
 
         ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
 
@@ -248,7 +193,7 @@ public class ObsDesiredStateTests
             IsConnected = true,
             SelectError = new InvalidOperationException("scene missing"),
         };
-        Harness harness = Open(TwitchIngestGuard.ProductionHost, Settings(), socket);
+        Harness harness = Open(Settings(), socket);
 
         ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
 
@@ -264,7 +209,7 @@ public class ObsDesiredStateTests
     {
         var socket = new FakeSession { IdentifyOnConnect = true, ActivateOnStart = true };
         var process = new FakeProcess { Exists = true, Running = true };
-        Harness harness = Open(TwitchIngestGuard.ProductionHost, Settings(), socket, process);
+        Harness harness = Open(Settings(), socket, process);
 
         ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
 
@@ -288,13 +233,7 @@ public class ObsDesiredStateTests
             ActivateOnCall = 3,
         };
         var backoff = new ObsBackoff(3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
-        Harness harness = Open(
-            TwitchIngestGuard.ProductionHost,
-            Settings(),
-            socket,
-            backoff: backoff,
-            budget: Fast(0)
-        );
+        Harness harness = Open(Settings(), socket, backoff: backoff, budget: Fast(0));
         var clock = Stopwatch.StartNew();
 
         ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
@@ -355,7 +294,7 @@ public class ObsDesiredStateTests
     {
         var socket = new FakeSession();
         var process = new FakeProcess { Exists = true };
-        Harness harness = Open(TwitchIngestGuard.ProductionHost, Settings(), socket, process);
+        Harness harness = Open(Settings(), socket, process);
 
         ObsShutdownResult result = harness.Coordinator.Shutdown();
 
@@ -474,7 +413,7 @@ public class ObsDesiredStateTests
             IsConnected = true,
             Recording = true,
         };
-        Harness harness = Open(TwitchIngestGuard.DevelopmentHost, Settings(), socket);
+        Harness harness = Open(Settings(streaming: false), socket);
 
         ObsRecordingResult started = harness.Coordinator.StartRecording(() => true, 7, "unit");
         ObsRecordingResult stopped = harness.Coordinator.StopRecording(7);
@@ -584,50 +523,23 @@ public class ObsDesiredStateTests
         );
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData("ASA-SERVER")]
-    [InlineData("asa-server")]
-    [InlineData("RANDOM-PC")]
-    public void Guard_RefusesNonProductionHosts(string host)
+    [Fact]
+    public void Guard_RefusalNamesTheStreamingSetting()
     {
-        Assert.False(TwitchIngestGuard.IsProductionHost(host));
-        Assert.False(TwitchIngestGuard.Allows(host, true));
-        Assert.False(TwitchIngestGuard.Allows(host, false));
-        Assert.Equal(TwitchIngestGuard.NotStartedMessage, TwitchIngestGuard.Refusal(host, true));
-        Assert.Equal("OBS streaming is disabled.", TwitchIngestGuard.Refusal(host, false));
-    }
-
-    [Theory]
-    [InlineData("DESKTOP-8SJE72")]
-    [InlineData("desktop-8sje72")]
-    [InlineData("  DESKTOP-8SJE72 ")]
-    public void Guard_AllowsOnlyTheProductionHostWhenStreamingIsEnabled(string host)
-    {
-        Assert.True(TwitchIngestGuard.IsProductionHost(host));
-        Assert.True(TwitchIngestGuard.Allows(host, true));
-        Assert.False(TwitchIngestGuard.Allows(host, false));
-        Assert.Equal("OBS streaming is disabled.", TwitchIngestGuard.Refusal(host, false));
+        Assert.Equal(TwitchIngestGuard.NotStartedMessage, TwitchIngestGuard.Refusal(true));
+        Assert.Equal("OBS streaming is disabled.", TwitchIngestGuard.Refusal(false));
     }
 
     [Fact]
-    public void Startup_DesiredStateRequiresEnabledStreamingAndProductionHost()
+    public void Startup_DesiredStateRequiresEnabledObsAndStreaming()
     {
         OBSSettings obs = Settings();
-        Assert.True(ObsDesired.StreamIsDesired(obs, TwitchIngestGuard.ProductionHost));
-        Assert.False(ObsDesired.StreamIsDesired(obs, TwitchIngestGuard.DevelopmentHost));
-        Assert.False(
-            ObsDesired.StreamIsDesired(Settings(streaming: false), TwitchIngestGuard.ProductionHost)
-        );
-        Assert.False(
-            ObsDesired.StreamIsDesired(Settings(enabled: false), TwitchIngestGuard.ProductionHost)
-        );
+        Assert.True(ObsDesired.StreamIsDesired(obs));
+        Assert.False(ObsDesired.StreamIsDesired(Settings(streaming: false)));
+        Assert.False(ObsDesired.StreamIsDesired(Settings(enabled: false)));
 
         ObsRuntimeSnapshot snapshot = ObsDesired.Capture(
             obs,
-            TwitchIngestGuard.ProductionHost,
             processRunning: false,
             processOwned: false,
             launch: ObsLaunchDecision.Decide(true, false, obs.ExecutablePath, true),
@@ -756,7 +668,6 @@ public class ObsDesiredStateTests
             Streaming = true,
         };
         return Open(
-            TwitchIngestGuard.ProductionHost,
             Settings(streaming: streaming, closeOwned: closeOwned),
             socket,
             budget: Fast(0)
@@ -764,14 +675,12 @@ public class ObsDesiredStateTests
     }
 
     private static Harness Open(
-        string host,
         OBSSettings obs,
         FakeSession socket = null,
         FakeProcess process = null,
         ObsBackoff backoff = null,
         ObsRecordingBudget budget = null,
-        Action beforeLaunch = null,
-        Func<string> machineName = null
+        Action beforeLaunch = null
     )
     {
         socket ??= new FakeSession();
@@ -783,7 +692,6 @@ public class ObsDesiredStateTests
             socket,
             process,
             new RecordingSession(NullLogger.Instance, socket, budget ?? Fast(0)),
-            machineName ?? (() => host),
             backoff ?? new ObsBackoff(1, TimeSpan.Zero, TimeSpan.Zero),
             waits.Add,
             TimeSpan.FromMilliseconds(20),

@@ -144,13 +144,11 @@ public sealed record ObsRuntimeSnapshot
 
 public static class ObsDesired
 {
-    public static bool StreamIsDesired(OBSSettings obs, string hostName) =>
-        obs is { Enabled: true }
-        && TwitchIngestGuard.Allows(hostName, SessionMedia.ShouldStream(obs));
+    public static bool StreamIsDesired(OBSSettings obs) =>
+        obs is { Enabled: true } && SessionMedia.ShouldStream(obs);
 
     public static ObsRuntimeSnapshot Capture(
         OBSSettings obs,
-        string hostName,
         bool processRunning,
         bool processOwned,
         ObsLaunchDecision launch,
@@ -163,7 +161,7 @@ public static class ObsDesired
     )
     {
         bool enabled = obs?.Enabled == true;
-        bool streamDesired = StreamIsDesired(obs, hostName);
+        bool streamDesired = StreamIsDesired(obs);
         return new ObsRuntimeSnapshot
         {
             ProcessDesired = enabled,

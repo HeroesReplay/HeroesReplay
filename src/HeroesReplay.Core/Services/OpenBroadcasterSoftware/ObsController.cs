@@ -48,7 +48,6 @@ public class ObsController : IObsController
             socket,
             new WindowsObsProcess(),
             new RecordingSession(logger, socket, ObsRecordingBudget.Default),
-            () => Environment.MachineName,
             ObsBackoff.Default,
             Thread.Sleep,
             TimeSpan.FromSeconds(10),

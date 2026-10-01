@@ -79,10 +79,7 @@ public class ConnectivityWatchdogTests
     [Fact]
     public void Apply_RepairsStoppedStreamWithoutAnInternetEdge()
     {
-        using Fixture fixture = CreateFixture(
-            streamingEnabled: true,
-            hostName: TwitchIngestGuard.ProductionHost
-        );
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
         Assert.False(fixture.Obs.IsStreaming());
 
         bool edge = fixture.Watchdog.Apply(OkSnapshot());
@@ -101,10 +98,7 @@ public class ConnectivityWatchdogTests
     [Fact]
     public void Apply_ShortOutageDoesNotStopTheStream()
     {
-        using Fixture fixture = CreateFixture(
-            streamingEnabled: true,
-            hostName: TwitchIngestGuard.ProductionHost
-        );
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
         fixture.Obs.Streaming = true;
 
         DropThenRestore(fixture);
@@ -113,49 +107,6 @@ public class ConnectivityWatchdogTests
         Assert.Equal(0, fixture.Obs.StartCalls);
         Assert.True(fixture.Obs.IsStreaming());
         Assert.True(fixture.Resume.IsPending);
-    }
-
-    [Fact]
-    public void Apply_DevelopmentHostDoesNotStart()
-    {
-        using Fixture fixture = CreateFixture(
-            streamingEnabled: true,
-            hostName: TwitchIngestGuard.DevelopmentHost
-        );
-
-        Assert.False(fixture.Watchdog.Apply(OkSnapshot()));
-        DropThenRestore(fixture);
-
-        Assert.Equal(0, fixture.Obs.StartCalls);
-        Assert.Equal(0, fixture.Obs.StopCalls);
-    }
-
-    [Fact]
-    public void Apply_ProductionHostWithStreamingDisabled_DoesNotStart()
-    {
-        using Fixture fixture = CreateFixture(
-            streamingEnabled: false,
-            hostName: TwitchIngestGuard.ProductionHost
-        );
-
-        Assert.False(fixture.Watchdog.Apply(OkSnapshot()));
-        DropThenRestore(fixture);
-
-        Assert.Equal(0, fixture.Obs.StartCalls);
-        Assert.Equal(0, fixture.Obs.StopCalls);
-    }
-
-    [Fact]
-    public void Apply_UnreadableMachineName_DoesNotStart()
-    {
-        using Fixture fixture = CreateFixture(
-            streamingEnabled: true,
-            machineName: () => throw new InvalidOperationException("unnamed")
-        );
-
-        Assert.False(fixture.Watchdog.Apply(OkSnapshot()));
-        Assert.Equal(0, fixture.Obs.StartCalls);
-        Assert.Equal(0, fixture.Obs.StopCalls);
     }
 
     [Fact]
@@ -250,17 +201,12 @@ public class ConnectivityWatchdogTests
         Assert.True(fixture.Probe.TwitchCalls >= 1);
         Assert.True(fixture.Probe.InternetCalls >= 1);
         Assert.Equal(0, fixture.Probe.HeroesProfileCalls);
-        Assert.Equal(0, fixture.Obs.StartCalls);
-        Assert.Equal(0, fixture.Obs.StopCalls);
     }
 
     [Fact]
-    public async Task RunAsync_ProductionHost_ConfirmsStopOnCancelWithoutStarting()
+    public async Task RunAsync_StreamingEnabled_ConfirmsStopOnCancelWithoutStarting()
     {
-        using Fixture fixture = CreateFixture(
-            streamingEnabled: true,
-            hostName: TwitchIngestGuard.ProductionHost
-        );
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
         fixture.Obs.Streaming = true;
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
 
@@ -352,12 +298,7 @@ public class ConnectivityWatchdogTests
             HeroesProfile = true,
         };
 
-    private static Fixture CreateFixture(
-        bool streamingEnabled,
-        bool gameRunning = true,
-        string hostName = TwitchIngestGuard.DevelopmentHost,
-        Func<string> machineName = null
-    )
+    private static Fixture CreateFixture(bool streamingEnabled, bool gameRunning = true)
     {
         string path = Path.Combine(
             Path.GetTempPath(),
@@ -391,8 +332,7 @@ public class ConnectivityWatchdogTests
             obs,
             resume,
             replays,
-            () => gameRunning,
-            machineName ?? (() => hostName)
+            () => gameRunning
         );
         return new Fixture(path, resumePath, probe, obs, watchdog, resume, store, replays);
     }

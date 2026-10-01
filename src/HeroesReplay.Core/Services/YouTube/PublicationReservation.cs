@@ -27,7 +27,7 @@ public static class PublicationReservation
 
     public static PublicationReservationResult TryReserve(
         string path,
-        bool productionHost,
+        bool publicListing,
         int insertsThisQuotaDay,
         DateTimeOffset now,
         DateTimeOffset? lastPublicUtc,
@@ -114,7 +114,7 @@ public static class PublicationReservation
         PublicationDecision decision = PublicationSchedule.Decide(
             settings ?? PublicationSchedule.CanarySettings(),
             send,
-            productionHost,
+            publicListing,
             insertsThisQuotaDay,
             now,
             last,

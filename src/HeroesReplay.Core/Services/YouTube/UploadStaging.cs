@@ -1,33 +1,32 @@
 using System;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
 
 namespace HeroesReplay.Core.Services.YouTube;
 
 /// <summary>
-/// The first videos.insert is private. A non-production host also keeps the [TEST] marker.
+/// The first videos.insert is private. A configuration that is not public
+/// (<c>YouTube:PrivacyStatus</c>) also keeps the final listing private.
 /// Public success is a later read-back, not the insert response.
 /// </summary>
 public static class UploadStaging
 {
     public const string InitialPrivacy = "private";
 
-    public static void Apply(YouTubeEntry entry, YouTubeSettings youtube, string hostName)
+    public static void Apply(YouTubeEntry entry, YouTubeSettings youtube)
     {
-        Apply(entry, youtube, hostName, null, null);
+        Apply(entry, youtube, null, null);
     }
 
     public static void Apply(
         YouTubeEntry entry,
         YouTubeSettings youtube,
-        string hostName,
         DateTimeOffset? nowUtc,
         DateTimeOffset? lastPublicUtc,
         TimeSpan? minimumInterval = null
     )
     {
-        YouTubeListing.StampForHost(entry, youtube, hostName);
+        YouTubeListing.Stamp(entry, youtube);
         if (entry == null)
         {
             return;
@@ -36,7 +35,7 @@ public static class UploadStaging
         string desiredFinal = string.IsNullOrWhiteSpace(entry.DesiredPrivacyStatus)
             ? entry.PrivacyStatus
             : entry.DesiredPrivacyStatus;
-        if (!TwitchIngestGuard.IsProductionHost(hostName))
+        if (!YouTubeListing.IsPublic(youtube))
         {
             desiredFinal = UploadVisibility.Staged;
         }
