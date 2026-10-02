@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Obs;
 

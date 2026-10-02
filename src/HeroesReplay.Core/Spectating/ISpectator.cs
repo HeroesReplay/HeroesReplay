@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.Spectating.Session;
 
 namespace HeroesReplay.Core.Spectating;
 

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Spectating.Clock.Ocr;
+using HeroesReplay.Core.Spectating.Control;
 
 namespace HeroesReplay.Core.Spectating.Clock.Memory;
 

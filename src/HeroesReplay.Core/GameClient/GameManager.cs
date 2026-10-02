@@ -15,6 +15,8 @@ using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating;
 using HeroesReplay.Core.Spectating.Capture;
+using HeroesReplay.Core.Spectating.Control;
+using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
 using HeroesReplay.Core.Twitch.Rewards;
 using HeroesReplay.Core.YouTube.Metadata;
