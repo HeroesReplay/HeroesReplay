@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.Obs;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

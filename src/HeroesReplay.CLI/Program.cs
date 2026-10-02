@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI;

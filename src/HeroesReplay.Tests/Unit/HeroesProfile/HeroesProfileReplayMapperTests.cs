@@ -1,5 +1,5 @@
 using System.Linq;
-using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.HeroesProfile.Client;
 using HeroesReplay.HeroesProfile.Client.Replays;
 using Xunit;

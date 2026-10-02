@@ -1,0 +1,28 @@
+using System;
+using System.Diagnostics;
+using System.Threading.Tasks;
+using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.Replays;
+
+namespace HeroesReplay.Core.Spectating;
+
+public interface IGameController
+{
+    Task<ClientHoldReason> LaunchAsync();
+    Task<bool> StartAuthenticatedReplayAsync(string replayPath, string replayVersion = null);
+    Task<bool> OpenReplayFromHomeScreenAsync(string replayPath);
+    Task<TimeSpan?> TryGetTimerAsync();
+    TimeSpan? TryReadMatchClock();
+    Task<bool> IsReplayPresentedAsync(LoadedReplay replay);
+    Task<bool> TrySeeEndScreenAsync(bool nearCore);
+    void SendFocus(int player);
+    void SendPanel(Panel panel);
+    void ShowSelectedUnit();
+    void SaveEndScreenshot();
+    bool IsGameHung();
+    bool IsGameRunning();
+    bool ReplayFileOpened { get; }
+    Process GetGameProcess();
+    void Kill();
+}

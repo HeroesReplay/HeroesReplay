@@ -17,11 +17,9 @@ namespace HeroesReplay.Tests.Unit.Support;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class UnusedSourceTests
 {
-    private const string RewardHandler =
-        "HeroesReplay.Core.Services.Twitch.RedeemedRewards.IRewardHandler";
+    private const string RewardHandler = "HeroesReplay.Core.Twitch.RedeemedRewards.IRewardHandler";
 
-    private const string MessageHandler =
-        "HeroesReplay.Core.Services.Twitch.ChatMessages.IMessageHandler";
+    private const string MessageHandler = "HeroesReplay.Core.Twitch.ChatMessages.IMessageHandler";
 
     [Fact]
     public void CoreAndCli_HaveNoUnreferencedTypes()

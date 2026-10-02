@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands;
-using HeroesReplay.Core.Services.SelfUpdate;
+using HeroesReplay.Core.SelfUpdate;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;

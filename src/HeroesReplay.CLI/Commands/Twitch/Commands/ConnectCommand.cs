@@ -4,10 +4,11 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Processes;
-using HeroesReplay.Core.Services.Twitch;
-using HeroesReplay.Core.Services.Twitch.Rewards;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.Twitch.Predictions;
+using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

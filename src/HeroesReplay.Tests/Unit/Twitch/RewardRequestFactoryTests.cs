@@ -1,5 +1,5 @@
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Twitch.Rewards;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Twitch.Rewards;
 using TwitchLib.PubSub.Events;
 using Xunit;
 

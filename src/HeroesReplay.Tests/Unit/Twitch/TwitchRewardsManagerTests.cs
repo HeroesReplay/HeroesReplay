@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Twitch.Rewards;
+using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.Logging.Abstractions;
 using TwitchLib.Api.Core.Enums;
 using TwitchLib.Api.Core.Interfaces;
@@ -56,11 +57,11 @@ public class TwitchRewardsManagerTests
 
     private sealed class EmptyRewards : ICustomRewardsHolder
     {
-        public List<HeroesReplay.Core.Models.SupportedReward> Rewards { get; } = new();
+        public List<HeroesReplay.Core.Twitch.Rewards.SupportedReward> Rewards { get; } = new();
 
         public bool TryGetReward(
             TwitchLib.PubSub.Events.OnRewardRedeemedArgs args,
-            out HeroesReplay.Core.Models.SupportedReward reward
+            out HeroesReplay.Core.Twitch.Rewards.SupportedReward reward
         )
         {
             reward = null;

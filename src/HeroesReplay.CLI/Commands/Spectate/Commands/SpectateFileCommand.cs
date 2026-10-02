@@ -3,9 +3,9 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Processes;
-using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands.Spectate.Commands;

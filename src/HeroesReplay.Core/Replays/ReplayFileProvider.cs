@@ -1,0 +1,181 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Heroes.ReplayParser;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Requests;
+using Microsoft.Extensions.Logging;
+
+namespace HeroesReplay.Core.Replays;
+
+public sealed class ReplayFileProvider : IReplayProvider
+{
+    private readonly ILogger<ReplayFileProvider> logger;
+    private readonly IReplayLoader loader;
+    private readonly IReplayHelper replayHelper;
+    private readonly Queue<FileInfo> remaining = new();
+    private readonly bool playOnce;
+    private readonly int? playerIndex;
+    private LoadedReplay staged;
+    private int? heldBackId;
+
+    public bool ContinuesWhenEmpty => !playOnce;
+
+    public ReplayFileProvider(
+        ILogger<ReplayFileProvider> logger,
+        IReplayLoader loader,
+        AppSettings settings,
+        IReplayHelper replayHelper,
+        ReplayPathOptions pathOptions
+    )
+    {
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
+        this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
+        if (settings == null)
+        {
+            throw new ArgumentNullException(nameof(settings));
+        }
+
+        playOnce = pathOptions?.PlayOnce ?? true;
+        playerIndex = pathOptions?.PlayerIndex;
+        string path = !string.IsNullOrWhiteSpace(pathOptions?.Path)
+            ? pathOptions.Path
+            : settings.Location.ReplaySource;
+        Seed(path);
+    }
+
+    public async Task<LoadedReplay> TryLoadNextReplayAsync()
+    {
+        using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay.load");
+        if (staged != null && staged.ReplayId != heldBackId)
+        {
+            LoadedReplay ready = staged;
+            staged = null;
+            return ready;
+        }
+
+        while (remaining.Count > 0)
+        {
+            FileInfo fileInfo = remaining.Dequeue();
+            activity?.SetTag("replay.path", fileInfo.FullName);
+            if (!fileInfo.Exists)
+            {
+                logger.LogWarning("Replay file not found: {Path}", fileInfo.FullName);
+                continue;
+            }
+
+            Replay replay = await loader.LoadAsync(fileInfo.FullName);
+            if (replay == null)
+            {
+                continue;
+            }
+
+            replayHelper.TryGetReplayId(fileInfo.FullName, out int replayId);
+            HeroesReplayTelemetry.TagReplay(
+                activity,
+                fileInfo.FullName,
+                replay.Map,
+                replayId,
+                replay.ReplayVersion
+            );
+            RewardQueueItem reward = null;
+            if (playerIndex is int slot)
+            {
+                reward = new RewardQueueItem
+                {
+                    Request = new RewardRequest { ReplayId = replayId, PlayerIndex = slot },
+                };
+            }
+
+            return new LoadedReplay
+            {
+                FileInfo = fileInfo,
+                Replay = replay,
+                ReplayId = replayId,
+                RewardQueueItem = reward,
+                HeroesProfileReplay = null,
+            };
+        }
+
+        activity?.SetTag("replay.empty", true);
+        return null;
+    }
+
+    private void Seed(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            logger.LogError("No replay path was configured.");
+            return;
+        }
+
+        if (File.Exists(path))
+        {
+            remaining.Enqueue(new FileInfo(path));
+            return;
+        }
+
+        if (Directory.Exists(path))
+        {
+            foreach (
+                string file in Directory
+                    .EnumerateFiles(path, "*.StormReplay", SearchOption.AllDirectories)
+                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            )
+            {
+                remaining.Enqueue(new FileInfo(file));
+            }
+
+            logger.LogInformation("Queued {Count} replay(s) from {Path}", remaining.Count, path);
+            return;
+        }
+
+        logger.LogError("Replay path does not exist: {Path}", path);
+    }
+
+    public void Requeue(LoadedReplay replay)
+    {
+        if (replay == null)
+        {
+            return;
+        }
+
+        staged = replay;
+        logger.LogInformation(
+            "Returned replay {ReplayId} to the front of the file queue.",
+            replay.ReplayId
+        );
+    }
+
+    public void Defer(LoadedReplay replay)
+    {
+        if (replay == null)
+        {
+            return;
+        }
+
+        if (staged?.ReplayId == replay.ReplayId)
+        {
+            staged = null;
+        }
+
+        logger.LogInformation(
+            "Replay {ReplayId} leaves the front of the file queue. It is not marked spectated.",
+            replay.ReplayId
+        );
+    }
+
+    public void MarkSpectated(LoadedReplay replay) { }
+
+    public void HoldBack(int replayId)
+    {
+        if (replayId > 0)
+        {
+            heldBackId = replayId;
+        }
+    }
+}

@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.YouTube.Publication;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube;

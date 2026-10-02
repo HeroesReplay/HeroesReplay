@@ -1,7 +1,22 @@
 using System;
 using System.IO;
-using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Core.Services.Retention;
+using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Retention;
+using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Capture;
+using HeroesReplay.Core.Spectating.Clock;
+using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.TwitchExtension;
+using HeroesReplay.Core.YouTube;
 
 namespace HeroesReplay.Core.Configuration;
 

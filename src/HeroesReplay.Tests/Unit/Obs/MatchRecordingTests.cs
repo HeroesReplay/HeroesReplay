@@ -1,5 +1,5 @@
 using System;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.Obs;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs;
