@@ -146,9 +146,10 @@ public static class MediaRetention
 
         foreach (DirectoryInfo dir in new DirectoryInfo(contextsDirectory).GetDirectories())
         {
+            bool inserted = PendingUploadSize.IsInserted(dir.FullName, "youtube-entry.json");
             if (
                 !string.Equals(dir.Name, protectedId, StringComparison.OrdinalIgnoreCase)
-                && PendingUploadSize.IsInserted(dir.FullName, "youtube-entry.json")
+                && inserted
             )
             {
                 // The video is on YouTube. Its entry may wait for publishAt, but the mp4 is not needed.
@@ -158,13 +159,14 @@ public static class MediaRetention
                 }
             }
 
-            if (IsProtectedContext(dir, protectedId))
+            if (IsProtectedContext(dir, protectedId, inserted))
             {
                 continue;
             }
 
             bool dryRun = dir.GetFiles("youtube-dry-run.json").Length > 0;
-            bool remoteUpload = !dryRun && dir.GetFiles("youtube-entry-uploaded.json").Length > 0;
+            bool remoteUpload =
+                !dryRun && (inserted || dir.GetFiles("youtube-entry-uploaded.json").Length > 0);
             FileInfo[] videos = dir.GetFiles("*.mp4");
             DateTime written = dir.LastWriteTimeUtc;
             if (dryRun)
@@ -205,14 +207,18 @@ public static class MediaRetention
         }
     }
 
-    private static bool IsProtectedContext(DirectoryInfo dir, string protectedId)
+    /// <summary>
+    /// The newest context and a recording still waiting for its insert are kept. An entry that
+    /// already has a video id only waits for publishAt, so its context ages out like an upload.
+    /// </summary>
+    private static bool IsProtectedContext(DirectoryInfo dir, string protectedId, bool inserted)
     {
         if (string.Equals(dir.Name, protectedId, StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        return dir.GetFiles("youtube-entry.json").Length > 0;
+        return !inserted && dir.GetFiles("youtube-entry.json").Length > 0;
     }
 
     private static bool DeleteHeavyFilesOlderThan(
