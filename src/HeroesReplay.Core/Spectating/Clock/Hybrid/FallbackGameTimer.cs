@@ -22,7 +22,11 @@ public sealed class FallbackGameTimer : IGameTimer
         this.filter = filter;
     }
 
-    public void Reset() => filter.Reset();
+    public void Reset()
+    {
+        memory.Reset();
+        filter.Reset();
+    }
 
     public async Task<GameTimerReading> ReadAsync(CancellationToken cancellationToken)
     {

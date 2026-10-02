@@ -215,6 +215,51 @@ public class StableMatchClockTests
     }
 
     [Fact]
+    public void Read_NextMatchInTheSameClient_IsNotStalledByThePreviousMatch()
+    {
+        // 2026-10-02: after a 24 minute match, every read of the next replay was "stalled"
+        // because the previous match's last second stayed the baseline.
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new(2026, 10, 2, 19, 0, 0, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        StableClockModule module = Module(21, SmallModule, "2.57.0.98304");
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 1440);
+        clock.Read(module, memory.Read);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 1441);
+        Assert.True(clock.Read(module, memory.Read).Ok);
+
+        for (int second = 10; second <= 30; second++)
+        {
+            now = now.AddSeconds(1);
+            memory.SetSeconds(PatternTickRva, PatternSpeedRva, second);
+            StableClockSample sample = clock.Read(module, memory.Read);
+            Assert.True(sample.Ok, $"second {second}: {sample.Reason}");
+        }
+    }
+
+    [Fact]
+    public void BeginMatch_ForgetsTheStallBaselineButKeepsTheLock()
+    {
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new(2026, 10, 2, 19, 0, 0, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        StableClockModule module = Module(22, SmallModule, "2.57.0.98304");
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 600);
+        clock.Read(module, memory.Read);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 601);
+        Assert.True(clock.Read(module, memory.Read).Ok);
+
+        clock.BeginMatch();
+        now = now.AddSeconds(30);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 599);
+
+        Assert.True(clock.Read(module, memory.Read).Ok);
+        Assert.True(clock.IsLocked);
+    }
+
+    [Fact]
     public void SameCellIsStale_EightSecondsWithoutAStep_IsStale()
     {
         DateTimeOffset changed = new DateTimeOffset(2026, 9, 30, 17, 49, 39, TimeSpan.Zero);
