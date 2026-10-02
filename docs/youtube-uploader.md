@@ -90,7 +90,7 @@ After a recording that can be published, a second check decides whether `youtube
 | --- | --- |
 | `Disabled` | Not written |
 | `RequestedOnly` | Written for a request |
-| `Curated` | Written for a request. Written for notable and high-skill while fewer than `MaxPublicPerDay` videos were observed public in the last 24 hours. An ordinary replay stays local. |
+| `Curated` | Written for a request, and for notable and high-skill. A full day does not drop them: the uploader schedules them for a later slot (#136). Only with `MaxPublishAhead` 0 are they written just while fewer than `MaxPublicPerDay` videos were observed public in the last 24 hours. An ordinary replay stays local. |
 | `AllEligible` | Written for every class that is still inside its age, including when the day is already full. The uploader schedules it for a later day. |
 
 The day count at this step is `Data`'s publication ledger of videos already observed public. The send step below uses its own reservation file, and that file is what spaces the publish times.
@@ -272,7 +272,7 @@ Uploads go first. An insert is counted when it is sent. A new upload starts only
 - `YouTube:LibraryUnitsPerDay` (3000) for the pass in one day.
 - `YouTube:DailyQuotaUnits` (10000) minus `YouTube:QuotaReserveUnits` (1600) for the whole day, uploads included.
 
-A quota response from YouTube during the pass pauses the pass until the next Pacific quota day, and uploads continue. A quota response during an upload pauses both the pass and new uploads until then (`UploadsPausedUntil`). That upload itself is ambiguous and waits for an operator retry, like any other upload that stopped mid-send.
+A quota response from YouTube during the pass pauses the pass until the next Pacific quota day, and uploads continue. A quota response during an upload pauses both the pass and new uploads until then (`UploadsPausedUntil`). YouTube checks quota when the upload session is created, so a quota refusal before any session exists means nothing was sent: the attempt goes back to pending and is retried automatically after the quota day turns. An upload that stopped after its session started is still ambiguous and waits for an operator retry.
 
 Backfilling the 338 videos on the channel today (4 already on the current template) costs about 7 units of listing (and 7 more once, for the full re-listing that reads the draft note and named player), 334 Heroes Profile lookups (the older template has no build) spread over 7 passes, and the playlist inserts. Each group that is on adds one insert per video: 338 × 50 = 16,900 units, about 6 days at 3000 units a day. With the defaults a ranked Storm League video is 4 inserts (map, mode, rank, patch), so the backlog is about 1,352 × 50 = 67,600 units, plus 50 for each playlist that does not exist yet (about 30: one per map, mode, league, patch line, draft note, and the review playlist). At 3000 units a day that is about 23 days. New uploads share that room (200 units each, so about 1,200 on a day with 6 uploads), which makes it closer to 5 to 6 weeks, and longer on days when uploads leave less room under the ceiling. An insert an earlier pass already made (the patch playlist) is not made again. To shorten the backlog, turn `Mode` off first: almost every video is Storm League, so the `Storm League` playlist is close to the whole channel.
 

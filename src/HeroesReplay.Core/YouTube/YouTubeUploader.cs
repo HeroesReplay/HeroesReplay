@@ -553,6 +553,17 @@ public class YouTubeUploader : IYouTubeUploader
             SaveLedger();
             MediaRetention.SweepAndLog(settings, logger);
         }
+        else if (
+            YouTubeListQuota.IsExhausted(result.Exception)
+            && await ReturnUnsentAsync(outbox, attemptId).ConfigureAwait(false)
+        )
+        {
+            PauseOnQuota(result.Exception);
+            logger.LogWarning(
+                "YouTube refused the upload of {Path} for quota before anything was sent. It stays pending and is retried after the quota day turns.",
+                recording.FullName
+            );
+        }
         else
         {
             await RecordInterruptedSendAsync(outbox, attemptId).ConfigureAwait(false);
@@ -562,6 +573,22 @@ public class YouTubeUploader : IYouTubeUploader
                 recording.FullName,
                 result.Status
             );
+        }
+    }
+
+    private async Task<bool> ReturnUnsentAsync(UploadOutbox outbox, string attemptId)
+    {
+        try
+        {
+            UploadAttemptResult returned = await outbox
+                .ReturnUnsentAsync(attemptId, DateTimeOffset.UtcNow, CancellationToken.None)
+                .ConfigureAwait(false);
+            return returned.Succeeded;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not return the unsent upload {Attempt}.", attemptId);
+            return false;
         }
     }
 

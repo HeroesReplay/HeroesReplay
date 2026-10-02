@@ -213,6 +213,32 @@ public static class UploadAttemptMachine
         return CopyForward(current, UploadAttemptState.AmbiguousUpload, at, null);
     }
 
+    /// <summary>
+    /// YouTube refused the insert before an upload session existed (a quota refusal at
+    /// initiation), so nothing was sent. The attempt goes back to pending and is retried
+    /// without an operator, instead of becoming ambiguous.
+    /// </summary>
+    public static UploadAttemptResult ReturnUnsent(UploadAttemptManifest current, DateTimeOffset at)
+    {
+        UploadAttemptResult rejected = RejectClockOrMissing(current, at);
+        if (rejected != null)
+        {
+            return rejected;
+        }
+
+        if (
+            current.State != UploadAttemptState.Uploading
+            || !UploadAttemptReceipt.IsBound(current)
+            || UploadAttemptReceipt.HasExactText(current.VideoId)
+            || !string.IsNullOrWhiteSpace(current.SessionUri)
+        )
+        {
+            return UploadAttemptResult.Failure(UploadAttemptReasons.IllegalTransition, current);
+        }
+
+        return CopyForward(current, UploadAttemptState.UploadPending, at, null);
+    }
+
     public static UploadAttemptResult NoteSession(
         UploadAttemptManifest current,
         string sessionUri,
@@ -559,7 +585,8 @@ public static class UploadAttemptMachine
             case UploadAttemptState.Uploading:
                 return to == UploadAttemptState.Uploaded
                     || to == UploadAttemptState.AmbiguousUpload
-                    || to == UploadAttemptState.Uploading;
+                    || to == UploadAttemptState.Uploading
+                    || to == UploadAttemptState.UploadPending;
             case UploadAttemptState.AmbiguousUpload:
                 return to == UploadAttemptState.Uploading || to == UploadAttemptState.Uploaded;
             default:
