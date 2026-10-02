@@ -4,10 +4,10 @@ using HeroesReplay.Core.YouTube.Publication;
 namespace HeroesReplay.Core.YouTube.Search;
 
 /// <summary>
-/// YouTube search.list has its own daily quota. One exhausted response pauses
-/// further searches until the next Pacific quota day. Recording does not stop.
+/// One exhausted quota response from the uploads listing pauses further listing
+/// until the next Pacific quota day. Recording does not stop.
 /// </summary>
-public static class YouTubeSearchQuota
+public static class YouTubeListQuota
 {
     public static bool IsExhausted(Exception exception)
     {

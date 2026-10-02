@@ -52,7 +52,13 @@ An invalid value, including a mode written as a number, fails closed. Nothing is
 
 ## What gets recorded
 
-Before launch, the replay file is classified. OBS starts recording when the loading screen or the match clock is visible, and only when the recording decision allows it. A replay id that is already on YouTube is not recorded again. The lookup is `Data\youtube-replay-ids.txt`, then the context receipt, then a channel search for that replay id.
+Before launch, the replay file is classified. OBS starts recording when the loading screen or the match clock is visible, and only when the recording decision allows it. A replay id that is already on YouTube is not recorded again. The lookup is `Data\youtube-replay-ids.txt`, then the context receipt, then the channel's uploads index.
+
+The uploads index does not search for a replay id. It lists the channel's uploads playlist (`playlistItems.list`, 50 videos and 1 quota unit per page) and writes every replay id it finds to `Data\youtube-replay-ids.txt`. A title's id part, a `Replay ID:` line, and a Heroes Profile `replayID=` link all count. The playlist id comes from `channels.list` once (1 unit) and is kept in `Data\youtube-uploads-index.json` with the video ids already seen and the time of the last listing. The index is listed again only after `YouTube:UploadsIndexRefresh` (6 hours by default), and that time survives a restart. A listing stops at the first page whose videos are all already in the index, so a refresh usually costs 1 or 2 units. The first listing on a new `Data` folder reads every page. Between refreshes a replay costs nothing. The earlier `search.list` check cost 100 units for every replay and had its own daily search limit.
+
+The listing uses `YouTube:ApiKey`, the same key the old search used, in the spectator process. An API key sees public videos only. A private or scheduled upload is not in the listing, but the uploader writes its replay id to `Data\youtube-replay-ids.txt` when the insert succeeds. The OAuth tokens are not used here: `youtube.upload` cannot list a playlist, and the `youtube` library consent can open a browser prompt.
+
+A quota response while listing pauses the index until the next Pacific quota day. The catalog and the receipt still count, and recording stays on. `YouTube:DryRun` true never lists the channel.
 
 | `RecordingMode` | What is recorded |
 | --- | --- |

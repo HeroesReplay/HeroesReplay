@@ -1,3 +1,4 @@
+using System;
 using HeroesReplay.Core.YouTube.Metadata;
 
 namespace HeroesReplay.Core.YouTube;
@@ -26,6 +27,12 @@ public class YouTubeSettings
     /// </summary>
     public string TitlePrefix { get; set; }
     public string EntryFileNameUploaded { get; set; }
+
+    /// <summary>
+    /// How long a listing of the channel's uploads stays current. The duplicate lookup
+    /// lists the uploads playlist again only after this much time.
+    /// </summary>
+    public TimeSpan UploadsIndexRefresh { get; set; } = TimeSpan.FromHours(6);
 
     /// <summary>
     /// Display name of the current patch playlist. Blank uses the patch number.

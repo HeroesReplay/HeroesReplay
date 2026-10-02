@@ -390,7 +390,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
             .AddSingleton<IAbilityDetector, AbilityDetector>()
-            .AddSingleton<IYouTubeVideoSearch, YouTubeApiVideoSearch>()
+            .AddSingleton<IYouTubeUploadsListing, YouTubeApiUploadsListing>()
             .AddSingleton<IYouTubeReplayLookup, YouTubeReplayLookup>()
             .AddSingleton<RecordingClock>()
             .AddSingleton<IGameFirewall, NetshGameFirewall>()

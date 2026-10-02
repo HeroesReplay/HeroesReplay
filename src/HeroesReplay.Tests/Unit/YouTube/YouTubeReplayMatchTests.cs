@@ -22,6 +22,19 @@ public class YouTubeReplayMatchTests
     }
 
     [Fact]
+    public void IdsIn_ReadsTheTitleAndTheDescriptionLines()
+    {
+        Assert.Equal(
+            new[] { 65550001, 65550002, 65550003 },
+            YouTubeReplayMatch.IdsIn(
+                "Cursed Hollow - Storm League - Diamond - 65550001",
+                "Replay ID: 65550002\nHeroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID=65550003\nBuild 2.57.0.98285"
+            )
+        );
+        Assert.Empty(YouTubeReplayMatch.IdsIn("Diamond 3 highlights", "Build 2.57.0.98285"));
+    }
+
+    [Fact]
     public void FromEntry_PrefersTheStoredIdThenTheTitle()
     {
         Assert.Equal(
