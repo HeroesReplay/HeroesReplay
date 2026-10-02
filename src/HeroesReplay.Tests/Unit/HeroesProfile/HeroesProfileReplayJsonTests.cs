@@ -1,5 +1,5 @@
 using System.Text.Json;
-using HeroesReplay.Core.Models;
+using HeroesReplay.Core.HeroesProfile;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.HeroesProfile;

@@ -1,5 +1,5 @@
 using System;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.YouTube;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube;

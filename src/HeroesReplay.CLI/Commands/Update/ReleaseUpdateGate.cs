@@ -7,8 +7,8 @@ using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Processes;
-using HeroesReplay.Core.Services.SelfUpdate;
+using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.CLI.Commands.Update;

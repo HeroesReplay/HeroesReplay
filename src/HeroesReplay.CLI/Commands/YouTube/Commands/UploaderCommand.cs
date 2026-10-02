@@ -3,8 +3,8 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
-using HeroesReplay.Core.Services.Processes;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.YouTube;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands.YouTube.Commands;

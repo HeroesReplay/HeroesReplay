@@ -6,9 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Status;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.Status;
+using HeroesReplay.Core.YouTube;
 using Microsoft.Extensions.Logging;
 using Xunit;
 

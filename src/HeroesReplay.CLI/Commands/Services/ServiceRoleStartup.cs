@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Processes;
-using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Shared;
 using Windows.Media.Ocr;
 
 namespace HeroesReplay.CLI.Commands.Services;

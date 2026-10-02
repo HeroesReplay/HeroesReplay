@@ -2,7 +2,7 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Mcp;
-using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Status;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

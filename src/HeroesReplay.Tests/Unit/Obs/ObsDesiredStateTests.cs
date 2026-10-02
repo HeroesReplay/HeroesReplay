@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-using HeroesReplay.Core.Services.Processes;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

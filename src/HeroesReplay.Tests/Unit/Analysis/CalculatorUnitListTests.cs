@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-using HeroesReplay.Core.Services.Analysis.Reports;
+using HeroesReplay.Core.Analysis.Reports;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Analysis;

@@ -1,5 +1,5 @@
 using System;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.Twitch.Predictions;
 using TwitchLib.Api.Core.Exceptions;
 using Xunit;
 

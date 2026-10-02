@@ -4,9 +4,7 @@ using System.IO;
 using System.Linq;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Analysis;
+using HeroesReplay.Core.Analysis;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 

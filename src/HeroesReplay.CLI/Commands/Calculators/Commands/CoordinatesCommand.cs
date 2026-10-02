@@ -4,9 +4,10 @@ using System.CommandLine;
 using System.IO;
 using System.Linq;
 using Heroes.ReplayParser;
+using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Analysis.Calculators;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Analysis;
-using HeroesReplay.Core.Services.Analysis.Calculators;
+using HeroesReplay.Core.Spectating;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HeroesReplay.CLI.Commands.Calculators.Commands;

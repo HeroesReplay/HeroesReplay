@@ -1,7 +1,6 @@
 using System.Collections.Generic;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.HeroesProfile.Client;
 using HeroesReplay.HeroesProfile.Client.Replay.Item;
 using Microsoft.Kiota.Abstractions.Serialization;

@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.HeroesProfile;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
 using Polly.Timeout;

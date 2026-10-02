@@ -1,8 +1,7 @@
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Observer;
-using HeroesReplay.Core.Services.Twitch;
-using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
-using HeroesReplay.Core.Services.Twitch.Rewards;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Twitch.RedeemedRewards;
+using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

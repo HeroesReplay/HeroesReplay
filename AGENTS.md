@@ -8,6 +8,30 @@ Windows-only automated spectator for Heroes of the Storm `.StormReplay` files: p
 
 Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `HeroesReplay.Core`, `HeroesReplay.HeroesProfile.Client` (Kiota v1), `HeroesReplay.Tests`. There is no AutoSpectator project. Regenerate the Heroes Profile client with `tools/generate-heroesprofile-client.ps1`; do not csharpier `Generated/`.
 
+### Source layout: feature slices
+
+`HeroesReplay.Core` is grouped by feature, not by kind. There are no `Models/`, `Services/`, or `Extensions/` folders. A feature's types, settings class, interfaces, and extension methods sit together. The namespace is the folder (`Core/YouTube/Metadata` is `HeroesReplay.Core.YouTube.Metadata`). `HeroesReplay.Tests/Unit/<Slice>` mirrors the slice names.
+
+| Slice | Owns |
+| --- | --- |
+| `Analysis` (`Calculators`, `Reports`) | Replay timeline, focus calculators, `Focus`, `Panel`, kill streaks, calculator and weight settings |
+| `Spectating` (`Capture`, `Clock/{Memory,Ocr,Hybrid}`, `Reports`) | The live spectator loop, game input, session holds, the HUD clock, frame capture |
+| `GameClient` | Launching the right Heroes build, Battle.net, HeroesSwitcher, firewall, `Variables.txt`, client and process settings |
+| `Replays` (`Context`) | Replay providers and loaders, `LoadedReplay`, the per-replay context folder |
+| `Requests` | Twitch request queue, leases, played ids, reward request models |
+| `HeroesProfile` | Heroes Profile API, replay listing, patch index, rank enrichment |
+| `HeroesData` | heroes-data2 hero and unit catalog |
+| `Twitch` (`Predictions`, `Rewards`, `RedeemedRewards`, `ChatMessages`) | Chat bot, predictions and their ledger, channel-point rewards |
+| `TwitchExtension` | Heroes Profile Twitch extension payloads |
+| `Obs` | OBS websocket control, recording, report scenes |
+| `YouTube` (`Metadata`, `Publication`, `Playlists`, `Search`, `Outbox`) | Upload, titles and descriptions, publication budget, playlists, duplicate lookup |
+| `MediaPolicy`, `Clips`, `Retention` | What gets recorded and uploaded, pentakill clips, disk cleanup |
+| `Connectivity`, `ServiceHost`, `SelfUpdate`, `Status` | Outage handling, the four service processes, release updates, `status.json` |
+| `Shared` | Types used across slices: `Map`, `Hero`, `GameType`, `GameRank`, `EnglishMapNames`, `DurableFile`, resilience and secrets helpers |
+| `Configuration` | `AppSettings` (the root that binds every slice's settings) and `LocationSettings` |
+
+Put a new type in the slice that uses it. Move it to `Shared` only when two or more slices need it.
+
 ## Before editing
 
 1. Load the matching skill under `.grok/skills/` (HeroesReplay skills and the vendored official .NET skills).

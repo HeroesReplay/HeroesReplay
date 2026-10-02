@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using HeroesReplay.Core.Services.YouTube;
-using HeroesReplay.Core.Services.YouTube.Outbox;
+using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Outbox;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube;
