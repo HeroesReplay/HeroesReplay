@@ -441,7 +441,9 @@ public class YouTubeUploader : IYouTubeUploader
         bool resume = UploadAttemptIds.IsSessionUri(dispatched.Manifest?.SessionUri);
         if (!resume)
         {
-            quotaUnits.SpendUpload(YouTubeQuotaUnits.VideoInsert, DateTimeOffset.UtcNow);
+            Bookkeep(() =>
+                quotaUnits.SpendUpload(YouTubeQuotaUnits.VideoInsert, DateTimeOffset.UtcNow)
+            );
         }
 
         IUploadProgress result;
@@ -471,7 +473,7 @@ public class YouTubeUploader : IYouTubeUploader
             if (YouTubeListQuota.IsExhausted(ex))
             {
                 DateTimeOffset now = DateTimeOffset.UtcNow;
-                quotaUnits.PauseLibrary(YouTubeListQuota.ResumeAt(now), now);
+                Bookkeep(() => quotaUnits.PauseLibrary(YouTubeListQuota.ResumeAt(now), now));
             }
 
             logger.LogError(
@@ -526,9 +528,11 @@ public class YouTubeUploader : IYouTubeUploader
             insertsToday++;
             lastInsertUtc = DateTimeOffset.UtcNow;
             RememberUploaded(entry);
-            YouTubeLibraryRecord.Append(
-                YouTubeLibraryRecord.PathFor(settings.Location?.DataDirectory),
-                YouTubeLibraryRecord.FromEntry(entry, lastInsertUtc.Value)
+            Bookkeep(() =>
+                YouTubeLibraryRecord.Append(
+                    YouTubeLibraryRecord.PathFor(settings.Location?.DataDirectory),
+                    YouTubeLibraryRecord.FromEntry(entry, lastInsertUtc.Value)
+                )
             );
             if (
                 UploadVisibility.ReconcileUntilPublic(
@@ -1051,6 +1055,22 @@ public class YouTubeUploader : IYouTubeUploader
             "Recorded YouTube upload for replay {ReplayId}. Later spectates will not record it again.",
             replayId.Value
         );
+    }
+
+    /// <summary>
+    /// The quota units and the library record never stop an upload. A file that stays
+    /// locked is logged and the upload goes on.
+    /// </summary>
+    private void Bookkeep(Action write)
+    {
+        try
+        {
+            write();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not update the YouTube quota units or library record.");
+        }
     }
 
     private void DeleteRecording(string path)
