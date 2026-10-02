@@ -134,7 +134,9 @@ public class PublicationAdmitTests
     [Theory]
     [InlineData(ReplayMediaPriority.Notable)]
     [InlineData(ReplayMediaPriority.HighSkill)]
-    public void Decide_AdmitsCuratedNotableAndHighSkillUnderTheCap(ReplayMediaPriority priority)
+    public void Decide_AdmitsCuratedNotableAndHighSkillAndSchedulesAFullDay(
+        ReplayMediaPriority priority
+    )
     {
         PublicationAdmitResult under = PublicationAdmit.Decide(
             Decision(
@@ -155,10 +157,28 @@ public class PublicationAdmitTests
             PublicationSchedule.MaxPublicPerDay
         );
 
+        PublicationAdmitResult atCapWithoutScheduling = PublicationAdmit.Decide(
+            Decision(
+                ReplayPublicationMode.Curated,
+                priority,
+                true,
+                ReplayMediaReason.EligibleCurated
+            ),
+            PublicationSchedule.MaxPublicPerDay,
+            new ReplayMediaPolicySettings
+            {
+                RecordingMode = ReplayRecordingMode.All,
+                PublicationMode = ReplayPublicationMode.Curated,
+                MaxPublishAhead = TimeSpan.Zero,
+            }
+        );
+
         Assert.True(under.Allow);
         Assert.Equal(ReplayMediaReason.EligibleCurated, under.Reason);
-        Assert.False(atCap.Allow);
-        Assert.Equal(ReplayMediaReason.NotSelected, atCap.Reason);
+        Assert.True(atCap.Allow);
+        Assert.Equal(ReplayMediaReason.EligibleCurated, atCap.Reason);
+        Assert.False(atCapWithoutScheduling.Allow);
+        Assert.Equal(ReplayMediaReason.NotSelected, atCapWithoutScheduling.Reason);
     }
 
     [Fact]

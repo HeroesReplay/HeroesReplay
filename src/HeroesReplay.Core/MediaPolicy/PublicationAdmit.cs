@@ -8,7 +8,8 @@ public readonly record struct PublicationAdmitResult(bool Allow, string Reason);
 /// <summary>
 /// Curated ordinary matches stay local. An ordinary match older than the configured
 /// ordinary max age stays local even in AllEligible. Notable and high-skill matches
-/// are admitted only while the rolling day is under the publication cap. A requested
+/// are admitted and scheduled for a later slot when the day is full; with
+/// MaxPublishAhead 0 they are admitted only while the day is under the cap. A requested
 /// match stays eligible for a later send.
 /// </summary>
 public static class PublicationAdmit
@@ -82,7 +83,11 @@ public static class PublicationAdmit
             return Withhold(ReplayMediaReason.NotSelected);
         }
 
-        if (alreadyPublishedInWindow >= dayCap)
+        // With a publish horizon the uploader schedules a full day onto a later slot (#136),
+        // so a notable or high-skill match is only dropped when scheduling is off.
+        TimeSpan publishAhead =
+            settings == null ? PublicationSchedule.PublishAhead : settings.MaxPublishAhead;
+        if (publishAhead <= TimeSpan.Zero && alreadyPublishedInWindow >= dayCap)
         {
             return Withhold(ReplayMediaReason.NotSelected);
         }
