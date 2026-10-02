@@ -2,7 +2,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.YouTube.Playlists;
 using Xunit;
 
-namespace HeroesReplay.Tests.Unit.YouTube;
+namespace HeroesReplay.Tests.Unit.YouTube.Playlists;
 
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class YouTubeVideoFactsTests
@@ -87,5 +87,57 @@ public class YouTubeVideoFactsTests
         Assert.False(YouTubeVideoFacts.NeedsRank(video));
         video.GameVersion = "2.57.0.98304";
         Assert.True(video.IsResolved);
+    }
+
+    [Fact]
+    public void Read_CurrentTemplateKeepsTheDraftNoteAndTheNamedPlayer()
+    {
+        YouTubeLibraryVideo video = YouTubeVideoFacts.Read(
+            "v",
+            "Illidan focus - Dragon Shire - Storm League - Diamond 3 - No healer - 65550001",
+            "Twitch: https://twitch.tv/saltysadism\r\nFull match.\r\nReplay ID: 65550001\r\nBuild: 2.57.0.98304\r\nMap: Dragon Shire\r\nMode: Storm League\r\nRank: Diamond 3\r\nFeatured: Illidan\r\nDraft: No healer\r\nFeaturing: Xal'atath",
+            "public"
+        );
+
+        Assert.True(video.IsResolved);
+        Assert.Equal("No healer", video.Draft);
+        Assert.Equal("Illidan", video.FocusHero);
+        Assert.True(video.IsViewerReview);
+    }
+
+    [Fact]
+    public void Read_ANewHeroIsNotANamedPlayer()
+    {
+        YouTubeLibraryVideo video = YouTubeVideoFacts.Read(
+            "v",
+            "Ft. Xal'atath - Volskaya Foundry - Storm League - Diamond - 65389750",
+            "Replay ID: 65389750\nBuild: 2.57.0.98304\nFeaturing: Xal'atath\nRequested by: viewer",
+            "public"
+        );
+
+        Assert.Null(video.FocusHero);
+        Assert.Null(video.Draft);
+        Assert.False(video.IsViewerReview);
+    }
+
+    [Fact]
+    public void Learn_FillsOnlyWhatTheRecordLacks()
+    {
+        var known = new YouTubeLibraryVideo
+        {
+            VideoId = "v",
+            Kind = YouTubeLibraryRecord.Full,
+            Draft = "Double tank",
+        };
+        var shown = new YouTubeLibraryVideo { Draft = "No healer", FocusHero = "Uther" };
+
+        Assert.True(YouTubeVideoFacts.Learn(known, shown));
+        Assert.False(YouTubeVideoFacts.Learn(known, shown));
+        Assert.Equal("Double tank", known.Draft);
+        Assert.Equal("Uther", known.FocusHero);
+
+        var clip = new YouTubeLibraryVideo { VideoId = "c", Kind = YouTubeLibraryRecord.Clip };
+        Assert.False(YouTubeVideoFacts.Learn(clip, shown));
+        Assert.Null(clip.FocusHero);
     }
 }
