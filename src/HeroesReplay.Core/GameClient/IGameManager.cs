@@ -19,4 +19,7 @@ public interface IGameManager
     void ReleaseClientAfterDefer();
 
     MatchOutcome LastOutcome { get; }
+
+    /// <summary>The last session read the match clock. False after a hold.</summary>
+    bool LastMatchClockSeen { get; }
 }

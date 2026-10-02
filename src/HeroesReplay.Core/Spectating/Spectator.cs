@@ -143,6 +143,8 @@ public class Spectator : ISpectator
 
     public void RecordHold(ClientHoldReason hold)
     {
+        // A held session never reached the clock. Do not report the last match's clock as this one's.
+        matchClockSeen = false;
         outcome = MatchCompletion.FromHold(hold);
     }
 

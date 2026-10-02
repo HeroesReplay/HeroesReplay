@@ -350,6 +350,8 @@ public class GameManager : IGameManager
 
     public MatchOutcome LastOutcome => spectator.Outcome;
 
+    public bool LastMatchClockSeen => spectator.MatchClockSeen;
+
     public void ReleaseClientAfterDefer()
     {
         logger.LogWarning(

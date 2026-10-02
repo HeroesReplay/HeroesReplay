@@ -609,7 +609,11 @@ public static class ServiceSupervisor
             }
 
             output.WriteLine($"  {role.Role, -9}{state, -9}{string.Join(", ", facts)}");
-            output.WriteLine($"{"", 20}{role.Cause}");
+            output.WriteLine(
+                string.IsNullOrWhiteSpace(role.CauseCode)
+                    ? $"{"", 20}{role.Cause}"
+                    : $"{"", 20}{role.Cause} [{role.CauseCode}]"
+            );
             if (!string.IsNullOrWhiteSpace(role.Remediation))
             {
                 output.WriteLine($"{"", 20}Fix: {role.Remediation}");
