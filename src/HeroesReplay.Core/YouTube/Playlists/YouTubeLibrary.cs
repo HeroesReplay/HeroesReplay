@@ -139,6 +139,8 @@ public class YouTubeLibrary : IYouTubeLibrary
             Dictionary<string, YouTubeLibraryVideo> record = YouTubeLibraryRecord.Read(recordPath);
             await ListUploadsAsync(index, record, recordPath, budget, pass, now, cancellationToken)
                 .ConfigureAwait(false);
+            await RefreshScheduledAsync(record, recordPath, budget, now, cancellationToken)
+                .ConfigureAwait(false);
             await ResolveAsync(index, record, recordPath, pass, now, cancellationToken)
                 .ConfigureAwait(false);
             index.Save(indexPath);
@@ -178,6 +180,55 @@ public class YouTubeLibrary : IYouTubeLibrary
             pass.UnitsSpent
         );
         return pass;
+    }
+
+    /// <summary>
+    /// A scheduled upload can fall past the uploads page the pass reads before it goes public.
+    /// Recorded videos whose publish time has passed (within <see cref="ScheduledLookback"/>) and
+    /// are not public yet get their privacy by id, 50 per call, so they are filed wherever they sit.
+    /// </summary>
+    internal static readonly TimeSpan ScheduledLookback = TimeSpan.FromDays(30);
+
+    private async Task RefreshScheduledAsync(
+        Dictionary<string, YouTubeLibraryVideo> record,
+        string recordPath,
+        Budget budget,
+        DateTimeOffset now,
+        CancellationToken cancellationToken
+    )
+    {
+        List<YouTubeLibraryVideo> due = record
+            .Values.Where(video =>
+                video.PublishAt is DateTimeOffset at
+                && at <= now
+                && at >= now - ScheduledLookback
+                && !string.Equals(video.PrivacyStatus, "public", StringComparison.Ordinal)
+            )
+            .OrderBy(video => video.PublishAt)
+            .ToList();
+        foreach (YouTubeLibraryVideo[] batch in due.Chunk(50))
+        {
+            if (!budget.TrySpend(YouTubeQuotaUnits.List))
+            {
+                return;
+            }
+
+            IReadOnlyDictionary<string, string> privacy = await playlists
+                .PrivacyAsync(batch.Select(video => video.VideoId).ToList(), cancellationToken)
+                .ConfigureAwait(false);
+            foreach (YouTubeLibraryVideo video in batch)
+            {
+                if (
+                    privacy.TryGetValue(video.VideoId, out string status)
+                    && !string.IsNullOrWhiteSpace(status)
+                    && !string.Equals(video.PrivacyStatus, status, StringComparison.Ordinal)
+                )
+                {
+                    video.PrivacyStatus = status;
+                    YouTubeLibraryRecord.Append(recordPath, video);
+                }
+            }
+        }
     }
 
     private async Task ListUploadsAsync(

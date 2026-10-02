@@ -574,6 +574,65 @@ public sealed class YouTubeLibraryTests : IDisposable
     }
 
     [Fact]
+    public async Task RunOnce_ScheduledVideoPastItsPublishTimeIsCheckedByIdAndFiled()
+    {
+        YouTubeLibraryRecord.Append(
+            YouTubeLibraryRecord.PathFor(directory),
+            new YouTubeLibraryVideo
+            {
+                VideoId = "v-old-sched",
+                ReplayId = 6,
+                Kind = YouTubeLibraryRecord.Full,
+                Map = "Sky Temple",
+                Mode = "Quick Match",
+                GameVersion = "2.57.0.98304",
+                PrivacyStatus = "private",
+                PublishAt = Noon.AddHours(-2),
+            }
+        );
+        var client = new FakeClient();
+        client.Privacy["v-old-sched"] = "public";
+        YouTubeLibrary library = Library(client);
+
+        YouTubeLibraryPass pass = await library.RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Equal(new[] { "v-old-sched" }, Assert.Single(client.PrivacyCalls));
+        Assert.Contains(pass.Planned, item => item.PlaylistTitle == "Sky Temple");
+        Assert.Equal(
+            "public",
+            YouTubeLibraryRecord
+                .Read(YouTubeLibraryRecord.PathFor(directory))["v-old-sched"]
+                .PrivacyStatus
+        );
+    }
+
+    [Fact]
+    public async Task RunOnce_ScheduledVideoNotYetDueIsNotLookedUp()
+    {
+        YouTubeLibraryRecord.Append(
+            YouTubeLibraryRecord.PathFor(directory),
+            new YouTubeLibraryVideo
+            {
+                VideoId = "v-future",
+                ReplayId = 7,
+                Kind = YouTubeLibraryRecord.Full,
+                Map = "Sky Temple",
+                Mode = "Quick Match",
+                GameVersion = "2.57.0.98304",
+                PrivacyStatus = "private",
+                PublishAt = Noon.AddHours(3),
+            }
+        );
+        var client = new FakeClient();
+        YouTubeLibrary library = Library(client);
+
+        YouTubeLibraryPass pass = await library.RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Empty(client.PrivacyCalls);
+        Assert.Empty(pass.Planned);
+    }
+
+    [Fact]
     public async Task RunOnce_PrivateUploadIsFiledOnceTheListingSeesItPublic()
     {
         YouTubeLibraryRecord.Append(
@@ -869,6 +928,22 @@ public sealed class YouTubeLibraryTests : IDisposable
         {
             Calls++;
             return Task.FromResult(new YouTubePlaylistsPage { Playlists = Existing.ToList() });
+        }
+
+        public Dictionary<string, string> Privacy { get; } = new();
+        public List<IReadOnlyList<string>> PrivacyCalls { get; } = new();
+
+        public Task<IReadOnlyDictionary<string, string>> PrivacyAsync(
+            IReadOnlyList<string> videoIds,
+            CancellationToken cancellationToken
+        )
+        {
+            Calls++;
+            PrivacyCalls.Add(videoIds);
+            IReadOnlyDictionary<string, string> found = videoIds
+                .Where(Privacy.ContainsKey)
+                .ToDictionary(id => id, id => Privacy[id]);
+            return Task.FromResult(found);
         }
 
         public Task<string> CreateAsync(string title, CancellationToken cancellationToken)

@@ -89,7 +89,7 @@ public static class PublicationSchedule
     public const int MaxSharedHeroes = 4;
     public static readonly TimeSpan OrdinaryMaxAge = TimeSpan.FromHours(72);
     public static readonly TimeSpan DiversityCooldown = TimeSpan.FromHours(8);
-    public static readonly TimeSpan PublishAhead = TimeSpan.FromDays(7);
+    public static readonly TimeSpan PublishAhead = TimeSpan.FromDays(14);
 
     public static PublicationDecision Decide(
         bool publicListing,
