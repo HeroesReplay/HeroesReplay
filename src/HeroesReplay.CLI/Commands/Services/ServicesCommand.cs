@@ -75,24 +75,28 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "stop",
-            "Ask the recorded processes to shut down, kill any still running after 20 seconds, and close Heroes of the Storm."
+            "Ask the recorded processes to shut down, kill any still running after 20 seconds, and close Heroes of the Storm. Exits 1 unless every role exited, the game closed, and OBS is not streaming."
         );
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
-                int code = ServiceSupervisor.Stop(
+                ServiceStopResult result = ServiceSupervisor.Stop(
                     ServiceLockStore.DefaultPath,
-                    ProcessNameOrNull,
-                    Kill,
-                    () => ServiceStopFile.Request(),
-                    TimeSpan.FromSeconds(20),
-                    Thread.Sleep,
-                    () => ServiceStopFile.Clear(),
-                    StopSpectatedGame,
-                    ServiceProcessProbe.TryFromProcess,
-                    ObsServiceStop.DelegateToSpectator
+                    new ServiceShutdown
+                    {
+                        ProcessNameOrNull = ProcessNameOrNull,
+                        Probe = ServiceProcessProbe.TryFromProcess,
+                        Kill = Kill,
+                        RequestGracefulStop = () => ServiceStopFile.Request(),
+                        GracefulWait = ServiceShutdown.DefaultGracefulWait,
+                        Wait = Thread.Sleep,
+                        ClearStopFile = () => ServiceStopFile.Clear(),
+                        CloseGame = StopSpectatedGame,
+                        ConfirmStream = ObsServiceStop.DelegateToSpectator,
+                        ReadStream = ServiceStreamProbe.Read,
+                    }
                 );
-                return Task.FromResult(code);
+                return Task.FromResult(result.ExitCode);
             }
         );
         return command;
@@ -284,22 +288,36 @@ public class ServicesCommand : Command
 
     private static string PsQuote(string value) => "'" + (value ?? "").Replace("'", "''") + "'";
 
-    private static void StopSpectatedGame()
+    private const string GameProcessName = "HeroesOfTheStorm_x64";
+
+    private static bool StopSpectatedGame()
     {
-        foreach (Process game in Process.GetProcessesByName("HeroesOfTheStorm_x64"))
+        foreach (Process game in Process.GetProcessesByName(GameProcessName))
         {
-            try
+            using (game)
             {
-                game.Kill(entireProcessTree: true);
-                Console.WriteLine($"Stopped Heroes of the Storm pid {game.Id}.");
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine(
-                    $"Could not stop Heroes of the Storm pid {game.Id}: {e.Message}"
-                );
+                try
+                {
+                    game.Kill(entireProcessTree: true);
+                    game.WaitForExit(5000);
+                    Console.WriteLine($"Stopped Heroes of the Storm pid {game.Id}.");
+                }
+                catch (Exception e)
+                {
+                    Console.Error.WriteLine(
+                        $"Could not stop Heroes of the Storm pid {game.Id}: {e.Message}"
+                    );
+                }
             }
         }
+
+        Process[] left = Process.GetProcessesByName(GameProcessName);
+        foreach (Process game in left)
+        {
+            game.Dispose();
+        }
+
+        return left.Length == 0;
     }
 
     private static void Kill(int pid)

@@ -630,21 +630,26 @@ public class ObsDesiredStateTests
         {
             ObsShutdownPlan seen = null;
             int kills = 0;
-            int code = ServiceSupervisor.Stop(
-                path,
-                _ => null,
-                _ => kills++,
-                requestGracefulStop: () => { },
-                gracefulWait: TimeSpan.Zero,
-                wait: _ => { },
-                confirmStream: plan =>
-                {
-                    seen = plan;
-                    Assert.True(plan.StopStream);
-                    Assert.False(plan.CloseProcess);
-                    return ObsStreamResult.ConfirmedInactive();
-                }
-            );
+            int code = ServiceSupervisor
+                .Stop(
+                    path,
+                    new ServiceShutdown
+                    {
+                        ProcessNameOrNull = _ => null,
+                        Kill = _ => kills++,
+                        RequestGracefulStop = () => { },
+                        GracefulWait = TimeSpan.Zero,
+                        Wait = _ => { },
+                        ConfirmStream = plan =>
+                        {
+                            seen = plan;
+                            Assert.True(plan.StopStream);
+                            Assert.False(plan.CloseProcess);
+                            return ObsStreamResult.ConfirmedInactive();
+                        },
+                    }
+                )
+                .ExitCode;
 
             Assert.Equal(0, code);
             Assert.NotNull(seen);
