@@ -28,6 +28,7 @@ internal readonly record struct StableClockModule(
 public sealed class StableMatchClock : IDisposable
 {
     private const double MaxCoherentStepSeconds = 8;
+    private static readonly TimeSpan RediscoverAfter = TimeSpan.FromSeconds(10);
 
     private IntPtr handle;
     private int attachedPid;
@@ -45,6 +46,7 @@ public sealed class StableMatchClock : IDisposable
     private float lastScale;
     private double lastOkSeconds = double.NaN;
     private DateTimeOffset lastOkChange;
+    private DateTimeOffset rediscoverAt;
     private string attachReason = "no-process";
     private ClockTelemetryReport lastReport;
     private int telemetryEmissions;
@@ -102,7 +104,7 @@ public sealed class StableMatchClock : IDisposable
         }
 
         UseModule(module);
-        if (!discovered)
+        if (!discovered || (tickRva == 0 && UtcNow() >= rediscoverAt))
         {
             ReportTelemetry(attachReason);
             Discover(read);
@@ -262,6 +264,7 @@ public sealed class StableMatchClock : IDisposable
         moduleSize = module.Size;
         version = fileVersion;
         discovered = false;
+        rediscoverAt = default;
         located = false;
         lastReport = default;
         DiscoveryTelemetry = default;
@@ -276,6 +279,8 @@ public sealed class StableMatchClock : IDisposable
     private void Discover(Func<long, byte[], bool> read)
     {
         discovered = true;
+        // A client still unpacking its code has no pattern yet. A miss is scanned again later.
+        rediscoverAt = UtcNow() + RediscoverAfter;
         located = false;
         tickRva = 0;
         speedRva = 0;
@@ -570,6 +575,7 @@ public sealed class StableMatchClock : IDisposable
         tickRva = 0;
         speedRva = 0;
         discovered = false;
+        rediscoverAt = default;
         located = false;
         hasSample = false;
         lastTicks = 0;

@@ -304,6 +304,30 @@ public class StableMatchClockTests
     }
 
     [Fact]
+    public void Read_CodeStillUnpacking_IsScannedAgainLater()
+    {
+        // The client's code is encrypted on disk. Read too early, it has no clock pattern yet.
+        MappedModule memory = MappedModule.Empty();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new(2026, 10, 2, 22, 0, 0, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        StableClockModule module = Module(25, SmallModule, "2.57.0.98304");
+
+        Assert.Equal("unsupported-build", clock.Read(module, memory.Read).Reason);
+        memory.AddPattern();
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 30);
+        Assert.Equal("unsupported-build", clock.Read(module, memory.Read).Reason);
+
+        now = now.AddSeconds(11);
+        clock.Read(module, memory.Read);
+        now = now.AddSeconds(1);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 31);
+
+        Assert.True(clock.Read(module, memory.Read).Ok);
+        Assert.Equal(PatternTickRva, clock.CandidateTickRva);
+    }
+
+    [Fact]
     public void Read_MenuZero_IsNotAMatchClock()
     {
         MappedModule memory = MappedModule.WithPattern();
@@ -391,12 +415,17 @@ public class StableMatchClockTests
         public static MappedModule WithPattern()
         {
             MappedModule module = Empty();
+            module.AddPattern();
+            return module;
+        }
+
+        public void AddPattern()
+        {
             int tickDisp = checked((int)(PatternTickRva - SectionRva - MatchClockPattern.MovdEnd));
             int speedDisp = checked(
                 (int)(PatternSpeedRva - SectionRva - MatchClockPattern.MulssEnd)
             );
-            module.Write(SectionRva, Pattern(tickDisp, speedDisp));
-            return module;
+            Write(SectionRva, Pattern(tickDisp, speedDisp));
         }
 
         public static MappedModule Empty()
