@@ -41,6 +41,8 @@ public class GameController : IGameController
 
     private readonly object controllerLock = new object();
     private readonly StableMatchClock matchClock = new();
+    private readonly LoadingScreenMemory loadingScreen = new();
+    private LoadingScreenSample lastScreen;
     private Process cachedProcess;
     private bool replayFileOpened;
     private string openedReplayPath;
@@ -574,10 +576,14 @@ public class GameController : IGameController
                 continue;
             }
 
-            bool loading = searchTerms.Any(word =>
-                !string.IsNullOrWhiteSpace(word)
-                && text.Contains(word, StringComparison.OrdinalIgnoreCase)
-            );
+            // Memory decides the map loading screen. The OCR'd words only count when it cannot.
+            bool? memoryLoading = IsMapLoadingInMemory();
+            bool loading =
+                memoryLoading
+                ?? searchTerms.Any(word =>
+                    !string.IsNullOrWhiteSpace(word)
+                    && text.Contains(word, StringComparison.OrdinalIgnoreCase)
+                );
             bool timer = await IsMatchClockRunning().ConfigureAwait(false);
             if (!recoveredLogin && !loading && !timer && ClientScreenText.IsLoginForm(text))
             {
@@ -620,7 +626,8 @@ public class GameController : IGameController
             }
 
             bool laterLoading =
-                !string.IsNullOrWhiteSpace(laterText)
+                memoryLoading == null
+                && !string.IsNullOrWhiteSpace(laterText)
                 && searchTerms.Any(word =>
                     !string.IsNullOrWhiteSpace(word)
                     && laterText.Contains(word, StringComparison.OrdinalIgnoreCase)
@@ -807,7 +814,9 @@ public class GameController : IGameController
                 )
             )
             {
-                ShowGameScene("loading screen");
+                ShowGameScene(
+                    memoryLoading == true ? "loading screen in memory" : "loading screen"
+                );
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
@@ -1296,6 +1305,41 @@ public class GameController : IGameController
         return StableMatchClock.IsRunning(first, second) ? second : null;
     }
 
+    /// <summary>
+    /// The map loading screen from memory, or null when memory cannot tell: an unsupported
+    /// build, or the boot splash before this client's first menu. Null reads the screen.
+    /// </summary>
+    private bool? IsMapLoadingInMemory()
+    {
+        Process process = GetGameProcess();
+        if (process == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            LoadingScreenSample sample = loadingScreen.Read(process);
+            if (sample.Screen != lastScreen.Screen || sample.MenuSeen != lastScreen.MenuSeen)
+            {
+                logger.LogInformation(
+                    "Client screen in memory is {Screen} ({Reason}, menu seen {MenuSeen}).",
+                    sample.Screen,
+                    sample.Reason,
+                    sample.MenuSeen
+                );
+                lastScreen = sample;
+            }
+
+            return sample.MapLoading;
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not read the loading screen from memory.");
+            return null;
+        }
+    }
+
     private TimeSpan? TryReadMatchClock()
     {
         Process process = GetGameProcess();
@@ -1327,10 +1371,16 @@ public class GameController : IGameController
             return false;
         }
 
-        // The match clock is memory only. OCR reads the loading screen, never the HUD timer.
+        // The match clock is memory only. The loading screen is memory first; OCR reads
+        // "WELCOME TO" only when memory cannot tell.
         if ((await TryReadRunningMatchClockAsync().ConfigureAwait(false)).HasValue)
         {
             return true;
+        }
+
+        if (IsMapLoadingInMemory() is bool loading)
+        {
+            return loading;
         }
 
         var parsed = replay?.Replay;
