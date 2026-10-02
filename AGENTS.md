@@ -74,6 +74,8 @@ One task at a time. A GitHub issue, or one concrete bug. Do not start a second t
 
 `develop` is the GitHub default branch. A clone checks it out, and branch work lands there. `master` is only for a production build: the win-x64 executable, prod settings, and the OBS collection. Merging to `master` is what publishes that release. Do not put day-to-day commits on `master`.
 
+Changes reach `develop` only through pull requests. The `ci` workflow (`.github/workflows/ci.yml`, job `build-and-test`: CSharpier check, Release build, Unit and Smoke tests) runs on every pull request and every push to `develop`, and the branch rules require it. Open the PR and turn on auto-merge (`gh pr merge <n> --auto --merge`); GitHub merges once `build-and-test` passes, and deletes the branch. A red check blocks the merge: fix it on the branch. Release by opening a pull request from `develop` to `master` when ASA-SERVER has proven the build; the same check runs there, and the merge runs `release.yml`.
+
 Stop at the earliest phase that can prove the change.
 
 1. **Unit.** Change the type that owns the behavior and call that type from a test. `dotnet test` is Unit only. This is enough for parse rules, reward titles, prediction decisions, queue locking, and probe decisions.
