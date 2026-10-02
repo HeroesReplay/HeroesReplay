@@ -116,6 +116,8 @@ public static class ServiceHealthClassifier
             WorkAgeSeconds = Seconds(workAge),
             WorkThresholdSeconds = (long)workThreshold.TotalSeconds,
             LastError = heartbeat?.LastError,
+            SessionsWithoutProgress = heartbeat?.SessionsWithoutProgress,
+            LastOutcome = heartbeat?.LastOutcome,
         };
 
         if (record == null)
@@ -181,6 +183,31 @@ public static class ServiceHealthClassifier
         string degradedFix =
             $"Check the {role} console, its log file, or the Aspire logs. If it does not recover, "
             + RestartStack;
+        int noProgressLimit = settings.NoProgressSessions(role);
+        if (
+            noProgressLimit > 0
+            && heartbeat.SessionsWithoutProgress is int misses
+            && misses >= noProgressLimit
+        )
+        {
+            string last = string.IsNullOrWhiteSpace(heartbeat.LastOutcome)
+                ? string.Empty
+                : $" The last one ended {heartbeat.LastOutcome}.";
+            return With(
+                health,
+                ServiceRoleState.Degraded,
+                $"{misses} replay sessions in a row ended without match progress (no match clock, no award screen; limit {noProgressLimit})."
+                    + last
+                    + LastError(heartbeat, now)
+                    + stopping,
+                $"Read the {role} log: each replay logs how it ended. A load timeout means the match clock never read. If it does not recover, "
+                    + RestartStack
+            ) with
+            {
+                CauseCode = ServiceHealthCodes.SpectateNoMatchProgress,
+            };
+        }
+
         if (sinceWork != null && sinceWork.Value > workThreshold)
         {
             string late =

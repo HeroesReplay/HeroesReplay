@@ -7,7 +7,7 @@ description: >
 
 # Release install
 
-Production runs the zip attached to a GitHub Release. It does not clone the repo and it does not run `dotnet build`. ASA-SERVER keeps compiling from the `develop` worktree. A push to `master` runs `.github/workflows/release.yml`, which tests, publishes `win-x64`, and uploads `heroesreplay-win-x64.zip`. GitVersion names the `master` release. The tag and `version.txt` are `v` plus that version, such as `v1.0.0`. `develop` stays a pre-release (`1.1.0-alpha.N`) and is not published.
+Production runs the zip attached to a GitHub Release. It does not clone the repo and it does not run `dotnet build`. ASA-SERVER keeps compiling from the `develop` worktree. A push to `master` runs `.github/workflows/release.yml`: Unit and Smoke tests, `tools/package-release.ps1` (publish `win-x64`, `obs/bundle.manifest`, `version.txt`, no secrets or `service.json`), `tools/verify-release.ps1`, then upload `heroesreplay-win-x64.zip`. `ci.yml` builds and checks the same zip on every pull request and push. The check extracts it, runs `heroesreplay.exe --help`, requires every bundle asset and what the update reads, and fails on `service.json`, `appsettings.secrets.json`, `client_secrets.json`, or a token file. GitVersion names the `master` release. The tag and `version.txt` are `v` plus that version, such as `v1.0.0`. `develop` stays a pre-release (`1.1.0-alpha.N`) and is not published.
 
 ## Layout
 

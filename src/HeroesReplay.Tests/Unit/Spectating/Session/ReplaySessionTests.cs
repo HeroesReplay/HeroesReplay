@@ -12,6 +12,21 @@ public class ReplaySessionTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 9, 29, 18, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(ReplaySessionKind.Played, false, true)]
+    [InlineData(ReplaySessionKind.AwardFinished, false, true)]
+    [InlineData(ReplaySessionKind.Unplayed, true, true)]
+    [InlineData(ReplaySessionKind.Unplayed, false, false)]
+    [InlineData(ReplaySessionKind.Held, false, false)]
+    public void MadeMatchProgress_IsTheClockOrTheAwardScreen(
+        ReplaySessionKind kind,
+        bool clockSeen,
+        bool expected
+    )
+    {
+        Assert.Equal(expected, ReplaySession.MadeMatchProgress(kind, clockSeen));
+    }
+
     [Fact]
     public void Classify_VerifiedCompletionConsumesTheReplay()
     {

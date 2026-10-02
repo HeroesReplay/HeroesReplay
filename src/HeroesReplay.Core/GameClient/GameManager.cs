@@ -252,7 +252,8 @@ public class GameManager : IGameManager
                 }
                 else
                 {
-                    UnpublishRecording(loadedReplay, stopped, allowsMedia);
+                    await UnpublishRecordingAsync(loadedReplay, stopped, allowsMedia)
+                        .ConfigureAwait(false);
                 }
             }
 
@@ -383,6 +384,8 @@ public class GameManager : IGameManager
             );
         }
     }
+
+    public bool LastMatchClockSeen => spectator.MatchClockSeen;
 
     public void ReleaseClientAfterDefer()
     {
@@ -948,7 +951,7 @@ public class GameManager : IGameManager
         recordingClock.Start();
     }
 
-    private void UnpublishRecording(
+    private async Task UnpublishRecordingAsync(
         LoadedReplay loadedReplay,
         ObsRecordingResult stopped,
         bool allowsMedia
@@ -973,7 +976,9 @@ public class GameManager : IGameManager
             ? "youtube-entry.json"
             : settings.YouTube.EntryFileName;
         bool removedEntry = TryDelete(Path.Combine(directory, entryName));
-        bool removedFile = TryDelete(RecordingOwnership.FileToDiscard(stopped, allowsMedia));
+        bool removedFile = await RecordingDiscard
+            .DeleteAsync(RecordingOwnership.FileToDiscard(stopped, allowsMedia), logger)
+            .ConfigureAwait(false);
         if (
             !removedEntry
             && !removedFile

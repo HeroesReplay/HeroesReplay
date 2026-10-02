@@ -67,13 +67,13 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 
 ## Role health
 
-Each role writes its ready file, `%LOCALAPPDATA%\HeroesReplay\ready\<nonce>.json`, when it is ready, then rewrites it every `ServiceHealth:HeartbeatInterval` (15 s) from a timer (`ServiceHeartbeat`). The file carries `role`, `version`, `executablePath`, `nonce`, `pid`, `readiness` (`ready`, `stopping` once the stop file or Ctrl+C reaches the role, `exited` when it left its loop without one), `readyAt`, `heartbeatAt`, `heartbeatIntervalSeconds`, `lastSuccessfulWorkAt`, and `lastError` (`message`, `at`). Error and critical logs become `lastError`, with tokens redacted.
+Each role writes its ready file, `%LOCALAPPDATA%\HeroesReplay\ready\<nonce>.json`, when it is ready, then rewrites it every `ServiceHealth:HeartbeatInterval` (15 s) from a timer (`ServiceHeartbeat`). The file carries `role`, `version`, `executablePath`, `nonce`, `pid`, `readiness` (`ready`, `stopping` once the stop file or Ctrl+C reaches the role, `exited` when it left its loop without one), `readyAt`, `heartbeatAt`, `heartbeatIntervalSeconds`, `lastSuccessfulWorkAt`, and `lastError` (`message`, `at`). Spectate also writes `sessionsWithoutProgress` and `lastOutcome`. Error and critical logs become `lastError`, with tokens redacted.
 
 Successful work is role-defined:
 
 | Role | Work | Default `ServiceHealth` threshold |
 | --- | --- | --- |
-| spectate | A spectate tick: the match clock advanced, or one pass of the replay loop ended | `SpectateWorkThreshold` 20 min |
+| spectate | Match progress: the match clock advanced, or a replay session reached the clock or the award screen. A deferred, held, timed-out, or failed session, an idle wait, and an outage pause are not work | `SpectateWorkThreshold` 20 min |
 | twitch | A Twitch reconcile: one prediction watcher pass (every second) | `TwitchWorkThreshold` 5 min |
 | download | A download pass (every 2 to 15 s) | `DownloadWorkThreshold` 15 min |
 | youtube | An upload pass: the pending drain, or the one-minute poll | `YouTubeWorkThreshold` 30 min |
@@ -83,12 +83,12 @@ Successful work is role-defined:
 | State | Code | Rule |
 | --- | --- | --- |
 | ready | `service.ready` | Alive, heartbeat fresh, work inside the threshold, no newer error |
-| degraded | `service.degraded` | Alive and heartbeating, but the last successful work (or `readyAt` before the first) is older than the role's threshold, or `lastError` is newer than it |
+| degraded | `service.degraded` | Alive and heartbeating, but the last successful work (or `readyAt` before the first) is older than the role's threshold, or `lastError` is newer than it. Spectate is also degraded, with `causeCode` `spectate.no_match_progress` and the last outcome in the cause, once `SpectateNoProgressSessions` (3) replay sessions in a row end without match progress |
 | stale | `service.stale` | Alive, but the heartbeat is older than `StaleAfterIntervals` (3) intervals, or missing |
 | stopped | `service.stopped` | Not in `services.json`, or exited after a stop request |
 | failed | `service.failed` | In `services.json`, gone, and no stop request was recorded |
 
-`--output json` prints `schemaVersion` (1), `ok`, `code` (the worst role: failed, stale, degraded, ready, stopped; `service.restart_budget_exhausted` wins over all of them), `message`, `environment`, `checkedAt`, `stopRequested`, `roles[]` (state, code, cause, remediation, pid, path, version, readiness, heartbeat and work ages with their limits, `lastError`, `logPath`, `restarts`), a `spectator` summary of `status.json`, and `supervisor`. It exits 1 when any role is failed, stale, or degraded.
+`--output json` prints `schemaVersion` (1), `ok`, `code` (the worst role: failed, stale, degraded, ready, stopped; `service.restart_budget_exhausted` wins over all of them), `message`, `environment`, `checkedAt`, `stopRequested`, `roles[]` (state, code, cause, `causeCode`, remediation, pid, path, version, readiness, heartbeat and work ages with their limits, `lastError`, `sessionsWithoutProgress`, `lastOutcome`, `logPath`, `restarts`), a `spectator` summary of `status.json`, and `supervisor`. It exits 1 when any role is failed, stale, or degraded.
 
 ## Role logs
 

@@ -89,6 +89,68 @@ public class ServiceHealthClassifierTests
         }
     }
 
+    [Theory]
+    [InlineData(2, ServiceRoleState.Ready)]
+    [InlineData(3, ServiceRoleState.Degraded)]
+    [InlineData(7, ServiceRoleState.Degraded)]
+    public void SpectateSessionsWithoutMatchProgress_DegradeAtTheLimit(
+        int sessions,
+        ServiceRoleState expected
+    )
+    {
+        ServiceReadyReport beat = Beat(
+            heartbeatAgo: TimeSpan.FromSeconds(3),
+            workAgo: TimeSpan.FromMinutes(1)
+        );
+        beat.SessionsWithoutProgress = sessions;
+        beat.LastOutcome = "ClientCrashed";
+
+        ServiceRoleHealth health = Classify("spectate", running: true, beat);
+
+        Assert.Equal(expected, health.State);
+        Assert.Equal(sessions, health.SessionsWithoutProgress);
+        Assert.Equal("ClientCrashed", health.LastOutcome);
+        if (expected == ServiceRoleState.Degraded)
+        {
+            Assert.Equal("service.degraded", health.Code);
+            Assert.Equal(ServiceHealthCodes.SpectateNoMatchProgress, health.CauseCode);
+            Assert.Contains($"{sessions} replay sessions in a row", health.Cause);
+            Assert.Contains("ended ClientCrashed", health.Cause);
+            Assert.Contains("load timeout", health.Remediation);
+        }
+        else
+        {
+            Assert.Null(health.CauseCode);
+        }
+    }
+
+    [Fact]
+    public void SpectateNoProgressSessions_IsConfigurable_AndOnlyForSpectate()
+    {
+        ServiceReadyReport beat = Beat(
+            heartbeatAgo: TimeSpan.FromSeconds(3),
+            workAgo: TimeSpan.FromMinutes(1)
+        );
+        beat.SessionsWithoutProgress = 5;
+        var settings = new ServiceHealthSettings { SpectateNoProgressSessions = 6 };
+
+        ServiceRoleHealth spectate = ServiceHealthClassifier.Classify(
+            "spectate",
+            Record("spectate", 70),
+            running: true,
+            beat,
+            stopRequested: false,
+            Now,
+            settings
+        );
+        ServiceRoleHealth download = Classify("download", running: true, beat);
+
+        Assert.Equal(ServiceRoleState.Ready, spectate.State);
+        Assert.Equal(ServiceRoleState.Ready, download.State);
+        Assert.Equal(3, Defaults.NoProgressSessions("spectate"));
+        Assert.Equal(0, Defaults.NoProgressSessions("download"));
+    }
+
     [Fact]
     public void StaleUsesTheIntervalTheRoleWrote()
     {
