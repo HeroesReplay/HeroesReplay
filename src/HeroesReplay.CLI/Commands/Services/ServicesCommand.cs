@@ -106,8 +106,17 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "status",
-            "Show which service processes are still running, plus the spectator status file."
+            "Classify each role as ready, degraded, stale, stopped, or failed from its heartbeat, with the cause and the fix, plus the spectator status file. Exits 1 when a role is failed, stale, or degraded."
         );
+        var output = new Option<string>("--output")
+        {
+            Description =
+                "text (default) or json. JSON is a stable envelope: schemaVersion, ok, code (service.ready, service.degraded, service.stale, service.stopped, service.failed), roles[].",
+            DefaultValueFactory = _ => "text",
+        };
+        output.AcceptOnlyFromAmong("text", "json");
+        output.Aliases.Add("-o");
+        command.Options.Add(output);
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
@@ -115,7 +124,14 @@ public class ServicesCommand : Command
                     ServiceLockStore.DefaultPath,
                     ProcessNameOrNull,
                     new SpectatorStatusStore().TryReadShared(),
-                    ServiceProcessProbe.TryFromProcess
+                    ServiceProcessProbe.TryFromProcess,
+                    new ServiceStatusQuery
+                    {
+                        Output = ServiceStatusQuery.ParseOutput(parseResult.GetValue(output)),
+                        Settings = ServiceCollectionExtensions.LoadServiceHealthSettings(),
+                        StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
+                        Environment = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV"),
+                    }
                 );
                 return Task.FromResult(code);
             }

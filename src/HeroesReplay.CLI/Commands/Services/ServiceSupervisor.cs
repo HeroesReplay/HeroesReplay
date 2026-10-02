@@ -351,58 +351,110 @@ public static class ServiceSupervisor
         }
     }
 
+    /// <summary>
+    /// Classify every role as ready, degraded, stale, stopped, or failed from the lock, the
+    /// process table, and each role's heartbeat. Exit code 0 unless a role is failed, stale, or
+    /// degraded.
+    /// </summary>
     public static int Status(
         string lockPath,
         Func<int, string> processNameOrNull,
         SpectatorStatus spectator,
-        Func<int, ServiceProcessProbe> probeOrNull = null
+        Func<int, ServiceProcessProbe> probeOrNull = null,
+        ServiceStatusQuery query = null
     )
     {
-        ServiceLock snapshot = ServiceLockStore.TryLoad(lockPath);
-        int expected = snapshot?.Processes?.Count ?? 0;
-        List<ServiceProcessRecord> living = ServiceProcessPlan.StillRunning(
-            snapshot?.Processes,
+        query ??= new ServiceStatusQuery();
+        ServiceStatusReport report = ServiceHealthClassifier.Build(
+            ServiceLockStore.TryLoad(lockPath),
             processNameOrNull,
-            probeOrNull
+            probeOrNull,
+            query.ReadHeartbeat ?? (record => ServiceReadyFile.TryRead(record)),
+            query.StopRequested?.Invoke() == true,
+            (query.Time ?? TimeProvider.System).GetUtcNow(),
+            query.Settings ?? new ServiceHealthSettings(),
+            query.Environment,
+            spectator
         );
-        if (expected == 0)
+        TextWriter output = query.Out ?? Console.Out;
+        if (query.Output == ServiceStatusOutput.Json)
         {
-            Console.WriteLine("Services: not running.");
+            output.WriteLine(report.ToJson());
         }
         else
         {
-            Console.WriteLine($"Services: {living.Count} of {expected} still running.");
-            foreach (ServiceProcessRecord record in living)
+            WriteStatusText(output, report, spectator);
+        }
+
+        return report.ExitCode;
+    }
+
+    public static void WriteStatusText(
+        TextWriter output,
+        ServiceStatusReport report,
+        SpectatorStatus spectator
+    )
+    {
+        output.WriteLine($"Services: {report.Message} [{report.Code}]");
+        if (report.StopRequested)
+        {
+            output.WriteLine("  A stop request is pending (services.stop).");
+        }
+
+        foreach (ServiceRoleHealth role in report.Roles)
+        {
+            string state = role.State.ToString().ToLowerInvariant();
+            if (!role.Expected)
             {
-                Console.WriteLine($"  {record.Name} pid {record.Pid} ({record.Arguments})");
+                output.WriteLine($"  {role.Role, -9}{state, -9}{role.Cause}");
+                continue;
+            }
+
+            var facts = new List<string> { $"pid {role.Pid}" };
+            if (role.HeartbeatAgeSeconds is long beat)
+            {
+                facts.Add(
+                    $"heartbeat {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(beat))} ago"
+                );
+            }
+
+            if (role.WorkAgeSeconds is long work)
+            {
+                facts.Add(
+                    $"last {ServiceHealthSettings.WorkName(role.Role)} {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(work))} ago"
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(role.Version))
+            {
+                facts.Add("version " + role.Version);
+            }
+
+            output.WriteLine($"  {role.Role, -9}{state, -9}{string.Join(", ", facts)}");
+            output.WriteLine($"{"", 20}{role.Cause}");
+            if (!string.IsNullOrWhiteSpace(role.Remediation))
+            {
+                output.WriteLine($"{"", 20}Fix: {role.Remediation}");
             }
         }
 
         if (spectator == null)
         {
-            Console.WriteLine("Spectator status: no snapshot.");
+            output.WriteLine("Spectator status: no snapshot.");
+            return;
         }
-        else
+
+        string obs = ObsStatus.Describe(spectator);
+        output.WriteLine(
+            $"Spectator status: phase={spectator.Phase} running={spectator.SpectatorRunning} stale={spectator.SnapshotStale} replay={spectator.ReplayId} map={spectator.Map} timer={spectator.Timer}"
+                + (obs == null ? "" : " " + obs)
+        );
+        if (spectator.CompletedReplayId.HasValue)
         {
-            string obs = ObsStatus.Describe(spectator);
-            Console.WriteLine(
-                $"Spectator status: phase={spectator.Phase} running={spectator.SpectatorRunning} stale={spectator.SnapshotStale} replay={spectator.ReplayId} map={spectator.Map} timer={spectator.Timer}"
-                    + (obs == null ? "" : " " + obs)
+            output.WriteLine(
+                $"Last completion: replay {spectator.CompletedReplayId} team {spectator.CompletedWinnerTeam} at {spectator.CompletedAt:O}"
             );
-            if (spectator.CompletedReplayId.HasValue)
-            {
-                Console.WriteLine(
-                    $"Last completion: replay {spectator.CompletedReplayId} team {spectator.CompletedWinnerTeam} at {spectator.CompletedAt:O}"
-                );
-            }
         }
-
-        if (expected == 0)
-        {
-            return 0;
-        }
-
-        return living.Count == expected ? 0 : 1;
     }
 
     private static void RequestStreamShutdown(Func<ObsShutdownPlan, ObsStreamResult> confirmStream)
