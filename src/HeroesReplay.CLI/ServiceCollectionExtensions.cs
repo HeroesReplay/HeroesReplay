@@ -25,6 +25,7 @@ using HeroesReplay.Core.Spectating.Clock;
 using HeroesReplay.Core.Spectating.Clock.Hybrid;
 using HeroesReplay.Core.Spectating.Clock.Memory;
 using HeroesReplay.Core.Spectating.Clock.Ocr;
+using HeroesReplay.Core.Spectating.Control;
 using HeroesReplay.Core.Spectating.Reports;
 using HeroesReplay.Core.Status;
 using HeroesReplay.Core.Twitch;

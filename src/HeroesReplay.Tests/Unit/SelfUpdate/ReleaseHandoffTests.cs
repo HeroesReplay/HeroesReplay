@@ -13,7 +13,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;

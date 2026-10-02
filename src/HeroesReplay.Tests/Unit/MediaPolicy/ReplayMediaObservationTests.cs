@@ -10,7 +10,7 @@ using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
-using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
 using Xunit;

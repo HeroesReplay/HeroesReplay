@@ -1,5 +1,5 @@
 using HeroesReplay.Core.Requests;
-using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Session;
 
 namespace HeroesReplay.Core.Twitch.Rewards;
 

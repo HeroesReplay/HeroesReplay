@@ -1,5 +1,5 @@
 using System;
-using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
 
 namespace HeroesReplay.Core.Twitch.Predictions;

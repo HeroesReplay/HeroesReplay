@@ -2,7 +2,7 @@ using System;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
-using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Session;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.MediaPolicy;
