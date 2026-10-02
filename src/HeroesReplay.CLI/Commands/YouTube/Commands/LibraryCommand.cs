@@ -15,7 +15,7 @@ public class LibraryCommand : Command
     public LibraryCommand()
         : base(
             "library",
-            "Run the YouTube library pass now: list the channel's uploads, record videos missing from Data\\youtube-library.jsonl (Heroes Profile fills a missing map, mode, rank, or build), and file them into map and patch playlists. The uploader runs the same pass at most every YouTube:LibraryInterval. Both share the daily quota units in Data\\youtube-quota-units.json, and only one process runs the pass at a time. Without --once this repeats the pass each LibraryInterval until stopped. Dry-run writes Data\\youtube-library-dry-run.json and does not call YouTube."
+            "Run the YouTube library pass now: list the channel's uploads, record videos missing from Data\\youtube-library.jsonl (Heroes Profile fills a missing map, mode, rank, or build), and file them into map and patch playlists. The uploader that services start launches runs the same pass at most every YouTube:LibraryInterval. Both share the daily quota units in Data\\youtube-quota-units.json, and only one process runs the pass at a time. Without --once this repeats the pass each LibraryInterval until stopped. Dry-run writes Data\\youtube-library-dry-run.json and does not call YouTube."
         )
     {
         var onceOption = new Option<bool>("--once")

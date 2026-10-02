@@ -19,12 +19,12 @@ public class SpectateHeroesProfileApiCommand : Command
         SetAction(
             async (parseResult, cancellationToken) =>
             {
-                await CommandAsync(cancellationToken);
+                return await CommandAsync(cancellationToken);
             }
         );
     }
 
-    protected async Task CommandAsync(CancellationToken cancellationToken)
+    protected async Task<int> CommandAsync(CancellationToken cancellationToken)
     {
         AspireDashboardHost.EnsureRunning();
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
@@ -35,6 +35,6 @@ public class SpectateHeroesProfileApiCommand : Command
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
         ServiceReadyFile.ReportFromEnvironment("spectate");
         ServiceReadyFile.ReportHeartbeatFromEnvironment();
-        await engine.RunAsync();
+        return await engine.RunAsync() ? 0 : 1;
     }
 }

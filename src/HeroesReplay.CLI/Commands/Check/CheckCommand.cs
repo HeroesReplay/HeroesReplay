@@ -356,6 +356,7 @@ public class CheckCommand : Command
             }
 
             string extra = string.Empty;
+            bool predictionsOk = true;
             if (settings.Twitch.EnablePredictions)
             {
                 try
@@ -365,6 +366,7 @@ public class CheckCommand : Command
                 }
                 catch (Exception e)
                 {
+                    predictionsOk = false;
                     extra =
                         " Predictions need channel:manage:predictions (Helix: " + e.Message + ").";
                 }
@@ -397,7 +399,7 @@ public class CheckCommand : Command
 
             return new CheckResult(
                 "twitch",
-                chatOk && rewardsOk,
+                chatOk && rewardsOk && predictionsOk,
                 $"Helix OK for {users.Users[0].DisplayName} ({users.Users[0].Id}).{extra}"
             );
         }

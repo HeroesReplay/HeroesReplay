@@ -96,7 +96,7 @@ public class ReleaseHandoffTests
 
         try
         {
-            await engine.RunAsync();
+            Assert.True(await engine.RunAsync());
         }
         finally
         {
@@ -109,6 +109,41 @@ public class ReleaseHandoffTests
         Assert.Equal(new int?[] { 101, 202 }, game.Spectated.ToArray());
         Assert.Equal(new[] { 101, 202 }, provider.SpectatedIds.ToArray());
         Assert.Empty(provider.Requeued);
+    }
+
+    [Fact]
+    public async Task UnexpectedEngineError_IsReportedSoSpectateExitsNonZero()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        var provider = new ScriptedReplays(continuesWhenEmpty: false);
+        provider.Enqueue(101);
+        var game = new RecordingGame();
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData { LoadError = new InvalidOperationException("no hero data") },
+            provider,
+            new CancellationTokenProvider(),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new IdleWatchdog(),
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false)
+        );
+
+        try
+        {
+            Assert.False(await engine.RunAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        Assert.Empty(game.Spectated);
     }
 
     [Fact]
@@ -714,7 +749,10 @@ public class ReleaseHandoffTests
 
         public UnitGroup GetUnitGroup(string unitName) => default;
 
-        public Task LoadDataAsync() => Task.CompletedTask;
+        public Exception LoadError { get; init; }
+
+        public Task LoadDataAsync() =>
+            LoadError == null ? Task.CompletedTask : Task.FromException(LoadError);
     }
 
     private sealed class IdleHeroesProfile : IHeroesProfileService

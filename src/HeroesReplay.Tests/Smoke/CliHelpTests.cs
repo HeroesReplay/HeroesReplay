@@ -134,7 +134,7 @@ public class CliHelpTests
         Assert.Contains(youtube.Subcommands, c => c.Name == "uploader");
         Assert.Contains(youtube.Subcommands, c => c.Name == "library");
         Command library = youtube.Subcommands.Single(c => c.Name == "library");
-        Assert.Contains("uploader runs the same pass", library.Description);
+        Assert.Contains("services start", library.Description);
         ParseResult once = root.Parse("youtube library --help");
         Assert.Empty(once.Errors);
     }

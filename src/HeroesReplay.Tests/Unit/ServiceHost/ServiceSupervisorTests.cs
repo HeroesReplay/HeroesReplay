@@ -316,17 +316,17 @@ public class ServiceSupervisorTests
                     },
                 }
             );
-            var killed = new List<int>();
-            int code = ServiceSupervisor.Stop(
-                path,
-                pid => pid == 50 ? "heroesreplay" : "explorer",
-                killed.Add,
-                requestGracefulStop: () => { },
-                gracefulWait: TimeSpan.Zero
-            );
+            var processes = new FakeProcesses(50);
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.ProcessNameOrNull = pid => pid == 51 ? "explorer" : processes.Name(pid);
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
 
-            Assert.Equal(0, code);
-            Assert.Equal(new[] { 50 }, killed);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(new[] { 50 }, processes.Killed);
+            Assert.Equal(
+                new[] { ServiceStopOutcome.Killed, ServiceStopOutcome.AlreadyExited },
+                result.Roles.Select(role => role.Outcome).ToArray()
+            );
             Assert.Null(ServiceLockStore.TryLoad(path));
         }
         finally
@@ -354,22 +354,26 @@ public class ServiceSupervisorTests
             int polls = 0;
             var killed = new List<int>();
             bool requested = false;
-            int code = ServiceSupervisor.Stop(
+            ServiceStopResult result = ServiceSupervisor.Stop(
                 path,
-                pid =>
+                new ServiceShutdown
                 {
-                    polls++;
-                    return polls < 3 ? "heroesreplay" : null;
-                },
-                killed.Add,
-                () => requested = true,
-                TimeSpan.FromSeconds(5),
-                _ => { }
+                    ProcessNameOrNull = pid =>
+                    {
+                        polls++;
+                        return polls < 3 ? "heroesreplay" : null;
+                    },
+                    Kill = killed.Add,
+                    RequestGracefulStop = () => requested = true,
+                    GracefulWait = TimeSpan.FromSeconds(5),
+                    Wait = _ => { },
+                }
             );
 
-            Assert.Equal(0, code);
+            Assert.Equal(0, result.ExitCode);
             Assert.True(requested);
             Assert.Empty(killed);
+            Assert.Equal(ServiceStopOutcome.Graceful, Assert.Single(result.Roles).Outcome);
             Assert.Null(ServiceLockStore.TryLoad(path));
         }
         finally
@@ -413,17 +417,13 @@ public class ServiceSupervisorTests
                 }
             );
             bool closedGame = false;
-            ServiceSupervisor.Stop(
-                path,
-                pid => null,
-                _ => { },
-                requestGracefulStop: () => { },
-                gracefulWait: TimeSpan.Zero,
-                wait: _ => { },
-                clearStopFile: () => { },
-                stopSpectatedGame: () => closedGame = true
-            );
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => closedGame = true;
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
             Assert.True(closedGame);
+            Assert.True(result.GameClosed);
+            Assert.Equal(0, result.ExitCode);
         }
         finally
         {
@@ -979,27 +979,300 @@ public class ServiceSupervisorTests
                 }
             );
             var killed = new List<int>();
-            int code = ServiceSupervisor.Stop(
+            ServiceStopResult result = ServiceSupervisor.Stop(
                 path,
-                pid => "heroesreplay",
-                killed.Add,
-                requestGracefulStop: () => { },
-                gracefulWait: TimeSpan.Zero,
-                probeOrNull: pid => new ServiceProcessProbe
+                new ServiceShutdown
                 {
-                    ExecutablePath = @"C:\other\heroesreplay.exe",
-                    StartedAt = started,
+                    ProcessNameOrNull = pid => "heroesreplay",
+                    Kill = killed.Add,
+                    RequestGracefulStop = () => { },
+                    GracefulWait = TimeSpan.Zero,
+                    Probe = pid => new ServiceProcessProbe
+                    {
+                        ExecutablePath = @"C:\other\heroesreplay.exe",
+                        StartedAt = started,
+                    },
                 }
             );
 
-            Assert.Equal(0, code);
+            Assert.Equal(0, result.ExitCode);
             Assert.Empty(killed);
+            Assert.Equal(ServiceStopOutcome.AlreadyExited, Assert.Single(result.Roles).Outcome);
             Assert.Null(ServiceLockStore.TryLoad(path));
         }
         finally
         {
             ServiceLockStore.Delete(path);
         }
+    }
+
+    [Fact]
+    public void Stop_ReportsGracefulKilledAlreadyExitedAndStillRunningPerRole()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 10, 11, 12, 13);
+            var processes = new FakeProcesses(10, 11, 13);
+            processes.Unkillable.Add(13);
+            int pauses = 0;
+            int streamReads = 0;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.FromSeconds(1));
+            shutdown.Wait = _ =>
+            {
+                pauses++;
+                processes.Exit(10);
+            };
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = () =>
+            {
+                streamReads++;
+                return ServiceStreamCheck.Inactive();
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Equal(
+                new[]
+                {
+                    "spectate pid 10: graceful.",
+                    "twitch pid 11: killed.",
+                    "download pid 12: already exited.",
+                    "youtube pid 13: still running. Kill failed: Access is denied.",
+                },
+                result.Roles.Select(role => role.Describe()).ToArray()
+            );
+            Assert.Equal(5, pauses);
+            Assert.Equal(new[] { 11, 13 }, processes.Killed);
+            Assert.Equal(0, streamReads);
+            Assert.Null(result.Stream);
+            Assert.Contains(result.Failures(), failure => failure.Contains("youtube pid 13"));
+            ServiceProcessRecord kept = Assert.Single(ServiceLockStore.TryLoad(path).Processes);
+            Assert.Equal(13, kept.Pid);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_KilledRoles_SucceedOnlyAfterTheGameClosedAndObsIsNotStreaming()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 20, 21);
+            var processes = new FakeProcesses(20, 21);
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = ServiceStreamCheck.Inactive;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.All(result.Roles, role => Assert.Equal(ServiceStopOutcome.Killed, role.Outcome));
+            Assert.True(result.GameClosed);
+            Assert.Equal(ServiceStreamState.Inactive, result.Stream.State);
+            Assert.Empty(result.Failures());
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_FailsWhenTheGameIsStillRunning()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 30);
+            ServiceShutdown shutdown = new FakeProcesses(30).Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => false;
+            shutdown.ReadStream = ServiceStreamCheck.NotRunning;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.False(result.GameClosed);
+            Assert.Contains(result.Failures(), failure => failure.Contains("Heroes of the Storm"));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_FailsWhenObsIsStillStreamingAfterTheRolesExited()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 40, 41);
+            var processes = new FakeProcesses(40, 41);
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.FromSeconds(5));
+            shutdown.RequestGracefulStop = () =>
+            {
+                processes.Exit(40);
+                processes.Exit(41);
+            };
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = ServiceStreamCheck.Active;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.All(
+                result.Roles,
+                role => Assert.Equal(ServiceStopOutcome.Graceful, role.Outcome)
+            );
+            Assert.Empty(processes.Killed);
+            Assert.Contains(result.Failures(), failure => failure.Contains("still streaming"));
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData(ServiceStreamState.NotRunning, 0)]
+    [InlineData(ServiceStreamState.Unreachable, 0)]
+    [InlineData(ServiceStreamState.Inactive, 0)]
+    [InlineData(ServiceStreamState.Active, 1)]
+    [InlineData(ServiceStreamState.Unknown, 1)]
+    public void Stop_ClosedOrUnreachableObsIsNotStreaming(ServiceStreamState state, int expected)
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 60);
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = () => new ServiceStreamCheck(state, "fake");
+
+            Assert.Equal(expected, ServiceSupervisor.Stop(path, shutdown).ExitCode);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_ObsReaderThatThrows_IsNotConfirmed()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.ReadStream = () => throw new InvalidOperationException("socket broke");
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Equal(ServiceStreamState.Unknown, result.Stream.State);
+            Assert.Contains("socket broke", result.Stream.Detail);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_KeepsTheTwentySecondGracefulBudgetBeforeKilling()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 70);
+            var processes = new FakeProcesses(70);
+            TimeSpan waited = TimeSpan.Zero;
+            var shutdown = new ServiceShutdown
+            {
+                ProcessNameOrNull = processes.Name,
+                Kill = pid =>
+                {
+                    Assert.Equal(TimeSpan.FromSeconds(20), waited);
+                    processes.Kill(pid);
+                },
+                RequestGracefulStop = () => { },
+                Wait = pause => waited += pause,
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(TimeSpan.FromSeconds(20), ServiceShutdown.DefaultGracefulWait);
+            Assert.Equal(TimeSpan.FromSeconds(20), waited);
+            Assert.Equal(ServiceStopOutcome.Killed, Assert.Single(result.Roles).Outcome);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    private static void SaveRoles(string path, params int[] pids)
+    {
+        string[] names = { "spectate", "twitch", "download", "youtube" };
+        var records = new List<ServiceProcessRecord>();
+        for (int index = 0; index < pids.Length; index++)
+        {
+            records.Add(new ServiceProcessRecord { Name = names[index], Pid = pids[index] });
+        }
+
+        ServiceLockStore.Save(
+            path,
+            new ServiceLock { StartedAt = DateTimeOffset.UtcNow, Processes = records }
+        );
+    }
+
+    /// <summary>Pids that are alive answer as heroesreplay. A kill ends them unless unkillable.</summary>
+    private sealed class FakeProcesses
+    {
+        private readonly HashSet<int> alive;
+
+        public FakeProcesses(params int[] pids)
+        {
+            alive = new HashSet<int>(pids);
+        }
+
+        public HashSet<int> Unkillable { get; } = new();
+
+        public List<int> Killed { get; } = new();
+
+        public string Name(int pid) => alive.Contains(pid) ? "heroesreplay" : null;
+
+        public void Exit(int pid) => alive.Remove(pid);
+
+        public void Kill(int pid)
+        {
+            Killed.Add(pid);
+            if (Unkillable.Contains(pid))
+            {
+                throw new InvalidOperationException("Access is denied.");
+            }
+
+            alive.Remove(pid);
+        }
+
+        public ServiceShutdown Shutdown(TimeSpan gracefulWait) =>
+            new()
+            {
+                ProcessNameOrNull = Name,
+                Kill = Kill,
+                RequestGracefulStop = () => { },
+                GracefulWait = gracefulWait,
+                Wait = _ => { },
+                ClearStopFile = () => { },
+            };
     }
 
     private const string Exe = @"C:\heroesreplay\heroesreplay.exe";

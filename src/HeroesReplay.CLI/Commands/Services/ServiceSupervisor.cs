@@ -140,94 +140,214 @@ public static class ServiceSupervisor
         return 0;
     }
 
-    public static int Stop(
-        string lockPath,
-        Func<int, string> processNameOrNull,
-        Action<int> kill,
-        Action requestGracefulStop = null,
-        TimeSpan? gracefulWait = null,
-        Action<TimeSpan> wait = null,
-        Action clearStopFile = null,
-        Action stopSpectatedGame = null,
-        Func<int, ServiceProcessProbe> probeOrNull = null,
-        Func<ObsShutdownPlan, ObsStreamResult> confirmStream = null
-    )
+    /// <summary>
+    /// Ask every recorded role to exit, kill the ones left after the graceful budget, close the
+    /// game, then read the OBS stream state. Exit code 0 needs all three confirmed. A role that is
+    /// still running stays in the lock so status and a second stop can still find it.
+    /// </summary>
+    public static ServiceStopResult Stop(string lockPath, ServiceShutdown shutdown)
     {
-        requestGracefulStop?.Invoke();
-        RequestStreamShutdown(confirmStream);
+        ArgumentNullException.ThrowIfNull(shutdown);
+        ArgumentNullException.ThrowIfNull(shutdown.ProcessNameOrNull);
         ServiceLock snapshot = ServiceLockStore.TryLoad(lockPath);
-        bool hadSpectate = snapshot?.Processes?.Any(record => record?.Name == "spectate") == true;
-        TimeSpan budget = gracefulWait ?? TimeSpan.FromSeconds(20);
-        Action<TimeSpan> pause = wait ?? Thread.Sleep;
+        List<ServiceProcessRecord> recorded = (
+            snapshot?.Processes ?? new List<ServiceProcessRecord>()
+        )
+            .Where(record => record != null && record.Pid > 0)
+            .ToList();
+        bool hadSpectate = recorded.Any(record => record.Name == "spectate");
+        Action<TimeSpan> pause = shutdown.Wait ?? Thread.Sleep;
+
+        // Until the processes are probed, every recorded role counts as running.
+        List<ServiceProcessRecord> survivors = recorded;
         try
         {
-            List<ServiceProcessRecord> living = ServiceProcessPlan.StillRunning(
-                snapshot?.Processes,
-                processNameOrNull,
-                probeOrNull
-            );
-            bool sawAny = living.Count > 0;
-            DateTimeOffset until = DateTimeOffset.UtcNow + budget;
-            while (living.Count > 0 && DateTimeOffset.UtcNow < until)
+            // Probe before asking, so a role that exits at once is graceful, not already gone.
+            List<ServiceProcessRecord> living = StillRunning(recorded, shutdown);
+            var asked = new HashSet<ServiceProcessRecord>(living);
+            shutdown.RequestGracefulStop?.Invoke();
+            RequestStreamShutdown(shutdown.ConfirmStream);
+
+            // The budget ends on the wall clock or on the summed pauses, whichever is first.
+            TimeSpan interval = TimeSpan.FromMilliseconds(200);
+            TimeSpan waited = TimeSpan.Zero;
+            DateTimeOffset until = DateTimeOffset.UtcNow + shutdown.GracefulWait;
+            while (
+                living.Count > 0 && waited < shutdown.GracefulWait && DateTimeOffset.UtcNow < until
+            )
             {
-                pause(TimeSpan.FromMilliseconds(200));
-                living = ServiceProcessPlan.StillRunning(
-                    ServiceLockStore.TryLoad(lockPath)?.Processes,
-                    processNameOrNull,
-                    probeOrNull
-                );
+                pause(interval);
+                waited += interval;
+                living = StillRunning(living, shutdown);
             }
 
-            if (living.Count == 0)
-            {
-                if (hadSpectate)
-                {
-                    stopSpectatedGame?.Invoke();
-                }
-
-                Console.WriteLine(
-                    sawAny ? "Services stopped." : "No HeroesReplay services are running."
-                );
-                return 0;
-            }
-
+            var killed = new HashSet<ServiceProcessRecord>();
+            var killErrors = new Dictionary<ServiceProcessRecord, string>();
             foreach (ServiceProcessRecord record in living)
             {
                 try
                 {
-                    kill(record.Pid);
-                    Console.WriteLine($"Stopped {record.Name} pid {record.Pid}.");
+                    if (shutdown.Kill == null)
+                    {
+                        throw new InvalidOperationException("No kill step was given.");
+                    }
+
+                    shutdown.Kill(record.Pid);
+                    killed.Add(record);
                 }
                 catch (Exception e)
                 {
-                    Console.Error.WriteLine(
-                        $"Could not stop {record.Name} pid {record.Pid}: {e.Message}"
-                    );
+                    killErrors[record] = "Kill failed: " + e.Message;
                 }
             }
 
-            if (hadSpectate)
+            survivors = StillRunning(living, shutdown);
+            var roles = new List<ServiceRoleStop>();
+            foreach (ServiceProcessRecord record in recorded)
             {
-                stopSpectatedGame?.Invoke();
+                ServiceStopOutcome outcome;
+                if (!asked.Contains(record))
+                {
+                    outcome = ServiceStopOutcome.AlreadyExited;
+                }
+                else if (survivors.Contains(record))
+                {
+                    outcome = ServiceStopOutcome.StillRunning;
+                }
+                else if (killed.Contains(record))
+                {
+                    outcome = ServiceStopOutcome.Killed;
+                }
+                else
+                {
+                    // It left during the budget, or on its own before the kill reached it.
+                    outcome = ServiceStopOutcome.Graceful;
+                }
+
+                killErrors.TryGetValue(record, out string detail);
+                var role = new ServiceRoleStop(
+                    record.Name,
+                    record.Pid,
+                    outcome,
+                    outcome == ServiceStopOutcome.StillRunning ? detail : null
+                );
+                roles.Add(role);
+                Console.WriteLine("  " + role.Describe());
             }
 
-            Console.WriteLine(
-                "Forced stop skipped spectator shutdown. Heroes of the Storm was closed if it was still open."
-            );
-            return 0;
+            bool? gameClosed = hadSpectate ? CloseGame(shutdown.CloseGame) : null;
+            if (gameClosed is bool closed)
+            {
+                Console.WriteLine(
+                    closed ? "Heroes of the Storm: closed." : "Heroes of the Storm: still running."
+                );
+            }
+
+            ServiceStreamCheck stream = null;
+            if (survivors.Count > 0)
+            {
+                // The spectator may still hold its OBS session. Do not open a second websocket.
+                Console.WriteLine("OBS stream: not read, because a role is still running.");
+            }
+            else if (shutdown.ReadStream != null)
+            {
+                stream = ReadStream(shutdown.ReadStream);
+                Console.WriteLine("OBS stream: " + stream.Describe());
+            }
+
+            var result = new ServiceStopResult
+            {
+                Roles = roles,
+                GameClosed = gameClosed,
+                Stream = stream,
+            };
+            if (killed.Count > 0)
+            {
+                Console.WriteLine(
+                    "Forced stop skipped the shutdown of the killed roles. The game and the OBS stream were checked separately."
+                );
+            }
+
+            if (result.Succeeded)
+            {
+                Console.WriteLine(
+                    recorded.Count == 0
+                        ? "No HeroesReplay services are running."
+                        : "Services stopped."
+                );
+            }
+            else
+            {
+                Console.Error.WriteLine(
+                    "Services did not stop cleanly. " + string.Join(" ", result.Failures())
+                );
+            }
+
+            return result;
         }
         finally
         {
-            if (snapshot?.Processes != null)
+            foreach (ServiceProcessRecord record in recorded)
             {
-                foreach (ServiceProcessRecord record in snapshot.Processes)
+                if (!survivors.Contains(record))
                 {
-                    ServiceReadyFile.Delete(record?.Nonce);
+                    ServiceReadyFile.Delete(record.Nonce);
                 }
             }
 
-            ServiceLockStore.Delete(lockPath);
-            clearStopFile?.Invoke();
+            if (survivors.Count > 0)
+            {
+                ServiceLockStore.Save(
+                    lockPath,
+                    new ServiceLock
+                    {
+                        StartedAt = snapshot?.StartedAt ?? DateTimeOffset.UtcNow,
+                        Processes = survivors.ToList(),
+                    }
+                );
+            }
+            else
+            {
+                ServiceLockStore.Delete(lockPath);
+            }
+
+            shutdown.ClearStopFile?.Invoke();
+        }
+    }
+
+    private static List<ServiceProcessRecord> StillRunning(
+        IEnumerable<ServiceProcessRecord> records,
+        ServiceShutdown shutdown
+    ) => ServiceProcessPlan.StillRunning(records, shutdown.ProcessNameOrNull, shutdown.Probe);
+
+    private static bool? CloseGame(Func<bool> closeGame)
+    {
+        if (closeGame == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return closeGame();
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Could not close Heroes of the Storm. " + e.Message);
+            return false;
+        }
+    }
+
+    private static ServiceStreamCheck ReadStream(Func<ServiceStreamCheck> readStream)
+    {
+        try
+        {
+            return readStream()
+                ?? ServiceStreamCheck.Unknown("The OBS stream reader returned nothing.");
+        }
+        catch (Exception e)
+        {
+            return ServiceStreamCheck.Unknown(e.Message);
         }
     }
 
