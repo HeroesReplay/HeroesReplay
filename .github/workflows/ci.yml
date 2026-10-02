@@ -1,0 +1,44 @@
+name: ci
+
+# Required check for develop (and master). Same gate as tools/verify.ps1 plus format and smoke tests.
+on:
+  pull_request:
+    branches:
+      - develop
+      - master
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: build-and-test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      HEROESREPLAY_SKIP_VERIFY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore tools
+        run: dotnet tool restore
+      - name: Format (CSharpier)
+        run: dotnet csharpier check src
+      - name: Build
+        run: dotnet build heroes-replay.slnx -c Release
+      - name: Unit tests
+        run: dotnet test heroes-replay.slnx -c Release --no-build -p:TestCategory=Unit
+      - name: Smoke tests
+        run: dotnet test heroes-replay.slnx -c Release --no-build -p:TestCategory=Smoke
