@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
@@ -113,6 +114,7 @@ public sealed class StatusPredictionWatcher
 
         while (!cancellationToken.IsCancellationRequested)
         {
+            bool reconciled = true;
             if (enabled)
             {
                 try
@@ -125,8 +127,14 @@ public sealed class StatusPredictionWatcher
                 }
                 catch (Exception e)
                 {
+                    reconciled = false;
                     logger.LogWarning(e, "Prediction watch step failed.");
                 }
+            }
+
+            if (reconciled)
+            {
+                ServiceHeartbeat.RecordWork();
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);

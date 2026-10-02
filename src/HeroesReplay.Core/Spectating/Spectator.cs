@@ -9,6 +9,7 @@ using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Clock;
 using HeroesReplay.Core.Spectating.Clock.Memory;
@@ -271,6 +272,7 @@ public class Spectator : ISpectator
                     {
                         lastAdvancedHud = reading.Time.Value;
                         lastAdvancedHudAt = DateTimeOffset.UtcNow;
+                        ServiceHeartbeat.RecordWork();
                     }
 
                     if (reading.Source != "memory")

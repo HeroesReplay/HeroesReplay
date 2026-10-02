@@ -161,6 +161,8 @@ public class YouTubeUploader : IYouTubeUploader
             DateTimeOffset drained = DateTimeOffset.UtcNow;
             while (!cancellationTokenSource.IsCancellationRequested)
             {
+                // An upload pass ended: the pending drain, or a poll that did not need one.
+                ServiceHost.ServiceHeartbeat.RecordWork();
                 TimeSpan waited = TimeSpan.Zero;
                 while (
                     waited < UploadDrain.Poll && !cancellationTokenSource.IsCancellationRequested

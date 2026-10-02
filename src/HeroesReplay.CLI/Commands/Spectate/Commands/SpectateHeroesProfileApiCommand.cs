@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,8 +34,11 @@ public class SpectateHeroesProfileApiCommand : Command
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
-        ServiceReadyFile.ReportFromEnvironment("spectate");
-        ServiceReadyFile.ReportHeartbeatFromEnvironment();
+        using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
+            "spectate",
+            scope.ServiceProvider.GetRequiredService<AppSettings>().ServiceHealth,
+            stop.Token
+        );
         return await engine.RunAsync() ? 0 : 1;
     }
 }

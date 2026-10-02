@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
@@ -345,13 +346,18 @@ public class ServiceProcessReadinessTests
     }
 
     [Fact]
-    public void ReportFromEnvironment_IgnoresAnUnsafeNonce()
+    public void StartFromEnvironment_IgnoresAnUnsafeNonce()
     {
         string previous = Environment.GetEnvironmentVariable(ServiceReadyFile.NonceVariable);
         Environment.SetEnvironmentVariable(ServiceReadyFile.NonceVariable, "../not-a-nonce");
         try
         {
-            ServiceReadyFile.ReportFromEnvironment("spectate");
+            using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
+                "spectate",
+                new ServiceHealthSettings(),
+                CancellationToken.None
+            );
+            Assert.Null(heartbeat);
             Assert.False(ServiceReadyFile.IsSafeNonce("../not-a-nonce"));
             Assert.False(ServiceReadyFile.IsSafeNonce(null));
         }

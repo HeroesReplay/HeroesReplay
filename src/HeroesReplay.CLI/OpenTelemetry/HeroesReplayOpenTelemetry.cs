@@ -1,7 +1,9 @@
 using System;
 using HeroesReplay.Core;
+using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
@@ -97,6 +99,10 @@ public static class HeroesReplayOpenTelemetry
         ServiceProviderOptions options = null
     )
     {
+        // Error logs become the role's lastError in its service heartbeat. Inert outside a role.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<ILoggerProvider, ServiceHeartbeatLoggerProvider>()
+        );
         ServiceProvider provider =
             options == null
                 ? services.BuildServiceProvider()
