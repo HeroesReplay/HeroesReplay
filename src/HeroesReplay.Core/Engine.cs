@@ -5,15 +5,15 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Connectivity;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Observer;
-using HeroesReplay.Core.Services.Providers;
-using HeroesReplay.Core.Services.Queue;
-using HeroesReplay.Core.Services.SelfUpdate;
-using HeroesReplay.Core.Services.Shared;
-using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core;
@@ -213,8 +213,7 @@ public class Engine : IEngine
                             loadedReplay.ReplayId,
                             recovery
                         );
-                        await Task
-                            .Delay(ClientHold.RetryAfter, consoleTokenProvider.Token)
+                        await Task.Delay(ClientHold.RetryAfter, consoleTokenProvider.Token)
                             .ConfigureAwait(false);
                         return true;
                     }

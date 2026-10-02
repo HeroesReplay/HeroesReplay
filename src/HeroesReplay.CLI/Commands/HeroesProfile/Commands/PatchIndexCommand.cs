@@ -5,8 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.HeroesProfile;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands.HeroesProfile.Commands;

@@ -4,8 +4,10 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Publication;
+using HeroesReplay.Core.YouTube.Search;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

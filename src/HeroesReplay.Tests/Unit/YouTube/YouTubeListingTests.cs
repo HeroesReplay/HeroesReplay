@@ -1,6 +1,5 @@
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Metadata;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube;

@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using HeroesReplay.Core.Services.Analysis;
+using HeroesReplay.Core.Analysis;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Analysis;

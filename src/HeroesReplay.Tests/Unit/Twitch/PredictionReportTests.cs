@@ -1,6 +1,6 @@
 using System.IO;
 using System.Linq;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.Twitch.Predictions;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Twitch;

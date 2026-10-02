@@ -6,8 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Status;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
 

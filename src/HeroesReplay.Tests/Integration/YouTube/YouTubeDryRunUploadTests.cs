@@ -4,10 +4,9 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Core.Services.YouTube;
-using HeroesReplay.Core.Services.YouTube.Outbox;
+using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Outbox;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

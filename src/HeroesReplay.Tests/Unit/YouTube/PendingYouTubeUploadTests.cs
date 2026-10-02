@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using HeroesReplay.Core.Services.YouTube;
-using HeroesReplay.Core.Services.YouTube.Outbox;
+using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Outbox;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube;
@@ -193,11 +193,7 @@ public class PendingYouTubeUploadTests
     private static UploadAttemptManifest BoundManifest(string mediaPath)
     {
         DateTimeOffset at = new DateTimeOffset(2026, 9, 28, 3, 0, 0, TimeSpan.Zero);
-        UploadAttemptResult prepared = UploadAttemptMachine.Prepare(
-            "replay-bound",
-            65536854,
-            at
-        );
+        UploadAttemptResult prepared = UploadAttemptMachine.Prepare("replay-bound", 65536854, at);
         UploadAttemptResult recording = UploadAttemptMachine.BeginRecording(
             prepared.Manifest,
             at.AddSeconds(1)

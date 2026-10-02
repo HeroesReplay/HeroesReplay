@@ -35,7 +35,7 @@ pwsh -File tools/verify.ps1
 - File-scoped namespaces; usings at file top.
 - `using` declarations over nested `using` blocks when dispose scope is the method.
 - Do not enable ImplicitUsings unless you strip redundant usings in the same change.
-- After file-scoped conversion, `Polly.Context` collides with `HeroesReplay.Core.Services.Context`. Alias: `using PollyContext = Polly.Context`.
+- After file-scoped conversion, `Polly.Context` collided with the old `HeroesReplay.Core.Services.Context` namespace (now `HeroesReplay.Core.Replays.Context`). Alias: `using PollyContext = Polly.Context`.
 
 ## Packages
 

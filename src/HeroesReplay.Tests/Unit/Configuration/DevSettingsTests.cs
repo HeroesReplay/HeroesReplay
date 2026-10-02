@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Spectating.Capture;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 

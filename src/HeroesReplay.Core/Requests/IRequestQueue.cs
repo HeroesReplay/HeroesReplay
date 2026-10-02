@@ -1,0 +1,13 @@
+using System.Threading.Tasks;
+
+namespace HeroesReplay.Core.Requests;
+
+public interface IRequestQueue
+{
+    Task<RewardQueueItem> DequeueItemAsync();
+    Task<RewardResponse> EnqueueItemAsync(RewardRequest request);
+    Task<int> GetItemsInQueue();
+    Task<RewardQueueItem> FindByIndexAsync(int index);
+    Task<(RewardQueueItem Item, int Position)?> RemoveItemAsync(string login);
+    Task<(RewardQueueItem Item, int Position)?> FindNextByLoginAsync(string login);
+}

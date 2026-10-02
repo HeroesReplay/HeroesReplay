@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Twitch.Predictions;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Twitch;
@@ -33,7 +33,11 @@ public class StatusPredictionWatcherTests
         SpectatorStatus status = Finished("ClientCrashed", winner: 0);
         status.Timer = "00:10:00";
 
-        PredictionSignal decided = StatusPredictionWatcher.DecideObserved(observed, status, settled);
+        PredictionSignal decided = StatusPredictionWatcher.DecideObserved(
+            observed,
+            status,
+            settled
+        );
 
         Assert.Equal(PredictionSignalKind.Cancel, decided.Kind);
         Assert.Null(decided.WinnerTeam);
