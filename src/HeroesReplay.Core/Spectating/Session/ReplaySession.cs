@@ -19,6 +19,9 @@ public enum ReplaySessionKind
 /// </summary>
 public static class ReplaySession
 {
+    /// <summary>The outcome spectate records when a session threw instead of ending.</summary>
+    public const string ErrorOutcome = "Error";
+
     public static ReplaySessionKind Classify(MatchOutcome outcome)
     {
         if (outcome == MatchOutcome.VerifiedCompleted)

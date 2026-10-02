@@ -67,14 +67,25 @@ public class ReleaseHealthCheckTests
         }
     }
 
-    [Fact]
-    public void Wait_ReturnsUnhealthyWhenTheWindowClosesWithoutMatchProgress()
+    [Theory]
+    [InlineData(null, ReleaseHealthVerdict.Inconclusive)]
+    [InlineData("BuildNotInstalled", ReleaseHealthVerdict.Inconclusive)]
+    [InlineData("LoadTimedOut", ReleaseHealthVerdict.Unhealthy)]
+    public void Wait_WhenTheWindowClosesWithoutMatchProgress_BlamesOnlyFailedSessions(
+        string outcome,
+        ReleaseHealthVerdict expected
+    )
     {
         string root = TempDir();
         var clock = new FakeClock(Since.AddMinutes(1));
         try
         {
-            WriteStack(root, spectateWorkAt: Since.AddMinutes(-2));
+            // Read back from the ready file, as the gate does on the stream PC.
+            WriteStack(
+                root,
+                spectateWorkAt: Since.AddMinutes(-2),
+                outcome == null ? null : new Dictionary<string, int> { [outcome] = 2 }
+            );
             ReleaseHealthCheck check = Check(root, clock, TextWriter.Null) with
             {
                 Wait = span => clock.Now += span,
@@ -87,8 +98,8 @@ public class ReleaseHealthCheckTests
                 CancellationToken.None
             );
 
-            Assert.Equal(ReleaseHealthVerdict.Unhealthy, result.Verdict);
-            Assert.Equal(2, result.ExitCode);
+            Assert.Equal(expected, result.Verdict);
+            Assert.Equal((int)expected, result.ExitCode);
             Assert.Equal(Since.AddMinutes(20), clock.Now);
         }
         finally
@@ -145,7 +156,11 @@ public class ReleaseHealthCheckTests
         };
 
     // Every role started 30 s after the install, heartbeats on an hour interval so it stays fresh.
-    private static void WriteStack(string root, DateTimeOffset? spectateWorkAt)
+    private static void WriteStack(
+        string root,
+        DateTimeOffset? spectateWorkAt,
+        Dictionary<string, int> spectateOutcomes = null
+    )
     {
         List<ServiceProcessRecord> records = Roles
             .Select(
@@ -175,6 +190,7 @@ public class ReleaseHealthCheckTests
                     HeartbeatAt = Since.AddSeconds(31),
                     HeartbeatIntervalSeconds = 3600,
                     LastSuccessfulWorkAt = record.Name == "spectate" ? spectateWorkAt : null,
+                    SessionOutcomes = record.Name == "spectate" ? spectateOutcomes : null,
                 },
                 Path.Combine(root, "ready")
             );

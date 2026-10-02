@@ -161,7 +161,7 @@ public class UpdateCommand : Command
     {
         var command = new Command(
             "release-health",
-            "Called by apply-release.ps1 after it installs a release. Exit 0 once every role in services.json runs with a fresh heartbeat from a process started after --since, and spectate showed match progress (the match clock or the award screen) after it. Exit 1 while Release:HealthWindow is still open (without --wait), 2 when it closed first (roll back), 3 when a stop was requested (no verdict)."
+            "Called by apply-release.ps1 after it installs a release. Exit 0 once every role in services.json runs with a fresh heartbeat from a process started after --since, and spectate showed match progress (the match clock or the award screen) after it. Exit 1 while Release:HealthWindow is still open (without --wait). When it closes: 2 when a role is down or stale or every replay spectate tried failed (roll back), 4 when spectate had nothing it could play (inconclusive: keep the install). 3 when a stop was requested (no verdict)."
         );
         Option<string> since = new("--since")
         {

@@ -101,6 +101,9 @@ public sealed record ServiceRoleHealth
     /// <summary>Spectate: how the last replay session ended.</summary>
     public string LastOutcome { get; init; }
 
+    /// <summary>Spectate: replay sessions this process ended, by outcome.</summary>
+    public IReadOnlyDictionary<string, int> SessionOutcomes { get; init; }
+
     /// <summary>The role's newest log file, or the file it writes today when there is none yet.</summary>
     public string LogPath { get; init; }
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Spectating.Session;
 
 namespace HeroesReplay.Core.SelfUpdate;
 
@@ -14,11 +15,20 @@ public enum ReleaseHealthVerdict
     /// <summary>Not healthy yet. The stabilization window is still open.</summary>
     Waiting = 1,
 
-    /// <summary>The window closed before the install was healthy. Roll back.</summary>
+    /// <summary>
+    /// The window closed and the build is at fault: a role is down or stale, or spectate tried a
+    /// replay and none reached a match clock. Roll back.
+    /// </summary>
     Unhealthy = 2,
 
     /// <summary>A stop was requested. The gate does not judge a stack someone is stopping.</summary>
     Stopped = 3,
+
+    /// <summary>
+    /// The window closed with every role up, but spectate had nothing it could play: no replay,
+    /// or only replays held for reasons outside the build. Keep the install; do not roll back.
+    /// </summary>
+    Inconclusive = 4,
 }
 
 public sealed record ReleaseHealthResult(
@@ -39,8 +49,10 @@ public sealed record ReleaseHealthResult(
 /// (<c>update release-health</c>). Healthy means every role in <c>services.json</c> runs, has a
 /// fresh <c>ready/&lt;nonce&gt;.json</c> heartbeat, and became ready after the install, and
 /// spectate recorded match progress after the install (its <c>lastSuccessfulWorkAt</c>: the
-/// match clock, or the award screen). Anything short of that when the window closes is
-/// unhealthy, and the script restores <c>.previous</c>.
+/// match clock, or the award screen). When the window closes without that, the build is blamed
+/// only for what it did: a role that is down or stale, or replay sessions that failed
+/// (<see cref="BuildFaults"/>). An empty queue, an outage, or only held replays is
+/// inconclusive, and the install stays.
 /// </summary>
 public static class ReleaseHealth
 {
@@ -48,6 +60,32 @@ public static class ReleaseHealth
     public static readonly TimeSpan DefaultWindow = TimeSpan.FromMinutes(20);
 
     public const string Spectate = "spectate";
+
+    /// <summary>
+    /// Session outcomes that are the build's fault: no match clock (including a client that would
+    /// not open the replay, which ends <c>LoadTimedOut</c>), a crash or hang, a session that ran to
+    /// its end without a clock, or an exception from the launch.
+    /// </summary>
+    public static readonly IReadOnlySet<string> BuildFaults = new HashSet<string>(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        nameof(MatchOutcome.LoadTimedOut),
+        nameof(MatchOutcome.ClientCrashed),
+        nameof(MatchOutcome.ClientHung),
+        nameof(MatchOutcome.Canceled),
+        ReplaySession.ErrorOutcome,
+    };
+
+    /// <summary>Replays held for reasons outside the build. Stopped and None count as neither.</summary>
+    public static readonly IReadOnlySet<string> HeldOutside = new HashSet<string>(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        nameof(MatchOutcome.BuildNotInstalled),
+        nameof(MatchOutcome.VersionMismatch),
+        nameof(MatchOutcome.RegionUnavailable),
+    };
 
     public static TimeSpan Window(TimeSpan configured) =>
         configured > TimeSpan.Zero ? configured : DefaultWindow;
@@ -76,11 +114,12 @@ public static class ReleaseHealth
         var problems = new List<string>();
         List<ServiceRoleHealth> expected =
             roles?.Where(role => role != null && role.Expected).ToList() ?? new();
+        ServiceRoleHealth spectate = expected.FirstOrDefault(IsSpectate);
         if (expected.Count == 0)
         {
             problems.Add("services.json lists no roles, so the stack is not running.");
         }
-        else if (!expected.Any(IsSpectate))
+        else if (spectate == null)
         {
             problems.Add("spectate is not in services.json, so match progress cannot be seen.");
         }
@@ -88,27 +127,53 @@ public static class ReleaseHealth
         foreach (ServiceRoleHealth role in expected)
         {
             string problem = RoleProblem(role, since);
-            if (problem == null && IsSpectate(role))
-            {
-                problem = MatchProgressProblem(role, since);
-            }
-
             if (problem != null)
             {
                 problems.Add(problem);
             }
         }
 
-        if (problems.Count == 0)
+        bool progress = spectate?.LastSuccessfulWorkAt is DateTimeOffset work && work >= since;
+        if (problems.Count == 0 && progress)
         {
             return new ReleaseHealthResult(ReleaseHealthVerdict.Healthy, problems);
         }
 
-        bool open = now - since < Window(window);
-        return new ReleaseHealthResult(
-            open ? ReleaseHealthVerdict.Waiting : ReleaseHealthVerdict.Unhealthy,
-            problems
-        );
+        if (now - since < Window(window))
+        {
+            if (!progress && spectate != null)
+            {
+                problems.Add(
+                    $"spectate has shown no match progress since the install{Sessions(spectate)}."
+                );
+            }
+
+            return new ReleaseHealthResult(ReleaseHealthVerdict.Waiting, problems);
+        }
+
+        if (problems.Count > 0)
+        {
+            return new ReleaseHealthResult(ReleaseHealthVerdict.Unhealthy, problems);
+        }
+
+        int failed = Count(spectate, BuildFaults);
+        if (failed > 0)
+        {
+            return new ReleaseHealthResult(
+                ReleaseHealthVerdict.Unhealthy,
+                new[]
+                {
+                    $"spectate tried {failed} replay session(s) after the install and none reached a match clock{Sessions(spectate)}.",
+                }
+            );
+        }
+
+        int held = Count(spectate, HeldOutside);
+        string nothing =
+            held > 0
+                ? $"spectate had no replay it could play: {held} session(s) were held for reasons outside the build{Sessions(spectate)}."
+                : $"spectate had no replay to play after the install (an empty queue, or no connectivity){Sessions(spectate)}.";
+        return new ReleaseHealthResult(ReleaseHealthVerdict.Inconclusive, new[] { nothing });
     }
 
     private static string RoleProblem(ServiceRoleHealth role, DateTimeOffset since)
@@ -141,18 +206,24 @@ public static class ReleaseHealth
         return null;
     }
 
-    private static string MatchProgressProblem(ServiceRoleHealth spectate, DateTimeOffset since)
+    // RoleProblem requires spectate to have started after the install, so its tally is the install's.
+    private static int Count(ServiceRoleHealth spectate, IReadOnlySet<string> outcomes) =>
+        spectate
+            ?.SessionOutcomes?.Where(item => outcomes.Contains(item.Key))
+            .Sum(item => item.Value)
+        ?? 0;
+
+    private static string Sessions(ServiceRoleHealth spectate)
     {
-        if (spectate.LastSuccessfulWorkAt is DateTimeOffset work && work >= since)
+        if (spectate?.SessionOutcomes == null || spectate.SessionOutcomes.Count == 0)
         {
-            return null;
+            return string.Empty;
         }
 
-        string sessions =
-            spectate.SessionsWithoutProgress is int misses && misses > 0
-                ? $" ({misses} sessions without it, the last {spectate.LastOutcome ?? "unknown"})"
-                : string.Empty;
-        return $"spectate has shown no match progress since the install{sessions}.";
+        IEnumerable<string> counts = spectate
+            .SessionOutcomes.OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => $"{item.Key} {item.Value}");
+        return " (" + string.Join(", ", counts) + ")";
     }
 
     private static bool IsSpectate(ServiceRoleHealth role) =>

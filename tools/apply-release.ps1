@@ -150,7 +150,7 @@ function Invoke-ReleaseCommand([string]$Exe, [string[]]$Arguments, [string]$What
 }
 
 function Invoke-ReleaseHealth([string]$Exe, [string]$Since) {
-    # 0 healthy, 2 the window closed first, 3 a stop was requested. A crash or a hang is unhealthy.
+    # 0 healthy, 2 unhealthy, 3 a stop was requested, 4 inconclusive. A crash or a hang is unhealthy.
     if (-not (Test-Path -LiteralPath $Exe)) {
         $script:healthDetail = "$Exe is missing."
         return 2
@@ -312,23 +312,19 @@ Protect-MinReplayId (Join-Path $source 'heroesreplay.exe') (Join-Path $InstallDi
 # streams (effective OBS:StreamingEnabled true), so production stays live. Never arms otherwise.
 Invoke-ReleaseCommand (Join-Path $source 'heroesreplay.exe') @('update', 'migrate-stream-arm', '--previous', $InstallDir, '--environment', $environment) 'Stream arm migration'
 
-# .previous is the last install that passed the health gate. The first update on a machine backs up
-# the install being replaced: it just finished a replay, which is what staged this update.
+# The rollback is always the install being replaced: it just finished a replay, which is what staged
+# this update, so it is known good. An older .previous (one an earlier script kept) is overwritten.
+# Without a fresh backup the release is not installed.
 $previous = "$InstallDir.previous"
-if (Test-Path -LiteralPath $previous) {
-    Write-Host "$previous stays the rollback: the last install that passed the health gate."
+try {
+    Copy-Install $InstallDir $previous
+    Write-Host "Backed up $InstallDir to $previous as the rollback."
 }
-else {
-    try {
-        Copy-Install $InstallDir $previous
-        Write-Host "Backed up $InstallDir to $previous as the rollback."
-    }
-    catch {
-        Write-Host "Could not back up the install: $($_.Exception.Message)"
-        Clear-ServiceStop
-        Start-HeroesReplayStack
-        exit 1
-    }
+catch {
+    Write-Host "Could not back up the install, so release $Version was not installed: $($_.Exception.Message)"
+    Clear-ServiceStop
+    Start-HeroesReplayStack
+    exit 1
 }
 
 # cmd /k consoles keep this directory as their cwd, so renaming the folder fails while those windows are open. Overwriting the files does not.
@@ -374,6 +370,12 @@ catch {
 
 # The health gate: every role in services.json heartbeats from a process started after $since, and
 # spectate reaches a match clock (or the award screen), inside Release:HealthWindow.
+#   0 healthy: .previous becomes this install.
+#   4 inconclusive: every role up, but spectate had nothing it could play (empty queue, outage,
+#     only held replays). The install stays, .previous is not refreshed, and the tag is not skipped.
+#   3 a stop was requested: no verdict.
+#   anything else (2, a crash, a hang): a role is down or stale, or every replay spectate tried
+#     failed. Roll back.
 Write-Host "Release $Version started at $since. Waiting for every role to heartbeat and spectate to reach a match clock."
 $health = Invoke-ReleaseHealth (Join-Path $InstallDir 'heroesreplay.exe') $since
 if ($health -eq 0) {
@@ -385,6 +387,11 @@ if ($health -eq 0) {
         Write-Host "Release $Version is healthy, but $previous was not refreshed: $($_.Exception.Message)"
     }
 
+    exit 0
+}
+
+if ($health -eq 4) {
+    Write-Host "Release $Version is INCONCLUSIVE, not rolled back: $($script:healthDetail) It stays installed and running. $previous still holds the install it replaced, and the tag was not skipped."
     exit 0
 }
 

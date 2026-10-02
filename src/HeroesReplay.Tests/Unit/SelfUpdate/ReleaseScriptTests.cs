@@ -41,6 +41,7 @@ public class ReleaseScriptTests
             StringComparison.Ordinal
         );
         int healthy = script.IndexOf("if ($health -eq 0)", gate, StringComparison.Ordinal);
+        int inconclusive = script.IndexOf("if ($health -eq 4)", gate, StringComparison.Ordinal);
         int stopped = script.IndexOf("if ($health -eq 3)", gate, StringComparison.Ordinal);
         int skip = script.IndexOf("Add-SkippedRelease $Version", gate, StringComparison.Ordinal);
         int stop = script.IndexOf("Stop-HeroesReplayStack", skip, StringComparison.Ordinal);
@@ -55,17 +56,55 @@ public class ReleaseScriptTests
             since > 0 && start > since && gate > start,
             "The gate does not follow the start."
         );
-        Assert.True(healthy > gate && stopped > healthy && skip > stopped);
+        Assert.True(
+            healthy > gate && inconclusive > healthy && stopped > inconclusive && skip > stopped
+        );
         Assert.True(stop > skip && restore > stop && restart > restore);
         Assert.Contains(
             "Copy-Install $InstallDir $previous",
-            script.Substring(healthy, stopped - healthy)
+            script.Substring(healthy, inconclusive - healthy)
         );
         Assert.DoesNotContain("Restore-PreviousInstall", script.Substring(healthy, skip - healthy));
+
+        // Inconclusive keeps the install: no refresh of .previous, no skip, no rollback.
+        string keep = script.Substring(inconclusive, stopped - inconclusive);
+        Assert.Contains("exit 0", keep);
+        Assert.DoesNotContain("Copy-Install", keep);
+        Assert.DoesNotContain("Add-SkippedRelease", keep);
+        Assert.DoesNotContain("Stop-HeroesReplayStack", keep);
         Assert.Contains(
             "update release-health --since $Since --install `\"$InstallDir`\" --environment $environment --wait",
             script
         );
+    }
+
+    [Fact]
+    public void ApplyRelease_AlwaysBacksUpTheRunningInstallBeforeItIsOverwritten()
+    {
+        string script = File.ReadAllText(FindScript());
+        int migrate = script.IndexOf("'update', 'migrate-stream-arm'", StringComparison.Ordinal);
+        int backup = script.IndexOf(
+            "Copy-Install $InstallDir $previous",
+            migrate,
+            StringComparison.Ordinal
+        );
+        int copy = script.IndexOf(
+            "Copy-Item -Path (Join-Path $source '*') -Destination $InstallDir",
+            StringComparison.Ordinal
+        );
+
+        Assert.True(migrate > 0 && backup > migrate && copy > backup);
+        string block = script.Substring(backup, copy - backup);
+        Assert.Contains("was not installed", block);
+        Assert.Contains("Start-HeroesReplayStack", block);
+        Assert.Contains("exit 1", block);
+        // An older .previous is never kept in place of the install being replaced.
+        int guard = script.LastIndexOf(
+            "if (Test-Path -LiteralPath $previous)",
+            backup,
+            StringComparison.Ordinal
+        );
+        Assert.True(guard < migrate, "The backup must not depend on an existing .previous.");
     }
 
     [Fact]

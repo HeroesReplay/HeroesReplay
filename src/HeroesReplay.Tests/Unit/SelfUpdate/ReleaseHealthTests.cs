@@ -11,6 +11,7 @@ public class ReleaseHealthTests
 {
     private static readonly DateTimeOffset Since = new(2026, 10, 2, 12, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(20);
+    private static readonly DateTimeOffset Closed = Since.Add(Window);
 
     [Fact]
     public void EveryRoleFreshAndSpectateProgressAfterTheInstall_IsHealthy()
@@ -28,7 +29,9 @@ public class ReleaseHealthTests
     [InlineData("old-process")]
     [InlineData("not-running")]
     [InlineData("stopping")]
-    public void OneRoleWithoutAFreshHeartbeatFromTheNewInstall_IsNotHealthy(string fault)
+    public void ARoleWithoutAFreshHeartbeatFromTheNewInstall_IsUnhealthyWhenTheWindowCloses(
+        string fault
+    )
     {
         List<ServiceRoleHealth> roles = Stack();
         ServiceRoleHealth download = roles[2];
@@ -42,44 +45,125 @@ public class ReleaseHealthTests
         };
 
         ReleaseHealthResult inside = Judge(roles, at: Since.AddMinutes(19));
-        ReleaseHealthResult after = Judge(roles, at: Since.Add(Window));
+        ReleaseHealthResult after = Judge(roles, at: Closed);
 
         Assert.Equal(ReleaseHealthVerdict.Waiting, inside.Verdict);
         Assert.Equal(1, inside.ExitCode);
         Assert.Equal(ReleaseHealthVerdict.Unhealthy, after.Verdict);
         Assert.Equal(2, after.ExitCode);
-        Assert.Single(after.Problems);
-        Assert.StartsWith("download", after.Problems[0]);
+        Assert.StartsWith("download", Assert.Single(after.Problems));
     }
 
     [Fact]
-    public void SpectateWithoutMatchProgressSinceTheInstall_RollsBackWhenTheWindowCloses()
+    public void AnEmptyQueueForTheWholeWindow_IsInconclusive()
+    {
+        // No session ended: nothing downloaded, Heroes Profile down, or an outage pause.
+        List<ServiceRoleHealth> roles = Stack();
+        roles[0] = roles[0] with { LastSuccessfulWorkAt = null, SessionOutcomes = null };
+
+        ReleaseHealthResult waiting = Judge(roles, at: Since.AddMinutes(19));
+        ReleaseHealthResult result = Judge(roles, at: Closed);
+
+        Assert.Equal(ReleaseHealthVerdict.Waiting, waiting.Verdict);
+        Assert.Equal(ReleaseHealthVerdict.Inconclusive, result.Verdict);
+        Assert.Equal(4, result.ExitCode);
+        Assert.Contains("no replay to play", Assert.Single(result.Problems));
+    }
+
+    [Fact]
+    public void OneLoadTimedOutSessionAndNothingElse_IsUnhealthy()
     {
         List<ServiceRoleHealth> roles = Stack();
         roles[0] = roles[0] with
         {
-            // Match progress from the build before the install does not count.
-            LastSuccessfulWorkAt = Since.AddMinutes(-3),
-            SessionsWithoutProgress = 3,
+            LastSuccessfulWorkAt = null,
+            SessionsWithoutProgress = 1,
             LastOutcome = "LoadTimedOut",
+            SessionOutcomes = Outcomes(("LoadTimedOut", 1)),
         };
 
-        ReleaseHealthResult waiting = Judge(roles, at: Since.AddMinutes(10));
-        ReleaseHealthResult result = Judge(roles, at: Since.AddMinutes(21));
+        ReleaseHealthResult result = Judge(roles, at: Closed);
 
-        Assert.Equal(ReleaseHealthVerdict.Waiting, waiting.Verdict);
         Assert.Equal(ReleaseHealthVerdict.Unhealthy, result.Verdict);
         string problem = Assert.Single(result.Problems);
-        Assert.Contains("spectate has shown no match progress since the install", problem);
-        Assert.Contains("3 sessions without it, the last LoadTimedOut", problem);
-        Assert.Contains("unhealthy: spectate", result.Describe());
+        Assert.Contains("spectate tried 1 replay session(s) after the install", problem);
+        Assert.Contains("(LoadTimedOut 1)", problem);
+    }
+
+    [Theory]
+    [InlineData("BuildNotInstalled")]
+    [InlineData("VersionMismatch")]
+    [InlineData("RegionUnavailable")]
+    public void OnlySessionsHeldOutsideTheBuild_AreInconclusive(string hold)
+    {
+        List<ServiceRoleHealth> roles = Stack();
+        roles[0] = roles[0] with
+        {
+            LastSuccessfulWorkAt = null,
+            SessionOutcomes = Outcomes((hold, 3), ("Stopped", 1)),
+        };
+
+        ReleaseHealthResult result = Judge(roles, at: Closed);
+
+        Assert.Equal(ReleaseHealthVerdict.Inconclusive, result.Verdict);
+        Assert.Contains(
+            "3 session(s) were held for reasons outside the build",
+            Assert.Single(result.Problems)
+        );
+    }
+
+    [Theory]
+    [InlineData("ClientCrashed")]
+    [InlineData("ClientHung")]
+    [InlineData("Canceled")]
+    [InlineData("Error")]
+    public void AFailedSessionAmongHeldOnes_IsUnhealthy(string failure)
+    {
+        List<ServiceRoleHealth> roles = Stack();
+        roles[0] = roles[0] with
+        {
+            LastSuccessfulWorkAt = null,
+            SessionOutcomes = Outcomes(("BuildNotInstalled", 2), (failure, 1)),
+        };
+
+        Assert.Equal(ReleaseHealthVerdict.Unhealthy, Judge(roles, at: Closed).Verdict);
+    }
+
+    [Fact]
+    public void MatchProgressFromBeforeTheInstall_DoesNotCount()
+    {
+        List<ServiceRoleHealth> roles = Stack();
+        roles[0] = roles[0] with
+        {
+            LastSuccessfulWorkAt = Since.AddMinutes(-3),
+            SessionOutcomes = Outcomes(("LoadTimedOut", 2)),
+        };
+
+        Assert.Equal(ReleaseHealthVerdict.Unhealthy, Judge(roles, at: Closed).Verdict);
+    }
+
+    [Fact]
+    public void ADeadRoleWithAnEmptyQueue_IsUnhealthyNotInconclusive()
+    {
+        List<ServiceRoleHealth> roles = Stack();
+        roles[0] = roles[0] with { LastSuccessfulWorkAt = null, SessionOutcomes = null };
+        roles[1] = roles[1] with { Running = false, State = ServiceRoleState.Failed };
+
+        ReleaseHealthResult result = Judge(roles, at: Closed);
+
+        Assert.Equal(ReleaseHealthVerdict.Unhealthy, result.Verdict);
+        Assert.Equal("twitch is not running (failed).", Assert.Single(result.Problems));
     }
 
     [Fact]
     public void TheWindowIsConfigurable_AndZeroMeansTheDefault()
     {
         List<ServiceRoleHealth> roles = Stack();
-        roles[0] = roles[0] with { LastSuccessfulWorkAt = null };
+        roles[0] = roles[0] with
+        {
+            LastSuccessfulWorkAt = null,
+            SessionOutcomes = Outcomes(("ClientCrashed", 1)),
+        };
 
         Assert.Equal(
             ReleaseHealthVerdict.Unhealthy,
@@ -96,13 +180,13 @@ public class ReleaseHealthTests
     }
 
     [Fact]
-    public void NoStack_OrNoSpectate_IsNotHealthy()
+    public void NoStack_OrNoSpectate_IsUnhealthy()
     {
         List<ServiceRoleHealth> withoutSpectate = Stack();
         withoutSpectate[0] = withoutSpectate[0] with { Expected = false };
 
-        ReleaseHealthResult empty = Judge(new List<ServiceRoleHealth>(), at: Since.Add(Window));
-        ReleaseHealthResult noSpectate = Judge(withoutSpectate, at: Since.Add(Window));
+        ReleaseHealthResult empty = Judge(new List<ServiceRoleHealth>(), at: Closed);
+        ReleaseHealthResult noSpectate = Judge(withoutSpectate, at: Closed);
 
         Assert.Equal(ReleaseHealthVerdict.Unhealthy, empty.Verdict);
         Assert.Contains("services.json lists no roles", empty.Problems[0]);
@@ -139,6 +223,17 @@ public class ReleaseHealthTests
         DateTimeOffset at
     ) => ReleaseHealth.Judge(roles, stopRequested: false, Since, at, Window);
 
+    private static Dictionary<string, int> Outcomes(params (string Outcome, int Count)[] items)
+    {
+        var outcomes = new Dictionary<string, int>();
+        foreach ((string outcome, int count) in items)
+        {
+            outcomes[outcome] = count;
+        }
+
+        return outcomes;
+    }
+
     private static List<ServiceRoleHealth> Stack() =>
         new()
         {
@@ -146,6 +241,7 @@ public class ReleaseHealthTests
             {
                 LastSuccessfulWorkAt = Since.AddMinutes(5),
                 SessionsWithoutProgress = 0,
+                SessionOutcomes = Outcomes(("VerifiedCompleted", 1)),
             },
             Role("twitch"),
             Role("download"),

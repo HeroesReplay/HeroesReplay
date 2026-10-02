@@ -118,6 +118,7 @@ public static class ServiceHealthClassifier
             LastError = heartbeat?.LastError,
             SessionsWithoutProgress = heartbeat?.SessionsWithoutProgress,
             LastOutcome = heartbeat?.LastOutcome,
+            SessionOutcomes = heartbeat?.SessionOutcomes,
         };
 
         if (record == null)

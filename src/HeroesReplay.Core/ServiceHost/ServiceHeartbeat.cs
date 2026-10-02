@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
@@ -135,13 +136,17 @@ public sealed class ServiceHeartbeat : IDisposable
     /// <summary>
     /// A spectate replay session ended with <paramref name="outcome"/>. Match progress (the match
     /// clock, or the award screen) is work and ends the run of sessions without it. Any other end
-    /// (a defer, a hold, a load timeout, a crash) is not work and adds one to that run.
+    /// (a defer, a hold, a load timeout, a crash) is not work and adds one to that run. Every end
+    /// is also counted by outcome (<see cref="ServiceReadyReport.SessionOutcomes"/>).
     /// </summary>
     public void Session(bool matchProgress, string outcome)
     {
         lock (gate)
         {
             report.LastOutcome = string.IsNullOrWhiteSpace(outcome) ? null : outcome;
+            report.SessionOutcomes ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            string key = report.LastOutcome ?? "None";
+            report.SessionOutcomes[key] = report.SessionOutcomes.GetValueOrDefault(key) + 1;
             if (matchProgress)
             {
                 report.LastSuccessfulWorkAt = time.GetUtcNow();
@@ -221,6 +226,10 @@ public sealed class ServiceHeartbeat : IDisposable
                         },
                 SessionsWithoutProgress = report.SessionsWithoutProgress,
                 LastOutcome = report.LastOutcome,
+                SessionOutcomes =
+                    report.SessionOutcomes == null
+                        ? null
+                        : new Dictionary<string, int>(report.SessionOutcomes),
             };
         }
     }

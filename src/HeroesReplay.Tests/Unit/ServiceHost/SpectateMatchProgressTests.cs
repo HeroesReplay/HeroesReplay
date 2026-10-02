@@ -52,6 +52,7 @@ public class SpectateMatchProgressTests
             Assert.Equal(Start, beat.LastSuccessfulWorkAt);
             Assert.Equal(3, beat.SessionsWithoutProgress);
             Assert.Equal("LoadTimedOut", beat.LastOutcome);
+            Assert.Equal(3, Assert.Single(beat.SessionOutcomes).Value);
 
             ServiceRoleHealth health = Classify(beat, clock.Now);
             Assert.Equal(ServiceRoleState.Degraded, health.State);
@@ -96,6 +97,9 @@ public class SpectateMatchProgressTests
             Assert.Equal(Start.AddMinutes(12), beat.LastSuccessfulWorkAt);
             Assert.Equal(0, beat.SessionsWithoutProgress);
             Assert.Equal("VerifiedCompleted", beat.LastOutcome);
+            Assert.Equal(2, beat.SessionOutcomes["LoadTimedOut"]);
+            Assert.Equal(1, beat.SessionOutcomes["ClientCrashed"]);
+            Assert.Equal(1, beat.SessionOutcomes["VerifiedCompleted"]);
             ServiceRoleHealth health = Classify(beat, clock.Now);
             Assert.Equal(ServiceRoleState.Ready, health.State);
             Assert.Null(health.CauseCode);
