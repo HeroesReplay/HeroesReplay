@@ -36,6 +36,11 @@ public class DevSettingsTests
         Assert.True(configuration.GetValue<bool>("YouTube:DryRun"));
         // The dev box shares the live Twitch channel. A dev prediction would cancel the live one.
         Assert.False(configuration.GetValue<bool>("Twitch:EnablePredictions"));
+        // Nor may it join live chat, handle viewers' redemptions, or sync the live rewards (#146).
+        Assert.False(configuration.GetValue<bool>("Twitch:EnableChatBot"));
+        Assert.False(configuration.GetValue<bool>("Twitch:EnablePubSub"));
+        Assert.False(configuration.GetValue<bool>("Twitch:EnableRequests"));
+        Assert.True(configuration.GetValue<bool>("Twitch:DryRunMode"));
     }
 
     [Fact]
