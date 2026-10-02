@@ -117,7 +117,7 @@ The environment variable and its appsettings overlay decide behavior. Code never
 | Hostname | `ASA-SERVER` | `DESKTOP-8SJEK72` |
 | Role | Develop, prove, and harden the spectator, CLI, and services. Not a broadcast. | Real spectating and the 24/7 Twitch stream (`saltysadism`). Intel Arc A310 guest vs this live box. |
 | Repo | `C:\heroesreplay\HeroesReplay` | Same path. A release install rewrites OBS assets under its own `obs` folder (`C:\heroesreplay\app\obs`), not this checkout. |
-| Stream | **Do not go live.** OBS, predictions, chat, rewards, and requested-replay recording/YouTube are for testing only. | Production ingest. Do not experiment on the live stream. |
+| Stream | **Do not go live.** OBS, chat, rewards, and requested-replay recording/YouTube are for testing only. Predictions are off (`Twitch:EnablePredictions` false in `appsettings.dev.json`): this box uses the live channel, and opening a game here would cancel the live prediction. | Production ingest. Do not experiment on the live stream. |
 | Upgrades | Safe to stop spectate, rebuild, reboot the guest (not Unraid/Tower). | Schedule **downtime** before pull, rebuild, client/OBS upgrades, or reboots. |
 | Spectator engine | **Normal** to kill `heroesreplay`, quit HotS, rebuild Release, and relaunch only long enough to prove a change. Stop when the proof is done. | Do **not** kill/rebuild/restart the spectator as a routine. This is the production spectate. |
 
