@@ -68,6 +68,15 @@ public class YouTubeLibraryPlannerTests
         "Blue triple bruiser, Red 4 healers",
         new[] { "Unusual drafts - Triple bruiser", "Unusual drafts - 4 healers" }
     )]
+    [InlineData(
+        "Blue double bruiser, Red dive, Split push",
+        new[]
+        {
+            "Unusual drafts - Double bruiser",
+            "Unusual drafts - Dive",
+            "Unusual drafts - Split push",
+        }
+    )]
     public void Titles_UnusualDraftGoesIntoOnePlaylistPerNote(string draft, string[] expected)
     {
         YouTubeLibraryVideo video = Video("v", "Dragon Shire", "Storm League", "Master");

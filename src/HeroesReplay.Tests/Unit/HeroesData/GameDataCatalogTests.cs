@@ -102,6 +102,11 @@ public class GameDataCatalogTests
                 xalatath.ReleaseDate
             );
             Assert.Contains("Ganker", xalatath.Descriptors);
+            Assert.False(xalatath.IsMelee);
+            Assert.Equal(8, xalatath.Ratings.Damage);
+            Assert.Equal(6, xalatath.Ratings.Survivability);
+            Assert.True(johanna.IsMelee);
+            Assert.Equal(10, johanna.Ratings.Survivability);
             Assert.Equal("Tank", johanna.Role);
             Assert.Equal("Johanna", johanna.HyperlinkId);
             Assert.Equal(UnitGroup.Hero, data.GetUnitGroup("HeroXalatath"));
@@ -199,6 +204,8 @@ public class GameDataCatalogTests
               "hyperlinkId": "Xalatath",
               "attributeId": "HXAL",
               "releaseDate": "2026-09-28",
+              "isMelee": false,
+              "ratings": { "complexity": 5, "damage": 8, "survivability": 6, "utility": 6 },
               "attributes": ["Heroic"],
               "scalingLinkIds": ["HeroDummyVeterancy"],
               "playstyles": ["Ganker"],
@@ -211,6 +218,8 @@ public class GameDataCatalogTests
               "hyperlinkId": "Johanna",
               "attributeId": "Crus",
               "releaseDate": "2015-06-02",
+              "isMelee": true,
+              "ratings": { "complexity": 2, "damage": 3, "survivability": 10, "utility": 6 },
               "attributes": ["Heroic"],
               "playstyles": ["RoleTank"]
             }
