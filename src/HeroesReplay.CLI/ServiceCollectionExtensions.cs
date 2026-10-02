@@ -110,6 +110,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
             .AddSingleton<IAbilityDetector, AbilityDetector>()
+            .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
             .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
             .AddSingleton<IReplayLoader, ReplayLoader>()
             .AddSingleton<IContextFileManager, ContextFileManager>()
