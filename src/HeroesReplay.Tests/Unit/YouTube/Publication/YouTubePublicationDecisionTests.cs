@@ -156,11 +156,24 @@ public class YouTubePublicationDecisionTests
             out IReadOnlyList<string> negativeErrors
         );
 
+        ReplayMediaPolicySettings behind = Bind(
+            Policy(
+                "All",
+                "AllEligible",
+                """
+                , "MaxPublishAhead": "-1.00:00:00"
+                """
+            ),
+            out IReadOnlyList<string> behindErrors
+        );
+
         Assert.Contains(ReplayMediaPolicyStartup.Unreadable + ":MaxPublicPerDay", unreadableErrors);
         Assert.Contains(
             ReplayMediaConfigurationError.MinimumPublicIntervalNegative,
             negativeErrors
         );
+        Assert.Contains(ReplayMediaConfigurationError.MaxPublishAheadNegative, behindErrors);
+        Assert.Equal("configuration", Send(behind, ReplayMediaPriority.Requested).Reason);
         Assert.False(Send(unreadable, ReplayMediaPriority.Requested).Allow);
         Assert.Equal("configuration", Send(unreadable, ReplayMediaPriority.Requested).Reason);
         Assert.False(Send(negative, ReplayMediaPriority.Requested).Allow);
@@ -168,7 +181,7 @@ public class YouTubePublicationDecisionTests
     }
 
     [Fact]
-    public void DayCapOfOne_RefusesTheSecondPublicationInsideTheRollingDay()
+    public void DayCapOfOne_SchedulesTheSecondPublicationWhenTheRollingDayHasRoom()
     {
         ReplayMediaPolicySettings settings = Require(
             Policy(
@@ -192,8 +205,10 @@ public class YouTubePublicationDecisionTests
 
             Assert.Equal(1, settings.MaxPublicPerDay);
             Assert.True(first.Allow);
-            Assert.False(second.Allow);
+            Assert.Equal(Now, first.PublishAtUtc);
+            Assert.True(second.Allow);
             Assert.Equal("day", second.Reason);
+            Assert.Equal(Now.AddHours(24), second.PublishAtUtc);
         }
         finally
         {
@@ -409,6 +424,7 @@ public class YouTubePublicationDecisionTests
         Assert.Contains("\"MaxPublicPerDay\": 6", text, StringComparison.Ordinal);
         Assert.Contains("\"MaxPublicPerWeek\": 30", text, StringComparison.Ordinal);
         Assert.Contains("\"MinimumPublicInterval\": \"02:00:00\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"MaxPublishAhead\": \"7.00:00:00\"", text, StringComparison.Ordinal);
         Assert.Contains(
             "\"OrdinaryCandidateMaxAge\": \"3.00:00:00\"",
             text,
@@ -430,6 +446,7 @@ public class YouTubePublicationDecisionTests
         Assert.Equal(6, settings.MaxPublicPerDay);
         Assert.Equal(30, settings.MaxPublicPerWeek);
         Assert.Equal(TimeSpan.FromHours(2), settings.MinimumPublicInterval);
+        Assert.Equal(TimeSpan.FromDays(7), settings.MaxPublishAhead);
         Assert.Equal(TimeSpan.FromHours(72), settings.OrdinaryCandidateMaxAge);
         Assert.Equal(TimeSpan.FromHours(8), settings.MapCooldown);
         Assert.Equal(TimeSpan.FromHours(8), settings.RankCooldown);

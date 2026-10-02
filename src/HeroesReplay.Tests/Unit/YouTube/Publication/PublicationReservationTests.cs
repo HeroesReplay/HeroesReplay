@@ -12,7 +12,7 @@ public class PublicationReservationTests
     private static readonly DateTimeOffset Now = new(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void TryReserve_PersistsOneSlotAndStopsASecondOne()
+    public void TryReserve_PersistsOneSlotAndSchedulesTheNextOneLater()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-slots-" + Path.GetRandomFileName());
         Directory.CreateDirectory(root);
@@ -45,15 +45,24 @@ public class PublicationReservationTests
 
             Assert.True(first.Allow);
             Assert.Equal(PublicationReservation.Granted, first.Kind);
+            Assert.Equal(Now, first.PublishAtUtc);
             Assert.Contains("reserved|", saved, StringComparison.Ordinal);
             Assert.Contains("replay-1", saved, StringComparison.Ordinal);
             Assert.Equal(saved, reread);
             Assert.True(same.Allow);
+            Assert.Equal("reserved", same.Reason);
+            Assert.Equal(Now, same.PublishAtUtc);
             Assert.Equal(1, CountLines(path, "replay-1"));
-            Assert.False(second.Allow);
+            // Same map and focus hero, so the second waits out the 8 hour cooldowns, not 2 hours.
+            Assert.True(second.Allow);
             Assert.Equal("interval", second.Reason);
-            Assert.Equal(PublicationReservation.Refused, second.Kind);
-            Assert.Equal(0, CountLines(path, "replay-2"));
+            Assert.Equal(Now.AddHours(8), second.PublishAtUtc);
+            Assert.Equal(1, CountLines(path, "replay-2"));
+            Assert.Contains(
+                "reserved|" + Now.AddHours(8).ToString("o") + "|0|replay-2",
+                File.ReadAllText(path),
+                StringComparison.Ordinal
+            );
         }
         finally
         {
@@ -145,7 +154,7 @@ public class PublicationReservationTests
     }
 
     [Fact]
-    public void TryReserve_DefersTheSameMapAndRankAndStillAcceptsARequest()
+    public void TryReserve_SchedulesTheSameMapAfterItsCooldownAndARequestBeforeIt()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-variety-" + Path.GetRandomFileName());
         Directory.CreateDirectory(root);
@@ -183,29 +192,21 @@ public class PublicationReservationTests
                 "Diamond 1",
                 new[] { "Illidan" }
             );
-            PublicationReservationResult sameRank = Variety(
-                path,
-                Now.AddHours(6),
-                false,
-                "replay-4",
-                "Sky Temple",
-                "Diamond 2",
-                null
-            );
             string saved = File.ReadAllText(path);
 
             Assert.True(first.Allow);
-            Assert.False(sameMap.Allow);
+            Assert.Equal(Now, first.PublishAtUtc);
+            Assert.True(sameMap.Allow);
             Assert.Equal("map", sameMap.Reason);
-            Assert.Equal(0, CountLines(path, "replay-2"));
+            Assert.Equal(Now.AddHours(8), sameMap.PublishAtUtc);
+            Assert.Equal(1, CountLines(path, "replay-2"));
             Assert.True(requested.Allow);
-            Assert.False(sameRank.Allow);
-            Assert.Equal("rank", sameRank.Reason);
+            Assert.Equal("ready", requested.Reason);
+            Assert.Equal(Now.AddHours(3), requested.PublishAtUtc);
             Assert.Contains("replay-old", saved, StringComparison.Ordinal);
             Assert.Contains("Tomb%20of%20the%20Spider%20Queen", saved, StringComparison.Ordinal);
             Assert.Contains("Anub%27arak", saved, StringComparison.Ordinal);
             Assert.Contains("replay-3", saved, StringComparison.Ordinal);
-            Assert.Equal(0, CountLines(path, "replay-4"));
         }
         finally
         {

@@ -52,10 +52,10 @@ public class UploadHandoffTests
     }
 
     [Fact]
-    public void Apply_SchedulesPublishAtWhenTheProductionListingShouldBePublic()
+    public void Schedule_StoresTheReservedTimeWhenTheProductionListingShouldBePublic()
     {
-        DateTimeOffset now = new(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
-        DateTimeOffset last = now.AddHours(-1);
+        DateTimeOffset slot = new(2026, 10, 1, 4, 0, 0, TimeSpan.Zero);
+        var settings = new YouTubeSettings { PrivacyStatus = "public" };
         var entry = new YouTubeEntry
         {
             Title = "Volskaya Foundry - 1",
@@ -63,10 +63,11 @@ public class UploadHandoffTests
             DesiredPrivacyStatus = "public",
         };
 
-        UploadStaging.Apply(entry, new YouTubeSettings { PrivacyStatus = "public" }, now, last);
+        UploadStaging.Apply(entry, settings);
+        UploadStaging.Schedule(entry, settings, slot);
 
         Assert.Equal("private", entry.PrivacyStatus);
-        Assert.Equal(last.Add(PublicationSchedule.MinimumInterval), entry.PublishAtUtc);
+        Assert.Equal(slot, entry.PublishAtUtc);
         Assert.Equal(
             entry.PublishAtUtc,
             UploadVisibility.PublishAt(entry.DesiredPrivacyStatus, entry.PublishAtUtc)
@@ -74,22 +75,20 @@ public class UploadHandoffTests
     }
 
     [Fact]
-    public void Apply_DoesNotSchedulePublishAtForAPrivateListing()
+    public void Schedule_GivesAPrivateListingNoPublishTime()
     {
-        DateTimeOffset now = new(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
+        DateTimeOffset slot = new(2026, 10, 1, 4, 0, 0, TimeSpan.Zero);
+        var settings = new YouTubeSettings { PrivacyStatus = "private", TitlePrefix = "[TEST]" };
         var entry = new YouTubeEntry
         {
             Title = "Volskaya Foundry - 1",
             PrivacyStatus = "public",
             DesiredPrivacyStatus = "public",
+            PublishAtUtc = slot,
         };
 
-        UploadStaging.Apply(
-            entry,
-            new YouTubeSettings { PrivacyStatus = "private", TitlePrefix = "[TEST]" },
-            now,
-            null
-        );
+        UploadStaging.Apply(entry, settings);
+        UploadStaging.Schedule(entry, settings, slot);
 
         Assert.Equal("private", entry.PrivacyStatus);
         Assert.StartsWith("[TEST]", entry.Title, StringComparison.Ordinal);

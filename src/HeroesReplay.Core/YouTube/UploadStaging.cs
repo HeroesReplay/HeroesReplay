@@ -1,6 +1,5 @@
 using System;
 using HeroesReplay.Core.YouTube.Metadata;
-using HeroesReplay.Core.YouTube.Publication;
 
 namespace HeroesReplay.Core.YouTube;
 
@@ -15,45 +14,37 @@ public static class UploadStaging
 
     public static void Apply(YouTubeEntry entry, YouTubeSettings youtube)
     {
-        Apply(entry, youtube, null, null);
-    }
-
-    public static void Apply(
-        YouTubeEntry entry,
-        YouTubeSettings youtube,
-        DateTimeOffset? nowUtc,
-        DateTimeOffset? lastPublicUtc,
-        TimeSpan? minimumInterval = null
-    )
-    {
         YouTubeListing.Stamp(entry, youtube);
         if (entry == null)
         {
             return;
         }
 
-        string desiredFinal = string.IsNullOrWhiteSpace(entry.DesiredPrivacyStatus)
-            ? entry.PrivacyStatus
-            : entry.DesiredPrivacyStatus;
-        if (!YouTubeListing.IsPublic(youtube))
+        entry.PrivacyStatus = InitialPrivacy;
+    }
+
+    /// <summary>
+    /// Stores the reserved slot as the time YouTube should publish the video. Only a public
+    /// listing whose entry wants to be public gets a time. Anything else stays private.
+    /// </summary>
+    public static void Schedule(
+        YouTubeEntry entry,
+        YouTubeSettings youtube,
+        DateTimeOffset? publishAtUtc
+    )
+    {
+        if (entry == null)
         {
-            desiredFinal = UploadVisibility.Staged;
+            return;
         }
 
-        entry.PrivacyStatus = InitialPrivacy;
-        if (entry.PublishAtUtc == null && nowUtc != null)
-        {
-            entry.PublishAtUtc = PublicationSchedule.NextPublishAt(
-                desiredFinal,
-                nowUtc.Value,
-                lastPublicUtc,
-                minimumInterval
-            );
-        }
+        entry.PublishAtUtc = YouTubeListing.IsPublic(youtube)
+            ? UploadVisibility.PublishAt(entry.DesiredPrivacyStatus, publishAtUtc)
+            : null;
     }
 
     public static bool AllowsPublicReceipt(string actualPrivacy)
     {
-        return string.Equals(actualPrivacy, "public", System.StringComparison.OrdinalIgnoreCase);
+        return string.Equals(actualPrivacy, "public", StringComparison.OrdinalIgnoreCase);
     }
 }

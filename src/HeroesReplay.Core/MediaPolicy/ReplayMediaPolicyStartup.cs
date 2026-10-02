@@ -193,6 +193,12 @@ public static class ReplayMediaPolicyStartup
         );
         ApplyAge(
             section,
+            nameof(ReplayMediaPolicySettings.MaxPublishAhead),
+            value => settings.MaxPublishAhead = value,
+            errors
+        );
+        ApplyAge(
+            section,
             nameof(ReplayMediaPolicySettings.MapCooldown),
             value => settings.MapCooldown = value,
             errors

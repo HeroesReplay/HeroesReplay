@@ -58,6 +58,8 @@ public static class ReplayMediaConfigurationError
     public const string PublicWeekCapNegative = "public-week-cap-negative";
     public const string MinimumPublicIntervalNegative = "minimum-public-interval-negative";
     public const string MinimumPublicIntervalTooLarge = "minimum-public-interval-too-large";
+    public const string MaxPublishAheadNegative = "max-publish-ahead-negative";
+    public const string MaxPublishAheadTooLarge = "max-publish-ahead-too-large";
     public const string MapCooldownNegative = "map-cooldown-negative";
     public const string MapCooldownTooLarge = "map-cooldown-too-large";
     public const string FeaturedHeroCooldownNegative = "featured-hero-cooldown-negative";

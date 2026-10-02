@@ -103,6 +103,12 @@ public static class ReplayMediaPolicy
         );
         AddAge(
             errors,
+            settings.MaxPublishAhead,
+            ReplayMediaConfigurationError.MaxPublishAheadNegative,
+            ReplayMediaConfigurationError.MaxPublishAheadTooLarge
+        );
+        AddAge(
+            errors,
             settings.MapCooldown,
             ReplayMediaConfigurationError.MapCooldownNegative,
             ReplayMediaConfigurationError.MapCooldownTooLarge

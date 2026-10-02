@@ -44,6 +44,7 @@ public class YouTubeUploader : IYouTubeUploader
     private int insertsToday;
     private int deferredBySchedule;
     private int stuckPrivate;
+    private bool quotaHeld;
     private DateTimeOffset? lastInsertUtc;
     private DateTimeOffset? lastPublicUtc;
     private DateTimeOffset currentQuotaDay;
@@ -236,13 +237,7 @@ public class YouTubeUploader : IYouTubeUploader
                 : entry.PrivacyStatus;
         }
 
-        UploadStaging.Apply(
-            entry,
-            settings.YouTube,
-            DateTimeOffset.UtcNow,
-            lastPublicUtc,
-            PublishInterval(settings.ReplayMedia)
-        );
+        UploadStaging.Apply(entry, settings.YouTube);
 
         if (!string.IsNullOrWhiteSpace(entry.VideoId))
         {
@@ -277,13 +272,24 @@ public class YouTubeUploader : IYouTubeUploader
         }
 
         DateTimeOffset dispatchedAt = DateTimeOffset.UtcNow;
-        bool liveSend = settings.YouTube.Enabled != false && !settings.YouTube.DryRun;
-        if (
-            liveSend
-            && !await ReservePublicationSlot(entry, recording.FullName).ConfigureAwait(false)
-        )
+        bool enabled = settings.YouTube.Enabled != false;
+        bool liveSend = enabled && !settings.YouTube.DryRun;
+        if (liveSend && !QuotaHasRoom(recording.FullName))
         {
             return;
+        }
+
+        PublicationReservationResult slot = null;
+        if (enabled)
+        {
+            slot = await ReservePublicationSlot(entry, recording.FullName, dryRun: !liveSend)
+                .ConfigureAwait(false);
+            if (liveSend && !slot.Allow)
+            {
+                return;
+            }
+
+            UploadStaging.Schedule(entry, settings.YouTube, slot.Allow ? slot.PublishAtUtc : null);
         }
 
         var outbox = new UploadOutbox(MediaPolicyAttemptLog.AttemptsRoot(settings));
@@ -348,7 +354,7 @@ public class YouTubeUploader : IYouTubeUploader
                     recording.Length,
                     entry.Title
                 );
-                await CompleteDryRunAsync(recording, entry, token).ConfigureAwait(false);
+                await CompleteDryRunAsync(recording, entry, slot, token).ConfigureAwait(false);
                 return;
             }
 
@@ -380,35 +386,14 @@ public class YouTubeUploader : IYouTubeUploader
             }
         );
 
-        string insertPrivacy = UploadVisibility.InsertStatus(entry.PrivacyStatus);
-        DateTimeOffset? publishAt = UploadVisibility.PublishAt(
-            entry.DesiredPrivacyStatus,
-            entry.PublishAtUtc
-        );
-        var videoStatus = new VideoStatus { PrivacyStatus = insertPrivacy };
-        if (publishAt != null)
-        {
-            videoStatus.PublishAtDateTimeOffset = publishAt.Value;
-        }
-
-        var video = new Video
-        {
-            Snippet = new VideoSnippet
-            {
-                Title = entry.Title,
-                Description = string.Join(Environment.NewLine, entry.DescriptionLines),
-                Tags = entry.Tags,
-                CategoryId = entry.CategoryId,
-            },
-            Status = videoStatus,
-        };
-
+        Video video = UploadBody.Build(entry);
         logger.LogInformation(
-            "Uploading {Path} ({Bytes} bytes) as {Title} ({Privacy}).",
+            "Uploading {Path} ({Bytes} bytes) as {Title} ({Privacy}, publish at {PublishAt}).",
             recording.FullName,
             recording.Length,
             entry.Title,
-            insertPrivacy
+            video.Status.PrivacyStatus,
+            video.Status.PublishAtDateTimeOffset
         );
 
         using FileStream fileStream = recording.Open(
@@ -418,7 +403,7 @@ public class YouTubeUploader : IYouTubeUploader
         );
         VideosResource.InsertMediaUpload videosInsertRequest = youtubeService.Videos.Insert(
             video,
-            "snippet,status",
+            UploadBody.Part,
             fileStream,
             "video/*"
         );
@@ -472,12 +457,7 @@ public class YouTubeUploader : IYouTubeUploader
                 throw;
             }
 
-            if (YouTubeListQuota.IsExhausted(ex))
-            {
-                DateTimeOffset now = DateTimeOffset.UtcNow;
-                Bookkeep(() => quotaUnits.PauseLibrary(YouTubeListQuota.ResumeAt(now), now));
-            }
-
+            PauseOnQuota(ex);
             logger.LogError(
                 ex,
                 "Upload of {Path} stopped mid-send. It stays pending until an operator retries it.",
@@ -545,9 +525,10 @@ public class YouTubeUploader : IYouTubeUploader
             {
                 stuckPrivate++;
                 logger.LogInformation(
-                    "Replay {ReplayId} uploaded as {Privacy}. It stays pending until YouTube reports public.",
+                    "Replay {ReplayId} uploaded as {Privacy}. YouTube publishes it at {PublishAt}. The recording can go; the entry stays until YouTube reports public.",
                     entry.ReplayId,
-                    entry.ActualPrivacyStatus ?? UploadVisibility.Staged
+                    entry.ActualPrivacyStatus ?? UploadVisibility.Staged,
+                    entry.PublishAtUtc
                 );
             }
             else if (
@@ -575,6 +556,7 @@ public class YouTubeUploader : IYouTubeUploader
         else
         {
             await RecordInterruptedSendAsync(outbox, attemptId).ConfigureAwait(false);
+            PauseOnQuota(result.Exception);
             logger.LogWarning(
                 "Upload of {Path} stopped mid-send ({Status}). It stays pending until an operator retries it.",
                 recording.FullName,
@@ -607,11 +589,15 @@ public class YouTubeUploader : IYouTubeUploader
 
     private async Task SendPendingAsync()
     {
-        IReadOnlyList<string> pending = PendingYouTubeUpload.Find(
-            settings.ContextsDirectory,
-            settings.YouTube.EntryFileName,
-            settings.YouTube.EntryFileNameUploaded,
-            PendingYouTubeUpload.AttemptsDirectory(settings.Location?.DataDirectory)
+        quotaHeld = false;
+        IReadOnlyList<string> pending = PendingYouTubeUpload.RequestsFirst(
+            PendingYouTubeUpload.Find(
+                settings.ContextsDirectory,
+                settings.YouTube.EntryFileName,
+                settings.YouTube.EntryFileNameUploaded,
+                PendingYouTubeUpload.AttemptsDirectory(settings.Location?.DataDirectory)
+            ),
+            settings.YouTube.EntryFileName
         );
         if (pending.Count == 0)
         {
@@ -645,7 +631,66 @@ public class YouTubeUploader : IYouTubeUploader
         LogPublicationHealth(pending.Count, pending);
     }
 
-    private async Task<bool> ReservePublicationSlot(YouTubeEntry entry, string path)
+    /// <summary>
+    /// The YouTube quota is the only limit that keeps a recording on disk. The budget only
+    /// moves its publish time.
+    /// </summary>
+    private bool QuotaHasRoom(string path)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        YouTubeQuotaDay day;
+        try
+        {
+            day = quotaUnits.Read(now);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not read the YouTube quota units. The upload goes on.");
+            return true;
+        }
+
+        if (quotaUnits.MayUpload(day, now))
+        {
+            return true;
+        }
+
+        quotaHeld = true;
+        logger.LogInformation(
+            "Upload of {Path} waits for the YouTube quota ({Units} of {Daily} units used today, uploads paused until {PausedUntil}). It stays pending.",
+            path,
+            day.Total,
+            settings.YouTube.DailyQuotaUnits,
+            day.UploadsPausedUntil
+        );
+        return false;
+    }
+
+    private void PauseOnQuota(Exception exception)
+    {
+        if (!YouTubeListQuota.IsExhausted(exception))
+        {
+            return;
+        }
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset until = YouTubeListQuota.ResumeAt(now);
+        Bookkeep(() => quotaUnits.PauseLibrary(until, now));
+        Bookkeep(() => quotaUnits.PauseUploads(until, now));
+        logger.LogWarning(
+            "YouTube reported the quota exhausted. New uploads wait until {Until}.",
+            until
+        );
+    }
+
+    /// <summary>
+    /// Reserves the replay's publish time. A dry run plans in its own ledger, so its times do
+    /// not take a live slot, and it never deletes a recording.
+    /// </summary>
+    private async Task<PublicationReservationResult> ReservePublicationSlot(
+        YouTubeEntry entry,
+        string path,
+        bool dryRun
+    )
     {
         EnsureLedger();
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -658,12 +703,8 @@ public class YouTubeUploader : IYouTubeUploader
 
         PublicationSendFacts facts = await ReadSendFactsAsync(entry).ConfigureAwait(false);
         bool publicListing = YouTubeListing.IsPublic(settings.YouTube);
-        string ledgerPath =
-            settings.Location?.DataDirectory == null
-                ? null
-                : Path.Combine(settings.Location.DataDirectory, "publication-reservations.txt");
         PublicationReservationResult reserved = PublicationReservation.TryReserve(
-            ledgerPath,
+            ReservationsPath(dryRun),
             publicListing,
             insertsToday,
             now,
@@ -684,6 +725,18 @@ public class YouTubeUploader : IYouTubeUploader
             entry?.Rank,
             entry?.Heroes
         );
+        if (dryRun)
+        {
+            logger.LogInformation(
+                "Dry run plan for {Path}: {Kind} ({Reason}), publish at {PublishAt}.",
+                path,
+                reserved.Kind,
+                reserved.Reason,
+                reserved.PublishAtUtc
+            );
+            return reserved;
+        }
+
         if (reserved.Kind == PublicationReservation.Terminal)
         {
             logger.LogInformation(
@@ -692,22 +745,42 @@ public class YouTubeUploader : IYouTubeUploader
                 reserved.Reason
             );
             DeleteRecording(path);
-            return false;
+            return reserved;
         }
 
         if (reserved.Allow)
         {
-            return true;
+            logger.LogInformation(
+                "Replay {ReplayId} publishes at {PublishAt} ({Reason}). It is sent now.",
+                entry?.ReplayId,
+                reserved.PublishAtUtc,
+                reserved.Reason
+            );
+            return reserved;
         }
 
         deferredBySchedule++;
         logger.LogInformation(
-            "Upload of {Path} waits for the publication schedule ({Reason}). It stays pending.",
+            "Upload of {Path} has no publish time within {Ahead} ({Reason}). It stays pending.",
             path,
+            settings.ReplayMedia?.MaxPublishAhead,
             reserved.Reason
         );
         LogPublicationHealth(1, new[] { path });
-        return false;
+        return reserved;
+    }
+
+    private string ReservationsPath(bool dryRun)
+    {
+        if (settings.Location?.DataDirectory == null)
+        {
+            return null;
+        }
+
+        return Path.Combine(
+            settings.Location.DataDirectory,
+            dryRun ? "publication-reservations-dry-run.txt" : "publication-reservations.txt"
+        );
     }
 
     private static string WorkKey(YouTubeEntry entry, string path)
@@ -771,16 +844,6 @@ public class YouTubeUploader : IYouTubeUploader
         );
     }
 
-    private static TimeSpan? PublishInterval(ReplayMediaPolicySettings media)
-    {
-        if (!PublicationSchedule.ConfigurationAllowsSend(media))
-        {
-            return null;
-        }
-
-        return media.MinimumPublicInterval;
-    }
-
     private void LogPublicationHealth(int pending, IReadOnlyList<string> candidates)
     {
         EnsureLedger();
@@ -790,7 +853,7 @@ public class YouTubeUploader : IYouTubeUploader
             pending,
             insertsToday,
             deferredBySchedule,
-            insertsToday >= media.MaxInsertsPerQuotaDay,
+            quotaHeld || insertsToday >= media.MaxInsertsPerQuotaDay,
             "1",
             PublicationSchedule.PublishedIn(publicAtUtc, now, TimeSpan.FromHours(24)),
             PublicationSchedule.PublishedIn(publicAtUtc, now, TimeSpan.FromDays(7)),
@@ -818,8 +881,18 @@ public class YouTubeUploader : IYouTubeUploader
             reserved = 0;
         }
 
-        DateTimeOffset next =
-            lastPublicUtc == null ? now : lastPublicUtc.Value.Add(media.MinimumPublicInterval);
+        DateTimeOffset? latest = PublicationReservation.Latest(ReservationsPath(dryRun: false));
+        if (lastPublicUtc != null && (latest == null || lastPublicUtc.Value > latest.Value))
+        {
+            latest = lastPublicUtc;
+        }
+
+        DateTimeOffset next = latest == null ? now : latest.Value.Add(media.MinimumPublicInterval);
+        if (next < now)
+        {
+            next = now;
+        }
+
         PublicationHealth.WriteStatus(
             Path.Combine(settings.Location.DataDirectory, "publication-status.txt"),
             health,
@@ -1013,18 +1086,30 @@ public class YouTubeUploader : IYouTubeUploader
         }
     }
 
+    /// <summary>
+    /// The receipt is the plan a live send would follow: the insert settings, and the publish
+    /// time or the reason the recording would wait.
+    /// </summary>
     private async Task CompleteDryRunAsync(
         FileInfo recording,
         YouTubeEntry entry,
+        PublicationReservationResult slot,
         CancellationToken token
     )
     {
         string receiptPath = Path.Combine(recording.Directory.FullName, "youtube-dry-run.json");
+        Video video = UploadBody.Build(entry);
         string receipt = JsonSerializer.Serialize(
             new
             {
                 entry.Title,
                 entry.PrivacyStatus,
+                entry.DesiredPrivacyStatus,
+                PublishAtUtc = video.Status.PublishAtDateTimeOffset,
+                Schedule = slot?.Kind,
+                ScheduleReason = slot?.Reason,
+                video.Status.SelfDeclaredMadeForKids,
+                video.Snippet.CategoryId,
                 Bytes = recording.Length,
                 Recording = recording.Name,
                 Simulated = true,

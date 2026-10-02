@@ -6,7 +6,7 @@ Production is `HEROES_REPLAY_ENV=prod` (`DESKTOP-8SJEK72`). The environment deci
 
 ## Production settings
 
-`appsettings.prod.json` is the production policy. It records every spectated replay and offers every eligible recording to YouTube, then the caps below space the public videos.
+`appsettings.prod.json` is the production policy. It records every spectated replay and uploads every eligible recording as soon as the YouTube quota allows. The caps below decide when each video goes public, not whether it is uploaded.
 
 ```json
 "YouTube": {
@@ -21,6 +21,7 @@ Production is `HEROES_REPLAY_ENV=prod` (`DESKTOP-8SJEK72`). The environment deci
   "MaxPublicPerDay": 6,
   "MaxPublicPerWeek": 30,
   "MinimumPublicInterval": "02:00:00",
+  "MaxPublishAhead": "7.00:00:00",
   "OrdinaryCandidateMaxAge": "3.00:00:00",
   "MapCooldown": "08:00:00",
   "RankCooldown": "08:00:00",
@@ -31,9 +32,9 @@ Production is `HEROES_REPLAY_ENV=prod` (`DESKTOP-8SJEK72`). The environment deci
 }
 ```
 
-`OrdinaryCandidateMaxAge` of `3.00:00:00` is 72 hours. `72:00:00` is 72 days, because that is how .NET reads a time span.
+`OrdinaryCandidateMaxAge` of `3.00:00:00` is 72 hours. `72:00:00` is 72 days, because that is how .NET reads a time span. `MaxPublishAhead` of `7.00:00:00` is 7 days. That keeps every scheduled video among the channel's newest 50 uploads when it goes public (at most 6 uploads a day for 7 days), so the library pass sees it on the first listing page. Raise it only together with that page in mind.
 
-The base `appsettings.json` has the same ten algorithm keys and does not select a recording mode or a publication mode, so a process with no overlay records nothing and publishes nothing. Dev (`appsettings.dev.json`) uses the same modes as production, with `YouTube:DryRun` true, `PrivacyStatus` private, and a `[TEST]` title. Dev inherits the caps from the base file.
+The base `appsettings.json` has the same eleven algorithm keys and does not select a recording mode or a publication mode, so a process with no overlay records nothing and publishes nothing. Dev (`appsettings.dev.json`) uses the same modes as production, with `YouTube:DryRun` true, `PrivacyStatus` private, and a `[TEST]` title. Dev inherits the caps from the base file.
 
 `PublicationMode` `AllEligible` is the live channel: a paced archive of the Storm League games the stream already plays. `Curated` is the other content policy. It sends a paid request, a pentakill or team wipe, or a high-skill game, and it does not send an ordinary game. High skill does nothing until `MinimumHighSkillRank` or `MinimumHighSkillMmr` is set. Production does not set either, so no replay is high-skill.
 
@@ -90,44 +91,69 @@ After a recording that can be published, a second check decides whether `youtube
 | `Disabled` | Not written |
 | `RequestedOnly` | Written for a request |
 | `Curated` | Written for a request. Written for notable and high-skill while fewer than `MaxPublicPerDay` videos were observed public in the last 24 hours. An ordinary replay stays local. |
-| `AllEligible` | Written for every class that is still inside its age, including when the day is already full. The uploader waits. |
+| `AllEligible` | Written for every class that is still inside its age, including when the day is already full. The uploader schedules it for a later day. |
 
-The day count at this step is `Data`'s publication ledger of videos already observed public. The send step below uses its own reservation file, and that file is what spaces the uploads.
+The day count at this step is `Data`'s publication ledger of videos already observed public. The send step below uses its own reservation file, and that file is what spaces the publish times.
 
 ## When a video is sent
 
-The uploader watches `Data\Contexts` for an mp4. It also retries pending files every 5 minutes. A dry-run process does not retry on that timer. It writes `youtube-dry-run.json` and does not call YouTube.
+The uploader watches `Data\Contexts` for an mp4. It also retries pending files every 5 minutes. A pass sends a viewer request first (`Requested` in the entry), then the oldest recording first. A dry-run process does not retry on that timer. It writes `youtube-dry-run.json` and does not call YouTube.
 
-When `YouTube:PrivacyStatus` is public (production), a verified replay is sent only when every line below allows it. The first refusal wins.
+A recording stays on disk only for the YouTube quota or for the media rules. These lines decide whether it is sent now. The first refusal wins.
 
 1. Configuration is valid.
 2. The replay is not already published, incomplete, or uncorrelated.
-3. The mode allows this class. `Disabled` refuses everyone. `RequestedOnly` refuses anything except a request. `Curated` refuses ordinary. `AllEligible` allows every class through to the caps.
-4. `videos.insert` calls today are under `MaxInsertsPerQuotaDay`. The quota day starts at midnight Pacific.
-5. Public videos in the last 7 days are under `MaxPublicPerWeek`.
-6. Public videos in the last 24 hours are under `MaxPublicPerDay`.
-7. Reserved request room. With 6 and 2, a non-request stops once 4 videos are in the day. A request may use the last 2, and it stops once 2 requests are already in the day and the ordinary room is full. A request does not skip the day cap, the week cap, the quota, or the interval.
-8. The previous public video is at least `MinimumPublicInterval` ago.
-9. An ordinary replay's game time is inside `OrdinaryCandidateMaxAge`. A request, a notable replay, and a high-skill replay do not use this age at send time. They already expired by their own windows above.
-10. The map was not already reserved inside `MapCooldown`. The check looks at every reserved slot in the window, not only the latest video. Comparison ignores case and surrounding spaces. One earlier upload of that map is enough. The reason is `map`.
-11. The rank tier was not already reserved inside `RankCooldown`. Division is ignored, so Diamond 3 and Diamond 1 are the same tier. An unrecognized rank is compared as written. MMR is not part of this check. The reason is `rank`.
-12. Heroes. A focus hero that was the focus of a reserved upload inside `FeaturedHeroCooldown` waits. Separately, when at least `MaxSharedHeroes` heroes from this replay (4 unless configured otherwise, and 0 turns this roster check off) appear anywhere in reserved uploads inside that window, the replay waits. One shared hero does not wait. The reason is `hero`.
+3. The mode allows this class. `Disabled` refuses everyone. `RequestedOnly` refuses anything except a request. `Curated` refuses ordinary. `AllEligible` allows every class.
+4. The day's quota has room. `Data\youtube-quota-units.json` has at least 1600 units (one `videos.insert`) left under `YouTube:DailyQuotaUnits`, library spend included, and no quota response from an upload paused uploads. `videos.insert` calls today are under `MaxInsertsPerQuotaDay`. The quota day starts at midnight Pacific.
+5. When `YouTube:PrivacyStatus` is public, an ordinary replay's game time is inside `OrdinaryCandidateMaxAge`. A request, a notable replay, and a high-skill replay do not use this age at send time. They already expired by their own windows above. An ordinary replay that is too old is not retried, and its recording is deleted.
+6. When `YouTube:PrivacyStatus` is public, a publish time inside `MaxPublishAhead` (7 days) keeps every rule below. With none, the reason is `horizon` and the recording waits for a later pass.
 
-A paid request skips the map, rank, and hero checks. Its slot still records the map, the rank, the focus hero, and the roster, so the next ordinary replay sees them. A refusal for `map`, `rank`, or `hero` stays pending. The uploader tries the next pending file on the same pass. Nothing sorts the queue by a score.
+The rules below no longer hold a recording back. They choose its publish time: the earliest time from now that keeps all of them. Each rule looks both ways, at videos already public and at slots already scheduled, so a later replay can take a free time between two earlier ones.
 
-A private listing (`YouTube:PrivacyStatus` private, as in `appsettings.dev.json`) still stops at the quota. It does not apply the day cap, the week cap, the interval, or the map, rank, and hero checks. The listing stays private and the title carries `YouTube:TitlePrefix` (`[TEST]` in dev).
+- Week. No rolling 7 days holds more than `MaxPublicPerWeek` videos.
+- Day. No rolling 24 hours holds more than `MaxPublicPerDay` videos.
+- Reserved request room. With 6 and 2, a non-request may not join a rolling 24 hours that already holds 4 videos, requests included. A request may use the last 2, unless 2 requests already sit in that 24 hours and the ordinary room is full. A request does not skip the day cap, the week cap, or the interval.
+- Interval. Every other publish time is at least `MinimumPublicInterval` away.
+- Map. No slot within `MapCooldown` has the same map. Comparison ignores case and surrounding spaces.
+- Rank. No slot within `RankCooldown` has the same tier. Division is ignored, so Diamond 3 and Diamond 1 are the same tier. An unrecognized rank is compared as written. MMR is not part of this check.
+- Heroes. No slot within `FeaturedHeroCooldown` has the same focus hero. Separately, fewer than `MaxSharedHeroes` heroes from this replay (4 unless configured otherwise, and 0 turns this roster check off) appear in slots within that window. One shared hero is fine.
 
-One replay id takes one publication slot, stored in `Data\publication-reservations.txt`. A retry of that same id does not take a second slot. An older line with only the time, the request flag, and the replay id still counts for the day, the week, and the interval. An ordinary replay that is too old is not retried. Any other refusal stays pending until a later pass.
+A paid request skips the map, rank, and hero rules and may use the reserved room, so it gets the earliest time. Its slot still records the map, the rank, the focus hero, and the roster, so later ordinary replays plan around them. Nothing sorts the queue by a score.
 
-The insert is private. When the desired privacy is public, the video also gets `publishAt`: now, or the previous public time plus `MinimumPublicInterval` when that is later. The entry is renamed to `youtube-entry-uploaded.json` when YouTube's insert response is already public. A response that is still private leaves the entry pending. This process does not later ask YouTube whether `publishAt` has fired. The reservation written at send time is what the next replay's day, week, and interval checks see.
+The log names the rule that pushed the time later (`interval`, `day`, `reserved`, `week`, `map`, `rank`, or `hero`), or `ready` when the time is now.
 
-A granted send that fails still keeps its slot. The retry is allowed through that slot and spends another `videos.insert` only if a new upload starts.
+A private listing (`YouTube:PrivacyStatus` private, as in `appsettings.dev.json`) still stops at the quota. It has no publish time and no other rule. The listing stays private and the title carries `YouTube:TitlePrefix` (`[TEST]` in dev).
+
+One replay id takes one publication slot, stored in `Data\publication-reservations.txt`. The slot's time is the publish time, which can be days after the upload. A retry of that same id does not take a second slot and uses the same time. A clip shares its replay's slot, so it publishes with the full match. An older line with only the time, the request flag, and the replay id still counts for the day, the week, and the interval.
+
+The insert is private with `publishAt` set to the slot's time. A time that has already passed by the end of the upload publishes the video right away. The entry is renamed to `youtube-entry-uploaded.json` when YouTube's insert response is already public. A response that is still private keeps `youtube-entry.json` with the video id and the publish time. This process does not later ask YouTube whether `publishAt` has fired. The library pass below sees it go public.
+
+A granted send that fails still keeps its slot. The retry is allowed through that slot and spends another `videos.insert` only if a new upload starts. A quota response from YouTube during an upload pauses new uploads and the library pass until the next Pacific quota day.
+
+A dry run plans in `Data\publication-reservations-dry-run.txt`, so its times never take a live slot. `youtube-dry-run.json` records the plan: the insert privacy, the desired privacy, `PublishAtUtc`, the schedule result and its reason (for example `granted` and `interval`, or `refused` and `horizon`), `SelfDeclaredMadeForKids`, and the category. A dry run never deletes a recording.
 
 ## How often
 
 The spectator plays the next queued replay as soon as the previous session ends. YouTube does not follow that clock.
 
-With the production settings a new replay is sent at most every 2 hours, at most 6 in any rolling 24 hours, and at most 30 in any rolling 7 days. The same map, the same rank tier, or a roster that shares 4 or more heroes with uploads from the last 8 hours waits, and the next different pending file is tried instead. Non-requests stop once 4 of those 6 are used. A paid request can take a remaining slot until 2 requests have already been sent in that day, and it is not held for map, rank, or heroes. The quota cap is 80 inserts per Pacific day, shared by full matches and clips.
+A recording is uploaded as soon as the quota allows. With 10000 units a day and 1600 per insert, that is at most 6 uploads per Pacific day, shared by full matches and clips, and fewer when the library pass already spent units. `MaxInsertsPerQuotaDay` (80) is a second cap above that.
+
+With the production settings the videos go public at most every 2 hours, at most 6 in any rolling 24 hours (a non-request only while fewer than 4 are in it), and at most 30 in any rolling 7 days. The same map, the same rank tier, or a roster that shares 4 or more heroes with a video 8 hours either side moves the time later.
+
+Eight ordinary games that end at 10:00, 10:30, and every half hour to 13:30 UTC, on eight maps and four rank tiers, on a quota day with nothing spent yet:
+
+| Game | Uploaded | Publishes | Why not earlier |
+| --- | --- | --- | --- |
+| 1 | 10:00 | 10:00 | |
+| 2 | 10:30 | 12:00 | interval |
+| 3 | 11:00 | 14:00 | interval |
+| 4 | 11:30 | 16:00 | interval |
+| 5 | 12:00 | next day 10:00 | reserved: 4 non-requests are in every 24 hours until game 1 leaves |
+| 6 | 12:30 | next day 12:00 | reserved |
+| 7 | after the quota day turns (07:00 or 08:00 UTC) | next day 14:00 | quota held the upload, then reserved |
+| 8 | after the quota day turns | next day 16:00 | quota held the upload, then reserved |
+
+A paid request that ends at 14:00 that day publishes at 18:00, the first time 2 hours from every other video. A ninth ordinary game publishes on the third day at 10:00. The recordings of games 1 to 6 go on the retention sweep that follows each upload. Only games 7 and 8 wait on disk, for the quota.
 
 ## What the video contains
 
@@ -148,11 +174,21 @@ A hero is featured when its name is in `RecentHeroes`, or when the catalog `rele
 
 The description starts with `Twitch: https://twitch.tv/saltysadism`, then `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note, `Featuring:` when a new hero is in the title, the pentakill or team wipe as a highlight, and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, and those events. The entry records `TemplateVersion` 5.
 
+Every `videos.insert`, full match or clip, is built by `UploadBody` with the `snippet,status` parts:
+
+- Audience: `status.selfDeclaredMadeForKids` is false, which is Studio's "No, it's not made for kids".
+- Age: nothing sets `contentDetails.contentRating.ytRating`, so no video is restricted to viewers over 18.
+- `status.privacyStatus` private, with `status.publishAt` set to the slot's time when the listing is public.
+- `status.containsSyntheticMedia` false (Studio's altered content question), `status.embeddable` true, and `status.license` `youtube`.
+- `snippet.categoryId` from the entry, or `20` (Gaming) when the entry has none, as an older clip entry can.
+- `snippet.defaultLanguage` and `snippet.defaultAudioLanguage` `en`.
+- The title, the description lines joined by line breaks, and the tags.
+
 Videos uploaded before this template can still have BattleTag numbers in the roster lines, or a viewer's name in the title. `tools/youtube-fix-descriptions.cs` is a one-off script that rewrites those videos on YouTube. It only prints the changes unless it is given `--apply`, and it changes titles only with `--titles`.
 
 Pentakill and team-wipe clips are separate full-frame cuts under the context `clips` folder, 12 seconds before the streak and 8 seconds after it on the match clock. `clips.json` in that context lists each cut with the hero and the killing blows (`second` and `victim`). The hero name is the English catalog name when the catalog has that hero. Each clip has its own `youtube-entry.json` and can be inserted as its own video. It uses the parent replay's class and the parent replay's one publication slot. Each insert still counts toward the quota. Clip titles look like `Li-Ming - pentakill - Alterac Pass - 65550001`.
 
-After a successful upload, retention deletes the mp4 on the next sweep. The context folder itself lasts `VideoKeepDays` (3 in production).
+After a successful upload, retention deletes the mp4 on the next sweep, which the uploader runs right after the insert. The video may still be waiting for its `publishAt`. The context folder itself lasts `VideoKeepDays` (3 in production), and an entry that waits for `publishAt` no longer keeps it.
 
 ## The library record
 
@@ -165,6 +201,8 @@ The uploader process owns every YouTube call. Besides uploads, it runs one libra
 1. **List the channel.** `channels.list` once for the uploads playlist id (1 unit), then `playlistItems.list` with `snippet,status`, 50 videos and 1 unit per page, newest first. Every replay id found goes into `Data\youtube-replay-ids.txt`. A video in the record whose privacy changed (a scheduled upload that went public) gets a new line. Until a listing has once reached the last page, every page is read (7 units for 338 videos). After that a listing stops at the first page with no new video, so a pass usually costs 1 or 2 units. When the pass learns to read a new fact (`YouTubeVideoFacts.Version`, now 2 for the draft note and the named player), the next listing reads every page once more, and a video already in the record gets a new line with the draft note or named player its description shows. Nothing the record already has is replaced.
 2. **Backfill.** A channel video missing from the record is read from its title and description. The current template has `Map:`, `Mode:`, `Rank:`, and `Build:` lines, plus `Draft:` and `Featured:` when they apply. Older uploads (`Sky Temple - 65269475 - Platinum` with only `Game type:` and `Rank:` lines) have no build, and a few have a localized map name. Whatever is missing comes from Heroes Profile by replay id, with the rank looked up from player MMR only when a Storm League video has none. At most `YouTube:LibraryLookupsPerPass` (50) lookups run per pass. A video that resolves is recorded and never looked up again. One that does not stays in the index as unresolved and is tried again 6 hours later, then 12, 24, and so on up to every 7 days. An inserted clip is resolved the same way to get its build.
 3. **File.** The record's resolved public videos, plus any public `youtube-entry-uploaded.json` still under `Data\Contexts` that the record does not have, are planned with the playlist groups below. The newest upload is planned first, so a new video is filed before the backlog of older ones. Each video id is filed once per playlist (`Data\youtube-playlists.json`). The channel's playlists are listed once per pass when a title is not cached (1 unit per 50), a missing playlist is created (50 units), and each video insert costs 50 units. Three failures in a row stop the filing for that pass. Nothing is removed from a playlist.
+
+A scheduled upload is filed once it is public, not at insert. The insert appends it to the record as private. The first pass after its `publishAt` lists it public, appends a new line, and files it, so it lands on its playlists within `LibraryInterval` (1 hour) of going public. That pass reads the first page of uploads every time and an older page only while the page before it held a new video, so it sees the change while the video is among the newest 50 uploads. `MaxPublishAhead` of 7 days keeps it there. Filing at insert is not possible with the current code: the upload consent is the `youtube.upload` scope, which cannot call `playlistItems.insert`, and the planner files only public videos so a playlist never lists a video viewers cannot open yet.
 
 Upload OAuth is the `youtube.upload` scope. The library pass (listing, playlist create, and insert) uses a separate consent, the full `youtube` scope, stored for `{ChannelId}:library`. That consent also lists private and scheduled uploads. Channel id in the base file is `UCpf5rn5UlJTUZF9n98HXS5A`.
 
@@ -229,12 +267,12 @@ The uploader process and `youtube library` share one count of quota units per Pa
 | `playlists.insert` | 50 |
 | Any list call | 1 |
 
-Uploads go first. An insert is counted when it is sent, and the units never refuse an upload. `MaxInsertsPerQuotaDay` still caps uploads as before. The library pass reserves each call's units before it makes the call, and it stops when either limit is reached:
+Uploads go first. An insert is counted when it is sent. A new upload starts only while the day has room for one more insert (1600 units) under `YouTube:DailyQuotaUnits`, library spend included. Otherwise the recording stays on disk until the next Pacific quota day. `MaxInsertsPerQuotaDay` still caps uploads as before. The library pass reserves each call's units before it makes the call, and it stops when either limit is reached:
 
 - `YouTube:LibraryUnitsPerDay` (3000) for the pass in one day.
 - `YouTube:DailyQuotaUnits` (10000) minus `YouTube:QuotaReserveUnits` (1600) for the whole day, uploads included.
 
-A quota response from YouTube, during the pass or an upload, pauses the pass until the next Pacific quota day. Uploads continue.
+A quota response from YouTube during the pass pauses the pass until the next Pacific quota day, and uploads continue. A quota response during an upload pauses both the pass and new uploads until then (`UploadsPausedUntil`). That upload itself is ambiguous and waits for an operator retry, like any other upload that stopped mid-send.
 
 Backfilling the 338 videos on the channel today (4 already on the current template) costs about 7 units of listing (and 7 more once, for the full re-listing that reads the draft note and named player), 334 Heroes Profile lookups (the older template has no build) spread over 7 passes, and the playlist inserts. Each group that is on adds one insert per video: 338 × 50 = 16,900 units, about 6 days at 3000 units a day. With the defaults a ranked Storm League video is 4 inserts (map, mode, rank, patch), so the backlog is about 1,352 × 50 = 67,600 units, plus 50 for each playlist that does not exist yet (about 30: one per map, mode, league, patch line, draft note, and the review playlist). At 3000 units a day that is about 23 days. New uploads share that room (200 units each, so about 1,200 on a day with 6 uploads), which makes it closer to 5 to 6 weeks, and longer on days when uploads leave less room under the ceiling. An insert an earlier pass already made (the patch playlist) is not made again. To shorten the backlog, turn `Mode` off first: almost every video is Storm League, so the `Storm League` playlist is close to the whole channel.
 

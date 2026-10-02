@@ -4,10 +4,14 @@ using HeroesReplay.Core.MediaPolicy;
 
 namespace HeroesReplay.Core.YouTube.Publication;
 
-/// <summary>One recent upload the diversity check can see. Older reservation lines have none of these fields.</summary>
+/// <summary>
+/// One video the budget counts: a reserved slot at the time it publishes, or a video that is
+/// already public. Older reservation lines have no map, rank, or heroes.
+/// </summary>
 public sealed class PublicationSample
 {
     public DateTimeOffset At { get; init; }
+    public bool Requested { get; init; }
     public string Map { get; init; }
     public string Rank { get; init; }
     public string Hero { get; init; }
@@ -15,14 +19,19 @@ public sealed class PublicationSample
 }
 
 /// <summary>
-/// Public hosts wait for the rolling interval. A prelive host still uploads private
-/// listings, and both hosts stop at the videos.insert quota-day cap.
+/// The budget picks the publish time. It does not hold an upload back. A public listing is
+/// inserted private with the earliest time that keeps the interval, the day and week caps,
+/// the reserved request room, and the map, rank, and hero cooldowns. A prelive host still
+/// uploads private listings with no time, and both hosts stop at the videos.insert quota-day cap.
 /// </summary>
 public static class PublicationSchedule
 {
     public const int MaxInsertsPerQuotaDay = 80;
 
     public static readonly TimeSpan MinimumInterval = TimeSpan.FromHours(2);
+
+    private static readonly TimeSpan Day = TimeSpan.FromHours(24);
+    private static readonly TimeSpan Week = TimeSpan.FromDays(7);
 
     public static bool ConfigurationAllowsSend(ReplayMediaPolicySettings settings)
     {
@@ -80,6 +89,7 @@ public static class PublicationSchedule
     public const int MaxSharedHeroes = 4;
     public static readonly TimeSpan OrdinaryMaxAge = TimeSpan.FromHours(72);
     public static readonly TimeSpan DiversityCooldown = TimeSpan.FromHours(8);
+    public static readonly TimeSpan PublishAhead = TimeSpan.FromDays(7);
 
     public static PublicationDecision Decide(
         bool publicListing,
@@ -126,6 +136,11 @@ public static class PublicationSchedule
         );
     }
 
+    /// <summary>
+    /// Whether the replay may publish at <paramref name="now"/> itself. The send path uses
+    /// <see cref="Plan"/>, which applies the same rules and looks for a later time instead of
+    /// refusing. <paramref name="recent"/> only feeds the map, rank, and hero checks.
+    /// </summary>
     public static PublicationDecision Decide(
         ReplayMediaPolicySettings settings,
         PublicationSendFacts facts,
@@ -144,6 +159,105 @@ public static class PublicationSchedule
         string rank = null,
         IReadOnlyList<string> heroes = null,
         IReadOnlyList<PublicationSample> recent = null
+    )
+    {
+        PublicationDecision gate = Gate(settings, facts, publicListing, insertsThisQuotaDay, now);
+        if (gate != null)
+        {
+            return gate;
+        }
+
+        List<PublicationSample> paced = History(publicAtUtc, lastPublicUtc, requestedInDay, now);
+        List<PublicationSample> shown = Seen(lastMap, lastMapUtc, lastHero, lastHeroUtc);
+        AddSamples(shown, recent);
+        AddSamples(shown, paced);
+        string conflict = Conflict(
+            settings,
+            facts.Criteria == ReplayMediaPriority.Requested,
+            now,
+            paced,
+            shown,
+            map,
+            rank,
+            hero,
+            heroes
+        );
+        return conflict == null
+            ? PublicationDecision.Granted("ready")
+            : PublicationDecision.Refused(conflict);
+    }
+
+    /// <summary>
+    /// The earliest publish time from <paramref name="now"/> that every pacing rule allows.
+    /// Each rule looks both ways, at videos already public and at slots already scheduled, so a
+    /// later replay can take a free time between two earlier ones. A request skips the map,
+    /// rank, and hero checks and may use the reserved request room, so it gets the earliest
+    /// time. No time inside <see cref="ReplayMediaPolicySettings.MaxPublishAhead"/> is
+    /// <c>horizon</c>, and the recording waits. A granted reason is <c>ready</c> when the time is
+    /// now, otherwise the rule that pushed it later. A private listing has no publish time.
+    /// <paramref name="seen"/> only feeds the map, rank, and hero checks.
+    /// </summary>
+    public static PublicationDecision Plan(
+        ReplayMediaPolicySettings settings,
+        PublicationSendFacts facts,
+        bool publicListing,
+        int insertsThisQuotaDay,
+        DateTimeOffset now,
+        IReadOnlyList<PublicationSample> slots,
+        string map,
+        string rank,
+        string hero,
+        IReadOnlyList<string> heroes,
+        IReadOnlyList<PublicationSample> seen = null
+    )
+    {
+        PublicationDecision gate = Gate(settings, facts, publicListing, insertsThisQuotaDay, now);
+        if (gate != null)
+        {
+            return gate;
+        }
+
+        bool requested = facts.Criteria == ReplayMediaPriority.Requested;
+        DateTimeOffset horizon = now + settings.MaxPublishAhead;
+        TimeSpan reach = Reach(settings);
+        List<PublicationSample> paced = Within(slots, now - reach, horizon + reach);
+        List<PublicationSample> shown = Within(seen, now - reach, horizon + reach);
+        shown.AddRange(paced);
+        string waited = null;
+        foreach (DateTimeOffset at in Candidates(settings, now, horizon, shown))
+        {
+            string conflict = Conflict(
+                settings,
+                requested,
+                at,
+                paced,
+                shown,
+                map,
+                rank,
+                hero,
+                heroes
+            );
+            if (conflict == null)
+            {
+                return PublicationDecision.Scheduled(waited ?? "ready", at);
+            }
+
+            waited ??= conflict;
+        }
+
+        return PublicationDecision.Refused("horizon");
+    }
+
+    /// <summary>
+    /// Media facts, the mode, and the quota decide whether the replay is sent at all. Only a
+    /// public listing goes on to the pacing rules. Null means the pacing rules decide.
+    /// </summary>
+    private static PublicationDecision Gate(
+        ReplayMediaPolicySettings settings,
+        PublicationSendFacts facts,
+        bool publicListing,
+        int insertsThisQuotaDay,
+        DateTimeOffset now
     )
     {
         if (!ConfigurationAllowsSend(settings))
@@ -167,7 +281,6 @@ public static class PublicationSchedule
             return PublicationDecision.Refused("uncorrelated");
         }
 
-        bool requested = send.Criteria == ReplayMediaPriority.Requested;
         PublicationDecision criteria = CriteriaGate(settings, send.Criteria);
         if (criteria != null)
         {
@@ -184,44 +297,6 @@ public static class PublicationSchedule
             return PublicationDecision.Granted("private-listing");
         }
 
-        int day = CountSince(publicAtUtc, now, TimeSpan.FromHours(24));
-        int week = CountSince(publicAtUtc, now, TimeSpan.FromDays(7));
-        if (week >= settings.MaxPublicPerWeek)
-        {
-            return PublicationDecision.Refused("week");
-        }
-
-        if (day >= settings.MaxPublicPerDay)
-        {
-            return PublicationDecision.Refused("day");
-        }
-
-        int ordinaryRoom = settings.MaxPublicPerDay - settings.ReservedRequestSlotsPerDay;
-        if (!requested && day >= ordinaryRoom)
-        {
-            return PublicationDecision.Refused("reserved");
-        }
-
-        if (
-            requested
-            && requestedInDay >= settings.ReservedRequestSlotsPerDay
-            && day >= ordinaryRoom
-        )
-        {
-            return PublicationDecision.Refused("reserved");
-        }
-
-        if (lastPublicUtc != null)
-        {
-            if (
-                now < lastPublicUtc.Value
-                || now - lastPublicUtc.Value < settings.MinimumPublicInterval
-            )
-            {
-                return PublicationDecision.Refused("interval");
-            }
-        }
-
         if (
             send.Criteria == ReplayMediaPriority.Ordinary
             && send.RecordedAtUtc != null
@@ -231,95 +306,333 @@ public static class PublicationSchedule
             return PublicationDecision.Refused("stale");
         }
 
-        if (!requested)
-        {
-            PublicationDecision diversity = Diversity(
-                settings,
-                now,
-                map,
-                rank,
-                hero,
-                heroes,
-                lastMap,
-                lastMapUtc,
-                lastHero,
-                lastHeroUtc,
-                recent
-            );
-            if (diversity != null)
-            {
-                return diversity;
-            }
-        }
-
-        return PublicationDecision.Granted("ready");
+        return null;
     }
 
-    private static PublicationDecision Diversity(
+    /// <summary>The pacing rule a video at <paramref name="at"/> breaks, or null.</summary>
+    private static string Conflict(
         ReplayMediaPolicySettings settings,
-        DateTimeOffset now,
+        bool requested,
+        DateTimeOffset at,
+        IReadOnlyList<PublicationSample> paced,
+        IReadOnlyList<PublicationSample> shown,
         string map,
         string rank,
         string hero,
-        IReadOnlyList<string> heroes,
-        string lastMap,
-        DateTimeOffset? lastMapUtc,
-        string lastHero,
-        DateTimeOffset? lastHeroUtc,
-        IReadOnlyList<PublicationSample> recent
+        IReadOnlyList<string> heroes
     )
     {
-        if (MapRepeats(map, lastMap, lastMapUtc, now, settings.MapCooldown, recent))
+        string window = Windows(settings, requested, at, paced);
+        if (window != null)
         {
-            return PublicationDecision.Refused("map");
+            return window;
         }
 
-        if (RankRepeats(rank, now, settings.RankCooldown, recent))
+        foreach (PublicationSample sample in paced)
         {
-            return PublicationDecision.Refused("rank");
+            if (Near(at, sample.At, settings.MinimumPublicInterval))
+            {
+                return "interval";
+            }
+        }
+
+        if (requested)
+        {
+            return null;
+        }
+
+        if (MapRepeats(map, at, settings.MapCooldown, shown))
+        {
+            return "map";
+        }
+
+        if (RankRepeats(rank, at, settings.RankCooldown, shown))
+        {
+            return "rank";
         }
 
         if (
             HeroRepeats(
                 hero,
                 heroes,
-                lastHero,
-                lastHeroUtc,
-                now,
+                at,
                 settings.FeaturedHeroCooldown,
                 settings.MaxSharedHeroes,
-                recent
+                shown
             )
         )
         {
-            return PublicationDecision.Refused("hero");
+            return "hero";
         }
 
         return null;
     }
 
-    private static bool MapRepeats(
-        string map,
-        string lastMap,
-        DateTimeOffset? lastMapUtc,
-        DateTimeOffset now,
-        TimeSpan cooldown,
-        IReadOnlyList<PublicationSample> recent
+    /// <summary>
+    /// A video at <paramref name="at"/> joins every rolling window that ends between
+    /// <paramref name="at"/> and one window length later. The fullest of those ends at
+    /// <paramref name="at"/> or at a scheduled slot inside that span.
+    /// </summary>
+    private static string Windows(
+        ReplayMediaPolicySettings settings,
+        bool requested,
+        DateTimeOffset at,
+        IReadOnlyList<PublicationSample> paced
     )
     {
-        if (WithinCooldown(map, lastMap, lastMapUtc, now, cooldown))
+        foreach (DateTimeOffset end in Ends(paced, at, Week))
         {
-            return true;
+            if (Count(paced, end, Week, out _) >= settings.MaxPublicPerWeek)
+            {
+                return "week";
+            }
         }
 
-        if (recent == null)
+        int ordinaryRoom = settings.MaxPublicPerDay - settings.ReservedRequestSlotsPerDay;
+        bool reserved = false;
+        foreach (DateTimeOffset end in Ends(paced, at, Day))
         {
-            return false;
+            int day = Count(paced, end, Day, out int requests);
+            if (day >= settings.MaxPublicPerDay)
+            {
+                return "day";
+            }
+
+            if (
+                day >= ordinaryRoom
+                && (!requested || requests >= settings.ReservedRequestSlotsPerDay)
+            )
+            {
+                reserved = true;
+            }
         }
 
-        foreach (PublicationSample sample in recent)
+        return reserved ? "reserved" : null;
+    }
+
+    private static IEnumerable<DateTimeOffset> Ends(
+        IReadOnlyList<PublicationSample> paced,
+        DateTimeOffset at,
+        TimeSpan length
+    )
+    {
+        yield return at;
+        foreach (PublicationSample sample in paced)
         {
-            if (sample != null && WithinCooldown(map, sample.Map, sample.At, now, cooldown))
+            if (sample.At > at && sample.At - at < length)
+            {
+                yield return sample.At;
+            }
+        }
+    }
+
+    private static int Count(
+        IReadOnlyList<PublicationSample> paced,
+        DateTimeOffset end,
+        TimeSpan length,
+        out int requests
+    )
+    {
+        int count = 0;
+        requests = 0;
+        foreach (PublicationSample sample in paced)
+        {
+            if (sample.At <= end && end - sample.At < length)
+            {
+                count++;
+                if (sample.Requested)
+                {
+                    requests++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// The earliest allowed time is now or the moment one rule stops applying to one sample,
+    /// which is that sample's time plus the rule's span.
+    /// </summary>
+    private static SortedSet<DateTimeOffset> Candidates(
+        ReplayMediaPolicySettings settings,
+        DateTimeOffset now,
+        DateTimeOffset horizon,
+        IReadOnlyList<PublicationSample> shown
+    )
+    {
+        var times = new SortedSet<DateTimeOffset> { now };
+        TimeSpan[] spans =
+        {
+            settings.MinimumPublicInterval,
+            Day,
+            Week,
+            settings.MapCooldown,
+            settings.RankCooldown,
+            settings.FeaturedHeroCooldown,
+        };
+        foreach (PublicationSample sample in shown)
+        {
+            foreach (TimeSpan span in spans)
+            {
+                DateTimeOffset time = sample.At + span;
+                if (time > now && time <= horizon)
+                {
+                    times.Add(time);
+                }
+            }
+        }
+
+        return times;
+    }
+
+    /// <summary>The longest span any rule looks across. A sample further away changes nothing.</summary>
+    private static TimeSpan Reach(ReplayMediaPolicySettings settings)
+    {
+        TimeSpan reach = Week;
+        foreach (
+            TimeSpan span in new[]
+            {
+                settings.MinimumPublicInterval,
+                settings.MapCooldown,
+                settings.RankCooldown,
+                settings.FeaturedHeroCooldown,
+            }
+        )
+        {
+            if (span > reach)
+            {
+                reach = span;
+            }
+        }
+
+        return reach;
+    }
+
+    private static List<PublicationSample> Within(
+        IReadOnlyList<PublicationSample> samples,
+        DateTimeOffset after,
+        DateTimeOffset before
+    )
+    {
+        var kept = new List<PublicationSample>();
+        if (samples == null)
+        {
+            return kept;
+        }
+
+        foreach (PublicationSample sample in samples)
+        {
+            if (sample != null && sample.At > after && sample.At < before)
+            {
+                kept.Add(sample);
+            }
+        }
+
+        return kept;
+    }
+
+    private static void AddSamples(
+        List<PublicationSample> target,
+        IReadOnlyList<PublicationSample> samples
+    )
+    {
+        if (samples == null)
+        {
+            return;
+        }
+
+        foreach (PublicationSample sample in samples)
+        {
+            if (sample != null)
+            {
+                target.Add(sample);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The uploader's older publication ledger as samples. That many of the videos in the
+    /// last 24 hours count as requests.
+    /// </summary>
+    internal static List<PublicationSample> History(
+        IReadOnlyList<DateTimeOffset> publicAtUtc,
+        DateTimeOffset? lastPublicUtc,
+        int requestedInDay,
+        DateTimeOffset now
+    )
+    {
+        var samples = new List<PublicationSample>();
+        int requests = requestedInDay;
+        bool lastListed = lastPublicUtc == null;
+        if (publicAtUtc != null)
+        {
+            for (int i = publicAtUtc.Count - 1; i >= 0; i--)
+            {
+                DateTimeOffset at = publicAtUtc[i];
+                bool request = requests > 0 && at <= now && now - at < Day;
+                if (request)
+                {
+                    requests--;
+                }
+
+                lastListed |= at == lastPublicUtc;
+                samples.Add(new PublicationSample { At = at, Requested = request });
+            }
+        }
+
+        if (!lastListed)
+        {
+            samples.Add(new PublicationSample { At = lastPublicUtc.Value });
+        }
+
+        return samples;
+    }
+
+    /// <summary>The older ledger's last map and focus hero. They only feed the cooldowns.</summary>
+    internal static List<PublicationSample> Seen(
+        string lastMap,
+        DateTimeOffset? lastMapUtc,
+        string lastHero,
+        DateTimeOffset? lastHeroUtc
+    )
+    {
+        var seen = new List<PublicationSample>();
+        if (!string.IsNullOrWhiteSpace(lastMap) && lastMapUtc != null)
+        {
+            seen.Add(new PublicationSample { At = lastMapUtc.Value, Map = lastMap });
+        }
+
+        if (!string.IsNullOrWhiteSpace(lastHero) && lastHeroUtc != null)
+        {
+            seen.Add(new PublicationSample { At = lastHeroUtc.Value, Hero = lastHero });
+        }
+
+        return seen;
+    }
+
+    private static bool Near(DateTimeOffset at, DateTimeOffset other, TimeSpan span)
+    {
+        return (at - other).Duration() < span;
+    }
+
+    private static bool Same(string value, string previous)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && !string.IsNullOrWhiteSpace(previous)
+            && string.Equals(value.Trim(), previous.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MapRepeats(
+        string map,
+        DateTimeOffset at,
+        TimeSpan cooldown,
+        IReadOnlyList<PublicationSample> shown
+    )
+    {
+        foreach (PublicationSample sample in shown)
+        {
+            if (Same(map, sample.Map) && Near(at, sample.At, cooldown))
             {
                 return true;
             }
@@ -330,29 +643,20 @@ public static class PublicationSchedule
 
     private static bool RankRepeats(
         string rank,
-        DateTimeOffset now,
+        DateTimeOffset at,
         TimeSpan cooldown,
-        IReadOnlyList<PublicationSample> recent
+        IReadOnlyList<PublicationSample> shown
     )
     {
         string tier = RankKey(rank);
-        if (tier == null || recent == null)
+        if (tier == null)
         {
             return false;
         }
 
-        foreach (PublicationSample sample in recent)
+        foreach (PublicationSample sample in shown)
         {
-            if (sample == null || now < sample.At || now - sample.At >= cooldown)
-            {
-                continue;
-            }
-
-            string previous = RankKey(sample.Rank);
-            if (
-                previous != null
-                && string.Equals(tier, previous, StringComparison.OrdinalIgnoreCase)
-            )
+            if (Near(at, sample.At, cooldown) && Same(tier, RankKey(sample.Rank)))
             {
                 return true;
             }
@@ -375,27 +679,17 @@ public static class PublicationSchedule
     private static bool HeroRepeats(
         string hero,
         IReadOnlyList<string> heroes,
-        string lastHero,
-        DateTimeOffset? lastHeroUtc,
-        DateTimeOffset now,
+        DateTimeOffset at,
         TimeSpan cooldown,
         int sharedLimit,
-        IReadOnlyList<PublicationSample> recent
+        IReadOnlyList<PublicationSample> shown
     )
     {
-        if (WithinCooldown(hero, lastHero, lastHeroUtc, now, cooldown))
+        foreach (PublicationSample sample in shown)
         {
-            return true;
-        }
-
-        if (recent != null && !string.IsNullOrWhiteSpace(hero))
-        {
-            foreach (PublicationSample sample in recent)
+            if (Same(hero, sample.Hero) && Near(at, sample.At, cooldown))
             {
-                if (sample != null && WithinCooldown(hero, sample.Hero, sample.At, now, cooldown))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 
@@ -419,43 +713,30 @@ public static class PublicationSchedule
             return false;
         }
 
-        var shown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (
-            !string.IsNullOrWhiteSpace(lastHero)
-            && lastHeroUtc != null
-            && now >= lastHeroUtc.Value
-            && now - lastHeroUtc.Value < cooldown
-        )
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (PublicationSample sample in shown)
         {
-            AddHero(shown, lastHero);
-        }
-
-        if (recent != null)
-        {
-            foreach (PublicationSample sample in recent)
+            if (!Near(at, sample.At, cooldown))
             {
-                if (sample == null || now < sample.At || now - sample.At >= cooldown)
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                AddHero(shown, sample.Hero);
-                if (sample.Heroes == null)
-                {
-                    continue;
-                }
+            AddHero(seen, sample.Hero);
+            if (sample.Heroes == null)
+            {
+                continue;
+            }
 
-                foreach (string name in sample.Heroes)
-                {
-                    AddHero(shown, name);
-                }
+            foreach (string name in sample.Heroes)
+            {
+                AddHero(seen, name);
             }
         }
 
         int shared = 0;
         foreach (string name in candidate)
         {
-            if (shown.Contains(name))
+            if (seen.Contains(name))
             {
                 shared++;
             }
@@ -514,38 +795,7 @@ public static class PublicationSchedule
         return null;
     }
 
-    private static bool WithinCooldown(
-        string value,
-        string previous,
-        DateTimeOffset? previousAt,
-        DateTimeOffset now,
-        TimeSpan cooldown
-    )
-    {
-        if (
-            string.IsNullOrWhiteSpace(value)
-            || string.IsNullOrWhiteSpace(previous)
-            || previousAt == null
-            || now < previousAt.Value
-        )
-        {
-            return false;
-        }
-
-        return string.Equals(value.Trim(), previous.Trim(), StringComparison.OrdinalIgnoreCase)
-            && now - previousAt.Value < cooldown;
-    }
-
     public static int PublishedIn(
-        IReadOnlyList<DateTimeOffset> times,
-        DateTimeOffset now,
-        TimeSpan window
-    )
-    {
-        return CountSince(times, now, window);
-    }
-
-    private static int CountSince(
         IReadOnlyList<DateTimeOffset> times,
         DateTimeOffset now,
         TimeSpan window
@@ -566,51 +816,6 @@ public static class PublicationSchedule
         }
 
         return count;
-    }
-
-    /// <summary>
-    /// A public listing is inserted private and carries the next UTC time YouTube should
-    /// publish it. A private listing has no publish time. The next time is now, unless the
-    /// previous public video was inside the minimum interval.
-    /// </summary>
-    public static DateTimeOffset? NextPublishAt(
-        string desiredFinal,
-        DateTimeOffset nowUtc,
-        DateTimeOffset? lastPublicUtc
-    )
-    {
-        return NextPublishAt(desiredFinal, nowUtc, lastPublicUtc, null);
-    }
-
-    public static DateTimeOffset? NextPublishAt(
-        string desiredFinal,
-        DateTimeOffset nowUtc,
-        DateTimeOffset? lastPublicUtc,
-        TimeSpan? minimumInterval
-    )
-    {
-        if (!string.Equals(desiredFinal, "public", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        if (nowUtc.Offset != TimeSpan.Zero)
-        {
-            return null;
-        }
-
-        TimeSpan interval = minimumInterval ?? MinimumInterval;
-        DateTimeOffset when = nowUtc;
-        if (lastPublicUtc != null && lastPublicUtc.Value.Offset == TimeSpan.Zero)
-        {
-            DateTimeOffset earliest = lastPublicUtc.Value.Add(interval);
-            if (earliest > when)
-            {
-                when = earliest;
-            }
-        }
-
-        return UploadVisibility.PublishAt(desiredFinal, when);
     }
 
     public static DateTimeOffset QuotaDayStart(DateTimeOffset utc)

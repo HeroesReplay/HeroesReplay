@@ -12,6 +12,7 @@ public sealed class YouTubeQuotaDay
     public int UploadUnits { get; set; }
     public int LibraryUnits { get; set; }
     public DateTimeOffset? LibraryPausedUntil { get; set; }
+    public DateTimeOffset? UploadsPausedUntil { get; set; }
 
     public int Total => UploadUnits + LibraryUnits;
 }
@@ -19,7 +20,8 @@ public sealed class YouTubeQuotaDay
 /// <summary>
 /// Quota units spent in the current Pacific quota day by the uploader process and
 /// <c>youtube library</c>, in <c>Data\youtube-quota-units.json</c>. Every change takes a
-/// lock file, so two processes cannot both spend the same room. Uploads are only counted.
+/// lock file, so two processes cannot both spend the same room. An upload is counted when it
+/// is sent, and a new upload starts only while the day has room for one more insert.
 /// The library pass reserves its units here before each call and stops when the room is gone.
 /// </summary>
 public sealed class YouTubeQuotaUnits
@@ -90,8 +92,38 @@ public sealed class YouTubeQuotaUnits
             }
         );
 
+    public void PauseUploads(DateTimeOffset until, DateTimeOffset utcNow) =>
+        Update(
+            utcNow,
+            day =>
+            {
+                day.UploadsPausedUntil = until;
+                return true;
+            }
+        );
+
     public static bool Paused(YouTubeQuotaDay day, DateTimeOffset utcNow) =>
         day?.LibraryPausedUntil is DateTimeOffset until && utcNow < until;
+
+    /// <summary>
+    /// True while the day has room for one more <c>videos.insert</c> under
+    /// <see cref="YouTubeSettings.DailyQuotaUnits"/>, library spend included, and no quota
+    /// response from an upload paused uploads until the next quota day.
+    /// </summary>
+    public bool MayUpload(YouTubeQuotaDay day, DateTimeOffset utcNow)
+    {
+        if (day == null)
+        {
+            return true;
+        }
+
+        if (day.UploadsPausedUntil is DateTimeOffset until && utcNow < until)
+        {
+            return false;
+        }
+
+        return settings.DailyQuotaUnits - day.Total >= VideoInsert;
+    }
 
     public int LibraryRoom(YouTubeQuotaDay day)
     {

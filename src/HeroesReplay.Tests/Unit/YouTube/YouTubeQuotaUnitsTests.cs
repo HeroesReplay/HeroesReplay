@@ -52,6 +52,30 @@ public sealed class YouTubeQuotaUnitsTests : IDisposable
     }
 
     [Fact]
+    public void MayUpload_HoldsTheNextInsertOnceTheDayHasNoRoomOrYouTubeSaidQuota()
+    {
+        var units = new YouTubeQuotaUnits(directory, settings);
+        int granted = 0;
+        while (units.MayUpload(units.Read(LateInDay), LateInDay))
+        {
+            units.SpendUpload(YouTubeQuotaUnits.VideoInsert, LateInDay);
+            granted++;
+        }
+
+        var paused = new YouTubeQuotaUnits(
+            Path.Combine(directory, "paused"),
+            new YouTubeSettings { DailyQuotaUnits = 10000 }
+        );
+        paused.PauseUploads(NextDay, LateInDay);
+
+        // Six inserts are 9600 units, and a seventh would pass the 10000 a day.
+        Assert.Equal(6, granted);
+        Assert.True(units.MayUpload(units.Read(NextDay), NextDay));
+        Assert.False(paused.MayUpload(paused.Read(LateInDay), LateInDay));
+        Assert.True(paused.MayUpload(paused.Read(NextDay), NextDay));
+    }
+
+    [Fact]
     public void Library_StopsAtItsDailyUnits()
     {
         var units = new YouTubeQuotaUnits(directory, settings);
