@@ -61,10 +61,22 @@ public sealed class NetshGameFirewall : IGameFirewall
 
     private FirewallRuleState AllowOne(HeroesFirewallRule rule, bool elevated)
     {
-        if (AlreadyAllows(rule))
+        int existing = CountAllowRules(rule);
+        if (existing == 1 || (existing > 1 && !elevated))
         {
             logger.LogDebug("Inbound access for {Program} is already allowed.", rule.ProgramPath);
             return FirewallRuleState.AlreadyAllowed;
+        }
+
+        if (existing > 1)
+        {
+            // Older builds added a copy on every launch because the check never matched.
+            run(DeleteArguments(rule), false);
+            logger.LogInformation(
+                "Removed {Count} copies of the inbound rule for {Program} before adding one.",
+                existing,
+                rule.ProgramPath
+            );
         }
 
         if (!elevated)
@@ -89,12 +101,43 @@ public sealed class NetshGameFirewall : IGameFirewall
         return FirewallRuleState.Added;
     }
 
-    private bool AlreadyAllows(HeroesFirewallRule rule)
+    /// <summary>
+    /// Allow rules with this name for this program. Only verbose output names the program, and
+    /// netsh wraps a long path onto the next line, so line breaks are removed before matching.
+    /// </summary>
+    private int CountAllowRules(HeroesFirewallRule rule)
     {
         NetshResult shown = run(ShowArguments(rule), true);
-        return shown.Code == 0
-            && shown.Text.IndexOf(rule.ProgramPath, StringComparison.OrdinalIgnoreCase) >= 0
-            && shown.Text.IndexOf("Allow", StringComparison.OrdinalIgnoreCase) >= 0;
+        if (shown.Code != 0)
+        {
+            return 0;
+        }
+
+        return CountAllowRules(shown.Text, rule.ProgramPath);
+    }
+
+    internal static int CountAllowRules(string verboseText, string programPath)
+    {
+        string flat = (verboseText ?? string.Empty)
+            .Replace("\r", string.Empty, StringComparison.Ordinal)
+            .Replace("\n", string.Empty, StringComparison.Ordinal);
+        if (flat.IndexOf(programPath, StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        int at = 0;
+        while ((at = flat.IndexOf("Action:", at, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            at += "Action:".Length;
+            if (flat.AsSpan(at).TrimStart().StartsWith("Allow", StringComparison.OrdinalIgnoreCase))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private void LogFailure(HeroesFirewallRule rule, Exception e)
@@ -108,7 +151,12 @@ public sealed class NetshGameFirewall : IGameFirewall
 
     internal static string ShowArguments(HeroesFirewallRule rule)
     {
-        return "advfirewall firewall show rule name=" + Quote(rule.Name);
+        return "advfirewall firewall show rule name=" + Quote(rule.Name) + " verbose";
+    }
+
+    internal static string DeleteArguments(HeroesFirewallRule rule)
+    {
+        return "advfirewall firewall delete rule name=" + Quote(rule.Name);
     }
 
     internal static string AddArguments(HeroesFirewallRule rule)
