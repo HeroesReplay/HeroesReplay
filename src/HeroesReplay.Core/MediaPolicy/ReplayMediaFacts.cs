@@ -7,6 +7,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.YouTube.Metadata;
 
 namespace HeroesReplay.Core.MediaPolicy;
 
@@ -47,7 +48,7 @@ public static class ReplayMediaFacts
             GameMode = GameMode(replay, profile),
             Rank = FirstText(profile?.Rank),
             AverageMmr = profile?.AverageMmr,
-            Roster = Roster(replay),
+            Roster = Roster(replay, heroes),
             FocusHero = PlayerPriorityRequest.HeroName(replay, request?.PlayerIndex),
             ViewerRequested = request != null,
             RecordAndUpload = request?.RecordAndUpload == true,
@@ -113,7 +114,10 @@ public static class ReplayMediaFacts
         return replay == null ? null : replay.GameMode.ToString();
     }
 
-    private static IReadOnlyList<ReplayMediaPlayer> Roster(Replay replay)
+    private static IReadOnlyList<ReplayMediaPlayer> Roster(
+        Replay replay,
+        IReadOnlyList<Hero> heroes
+    )
     {
         if (replay?.Players == null || replay.Players.Length == 0)
         {
@@ -132,7 +136,7 @@ public static class ReplayMediaFacts
                 new ReplayMediaPlayer
                 {
                     Team = player.Team,
-                    Hero = Hero(player),
+                    Hero = Hero(player, heroes),
                     Name = FirstText(player.Name),
                     BattleTag = player.BattleTag,
                     IsAi = player.PlayerType == PlayerType.Computer,
@@ -143,8 +147,25 @@ public static class ReplayMediaFacts
         return roster;
     }
 
-    private static string Hero(Player player)
+    /// <summary>
+    /// The catalog's English name, matched by attribute id first. The replay's character name is in
+    /// the uploader's game language, so a French or Korean replay would otherwise miss draft notes,
+    /// composition labels, and English titles.
+    /// </summary>
+    private static string Hero(Player player, IReadOnlyList<Hero> heroes)
     {
+        if (heroes != null && heroes.Count > 0)
+        {
+            Hero match =
+                HeroDraft.Find(heroes, player.HeroAttributeId)
+                ?? HeroDraft.Find(heroes, player.HeroId)
+                ?? HeroDraft.Find(heroes, player.Character);
+            if (!string.IsNullOrWhiteSpace(match?.Name))
+            {
+                return match.Name.Trim();
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(player.Character))
         {
             return player.Character.Trim();
