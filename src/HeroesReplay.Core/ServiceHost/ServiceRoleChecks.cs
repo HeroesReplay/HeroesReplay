@@ -12,7 +12,6 @@ namespace HeroesReplay.Core.ServiceHost;
 public sealed class SpectateStartupFacts
 {
     public string LaunchPath { get; set; }
-    public bool PrivilegeOk { get; set; }
     public object OcrResult { get; set; }
     public bool CaptureOk { get; set; }
     public bool PathsOk { get; set; }
@@ -56,7 +55,6 @@ public static class ServiceRoleChecks
 {
     public static ServiceRoleFacts Describe(
         string launchPath,
-        bool privilegeOk,
         object ocrResult,
         bool captureOk,
         bool pathsOk,
@@ -75,7 +73,6 @@ public static class ServiceRoleChecks
             Spectate = new SpectateStartupFacts
             {
                 LaunchPath = launchPath,
-                PrivilegeOk = privilegeOk,
                 OcrResult = ocrResult,
                 CaptureOk = captureOk,
                 PathsOk = pathsOk,
@@ -237,11 +234,6 @@ public static class ServiceRoleChecks
         if (!ServiceProcessPlan.IsHeroesReplay(Path.GetFileName(path ?? string.Empty)))
         {
             return "launch path is not heroesreplay.";
-        }
-
-        if (!facts.PrivilegeOk)
-        {
-            return "privilege check failed.";
         }
 
         if (facts.OcrResult == null)

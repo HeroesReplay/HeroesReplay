@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.ServiceHost;
-using HeroesReplay.Core.Shared;
 using Windows.Media.Ocr;
 
 namespace HeroesReplay.CLI.Commands.Services;
@@ -30,7 +29,6 @@ internal static class ServiceRoleStartup
             );
             ServiceRoleFacts facts = ServiceRoleChecks.Describe(
                 exe,
-                new AdminChecker().IsAdministrator(),
                 engine != null ? new object() : null,
                 settings.Capture != null
                     && ServiceRoleChecks.CaptureAvailable(settings.Capture.Method),

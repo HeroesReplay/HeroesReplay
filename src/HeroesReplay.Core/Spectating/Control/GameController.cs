@@ -1838,6 +1838,23 @@ public class GameController : IGameController
         cachedProcess = null;
     }
 
+    // An elevated game blocks memory reads and posted hotkeys from an unelevated spectator.
+    private void WarnIfGameIsElevated(int processId)
+    {
+        if (MediumIntegrityProcess.IsCurrentProcessElevated())
+        {
+            return;
+        }
+
+        if (MediumIntegrityProcess.IsProcessElevated(processId) != false)
+        {
+            logger.LogWarning(
+                "Heroes of the Storm (pid {Pid}) is elevated or its token cannot be read. The memory clock and hotkeys need it to run unelevated. Start Battle.net and Heroes from a normal, unelevated session.",
+                processId
+            );
+        }
+    }
+
     private bool TryGetGameHandle(out IntPtr handle)
     {
         handle = IntPtr.Zero;
@@ -1883,6 +1900,7 @@ public class GameController : IGameController
                 if (cachedProcess == null && !candidate.HasExited)
                 {
                     cachedProcess = candidate;
+                    WarnIfGameIsElevated(candidate.Id);
                     handle = GameWindowInput.FindLargestVisibleWindow(
                         candidate.Id,
                         minWidth,

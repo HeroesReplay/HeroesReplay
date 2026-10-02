@@ -1,5 +1,7 @@
 using System.CommandLine;
 using System.Linq;
+using System.Threading.Tasks;
+using HeroesReplay.CLI;
 using HeroesReplay.CLI.Commands;
 using Xunit;
 
@@ -173,5 +175,25 @@ public class CliHelpTests
         Assert.Contains("services start", library.Description);
         ParseResult once = root.Parse("youtube library --help");
         Assert.Empty(once.Errors);
+    }
+
+    [Fact]
+    public void ClientHelp_HasFirewall()
+    {
+        var root = new HeroesReplayCommand();
+        Command client = root.Subcommands.Single(c => c.Name == "client");
+        Command firewall = client.Subcommands.Single(c => c.Name == "firewall");
+        Assert.Contains("elevated", firewall.Description);
+        Assert.Empty(root.Parse("client firewall --help").Errors);
+    }
+
+    [Fact]
+    public async Task SpectateHelp_WorksWithoutElevation()
+    {
+        Assert.Equal(0, await new CommandLineService().InvokeAsync(new[] { "spectate", "--help" }));
+        Assert.Equal(
+            0,
+            await new CommandLineService().InvokeAsync(new[] { "spectate", "file", "--help" })
+        );
     }
 }

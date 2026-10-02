@@ -149,6 +149,68 @@ public class SupportedRewardsHolderTests
         return maps;
     }
 
+    [Fact]
+    public void Rewards_OnlyRankTitlesAskForARank()
+    {
+        var holder = new SupportedRewardsHolder(
+            new MapOnlyGameData(
+                new Map("Braxis Holdout", "BraxisHoldout", true, "standard", true),
+                new Map("Silver City", "SilverCity", true, "aram", false)
+            )
+        );
+
+        Assert.NotEmpty(holder.Rewards);
+        foreach (SupportedReward reward in holder.Rewards)
+        {
+            bool rankTitle = reward.Title.Contains("(Rank ", StringComparison.Ordinal);
+            Assert.True(
+                rankTitle == reward.RewardType.HasFlag(RewardType.Rank),
+                $"{reward.Title} is {reward.RewardType}"
+            );
+            Assert.Equal(
+                rankTitle || reward.RewardType == RewardType.ReplayId,
+                reward.IsUserInputRequired
+            );
+        }
+    }
+
+    [Fact]
+    public void RewardType_ModeMapAndRankCombinationsAreDistinct()
+    {
+        RewardType[] modes = { RewardType.ARAM, RewardType.QM, RewardType.UD, RewardType.SL };
+        var values = new HashSet<RewardType> { RewardType.ReplayId };
+        foreach (RewardType mode in modes)
+        {
+            Assert.True(values.Add(mode), mode.ToString());
+            Assert.True(values.Add(mode | RewardType.Map), mode + " | Map");
+            Assert.True(
+                values.Add(mode | RewardType.Map | RewardType.Rank),
+                mode + " | Map | Rank"
+            );
+            Assert.False((mode | RewardType.Map).HasFlag(RewardType.Rank), mode + " | Map");
+        }
+    }
+
+    [Theory]
+    [InlineData("\"QM, Map\"", RewardType.QM | RewardType.Map)]
+    [InlineData("\"SL, Map, Rank\"", RewardType.SL | RewardType.Map | RewardType.Rank)]
+    [InlineData("\"ARAM, Map\"", RewardType.ARAM | RewardType.Map)]
+    [InlineData("\"ReplayId\"", RewardType.ReplayId)]
+    public void RewardType_StoredNamesParseToTheIntendedValue(string json, RewardType expected)
+    {
+        var options = new JsonSerializerOptions
+        {
+            Converters =
+            {
+                new System.Text.Json.Serialization.JsonStringEnumConverter(
+                    allowIntegerValues: true
+                ),
+            },
+        };
+
+        Assert.Equal(expected, JsonSerializer.Deserialize<RewardType>(json, options));
+    }
+
     private sealed class MapOnlyGameData : IGameData
     {
         public MapOnlyGameData(params Map[] maps)

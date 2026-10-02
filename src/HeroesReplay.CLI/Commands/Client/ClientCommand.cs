@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.CommandLine;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.GameClient;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,6 +18,7 @@ public class ClientCommand : Command
     {
         Subcommands.Add(ConfigureCommand());
         Subcommands.Add(StatusCommand());
+        Subcommands.Add(FirewallCommand());
     }
 
     private static Command ConfigureCommand()
@@ -46,6 +49,59 @@ public class ClientCommand : Command
             }
         );
         return command;
+    }
+
+    private static Command FirewallCommand()
+    {
+        var command = new Command(
+            "firewall",
+            "Add an inbound Windows Firewall rule for each installed Heroes client exe. Needs an elevated shell; spectate itself does not."
+        );
+        command.SetAction(
+            async (parseResult, cancellationToken) =>
+            {
+                return await Task.Run(() => RunFirewall(), cancellationToken);
+            }
+        );
+        return command;
+    }
+
+    private static int RunFirewall()
+    {
+        if (!MediumIntegrityProcess.IsCurrentProcessElevated())
+        {
+            Console.Error.WriteLine(
+                "Adding firewall rules needs an elevated shell. Run `heroesreplay client firewall` as administrator."
+            );
+            return 1;
+        }
+
+        using ServiceProvider provider = CreateProvider();
+        AppSettings settings = provider.GetRequiredService<AppSettings>();
+        IGameFirewall firewall = provider.GetRequiredService<IGameFirewall>();
+        IReadOnlyList<InstalledClient> clients = InstalledClientCatalog.Clients(
+            settings.Location?.GameInstallDirectory
+        );
+        var paths = new List<string>(clients.Count);
+        foreach (InstalledClient client in clients)
+        {
+            paths.Add(client.ExePath);
+        }
+
+        int failed = 0;
+        foreach (FirewallRuleOutcome outcome in firewall.AllowInboundClients(paths))
+        {
+            Console.WriteLine($"{outcome.State}: {outcome.ProgramPath}");
+            if (
+                outcome.State is FirewallRuleState.Failed or FirewallRuleState.MissingNeedsElevation
+            )
+            {
+                failed++;
+            }
+        }
+
+        Console.WriteLine($"{paths.Count} installed client(s), {failed} without a rule.");
+        return failed == 0 ? 0 : 1;
     }
 
     private static int RunConfigure()

@@ -1,8 +1,6 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Shared;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI;
 
@@ -17,13 +15,6 @@ static class Program
         }
         catch (IOException) { }
 
-        using ServiceProvider provider = new ServiceCollection()
-            .AddSingleton<CommandLineService>()
-            .AddSingleton<IAdminChecker, AdminChecker>()
-            .BuildServiceProvider();
-        using IServiceScope scope = provider.CreateScope();
-        CommandLineService commandLineService =
-            scope.ServiceProvider.GetRequiredService<CommandLineService>();
-        return await commandLineService.InvokeAsync(args);
+        return await new CommandLineService().InvokeAsync(args);
     }
 }
