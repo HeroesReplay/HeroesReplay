@@ -58,7 +58,7 @@ public class PredictionLedgerTests
     }
 
     [Fact]
-    public async Task Open_SameTitleDifferentPrediction_DoesNotAdopt()
+    public async Task Open_ForeignLockedPrediction_IsCanceledAndANewOneOpens()
     {
         string directory = NewDirectory();
         try
@@ -69,19 +69,65 @@ public class PredictionLedgerTests
             TwitchMatchPredictionService service = Service(directory, http);
 
             bool opened = await service.OpenAsync(11, "Cursed Hollow", CancellationToken.None);
-            PredictionReconcileResult reconciled = await service.ReconcileAsync(
-                CancellationToken.None
-            );
             PredictionLedger reloaded = PredictionLedger.Load(PredictionLedger.PathFor(directory));
 
-            Assert.False(opened);
-            Assert.Equal(0, http.CreateCount);
-            Assert.Equal(0, http.PatchCount);
+            Assert.True(opened);
+            Assert.Equal(1, http.PatchCount);
+            Assert.Contains("pred-b", http.LastPatch, StringComparison.Ordinal);
+            Assert.Contains("CANCELED", http.LastPatch, StringComparison.Ordinal);
+            Assert.Equal(1, http.CreateCount);
             Assert.Null(reloaded.FindByPredictionId("pred-b"));
-            Assert.Equal(10, reloaded.FindByPredictionId("pred-a").ReplayId);
-            Assert.Equal("10:1", reloaded.FindByPredictionId("pred-a").SessionKey);
-            Assert.Null(reconciled.Resume);
-            Assert.Equal(new[] { "pred-b" }, reconciled.ForeignPredictionIds);
+            Assert.Equal(11, reloaded.FindByPredictionId("created-prediction").ReplayId);
+            Assert.Equal(PredictionLedgerState.Open, reloaded.FindByPredictionId("pred-a").State);
+        }
+        finally
+        {
+            Delete(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Open_PreviousReplaysPrediction_IsCanceledSettledAndReplaced()
+    {
+        string directory = NewDirectory();
+        try
+        {
+            Seed(directory, 10, 1, "pred-a", "Cursed Hollow: who wins?");
+            var http = new PredictionHttp();
+            http.Items.Add(Item("pred-a", "Cursed Hollow: who wins?", "LOCKED"));
+            TwitchMatchPredictionService service = Service(directory, http);
+
+            bool opened = await service.OpenAsync(11, "Cursed Hollow", CancellationToken.None);
+            PredictionLedger reloaded = PredictionLedger.Load(PredictionLedger.PathFor(directory));
+            PredictionLedgerEntry previous = reloaded.FindByPredictionId("pred-a");
+
+            Assert.True(opened);
+            Assert.Contains("CANCELED", http.LastPatch, StringComparison.Ordinal);
+            Assert.Equal(PredictionLedgerState.Settled, previous.State);
+            Assert.Equal("CANCELED", previous.SettledStatus);
+            Assert.Equal(1, http.CreateCount);
+        }
+        finally
+        {
+            Delete(directory);
+        }
+    }
+
+    [Fact]
+    public async Task Open_WhenLeftoverCannotBeCanceled_DoesNotCreate()
+    {
+        string directory = NewDirectory();
+        try
+        {
+            var http = new PredictionHttp { FailPatch = true };
+            http.Items.Add(Item("pred-b", "Cursed Hollow: who wins?", "LOCKED"));
+            TwitchMatchPredictionService service = Service(directory, http);
+
+            bool opened = await service.OpenAsync(11, "Cursed Hollow", CancellationToken.None);
+
+            Assert.False(opened);
+            Assert.Equal(1, http.PatchCount);
+            Assert.Equal(0, http.CreateCount);
         }
         finally
         {

@@ -102,27 +102,12 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 return true;
             }
 
-            if (owned == null)
+            // Twitch allows one ACTIVE or LOCKED prediction per channel. A new game cancels whatever
+            // is left over, which refunds every point, so an unknown prediction cannot block the channel.
+            if (!await CancelLeftoverAsync(channel, owned, replayId).ConfigureAwait(false))
             {
-                logger.LogWarning(
-                    "Twitch prediction {PredictionId} ({Title}, {Status}) is not in the ledger. Not adopting it.",
-                    channel.Id,
-                    channel.Title,
-                    channel.Status
-                );
+                return false;
             }
-            else
-            {
-                logger.LogWarning(
-                    "Twitch prediction {PredictionId} belongs to replay {ReplayId} attempt {Attempt}, not replay {Requested}.",
-                    channel.Id,
-                    owned.ReplayId,
-                    owned.Attempt,
-                    replayId
-                );
-            }
-
-            return false;
         }
 
         string channelId = await GetChannelIdAsync().ConfigureAwait(false);
@@ -544,6 +529,54 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         }
     }
 
+    private async Task<bool> CancelLeftoverAsync(
+        Prediction channel,
+        PredictionLedgerEntry owned,
+        int replayId
+    )
+    {
+        logger.LogWarning(
+            "Cancelling leftover Twitch prediction {PredictionId} ({Title}, {Status}, created {CreatedAt}, ledger replay {OwnerReplayId}) so replay {ReplayId} can open one. Points are refunded.",
+            channel.Id,
+            channel.Title,
+            channel.Status,
+            channel.CreatedAt,
+            owned?.ReplayId,
+            replayId
+        );
+
+        try
+        {
+            string channelId = string.IsNullOrWhiteSpace(channel.BroadcasterId)
+                ? await GetChannelIdAsync().ConfigureAwait(false)
+                : channel.BroadcasterId;
+            await api
+                .Helix.Predictions.EndPredictionAsync(
+                    channelId,
+                    channel.Id,
+                    PredictionEndStatus.CANCELED
+                )
+                .ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Could not cancel leftover Twitch prediction {PredictionId}. No new prediction for replay {ReplayId}.",
+                channel.Id,
+                replayId
+            );
+            return false;
+        }
+
+        if (owned != null && owned.State is not PredictionLedgerState.Settled)
+        {
+            MarkSettled(owned, PredictionRemoteState.Canceled);
+        }
+
+        return true;
+    }
+
     private async Task ConfirmAsync(
         PredictionLedgerEntry entry,
         Prediction[] data,
@@ -790,7 +823,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         {
             Prediction match = FindPrediction(remote, foreign);
             logger.LogWarning(
-                "Orphaned Twitch prediction {PredictionId} ({Title}, {Status}) has no ledger entry. Leaving it alone.",
+                "Orphaned Twitch prediction {PredictionId} ({Title}, {Status}) has no ledger entry. The next game cancels it.",
                 foreign,
                 match?.Title,
                 match == null ? null : match.Status.ToString()
