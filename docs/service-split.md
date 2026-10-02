@@ -57,8 +57,34 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 2. Done: `Engine` no longer starts `TwitchBot`. `twitch connect` uses `AddTwitchServices` and does not build the game/OCR graph.
 3. Done: `heroesprofile download` lists and downloads. `spectate heroesprofile` uses `ReplayCacheProvider` and only plays files already in `Data\Standard` and `Data\Requests`. Existing files are seeded into `Data\spectated-ids.txt` so the cache is not replayed from the beginning.
 4. Done: Blue/Red predictions run in `twitch connect`. The spectator does not call Helix. `twitch connect` opens a prediction when `status.json` phase is `TimerDetected`, and settles it from `completedReplayId` / `completedAt` / `completedWinnerTeam` (0 blue, 1 red, null cancels). Those completion fields are written when the spectate session ends and are not cleared when the next replay loads.
-5. Done: `heroesreplay services start` launches four processes (`spectate heroesprofile`, `twitch connect`, `heroesprofile download`, `youtube uploader`) and records their pids in `%LOCALAPPDATA%\HeroesReplay\services.json`. Each process is detached. Stdout and stderr go to `%LOCALAPPDATA%\HeroesReplay\logs\`. `services stop` writes `%LOCALAPPDATA%\HeroesReplay\services.stop`. Spectate, `twitch connect`, `heroesprofile download`, and `youtube uploader` cancel on that file. The spectator then runs its normal shutdown, which closes Heroes of the Storm. Processes still alive after 20 seconds are killed, and Heroes of the Storm is closed if spectate was one of the recorded processes. Once every role has exited, stop reads OBS `GetStreamStatus` once without changing it. It exits 1 when a role is still running (that role stays in `services.json`), the game is still open, or OBS is still streaming. `services status` reports the pid list plus `status.json`. Start does not turn on Twitch ingest, and it clears a leftover stop file before launching.
+5. Done: `heroesreplay services start` launches four processes (`spectate heroesprofile`, `twitch connect`, `heroesprofile download`, `youtube uploader`) and records their pids in `%LOCALAPPDATA%\HeroesReplay\services.json`. Each process is detached. Stdout and stderr go to `%LOCALAPPDATA%\HeroesReplay\logs\`. `services stop` writes `%LOCALAPPDATA%\HeroesReplay\services.stop`. Spectate, `twitch connect`, `heroesprofile download`, and `youtube uploader` cancel on that file. The spectator then runs its normal shutdown, which closes Heroes of the Storm. Processes still alive after 20 seconds are killed, and Heroes of the Storm is closed if spectate was one of the recorded processes. Once every role has exited, stop reads OBS `GetStreamStatus` once without changing it. It exits 1 when a role is still running (that role stays in `services.json`), the game is still open, or OBS is still streaming. Start does not turn on Twitch ingest, and it clears a leftover stop file before launching.
 6. Done: `!talents` / `!stats` and `Data\requests.json` are shared files with a cross-process lock. Chat in `twitch connect` can show a panel in the spectator process.
 7. Optional later: Windows services or containers for Twitch, the downloader, and YouTube. Not for the spectator.
+8. Done (#149): continuous role health. See below. Restart policy and durable per-role logs are later slices of #130.
+
+## Role health
+
+Each role writes its ready file, `%LOCALAPPDATA%\HeroesReplay\ready\<nonce>.json`, when it is ready, then rewrites it every `ServiceHealth:HeartbeatInterval` (15 s) from a timer (`ServiceHeartbeat`). The file carries `role`, `version`, `executablePath`, `nonce`, `pid`, `readiness` (`ready`, `stopping` once the stop file or Ctrl+C reaches the role, `exited` when it left its loop without one), `readyAt`, `heartbeatAt`, `heartbeatIntervalSeconds`, `lastSuccessfulWorkAt`, and `lastError` (`message`, `at`). Error and critical logs become `lastError`, with tokens redacted.
+
+Successful work is role-defined:
+
+| Role | Work | Default `ServiceHealth` threshold |
+| --- | --- | --- |
+| spectate | A spectate tick: the HUD clock advanced, or one pass of the replay loop ended | `SpectateWorkThreshold` 20 min |
+| twitch | A Twitch reconcile: one prediction watcher pass (every second) | `TwitchWorkThreshold` 5 min |
+| download | A download pass (every 2 to 15 s) | `DownloadWorkThreshold` 15 min |
+| youtube | An upload pass: the pending drain, or the one-minute poll | `YouTubeWorkThreshold` 30 min |
+
+`services status` reads `services.json`, the process table, and each heartbeat:
+
+| State | Code | Rule |
+| --- | --- | --- |
+| ready | `service.ready` | Alive, heartbeat fresh, work inside the threshold, no newer error |
+| degraded | `service.degraded` | Alive and heartbeating, but the last successful work (or `readyAt` before the first) is older than the role's threshold, or `lastError` is newer than it |
+| stale | `service.stale` | Alive, but the heartbeat is older than `StaleAfterIntervals` (3) intervals, or missing |
+| stopped | `service.stopped` | Not in `services.json`, or exited after a stop request |
+| failed | `service.failed` | In `services.json`, gone, and no stop request was recorded |
+
+`--output json` prints `schemaVersion` (1), `ok`, `code` (the worst role: failed, stale, degraded, ready, stopped), `message`, `environment`, `checkedAt`, `stopRequested`, `roles[]` (state, code, cause, remediation, pid, path, version, readiness, heartbeat and work ages with their limits, `lastError`), and a `spectator` summary of `status.json`. It exits 1 when any role is failed, stale, or degraded.
 
 Do not start Twitch ingest as part of this split.

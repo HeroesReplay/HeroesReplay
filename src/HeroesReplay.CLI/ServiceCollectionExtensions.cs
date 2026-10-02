@@ -18,6 +18,7 @@ using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating;
 using HeroesReplay.Core.Spectating.Capture;
@@ -169,6 +170,13 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static OBSSettings LoadObsSettings() =>
         GetConfiguration().GetSection("OBS").Get<OBSSettings>() ?? new OBSSettings();
+
+    /// <summary>
+    /// The effective <c>ServiceHealth</c> section, for <c>services status</c>. No secret is resolved.
+    /// </summary>
+    public static ServiceHealthSettings LoadServiceHealthSettings() =>
+        GetConfiguration().GetSection("ServiceHealth").Get<ServiceHealthSettings>()
+        ?? new ServiceHealthSettings();
 
     /// <summary>
     /// What the read-only OBS MCP tools need, read on each call. No secret is resolved here;

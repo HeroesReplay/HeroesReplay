@@ -10,6 +10,7 @@ using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating;
 using HeroesReplay.Core.Spectating.Capture;
@@ -50,6 +51,7 @@ public class AppSettings
     public ReplayMediaPolicySettings ReplayMedia { get; set; } = new ReplayMediaPolicySettings();
     public RetentionSettings Retention { get; set; }
     public ReleaseSettings Release { get; set; }
+    public ServiceHealthSettings ServiceHealth { get; set; } = new ServiceHealthSettings();
     public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
     public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
     public string ContextsDirectory => Path.Combine(Location.DataDirectory, "Contexts");

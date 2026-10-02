@@ -2,16 +2,51 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 
 namespace HeroesReplay.Core.ServiceHost;
 
+/// <summary>
+/// The ready file of one role process, keyed by its nonce. The role writes it once when it is
+/// ready, then refreshes it on every heartbeat (<see cref="ServiceHeartbeat"/>).
+/// </summary>
 public sealed class ServiceReadyReport
 {
     public string Role { get; set; }
     public string Nonce { get; set; }
     public string Version { get; set; }
+    public string ExecutablePath { get; set; }
+    public int? Pid { get; set; }
+
+    /// <summary><see cref="ServiceReadiness"/>: ready, stopping, or exited.</summary>
+    public string Readiness { get; set; }
     public DateTimeOffset? ReadyAt { get; set; }
     public DateTimeOffset? HeartbeatAt { get; set; }
+
+    /// <summary>The interval the role refreshes this file on. Null in files from older roles.</summary>
+    public int? HeartbeatIntervalSeconds { get; set; }
+
+    /// <summary>Role-defined: a spectate tick, a Twitch reconcile, a download pass, an upload pass.</summary>
+    public DateTimeOffset? LastSuccessfulWorkAt { get; set; }
+    public ServiceRoleError LastError { get; set; }
+}
+
+public sealed class ServiceRoleError
+{
+    public string Message { get; set; }
+    public DateTimeOffset? At { get; set; }
+}
+
+/// <summary>What a role says about itself in <see cref="ServiceReadyReport.Readiness"/>.</summary>
+public static class ServiceReadiness
+{
+    public const string Ready = "ready";
+
+    /// <summary>The stop file or Ctrl+C reached the role. It is shutting down on purpose.</summary>
+    public const string Stopping = "stopping";
+
+    /// <summary>The role left its main loop without a stop request.</summary>
+    public const string Exited = "exited";
 }
 
 public static class ServiceReadyFile
@@ -46,56 +81,10 @@ public static class ServiceReadyFile
             Role = record.Name,
             Nonce = record.Nonce,
             Version = record.Version,
+            Readiness = ServiceReadiness.Ready,
             ReadyAt = now,
             HeartbeatAt = now.AddTicks(1),
         };
-    }
-
-    public static void ReportFromEnvironment(string role)
-    {
-        string nonce = Environment.GetEnvironmentVariable(NonceVariable);
-        if (!IsSafeNonce(nonce))
-        {
-            return;
-        }
-
-        string reportedRole = string.IsNullOrWhiteSpace(role)
-            ? Environment.GetEnvironmentVariable(RoleVariable)
-            : role;
-        string version = Environment.GetEnvironmentVariable(VersionVariable);
-        if (string.IsNullOrWhiteSpace(version))
-        {
-            version = CurrentVersion();
-        }
-
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        Report(
-            new ServiceReadyReport
-            {
-                Role = reportedRole,
-                Nonce = nonce,
-                Version = version,
-                ReadyAt = now,
-            }
-        );
-    }
-
-    public static void ReportHeartbeatFromEnvironment()
-    {
-        string nonce = Environment.GetEnvironmentVariable(NonceVariable);
-        if (!IsSafeNonce(nonce))
-        {
-            return;
-        }
-
-        TryWriteHeartbeat(
-            new ServiceProcessRecord
-            {
-                Name = Environment.GetEnvironmentVariable(RoleVariable),
-                Nonce = nonce,
-            },
-            DateTimeOffset.UtcNow
-        );
     }
 
     public static bool TryWriteHeartbeat(
@@ -110,12 +99,14 @@ public static class ServiceReadyFile
             return false;
         }
 
-        DateTimeOffset heartbeat =
-            at > existing.ReadyAt.Value ? at : existing.ReadyAt.Value.AddTicks(1);
-        existing.HeartbeatAt = heartbeat;
+        existing.HeartbeatAt = HeartbeatAfterReady(existing.ReadyAt.Value, at);
         Report(existing, directory);
         return true;
     }
+
+    /// <summary>A heartbeat always follows the ready write, even when the clock has not moved.</summary>
+    public static DateTimeOffset HeartbeatAfterReady(DateTimeOffset readyAt, DateTimeOffset at) =>
+        at > readyAt ? at : readyAt.AddTicks(1);
 
     public static void Report(ServiceReadyReport report, string directory = null)
     {
@@ -139,49 +130,59 @@ public static class ServiceReadyFile
             return null;
         }
 
-        try
+        string path = Path.Combine(directory ?? DefaultDirectory, record.Nonce + ".json");
+        // The role replaces this file on every heartbeat. A read that meets the replace retries.
+        for (int attempt = 0; ; attempt++)
         {
-            string path = Path.Combine(directory ?? DefaultDirectory, record.Nonce + ".json");
-            if (!File.Exists(path))
+            try
+            {
+                return Read(record, path);
+            }
+            catch (IOException) when (attempt < 2)
+            {
+                Thread.Sleep(25);
+            }
+            catch (IOException)
             {
                 return null;
             }
-
-            ServiceReadyReport report = JsonSerializer.Deserialize<ServiceReadyReport>(
-                File.ReadAllText(path),
-                Json
-            );
-            if (
-                report == null
-                || !string.Equals(report.Nonce, record.Nonce, StringComparison.Ordinal)
-            )
+            catch (JsonException)
             {
                 return null;
             }
-
-            if (
-                !string.IsNullOrWhiteSpace(record.Name)
-                && !string.IsNullOrWhiteSpace(report.Role)
-                && !string.Equals(report.Role, record.Name, StringComparison.OrdinalIgnoreCase)
-            )
+            catch (UnauthorizedAccessException)
             {
                 return null;
             }
+        }
+    }
 
-            return report;
-        }
-        catch (IOException)
+    private static ServiceReadyReport Read(ServiceProcessRecord record, string path)
+    {
+        if (!File.Exists(path))
         {
             return null;
         }
-        catch (JsonException)
+
+        ServiceReadyReport report = JsonSerializer.Deserialize<ServiceReadyReport>(
+            File.ReadAllText(path),
+            Json
+        );
+        if (report == null || !string.Equals(report.Nonce, record.Nonce, StringComparison.Ordinal))
         {
             return null;
         }
-        catch (UnauthorizedAccessException)
+
+        if (
+            !string.IsNullOrWhiteSpace(record.Name)
+            && !string.IsNullOrWhiteSpace(report.Role)
+            && !string.Equals(report.Role, record.Name, StringComparison.OrdinalIgnoreCase)
+        )
         {
             return null;
         }
+
+        return report;
     }
 
     public static void Delete(string nonce, string directory = null)
@@ -216,7 +217,7 @@ public static class ServiceReadyFile
         return true;
     }
 
-    private static string CurrentVersion()
+    public static string CurrentVersion()
     {
         Assembly assembly = typeof(ServiceReadyFile).Assembly;
         string informational = assembly

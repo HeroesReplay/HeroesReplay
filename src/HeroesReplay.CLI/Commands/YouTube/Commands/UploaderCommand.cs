@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.YouTube;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,8 +34,11 @@ public class UploaderCommand : Command
         using Activity ready = HeroesReplayTelemetry.StartSpan("heroesreplay.service.ready");
         using IServiceScope scope = provider.CreateScope();
         IYouTubeUploader uploader = scope.ServiceProvider.GetRequiredService<IYouTubeUploader>();
-        ServiceReadyFile.ReportFromEnvironment("youtube");
-        ServiceReadyFile.ReportHeartbeatFromEnvironment();
+        using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
+            "youtube",
+            scope.ServiceProvider.GetRequiredService<AppSettings>().ServiceHealth,
+            stop.Token
+        );
         await uploader.ListenAsync();
     }
 }

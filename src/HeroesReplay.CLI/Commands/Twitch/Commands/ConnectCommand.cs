@@ -72,8 +72,11 @@ public class ConnectCommand : Command
 
         ITwitchBot twitchBot = scope.ServiceProvider.GetRequiredService<ITwitchBot>();
         await twitchBot.InitializeAsync();
-        ServiceReadyFile.ReportFromEnvironment("twitch");
-        ServiceReadyFile.ReportHeartbeatFromEnvironment();
+        using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
+            "twitch",
+            settings.ServiceHealth,
+            stop.Token
+        );
         StatusPredictionWatcher predictions =
             scope.ServiceProvider.GetRequiredService<StatusPredictionWatcher>();
         await predictions.WatchAsync(stop.Token);

@@ -124,6 +124,22 @@ public class CliHelpTests
     }
 
     [Fact]
+    public void ServicesStatusHelp_HasTheJsonOutput()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("services status --output json --help").Errors);
+        Assert.Empty(root.Parse("services status --output json").Errors);
+        Assert.Empty(root.Parse("services status -o text").Errors);
+        Assert.NotEmpty(root.Parse("services status --output yaml").Errors);
+        Command status = root
+            .Subcommands.Single(c => c.Name == "services")
+            .Subcommands.Single(c => c.Name == "status");
+        Option output = status.Options.Single(o => o.Name == "--output");
+        Assert.Contains("schemaVersion", output.Description);
+        Assert.Contains("service.stale", output.Description);
+    }
+
+    [Fact]
     public void HeroesProfileHelp_HasDownload()
     {
         var root = new HeroesReplayCommand();

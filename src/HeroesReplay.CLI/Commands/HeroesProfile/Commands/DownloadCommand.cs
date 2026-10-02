@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
@@ -46,8 +47,11 @@ public class DownloadCommand : Command
         ILogger<DownloadCommand> logger = scope.ServiceProvider.GetRequiredService<
             ILogger<DownloadCommand>
         >();
-        ServiceReadyFile.ReportFromEnvironment("download");
-        ServiceReadyFile.ReportHeartbeatFromEnvironment();
+        using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
+            "download",
+            scope.ServiceProvider.GetRequiredService<AppSettings>().ServiceHealth,
+            stop.Token
+        );
         int failures = 0;
         while (!stop.Token.IsCancellationRequested)
         {
@@ -76,6 +80,7 @@ public class DownloadCommand : Command
             try
             {
                 downloaded = await downloader.DownloadNextAsync().ConfigureAwait(false);
+                ServiceHeartbeat.RecordWork();
                 if (downloaded)
                 {
                     failures = 0;

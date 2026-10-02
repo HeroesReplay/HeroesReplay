@@ -11,6 +11,7 @@ using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
@@ -112,7 +113,9 @@ public class Engine : IEngine
         {
             try
             {
-                if (!await SpectateOneAsync().ConfigureAwait(false))
+                bool next = await SpectateOneAsync().ConfigureAwait(false);
+                ServiceHeartbeat.RecordWork();
+                if (!next)
                 {
                     break;
                 }
