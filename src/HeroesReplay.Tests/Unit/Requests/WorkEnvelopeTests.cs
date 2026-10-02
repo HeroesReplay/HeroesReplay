@@ -53,10 +53,12 @@ public class WorkEnvelopeTests
     }
 
     [Fact]
-    public void Decide_RefundsAnUnverifiedRedemptionAndFulfillsAVerifiedOne()
+    public void Decide_LeavesAnUnverifiedRedemptionUnfulfilledAndFulfillsAVerifiedOne()
     {
+        // #169: an unplayed request stays queued, so its redemption is neither fulfilled nor
+        // refunded. It plays again.
         Assert.Equal(RedemptionEnd.None, RedemptionDisposition.Decide(false, true));
-        Assert.Equal(RedemptionEnd.Refund, RedemptionDisposition.Decide(true, false));
+        Assert.Equal(RedemptionEnd.None, RedemptionDisposition.Decide(true, false));
         Assert.Equal(RedemptionEnd.Fulfill, RedemptionDisposition.Decide(true, true));
     }
 }

@@ -79,7 +79,19 @@ public class ConnectCommand : Command
         );
         StatusPredictionWatcher predictions =
             scope.ServiceProvider.GetRequiredService<StatusPredictionWatcher>();
-        await predictions.WatchAsync(stop.Token);
+        RedemptionFulfiller redemptions =
+            scope.ServiceProvider.GetRequiredService<RedemptionFulfiller>();
+        using var fulfilStop = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+        Task fulfil = redemptions.RunAsync(fulfilStop.Token);
+        try
+        {
+            await predictions.WatchAsync(stop.Token);
+        }
+        finally
+        {
+            fulfilStop.Cancel();
+            await fulfil;
+        }
     }
 
     /// <summary>Rewards are only needed when redemptions are handled. Syncing edits the live channel (#146).</summary>

@@ -6,6 +6,12 @@ namespace HeroesReplay.Core.Requests;
 public class RewardRequest
 {
     public Guid RedemptionId { get; set; }
+
+    /// <summary>The channel-point reward. Twitch needs it to mark the redemption FULFILLED.</summary>
+    public Guid RewardId { get; set; }
+
+    /// <summary>The channel's Twitch user id, from the redemption event.</summary>
+    public string BroadcasterId { get; set; }
     public string RewardTitle { get; set; }
     public string Login { get; set; }
     public int? ReplayId { get; set; }

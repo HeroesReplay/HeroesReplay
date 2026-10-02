@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
 using Xunit;
@@ -86,6 +87,91 @@ public class PendingYouTubeUploadTests
 
             Assert.Equal(new[] { request, oldest, unreadable, missing }, ordered);
             Assert.Empty(PendingYouTubeUpload.RequestsFirst(null, "youtube-entry.json"));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RequestsFirst_ARequestDoesNotWaitBehindFortyEightOlderRecordings()
+    {
+        // #165/#161: 6 inserts a day, and replay 65625279 sat behind about 48 ordinary ones.
+        string root = Path.Combine(Path.GetTempPath(), "hr-yt-" + Path.GetRandomFileName());
+        try
+        {
+            var older = new List<string>();
+            for (int i = 0; i < 48; i++)
+            {
+                older.Add(Recording(root, "6558" + i.ToString("D4"), "{\"Requested\":false}"));
+            }
+
+            string request = Recording(root, "65625279", "{\"Requested\":true}");
+            var found = new List<string>(older) { request };
+
+            IReadOnlyList<string> ordered = PendingYouTubeUpload.RequestsFirst(
+                found,
+                "youtube-entry.json"
+            );
+
+            Assert.Equal(request, ordered[0]);
+            Assert.Equal(older, ordered.Skip(1));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void CountRequestsWaiting_CountsRequestsThatStillNeedAnInsert()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-yt-" + Path.GetRandomFileName());
+        try
+        {
+            string ordinary = Recording(root, "1", "{\"Requested\":false}");
+            string waiting = Recording(root, "2", "{\"Requested\":true}");
+            Recording(root, "3", "{\"Requested\":true,\"VideoId\":\"abc\"}");
+            Recording(root, "4", "{\"Requested\":true}");
+            File.WriteAllText(Path.Combine(root, "4", "youtube-entry-uploaded.json"), "{}");
+            string noVideo = Path.Combine(root, "5");
+            Directory.CreateDirectory(noVideo);
+            File.WriteAllText(Path.Combine(noVideo, "youtube-entry.json"), "{\"Requested\":true}");
+
+            Assert.Equal(
+                1,
+                PendingYouTubeUpload.CountRequestsWaiting(
+                    root,
+                    "youtube-entry.json",
+                    "youtube-entry-uploaded.json",
+                    ordinary
+                )
+            );
+            Assert.Equal(
+                0,
+                PendingYouTubeUpload.CountRequestsWaiting(
+                    root,
+                    "youtube-entry.json",
+                    "youtube-entry-uploaded.json",
+                    waiting
+                )
+            );
+            Assert.Equal(
+                0,
+                PendingYouTubeUpload.CountRequestsWaiting(
+                    Path.Combine(root, "missing"),
+                    "youtube-entry.json",
+                    "youtube-entry-uploaded.json",
+                    null
+                )
+            );
         }
         finally
         {

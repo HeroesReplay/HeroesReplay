@@ -1,0 +1,234 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.Twitch.Rewards;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
+
+namespace HeroesReplay.Tests.Unit.Twitch.Rewards;
+
+/// <summary>
+/// #165: the redemption for replay 65625279 stayed UNFULFILLED. The spectator only wrote a
+/// local line and nothing ever told Twitch.
+/// </summary>
+[Trait(TestCategories.Category, TestCategories.Unit)]
+public sealed class RedemptionFulfillerTests : IDisposable
+{
+    private static readonly Guid Redemption = Guid.Parse("0a018521-19d9-437d-904b-4096c971d461");
+    private static readonly Guid Reward = Guid.Parse("11111111-2222-3333-4444-555555555555");
+
+    private readonly string root = Path.Combine(
+        Path.GetTempPath(),
+        "hr-fulfil-" + Guid.NewGuid().ToString("N")
+    );
+
+    public RedemptionFulfillerTests()
+    {
+        Directory.CreateDirectory(root);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task VerifiedRequest_IsFulfilledOnTwitchOnce()
+    {
+        Append(65625279, Redemption);
+        var twitch = new ScriptedTwitch(RedemptionUpdate.Updated);
+        RedemptionFulfiller fulfiller = Fulfiller(twitch);
+
+        Assert.Equal(1, await fulfiller.SendPendingAsync(CancellationToken.None));
+        Assert.Equal(0, await fulfiller.SendPendingAsync(CancellationToken.None));
+
+        (string Broadcaster, Guid RewardId, Guid RedemptionId, string Status) call = Assert.Single(
+            twitch.Calls
+        );
+        Assert.Equal("123456", call.Broadcaster);
+        Assert.Equal(Reward, call.RewardId);
+        Assert.Equal(Redemption, call.RedemptionId);
+        Assert.Equal(RewardRedemptionStatus.Fulfilled, call.Status);
+        Assert.Contains(
+            Redemption.ToString("D") + " fulfilled 65625279",
+            File.ReadAllText(Path.Combine(root, RedemptionFulfiller.SentFileName))
+        );
+    }
+
+    [Fact]
+    public async Task NetworkFailure_IsRetriedAndARefusalIsNot()
+    {
+        Guid refused = Guid.NewGuid();
+        Append(65625279, Redemption);
+        Append(65625280, refused);
+        var twitch = new ScriptedTwitch(RedemptionUpdate.Retry);
+        twitch.Results[refused] = RedemptionUpdate.Refused;
+        RedemptionFulfiller fulfiller = Fulfiller(twitch);
+
+        Assert.Equal(0, await fulfiller.SendPendingAsync(CancellationToken.None));
+        twitch.Results[Redemption] = RedemptionUpdate.Updated;
+        Assert.Equal(1, await fulfiller.SendPendingAsync(CancellationToken.None));
+        Assert.Equal(0, await fulfiller.SendPendingAsync(CancellationToken.None));
+
+        Assert.Equal(3, twitch.Calls.Count);
+        Assert.Single(twitch.Calls, call => call.RedemptionId == refused);
+    }
+
+    [Fact]
+    public async Task UnverifiedAndOldLines_AreNotSent()
+    {
+        File.WriteAllLines(
+            Path.Combine(root, RedemptionDispositionLog.FileName),
+            new[]
+            {
+                // Written by older builds: a refund for an unplayed session, and a verified
+                // session without the reward id.
+                "65659620 Refund " + Guid.NewGuid().ToString("D"),
+                "65582813 Fulfill " + Guid.NewGuid().ToString("D"),
+                "not a line",
+            }
+        );
+        var twitch = new ScriptedTwitch(RedemptionUpdate.Updated);
+
+        Assert.Equal(0, await Fulfiller(twitch).SendPendingAsync(CancellationToken.None));
+        Assert.Empty(twitch.Calls);
+    }
+
+    [Fact]
+    public void Append_SkipsAnUnfulfilledSessionAndRoundTripsTheReward()
+    {
+        string path = Path.Combine(root, RedemptionDispositionLog.FileName);
+        RewardRequest request = Request(Redemption);
+
+        RedemptionDispositionLog.Append(path, 65625279, request, RedemptionEnd.None);
+        Assert.False(File.Exists(path));
+
+        RedemptionDispositionLog.Append(path, 65625279, request, RedemptionEnd.Fulfill);
+        RedemptionDispositionLine line = Assert.Single(RedemptionDispositionLog.Read(path));
+
+        Assert.Equal(
+            new RedemptionDispositionLine(
+                65625279,
+                RedemptionEnd.Fulfill,
+                Redemption,
+                Reward,
+                "123456"
+            ),
+            line
+        );
+    }
+
+    [Theory]
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, false, true)]
+    [InlineData(false, true, false, true)]
+    [InlineData(true, true, true, false)]
+    public void Enabled_OnlyWhereRedemptionsAreHandledAndNotInADryRun(
+        bool pubSub,
+        bool requests,
+        bool dryRun,
+        bool expected
+    )
+    {
+        var twitch = new TwitchSettings
+        {
+            EnablePubSub = pubSub,
+            EnableRequests = requests,
+            DryRunMode = dryRun,
+        };
+
+        Assert.Equal(expected, RedemptionFulfiller.Enabled(twitch));
+        Assert.False(RedemptionFulfiller.Enabled(null));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NoContent, RedemptionUpdate.Updated)]
+    [InlineData(HttpStatusCode.OK, RedemptionUpdate.Updated)]
+    [InlineData(HttpStatusCode.BadRequest, RedemptionUpdate.Refused)]
+    [InlineData(HttpStatusCode.Forbidden, RedemptionUpdate.Refused)]
+    [InlineData(HttpStatusCode.NotFound, RedemptionUpdate.Refused)]
+    [InlineData(HttpStatusCode.Unauthorized, RedemptionUpdate.Retry)]
+    [InlineData(HttpStatusCode.TooManyRequests, RedemptionUpdate.Retry)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, RedemptionUpdate.Retry)]
+    public void Classify_RetriesOnlyWhatCanSucceedLater(
+        HttpStatusCode code,
+        RedemptionUpdate expected
+    )
+    {
+        Assert.Equal(expected, HelixRedemptionStatus.Classify(code));
+    }
+
+    private void Append(int replayId, Guid redemption)
+    {
+        RedemptionDispositionLog.Append(
+            Path.Combine(root, RedemptionDispositionLog.FileName),
+            replayId,
+            Request(redemption),
+            RedemptionEnd.Fulfill
+        );
+    }
+
+    private static RewardRequest Request(Guid redemption) =>
+        new()
+        {
+            Login = "zemill",
+            RedemptionId = redemption,
+            RewardId = Reward,
+            BroadcasterId = "123456",
+            RewardTitle = "ReplayId",
+            ReplayId = 65625279,
+        };
+
+    private RedemptionFulfiller Fulfiller(IRedemptionStatusClient twitch) =>
+        new(
+            NullLogger<RedemptionFulfiller>.Instance,
+            new AppSettings
+            {
+                Location = new LocationSettings { DataDirectory = root },
+                Twitch = new TwitchSettings { EnableRequests = true },
+            },
+            twitch
+        );
+
+    private sealed class ScriptedTwitch : IRedemptionStatusClient
+    {
+        private readonly RedemptionUpdate fallback;
+
+        public ScriptedTwitch(RedemptionUpdate fallback)
+        {
+            this.fallback = fallback;
+        }
+
+        public Dictionary<Guid, RedemptionUpdate> Results { get; } = new();
+
+        public List<(
+            string Broadcaster,
+            Guid RewardId,
+            Guid RedemptionId,
+            string Status
+        )> Calls { get; } = new();
+
+        public Task<RedemptionUpdate> UpdateAsync(
+            string broadcasterId,
+            Guid rewardId,
+            Guid redemptionId,
+            string status,
+            CancellationToken cancellationToken
+        )
+        {
+            Calls.Add((broadcasterId, rewardId, redemptionId, status));
+            return Task.FromResult(
+                Results.TryGetValue(redemptionId, out RedemptionUpdate result) ? result : fallback
+            );
+        }
+    }
+}

@@ -34,6 +34,8 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private readonly Dictionary<int, string> knownVersion = new();
     private readonly HashSet<int> announcedMissing = new();
     private readonly HashSet<int> belowFloorIds = new();
+    private readonly Dictionary<int, int> requestDefers = new();
+    private Func<DateTimeOffset> clock = () => DateTimeOffset.UtcNow;
     private int scanSkipped;
     private bool deferredDirty;
     private LoadedReplay staged;
@@ -64,6 +66,11 @@ public sealed class ReplayCacheProvider : IReplayProvider
     internal void UseInstalledVersions(Func<IReadOnlyList<string>> source)
     {
         installedVersionSource = source;
+    }
+
+    internal void UseClock(Func<DateTimeOffset> source)
+    {
+        clock = source ?? (() => DateTimeOffset.UtcNow);
     }
 
     public async Task<LoadedReplay> TryLoadNextReplayAsync()
@@ -240,13 +247,39 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 replayId,
                 replay.ReplayVersion
             );
-            logger.LogInformation(
-                IsRequest(next)
-                    ? "Playing requested replay {ReplayId} from {Path}"
-                    : "Playing cached replay {ReplayId} from {Path}",
-                replayId,
-                next.FullName
-            );
+            // The request is found by replay id, so a copy in Data\Standard or a file whose
+            // sidecar is missing still plays as the viewer's request (#165, #166).
+            RewardQueueItem request =
+                CachedRequestReward.Read(next.FullName)
+                ?? CachedRequestReward.FindById(settings.RequestedReplayCachePath, replayId);
+            if (request?.Request != null)
+            {
+                logger.LogInformation(
+                    "Playing requested replay {ReplayId} for {Login} ({Reward}, redemption {RedemptionId}) from {Path}",
+                    replayId,
+                    request.Request.Login,
+                    request.Request.RewardTitle,
+                    request.Request.RedemptionId,
+                    next.FullName
+                );
+            }
+            else if (IsRequest(next))
+            {
+                logger.LogWarning(
+                    "Playing replay {ReplayId} from {Path}. No request was found for it, so it plays as an ordinary replay.",
+                    replayId,
+                    next.FullName
+                );
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Playing cached replay {ReplayId} from {Path}",
+                    replayId,
+                    next.FullName
+                );
+            }
+
             HeroesProfileReplay profile = RankFromFile(next.Name, replayId, replay.Map);
             if (profile != null)
             {
@@ -260,8 +293,8 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 FileInfo = next,
                 Replay = replay,
                 ReplayId = replayId,
-                RewardQueueItem = CachedRequestReward.Read(next.FullName),
-                HeroesProfileReplay = profile,
+                RewardQueueItem = request,
+                HeroesProfileReplay = profile ?? request?.HeroesProfileReplay,
             };
         }
 
@@ -275,7 +308,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
             return;
         }
 
-        deferredUntil[replayId] = DateTimeOffset.UtcNow.Add(ReplayRetryPlan.DeferFor);
+        deferredUntil[replayId] = clock().Add(ReplayRetryPlan.DeferFor);
         deferredDirty = true;
         if (announcedMissing.Add(replayId))
         {
@@ -334,9 +367,29 @@ public sealed class ReplayCacheProvider : IReplayProvider
             staged = null;
         }
 
+        bool requested = replay.RewardQueueItem?.Request != null || IsRequest(replay.FileInfo);
+        requestDefers.TryGetValue(replayId, out int earlier);
+        if (requested)
+        {
+            requestDefers[replayId] = earlier + 1;
+        }
+
         played.Add(replayId);
-        deferredUntil[replayId] = DateTimeOffset.UtcNow.Add(ReplayRetryPlan.DeferFor);
+        deferredUntil[replayId] = clock().Add(ReplayRetryPlan.DeferWindow(requested, earlier));
         WriteDefers();
+        if (requested)
+        {
+            // The request file and its sidecar stay in Data\Requests, so the link and the lease
+            // come back with the replay. The redemption stays UNFULFILLED until it plays.
+            logger.LogInformation(
+                "Deferred requested replay {ReplayId} until {Until:o} (miss {Miss}). It is not marked spectated, its redemption stays unfulfilled, and it plays again ahead of ordinary replays.",
+                replayId,
+                deferredUntil[replayId],
+                earlier + 1
+            );
+            return;
+        }
+
         logger.LogInformation(
             "Deferred replay {ReplayId} until {Until:o}. It is not marked spectated.",
             replayId,
@@ -352,6 +405,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
         }
 
         played.Add(replayId);
+        requestDefers.Remove(replayId);
         AppendPlayed(replayId);
         if (staged?.ReplayId == replayId)
         {
@@ -506,7 +560,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
 
     private void ReleaseExpiredDefers()
     {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = clock();
         List<int> due = deferredUntil
             .Where(pair => pair.Value <= now)
             .Select(pair => pair.Key)
@@ -564,7 +618,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
 
     private bool IsRequest(FileInfo file)
     {
-        string directory = file.DirectoryName;
+        string directory = file?.DirectoryName;
         if (string.IsNullOrEmpty(directory))
         {
             return false;

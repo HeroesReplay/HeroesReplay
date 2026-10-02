@@ -274,7 +274,7 @@ public class YouTubeUploader : IYouTubeUploader
         DateTimeOffset dispatchedAt = DateTimeOffset.UtcNow;
         bool enabled = settings.YouTube.Enabled != false;
         bool liveSend = enabled && !settings.YouTube.DryRun;
-        if (liveSend && !QuotaHasRoom(recording.FullName))
+        if (liveSend && !QuotaHasRoom(recording.FullName, entry.Requested))
         {
             return;
         }
@@ -660,9 +660,10 @@ public class YouTubeUploader : IYouTubeUploader
 
     /// <summary>
     /// The YouTube quota is the only limit that keeps a recording on disk. The budget only
-    /// moves its publish time.
+    /// moves its publish time. An ordinary recording leaves the day's last inserts to viewer
+    /// requests that are still waiting (#161).
     /// </summary>
-    private bool QuotaHasRoom(string path)
+    private bool QuotaHasRoom(string path, bool requested)
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
         YouTubeQuotaDay day;
@@ -676,20 +677,57 @@ public class YouTubeUploader : IYouTubeUploader
             return true;
         }
 
-        if (quotaUnits.MayUpload(day, now))
+        if (!quotaUnits.MayUpload(day, now))
+        {
+            quotaHeld = true;
+            logger.LogInformation(
+                "Upload of {Path} waits for the YouTube quota ({Units} of {Daily} units used today). Uploads resume at {ResumeAt:u}. It stays pending.",
+                path,
+                day.Total,
+                settings.YouTube.DailyQuotaUnits,
+                quotaUnits.UploadsResumeAt(day, now)
+            );
+            return false;
+        }
+
+        if (requested)
+        {
+            return true;
+        }
+
+        int requestsWaiting = RequestsWaiting(path);
+        if (quotaUnits.MayUpload(day, now, requested: false, requestsWaiting))
         {
             return true;
         }
 
         quotaHeld = true;
         logger.LogInformation(
-            "Upload of {Path} waits for the YouTube quota ({Units} of {Daily} units used today, uploads paused until {PausedUntil}). It stays pending.",
+            "Upload of {Path} waits: {Left} insert(s) are left today and {Requests} viewer request(s) go first. Uploads resume at {ResumeAt:u}. It stays pending.",
             path,
-            day.Total,
-            settings.YouTube.DailyQuotaUnits,
-            day.UploadsPausedUntil
+            quotaUnits.InsertsLeft(day),
+            requestsWaiting,
+            YouTubeQuotaUnits.NextQuotaDay(now)
         );
         return false;
+    }
+
+    private int RequestsWaiting(string excluding)
+    {
+        try
+        {
+            return PendingYouTubeUpload.CountRequestsWaiting(
+                settings.ContextsDirectory,
+                settings.YouTube.EntryFileName,
+                settings.YouTube.EntryFileNameUploaded,
+                excluding
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not count the viewer requests waiting for YouTube.");
+            return 0;
+        }
     }
 
     private void PauseOnQuota(Exception exception)

@@ -305,4 +305,40 @@ public class YouTubeEntryBuilderTests
         );
         Assert.Contains("Illidan", entry.Heroes);
     }
+
+    [Fact]
+    public void Create_PlainReplayIdRewardIsARequestThatNamesTheViewer()
+    {
+        // #165: youtube-entry.json for replay 65625279 said Requested false with no requester.
+        var loaded = new LoadedReplay
+        {
+            ReplayId = 65625279,
+            Replay = new Replay { Map = "Industrial District" },
+            HeroesProfileReplay = new HeroesProfileReplay
+            {
+                Id = 65625279,
+                Map = "Industrial District",
+                GameType = "ARAM",
+            },
+            RewardQueueItem = new RewardQueueItem
+            {
+                Request = new RewardRequest
+                {
+                    ReplayId = 65625279,
+                    Login = "Zemill",
+                    RewardTitle = "ReplayId",
+                    RecordAndUpload = false,
+                },
+            },
+        };
+
+        YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
+
+        Assert.True(entry.Requested);
+        Assert.Contains(
+            entry.DescriptionLines,
+            line => line.Contains("Requested by: Zemill", System.StringComparison.Ordinal)
+        );
+        Assert.DoesNotContain("Zemill", entry.Title, System.StringComparison.Ordinal);
+    }
 }
