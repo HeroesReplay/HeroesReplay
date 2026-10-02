@@ -26,7 +26,7 @@ public static class YouTubePlaylistNames
             return null;
         }
 
-        string mode = CanonicalMode(gameType);
+        string mode = Mode(gameType);
         if (mode == null)
         {
             return null;
@@ -85,7 +85,10 @@ public static class YouTubePlaylistNames
         return Title(parts[0], parts[2], rank);
     }
 
-    private static string CanonicalMode(string gameType)
+    /// <summary>
+    /// The playlist name of a game mode, or null for a mode that is not filed.
+    /// </summary>
+    public static string Mode(string gameType)
     {
         if (string.IsNullOrWhiteSpace(gameType))
         {

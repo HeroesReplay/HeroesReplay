@@ -29,12 +29,6 @@ public class YouTubeSettings
     public string EntryFileNameUploaded { get; set; }
 
     /// <summary>
-    /// How long a listing of the channel's uploads stays current. The duplicate lookup
-    /// lists the uploads playlist again only after this much time.
-    /// </summary>
-    public TimeSpan UploadsIndexRefresh { get; set; } = TimeSpan.FromHours(6);
-
-    /// <summary>
     /// The uploader's library pass (uploads listing, backfill, playlist filing) runs at
     /// most once per this interval. The last run time survives a restart.
     /// </summary>

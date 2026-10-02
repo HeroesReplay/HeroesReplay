@@ -4,8 +4,8 @@ using HeroesReplay.Core.YouTube.Publication;
 namespace HeroesReplay.Core.YouTube.Search;
 
 /// <summary>
-/// One exhausted quota response from the uploads listing pauses further listing
-/// until the next Pacific quota day. Recording does not stop.
+/// One exhausted quota response pauses the uploader's library pass until the next Pacific
+/// quota day. Uploads and recording do not stop.
 /// </summary>
 public static class YouTubeListQuota
 {

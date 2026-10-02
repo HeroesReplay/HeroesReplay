@@ -12,31 +12,6 @@ public static class YouTubeReplayMatch
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
     );
 
-    public static bool Mentions(string text, int replayId)
-    {
-        if (string.IsNullOrEmpty(text) || replayId <= 0)
-        {
-            return false;
-        }
-
-        string id = replayId.ToString();
-        int index = 0;
-        while ((index = text.IndexOf(id, index, StringComparison.Ordinal)) >= 0)
-        {
-            bool left = index == 0 || !char.IsDigit(text[index - 1]);
-            int end = index + id.Length;
-            bool right = end >= text.Length || !char.IsDigit(text[end]);
-            if (left && right)
-            {
-                return true;
-            }
-
-            index = end;
-        }
-
-        return false;
-    }
-
     /// <summary>
     /// Replay ids an uploaded video names: the title's id part, and the description's
     /// <c>Replay ID:</c> line or Heroes Profile <c>replayID=</c> link.

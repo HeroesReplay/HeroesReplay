@@ -77,6 +77,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IYouTubeUploader, YouTubeUploader>()
             .AddSingleton<IYouTubePlaylistClient, GoogleYouTubePlaylistClient>()
             .AddSingleton<IYouTubeLibrary, YouTubeLibrary>()
+            .AddSingleton(new CancellationTokenProvider(token))
+            .AddHeroesProfileService()
             .AddSingleton(serviceProvider =>
                 BindSettings(serviceProvider.GetRequiredService<IConfiguration>())
             )
@@ -390,7 +392,6 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
             .AddSingleton<IAbilityDetector, AbilityDetector>()
-            .AddSingleton<IYouTubeUploadsListing, YouTubeApiUploadsListing>()
             .AddSingleton<IYouTubeReplayLookup, YouTubeReplayLookup>()
             .AddSingleton<RecordingClock>()
             .AddSingleton<IGameFirewall, NetshGameFirewall>()
