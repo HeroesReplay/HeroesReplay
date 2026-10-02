@@ -298,6 +298,10 @@ public class HeroesProfileProvider : IReplayProvider
                 };
             }
         }
+        catch (OperationCanceledException) when (provider.Token.IsCancellationRequested)
+        {
+            return null;
+        }
         catch (Exception e)
         {
             logger.LogCritical(e, "Could not provide a Replay file using HeroesProfile API.");
@@ -342,6 +346,10 @@ public class HeroesProfileProvider : IReplayProvider
                 };
             }
         }
+        catch (OperationCanceledException) when (provider.Token.IsCancellationRequested)
+        {
+            return null;
+        }
         catch (Exception e)
         {
             logger.LogCritical(e, "Could not provide a Replay file using HeroesProfile API.");
@@ -363,7 +371,12 @@ public class HeroesProfileProvider : IReplayProvider
         {
             await WriteDownloadAsync(replay, fileInfo).ConfigureAwait(false);
         }
-        catch (Exception e) when (heroesProfileResume != null && heroesProfileResume.Consume())
+        // A stop cancels the token. That is not an outage, so the resume flag stays for the next run.
+        catch (Exception e)
+            when (!provider.Token.IsCancellationRequested
+                && heroesProfileResume != null
+                && heroesProfileResume.Consume()
+            )
         {
             logger.LogWarning(
                 e,
@@ -384,14 +397,36 @@ public class HeroesProfileProvider : IReplayProvider
         }
     }
 
+    /// <summary>
+    /// The download goes to a <c>.part</c> file that is renamed when it is complete.
+    /// A failed or cancelled download leaves no <c>.StormReplay</c> for the next run to load.
+    /// </summary>
     private async Task WriteDownloadAsync(HeroesProfileReplay replay, FileInfo fileInfo)
     {
-        await using (FileStream file = fileInfo.OpenWrite())
+        string partial = PartialPath(fileInfo);
+        try
         {
-            await heroesProfileService
-                .DownloadReplayAsync(replay.Id, file, provider.Token)
-                .ConfigureAwait(false);
-            await file.FlushAsync(provider.Token).ConfigureAwait(false);
+            await using (
+                FileStream file = new FileStream(
+                    partial,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None
+                )
+            )
+            {
+                await heroesProfileService
+                    .DownloadReplayAsync(replay.Id, file, provider.Token)
+                    .ConfigureAwait(false);
+                await file.FlushAsync(provider.Token).ConfigureAwait(false);
+            }
+
+            File.Move(partial, fileInfo.FullName, overwrite: true);
+        }
+        catch
+        {
+            DeletePartial(partial);
+            throw;
         }
 
         fileInfo.Refresh();
@@ -400,6 +435,20 @@ public class HeroesProfileProvider : IReplayProvider
             replay.Id,
             fileInfo.Length
         );
+    }
+
+    private static string PartialPath(FileInfo fileInfo) => fileInfo.FullName + ".part";
+
+    private void DeletePartial(string partial)
+    {
+        try
+        {
+            File.Delete(partial);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not remove the partial download {Path}.", partial);
+        }
     }
 
     private FileInfo GetFileInfo(DirectoryInfo directory, HeroesProfileReplay replay)
@@ -445,6 +494,10 @@ public class HeroesProfileProvider : IReplayProvider
             }
 
             return found;
+        }
+        catch (OperationCanceledException) when (provider.Token.IsCancellationRequested)
+        {
+            return null;
         }
         catch (Exception e)
         {
