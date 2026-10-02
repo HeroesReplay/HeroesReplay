@@ -53,12 +53,9 @@ An invalid value, including a mode written as a number, fails closed. Nothing is
 ## What gets recorded
 
 Before launch, the replay file is classified. OBS starts recording when the loading screen or the match clock is visible, and only when the recording decision allows it. A replay id that is already on YouTube is not recorded again. The lookup is `Data\youtube-replay-ids.txt`, then the context receipt, then the channel's uploads index.
+Before launch, the replay file is classified. OBS starts recording when the loading screen or the match clock is visible, and only when the recording decision allows it. A replay id that is already on YouTube is not recorded again. The spectator checks `Data\youtube-replay-ids.txt`, then the context receipt. Both are local files. The spectator never calls YouTube.
 
-The uploads index does not search for a replay id. It lists the channel's uploads playlist (`playlistItems.list`, 50 videos and 1 quota unit per page) and writes every replay id it finds to `Data\youtube-replay-ids.txt`. A title's id part, a `Replay ID:` line, and a Heroes Profile `replayID=` link all count. The playlist id comes from `channels.list` once (1 unit) and is kept in `Data\youtube-uploads-index.json` with the video ids already seen and the time of the last listing. The index is listed again only after `YouTube:UploadsIndexRefresh` (6 hours by default), and that time survives a restart. A listing stops at the first page whose videos are all already in the index, so a refresh usually costs 1 or 2 units. The first listing on a new `Data` folder reads every page. Between refreshes a replay costs nothing. The earlier `search.list` check cost 100 units for every replay and had its own daily search limit.
-
-The listing uses `YouTube:ApiKey`, the same key the old search used, in the spectator process. An API key sees public videos only. A private or scheduled upload is not in the listing, but the uploader writes its replay id to `Data\youtube-replay-ids.txt` when the insert succeeds. The OAuth tokens are not used here: `youtube.upload` cannot list a playlist, and the `youtube` library consent can open a browser prompt.
-
-A quota response while listing pauses the index until the next Pacific quota day. The catalog and the receipt still count, and recording stays on. `YouTube:DryRun` true never lists the channel.
+The uploader process keeps that catalog current. It adds a replay id when its insert succeeds, and its library pass (below) adds every replay id it finds on the channel: a title's id part, a `Replay ID:` line, or a Heroes Profile `replayID=` link. The earlier per-replay `search.list` check cost 100 units for every replay and had its own daily search limit.
 
 | `RecordingMode` | What is recorded |
 | --- | --- |
@@ -157,18 +154,48 @@ Pentakill and team-wipe clips are separate full-frame cuts under the context `cl
 
 After a successful upload, retention deletes the mp4 on the next sweep. The context folder itself lasts `VideoKeepDays` (3 in production).
 
-## Playlists
+## The library record
 
-Playlist filing runs at uploader startup and after each live drain, and on `heroesreplay youtube library`. It reads `youtube-entry-uploaded.json` files that are still under `Data\Contexts`. It does not remove a video from a playlist.
+Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode and without a build.
+
+## The library pass
+
+The uploader process owns every YouTube call. Besides uploads, it runs one library pass at most every `YouTube:LibraryInterval` (1 hour). The time of the last pass is kept in `Data\youtube-uploads-index.json`, so a restart does not run it again early. `heroesreplay youtube library --once` runs the same pass at once. Only one process runs it at a time (`Data\youtube-library.lock`). A pass does three things.
+
+1. **List the channel.** `channels.list` once for the uploads playlist id (1 unit), then `playlistItems.list` with `snippet,status`, 50 videos and 1 unit per page, newest first. Every replay id found goes into `Data\youtube-replay-ids.txt`. A video in the record whose privacy changed (a scheduled upload that went public) gets a new line. Until a listing has once reached the last page, every page is read (7 units for 338 videos). After that a listing stops at the first page with no new video, so a pass usually costs 1 or 2 units.
+2. **Backfill.** A channel video missing from the record is read from its title and description. The current template has `Map:`, `Mode:`, `Rank:`, and `Build:` lines. Older uploads (`Sky Temple - 65269475 - Platinum` with only `Game type:` and `Rank:` lines) have no build, and a few have a localized map name. Whatever is missing comes from Heroes Profile by replay id, with the rank looked up from player MMR only when a Storm League video has none. At most `YouTube:LibraryLookupsPerPass` (50) lookups run per pass. A video that resolves is recorded and never looked up again. One that does not stays in the index as unresolved and is tried again 6 hours later, then 12, 24, and so on up to every 7 days. An inserted clip is resolved the same way to get its build.
+3. **File.** The record's resolved public videos, plus any `youtube-entry-uploaded.json` still under `Data\Contexts` that the record does not have, are planned with the playlist rules below. Each video id is filed once per playlist (`Data\youtube-playlists.json`). The channel's playlists are listed once per pass when a title is not cached (1 unit per 50), a missing playlist is created (50 units), and each video insert costs 50 units. Three failures in a row stop the filing for that pass. Nothing is removed from a playlist.
 
 Two playlists are created when missing, both public:
 
-- Map and mode. `Alterac Pass - Storm League - Diamond`. The league is Grandmaster, Master, Diamond, Platinum, Gold, Silver, or Bronze, without division. Unranked Storm League is `Alterac Pass - Storm League`. Quick Match, ARAM, and Unranked Draft use `Alterac Pass - Quick Match` and the same shape. Other modes are skipped.
-- Patch. The current patch line of `Spectate:MinimumGameVersion` uses `YouTube:SeasonName` when that is set, otherwise `Patch 2.57`. An older line uses `Patch 2.55 archive`. A video with no build uses `Unknown patch`. Only a public listing is filed. Nothing is deleted when the patch rolls.
+- Map and mode. `Alterac Pass - Storm League - Diamond`. The league is Grandmaster, Master, Diamond, Platinum, Gold, Silver, or Bronze, without division. Unranked Storm League is `Alterac Pass - Storm League`. Quick Match, ARAM, and Unranked Draft use `Alterac Pass - Quick Match` and the same shape. Other modes are skipped. A clip has no mode, so it is not filed on a map playlist.
+- Patch. The current patch line of `Spectate:MinimumGameVersion` uses `YouTube:SeasonName` when that is set, otherwise `Patch 2.57`. An older line uses `Patch 2.55 archive`. A record video waits for its build before it is filed. A context entry with no build uses `Unknown patch`. Only a public video is filed. Nothing is deleted when the patch rolls.
 
-The cache is `Data\youtube-playlists.json`. Upload OAuth is the `youtube.upload` scope. Playlist create and insert use a separate consent, the full `youtube` scope, stored for `{ChannelId}:library`. Channel id in the base file is `UCpf5rn5UlJTUZF9n98HXS5A`. A clip entry has a map and no mode, so it is not filed on a map playlist. With no build it can land on `Unknown patch` once its receipt exists.
+Upload OAuth is the `youtube.upload` scope. The library pass (listing, playlist create, and insert) uses a separate consent, the full `youtube` scope, stored for `{ChannelId}:library`. That consent also lists private and scheduled uploads. Channel id in the base file is `UCpf5rn5UlJTUZF9n98HXS5A`.
 
-`YouTube:DryRun` true writes `youtube-library-dry-run.json` and does not call YouTube.
+`YouTube:DryRun` true never calls YouTube or Heroes Profile. It writes `Data\youtube-library-dry-run.json` with the playlist inserts it would make from the record and the contexts, the unresolved videos it would look up, and the day's units.
+
+Renaming or retitling published videos is not part of the pass. That stays in `tools/youtube-fix-descriptions.cs`.
+
+## Quota units
+
+The uploader process and `youtube library` share one count of quota units per Pacific quota day in `Data\youtube-quota-units.json`. Each change takes `youtube-quota-units.json.lock`, so two processes cannot both spend the same room.
+
+| Call | Units |
+| --- | --- |
+| `videos.insert` | 1600 |
+| `playlistItems.insert` | 50 |
+| `playlists.insert` | 50 |
+| Any list call | 1 |
+
+Uploads go first. An insert is counted when it is sent, and the units never refuse an upload. `MaxInsertsPerQuotaDay` still caps uploads as before. The library pass reserves each call's units before it makes the call, and it stops when either limit is reached:
+
+- `YouTube:LibraryUnitsPerDay` (3000) for the pass in one day.
+- `YouTube:DailyQuotaUnits` (10000) minus `YouTube:QuotaReserveUnits` (1600) for the whole day, uploads included.
+
+A quota response from YouTube, during the pass or an upload, pauses the pass until the next Pacific quota day. Uploads continue.
+
+Backfilling the 338 videos on the channel today (4 already on the current template) costs about 7 units of listing, 334 Heroes Profile lookups (the older template has no build) spread over 7 passes, and two playlist inserts per public video: about 676 × 50 = 33,800 units, plus 50 for each playlist that does not exist yet (roughly one per map and league seen, plus one per patch line). At 3000 units a day that is about 12 to 13 days, longer on days when uploads leave less room under the ceiling.
 
 ## The score
 
