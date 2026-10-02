@@ -1,5 +1,7 @@
 using System.CommandLine;
 using System.Linq;
+using System.Threading.Tasks;
+using HeroesReplay.CLI;
 using HeroesReplay.CLI.Commands;
 using Xunit;
 
@@ -21,6 +23,44 @@ public class CliHelpTests
         Assert.Contains(root.Subcommands, c => c.Name == "client");
         Assert.Contains(root.Subcommands, c => c.Name == "otel");
         Assert.Contains(root.Subcommands, c => c.Name == "update");
+        Assert.Contains(root.Subcommands, c => c.Name == "obs");
+    }
+
+    [Fact]
+    public void ObsHelp_HasArmDisarmStatus()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("obs --help");
+        Assert.Empty(result.Errors);
+        Command obs = root.Subcommands.Single(c => c.Name == "obs");
+        Assert.Contains("OBS:StreamingEnabled", obs.Description);
+        Command arm = obs.Subcommands.Single(c => c.Name == "arm");
+        Assert.Contains("stream-armed", arm.Description);
+        Assert.Contains(obs.Subcommands, c => c.Name == "disarm");
+        Assert.Contains(obs.Subcommands, c => c.Name == "status");
+        foreach (
+            string help in new[] { "obs arm --help", "obs disarm --help", "obs status --help" }
+        )
+        {
+            Assert.Empty(root.Parse(help).Errors);
+        }
+    }
+
+    [Fact]
+    public void UpdateHelp_HasTheReleaseHelpers()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("update --help");
+        Assert.Empty(result.Errors);
+        Command update = root.Subcommands.Single(c => c.Name == "update");
+        Assert.Contains(update.Subcommands, c => c.Name == "check");
+        Assert.Contains(update.Subcommands, c => c.Name == "preserve-min-replay-id");
+        Assert.Contains(update.Subcommands, c => c.Name == "release-health");
+        Assert.Contains(update.Subcommands, c => c.Name == "migrate-stream-arm");
+        Assert.Contains(update.Subcommands, c => c.Name == "install-obs");
+        Assert.Empty(root.Parse("update migrate-stream-arm --previous C:\\app").Errors);
+        Assert.NotEmpty(root.Parse("update migrate-stream-arm").Errors);
+        Assert.Empty(root.Parse("update install-obs --install C:\\app --environment prod").Errors);
     }
 
     [Fact]
@@ -84,6 +124,47 @@ public class CliHelpTests
     }
 
     [Fact]
+    public void ServicesStatusHelp_HasTheJsonOutput()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("services status --output json --help").Errors);
+        Assert.Empty(root.Parse("services status --output json").Errors);
+        Assert.Empty(root.Parse("services status -o text").Errors);
+        Assert.NotEmpty(root.Parse("services status --output yaml").Errors);
+        Command status = root
+            .Subcommands.Single(c => c.Name == "services")
+            .Subcommands.Single(c => c.Name == "status");
+        Option output = status.Options.Single(o => o.Name == "--output");
+        Assert.Contains("schemaVersion", output.Description);
+        Assert.Contains("service.stale", output.Description);
+    }
+
+    [Fact]
+    public void ServicesSupervise_AndStartSuperviseRolesHelp_Parse()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("services supervise --help").Errors);
+        Assert.Empty(root.Parse("services start --supervise --help").Errors);
+        Assert.Empty(
+            root.Parse("services start --supervise --roles download,youtube --help").Errors
+        );
+        Assert.Empty(root.Parse("services start --roles download").Errors);
+        Command services = root.Subcommands.Single(c => c.Name == "services");
+        Command supervise = services.Subcommands.Single(c => c.Name == "supervise");
+        Assert.Contains("service.restart_budget_exhausted", supervise.Description);
+        Assert.Contains("services stop", supervise.Description);
+        Command start = services.Subcommands.Single(c => c.Name == "start");
+        Assert.Contains(
+            "10s, 30s, 2m, 5m",
+            start.Options.Single(o => o.Name == "--supervise").Description
+        );
+        Assert.Contains(
+            "download,youtube",
+            start.Options.Single(o => o.Name == "--roles").Description
+        );
+    }
+
+    [Fact]
     public void HeroesProfileHelp_HasDownload()
     {
         var root = new HeroesReplayCommand();
@@ -120,6 +201,7 @@ public class CliHelpTests
         Assert.Contains(calculators.Subcommands, c => c.Name == "report");
         Assert.Contains(calculators.Subcommands, c => c.Name == "coordinates");
         Assert.Contains(calculators.Subcommands, c => c.Name == "units");
+        Assert.Contains(calculators.Subcommands, c => c.Name == "compositions");
     }
 
     [Fact]
@@ -135,5 +217,25 @@ public class CliHelpTests
         Assert.Contains("services start", library.Description);
         ParseResult once = root.Parse("youtube library --help");
         Assert.Empty(once.Errors);
+    }
+
+    [Fact]
+    public void ClientHelp_HasFirewall()
+    {
+        var root = new HeroesReplayCommand();
+        Command client = root.Subcommands.Single(c => c.Name == "client");
+        Command firewall = client.Subcommands.Single(c => c.Name == "firewall");
+        Assert.Contains("elevated", firewall.Description);
+        Assert.Empty(root.Parse("client firewall --help").Errors);
+    }
+
+    [Fact]
+    public async Task SpectateHelp_WorksWithoutElevation()
+    {
+        Assert.Equal(0, await new CommandLineService().InvokeAsync(new[] { "spectate", "--help" }));
+        Assert.Equal(
+            0,
+            await new CommandLineService().InvokeAsync(new[] { "spectate", "file", "--help" })
+        );
     }
 }

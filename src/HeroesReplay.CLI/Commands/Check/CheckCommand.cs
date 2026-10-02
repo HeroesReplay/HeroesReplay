@@ -10,13 +10,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Client;
-using HeroesReplay.Core.Services.Connectivity;
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.HeroesProfileExtension;
-using HeroesReplay.Core.Services.Observer;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Spectating.Clock.Memory;
+using HeroesReplay.Core.TwitchExtension;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OBSWebsocketDotNet;
@@ -45,7 +45,7 @@ public class CheckCommand : Command
         Subcommands.Add(
             Build(
                 "obs",
-                "Connect to obs-websocket 5, read the server version, and verify scene files.",
+                "Connect to obs-websocket 5, read the server version, verify scene files, and check the active profile and scene collection.",
                 CheckObsAsync
             )
         );
@@ -154,6 +154,8 @@ public class CheckCommand : Command
                 $"OBS endpoint: {settings.OBS?.WebSocketEndpoint}",
                 $"OBS password: {SecretResolver.Describe(settings.OBS?.WebSocketPassword)}",
                 $"OBS streaming enabled: {settings.OBS?.StreamingEnabled == true}",
+                $"OBS stream arm (this machine): {(new ObsStreamArm().IsArmed() ? "armed" : "not armed")}",
+                $"OBS profile / scene collection: {ObsNames.Profile(settings.OBS)} / {ObsNames.SceneCollection(settings.OBS)}",
                 $"OBS report scenes enabled: {DescribeReportScenes(settings)}",
                 $"Twitch channel: {NullToMissing(settings.Twitch?.Channel)}",
                 $"Twitch access token: {SecretResolver.Describe(settings.Twitch?.AccessToken)}",
@@ -252,7 +254,20 @@ public class CheckCommand : Command
                 var version = obs.GetVersion();
                 string connected =
                     $"Connected. OBS {version.OBSStudioVersion}, websocket {version.PluginVersion}.";
-                return new CheckResult("obs", filesOk, files + " " + connected);
+                ObsSelectionResult selection = ReadSelection(obs, settings.OBS);
+                return new CheckResult(
+                    "obs",
+                    filesOk && selection.Ok,
+                    files
+                        + " "
+                        + connected
+                        + " "
+                        + (
+                            selection.Ok
+                                ? selection.Detail
+                                : selection.Reason + ": " + selection.Detail
+                        )
+                );
             }
             finally
             {
@@ -282,49 +297,31 @@ public class CheckCommand : Command
         }
     }
 
-    private static ObsCollectionInspection InspectObsFiles(AppSettings settings)
+    private static ObsSelectionResult ReadSelection(OBSWebsocket obs, OBSSettings settings)
     {
-        var scenes = new List<string>();
-        var sources = new List<string>();
-        if (settings?.OBS != null)
+        try
         {
-            AddName(scenes, settings.OBS.GameSceneName);
-            AddName(scenes, settings.OBS.WaitingSceneName);
-            AddName(sources, settings.OBS.InfoSourceName);
-            AddName(sources, settings.OBS.TierDivisionSourceName);
-            AddName(sources, settings.OBS.TierRankPointsSourceName);
-            if (settings.OBS.RankImagesSourceNames != null)
-            {
-                foreach (string name in settings.OBS.RankImagesSourceNames)
-                {
-                    AddName(sources, name);
-                }
-            }
-
-            if (settings.OBS.ReportScenes != null)
-            {
-                foreach (var scene in settings.OBS.ReportScenes)
-                {
-                    if (scene == null || !scene.Enabled)
-                    {
-                        continue;
-                    }
-
-                    AddName(scenes, scene.SceneName);
-                    AddName(sources, scene.SourceName);
-                }
-            }
+            return ObsSelection.Check(
+                ObsNames.Profile(settings),
+                ObsNames.SceneCollection(settings),
+                obs.GetProfileList()?.CurrentProfileName,
+                obs.GetCurrentSceneCollection()
+            );
         }
-
-        return ObsCollectionPaths.Inspect(AppContext.BaseDirectory, scenes, sources);
+        catch (Exception e)
+        {
+            return ObsSelection.NotRead(e.Message);
+        }
     }
 
-    private static void AddName(List<string> names, string value)
+    private static ObsCollectionInspection InspectObsFiles(AppSettings settings)
     {
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            names.Add(value);
-        }
+        ObsContract contract = ObsContract.From(settings?.OBS);
+        return ObsCollectionPaths.Inspect(
+            AppContext.BaseDirectory,
+            contract.Scenes,
+            contract.Sources
+        );
     }
 
     public static async Task<CheckResult> CheckTwitchAsync(CancellationToken cancellationToken)
@@ -356,6 +353,7 @@ public class CheckCommand : Command
             }
 
             string extra = string.Empty;
+            bool predictionsOk = true;
             if (settings.Twitch.EnablePredictions)
             {
                 try
@@ -365,6 +363,7 @@ public class CheckCommand : Command
                 }
                 catch (Exception e)
                 {
+                    predictionsOk = false;
                     extra =
                         " Predictions need channel:manage:predictions (Helix: " + e.Message + ").";
                 }
@@ -397,7 +396,7 @@ public class CheckCommand : Command
 
             return new CheckResult(
                 "twitch",
-                chatOk && rewardsOk,
+                chatOk && rewardsOk && predictionsOk,
                 $"Helix OK for {users.Users[0].DisplayName} ({users.Users[0].Id}).{extra}"
             );
         }

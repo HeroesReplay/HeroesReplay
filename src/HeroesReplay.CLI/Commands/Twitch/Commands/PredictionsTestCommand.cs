@@ -2,7 +2,7 @@ using System;
 using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.Twitch.Predictions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands.Twitch.Commands;
@@ -20,6 +20,14 @@ public class PredictionsTestCommand : Command
             Description = "Blue, Red, or cancel (default cancel).",
             DefaultValueFactory = _ => "cancel",
         };
+        outcome.Validators.Add(result =>
+        {
+            string value = result.GetValueOrDefault<string>();
+            if (!TryParseOutcome(value, out _))
+            {
+                result.AddError($"--outcome must be Blue, Red, or cancel. '{value}' is not one.");
+            }
+        });
         Options.Add(outcome);
         SetAction(
             async (parseResult, cancellationToken) =>
@@ -31,7 +39,7 @@ public class PredictionsTestCommand : Command
 
     private static async Task CommandAsync(string outcome, CancellationToken cancellationToken)
     {
-        int? team = ParseOutcome(outcome);
+        TryParseOutcome(outcome, out int? team);
         using ServiceProvider provider = new ServiceCollection()
             .AddCheckServices(cancellationToken)
             .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>()
@@ -43,18 +51,22 @@ public class PredictionsTestCommand : Command
         await predictions.TestAsync(team, cancellationToken);
     }
 
-    private static int? ParseOutcome(string outcome)
+    /// <summary>Blue is team 0, Red is team 1, and cancel is no team.</summary>
+    public static bool TryParseOutcome(string outcome, out int? team)
     {
+        team = null;
         if (string.Equals(outcome, "blue", StringComparison.OrdinalIgnoreCase))
         {
-            return 0;
+            team = 0;
+            return true;
         }
 
         if (string.Equals(outcome, "red", StringComparison.OrdinalIgnoreCase))
         {
-            return 1;
+            team = 1;
+            return true;
         }
 
-        return null;
+        return string.Equals(outcome, "cancel", StringComparison.OrdinalIgnoreCase);
     }
 }

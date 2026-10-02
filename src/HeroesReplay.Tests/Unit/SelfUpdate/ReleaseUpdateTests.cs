@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands;
-using HeroesReplay.Core.Services.SelfUpdate;
+using HeroesReplay.Core.SelfUpdate;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;
@@ -203,8 +205,13 @@ public class ReleaseUpdateTests
             Directory.CreateDirectory(Path.Combine(install, "obs"));
             File.WriteAllText(Path.Combine(install, "obs", "Default.json"), "{\"scenes\":[]}");
 
-            ReleaseInstall.CopyObsScenesIfClosed(install, appData, obsIsRunning: true);
+            IReadOnlyList<string> open = ReleaseInstall.CopyObsScenesIfClosed(
+                install,
+                appData,
+                obsIsRunning: true
+            );
 
+            Assert.Contains(open, note => note.Contains("OBS is open", StringComparison.Ordinal));
             Assert.False(
                 File.Exists(
                     Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json")
@@ -227,6 +234,144 @@ public class ReleaseUpdateTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void CopyObsScenes_KeepsAnExistingProfileAndNeverCopiesTheStreamKey()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string appData = Path.Combine(root, "appdata");
+        try
+        {
+            WriteObsBundle(install);
+            File.WriteAllText(
+                Path.Combine(install, "obs", "Default", "service.json"),
+                "{\"key\":\"unit-test-not-a-secret\"}"
+            );
+            string profileDir = Path.Combine(
+                appData,
+                "obs-studio",
+                "basic",
+                "profiles",
+                "HeroesReplay"
+            );
+            Directory.CreateDirectory(profileDir);
+            const string machine =
+                "[General]\r\nName=HeroesReplay\r\n\r\n[SimpleOutput]\r\nRecEncoder=nvenc\r\n";
+            File.WriteAllText(Path.Combine(profileDir, "basic.ini"), machine);
+
+            IReadOnlyList<string> notes = ReleaseInstall.CopyObsScenesIfClosed(
+                install,
+                appData,
+                obsIsRunning: false
+            );
+
+            Assert.Equal(machine, File.ReadAllText(Path.Combine(profileDir, "basic.ini")));
+            Assert.Contains(
+                notes,
+                note => note.Contains("Kept the existing OBS profile", StringComparison.Ordinal)
+            );
+            Assert.False(File.Exists(Path.Combine(profileDir, "service.json")));
+            Assert.Empty(Directory.GetFiles(appData, "service.json", SearchOption.AllDirectories));
+            Assert.True(
+                File.Exists(
+                    Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json")
+                )
+            );
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void CopyObsScenes_InstallsTheProfileTemplateOnlyWhenMissing()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string appData = Path.Combine(root, "appdata");
+        try
+        {
+            WriteObsBundle(install);
+
+            IReadOnlyList<string> notes = ReleaseInstall.CopyObsScenesIfClosed(
+                install,
+                appData,
+                obsIsRunning: false,
+                profileName: "HeroesReplay-live",
+                collectionName: "HeroesReplay-live"
+            );
+
+            string profile = Path.Combine(
+                appData,
+                "obs-studio",
+                "basic",
+                "profiles",
+                "HeroesReplay-live",
+                "basic.ini"
+            );
+            Assert.Contains("Name=HeroesReplay-live\r\n", File.ReadAllText(profile));
+            Assert.Contains("RecEncoder=qsv_h264", File.ReadAllText(profile));
+            Assert.Contains(notes, note => note.Contains("template", StringComparison.Ordinal));
+            string collection = Path.Combine(
+                appData,
+                "obs-studio",
+                "basic",
+                "scenes",
+                "HeroesReplay-live.json"
+            );
+            using (JsonDocument document = JsonDocument.Parse(File.ReadAllText(collection)))
+            {
+                Assert.Equal(
+                    "HeroesReplay-live",
+                    document.RootElement.GetProperty("name").GetString()
+                );
+            }
+
+            File.WriteAllText(profile, "[General]\r\nName=HeroesReplay-live\r\n; tuned\r\n");
+            ReleaseInstall.CopyObsScenesIfClosed(
+                install,
+                appData,
+                obsIsRunning: false,
+                profileName: "HeroesReplay-live",
+                collectionName: "HeroesReplay-live"
+            );
+
+            Assert.Equal(
+                "[General]\r\nName=HeroesReplay-live\r\n; tuned\r\n",
+                File.ReadAllText(profile)
+            );
+            Assert.False(
+                Directory.Exists(
+                    Path.Combine(appData, "obs-studio", "basic", "profiles", "HeroesReplay")
+                )
+            );
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    private static void WriteObsBundle(string install)
+    {
+        Directory.CreateDirectory(Path.Combine(install, "obs", "Default"));
+        File.WriteAllText(
+            Path.Combine(install, "obs", "Default.json"),
+            "{\"name\":\"HeroesReplay\",\"sources\":[]}"
+        );
+        File.WriteAllText(
+            Path.Combine(install, "obs", "Default", "basic.ini"),
+            "[General]\r\nName=HeroesReplay\r\n\r\n[SimpleOutput]\r\nRecEncoder=qsv_h264\r\n"
+        );
     }
 
     [Fact]

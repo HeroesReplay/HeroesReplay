@@ -1,7 +1,23 @@
 using System;
 using System.IO;
-using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Core.Services.Retention;
+using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Retention;
+using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Capture;
+using HeroesReplay.Core.Spectating.Clock;
+using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.TwitchExtension;
+using HeroesReplay.Core.YouTube;
 
 namespace HeroesReplay.Core.Configuration;
 
@@ -35,6 +51,9 @@ public class AppSettings
     public ReplayMediaPolicySettings ReplayMedia { get; set; } = new ReplayMediaPolicySettings();
     public RetentionSettings Retention { get; set; }
     public ReleaseSettings Release { get; set; }
+    public ServiceHealthSettings ServiceHealth { get; set; } = new ServiceHealthSettings();
+    public ServiceLogSettings ServiceLogs { get; set; } = new ServiceLogSettings();
+    public ServiceRestartSettings ServiceRestart { get; set; } = new ServiceRestartSettings();
     public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
     public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
     public string ContextsDirectory => Path.Combine(Location.DataDirectory, "Contexts");

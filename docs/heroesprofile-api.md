@@ -24,15 +24,16 @@ Paths included: `/replays`, `/replays/**`, `/download/replay`, `/replay/{replayI
 | --- | --- |
 | List / max id | `GET /replays?after={id}&game_type=Storm League` |
 | Download | `GET /download/replay?replayID={id}` |
-| One match | `GET /replays?after={id-1}` then pick `replayID` (detail: `GET /replay/{replayID}` has `winner`) |
+| One match | `GET /replays?after={id-1}` then pick `replayID` |
+| Rank badge | `GET /replay/{replayID}` (average player MMR) |
 
-`region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable` instead of a GCS/S3 `url`. Skip when `downloadable` is false or `deleted` is non-zero.
+`region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable`. Skip when `downloadable` is false or `deleted` is non-zero.
 
 Auth is `Authorization: Bearer` ([Migrating](https://www.heroesprofile.com/Api/Migrating)). The v1 key is `op://Heroes Replay/Heroes Profile API Key/password` (skill `op-service-account`). The old `api.heroesprofile.com` `api_token` key is not accepted.
 
 ## Twitch extension
 
-The spectator feeds the Heroes Profile Twitch extension while a replay is on screen. That API is not part of the external v1 spec and is not in the Kiota client.
+The spectator feeds the Heroes Profile Twitch extension while a replay is on screen, when `TwitchExtension:Enabled` is true. It is false in every appsettings file. That API is not part of the external v1 spec and is not in the Kiota client.
 
 Base URL: `https://www.heroesprofile.com/api/twitch/v1/`  
 Auth header: `X-HP-Twitch-Key` (an uploader key from https://www.heroesprofile.com/Api/Account). The v1 Bearer key is not accepted.
@@ -42,4 +43,4 @@ Auth header: `X-HP-Twitch-Key` (an uploader key from https://www.heroesprofile.c
 | Check the key | `GET uploader/whoami` |
 | One full game so far | `POST uploader/snapshot` |
 
-`heroesreplay check twitch-extension` calls whoami. The key URI is `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password`. Snapshots use phases `lobby`, `in_game`, and `ended`, paced by the match clock. The server applies `delay_seconds` from whoami before viewers see the update.
+`heroesreplay check twitch-extension` calls whoami when the extension is enabled. The key URI is `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password`. Snapshots use phases `lobby`, `in_game`, and `ended`, paced by the match clock. The server applies `delay_seconds` from whoami before viewers see the update.

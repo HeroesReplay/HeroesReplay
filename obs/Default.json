@@ -31,37 +31,6 @@
     "monitoring_type": 0,
     "private_settings": {}
   },
-  "AuxAudioDevice1": {
-    "prev_ver": 537001986,
-    "name": "Mic/Aux",
-    "uuid": "f2fa934c-2590-4a34-89bf-7b4a13be2462",
-    "id": "wasapi_input_capture",
-    "versioned_id": "wasapi_input_capture",
-    "settings": {
-      "device_id": "default"
-    },
-    "mixers": 255,
-    "sync": 0,
-    "flags": 0,
-    "volume": 1.0,
-    "balance": 0.5,
-    "enabled": true,
-    "muted": false,
-    "push-to-mute": false,
-    "push-to-mute-delay": 0,
-    "push-to-talk": false,
-    "push-to-talk-delay": 0,
-    "hotkeys": {
-      "libobs.mute": [],
-      "libobs.unmute": [],
-      "libobs.push-to-mute": [],
-      "libobs.push-to-talk": []
-    },
-    "deinterlace_mode": 0,
-    "deinterlace_field_order": 0,
-    "monitoring_type": 0,
-    "private_settings": {}
-  },
   "sources": [
     {
       "prev_ver": 537001986,
@@ -318,7 +287,7 @@
       "id": "browser_source",
       "versioned_id": "browser_source",
       "settings": {
-        "url": "file:///countdown/index.html?m=5\u0026s=0\u0026autostart=1",
+        "url": "file:///countdown/index.html?m=2\u0026s=0\u0026autostart=1\u0026title=NEXT%20MATCH\u0026end=STARTING",
         "width": 720,
         "height": 240,
         "shutdown": true,

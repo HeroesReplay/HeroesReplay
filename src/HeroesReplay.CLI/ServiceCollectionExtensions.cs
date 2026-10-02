@@ -5,35 +5,46 @@ using System.Net.Http;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Update;
 using HeroesReplay.Core;
+using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Analysis.Calculators;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Analysis;
-using HeroesReplay.Core.Services.Analysis.Calculators;
-using HeroesReplay.Core.Services.Client;
-using HeroesReplay.Core.Services.Connectivity;
-using HeroesReplay.Core.Services.Context;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.HeroesProfileExtension;
-using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Core.Services.Observer;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-using HeroesReplay.Core.Services.Providers;
-using HeroesReplay.Core.Services.Queue;
-using HeroesReplay.Core.Services.Reports;
-using HeroesReplay.Core.Services.SelfUpdate;
-using HeroesReplay.Core.Services.Shared;
-using HeroesReplay.Core.Services.Status;
-using HeroesReplay.Core.Services.Twitch;
-using HeroesReplay.Core.Services.Twitch.ChatMessages;
-using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
-using HeroesReplay.Core.Services.Twitch.Rewards;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Replays.Context;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Capture;
+using HeroesReplay.Core.Spectating.Clock;
+using HeroesReplay.Core.Spectating.Clock.Hybrid;
+using HeroesReplay.Core.Spectating.Clock.Memory;
+using HeroesReplay.Core.Spectating.Clock.Ocr;
+using HeroesReplay.Core.Spectating.Control;
+using HeroesReplay.Core.Spectating.Reports;
+using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.Twitch.ChatMessages;
+using HeroesReplay.Core.Twitch.Predictions;
+using HeroesReplay.Core.Twitch.RedeemedRewards;
+using HeroesReplay.Core.Twitch.Rewards;
+using HeroesReplay.Core.TwitchExtension;
+using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Playlists;
+using HeroesReplay.Core.YouTube.Search;
 using HeroesReplay.HeroesProfile.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using OBSWebsocketDotNet;
+using Polly.Telemetry;
 using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
@@ -69,6 +80,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IYouTubeUploader, YouTubeUploader>()
             .AddSingleton<IYouTubePlaylistClient, GoogleYouTubePlaylistClient>()
             .AddSingleton<IYouTubeLibrary, YouTubeLibrary>()
+            .AddSingleton(new CancellationTokenProvider(token))
+            .AddHeroesProfileService()
             .AddSingleton(serviceProvider =>
                 BindSettings(serviceProvider.GetRequiredService<IConfiguration>())
             )
@@ -102,6 +115,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
             .AddSingleton<IAbilityDetector, AbilityDetector>()
+            .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
             .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
             .AddSingleton<IReplayLoader, ReplayLoader>()
             .AddSingleton<IContextFileManager, ContextFileManager>()
@@ -151,6 +165,94 @@ public static class ServiceCollectionExtensions
         return BindSettings(GetConfiguration());
     }
 
+    /// <summary>
+    /// The effective settings without resolving secrets or the media policy, for offline
+    /// commands that only read local files such as the hero catalog.
+    /// </summary>
+    public static AppSettings LoadOfflineSettings() =>
+        GetConfiguration().Get<AppSettings>() ?? new AppSettings();
+
+    /// <summary>
+    /// The effective <c>OBS</c> section without resolving secrets, for commands that only need
+    /// names and flags.
+    /// </summary>
+    public static OBSSettings LoadObsSettings() =>
+        GetConfiguration().GetSection("OBS").Get<OBSSettings>() ?? new OBSSettings();
+
+    /// <summary>
+    /// The effective <c>ServiceHealth</c> section, for <c>services status</c>. No secret is resolved.
+    /// </summary>
+    public static ServiceHealthSettings LoadServiceHealthSettings() =>
+        GetConfiguration().GetSection("ServiceHealth").Get<ServiceHealthSettings>()
+        ?? new ServiceHealthSettings();
+
+    /// <summary>The effective <c>ServiceLogs</c> section. No secret is resolved.</summary>
+    public static ServiceLogSettings LoadServiceLogSettings() =>
+        GetConfiguration().GetSection("ServiceLogs").Get<ServiceLogSettings>()
+        ?? new ServiceLogSettings();
+
+    /// <summary>The effective <c>ServiceRestart</c> section. No secret is resolved.</summary>
+    public static ServiceRestartSettings LoadServiceRestartSettings() =>
+        GetConfiguration().GetSection("ServiceRestart").Get<ServiceRestartSettings>()
+        ?? new ServiceRestartSettings();
+
+    /// <summary>
+    /// Writes this process's logs to <c>&lt;role&gt;-&lt;date&gt;.log</c> under
+    /// <c>ServiceLogs:Directory</c>. Does nothing without a role or when the section is disabled.
+    /// </summary>
+    public static IServiceCollection AddServiceRoleLog(
+        this IServiceCollection services,
+        string role
+    )
+    {
+        if (!ServiceRoleLog.IsSafeRole(role))
+        {
+            return services;
+        }
+
+        ServiceLogSettings settings = LoadServiceLogSettings();
+        if (!settings.Enabled)
+        {
+            return services;
+        }
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<ILoggerProvider, ServiceRoleLogProvider>(
+                _ => new ServiceRoleLogProvider(role, settings)
+            )
+        );
+        return services;
+    }
+
+    /// <summary>Console, the supervisor's own log file, and OpenTelemetry for the supervisor.</summary>
+    public static IServiceCollection AddSupervisorServices(this IServiceCollection services)
+    {
+        IConfigurationRoot configuration = GetConfiguration();
+        return services
+            .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-supervisor")
+            .AddLogging(builder =>
+                builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole()
+            )
+            .AddServiceRoleLog(ServiceRoleLog.SupervisorRole);
+    }
+
+    /// <summary>
+    /// What the read-only OBS MCP tools need, read on each call. No secret is resolved here;
+    /// the tools resolve only <c>OBS:WebSocketPassword</c>.
+    /// </summary>
+    public static ObsInspectionSettings LoadObsInspectionSettings()
+    {
+        IConfigurationRoot configuration = GetConfiguration();
+        var arm = new ObsStreamArm();
+        return new ObsInspectionSettings(
+            configuration.GetSection("OBS").Get<OBSSettings>() ?? new OBSSettings(),
+            AppContext.BaseDirectory,
+            configuration.GetSection("Location").Get<LocationSettings>()?.DataDirectory,
+            arm.IsArmed(),
+            arm.FilePath
+        );
+    }
+
     public static AppSettings BindSettings(IConfiguration configuration)
     {
         ReplayMediaPolicySettings media = ReplayMediaPolicyStartup.Require(configuration);
@@ -171,7 +273,8 @@ public static class ServiceCollectionExtensions
         return services
             .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-client")
             .AddSingleton(settings)
-            .AddSingleton<StormClientConfigurator>();
+            .AddSingleton<StormClientConfigurator>()
+            .AddSingleton<IGameFirewall, NetshGameFirewall>();
     }
 
     public static IServiceCollection AddFocusCalculators(this IServiceCollection services)
@@ -381,7 +484,6 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
             .AddSingleton<IAbilityDetector, AbilityDetector>()
-            .AddSingleton<IYouTubeVideoSearch, YouTubeApiVideoSearch>()
             .AddSingleton<IYouTubeReplayLookup, YouTubeReplayLookup>()
             .AddSingleton<RecordingClock>()
             .AddSingleton<IGameFirewall, NetshGameFirewall>()
@@ -507,6 +609,9 @@ public static class ServiceCollectionExtensions
                 client => client.Timeout = Timeout.InfiniteTimeSpan
             )
             .AddResilienceHandler(HeroesProfileHttp.ClientName, HeroesProfileHttp.Configure);
+        services.Configure<TelemetryOptions>(options =>
+            options.SeverityProvider = HeroesProfileHttp.Severity
+        );
 
         return services.AddSingleton(sp =>
         {
@@ -519,21 +624,33 @@ public static class ServiceCollectionExtensions
 
     private static IConfigurationRoot GetConfiguration()
     {
-        var env = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV");
         string basePath = Directory.GetCurrentDirectory();
         if (!File.Exists(Path.Combine(basePath, "appsettings.json")))
         {
             basePath = AppContext.BaseDirectory;
         }
 
+        return BuildConfiguration(
+            basePath,
+            Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV")
+        );
+    }
+
+    /// <summary>
+    /// The effective settings of the install in <paramref name="basePath"/>: appsettings.json,
+    /// secrets, the <paramref name="environment"/> overlay, then <c>HEROES_REPLAY_</c> variables.
+    /// The release update reads the install it replaces through this.
+    /// </summary>
+    public static IConfigurationRoot BuildConfiguration(string basePath, string environment)
+    {
         var builder = new ConfigurationBuilder()
             .SetBasePath(basePath)
             .AddJsonFile("appsettings.json")
             .AddJsonFile("appsettings.secrets.json", optional: true);
 
-        if (!string.IsNullOrWhiteSpace(env))
+        if (!string.IsNullOrWhiteSpace(environment))
         {
-            builder.AddJsonFile($"appsettings.{env}.json", optional: true);
+            builder.AddJsonFile($"appsettings.{environment}.json", optional: true);
         }
 
         builder.AddEnvironmentVariables("HEROES_REPLAY_");

@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Retention;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Retention;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Retention;
@@ -280,6 +282,30 @@ public class MediaRetentionTests
 
         Assert.False(File.Exists(Path.Combine(inserted, "match.mp4")));
         Assert.True(File.Exists(Path.Combine(inserted, "youtube-entry.json")));
+        Assert.True(File.Exists(Path.Combine(waiting, "match.mp4")));
+        Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
+    }
+
+    [Fact]
+    public void Sweep_RemovesAScheduledVideoContextAfterVideoKeepDays()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string scheduled = library.AddContext("scheduled");
+        string waiting = library.AddContext("waiting");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(scheduled, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.WriteText(waiting, "youtube-entry.json", "{\"VideoId\":null}");
+        TempLibrary.WriteFile(scheduled, "match.StormReplay", 16, now.AddDays(-5));
+        TempLibrary.WriteFile(waiting, "match.mp4", 32, now.AddDays(-5));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(scheduled, now.AddDays(-5));
+        TempLibrary.SetDirectoryTime(waiting, now.AddDays(-5));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.False(Directory.Exists(scheduled));
         Assert.True(File.Exists(Path.Combine(waiting, "match.mp4")));
         Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
     }

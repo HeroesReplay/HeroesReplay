@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.CommandLine;
 using System.Diagnostics;
 using System.IO;
@@ -6,9 +7,11 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-using HeroesReplay.Core.Services.Processes;
-using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Status;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.CLI.Commands.Services;
 
@@ -23,6 +26,7 @@ public class ServicesCommand : Command
         Subcommands.Add(StartCommand());
         Subcommands.Add(StopCommand());
         Subcommands.Add(StatusCommand());
+        Subcommands.Add(SuperviseCommand());
     }
 
     private static Command StartCommand()
@@ -31,68 +35,305 @@ public class ServicesCommand : Command
             "start",
             "Start spectate, twitch connect, heroesprofile download, and youtube uploader. Does not start Twitch ingest."
         );
+        var supervise = new Option<bool>("--supervise")
+        {
+            Description =
+                "Stay in the foreground as the supervisor after the roles are ready: restart failed roles with backoff (10s, 30s, 2m, 5m), kill and restart stale ones, at most 5 restarts per role in 30 minutes (ServiceRestart). `services stop` ends it.",
+        };
+        var roles = new Option<string>("--roles")
+        {
+            Description =
+                "Comma-separated subset to start, in plan order: spectate, twitch, download, youtube. Default: all four. For proofs, e.g. `--roles download,youtube`.",
+        };
+        command.Options.Add(supervise);
+        command.Options.Add(roles);
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
-                string exe = Environment.ProcessPath;
-                PatchObsCollection(exe);
-                ServiceStartupHandshake handshake;
-                try
+                IReadOnlyList<string> selected = ServiceProcessPlan.ParseRoles(
+                    parseResult.GetValue(roles),
+                    out string error
+                );
+                if (selected == null)
                 {
-                    handshake = ServiceRoleStartup.ForCurrentProcess(exe);
+                    Console.Error.WriteLine(error);
+                    return Task.FromResult(1);
                 }
-                catch (Exception e)
+
+                bool supervised = parseResult.GetValue(supervise);
+                ServiceSupervisorMutex claim = null;
+                if (supervised)
+                {
+                    claim = ServiceSupervisorMutex.TryAcquire();
+                    if (claim == null)
+                    {
+                        Console.Error.WriteLine(SupervisorRunningMessage());
+                        return Task.FromResult(1);
+                    }
+                }
+                else if (ServiceSupervisorFile.IsRunning())
+                {
+                    Console.Error.WriteLine(SupervisorRunningMessage());
+                    return Task.FromResult(1);
+                }
+
+                using (claim)
+                {
+                    // No other supervisor runs here, so any state file is a dead one's.
+                    ServiceSupervisorFile.Delete(ServiceSupervisorFile.DefaultPath);
+                    string exe = Environment.ProcessPath;
+                    PatchObsCollection(exe);
+                    ServiceStartupHandshake handshake = CreateHandshake(exe);
+                    if (handshake == null)
+                    {
+                        return Task.FromResult(1);
+                    }
+
+                    int code = ServiceSupervisor.Start(
+                        ServiceLockStore.DefaultPath,
+                        exe,
+                        ProcessNameOrNull,
+                        (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
+                        () => ServiceStopFile.Clear(),
+                        () =>
+                        {
+                            AspireDashboardHost.EnsureRunning();
+                        },
+                        handshake,
+                        selected
+                    );
+                    if (code != 0 || !supervised)
+                    {
+                        return Task.FromResult(code);
+                    }
+
+                    return Task.FromResult(Supervise(exe, cancellationToken));
+                }
+            }
+        );
+        return command;
+    }
+
+    private static Command SuperviseCommand()
+    {
+        var command = new Command(
+            "supervise",
+            "Supervise the roles `services start` recorded, in the foreground: restart failed roles with backoff (10s, 30s, 2m, 5m), kill and restart roles whose heartbeat is 2 minutes old, at most 5 restarts per role in 30 minutes (ServiceRestart), then leave the role down (service.restart_budget_exhausted). One supervisor at a time. `services stop` ends it; Ctrl+C leaves the roles running unsupervised."
+        );
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                using ServiceSupervisorMutex claim = ServiceSupervisorMutex.TryAcquire();
+                if (claim == null)
+                {
+                    Console.Error.WriteLine(SupervisorRunningMessage());
+                    return Task.FromResult(1);
+                }
+
+                if (File.Exists(ServiceStopFile.DefaultPath))
                 {
                     Console.Error.WriteLine(
-                        "Service startup failed: role configuration could not be loaded. "
-                            + e.Message
+                        "A stop is in progress (services.stop). Run `heroesreplay services start --supervise` once it finishes."
                     );
                     return Task.FromResult(1);
                 }
 
-                handshake.StopStarted = Kill;
-                handshake.Probe = ServiceProcessProbe.TryFromProcess;
-                handshake.Wait = Thread.Sleep;
-                int code = ServiceSupervisor.Start(
-                    ServiceLockStore.DefaultPath,
-                    exe,
-                    ProcessNameOrNull,
-                    (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
-                    () => ServiceStopFile.Clear(),
-                    () =>
-                    {
-                        AspireDashboardHost.EnsureRunning();
-                    },
-                    handshake
-                );
-                return Task.FromResult(code);
+                return Task.FromResult(Supervise(Environment.ProcessPath, cancellationToken));
             }
         );
         return command;
+    }
+
+    /// <summary>
+    /// Runs the supervisor in this process until <c>services stop</c> or Ctrl+C. The caller holds
+    /// the supervisor mutex on this thread.
+    /// </summary>
+    private static int Supervise(string exe, CancellationToken cancellationToken)
+    {
+        ServiceRestartSettings settings = ServiceCollectionExtensions.LoadServiceRestartSettings();
+        using ServiceProvider provider = new ServiceCollection()
+            .AddSupervisorServices()
+            .BuildHeroesReplayProvider();
+        ServiceRoleLogProvider log = provider
+            .GetServices<ILoggerProvider>()
+            .OfType<ServiceRoleLogProvider>()
+            .FirstOrDefault();
+        var supervision = new ServiceSupervision
+        {
+            Settings = settings,
+            Health = ServiceCollectionExtensions.LoadServiceHealthSettings(),
+            ProcessNameOrNull = ProcessNameOrNull,
+            Probe = ServiceProcessProbe.TryFromProcess,
+            ReadHeartbeat = record => ServiceReadyFile.TryRead(record),
+            DeleteHeartbeat = record => ServiceReadyFile.Delete(record?.Nonce),
+            StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
+            Launch = (role, started) =>
+            {
+                ServiceStartupHandshake handshake = CreateHandshake(exe);
+                if (handshake == null)
+                {
+                    return new ServiceLaunch(
+                        null,
+                        false,
+                        false,
+                        "role configuration could not be loaded."
+                    );
+                }
+
+                handshake.Cancelled = () => File.Exists(ServiceStopFile.DefaultPath);
+                return ServiceSupervisor.Restart(
+                    role,
+                    exe,
+                    (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
+                    ProcessNameOrNull,
+                    handshake,
+                    started
+                );
+            },
+            Kill = Kill,
+            CloseGame = StopSpectatedGame,
+            Wait = pause => cancellationToken.WaitHandle.WaitOne(pause),
+            Logger = provider.GetRequiredService<ILogger<ServiceSupervision>>(),
+            ExecutablePath = exe,
+            Version = ServiceReadyFile.CurrentVersion(),
+            LogPath = () => log?.CurrentPath,
+        };
+        return supervision.Run(cancellationToken);
+    }
+
+    /// <summary>The <c>services start</c> handshake: role prerequisites, kill, probe, and wait.</summary>
+    private static ServiceStartupHandshake CreateHandshake(string exe)
+    {
+        ServiceStartupHandshake handshake;
+        try
+        {
+            handshake = ServiceRoleStartup.ForCurrentProcess(exe);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(
+                "Service startup failed: role configuration could not be loaded. " + e.Message
+            );
+            return null;
+        }
+
+        handshake.StopStarted = Kill;
+        handshake.Probe = ServiceProcessProbe.TryFromProcess;
+        handshake.Wait = Thread.Sleep;
+        return handshake;
+    }
+
+    private static string SupervisorRunningMessage()
+    {
+        int? pid = ServiceSupervisorFile.TryLoad(ServiceSupervisorFile.DefaultPath)?.Pid;
+        return $"A supervisor is already running{(pid > 0 ? $" (pid {pid})" : "")}. Run `heroesreplay services stop` first; it stops the roles and the supervisor.";
+    }
+
+    /// <summary>
+    /// After the stop file is down: wait for the supervisor to see it and exit, then kill it if it
+    /// has not. Null when none was running.
+    /// </summary>
+    private static ServiceRoleStop StopSupervisor()
+    {
+        string path = ServiceSupervisorFile.DefaultPath;
+        int pid = ServiceSupervisorFile.TryLoad(path)?.Pid ?? 0;
+        try
+        {
+            if (!ServiceSupervisorFile.IsRunning())
+            {
+                return null;
+            }
+
+            if (WaitForSupervisorExit(SupervisorStopWait))
+            {
+                return new ServiceRoleStop(
+                    ServiceRoleLog.SupervisorRole,
+                    pid,
+                    ServiceStopOutcome.Graceful
+                );
+            }
+
+            string detail = null;
+            if (pid > 0 && ServiceProcessPlan.IsHeroesReplay(ProcessNameOrNull(pid)))
+            {
+                try
+                {
+                    Kill(pid);
+                }
+                catch (Exception e)
+                {
+                    detail = "Kill failed: " + e.Message;
+                }
+            }
+            else
+            {
+                detail = "supervisor.json names no live heroesreplay pid to kill.";
+            }
+
+            return WaitForSupervisorExit(TimeSpan.FromSeconds(5))
+                ? new ServiceRoleStop(ServiceRoleLog.SupervisorRole, pid, ServiceStopOutcome.Killed)
+                : new ServiceRoleStop(
+                    ServiceRoleLog.SupervisorRole,
+                    pid,
+                    ServiceStopOutcome.StillRunning,
+                    detail
+                );
+        }
+        finally
+        {
+            if (!ServiceSupervisorFile.IsRunning())
+            {
+                ServiceSupervisorFile.Delete(path);
+            }
+        }
+    }
+
+    // A restart in progress ends its ready wait on the stop file; a launch takes up to 15 s more.
+    private static readonly TimeSpan SupervisorStopWait = TimeSpan.FromSeconds(30);
+
+    private static bool WaitForSupervisorExit(TimeSpan budget)
+    {
+        DateTimeOffset until = DateTimeOffset.UtcNow + budget;
+        while (ServiceSupervisorFile.IsRunning())
+        {
+            if (DateTimeOffset.UtcNow >= until)
+            {
+                return false;
+            }
+
+            Thread.Sleep(200);
+        }
+
+        return true;
     }
 
     private static Command StopCommand()
     {
         var command = new Command(
             "stop",
-            "Ask the recorded processes to shut down, kill any still running after 20 seconds, and close Heroes of the Storm."
+            "Ask the recorded processes to shut down, kill any still running after 20 seconds, and close Heroes of the Storm. Exits 1 unless every role exited, the game closed, and OBS is not streaming."
         );
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
-                int code = ServiceSupervisor.Stop(
+                ServiceStopResult result = ServiceSupervisor.Stop(
                     ServiceLockStore.DefaultPath,
-                    ProcessNameOrNull,
-                    Kill,
-                    () => ServiceStopFile.Request(),
-                    TimeSpan.FromSeconds(20),
-                    Thread.Sleep,
-                    () => ServiceStopFile.Clear(),
-                    StopSpectatedGame,
-                    ServiceProcessProbe.TryFromProcess,
-                    ObsServiceStop.DelegateToSpectator
+                    new ServiceShutdown
+                    {
+                        ProcessNameOrNull = ProcessNameOrNull,
+                        Probe = ServiceProcessProbe.TryFromProcess,
+                        Kill = Kill,
+                        RequestGracefulStop = () => ServiceStopFile.Request(),
+                        GracefulWait = ServiceShutdown.DefaultGracefulWait,
+                        Wait = Thread.Sleep,
+                        ClearStopFile = () => ServiceStopFile.Clear(),
+                        CloseGame = StopSpectatedGame,
+                        ConfirmStream = ObsServiceStop.DelegateToSpectator,
+                        ReadStream = ServiceStreamProbe.Read,
+                        StopSupervisor = StopSupervisor,
+                    }
                 );
-                return Task.FromResult(code);
+                return Task.FromResult(result.ExitCode);
             }
         );
         return command;
@@ -102,8 +343,17 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "status",
-            "Show which service processes are still running, plus the spectator status file."
+            "Classify each role as ready, degraded, stale, stopped, or failed from its heartbeat, with the cause and the fix, plus the spectator status file. Exits 1 when a role is failed, stale, or degraded."
         );
+        var output = new Option<string>("--output")
+        {
+            Description =
+                "text (default) or json. JSON is a stable envelope: schemaVersion, ok, code (service.ready, service.degraded, service.stale, service.stopped, service.failed), roles[].",
+            DefaultValueFactory = _ => "text",
+        };
+        output.AcceptOnlyFromAmong("text", "json");
+        output.Aliases.Add("-o");
+        command.Options.Add(output);
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
@@ -111,7 +361,20 @@ public class ServicesCommand : Command
                     ServiceLockStore.DefaultPath,
                     ProcessNameOrNull,
                     new SpectatorStatusStore().TryReadShared(),
-                    ServiceProcessProbe.TryFromProcess
+                    ServiceProcessProbe.TryFromProcess,
+                    new ServiceStatusQuery
+                    {
+                        Output = ServiceStatusQuery.ParseOutput(parseResult.GetValue(output)),
+                        Settings = ServiceCollectionExtensions.LoadServiceHealthSettings(),
+                        StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
+                        Environment = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV"),
+                        LogDirectory = ServiceCollectionExtensions
+                            .LoadServiceLogSettings()
+                            .ResolvedDirectory,
+                        ReadSupervisor = () =>
+                            ServiceSupervisorFile.TryLoad(ServiceSupervisorFile.DefaultPath),
+                        SupervisorRunning = () => ServiceSupervisorFile.IsRunning(),
+                    }
                 );
                 return Task.FromResult(code);
             }
@@ -269,7 +532,8 @@ public class ServicesCommand : Command
             ObsCollectionApplyResult result = ObsCollectionPatcher.ApplyForInstall(
                 installDirectory,
                 ObsCollectionPatcher.ReadDataDirectory(installDirectory),
-                Process.GetProcessesByName("obs64").Length > 0
+                Process.GetProcessesByName("obs64").Length > 0,
+                ObsNames.SceneCollection(ServiceCollectionExtensions.LoadObsSettings())
             );
             if (result.Drift || result.Wrote)
             {
@@ -284,22 +548,36 @@ public class ServicesCommand : Command
 
     private static string PsQuote(string value) => "'" + (value ?? "").Replace("'", "''") + "'";
 
-    private static void StopSpectatedGame()
+    private const string GameProcessName = "HeroesOfTheStorm_x64";
+
+    private static bool StopSpectatedGame()
     {
-        foreach (Process game in Process.GetProcessesByName("HeroesOfTheStorm_x64"))
+        foreach (Process game in Process.GetProcessesByName(GameProcessName))
         {
-            try
+            using (game)
             {
-                game.Kill(entireProcessTree: true);
-                Console.WriteLine($"Stopped Heroes of the Storm pid {game.Id}.");
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine(
-                    $"Could not stop Heroes of the Storm pid {game.Id}: {e.Message}"
-                );
+                try
+                {
+                    game.Kill(entireProcessTree: true);
+                    game.WaitForExit(5000);
+                    Console.WriteLine($"Stopped Heroes of the Storm pid {game.Id}.");
+                }
+                catch (Exception e)
+                {
+                    Console.Error.WriteLine(
+                        $"Could not stop Heroes of the Storm pid {game.Id}: {e.Message}"
+                    );
+                }
             }
         }
+
+        Process[] left = Process.GetProcessesByName(GameProcessName);
+        foreach (Process game in left)
+        {
+            game.Dispose();
+        }
+
+        return left.Length == 0;
     }
 
     private static void Kill(int pid)

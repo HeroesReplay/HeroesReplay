@@ -5,8 +5,10 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.SelfUpdate;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.Shared;
+using Microsoft.Extensions.Configuration;
 
 namespace HeroesReplay.CLI.Commands.Update;
 
@@ -21,6 +23,136 @@ public class UpdateCommand : Command
         Subcommands.Add(CheckCommand());
         Subcommands.Add(PreserveMinReplayIdCommand());
         Subcommands.Add(ReleaseHealthCommand());
+        Subcommands.Add(MigrateStreamArmCommand());
+        Subcommands.Add(InstallObsCommand());
+    }
+
+    private static Option<string> EnvironmentOption() =>
+        new("--environment")
+        {
+            Description =
+                "appsettings overlay to read (HEROES_REPLAY_ENV). apply-release.ps1 passes the running environment, prod when unset.",
+        };
+
+    private static Command MigrateStreamArmCommand()
+    {
+        var command = new Command(
+            "migrate-stream-arm",
+            "Called by apply-release.ps1 once: arm this machine for Twitch ingest when the install being replaced has OBS:StreamingEnabled true. Never arms when it is false, and never runs twice."
+        );
+        Option<string> previous = new("--previous")
+        {
+            Description = "The install being replaced. Its effective settings are read.",
+            Required = true,
+        };
+        Option<string> environment = EnvironmentOption();
+        command.Options.Add(previous);
+        command.Options.Add(environment);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(
+                    MigrateStreamArm(
+                        parseResult.GetValue(previous),
+                        parseResult.GetValue(environment)
+                    )
+                );
+            }
+        );
+        return command;
+    }
+
+    private static int MigrateStreamArm(string previous, string environment)
+    {
+        bool streamingEnabled;
+        try
+        {
+            streamingEnabled = ServiceCollectionExtensions
+                .BuildConfiguration(Path.GetFullPath(previous), environment)
+                .GetValue<bool>("OBS:StreamingEnabled");
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(
+                $"Stream arm migration did not run. The settings in {previous} could not be read. {e.Message}"
+            );
+            return 1;
+        }
+
+        try
+        {
+            StreamArmMigrationResult result = StreamArmMigration.Run(
+                new ObsStreamArm(),
+                streamingEnabled,
+                previous
+            );
+            Console.WriteLine(result.Message);
+            return 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"Stream arm migration failed. {e.Message}");
+            return 1;
+        }
+    }
+
+    private static Command InstallObsCommand()
+    {
+        var command = new Command(
+            "install-obs",
+            "Called by apply-release.ps1: while OBS is closed, copy the release scene collection and install the profile template only when this machine has no profile. Never copies service.json."
+        );
+        Option<string> install = new("--install")
+        {
+            Description = "The install directory that holds obs\\Default.json and appsettings.",
+            Required = true,
+        };
+        Option<string> environment = EnvironmentOption();
+        command.Options.Add(install);
+        command.Options.Add(environment);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(
+                    InstallObs(parseResult.GetValue(install), parseResult.GetValue(environment))
+                );
+            }
+        );
+        return command;
+    }
+
+    private static int InstallObs(string install, string environment)
+    {
+        try
+        {
+            OBSSettings obs =
+                ServiceCollectionExtensions
+                    .BuildConfiguration(Path.GetFullPath(install), environment)
+                    .GetSection("OBS")
+                    .Get<OBSSettings>()
+                ?? new OBSSettings();
+            foreach (
+                string note in ReleaseInstall.CopyObsScenesIfClosed(
+                    install,
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
+                    ObsNames.Profile(obs),
+                    ObsNames.SceneCollection(obs)
+                )
+            )
+            {
+                Console.WriteLine(note);
+            }
+
+            return 0;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"OBS scene files were not copied. {e.Message}");
+            return 1;
+        }
     }
 
     private static Command ReleaseHealthCommand()

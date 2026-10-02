@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-using HeroesReplay.Core.Services.Processes;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Status;
 
 namespace HeroesReplay.CLI.Commands.Services;
 
@@ -19,13 +19,11 @@ public static class ServiceSupervisor
         Func<string, string, int?> startProcess,
         Action clearStopFile = null,
         Action ensureDashboard = null,
-        ServiceStartupHandshake handshake = null
+        ServiceStartupHandshake handshake = null,
+        IReadOnlyCollection<string> roles = null
     )
     {
-        if (
-            string.IsNullOrWhiteSpace(exePath)
-            || !ServiceProcessPlan.IsHeroesReplay(Path.GetFileName(exePath))
-        )
+        if (!IsHeroesReplayExe(exePath))
         {
             Console.Error.WriteLine($"Refusing to start services from `{exePath}`.");
             return 1;
@@ -68,61 +66,31 @@ public static class ServiceSupervisor
         string version = string.IsNullOrWhiteSpace(handshake.Version)
             ? CurrentVersion()
             : handshake.Version;
+        IReadOnlyList<(string Name, string Arguments)> plan = ServiceProcessPlan.Select(roles);
         var started = new List<ServiceProcessRecord>();
-        foreach ((string name, string arguments) in ServiceProcessPlan.All)
+        foreach ((string name, _) in plan)
         {
-            try
+            ServiceLaunch launch = Launch(
+                name,
+                exePath,
+                version,
+                startProcess,
+                processNameOrNull,
+                handshake
+            );
+            if (launch.Record != null)
             {
-                string validation = Validate(name, exePath, handshake);
-                if (validation != null)
-                {
-                    Fail(handshake, $"{name} failed: {validation}");
-                    Rollback(lockPath, started, handshake);
-                    return 1;
-                }
-
-                var record = new ServiceProcessRecord
-                {
-                    Name = name,
-                    Arguments = arguments,
-                    ExecutablePath = exePath,
-                    Nonce = Guid.NewGuid().ToString("N"),
-                    Version = version,
-                };
-                handshake.Pending = record;
-                int? pid = startProcess(name, arguments);
-                if (pid is not int id || id <= 0)
-                {
-                    Fail(handshake, $"Failed to start {name} ({arguments}).");
-                    Rollback(lockPath, started, handshake);
-                    return 1;
-                }
-
-                record.Pid = id;
-                started.Add(record);
-                ServiceProcessProbe probed = handshake.Probe?.Invoke(id);
-                if (!string.IsNullOrWhiteSpace(probed?.ExecutablePath))
-                {
-                    record.ExecutablePath = probed.ExecutablePath;
-                }
-
-                record.StartedAt = probed?.StartedAt ?? DateTimeOffset.UtcNow;
-                Console.WriteLine($"Started {name} pid {id} ({arguments}).");
-                if (!WaitForReady(record, processNameOrNull, handshake))
-                {
-                    Rollback(lockPath, started, handshake);
-                    return 1;
-                }
+                started.Add(launch.Record);
             }
-            catch (Exception e)
+
+            if (!launch.Ready)
             {
-                Fail(handshake, $"{name} failed: {e.Message}");
                 Rollback(lockPath, started, handshake);
                 return 1;
             }
         }
 
-        if (started.Count != ServiceProcessPlan.All.Count)
+        if (started.Count != plan.Count)
         {
             Fail(handshake, "Service startup failed before every role was ready.");
             Rollback(lockPath, started, handshake);
@@ -140,149 +108,585 @@ public static class ServiceSupervisor
         return 0;
     }
 
-    public static int Stop(
-        string lockPath,
+    /// <summary>
+    /// Starts one role again for the supervisor, through the same launch as <c>services start</c>:
+    /// the role's prerequisites, a new nonce, the same arguments, and the ready handshake. A role
+    /// that started but did not get ready is stopped again, unless a stop request cut the wait
+    /// short; then <c>services stop</c> owns it through <paramref name="started"/>.
+    /// </summary>
+    public static ServiceLaunch Restart(
+        string name,
+        string exePath,
+        Func<string, string, int?> startProcess,
         Func<int, string> processNameOrNull,
-        Action<int> kill,
-        Action requestGracefulStop = null,
-        TimeSpan? gracefulWait = null,
-        Action<TimeSpan> wait = null,
-        Action clearStopFile = null,
-        Action stopSpectatedGame = null,
-        Func<int, ServiceProcessProbe> probeOrNull = null,
-        Func<ObsShutdownPlan, ObsStreamResult> confirmStream = null
+        ServiceStartupHandshake handshake,
+        Action<ServiceProcessRecord> started = null
     )
     {
-        requestGracefulStop?.Invoke();
-        RequestStreamShutdown(confirmStream);
-        ServiceLock snapshot = ServiceLockStore.TryLoad(lockPath);
-        bool hadSpectate = snapshot?.Processes?.Any(record => record?.Name == "spectate") == true;
-        TimeSpan budget = gracefulWait ?? TimeSpan.FromSeconds(20);
-        Action<TimeSpan> pause = wait ?? Thread.Sleep;
+        if (!IsHeroesReplayExe(exePath))
+        {
+            return new ServiceLaunch(
+                null,
+                false,
+                false,
+                Fail(handshake, $"Refusing to start {name} from `{exePath}`.")
+            );
+        }
+
+        handshake ??= new ServiceStartupHandshake();
+        handshake.TryReadReady ??= record => ServiceReadyFile.TryRead(record);
+        string version = string.IsNullOrWhiteSpace(handshake.Version)
+            ? CurrentVersion()
+            : handshake.Version;
+        ServiceLaunch launch = Launch(
+            name,
+            exePath,
+            version,
+            startProcess,
+            processNameOrNull,
+            handshake,
+            started
+        );
+        if (!launch.Ready && !launch.Cancelled && launch.Record != null)
+        {
+            Rollback(null, new[] { launch.Record }, handshake);
+        }
+
+        return launch;
+    }
+
+    /// <summary>
+    /// One role: check its prerequisites, give it a new nonce, start it, then wait for its ready
+    /// file and first heartbeat. <paramref name="started"/> sees the record as soon as the
+    /// process has a pid.
+    /// </summary>
+    private static ServiceLaunch Launch(
+        string name,
+        string exePath,
+        string version,
+        Func<string, string, int?> startProcess,
+        Func<int, string> processNameOrNull,
+        ServiceStartupHandshake handshake,
+        Action<ServiceProcessRecord> started = null
+    )
+    {
+        ServiceProcessRecord record = null;
         try
         {
-            List<ServiceProcessRecord> living = ServiceProcessPlan.StillRunning(
-                snapshot?.Processes,
-                processNameOrNull,
-                probeOrNull
+            string arguments = ServiceProcessPlan.ArgumentsFor(name);
+            string validation =
+                arguments == null ? "unknown service role." : Validate(name, exePath, handshake);
+            if (validation != null)
+            {
+                return new ServiceLaunch(
+                    null,
+                    false,
+                    false,
+                    Fail(handshake, $"{name} failed: {validation}")
+                );
+            }
+
+            var pending = new ServiceProcessRecord
+            {
+                Name = name,
+                Arguments = arguments,
+                ExecutablePath = exePath,
+                Nonce = Guid.NewGuid().ToString("N"),
+                Version = version,
+            };
+            handshake.Pending = pending;
+            int? pid = startProcess(name, arguments);
+            if (pid is not int id || id <= 0)
+            {
+                return new ServiceLaunch(
+                    null,
+                    false,
+                    false,
+                    Fail(handshake, $"Failed to start {name} ({arguments}).")
+                );
+            }
+
+            pending.Pid = id;
+            record = pending;
+            ServiceProcessProbe probed = handshake.Probe?.Invoke(id);
+            if (!string.IsNullOrWhiteSpace(probed?.ExecutablePath))
+            {
+                record.ExecutablePath = probed.ExecutablePath;
+            }
+
+            record.StartedAt = probed?.StartedAt ?? DateTimeOffset.UtcNow;
+            Console.WriteLine($"Started {name} pid {id} ({arguments}).");
+            started?.Invoke(record);
+            string failure = WaitForReady(record, processNameOrNull, handshake, out bool cancelled);
+            return new ServiceLaunch(record, failure == null, cancelled, failure);
+        }
+        catch (Exception e)
+        {
+            return new ServiceLaunch(
+                record,
+                false,
+                false,
+                Fail(handshake, $"{name} failed: {e.Message}")
             );
-            bool sawAny = living.Count > 0;
-            DateTimeOffset until = DateTimeOffset.UtcNow + budget;
-            while (living.Count > 0 && DateTimeOffset.UtcNow < until)
-            {
-                pause(TimeSpan.FromMilliseconds(200));
-                living = ServiceProcessPlan.StillRunning(
-                    ServiceLockStore.TryLoad(lockPath)?.Processes,
-                    processNameOrNull,
-                    probeOrNull
-                );
-            }
+        }
+    }
 
-            if (living.Count == 0)
+    private static bool IsHeroesReplayExe(string exePath) =>
+        !string.IsNullOrWhiteSpace(exePath)
+        && ServiceProcessPlan.IsHeroesReplay(Path.GetFileName(exePath));
+
+    /// <summary>
+    /// Ask every recorded role to exit, kill the ones left after the graceful budget, close the
+    /// game, then read the OBS stream state. Exit code 0 needs all three confirmed. A role that is
+    /// still running stays in the lock so status and a second stop can still find it.
+    /// </summary>
+    public static ServiceStopResult Stop(string lockPath, ServiceShutdown shutdown)
+    {
+        ArgumentNullException.ThrowIfNull(shutdown);
+        ArgumentNullException.ThrowIfNull(shutdown.ProcessNameOrNull);
+        ServiceLock snapshot = ServiceLockStore.TryLoad(lockPath);
+        List<ServiceProcessRecord> recorded = (
+            snapshot?.Processes ?? new List<ServiceProcessRecord>()
+        )
+            .Where(record => record != null && record.Pid > 0)
+            .ToList();
+        Action<TimeSpan> pause = shutdown.Wait ?? Thread.Sleep;
+        ServiceRoleStop supervisor = null;
+
+        // Until the processes are probed, every recorded role counts as running.
+        List<ServiceProcessRecord> survivors = recorded;
+        try
+        {
+            // Probe before asking, so a role that exits at once is graceful, not already gone.
+            List<ServiceProcessRecord> living = StillRunning(recorded, shutdown);
+            var asked = new HashSet<ServiceProcessRecord>(living);
+            shutdown.RequestGracefulStop?.Invoke();
+
+            // The supervisor sees the same stop file and exits without restarting anything.
+            supervisor = StopSupervisor(shutdown.StopSupervisor);
+            if (supervisor != null)
             {
-                if (hadSpectate)
+                Console.WriteLine("  " + supervisor.Describe());
+                // A restart it began before it saw the stop file is in the lock by now.
+                foreach (ServiceProcessRecord added in Added(recorded, lockPath))
                 {
-                    stopSpectatedGame?.Invoke();
+                    recorded.Add(added);
+                    if (StillRunning(new[] { added }, shutdown).Count == 1)
+                    {
+                        living.Add(added);
+                        asked.Add(added);
+                    }
                 }
-
-                Console.WriteLine(
-                    sawAny ? "Services stopped." : "No HeroesReplay services are running."
-                );
-                return 0;
             }
 
+            RequestStreamShutdown(shutdown.ConfirmStream);
+            bool hadSpectate = recorded.Any(record => record.Name == "spectate");
+
+            // The budget ends on the wall clock or on the summed pauses, whichever is first.
+            TimeSpan interval = TimeSpan.FromMilliseconds(200);
+            TimeSpan waited = TimeSpan.Zero;
+            DateTimeOffset until = DateTimeOffset.UtcNow + shutdown.GracefulWait;
+            while (
+                living.Count > 0 && waited < shutdown.GracefulWait && DateTimeOffset.UtcNow < until
+            )
+            {
+                pause(interval);
+                waited += interval;
+                living = StillRunning(living, shutdown);
+            }
+
+            var killed = new HashSet<ServiceProcessRecord>();
+            var killErrors = new Dictionary<ServiceProcessRecord, string>();
             foreach (ServiceProcessRecord record in living)
             {
                 try
                 {
-                    kill(record.Pid);
-                    Console.WriteLine($"Stopped {record.Name} pid {record.Pid}.");
+                    if (shutdown.Kill == null)
+                    {
+                        throw new InvalidOperationException("No kill step was given.");
+                    }
+
+                    shutdown.Kill(record.Pid);
+                    killed.Add(record);
                 }
                 catch (Exception e)
                 {
-                    Console.Error.WriteLine(
-                        $"Could not stop {record.Name} pid {record.Pid}: {e.Message}"
-                    );
+                    killErrors[record] = "Kill failed: " + e.Message;
                 }
             }
 
-            if (hadSpectate)
+            survivors = StillRunning(living, shutdown);
+            var roles = new List<ServiceRoleStop>();
+            foreach (ServiceProcessRecord record in recorded)
             {
-                stopSpectatedGame?.Invoke();
+                ServiceStopOutcome outcome;
+                if (!asked.Contains(record))
+                {
+                    outcome = ServiceStopOutcome.AlreadyExited;
+                }
+                else if (survivors.Contains(record))
+                {
+                    outcome = ServiceStopOutcome.StillRunning;
+                }
+                else if (killed.Contains(record))
+                {
+                    outcome = ServiceStopOutcome.Killed;
+                }
+                else
+                {
+                    // It left during the budget, or on its own before the kill reached it.
+                    outcome = ServiceStopOutcome.Graceful;
+                }
+
+                killErrors.TryGetValue(record, out string detail);
+                var role = new ServiceRoleStop(
+                    record.Name,
+                    record.Pid,
+                    outcome,
+                    outcome == ServiceStopOutcome.StillRunning ? detail : null
+                );
+                roles.Add(role);
+                Console.WriteLine("  " + role.Describe());
             }
 
-            Console.WriteLine(
-                "Forced stop skipped spectator shutdown. Heroes of the Storm was closed if it was still open."
-            );
-            return 0;
+            bool? gameClosed = hadSpectate ? CloseGame(shutdown.CloseGame) : null;
+            if (gameClosed is bool closed)
+            {
+                Console.WriteLine(
+                    closed ? "Heroes of the Storm: closed." : "Heroes of the Storm: still running."
+                );
+            }
+
+            ServiceStreamCheck stream = null;
+            if (survivors.Count > 0)
+            {
+                // The spectator may still hold its OBS session. Do not open a second websocket.
+                Console.WriteLine("OBS stream: not read, because a role is still running.");
+            }
+            else if (shutdown.ReadStream != null)
+            {
+                stream = ReadStream(shutdown.ReadStream);
+                Console.WriteLine("OBS stream: " + stream.Describe());
+            }
+
+            var result = new ServiceStopResult
+            {
+                Roles = roles,
+                GameClosed = gameClosed,
+                Stream = stream,
+                Supervisor = supervisor,
+            };
+            if (killed.Count > 0)
+            {
+                Console.WriteLine(
+                    "Forced stop skipped the shutdown of the killed roles. The game and the OBS stream were checked separately."
+                );
+            }
+
+            if (result.Succeeded)
+            {
+                Console.WriteLine(
+                    recorded.Count == 0
+                        ? "No HeroesReplay services are running."
+                        : "Services stopped."
+                );
+            }
+            else
+            {
+                Console.Error.WriteLine(
+                    "Services did not stop cleanly. " + string.Join(" ", result.Failures())
+                );
+            }
+
+            return result;
         }
         finally
         {
-            if (snapshot?.Processes != null)
+            foreach (ServiceProcessRecord record in recorded)
             {
-                foreach (ServiceProcessRecord record in snapshot.Processes)
+                if (!survivors.Contains(record))
                 {
-                    ServiceReadyFile.Delete(record?.Nonce);
+                    ServiceReadyFile.Delete(record.Nonce);
                 }
             }
 
-            ServiceLockStore.Delete(lockPath);
-            clearStopFile?.Invoke();
+            if (survivors.Count > 0)
+            {
+                ServiceLockStore.Save(
+                    lockPath,
+                    new ServiceLock
+                    {
+                        StartedAt = snapshot?.StartedAt ?? DateTimeOffset.UtcNow,
+                        Processes = survivors.ToList(),
+                    }
+                );
+            }
+            else
+            {
+                ServiceLockStore.Delete(lockPath);
+            }
+
+            // A supervisor that is still running would restart roles once the stop file is gone.
+            if (supervisor?.Outcome != ServiceStopOutcome.StillRunning)
+            {
+                shutdown.ClearStopFile?.Invoke();
+            }
         }
     }
 
+    private static List<ServiceProcessRecord> StillRunning(
+        IEnumerable<ServiceProcessRecord> records,
+        ServiceShutdown shutdown
+    ) => ServiceProcessPlan.StillRunning(records, shutdown.ProcessNameOrNull, shutdown.Probe);
+
+    private static ServiceRoleStop StopSupervisor(Func<ServiceRoleStop> stopSupervisor)
+    {
+        if (stopSupervisor == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return stopSupervisor();
+        }
+        catch (Exception e)
+        {
+            return new ServiceRoleStop(
+                ServiceRoleLog.SupervisorRole,
+                0,
+                ServiceStopOutcome.StillRunning,
+                e.Message
+            );
+        }
+    }
+
+    /// <summary>Records in the lock now that the stop's first read did not have.</summary>
+    private static List<ServiceProcessRecord> Added(
+        IReadOnlyCollection<ServiceProcessRecord> recorded,
+        string lockPath
+    )
+    {
+        var known = new HashSet<string>(
+            recorded.Select(record => record.Nonce ?? "pid:" + record.Pid),
+            StringComparer.Ordinal
+        );
+        return (ServiceLockStore.TryLoad(lockPath)?.Processes ?? new List<ServiceProcessRecord>())
+            .Where(record =>
+                record != null
+                && record.Pid > 0
+                && !known.Contains(record.Nonce ?? "pid:" + record.Pid)
+            )
+            .ToList();
+    }
+
+    private static bool? CloseGame(Func<bool> closeGame)
+    {
+        if (closeGame == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return closeGame();
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Could not close Heroes of the Storm. " + e.Message);
+            return false;
+        }
+    }
+
+    private static ServiceStreamCheck ReadStream(Func<ServiceStreamCheck> readStream)
+    {
+        try
+        {
+            return readStream()
+                ?? ServiceStreamCheck.Unknown("The OBS stream reader returned nothing.");
+        }
+        catch (Exception e)
+        {
+            return ServiceStreamCheck.Unknown(e.Message);
+        }
+    }
+
+    /// <summary>
+    /// Classify every role as ready, degraded, stale, stopped, or failed from the lock, the
+    /// process table, and each role's heartbeat. Exit code 0 unless a role is failed, stale, or
+    /// degraded.
+    /// </summary>
     public static int Status(
         string lockPath,
         Func<int, string> processNameOrNull,
         SpectatorStatus spectator,
-        Func<int, ServiceProcessProbe> probeOrNull = null
+        Func<int, ServiceProcessProbe> probeOrNull = null,
+        ServiceStatusQuery query = null
     )
     {
-        ServiceLock snapshot = ServiceLockStore.TryLoad(lockPath);
-        int expected = snapshot?.Processes?.Count ?? 0;
-        List<ServiceProcessRecord> living = ServiceProcessPlan.StillRunning(
-            snapshot?.Processes,
+        query ??= new ServiceStatusQuery();
+        TimeProvider time = query.Time ?? TimeProvider.System;
+        DateTimeOffset now = time.GetUtcNow();
+        ServiceStatusReport report = ServiceHealthClassifier.Build(
+            ServiceLockStore.TryLoad(lockPath),
             processNameOrNull,
-            probeOrNull
+            probeOrNull,
+            query.ReadHeartbeat ?? (record => ServiceReadyFile.TryRead(record)),
+            query.StopRequested?.Invoke() == true,
+            now,
+            query.Settings ?? new ServiceHealthSettings(),
+            query.Environment,
+            spectator
         );
-        if (expected == 0)
+        string logs = query.LogDirectory ?? ServiceLogSettings.DefaultDirectory;
+        DateOnly today = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(now, time.LocalTimeZone).DateTime
+        );
+        report = ServiceHealthClassifier.WithLogPaths(
+            report,
+            role => ServiceRoleLog.LatestPath(logs, role, today)
+        );
+        report = ServiceHealthClassifier.WithSupervisor(
+            report,
+            query.ReadSupervisor?.Invoke(),
+            query.SupervisorRunning?.Invoke() == true,
+            now
+        );
+        TextWriter output = query.Out ?? Console.Out;
+        if (query.Output == ServiceStatusOutput.Json)
         {
-            Console.WriteLine("Services: not running.");
+            output.WriteLine(report.ToJson());
         }
         else
         {
-            Console.WriteLine($"Services: {living.Count} of {expected} still running.");
-            foreach (ServiceProcessRecord record in living)
+            WriteStatusText(output, report, spectator);
+        }
+
+        return report.ExitCode;
+    }
+
+    public static void WriteStatusText(
+        TextWriter output,
+        ServiceStatusReport report,
+        SpectatorStatus spectator
+    )
+    {
+        output.WriteLine($"Services: {report.Message} [{report.Code}]");
+        if (report.StopRequested)
+        {
+            output.WriteLine("  A stop request is pending (services.stop).");
+        }
+
+        WriteSupervisorText(output, report.Supervisor);
+        foreach (ServiceRoleHealth role in report.Roles)
+        {
+            string state = role.State.ToString().ToLowerInvariant();
+            if (!role.Expected)
             {
-                Console.WriteLine($"  {record.Name} pid {record.Pid} ({record.Arguments})");
+                output.WriteLine($"  {role.Role, -9}{state, -9}{role.Cause}");
+                WriteLogText(output, role);
+                continue;
             }
+
+            var facts = new List<string> { $"pid {role.Pid}" };
+            if (role.HeartbeatAgeSeconds is long beat)
+            {
+                facts.Add(
+                    $"heartbeat {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(beat))} ago"
+                );
+            }
+
+            if (role.WorkAgeSeconds is long work)
+            {
+                facts.Add(
+                    $"last {ServiceHealthSettings.WorkName(role.Role)} {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(work))} ago"
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(role.Version))
+            {
+                facts.Add("version " + role.Version);
+            }
+
+            output.WriteLine($"  {role.Role, -9}{state, -9}{string.Join(", ", facts)}");
+            output.WriteLine($"{"", 20}{role.Cause}");
+            if (!string.IsNullOrWhiteSpace(role.Remediation))
+            {
+                output.WriteLine($"{"", 20}Fix: {role.Remediation}");
+            }
+
+            if (role.Restarts is ServiceRoleRestartStatus restarts)
+            {
+                string last = restarts.LastRestartAt is DateTimeOffset at
+                    ? $", last {at.ToLocalTime():HH:mm:ss} ({restarts.LastReason})"
+                    : string.Empty;
+                string budget = restarts.BudgetExhausted
+                    ? "budget exhausted"
+                    : $"budget {restarts.BudgetUsed} of {restarts.BudgetLimit} used in {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(restarts.BudgetWindowSeconds))}";
+                output.WriteLine($"{"", 20}Restarts: {restarts.Count}{last}; {budget}.");
+            }
+
+            WriteLogText(output, role);
         }
 
         if (spectator == null)
         {
-            Console.WriteLine("Spectator status: no snapshot.");
+            output.WriteLine("Spectator status: no snapshot.");
+            return;
         }
-        else
+
+        string obs = ObsStatus.Describe(spectator);
+        output.WriteLine(
+            $"Spectator status: phase={spectator.Phase} running={spectator.SpectatorRunning} stale={spectator.SnapshotStale} replay={spectator.ReplayId} map={spectator.Map} timer={spectator.Timer}"
+                + (obs == null ? "" : " " + obs)
+        );
+        if (spectator.CompletedReplayId.HasValue)
         {
-            string obs = ObsStatus.Describe(spectator);
-            Console.WriteLine(
-                $"Spectator status: phase={spectator.Phase} running={spectator.SpectatorRunning} stale={spectator.SnapshotStale} replay={spectator.ReplayId} map={spectator.Map} timer={spectator.Timer}"
-                    + (obs == null ? "" : " " + obs)
+            output.WriteLine(
+                $"Last completion: replay {spectator.CompletedReplayId} team {spectator.CompletedWinnerTeam} at {spectator.CompletedAt:O}"
             );
-            if (spectator.CompletedReplayId.HasValue)
-            {
-                Console.WriteLine(
-                    $"Last completion: replay {spectator.CompletedReplayId} team {spectator.CompletedWinnerTeam} at {spectator.CompletedAt:O}"
-                );
-            }
         }
+    }
 
-        if (expected == 0)
+    private static void WriteSupervisorText(TextWriter output, ServiceSupervisorSummary supervisor)
+    {
+        if (supervisor == null)
         {
-            return 0;
+            output.WriteLine(
+                "  Supervisor: not running. `heroesreplay services supervise` restarts failed and stale roles."
+            );
+            return;
         }
 
-        return living.Count == expected ? 0 : 1;
+        if (!supervisor.Running)
+        {
+            output.WriteLine(
+                $"  Supervisor: not running (pid {supervisor.Pid} left supervisor.json). Restart counts below are its last."
+            );
+            return;
+        }
+
+        string backoff = string.Join(
+            "/",
+            supervisor.BackoffSeconds.Select(seconds =>
+                ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(seconds))
+            )
+        );
+        output.WriteLine(
+            $"  Supervisor: running, pid {supervisor.Pid}{(supervisor.Stopping ? ", stopping" : "")}, roles {string.Join(", ", supervisor.Supervised)}; backoff {backoff}; budget {supervisor.Budget} per {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(supervisor.BudgetWindowSeconds))}; stale roles killed after {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(supervisor.StaleRestartAfterSeconds))}."
+        );
+        if (!string.IsNullOrWhiteSpace(supervisor.LogPath))
+        {
+            output.WriteLine($"{"", 20}Log: {supervisor.LogPath}");
+        }
+    }
+
+    private static void WriteLogText(TextWriter output, ServiceRoleHealth role)
+    {
+        if (!string.IsNullOrWhiteSpace(role.LogPath))
+        {
+            output.WriteLine($"{"", 20}Log: {role.LogPath}");
+        }
     }
 
     private static void RequestStreamShutdown(Func<ObsShutdownPlan, ObsStreamResult> confirmStream)
@@ -341,12 +745,15 @@ public static class ServiceSupervisor
         }
     }
 
-    private static bool WaitForReady(
+    /// <summary>Null once the role is ready and has beaten once; otherwise why not.</summary>
+    private static string WaitForReady(
         ServiceProcessRecord record,
         Func<int, string> processNameOrNull,
-        ServiceStartupHandshake handshake
+        ServiceStartupHandshake handshake,
+        out bool cancelled
     )
     {
+        cancelled = false;
         DateTimeOffset deadline = DateTimeOffset.UtcNow + handshake.ReadyTimeout;
         while (true)
         {
@@ -357,8 +764,7 @@ public static class ServiceSupervisor
             {
                 if (ServiceChildHeartbeat.ExitCode(report, exited) == 1)
                 {
-                    Fail(handshake, $"{record.Name} failed: exited before heartbeat.");
-                    return false;
+                    return Fail(handshake, $"{record.Name} failed: exited before heartbeat.");
                 }
 
                 if (ServiceChildHeartbeat.FollowsReady(report))
@@ -370,24 +776,29 @@ public static class ServiceSupervisor
                         record.Version = report.Version;
                     }
 
-                    return true;
+                    return null;
                 }
             }
             else if (exited)
             {
-                Fail(handshake, $"{record.Name} failed: exited before ready.");
-                return false;
+                return Fail(handshake, $"{record.Name} failed: exited before ready.");
+            }
+
+            // A stop request ends the wait. The role sees the same stop file and exits.
+            if (handshake.Cancelled?.Invoke() == true)
+            {
+                cancelled = true;
+                return Fail(handshake, $"{record.Name}: a stop was requested before it was ready.");
             }
 
             if (handshake.ReadyTimeout <= TimeSpan.Zero || DateTimeOffset.UtcNow >= deadline)
             {
-                Fail(
+                return Fail(
                     handshake,
                     IsReady(record, report)
                         ? $"{record.Name} failed: heartbeat timed out."
                         : $"{record.Name} failed: ready timed out."
                 );
-                return false;
             }
 
             TimeSpan pause =
@@ -450,10 +861,11 @@ public static class ServiceSupervisor
         ServiceLockStore.Delete(lockPath);
     }
 
-    private static void Fail(ServiceStartupHandshake handshake, string message)
+    private static string Fail(ServiceStartupHandshake handshake, string message)
     {
         Console.Error.WriteLine(message);
         handshake?.Report?.Invoke(message);
+        return message;
     }
 
     private static string CurrentVersion()

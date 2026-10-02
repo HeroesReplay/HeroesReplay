@@ -3,11 +3,10 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.Client;
-using HeroesReplay.Core.Services.Observer;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.Spectating.Capture;
 using Microsoft.Extensions.Logging.Abstractions;
 using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
@@ -54,7 +53,9 @@ public static class BattleNetLauncherCheck
             bool captured = false;
             for (int attempt = 0; attempt < 3 && string.IsNullOrWhiteSpace(text); attempt++)
             {
-                using Bitmap bitmap = CaptureAware(window.MainWindowHandle);
+                using Bitmap bitmap = new PrintWindowCapture(
+                    NullLogger<PrintWindowCapture>.Instance
+                ).Capture(window.MainWindowHandle);
                 if (bitmap == null)
                 {
                     continue;
@@ -109,25 +110,6 @@ public static class BattleNetLauncherCheck
         }
     }
 
-    private static Bitmap CaptureAware(IntPtr handle)
-    {
-        // The launcher sits on a per-monitor DPI screen. PrintWindow from an
-        // unaware thread returns the virtualized frame, and OCR reads no text.
-        IntPtr previous = Native.SetThreadDpiAwarenessContext(Native.PerMonitorAwareV2);
-        try
-        {
-            var capture = new PrintWindowCapture(NullLogger<PrintWindowCapture>.Instance);
-            return capture.Capture(handle);
-        }
-        finally
-        {
-            if (previous != IntPtr.Zero)
-            {
-                Native.SetThreadDpiAwarenessContext(previous);
-            }
-        }
-    }
-
     private static async Task<string> RecognizeAsync(OcrEngine engine, Bitmap bitmap)
     {
         using var stream = new InMemoryRandomAccessStream();
@@ -144,13 +126,5 @@ public static class BattleNetLauncherCheck
             OcrResult result = await engine.RecognizeAsync(software);
             return result?.Text;
         }
-    }
-
-    private static class Native
-    {
-        public static readonly IntPtr PerMonitorAwareV2 = new(-4);
-
-        [DllImport("user32.dll")]
-        public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
     }
 }

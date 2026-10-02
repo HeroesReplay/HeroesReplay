@@ -1,4 +1,4 @@
-using HeroesReplay.Core.Services.Connectivity;
+using HeroesReplay.Core.Connectivity;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Connectivity;

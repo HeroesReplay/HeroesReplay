@@ -8,6 +8,30 @@ Windows-only automated spectator for Heroes of the Storm `.StormReplay` files: p
 
 Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `HeroesReplay.Core`, `HeroesReplay.HeroesProfile.Client` (Kiota v1), `HeroesReplay.Tests`. There is no AutoSpectator project. Regenerate the Heroes Profile client with `tools/generate-heroesprofile-client.ps1`; do not csharpier `Generated/`.
 
+### Source layout: feature slices
+
+`HeroesReplay.Core` is grouped by feature, not by kind. There are no `Models/`, `Services/`, or `Extensions/` folders. A feature's types, settings class, interfaces, and extension methods sit together. The namespace is the folder (`Core/YouTube/Metadata` is `HeroesReplay.Core.YouTube.Metadata`). `Engine`, `IEngine`, and `HeroesReplayTelemetry` sit at the Core root. `HeroesReplay.Tests/Unit/<Slice>[/<Sub>]` mirrors the slices: a test sits in the folder of the slice that owns the type it tests, and its namespace is that folder (`Unit/YouTube/Metadata` is `HeroesReplay.Tests.Unit.YouTube.Metadata`). The clock tests share one `Unit/Spectating/Clock` folder. `Unit/Check`, `Unit/Support`, and `Unit/Telemetry` are the extra test folders. `Integration/<Slice>` follows the same names.
+
+| Slice | Owns |
+| --- | --- |
+| `Analysis` (`Calculators`, `Reports`) | Replay timeline, focus calculators, `Focus`, `Panel`, kill streaks, calculator and weight settings |
+| `Spectating` (`Session`, `Control`, `Capture`, `Clock/{Memory,Ocr,Hybrid}`, `Reports`) | The live spectator loop (`Spectator`). `Session`: match outcome, session holds, report handoff, retry and shutdown. `Control`: `GameController`, window input, observer panels. Also the HUD clock and frame capture |
+| `GameClient` | Launching the right Heroes build, Battle.net, HeroesSwitcher, firewall, `Variables.txt`, client and process settings |
+| `Replays` (`Context`) | Replay providers and loaders, `LoadedReplay`, the spectate queue and queue pick, the per-replay context folder |
+| `Requests` | Twitch request queue, leases, played ids, reward request models |
+| `HeroesProfile` | Heroes Profile API, replay listing, patch index, rank enrichment |
+| `HeroesData` | heroes-data2 hero and unit catalog |
+| `Twitch` (`Predictions`, `Rewards`, `RedeemedRewards`, `ChatMessages`) | Chat bot, predictions and their ledger, channel-point rewards |
+| `TwitchExtension` | Heroes Profile Twitch extension payloads |
+| `Obs` | OBS websocket control, recording, report scenes |
+| `YouTube` (`Metadata`, `Publication`, `Playlists`, `Search`, `Outbox`) | Upload, titles and descriptions, publication budget, playlists, duplicate lookup |
+| `MediaPolicy`, `Clips`, `Retention` | What gets recorded and uploaded, pentakill clips, disk cleanup |
+| `Connectivity`, `ServiceHost`, `SelfUpdate`, `Status` | Outage handling, the four service processes, release updates, `status.json` |
+| `Shared` | Types used across slices: `Map`, `Hero`, `GameType`, `GameRank`, `EnglishMapNames`, `DurableFile`, `NamedProcess`, resilience and secrets helpers |
+| `Configuration` | `AppSettings` (the root that binds every slice's settings) and `LocationSettings` |
+
+Put a new type in the slice that uses it. Move it to `Shared` only when two or more slices need it.
+
 ## Before editing
 
 1. Load the matching skill under `.grok/skills/` (HeroesReplay skills and the vendored official .NET skills).
@@ -36,6 +60,8 @@ Secrets: skill `op-service-account`. On a new clone, set user env `OP_SERVICE_AC
 
 CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
 
+Production MCP is read-only. `heroesreplay mcp` reads OBS with `obs_inspect`, `obs_validate`, and `obs_screenshot`, which send only Get requests (`ObsReadOnly`) and never return the stream key. Nothing in it starts or stops a stream or recording, changes a scene, or arms a machine; that stays with guarded CLI commands. obs-mcp (royshil, about 120 unrestricted tools, returns the stream key) is **dev-only**: register it per machine on ASA-SERVER (`claude mcp add obs --scope user …`) if wanted. Never add it to the repo, the release zip, or DESKTOP-8SJEK72.
+
 ## Purpose of the work
 
 Improve the spectator and the tools around it. The work is to prove, validate, and keep the functionality correct, and to make the CLI, the services, and the spectator more resilient and easier to run.
@@ -50,10 +76,12 @@ One task at a time. A GitHub issue, or one concrete bug. Do not start a second t
 
 `develop` is the GitHub default branch. A clone checks it out, and branch work lands there. `master` is only for a production build: the win-x64 executable, prod settings, and the OBS collection. Merging to `master` is what publishes that release. Do not put day-to-day commits on `master`.
 
+Changes reach `develop` only through pull requests. The `ci` workflow (`.github/workflows/ci.yml`, job `build-and-test`: CSharpier check, Release build, Unit and Smoke tests) runs on every pull request and every push to `develop`, and the branch rules require it. Open the PR and turn on auto-merge (`gh pr merge <n> --auto --merge`); GitHub merges once `build-and-test` passes, and deletes the branch. A red check blocks the merge: fix it on the branch. Release by opening a pull request from `develop` to `master` when ASA-SERVER has proven the build; the same check runs there, and the merge runs `release.yml`.
+
 Stop at the earliest phase that can prove the change.
 
 1. **Unit.** Change the type that owns the behavior and call that type from a test. `dotnet test` is Unit only. This is enough for parse rules, reward titles, prediction decisions, queue locking, and probe decisions.
-2. **Build.** A running `heroesreplay.exe` locks the Debug bin (`MSB3027`). Stop with `heroesreplay services stop`. That asks the four processes to exit, then closes Heroes of the Storm. If you stop the processes yourself, close the game too: `CloseMainWindow`, then `Kill` if it is still there after a few seconds. An open client with no spectator is a stuck replay, not a test.
+2. **Build.** A running `heroesreplay.exe` locks the Debug bin (`MSB3027`). Stop with `heroesreplay services stop`. That asks the four processes to exit, then closes Heroes of the Storm. Exit 1 means a role, the game, or the OBS stream is still up; its output names which. If you stop the processes yourself, close the game too: `CloseMainWindow`, then `Kill` if it is still there after a few seconds. An open client with no spectator is a stuck replay, not a test.
 3. **Short live proof.** Only when the change touches launch, the HUD clock, hero selection, the end screen, OBS scenes, download pacing, or predictions. One replay until the clock reads `MM:SS` and a hero is selected (`1`–`0`), then `services stop`. Streaming stays off on ASA-SERVER.
 4. **Long proof, 1 to 5 games.** Only when the user asks to prove the loop, or the change is end-of-match, the next replay loading, request-before-Standard, or a prediction opening and resolving. Each counted game reaches the core (HUD time within a second or two of core death) and the next replay starts loading. Do not kill the stack mid-game to rebuild. Do not continue past five. Then `services stop`, and confirm Heroes of the Storm is gone.
 
@@ -68,24 +96,37 @@ The newest installed `Versions\Base*\HeroesOfTheStorm_x64.exe` is the current pa
 - **Missing build.** Do not launch the current client and do not open the file. The replay stays queued. Do not close a Heroes process that is already running.
 - **Patch line.** A main patch is the first two numbers (`2.57.*`). Every build iteration of that line is its own client: `2.57.0.98285`, `2.57.0.98304`, and later `2.57.*` builds. They are not interchangeable. The replay build must equal the exe. The newest installed exe is still the current patch and signs in through Battle.net. Each older iteration is a previous patch and opens through HeroesSwitcher. `heroesprofile patch-index` reports the first replay id of that whole line, not only the newest build number.
 - **Reclaim.** Battle.net deletes the previous iteration's `Versions\Base*` exe while it installs the next one. An empty `Base*` folder is still not a client. Before a replay launches, copy each supported exe into `Location:RetainedClientDirectory` (`Data\Clients` when that is empty). When the live exe for the replay's build is missing and a copy exists, copy it back into `Versions\Base*` before HeroesSwitcher runs. A build deleted before any copy was kept stays not installed. Do not click Update or Play to fetch it. The retained set is every installed build on the `MinimumGameVersion` patch line, plus any installed build at or above that floor.
-- **Firewall.** Windows asks to allow public and private networks the first time each `Versions\Base*\HeroesOfTheStorm_x64.exe` listens. Before Battle.net or HeroesSwitcher starts Heroes, add an inbound allow rule for every installed client exe. Do not click Allow. The rule is for that exe path, so a new `Base*` folder needs its own rule.
+- **Firewall.** Windows asks to allow public and private networks the first time each `Versions\Base*\HeroesOfTheStorm_x64.exe` listens. Before Battle.net or HeroesSwitcher starts Heroes, the spectator checks for an inbound allow rule for every installed client exe. Do not click Allow. The rule is for that exe path, so a new `Base*` folder needs its own rule. Adding a rule is the only step that needs administrator rights: run `heroesreplay client firewall` once from an elevated shell after a new client build is installed. Spectate itself runs unelevated (issue #133) and only warns when a rule is missing.
 - **New client.** When a newer `Base*` exe is installed, write windowed 1080p and AhliObs into root and account `Variables.txt` and copy the interface again before that client starts, even if the files already name AhliObs. Do this only while Heroes is not running. Do not close a client HeroesSwitcher launched in order to reload AhliObs or to pass the replay a second time. HeroesSwitcher opens the newest exe first so it can start an older build. A download or preparing screen on that newer exe is the handoff and stays up. A blank full-size window on the process the switcher started is still startup and stays up. Text that already names AhliObs is not the HUD. A HeroesSwitcher process with no Heroes process is closed before the next open. The download screen is stock chrome. Do not click Play, Update, or Allow.
 
 A version-mismatch or region-unavailable dialog leaves the front on the first miss. That dialog is an invalid client, so Heroes closes and the next replay can start. A client that is still downloading data, or still switching to the replay's build, is not that dialog and is not closed. The replay is eligible again after the defer interval. Battle.net is not clicked. On ASA-SERVER the long proof includes one current-patch replay and one previous-patch replay whenever both clients are installed. Each must reach the match clock on its own exe. Test uploads stay private and titled with `[TEST]`. Do not set `HEROES_REPLAY_ENV=prod`. Do not start Twitch ingest.
 
 Live-proof logs: Aspire dashboard at `http://127.0.0.1:18888`. The Aspire CLI on this machine is 13.5.4 and its MCP server is `aspire agent mcp`. This app has no AppHost, so connect it in dashboard-only mode: `aspire agent mcp --dashboard-url http://127.0.0.1:18888`. That mode exposes only `list_structured_logs`, `list_traces`, and `list_trace_structured_logs`. `list_resources` and `execute_resource_command` need an AppHost and are not available here. If that MCP is not connected, use `aspire otel logs`. Spectate, Twitch, download, and YouTube. No unhandled error stacks. No repeated invalid-timer flood. Service consoles must not cover the clock pill.
 
-On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: `services stop` (this closes HotS), `dotnet build heroes-replay.slnx -c Release`, copy `appsettings.secrets.json` into the CLI Release bin, and start a proof only if phase 3 or 4 applies. Never start Twitch ingest here.
+Role logs do not need Aspire. Each role that `services start` launches writes `%LOCALAPPDATA%\HeroesReplay\logs\<role>-<yyyy-MM-dd>.log` (Information and up, tokens redacted, 20 MB parts, kept 14 days; `ServiceLogs`), and the supervisor writes `supervisor-<date>.log` there. `services status` prints each role's file. Read it first when a role is failed, degraded, or was restarted.
+
+### Supervision
+
+`services start --supervise` keeps its console as the supervisor once the roles are ready (`services supervise` attaches to a stack that is already running). It restarts a failed role after 10 s, 30 s, 2 min, then 5 min, kills and restarts a role whose heartbeat is 2 min old, and after 5 restarts in 30 min leaves the role down with one error and `service.restart_budget_exhausted` in `services status`. Degraded roles are not restarted. `services stop` stops the supervisor before the roles, so nothing restarts during a stop. One supervisor per session. Rules: `ServiceRestart`; details: `docs/service-split.md`.
+
+- **DESKTOP-8SJEK72:** run the stack supervised. In a scheduled downtime, `services stop`, then `heroesreplay services start --supervise` in its own console window, and leave that console open. Closing it ends supervision only; `heroesreplay services supervise` attaches again. Do not kill the supervisor to stop the stack; use `services stop`.
+- **ASA-SERVER:** prove supervision with `HEROES_REPLAY_ENV=dev` and `services start --supervise --roles download,youtube` only. Not spectate, not `twitch connect`. Kill a role with `Stop-Process -Force` to see a restart. End with `services stop`, then confirm `tasklist` shows no `heroesreplay.exe` and no `services.json`, `services.stop`, or `supervisor.json` is left in `%LOCALAPPDATA%\HeroesReplay`.
+
+On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: `services stop` (this closes HotS), `dotnet build heroes-replay.slnx -c Release` (the build copies `src/HeroesReplay.CLI/appsettings.secrets.json` into the Release bin), and start a proof only if phase 3 or 4 applies. Never start Twitch ingest here.
 
 ### Capture
 
 `IGameCapture` is the capture port. `PrintWindowCapture` is the default (`Capture:Method` = `PrintWindow`): the game HWND's composed frame, cropped to the client area, including DirectX. Another window on top of the game does not replace the clock. `BitBltCapture` is the desktop copy and is only used when `Capture:Method` is `BitBlt`. Windowed mode is still required so DWM has a frame.
 
-OBS game capture also sees the frame when the window is covered, because it hooks the swap chain. One-off `GetSourceScreenshot` calls have worked. A sustained one-screenshot-per-second measurement has **not** been done. That comparison is issue 27. The dynamic memory scan stays off. Build `2.55.17.98025` also has a fixed read-only tick address (`MatchTickClock`, seconds = ticks / 4096). It is preferred when that read succeeds. OCR of `-MM:SS` or `MM:SS` remains the fallback. A different client build does not use those offsets.
+OBS game capture also sees the frame when the window is covered, because it hooks the swap chain. Issue 27 (closed) timed five `GetSourceScreenshot` calls one second apart at 37–72 ms each. OBS is not the clock.
+
+The match clock reads memory first. `StableMatchClock` is read-only. It finds the tick global from the clock instruction pattern on each client build (`MatchClockPattern`). Build `2.55.17.98025` also has fixed addresses (`MatchTickClock`, seconds = ticks / 4096) as a candidate. OCR of `-MM:SS` or `MM:SS` is the fallback when that read is not usable. The dynamic page scan (`Spectate:MemoryTimerEnabled`, `Spectate:UseMemoryTimer`) is on in the base and prod settings. Its locked address is used only when the stable clock and OCR both miss.
 
 ## Environments
 
 The environment variable and its appsettings overlay decide behavior. Code never compares the machine name: Twitch ingest follows `OBS:StreamingEnabled`, and the YouTube title marker, privacy, and publication budgets follow `YouTube:TitlePrefix` and `YouTube:PrivacyStatus`. The hostnames below only tell an agent which box it is on.
+
+Ingest also needs a machine-local arm, `%LOCALAPPDATA%\HeroesReplay\stream-armed` (`heroesreplay obs arm` / `obs disarm` / `obs status`). It is not in the repo or the release zip, and no setting can move it, so the overlay alone cannot start production ingest. Only the live box is armed. Never arm ASA-SERVER. Recording does not need the arm.
 
 | | **dev** | **live** |
 | --- | --- | --- |
@@ -93,7 +134,7 @@ The environment variable and its appsettings overlay decide behavior. Code never
 | Hostname | `ASA-SERVER` | `DESKTOP-8SJEK72` |
 | Role | Develop, prove, and harden the spectator, CLI, and services. Not a broadcast. | Real spectating and the 24/7 Twitch stream (`saltysadism`). Intel Arc A310 guest vs this live box. |
 | Repo | `C:\heroesreplay\HeroesReplay` | Same path. A release install rewrites OBS assets under its own `obs` folder (`C:\heroesreplay\app\obs`), not this checkout. |
-| Stream | **Do not go live.** OBS, predictions, chat, rewards, and requested-replay recording/YouTube are for testing only. | Production ingest. Do not experiment on the live stream. |
+| Stream | **Do not go live** and do not run `obs arm`. OBS recording and YouTube are for testing only (private, `[TEST]`, dry-run). This box uses the live Twitch channel, so `appsettings.dev.json` turns every Twitch side effect off: predictions, chat (`EnableChatBot`), channel-point redemptions and reward sync (`EnablePubSub`, `EnableRequests`), with `DryRunMode` on (#126, #146). | Production ingest (`OBS:StreamingEnabled` plus the machine arm). Do not experiment on the live stream. |
 | Upgrades | Safe to stop spectate, rebuild, reboot the guest (not Unraid/Tower). | Schedule **downtime** before pull, rebuild, client/OBS upgrades, or reboots. |
 | Spectator engine | **Normal** to kill `heroesreplay`, quit HotS, rebuild Release, and relaunch only long enough to prove a change. Stop when the proof is done. | Do **not** kill/rebuild/restart the spectator as a routine. This is the production spectate. |
 
@@ -106,11 +147,13 @@ On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\He
 - ARAM: Silver City, Lost Cavern, Industrial District, Braxis Outpost.
 - ReplayId rewards: the current patch line (`MinimumGameVersion` and every newer build, including each `2.57.*` iteration). A reward still needs that build's exe. Older replays need a local `Versions\Base*` folder; old clients are often no longer downloadable.
 - Spectator keys: `1`–`0` observe player. Do not send `C` (follow player camera) or Shift+Z ultra zoom.
-- Twitch: chat + PubSub reconnect with backoff; Helix predictions; channel-point rewards queue `Data\requests.json`. Reward prompts must say recent patch ReplayIds.
+- Twitch: chat and EventSub redemptions reconnect with backoff; Helix predictions; channel-point rewards queue `Data\requests.json`. Reward prompts must say recent patch ReplayIds.
 
 ### Calculators
 
 `Calculators:Enabled` in appsettings (type name, default on) for A/B. Example: `"EmotingCalculator": false`.
+
+### Directory tree
 
 Both are Windows 11. Use the **same directory tree** so spectate, downloads, and OBS assets match.
 
@@ -126,10 +169,11 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `C:\heroesreplay\Data\HeroesData` | heroes-data2 JSON cache (Heroes.Element). Downloaded from HeroesToolChest/heroes-data2 when that cache is missing |
 | `C:\heroesreplay\secrets` | Local backup of gitignored `appsettings.secrets.json` |
 | `%USERPROFILE%\Documents\Heroes of the Storm\Interfaces` | AhliObs (`client configure`) |
-| `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` |
-| `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile from `obs/Default/basic.ini` |
+| `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` (`OBS:SceneCollectionName`) |
+| `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile (`OBS:ProfileName`). Machine-owned: `obs/Default/basic.ini` is copied only when it does not exist, and updates keep it |
+| `%LOCALAPPDATA%\HeroesReplay\stream-armed` | Machine-local Twitch ingest arm. Live box only |
 
-`Location:DataDirectory` is `C:\heroesreplay\Data`. Contexts are `Data\Contexts` (not a sibling of Data). Do not copy OBS `service.json` (stream key).
+`Location:DataDirectory` is `C:\heroesreplay\Data`. Contexts are `Data\Contexts` (not a sibling of Data). Do not copy OBS `service.json` (stream key). The OBS profile and scene collection names are `OBS:ProfileName` and `OBS:SceneCollectionName` (default `HeroesReplay`); a stream or recording does not start while OBS has another one active.
 
 Detect with `hostname`. If `DESKTOP-8SJEK72`, ask before stopping `heroesreplay` / HotS / OBS, and do not start a Twitch stream from a test build. If `ASA-SERVER`, do not SSH to Unraid (`Tower` / 192.168.1.102), do not bind the host 3090/iGPU, and do not reboot Tower.
 
@@ -137,12 +181,12 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 
 ## Hard rules
 
-- Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. WinRT OCR and BitBlt need the Windows TFM.
+- Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. WinRT OCR and the PrintWindow/BitBlt capture need the Windows TFM.
 - File-scoped namespaces, usings outside the namespace, `using` declarations where they reduce nesting.
 - Calculators implement `IFocusCalculator.Contribute(ReplayTimeline)`. Do not bring back `GetFocusPlayers(TimeSpan, Replay)` × PLINQ.
-- Focus pipeline: parse replay → calculators offer weighted events → hold last winner across empty seconds → spectator looks up by OCR game timer until core kill. Do not recompute calculators in the live loop.
+- Focus pipeline: parse replay → calculators offer weighted events → hold last winner across empty seconds → spectator looks up by the match clock (memory read, OCR fallback) until core kill. Do not recompute calculators in the live loop.
 - Living units: `unit.IsAliveAt(now)` (`TimeSpanDied == null` means alive).
-- OBS: websocket **5**, port **4455**, **one connection per replay** (`BeginSession` / `EndSession`). Do not connect-disconnect per request.
+- OBS: websocket **5**, port **4455**, **one connection per replay** (`BeginSession` / `EndSession`). Do not connect-disconnect per request. The read-only MCP OBS tools are a separate client: one short session per tool call, Get requests only.
 - Cache the Heroes of the Storm HWND after launch; do not `GetProcessesByName` on every keystroke.
 - `spectate file` plays the queue **once**. Heroes Profile provider loops.
 - Never commit `appsettings.secrets.json`, user `*.StormReplay` dumps, or large `*.mp4`.
@@ -185,4 +229,4 @@ These are installed under `.grok/skills/<name>/` from [dotnet/skills](https://gi
 
 Grok already provides `review`, `create-skill`, and `long-running-background-tasks`. They stay with the tool and are not copied into this repo.
 
-There is no high-quality public skill specifically for **obs-websocket 5** or **TwitchLib 3.x** — that is why the two repo skills exist. Twitch EventSub (not PubSub) is the long-term replacement for channel-point redemptions.
+There is no high-quality public skill specifically for **obs-websocket 5** or **TwitchLib 3.x** — that is why the two repo skills exist. Channel-point redemptions arrive over Twitch EventSub (`EventSubRewardListener`), not PubSub.

@@ -5,15 +5,16 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Connectivity;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Observer;
-using HeroesReplay.Core.Services.Providers;
-using HeroesReplay.Core.Services.Queue;
-using HeroesReplay.Core.Services.SelfUpdate;
-using HeroesReplay.Core.Services.Shared;
-using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Spectating.Session;
+using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core;
@@ -62,7 +63,7 @@ public class Engine : IEngine
             releaseUpdate ?? throw new ArgumentNullException(nameof(releaseUpdate));
     }
 
-    public async Task RunAsync()
+    public async Task<bool> RunAsync()
     {
         try
         {
@@ -82,11 +83,16 @@ public class Engine : IEngine
             }
 
             await Task.WhenAll(spectator, connectivity).ConfigureAwait(false);
+            return true;
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            return true;
+        }
         catch (Exception e)
         {
             logger.LogError(e, "An unexpected error in the replay engine.");
+            return false;
         }
     }
 
@@ -107,7 +113,9 @@ public class Engine : IEngine
         {
             try
             {
-                if (!await SpectateOneAsync().ConfigureAwait(false))
+                bool next = await SpectateOneAsync().ConfigureAwait(false);
+                ServiceHeartbeat.RecordWork();
+                if (!next)
                 {
                     break;
                 }
@@ -213,8 +221,7 @@ public class Engine : IEngine
                             loadedReplay.ReplayId,
                             recovery
                         );
-                        await Task
-                            .Delay(ClientHold.RetryAfter, consoleTokenProvider.Token)
+                        await Task.Delay(ClientHold.RetryAfter, consoleTokenProvider.Token)
                             .ConfigureAwait(false);
                         return true;
                     }

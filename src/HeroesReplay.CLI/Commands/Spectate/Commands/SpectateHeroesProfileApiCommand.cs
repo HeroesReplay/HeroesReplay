@@ -2,8 +2,9 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
-using HeroesReplay.Core.Services.Processes;
-using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands.Spectate.Commands;
@@ -19,12 +20,12 @@ public class SpectateHeroesProfileApiCommand : Command
         SetAction(
             async (parseResult, cancellationToken) =>
             {
-                await CommandAsync(cancellationToken);
+                return await CommandAsync(cancellationToken);
             }
         );
     }
 
-    protected async Task CommandAsync(CancellationToken cancellationToken)
+    protected async Task<int> CommandAsync(CancellationToken cancellationToken)
     {
         AspireDashboardHost.EnsureRunning();
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
@@ -33,8 +34,11 @@ public class SpectateHeroesProfileApiCommand : Command
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
-        ServiceReadyFile.ReportFromEnvironment("spectate");
-        ServiceReadyFile.ReportHeartbeatFromEnvironment();
-        await engine.RunAsync();
+        using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
+            "spectate",
+            scope.ServiceProvider.GetRequiredService<AppSettings>().ServiceHealth,
+            stop.Token
+        );
+        return await engine.RunAsync() ? 0 : 1;
     }
 }

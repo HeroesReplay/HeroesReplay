@@ -1,5 +1,5 @@
 using System;
-using HeroesReplay.Core.Services.Processes;
+using HeroesReplay.Core.ServiceHost;
 
 namespace HeroesReplay.CLI.Commands.Services;
 
@@ -18,6 +18,9 @@ public sealed class ServiceStartupHandshake
     public DownloadStartupFacts Download { get; set; }
     public YouTubeStartupFacts YouTube { get; set; }
     public ServiceProcessRecord Pending { get; set; }
+
+    /// <summary>True ends the ready wait early: <c>services stop</c> asked everything to exit.</summary>
+    public Func<bool> Cancelled { get; set; }
 
     public static ServiceStartupHandshake ReadyNow()
     {

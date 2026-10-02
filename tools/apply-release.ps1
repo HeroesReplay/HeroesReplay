@@ -9,9 +9,22 @@ $ErrorActionPreference = 'Stop'
 $InstallDir = $InstallDir.TrimEnd('\')
 $StagingDir = $StagingDir.TrimEnd('\')
 
+# This runs in a hidden window. Keep what it decided (OBS files, stream arm) for the operator.
+try {
+    $logDir = Join-Path $env:LOCALAPPDATA 'HeroesReplay\logs'
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    Start-Transcript -Path (Join-Path $logDir 'apply-release.log') -Append | Out-Null
+}
+catch {
+    Write-Host "Could not start the update log: $($_.Exception.Message)"
+}
+
 if ($InstallDir -match '\\src\\|\\worktrees\\') {
     throw "Refusing to replace a source build at $InstallDir"
 }
+
+# The environment of the stack this update replaces and restarts. Start-HeroesReplayStack starts prod.
+$environment = if ($env:HEROES_REPLAY_ENV) { $env:HEROES_REPLAY_ENV } else { 'prod' }
 
 function Clear-ServiceStop {
     $stop = Join-Path $env:LOCALAPPDATA 'HeroesReplay\services.stop'
@@ -79,6 +92,25 @@ function Protect-MinReplayId([string]$Exe, [string]$PreviousSettings, [string]$T
     }
 }
 
+function Invoke-ReleaseCommand([string]$Exe, [string[]]$Arguments, [string]$What) {
+    if (-not (Test-Path -LiteralPath $Exe)) {
+        Write-Host "$What was skipped: $Exe is missing."
+        return
+    }
+
+    # Native stderr must not become a terminating error under Stop in Windows PowerShell.
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $Exe @Arguments 2>&1 | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "$What exited $LASTEXITCODE."
+        }
+    }
+    catch {
+        Write-Host "$What failed: $($_.Exception.Message)"
+    }
+}
+
 function Restore-PreviousInstall([string]$Previous) {
     if (-not (Test-Path -LiteralPath $Previous)) {
         return
@@ -126,29 +158,39 @@ if (-not (Test-Path -LiteralPath $stagedExe)) {
 
 Protect-MinReplayId (Join-Path $source 'heroesreplay.exe') (Join-Path $InstallDir 'appsettings.json') (Join-Path $source 'appsettings.json')
 
+# Twitch ingest now also needs the machine-local arm (%LOCALAPPDATA%\HeroesReplay\stream-armed).
+# Once per machine, before the files are replaced: arm it only when the install being replaced
+# streams (effective OBS:StreamingEnabled true), so production stays live. Never arms otherwise.
+Invoke-ReleaseCommand (Join-Path $source 'heroesreplay.exe') @('update', 'migrate-stream-arm', '--previous', $InstallDir, '--environment', $environment) 'Stream arm migration'
+
 $previous = "$InstallDir.previous"
+$backUpInstall = $true
 if (Test-Path -LiteralPath $previous) {
     $roleFile = Join-Path $InstallDir 'role-ready.txt'
     $healthExe = Join-Path $source 'heroesreplay.exe'
     & $healthExe update release-health --role-file $roleFile
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Previous install is still inside the stabilization window."
-        Clear-ServiceStop
-        exit 1
+        # The services are already stopped for this update. Exiting here left the live stream down.
+        # Keep the older proven rollback, do not back up this unproven install, and install the release.
+        Write-Host "Previous install is still inside the stabilization window. It stays the rollback; this install is not backed up."
+        $backUpInstall = $false
     }
-
-    Remove-Item -LiteralPath $previous -Recurse -Force
+    else {
+        Remove-Item -LiteralPath $previous -Recurse -Force
+    }
 }
 
 # cmd /k consoles keep this directory as their cwd, so renaming the folder fails while those windows are open. Overwriting the files does not.
-try {
-    Copy-Item -LiteralPath $InstallDir -Destination $previous -Recurse -Force
-}
-catch {
-    Write-Host "Could not back up the install: $($_.Exception.Message)"
-    Clear-ServiceStop
-    Start-HeroesReplayStack
-    exit 1
+if ($backUpInstall) {
+    try {
+        Copy-Item -LiteralPath $InstallDir -Destination $previous -Recurse -Force
+    }
+    catch {
+        Write-Host "Could not back up the install: $($_.Exception.Message)"
+        Clear-ServiceStop
+        Start-HeroesReplayStack
+        exit 1
+    }
 }
 
 try {
@@ -175,29 +217,11 @@ catch {
     exit 1
 }
 
-try {
-    if (-not (Get-Process obs64 -ErrorAction SilentlyContinue)) {
-        $scene = Join-Path $InstallDir 'obs\Default.json'
-        if (Test-Path -LiteralPath $scene) {
-            $sceneDest = Join-Path $env:APPDATA 'obs-studio\basic\scenes\HeroesReplay.json'
-            New-Item -ItemType Directory -Force -Path (Split-Path $sceneDest) | Out-Null
-            Copy-Item -LiteralPath $scene -Destination $sceneDest -Force
-        }
-
-        $ini = Join-Path $InstallDir 'obs\Default\basic.ini'
-        if (Test-Path -LiteralPath $ini) {
-            $profile = Join-Path $env:APPDATA 'obs-studio\basic\profiles\HeroesReplay\basic.ini'
-            New-Item -ItemType Directory -Force -Path (Split-Path $profile) | Out-Null
-            Copy-Item -LiteralPath $ini -Destination $profile -Force
-        }
-    }
-    else {
-        Write-Host 'OBS is open. Scene files in the release were left under obs\ and were not copied.'
-    }
-}
-catch {
-    Write-Host "OBS scene files were not copied: $($_.Exception.Message)"
-}
+# The new build reads OBS:SceneCollectionName and OBS:ProfileName from this install. While OBS is
+# closed it replaces the scene collection. The profile (basic.ini) belongs to the machine: the
+# packaged one is only copied when the machine has none, and an existing profile is kept.
+# service.json (stream key) is never copied.
+Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'install-obs', '--install', $InstallDir, '--environment', $environment) 'OBS scene files'
 
 Clear-ServiceStop
 try {

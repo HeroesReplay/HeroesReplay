@@ -12,7 +12,7 @@ Copy the file into the HotS interfaces folder (create it if missing):
 
 In-game: **Options → Observer and Replay**, set both Observer and Replay to **AhliObs 0.75**.
 
-HotS stores the **live** observer/replay UI on the Battle.net **account** file:
+A client signed in through Battle.net reads the observer/replay UI from the **account** file:
 
 `Documents\Heroes of the Storm\Accounts\<id>\Variables.txt`
 
@@ -23,7 +23,7 @@ observerinterface=AhliObs 0.75.StormInterface
 replayinterface=AhliObs 0.75.StormInterface
 ```
 
-Root `Variables.txt` holds windowed 1080p (`displaymode` / `width` / `height`). `heroesreplay client configure` writes both.
+A client that does not sign in (an older build opened through HeroesSwitcher) reads the root `Documents\Heroes of the Storm\Variables.txt` instead. `heroesreplay client configure` writes windowed 1080p (`displaymode` / `width` / `height`) and both interface lines into the root file and every account file.
 
 Restart Heroes of the Storm after copying so the dropdown picks it up.
 

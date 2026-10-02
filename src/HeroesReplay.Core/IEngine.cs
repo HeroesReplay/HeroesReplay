@@ -4,5 +4,6 @@ namespace HeroesReplay.Core;
 
 public interface IEngine
 {
-    Task RunAsync();
+    /// <summary>False when an unexpected error ended the engine. A requested stop is true.</summary>
+    Task<bool> RunAsync();
 }

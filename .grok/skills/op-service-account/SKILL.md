@@ -13,7 +13,7 @@ HeroesReplay development uses a **1Password service account**, not desktop `op s
 
 ## Token
 
-User env **`OP_SERVICE_ACCOUNT`** holds the token (`ops_…`). The official CLI only reads **`OP_SERVICE_ACCOUNT_TOKEN`**. Map before every `op` call:
+User env **`OP_SERVICE_ACCOUNT`** holds the token (`ops_…`). `OP_SERVICE_ACCOUNT_TOKEN` is not set at User scope, and the official CLI only reads **`OP_SERVICE_ACCOUNT_TOKEN`**. Map it in the process before every `op` call:
 
 ```powershell
 if (-not $env:OP_SERVICE_ACCOUNT_TOKEN) {
@@ -30,7 +30,7 @@ This account is **SERVICE_ACCOUNT**. It cannot see vault `Private`. Do not use d
 ## New machine (clone / pull)
 
 1. Install Git, .NET 10 SDK, and 1Password CLI (`winget install --exact Git.Git Microsoft.DotNet.SDK.10 AgileBits.1Password.CLI`). Open a new shell so `op` is on PATH.
-2. Clone into **`C:\heroesreplay\HeroesReplay`** (required: OBS `obs/Default.json` uses that path). `git clone https://github.com/HeroesReplay/HeroesReplay.git C:\heroesreplay\HeroesReplay`
+2. Clone into **`C:\heroesreplay\HeroesReplay`** (the layout in `AGENTS.md`; the bootstrap and `Location` defaults assume `C:\heroesreplay`). OBS asset paths in `obs/Default.json` are relative, and heroesreplay rewrites them to the checkout when OBS is closed. `git clone https://github.com/HeroesReplay/HeroesReplay.git C:\heroesreplay\HeroesReplay`
 3. Set the service-account token **once** at User scope (paste the `ops_` value; do not commit it):
 
 ```powershell
@@ -48,7 +48,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check heroespro
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check twitch
 ```
 
-`bootstrap-workstation.ps1` creates `C:\heroesreplay\Replays`, `Data\Standard`, `Data\Contexts`, copies the OBS HeroesReplay collection/profile, then runs `fill-secrets-from-op.ps1`. Install Battle.net with `winget install Blizzard.BattleNet --location C:\heroesreplay\Battle.net`. Quit HotS and run `heroesreplay client configure` for AhliObs + windowed 1080p. Report only `op whoami` user type and secret **lengths**. Layout: `AGENTS.md` Environments.
+`bootstrap-workstation.ps1` creates `C:\heroesreplay\Battle.net`, `Replays`, `Data\Standard`, `Data\Requests`, `Data\Contexts`, `Data\HeroesData`, and `secrets`, copies the OBS collection while OBS is closed and installs the OBS profile template only when the machine has none (an existing `basic.ini` is kept), runs `fill-secrets-from-op.ps1`, then installs the git hooks. Install Battle.net with `winget install Blizzard.BattleNet --location C:\heroesreplay\Battle.net`. Quit HotS and run `heroesreplay client configure` for AhliObs + windowed 1080p. Report only `op whoami` user type and secret **lengths**. Layout: `AGENTS.md` Environments.
 
 ## Vault
 
@@ -66,7 +66,15 @@ Name: `Heroes Replay` (id `fk7tudovwzuaa64lvomn6rxwtq`). Quote `op://` URIs that
 | YouTube OAuth client secret | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Client Secret` |
 | YouTube GCP project id | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Project ID` |
 
-Items with `(` in the title: use the item UUID, not the name.
+`appsettings.secrets.example.json` also names `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password` for `TwitchExtension:ApiKey`. That item is not in the vault, so the reference does not resolve, and `fill-secrets-from-op.ps1` does not write it. The Twitch extension is off (`TwitchExtension:Enabled` false) until that key exists.
+
+Other items in the vault (`Heroes Profile` and `TikTok` logins, `Salty Sadism - Live` / `PreLive`, the service-account token item) are not read by HeroesReplay. Use the item UUID instead of the name when a title has `(` or would be ambiguous.
+
+To check the table without exposing values, print only whether each URI resolves and its length:
+
+```powershell
+$v = op read "op://Heroes Replay/Heroes Profile API Key/password"; "len=$($v.Length)"; $v = $null
+```
 
 ```powershell
 op read "op://Heroes Replay/Heroes Profile API Key/password"
@@ -74,8 +82,8 @@ op whoami   # User Type: SERVICE_ACCOUNT
 op vault list
 ```
 
-Twitch Helix Predictions need `channel:manage:predictions` on the access token. `check twitch` reports whether that scope is present.
+Twitch Helix Predictions need `channel:manage:predictions` on the access token. EventSub channel-point redemptions need `channel:read:redemptions` or `channel:manage:redemptions`. `check twitch` lists the token scopes and reports what is missing.
 
 ## App secrets file
 
-Live values go in gitignored `src/HeroesReplay.CLI/appsettings.secrets.json` (Twitch Helix, Heroes Profile v1 Bearer, YouTube API key). `fill-secrets-from-op.ps1` also writes `C:\heroesreplay\Data\client_secrets.json` (Google OAuth desktop client for `youtube uploader`). Template: `appsettings.secrets.example.json`. Copy into CLI `bin/...` when running the exe. Env override prefix `HEROES_REPLAY_`. Do not grep or echo that file for secret values; report `source=literal|op` and length only. The Google account password on the YouTube Uploader item is not used; upload uses OAuth.
+Live values go in gitignored `src/HeroesReplay.CLI/appsettings.secrets.json` (Twitch access token, client id, and refresh token, Heroes Profile v1 Bearer, YouTube API key). `fill-secrets-from-op.ps1` also writes `C:\heroesreplay\Data\client_secrets.json` (Google OAuth desktop client for `youtube uploader` and `youtube library`), copies both files to `C:\heroesreplay\secrets`, and copies the secrets file into every existing CLI `bin` output. The build also copies it to the output directory. Template: `appsettings.secrets.example.json`. Env override prefix `HEROES_REPLAY_`. Do not grep or echo that file for secret values. `check config` prints only `missing`, `set (N chars)`, or `1Password reference (unresolved)`; report the same. The Google account password on the YouTube Uploader item is not used; upload uses OAuth.

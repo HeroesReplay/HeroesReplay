@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.HeroesProfile;
+using HeroesReplay.Core.HeroesProfile;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.HeroesProfile;

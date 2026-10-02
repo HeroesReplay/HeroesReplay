@@ -6,6 +6,7 @@
         <AssemblyName>heroesreplay</AssemblyName>
         <IsPackable>false</IsPackable>
         <ApplicationIcon>heroesreplay.ico</ApplicationIcon>
+        <ApplicationManifest>app.manifest</ApplicationManifest>
         <UseWindowsForms>true</UseWindowsForms>
         <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     </PropertyGroup>

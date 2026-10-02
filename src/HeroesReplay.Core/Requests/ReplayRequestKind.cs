@@ -1,0 +1,16 @@
+using HeroesReplay.Core.Replays;
+
+namespace HeroesReplay.Core.Requests;
+
+public static class ReplayRequestKind
+{
+    public static bool ViewerEnteredReplayId(RewardQueueItem item)
+    {
+        return item?.Request?.ReplayId is int id && id > 0;
+    }
+
+    public static bool ViewerEnteredReplayId(LoadedReplay loaded)
+    {
+        return ViewerEnteredReplayId(loaded?.RewardQueueItem);
+    }
+}

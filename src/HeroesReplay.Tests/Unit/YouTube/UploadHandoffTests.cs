@@ -1,7 +1,6 @@
 using System;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Publication;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube;
@@ -53,10 +52,10 @@ public class UploadHandoffTests
     }
 
     [Fact]
-    public void Apply_SchedulesPublishAtWhenTheProductionListingShouldBePublic()
+    public void Schedule_StoresTheReservedTimeWhenTheProductionListingShouldBePublic()
     {
-        DateTimeOffset now = new(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
-        DateTimeOffset last = now.AddHours(-1);
+        DateTimeOffset slot = new(2026, 10, 1, 4, 0, 0, TimeSpan.Zero);
+        var settings = new YouTubeSettings { PrivacyStatus = "public" };
         var entry = new YouTubeEntry
         {
             Title = "Volskaya Foundry - 1",
@@ -64,10 +63,11 @@ public class UploadHandoffTests
             DesiredPrivacyStatus = "public",
         };
 
-        UploadStaging.Apply(entry, new YouTubeSettings { PrivacyStatus = "public" }, now, last);
+        UploadStaging.Apply(entry, settings);
+        UploadStaging.Schedule(entry, settings, slot);
 
         Assert.Equal("private", entry.PrivacyStatus);
-        Assert.Equal(last.Add(PublicationSchedule.MinimumInterval), entry.PublishAtUtc);
+        Assert.Equal(slot, entry.PublishAtUtc);
         Assert.Equal(
             entry.PublishAtUtc,
             UploadVisibility.PublishAt(entry.DesiredPrivacyStatus, entry.PublishAtUtc)
@@ -75,22 +75,20 @@ public class UploadHandoffTests
     }
 
     [Fact]
-    public void Apply_DoesNotSchedulePublishAtForAPrivateListing()
+    public void Schedule_GivesAPrivateListingNoPublishTime()
     {
-        DateTimeOffset now = new(2026, 9, 30, 18, 0, 0, TimeSpan.Zero);
+        DateTimeOffset slot = new(2026, 10, 1, 4, 0, 0, TimeSpan.Zero);
+        var settings = new YouTubeSettings { PrivacyStatus = "private", TitlePrefix = "[TEST]" };
         var entry = new YouTubeEntry
         {
             Title = "Volskaya Foundry - 1",
             PrivacyStatus = "public",
             DesiredPrivacyStatus = "public",
+            PublishAtUtc = slot,
         };
 
-        UploadStaging.Apply(
-            entry,
-            new YouTubeSettings { PrivacyStatus = "private", TitlePrefix = "[TEST]" },
-            now,
-            null
-        );
+        UploadStaging.Apply(entry, settings);
+        UploadStaging.Schedule(entry, settings, slot);
 
         Assert.Equal("private", entry.PrivacyStatus);
         Assert.StartsWith("[TEST]", entry.Title, StringComparison.Ordinal);
@@ -142,79 +140,5 @@ public class UploadHandoffTests
         Assert.Equal("quota", quota.Limit);
         Assert.Equal(4, deferred.Pending);
         Assert.Equal("1", quota.PolicyVersion);
-    }
-
-    [Fact]
-    public void Roll_FilesOnlyPublicVideosAndDoesNotDuplicate()
-    {
-        var entries = new[]
-        {
-            new YouTubeEntry
-            {
-                VideoId = "pub",
-                PrivacyStatus = "public",
-                GameVersion = "2.57.0.98304",
-                ReplayId = 1,
-            },
-            new YouTubeEntry
-            {
-                VideoId = "pub",
-                PrivacyStatus = "public",
-                GameVersion = "2.57.0.98304",
-                ReplayId = 1,
-            },
-            new YouTubeEntry
-            {
-                VideoId = "test",
-                PrivacyStatus = "private",
-                GameVersion = "2.57.0.98304",
-                ReplayId = 2,
-            },
-            new YouTubeEntry
-            {
-                VideoId = "old",
-                PrivacyStatus = "public",
-                GameVersion = "2.55.17.98025",
-                ReplayId = 3,
-            },
-            new YouTubeEntry
-            {
-                VideoId = "mystery",
-                PrivacyStatus = "public",
-                ReplayId = 4,
-            },
-        };
-
-        var rolled = YouTubeLibraryPlanner.Roll(entries, "2.57");
-
-        Assert.Equal(3, rolled.Count);
-        Assert.Equal("Patch 2.57", rolled[0].PlaylistTitle);
-        Assert.Equal("Patch 2.55 archive", rolled[1].PlaylistTitle);
-        Assert.Equal(PatchPlaylist.Unknown, rolled[2].PlaylistTitle);
-        Assert.DoesNotContain(rolled, item => item.VideoId == "test");
-    }
-
-    [Fact]
-    public void Roll_FilesAPrivateStagingEntryOnceYouTubeReportsItPublic()
-    {
-        var rolled = YouTubeLibraryPlanner.Roll(
-            new[]
-            {
-                new YouTubeEntry
-                {
-                    VideoId = "staged",
-                    PrivacyStatus = "private",
-                    ActualPrivacyStatus = "public",
-                    GameVersion = "2.57.0.98304",
-                    ReplayId = 9,
-                },
-            },
-            "2.57",
-            "Season 2026"
-        );
-
-        YouTubeLibraryItem item = Assert.Single(rolled);
-        Assert.Equal("Season 2026", item.PlaylistTitle);
-        Assert.Equal("staged", item.VideoId);
     }
 }

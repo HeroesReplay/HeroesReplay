@@ -8,7 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
-using HeroesReplay.Core.Services.Analysis.Reports;
+using HeroesReplay.Core.Analysis.Reports;
 
 namespace HeroesReplay.CLI.Commands.Calculators.Commands;
 

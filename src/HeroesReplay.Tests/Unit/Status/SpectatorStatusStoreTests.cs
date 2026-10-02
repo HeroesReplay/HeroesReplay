@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Status;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Status;
