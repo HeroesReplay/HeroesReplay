@@ -34,7 +34,7 @@ The spectator can run unattended because it can tell these apart:
 
 The clock comes from the game's memory once it is locked. Screen text is the fallback, and it is also how menus and dialogs are recognised.
 
-A replay that never reaches a healthy match is held or returned to the queue, and the next replay starts. Between replays, the production install can replace itself with the current release and continue.
+A replay that never reaches a healthy match is held or returned to the queue, and the next replay starts. Between replays, the production install can replace itself with the current release and continue. A release that does not reach a match clock within its health window is rolled back to the last healthy install and not installed again.
 
 ## What stays in human hands
 

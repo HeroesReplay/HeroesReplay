@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.CompilerServices;
+using HeroesReplay.Core.SelfUpdate;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;
@@ -21,23 +22,64 @@ public class ReleaseScriptTests
         Assert.Contains("robocopy.exe", script);
         Assert.Contains("preserve-min-replay-id", script);
         Assert.Contains("Protect-MinReplayId (Join-Path $source 'heroesreplay.exe')", script);
-        Assert.Contains("stabilization window", script);
-        Assert.Contains("role-ready.txt", script);
-        Assert.Contains("update release-health", script);
+        Assert.DoesNotContain("role-ready.txt", script);
+        Assert.DoesNotContain("--role-file", script);
         Assert.DoesNotContain("CreationTime", script);
     }
 
     [Fact]
-    public void ApplyRelease_StabilizationWindowStillInstallsInsteadOfLeavingTheStackStopped()
+    public void ApplyRelease_GatesTheStartedStackThenRefreshesOrRollsBack()
     {
         string script = File.ReadAllText(FindScript());
-        int health = script.IndexOf("update release-health", StringComparison.Ordinal);
-        int backup = script.IndexOf("if ($backUpInstall)", StringComparison.Ordinal);
+        int since = script.IndexOf(
+            "$since = (Get-Date).ToUniversalTime().ToString('o')",
+            StringComparison.Ordinal
+        );
+        int start = script.IndexOf("Start-HeroesReplayStack", since, StringComparison.Ordinal);
+        int gate = script.IndexOf(
+            "$health = Invoke-ReleaseHealth (Join-Path $InstallDir 'heroesreplay.exe') $since",
+            StringComparison.Ordinal
+        );
+        int healthy = script.IndexOf("if ($health -eq 0)", gate, StringComparison.Ordinal);
+        int stopped = script.IndexOf("if ($health -eq 3)", gate, StringComparison.Ordinal);
+        int skip = script.IndexOf("Add-SkippedRelease $Version", gate, StringComparison.Ordinal);
+        int stop = script.IndexOf("Stop-HeroesReplayStack", skip, StringComparison.Ordinal);
+        int restore = script.IndexOf(
+            "Restore-PreviousInstall $previous",
+            stop,
+            StringComparison.Ordinal
+        );
+        int restart = script.IndexOf("Start-HeroesReplayStack", restore, StringComparison.Ordinal);
 
-        Assert.True(health > 0 && backup > health);
-        string branch = script.Substring(health, backup - health);
-        Assert.Contains("$backUpInstall = $false", branch);
-        Assert.DoesNotContain("exit", branch);
+        Assert.True(
+            since > 0 && start > since && gate > start,
+            "The gate does not follow the start."
+        );
+        Assert.True(healthy > gate && stopped > healthy && skip > stopped);
+        Assert.True(stop > skip && restore > stop && restart > restore);
+        Assert.Contains(
+            "Copy-Install $InstallDir $previous",
+            script.Substring(healthy, stopped - healthy)
+        );
+        Assert.DoesNotContain("Restore-PreviousInstall", script.Substring(healthy, skip - healthy));
+        Assert.Contains(
+            "update release-health --since $Since --install `\"$InstallDir`\" --environment $environment --wait",
+            script
+        );
+    }
+
+    [Fact]
+    public void ApplyRelease_SkipListMatchesTheGateAndRestartsSupervisedWhenItWas()
+    {
+        string script = File.ReadAllText(FindScript());
+
+        Assert.Contains(@"'updates\" + ReleaseSkipList.FileName + "'", script);
+        Assert.Contains("\"$Tag`t$when`t$note\"", script);
+        Assert.Contains("if (Test-ReleaseSkipped $Version)", script);
+        Assert.Contains("[switch]$Supervise", script);
+        Assert.Contains("$arguments += '--supervise'", script);
+        Assert.Contains("'supervisor.json'", script);
+        Assert.Contains("@('services', 'stop')", script);
     }
 
     [Fact]

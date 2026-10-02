@@ -1,5 +1,6 @@
 using System;
 using System.CommandLine;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -7,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Configuration;
 
@@ -159,42 +161,132 @@ public class UpdateCommand : Command
     {
         var command = new Command(
             "release-health",
-            "Exit 0 when role-ready.txt says every role has been ready for the stabilization window."
+            "Called by apply-release.ps1 after it installs a release. Exit 0 once every role in services.json runs with a fresh heartbeat from a process started after --since, and spectate showed match progress (the match clock or the award screen) after it. Exit 1 while Release:HealthWindow is still open (without --wait), 2 when it closed first (roll back), 3 when a stop was requested (no verdict)."
         );
-        Option<string> roleFile = new("--role-file")
+        Option<string> since = new("--since")
         {
             Description =
-                "role-ready.txt written by the running roles. A missing file is not ready.",
+                "When the new stack was started, UTC in round-trip format. Roles and work from before it do not count.",
             Required = true,
         };
-        command.Options.Add(roleFile);
+        Option<string> install = new("--install")
+        {
+            Description =
+                "The install whose settings give Release:HealthWindow and ServiceHealth. Default: this exe's folder.",
+        };
+        Option<string> environment = EnvironmentOption();
+        Option<string> window = new("--window")
+        {
+            Description = "Overrides Release:HealthWindow (hh:mm:ss).",
+        };
+        Option<bool> wait = new("--wait")
+        {
+            Description =
+                "Check every 15 seconds until the install is healthy, the window closes, or a stop is requested.",
+        };
+        command.Options.Add(since);
+        command.Options.Add(install);
+        command.Options.Add(environment);
+        command.Options.Add(window);
+        command.Options.Add(wait);
         command.SetAction(
             (parseResult, cancellationToken) =>
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                return Task.FromResult(ReleaseHealthExit(parseResult.GetValue(roleFile)));
-            }
+                Task.FromResult(
+                    ReleaseHealthExit(
+                        parseResult.GetValue(since),
+                        parseResult.GetValue(install),
+                        parseResult.GetValue(environment),
+                        parseResult.GetValue(window),
+                        parseResult.GetValue(wait),
+                        cancellationToken
+                    )
+                )
         );
         return command;
     }
 
-    private static int ReleaseHealthExit(string path)
+    private static int ReleaseHealthExit(
+        string sinceText,
+        string install,
+        string environment,
+        string windowText,
+        bool wait,
+        CancellationToken cancellationToken
+    )
     {
-        string text = null;
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        if (
+            !DateTimeOffset.TryParse(
+                sinceText,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind | DateTimeStyles.AssumeUniversal,
+                out DateTimeOffset started
+            )
+        )
         {
-            try
-            {
-                text = File.ReadAllText(path);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                Console.Error.WriteLine("Could not read role-ready.txt.");
-                return 1;
-            }
+            Console.Error.WriteLine($"--since '{sinceText}' is not a time. Use the o format.");
+            return (int)ReleaseHealthVerdict.Unhealthy;
         }
 
-        return ReleaseHealth.MayDiscardRoleFile(text, DateTimeOffset.UtcNow) ? 0 : 1;
+        TimeSpan? overrideWindow = null;
+        if (!string.IsNullOrWhiteSpace(windowText))
+        {
+            if (!TimeSpan.TryParse(windowText, CultureInfo.InvariantCulture, out TimeSpan parsed))
+            {
+                Console.Error.WriteLine($"--window '{windowText}' is not a time span (hh:mm:ss).");
+                return (int)ReleaseHealthVerdict.Unhealthy;
+            }
+
+            overrideWindow = parsed;
+        }
+
+        IConfiguration settings = InstallSettings(install, environment);
+        TimeSpan healthWindow = ReleaseHealth.Window(
+            overrideWindow
+                ?? settings?.GetSection("Release").Get<ReleaseSettings>()?.HealthWindow
+                ?? ReleaseHealth.DefaultWindow
+        );
+        var check = new ReleaseHealthCheck
+        {
+            Health =
+                settings?.GetSection("ServiceHealth").Get<ServiceHealthSettings>()
+                ?? new ServiceHealthSettings(),
+        };
+        ReleaseHealthResult result = wait
+            ? check.WaitForVerdict(started, healthWindow, cancellationToken)
+            : check.Check(started, healthWindow);
+        if (!wait)
+        {
+            Console.WriteLine("Release health " + result.Describe());
+        }
+
+        return result.ExitCode;
+    }
+
+    // A missing or unreadable appsettings.json leaves the defaults.
+    private static IConfiguration InstallSettings(string install, string environment)
+    {
+        string directory = string.IsNullOrWhiteSpace(install)
+            ? Path.GetDirectoryName(Environment.ProcessPath)
+            : Path.GetFullPath(install);
+        if (
+            string.IsNullOrWhiteSpace(directory)
+            || !File.Exists(Path.Combine(directory, "appsettings.json"))
+        )
+        {
+            return null;
+        }
+
+        try
+        {
+            return ServiceCollectionExtensions.BuildConfiguration(directory, environment);
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or FormatException)
+        {
+            Console.Error.WriteLine(
+                $"Release health uses default settings. {directory} could not be read: {e.Message}"
+            );
+            return null;
+        }
     }
 
     private static Command PreserveMinReplayIdCommand()
