@@ -48,10 +48,7 @@ public class QueueBoardTests
                 path,
                 new[]
                 {
-                    new RewardQueueItem
-                    {
-                        Request = new RewardRequest { Login = "Kazpa <coach>" },
-                    },
+                    new RewardQueueItem { Request = new RewardRequest { Login = "Kazpa <coach>" } },
                 }
             );
 

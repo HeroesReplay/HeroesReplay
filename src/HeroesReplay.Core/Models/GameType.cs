@@ -1,4 +1,3 @@
-
 namespace HeroesReplay.Core.Models;
 
 public enum GameType

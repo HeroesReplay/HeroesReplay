@@ -65,7 +65,7 @@ public sealed class FullMatchMetadata
 
 public static class FullMatchMetadataBuilder
 {
-    public const string TemplateVersion = "4";
+    public const string TemplateVersion = "5";
     public const int TitleMaxCharacters = 100;
     public const int DescriptionMaxCharacters = 5000;
     public const int TagMaxCharacters = 30;
@@ -137,7 +137,6 @@ public static class FullMatchMetadataBuilder
             mode,
             rank,
             focus,
-            requestor,
             feature,
             draft,
             replayText
@@ -229,46 +228,15 @@ public static class FullMatchMetadataBuilder
         string mode,
         string rank,
         string hero,
-        string requestor,
         string feature,
         string draft,
         string replayId
     )
     {
-        bool named = namedPlayer && titles.NamedPlayerTitles && hero != null;
-        bool requested = requestor != null && titles.RequestedByTitles;
-        if (named && requested)
-        {
-            return ComposeTitle(
-                hero + " requested by " + requestor,
-                feature,
-                map,
-                mode,
-                rank,
-                draft,
-                replayId
-            );
-        }
-
-        if (named)
-        {
-            return ComposeTitle(hero, feature, map, mode, rank, draft, replayId);
-        }
-
-        if (requested)
-        {
-            return ComposeTitle(
-                "Requested by " + requestor,
-                feature,
-                map,
-                mode,
-                rank,
-                draft,
-                replayId
-            );
-        }
-
-        return ComposeTitle(feature, map, mode, rank, draft, replayId);
+        // A title never names the Twitch viewer. A reward that picked a player leads with that hero.
+        string lead =
+            namedPlayer && titles.NamedPlayerTitles && hero != null ? hero + " focus" : null;
+        return ComposeTitle(lead, feature, map, mode, rank, draft, replayId);
     }
 
     private static string ComposeTitle(params string[] parts)
@@ -389,25 +357,14 @@ public static class FullMatchMetadataBuilder
         return hero ?? account;
     }
 
+    /// <summary>
+    /// The display name without the BattleTag number. YouTube turns <c>#1234</c> in a description into a hashtag.
+    /// </summary>
     private static string Account(ReplayMediaPlayer player)
     {
         string name = Clean(player.Name, 40);
-        if (name == null)
-        {
-            return null;
-        }
-
-        if (name.IndexOf('#') >= 0)
-        {
-            return name;
-        }
-
-        if (player.BattleTag > 0)
-        {
-            return name + "#" + player.BattleTag.ToString(CultureInfo.InvariantCulture);
-        }
-
-        return name;
+        int hash = name?.IndexOf('#') ?? -1;
+        return hash < 0 ? name : Clean(name.Substring(0, hash), 40);
     }
 
     private static string[] Tags(

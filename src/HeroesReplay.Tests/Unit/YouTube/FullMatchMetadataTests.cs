@@ -66,7 +66,7 @@ public class FullMatchMetadataTests
         Assert.DoesNotContain("ViewerZZ", ordinary.Description);
         Assert.DoesNotContain("Full match.", ordinary.Description);
         Assert.Equal(
-            "Greymane requested by ViewerZZ - Alterac Pass - Storm League - Master - 222",
+            "Greymane focus - Alterac Pass - Storm League - Master - 222",
             requested.Title
         );
         Assert.DoesNotContain("Pentakill", requested.Title, StringComparison.OrdinalIgnoreCase);
@@ -91,7 +91,7 @@ public class FullMatchMetadataTests
         Assert.Equal(first.Description, second.Description);
         Assert.Equal(first.Tags, second.Tags);
         Assert.Equal(FullMatchMetadataBuilder.TemplateVersion, first.TemplateVersion);
-        Assert.Equal("4", first.TemplateVersion);
+        Assert.Equal("5", first.TemplateVersion);
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public class FullMatchMetadataTests
         Assert.False(empty.ClaimsFullMatch);
         Assert.False(missing.ClaimsPentakill);
         Assert.False(missing.ClaimsTeamWipe);
-        Assert.Equal("4", missing.TemplateVersion);
+        Assert.Equal("5", missing.TemplateVersion);
         Assert.Null(missing.ReplayId);
         Assert.Null(missing.HeroesProfileUrl);
     }
@@ -240,10 +240,7 @@ public class FullMatchMetadataTests
             new FullMatchMetadataOptions { IncludeRequestAttribution = false }
         );
 
-        Assert.Equal(
-            "Requested by ViewerZZ - Dragon Shire - Storm League - Diamond 3 - 65389750",
-            shown.Title
-        );
+        Assert.Equal("Dragon Shire - Storm League - Diamond 3 - 65389750", shown.Title);
         Assert.DoesNotContain("Li-Ming", shown.Title, StringComparison.Ordinal);
         Assert.Contains("Requested by: ViewerZZ", shown.Description);
         Assert.Equal("Dragon Shire - Storm League - Diamond 3 - 65389750", hidden.Title);
@@ -506,7 +503,7 @@ public class FullMatchMetadataTests
     }
 
     [Fact]
-    public void Roster_ListsEachTeamsHeroesAndBattleTags()
+    public void Roster_ListsEachTeamsHeroesWithoutBattleTagNumbers()
     {
         FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(
             new FullMatchMetadataInput
@@ -571,11 +568,11 @@ public class FullMatchMetadataTests
         );
 
         Assert.Contains(
-            "Blue: Li-Ming (Salty#111), Johanna (Already#9), HeroLiMing (Attr#4)",
+            "Blue: Li-Ming (Salty), Johanna (Already), HeroLiMing (Attr)",
             metadata.DescriptionLines
         );
         Assert.Contains(
-            "Red: Lunara (AI), Muradin (Plain), NoHero#50, Illidan",
+            "Red: Lunara (AI), Muradin (Plain), NoHero, Illidan",
             metadata.DescriptionLines
         );
         Assert.DoesNotContain("Abathur", metadata.Description);

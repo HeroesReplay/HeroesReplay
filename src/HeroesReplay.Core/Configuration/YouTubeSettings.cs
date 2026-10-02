@@ -1,4 +1,3 @@
-
 namespace HeroesReplay.Core.Configuration;
 
 public class YouTubeSettings

@@ -117,7 +117,9 @@ public class SessionMediaTests
             PolicyAllowsPublication = true,
         };
 
-        Assert.False(SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = false }, replay));
+        Assert.False(
+            SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = false }, replay)
+        );
         Assert.True(SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = true }, replay));
         Assert.False(
             SessionMedia.ShouldWriteYouTubeEntry(new YouTubeSettings { Enabled = false }, replay)

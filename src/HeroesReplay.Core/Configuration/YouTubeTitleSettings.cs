@@ -11,7 +11,6 @@ public class YouTubeTitleSettings
 
     public bool DraftNotes { get; set; } = true;
     public bool NamedPlayerTitles { get; set; } = true;
-    public bool RequestedByTitles { get; set; } = true;
     public bool FeatureNewHeroes { get; set; } = true;
     public string FeaturePrefix { get; set; } = "Ft.";
 

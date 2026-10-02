@@ -652,13 +652,12 @@ public class ServiceSupervisorTests
                 (name, arguments) => 41,
                 handshake: new ServiceStartupHandshake
                 {
-                    TryReadReady = record =>
-                        new ServiceReadyReport
-                        {
-                            Role = record.Name,
-                            Nonce = record.Nonce,
-                            ReadyAt = readyAt,
-                        },
+                    TryReadReady = record => new ServiceReadyReport
+                    {
+                        Role = record.Name,
+                        Nonce = record.Nonce,
+                        ReadyAt = readyAt,
+                    },
                     ReadyTimeout = TimeSpan.FromSeconds(30),
                     Wait = _ => throw new InvalidOperationException("should not wait after exit"),
                     StopStarted = stopped.Add,

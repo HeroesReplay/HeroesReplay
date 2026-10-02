@@ -58,7 +58,7 @@ public static class YouTubeEntryBuilder
             }
         );
 
-        var lines = new List<string> { "Twitch: http://twitch.tv/saltysadism" };
+        var lines = new List<string> { "Twitch: https://twitch.tv/saltysadism" };
         if (metadata.DescriptionLines != null)
         {
             lines.AddRange(metadata.DescriptionLines);

@@ -54,7 +54,7 @@ public class YouTubeEntryBuilderTests
     }
 
     [Fact]
-    public void Create_ListsEachTeamsHeroesAndBattleTags()
+    public void Create_ListsEachTeamsHeroesWithoutBattleTagNumbers()
     {
         var loaded = new LoadedReplay
         {
@@ -132,11 +132,11 @@ public class YouTubeEntryBuilderTests
         YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
 
         Assert.Contains(
-            "Blue: Li-Ming (Salty#111), Johanna (Already#9), HeroLiMing (Attr#4)",
+            "Blue: Li-Ming (Salty), Johanna (Already), HeroLiMing (Attr)",
             entry.DescriptionLines
         );
         Assert.Contains(
-            "Red: Lunara (AI), Muradin (Plain), NoHero#50, Illidan",
+            "Red: Lunara (AI), Muradin (Plain), NoHero, Illidan",
             entry.DescriptionLines
         );
         Assert.DoesNotContain(
@@ -150,7 +150,7 @@ public class YouTubeEntryBuilderTests
             entry.DescriptionLines,
             line => line.StartsWith("Blue:", System.StringComparison.Ordinal)
         );
-        Assert.Equal("Twitch: http://twitch.tv/saltysadism", entry.DescriptionLines[0]);
+        Assert.Equal("Twitch: https://twitch.tv/saltysadism", entry.DescriptionLines[0]);
         Assert.True(roster > 0);
         Assert.DoesNotContain(
             entry.DescriptionLines,
@@ -253,7 +253,7 @@ public class YouTubeEntryBuilderTests
 
         YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
 
-        Assert.Equal("Illidan - Dragon Shire - Storm League - Diamond 3 - 1", entry.Title);
+        Assert.Equal("Illidan focus - Dragon Shire - Storm League - Diamond 3 - 1", entry.Title);
         Assert.DoesNotContain("Full match", entry.Title, System.StringComparison.Ordinal);
         Assert.DoesNotContain("MMR", entry.Title, System.StringComparison.OrdinalIgnoreCase);
     }
@@ -291,10 +291,7 @@ public class YouTubeEntryBuilderTests
 
         YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
 
-        Assert.Equal(
-            "Illidan requested by ViewerZZ - Dragon Shire - Storm League - Diamond 3 - 1",
-            entry.Title
-        );
+        Assert.Equal("Illidan focus - Dragon Shire - Storm League - Diamond 3 - 1", entry.Title);
         Assert.DoesNotContain("MMR", entry.Title, System.StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(
             entry.DescriptionLines,

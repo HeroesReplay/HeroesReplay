@@ -137,11 +137,21 @@ public class PublicationAdmitTests
     public void Decide_AdmitsCuratedNotableAndHighSkillUnderTheCap(ReplayMediaPriority priority)
     {
         PublicationAdmitResult under = PublicationAdmit.Decide(
-            Decision(ReplayPublicationMode.Curated, priority, true, ReplayMediaReason.EligibleCurated),
+            Decision(
+                ReplayPublicationMode.Curated,
+                priority,
+                true,
+                ReplayMediaReason.EligibleCurated
+            ),
             PublicationSchedule.MaxPublicPerDay - 1
         );
         PublicationAdmitResult atCap = PublicationAdmit.Decide(
-            Decision(ReplayPublicationMode.Curated, priority, true, ReplayMediaReason.EligibleCurated),
+            Decision(
+                ReplayPublicationMode.Curated,
+                priority,
+                true,
+                ReplayMediaReason.EligibleCurated
+            ),
             PublicationSchedule.MaxPublicPerDay
         );
 
