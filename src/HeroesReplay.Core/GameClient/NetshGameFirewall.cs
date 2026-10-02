@@ -7,43 +7,88 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.GameClient;
 
+/// <summary>
+/// Reading rules needs no elevation. Adding one does, so an unelevated process only reports
+/// a missing rule; <c>heroesreplay client firewall</c> from an elevated shell adds it.
+/// </summary>
 public sealed class NetshGameFirewall : IGameFirewall
 {
     private readonly ILogger<NetshGameFirewall> logger;
+    private readonly Func<bool> isElevated;
+    private readonly Func<string, bool, NetshResult> run;
 
     public NetshGameFirewall(ILogger<NetshGameFirewall> logger)
+        : this(logger, MediumIntegrityProcess.IsCurrentProcessElevated, Run) { }
+
+    internal NetshGameFirewall(
+        ILogger<NetshGameFirewall> logger,
+        Func<bool> isElevated,
+        Func<string, bool, NetshResult> run
+    )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.isElevated = isElevated ?? throw new ArgumentNullException(nameof(isElevated));
+        this.run = run ?? throw new ArgumentNullException(nameof(run));
     }
 
-    public void AllowInboundClients(IReadOnlyList<string> exePaths)
+    public IReadOnlyList<FirewallRuleOutcome> AllowInboundClients(IReadOnlyList<string> exePaths)
     {
+        var outcomes = new List<FirewallRuleOutcome>();
+        bool elevated = isElevated();
         foreach (HeroesFirewallRule rule in HeroesFirewallConsent.ForClients(exePaths))
         {
+            FirewallRuleState state;
             try
             {
-                AllowOne(rule);
+                state = AllowOne(rule, elevated);
             }
             catch (Win32Exception e)
             {
                 LogFailure(rule, e);
+                state = FirewallRuleState.Failed;
             }
             catch (InvalidOperationException e)
             {
                 LogFailure(rule, e);
+                state = FirewallRuleState.Failed;
             }
+
+            outcomes.Add(new FirewallRuleOutcome(rule.ProgramPath, state));
         }
+
+        return outcomes;
     }
 
-    private void AllowOne(HeroesFirewallRule rule)
+    private FirewallRuleState AllowOne(HeroesFirewallRule rule, bool elevated)
     {
-        if (AlreadyAllows(rule))
+        int existing = CountAllowRules(rule);
+        if (existing == 1 || (existing > 1 && !elevated))
         {
             logger.LogDebug("Inbound access for {Program} is already allowed.", rule.ProgramPath);
-            return;
+            return FirewallRuleState.AlreadyAllowed;
         }
 
-        int code = Run(AddArguments(rule), capture: false).Code;
+        if (existing > 1)
+        {
+            // Older builds added a copy on every launch because the check never matched.
+            run(DeleteArguments(rule), false);
+            logger.LogInformation(
+                "Removed {Count} copies of the inbound rule for {Program} before adding one.",
+                existing,
+                rule.ProgramPath
+            );
+        }
+
+        if (!elevated)
+        {
+            logger.LogWarning(
+                "No inbound firewall rule for {Program}. Windows may ask to allow it the first time it listens. Run `heroesreplay client firewall` once from an elevated shell to add it.",
+                rule.ProgramPath
+            );
+            return FirewallRuleState.MissingNeedsElevation;
+        }
+
+        int code = run(AddArguments(rule), false).Code;
         if (code != 0)
         {
             throw new InvalidOperationException("netsh could not add the allow rule. Exit " + code);
@@ -53,14 +98,46 @@ public sealed class NetshGameFirewall : IGameFirewall
             "Allowed inbound network access for {Program}. Windows Firewall will not ask for this Heroes client.",
             rule.ProgramPath
         );
+        return FirewallRuleState.Added;
     }
 
-    private static bool AlreadyAllows(HeroesFirewallRule rule)
+    /// <summary>
+    /// Allow rules with this name for this program. Only verbose output names the program, and
+    /// netsh wraps a long path onto the next line, so line breaks are removed before matching.
+    /// </summary>
+    private int CountAllowRules(HeroesFirewallRule rule)
     {
-        NetshResult shown = Run(ShowArguments(rule), capture: true);
-        return shown.Code == 0
-            && shown.Text.IndexOf(rule.ProgramPath, StringComparison.OrdinalIgnoreCase) >= 0
-            && shown.Text.IndexOf("Allow", StringComparison.OrdinalIgnoreCase) >= 0;
+        NetshResult shown = run(ShowArguments(rule), true);
+        if (shown.Code != 0)
+        {
+            return 0;
+        }
+
+        return CountAllowRules(shown.Text, rule.ProgramPath);
+    }
+
+    internal static int CountAllowRules(string verboseText, string programPath)
+    {
+        string flat = (verboseText ?? string.Empty)
+            .Replace("\r", string.Empty, StringComparison.Ordinal)
+            .Replace("\n", string.Empty, StringComparison.Ordinal);
+        if (flat.IndexOf(programPath, StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        int at = 0;
+        while ((at = flat.IndexOf("Action:", at, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            at += "Action:".Length;
+            if (flat.AsSpan(at).TrimStart().StartsWith("Allow", StringComparison.OrdinalIgnoreCase))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private void LogFailure(HeroesFirewallRule rule, Exception e)
@@ -74,7 +151,12 @@ public sealed class NetshGameFirewall : IGameFirewall
 
     internal static string ShowArguments(HeroesFirewallRule rule)
     {
-        return "advfirewall firewall show rule name=" + Quote(rule.Name);
+        return "advfirewall firewall show rule name=" + Quote(rule.Name) + " verbose";
+    }
+
+    internal static string DeleteArguments(HeroesFirewallRule rule)
+    {
+        return "advfirewall firewall delete rule name=" + Quote(rule.Name);
     }
 
     internal static string AddArguments(HeroesFirewallRule rule)
@@ -131,5 +213,5 @@ public sealed class NetshGameFirewall : IGameFirewall
         return new NetshResult(process.ExitCode, text ?? string.Empty);
     }
 
-    private readonly record struct NetshResult(int Code, string Text);
+    internal readonly record struct NetshResult(int Code, string Text);
 }

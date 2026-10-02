@@ -743,41 +743,6 @@ public class ServiceSupervisorTests
     }
 
     [Fact]
-    public void Start_WrongPrivilege_FailsBeforeAnyChildStarts()
-    {
-        string path = TempLock();
-        try
-        {
-            var messages = new List<string>();
-            int starts = 0;
-            ServiceStartupHandshake handshake = ServiceStartupHandshake.ReadyNow();
-            handshake.Spectate = HealthySpectate();
-            handshake.Spectate.PrivilegeOk = false;
-            handshake.Report = messages.Add;
-            int code = ServiceSupervisor.Start(
-                path,
-                Exe,
-                pid => "heroesreplay",
-                (name, arguments) =>
-                {
-                    starts++;
-                    return 1;
-                },
-                handshake: handshake
-            );
-
-            Assert.Equal(1, code);
-            Assert.Equal(0, starts);
-            Assert.Null(ServiceLockStore.TryLoad(path));
-            Assert.Contains(messages, message => message.Contains("privilege"));
-        }
-        finally
-        {
-            ServiceLockStore.Delete(path);
-        }
-    }
-
-    [Fact]
     public void Start_NullOcr_FailsBeforeAnyChildStarts()
     {
         string path = TempLock();
@@ -1317,7 +1282,6 @@ public class ServiceSupervisorTests
         return new SpectateStartupFacts
         {
             LaunchPath = Exe,
-            PrivilegeOk = true,
             OcrResult = new object(),
             CaptureOk = true,
             PathsOk = true,

@@ -14,11 +14,10 @@ namespace HeroesReplay.Tests.Unit.ServiceHost;
 public class ServiceProcessReadinessTests
 {
     [Fact]
-    public void Describe_NullOcrWrongPrivilegeAndMissingSecretsFailTheirRoles()
+    public void Describe_NullOcrAndMissingSecretsFailTheirRoles()
     {
         ServiceRoleFacts facts = ServiceRoleChecks.Describe(
             @"C:\heroesreplay\heroesreplay.exe",
-            privilegeOk: false,
             ocrResult: null,
             captureOk: true,
             pathsOk: true,
@@ -31,11 +30,6 @@ public class ServiceProcessReadinessTests
             oauthPresent: false
         );
 
-        Assert.Contains(
-            "privilege",
-            ServiceRoleChecks.SpectateFailure(facts.Spectate.LaunchPath, facts.Spectate)
-        );
-        facts.Spectate.PrivilegeOk = true;
         Assert.Contains(
             "OCR",
             ServiceRoleChecks.SpectateFailure(facts.Spectate.LaunchPath, facts.Spectate)
@@ -184,7 +178,6 @@ public class ServiceProcessReadinessTests
 
         ServiceRoleFacts facts = ServiceRoleChecks.Describe(
             @"C:\heroesreplay\heroesreplay.exe",
-            privilegeOk: true,
             ocrResult: new object(),
             captureOk: true,
             pathsOk: true,
@@ -208,7 +201,6 @@ public class ServiceProcessReadinessTests
                 new SpectateStartupFacts
                 {
                     LaunchPath = "cmd.exe",
-                    PrivilegeOk = true,
                     OcrResult = new object(),
                     CaptureOk = true,
                     PathsOk = true,

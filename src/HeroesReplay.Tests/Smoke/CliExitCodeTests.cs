@@ -4,15 +4,14 @@ using System.IO;
 using System.Threading.Tasks;
 using HeroesReplay.CLI;
 using HeroesReplay.CLI.Commands;
-using HeroesReplay.Core.Shared;
 using Xunit;
 
 namespace HeroesReplay.Tests.Smoke;
 
 /// <summary>
 /// Exit codes through <see cref="CommandLineService"/>, the same path Program.Main takes.
-/// The admin checker always answers "not elevated", so a real spectate run is refused before
-/// it starts. Nothing here launches the game, OBS, or Twitch.
+/// Spectate needs no elevation (#133). Every case here stops at help or a parse error, so
+/// nothing launches the game, OBS, or Twitch.
 /// </summary>
 [Trait(TestCategories.Category, TestCategories.Smoke)]
 public class CliExitCodeTests
@@ -25,14 +24,11 @@ public class CliExitCodeTests
     [InlineData("spectate file --player 11 --help")]
     [InlineData("--help")]
     [InlineData("--version")]
-    public async Task HelpAndVersion_ExitZeroWithoutElevation(string line)
+    public async Task HelpAndVersion_ExitZero(string line)
     {
-        var admin = new Unelevated();
-
-        (int code, string output, string error) = await InvokeAsync(admin, line);
+        (int code, string output, string error) = await InvokeAsync(line);
 
         Assert.Equal(0, code);
-        Assert.Equal(0, admin.Checks);
         Assert.False(string.IsNullOrWhiteSpace(output));
         Assert.DoesNotContain("administrator", error, StringComparison.OrdinalIgnoreCase);
     }
@@ -40,21 +36,18 @@ public class CliExitCodeTests
     [Theory]
     [InlineData("[suggest] spectate")]
     [InlineData("[suggest] spectate fi")]
-    public async Task CommandDiscovery_ExitsZeroWithoutElevation(string line)
+    public async Task CommandDiscovery_ExitsZero(string line)
     {
-        var admin = new Unelevated();
-
-        (int code, _, string error) = await InvokeAsync(admin, line);
+        (int code, _, string error) = await InvokeAsync(line);
 
         Assert.Equal(0, code);
-        Assert.Equal(0, admin.Checks);
         Assert.DoesNotContain("administrator", error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task SpectateFileHelp_ListsTheOptions()
     {
-        (int code, string output, _) = await InvokeAsync(new Unelevated(), "spectate file --help");
+        (int code, string output, _) = await InvokeAsync("spectate file --help");
 
         Assert.Equal(0, code);
         Assert.Contains("--file", output, StringComparison.Ordinal);
@@ -72,13 +65,10 @@ public class CliExitCodeTests
         ParseResult parse = new HeroesReplayCommand().Parse(line);
         Assert.NotEmpty(parse.Errors);
         Assert.NotSame(parse.CommandResult.Command.Action, parse.Action);
-        Assert.False(CommandLineService.RequiresAdministrator(parse));
 
-        var admin = new Unelevated();
-        (int code, _, string error) = await InvokeAsync(admin, line);
+        (int code, _, string error) = await InvokeAsync(line);
 
         Assert.NotEqual(0, code);
-        Assert.Equal(0, admin.Checks);
         Assert.Contains("--player", error, StringComparison.Ordinal);
     }
 
@@ -103,29 +93,10 @@ public class CliExitCodeTests
             Path.GetTempPath(),
             "hr-missing-" + Guid.NewGuid().ToString("N") + ".StormReplay"
         );
-        var admin = new Unelevated();
-
-        (int code, _, string error) = await InvokeAsync(admin, "spectate file --file " + missing);
+        (int code, _, string error) = await InvokeAsync("spectate file --file " + missing);
 
         Assert.NotEqual(0, code);
-        Assert.Equal(0, admin.Checks);
         Assert.Contains("does not exist", error, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData("spectate file", true)]
-    [InlineData("spectate heroesprofile", true)]
-    [InlineData("spectate file --player 3", true)]
-    [InlineData("spectate --help", false)]
-    [InlineData("spectate file --help", false)]
-    [InlineData("spectate", false)]
-    [InlineData("services stop", false)]
-    [InlineData("check config", false)]
-    public void OnlyARealSpectateRunNeedsElevation(string line, bool required)
-    {
-        ParseResult parse = new HeroesReplayCommand().Parse(line);
-
-        Assert.Equal(required, CommandLineService.RequiresAdministrator(parse));
     }
 
     [Theory]
@@ -155,28 +126,14 @@ public class CliExitCodeTests
         Assert.Empty(parse.Errors);
     }
 
-    private static async Task<(int Code, string Output, string Error)> InvokeAsync(
-        IAdminChecker admin,
-        string line
-    )
+    private static async Task<(int Code, string Output, string Error)> InvokeAsync(string line)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
-        int code = await new CommandLineService(admin).InvokeAsync(
+        int code = await new CommandLineService().InvokeAsync(
             line.Split(' ', StringSplitOptions.RemoveEmptyEntries),
             new InvocationConfiguration { Output = output, Error = error }
         );
         return (code, output.ToString(), error.ToString());
-    }
-
-    private sealed class Unelevated : IAdminChecker
-    {
-        public int Checks { get; private set; }
-
-        public bool IsAdministrator()
-        {
-            Checks++;
-            return false;
-        }
     }
 }

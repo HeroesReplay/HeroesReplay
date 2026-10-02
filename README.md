@@ -113,7 +113,7 @@ dotnet run --no-launch-profile -- --help
 | `update check` | Compare this install with the latest GitHub Release |
 | `mcp` | Stdio MCP server for agents (`get_spectator_status`, `get_current_focus`, checks). Pair with a running `spectate` process. |
 
-A real `spectate` run needs an elevated (administrator) shell. `--help`, `--version`, and command completion do not, so `spectate --help` works from a normal shell. Invalid input, such as `spectate file --player 11`, exits 1 before anything runs. `services stop` exits 1 unless every role exited, Heroes of the Storm closed, and OBS is not streaming; it prints each role as graceful, killed, already exited, or still running.
+No command needs an elevated (administrator) shell except `client firewall`, which adds the Windows Firewall rule for each installed Heroes client. `spectate` and the services run unelevated. Invalid input, such as `spectate file --player 11`, exits 1 before anything runs. `services stop` exits 1 unless every role exited, Heroes of the Storm closed, and OBS is not streaming; it prints each role as graceful, killed, already exited, or still running.
 
 Grok picks up the server from `.grok/config.toml` (`mcp_servers.heroesreplay`). Status snapshot: `%LOCALAPPDATA%\HeroesReplay\status.json`.
 
