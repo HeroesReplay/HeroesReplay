@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -76,6 +77,35 @@ public sealed class GoogleYouTubePlaylistClient : IYouTubePlaylistClient
                 })
                 .ToList(),
         };
+    }
+
+    public async Task<IReadOnlyDictionary<string, string>> PrivacyAsync(
+        IReadOnlyList<string> videoIds,
+        CancellationToken cancellationToken
+    )
+    {
+        var privacy = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (videoIds == null || videoIds.Count == 0)
+        {
+            return privacy;
+        }
+
+        YouTubeService youtube = await ServiceAsync(cancellationToken).ConfigureAwait(false);
+        VideosResource.ListRequest request = youtube.Videos.List("status");
+        request.Id = string.Join(",", videoIds.Take(50));
+        request.MaxResults = 50;
+        VideoListResponse response = await request
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
+        foreach (Video video in response?.Items ?? Array.Empty<Video>())
+        {
+            if (!string.IsNullOrWhiteSpace(video?.Id))
+            {
+                privacy[video.Id] = video.Status?.PrivacyStatus;
+            }
+        }
+
+        return privacy;
     }
 
     public async Task<YouTubePlaylistsPage> PlaylistsAsync(

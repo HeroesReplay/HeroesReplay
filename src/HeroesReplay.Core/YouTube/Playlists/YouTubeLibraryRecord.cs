@@ -24,6 +24,9 @@ public sealed class YouTubeLibraryVideo
     public string PrivacyStatus { get; set; }
     public DateTimeOffset? UploadedAt { get; set; }
 
+    /// <summary>When a scheduled upload goes public (#136). The pass checks its privacy by id after this.</summary>
+    public DateTimeOffset? PublishAt { get; set; }
+
     /// <summary>
     /// The description's <c>Draft:</c> note (<c>Blue no tank, Red double healer</c>). Null for
     /// a usual draft, a clip, or a video from before the template wrote the note.
@@ -98,6 +101,7 @@ public static class YouTubeLibraryRecord
                 ? entry.PrivacyStatus
                 : entry.ActualPrivacyStatus,
             UploadedAt = uploadedAt,
+            PublishAt = entry.PublishAtUtc,
             Draft = clip ? null : YouTubeVideoFacts.Draft(lines),
             FocusHero = clip ? null : YouTubeVideoFacts.FocusHero(lines),
         };

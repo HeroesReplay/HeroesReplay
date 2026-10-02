@@ -424,7 +424,7 @@ public class YouTubePublicationDecisionTests
         Assert.Contains("\"MaxPublicPerDay\": 6", text, StringComparison.Ordinal);
         Assert.Contains("\"MaxPublicPerWeek\": 30", text, StringComparison.Ordinal);
         Assert.Contains("\"MinimumPublicInterval\": \"02:00:00\"", text, StringComparison.Ordinal);
-        Assert.Contains("\"MaxPublishAhead\": \"7.00:00:00\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"MaxPublishAhead\": \"14.00:00:00\"", text, StringComparison.Ordinal);
         Assert.Contains(
             "\"OrdinaryCandidateMaxAge\": \"3.00:00:00\"",
             text,
@@ -446,7 +446,7 @@ public class YouTubePublicationDecisionTests
         Assert.Equal(6, settings.MaxPublicPerDay);
         Assert.Equal(30, settings.MaxPublicPerWeek);
         Assert.Equal(TimeSpan.FromHours(2), settings.MinimumPublicInterval);
-        Assert.Equal(TimeSpan.FromDays(7), settings.MaxPublishAhead);
+        Assert.Equal(TimeSpan.FromDays(14), settings.MaxPublishAhead);
         Assert.Equal(TimeSpan.FromHours(72), settings.OrdinaryCandidateMaxAge);
         Assert.Equal(TimeSpan.FromHours(8), settings.MapCooldown);
         Assert.Equal(TimeSpan.FromHours(8), settings.RankCooldown);

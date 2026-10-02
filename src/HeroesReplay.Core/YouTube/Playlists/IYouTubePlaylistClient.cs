@@ -47,6 +47,12 @@ public interface IYouTubePlaylistClient
         CancellationToken cancellationToken
     );
 
+    /// <summary>Privacy status by video id for up to 50 ids (one videos.list call). Missing ids are left out.</summary>
+    Task<IReadOnlyDictionary<string, string>> PrivacyAsync(
+        IReadOnlyList<string> videoIds,
+        CancellationToken cancellationToken
+    );
+
     Task<string> CreateAsync(string title, CancellationToken cancellationToken);
 
     Task InsertAsync(string playlistId, string videoId, CancellationToken cancellationToken);
