@@ -35,6 +35,12 @@ public sealed class YouTubeUploadsIndex
     /// True once a listing reached the last page. Until then a listing does not stop early.
     /// </summary>
     public bool ListedToEnd { get; set; }
+
+    /// <summary>
+    /// The <see cref="YouTubeVideoFacts.Version"/> of the last listing that reached the last
+    /// page. An older number lists every page once more.
+    /// </summary>
+    public int FactsVersion { get; set; }
     public List<string> VideoIds { get; set; } = new();
     public List<YouTubeUnresolvedVideo> Unresolved { get; set; } = new();
 

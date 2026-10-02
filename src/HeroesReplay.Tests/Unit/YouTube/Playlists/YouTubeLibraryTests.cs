@@ -43,45 +43,26 @@ public sealed class YouTubeLibraryTests : IDisposable
     }
 
     [Fact]
-    public void Select_SkipsEntriesWithoutAVideoIdOrKnownMode()
+    public void Plan_SkipsEntriesWithoutAVideoIdOrKnownMode()
     {
-        IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Select(
+        IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Plan(
             new[]
             {
-                new YouTubeEntry
-                {
-                    ReplayId = 1,
-                    Map = "Cursed Hollow",
-                    GameType = "Quick Match",
-                },
-                new YouTubeEntry
-                {
-                    ReplayId = 2,
-                    VideoId = "abc",
-                    Map = "Cursed Hollow",
-                    GameType = "Custom",
-                },
-                new YouTubeEntry
-                {
-                    ReplayId = 3,
-                    VideoId = "vid-1",
-                    Map = "Cursed Hollow",
-                    GameType = "Quick Match",
-                },
-                new YouTubeEntry
-                {
-                    ReplayId = 4,
-                    VideoId = "vid-1",
-                    Map = "Sky Temple",
-                    GameType = "ARAM",
-                },
-            }
+                PublicEntry(1, null, "Cursed Hollow", "Quick Match"),
+                PublicEntry(2, "abc", "Cursed Hollow", "Custom"),
+                PublicEntry(3, "vid-1", "Cursed Hollow", "Quick Match"),
+                PublicEntry(4, "vid-1", "Sky Temple", "ARAM"),
+            }.Select(entry => YouTubeLibraryRecord.FromEntry(entry, uploadedAt: null)),
+            new YouTubePlaylistSettings { Patch = false },
+            "2.57.0.98304"
         );
 
-        YouTubeLibraryItem item = Assert.Single(items);
-        Assert.Equal("Cursed Hollow - Quick Match", item.PlaylistTitle);
-        Assert.Equal("vid-1", item.VideoId);
-        Assert.Equal(3, item.ReplayId);
+        Assert.Equal(
+            new[] { "Cursed Hollow", "Quick Match" },
+            items.Select(item => item.PlaylistTitle)
+        );
+        Assert.All(items, item => Assert.Equal("vid-1", item.VideoId));
+        Assert.All(items, item => Assert.Equal(3, item.ReplayId));
     }
 
     [Fact]
@@ -101,6 +82,12 @@ public sealed class YouTubeLibraryTests : IDisposable
                     GameVersion = "2.57.0.98304",
                     PrivacyStatus = "private",
                     ActualPrivacyStatus = "public",
+                    DescriptionLines = new[]
+                    {
+                        "Twitch: https://twitch.tv/saltysadism",
+                        "Featured: Illidan",
+                        "Draft: Blue double tank",
+                    },
                 },
                 Noon
             )
@@ -130,9 +117,18 @@ public sealed class YouTubeLibraryTests : IDisposable
         Assert.Equal("public", full.PrivacyStatus);
         Assert.Equal(Noon, full.UploadedAt);
         Assert.True(full.IsResolved);
+        Assert.Equal("Blue double tank", full.Draft);
+        Assert.Equal("Illidan", full.FocusHero);
+        Assert.True(full.IsViewerReview);
         Assert.Equal(YouTubeLibraryRecord.Clip, record["clip-1"].Kind);
         Assert.False(record["clip-1"].IsResolved);
-        Assert.DoesNotContain("IsResolved", File.ReadAllText(path), StringComparison.Ordinal);
+        Assert.Null(record["clip-1"].Draft);
+        Assert.Null(record["clip-1"].FocusHero);
+        string[] lines = File.ReadAllLines(path);
+        Assert.DoesNotContain("IsResolved", lines[0], StringComparison.Ordinal);
+        Assert.DoesNotContain("IsViewerReview", lines[0], StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Draft\"", lines[1], StringComparison.Ordinal);
+        Assert.DoesNotContain("\"FocusHero\"", lines[1], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -166,53 +162,80 @@ public sealed class YouTubeLibraryTests : IDisposable
         YouTubeLibraryPass pass = await Library(client).RunOnceAsync(true, CancellationToken.None);
 
         Assert.Equal(
-            new[] { "Cursed Hollow - Storm League - Platinum", "Season 2026" },
+            new[] { "Cursed Hollow", "Storm League", "Storm League - Platinum", "Season 2026" },
             client.Created
         );
-        Assert.Equal(new[] { ("pl-0", "video-9"), ("pl-1", "video-9") }, client.Inserted);
+        Assert.Equal(
+            new[]
+            {
+                ("pl-0", "video-9"),
+                ("pl-1", "video-9"),
+                ("pl-2", "video-9"),
+                ("pl-3", "video-9"),
+            },
+            client.Inserted
+        );
+        Assert.Equal(4, pass.Filed);
+        // One playlists listing, four creates, four inserts.
+        Assert.Equal(1 + 4 * 50 + 4 * 50 + UploadsListing(client), pass.UnitsSpent);
+    }
+
+    [Fact]
+    public async Task RunOnce_FilesOnlyTheGroupsThatAreOn()
+    {
+        AppendRecord("video-9", "Cursed Hollow", "2.57.0.98304");
+        var client = new FakeClient();
+        AppSettings settings = Settings(false);
+        settings.YouTube.Playlists = new YouTubePlaylistSettings
+        {
+            Map = false,
+            Mode = false,
+            Rank = true,
+            Draft = false,
+            ViewerReview = false,
+            Patch = false,
+            MapMode = true,
+        };
+
+        YouTubeLibraryPass pass = await Library(client, settings: settings)
+            .RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Equal(
+            new[] { "Storm League - Platinum", "Cursed Hollow - Storm League - Platinum" },
+            client.Created
+        );
         Assert.Equal(2, pass.Filed);
-        // One playlists listing, two creates, two inserts.
-        Assert.Equal(1 + 50 + 50 + 50 + 50 + UploadsListing(client), pass.UnitsSpent);
     }
 
     [Fact]
     public async Task RunOnce_DedupesTheRecordAndTheContextEntryByVideoId()
     {
         AppendRecord("video-7", "Dragon Shire", "2.57.0.98304");
-        WriteEntry(
-            new YouTubeEntry
-            {
-                ReplayId = 7,
-                VideoId = "video-7",
-                Map = "Garden of Terror",
-                GameType = "ARAM",
-            }
-        );
-        WriteEntry(
-            new YouTubeEntry
-            {
-                ReplayId = 8,
-                VideoId = "video-8",
-                Map = "Garden of Terror",
-                GameType = "ARAM",
-            },
-            "8"
-        );
+        WriteEntry(PublicEntry(7, "video-7", "Garden of Terror", "ARAM"));
+        WriteEntry(PublicEntry(8, "video-8", "Garden of Terror", "ARAM"), "8");
         var client = new FakeClient();
 
         YouTubeLibraryPass pass = await Library(client).RunOnceAsync(true, CancellationToken.None);
 
         Assert.DoesNotContain(
             pass.Planned,
-            item => item.PlaylistTitle == "Garden of Terror - ARAM" && item.VideoId == "video-7"
+            item => item.VideoId == "video-7" && item.PlaylistTitle is "Garden of Terror" or "ARAM"
         );
         Assert.Contains(
             pass.Planned,
-            item => item.PlaylistTitle == "Dragon Shire - Storm League - Platinum"
+            item => item.PlaylistTitle == "Dragon Shire" && item.VideoId == "video-7"
         );
         Assert.Contains(
             pass.Planned,
-            item => item.PlaylistTitle == "Garden of Terror - ARAM" && item.VideoId == "video-8"
+            item => item.PlaylistTitle == "Garden of Terror" && item.VideoId == "video-8"
+        );
+        Assert.Contains(
+            pass.Planned,
+            item => item.PlaylistTitle == "ARAM" && item.VideoId == "video-8"
+        );
+        Assert.Equal(
+            pass.Planned.Count,
+            pass.Planned.Select(item => item.PlaylistTitle + "\n" + item.VideoId).Distinct().Count()
         );
     }
 
@@ -221,17 +244,17 @@ public sealed class YouTubeLibraryTests : IDisposable
     {
         AppendRecord("video-7", "Dragon Shire", "2.57.0.98304");
         var client = new FakeClient();
-        client.Existing.Add(
-            new YouTubePlaylist("existing-sl", "Dragon Shire - Storm League - Platinum")
-        );
+        client.Existing.Add(new YouTubePlaylist("existing-map", "Dragon Shire"));
+        client.Existing.Add(new YouTubePlaylist("existing-sl", "Storm League"));
         YouTubeLibrary library = Library(client);
 
         await library.RunOnceAsync(true, CancellationToken.None);
         YouTubeLibraryPass second = await library.RunOnceAsync(true, CancellationToken.None);
 
-        Assert.Equal(new[] { "Season 2026" }, client.Created);
+        Assert.Equal(new[] { "Storm League - Platinum", "Season 2026" }, client.Created);
+        Assert.Contains(("existing-map", "video-7"), client.Inserted);
         Assert.Contains(("existing-sl", "video-7"), client.Inserted);
-        Assert.Equal(2, client.Inserted.Count);
+        Assert.Equal(4, client.Inserted.Count);
         Assert.Empty(second.Planned);
     }
 
@@ -277,9 +300,108 @@ public sealed class YouTubeLibraryTests : IDisposable
         Assert.True(
             YouTubeReplayCatalog.Contains(YouTubeReplayCatalog.PathFor(directory), 65269475)
         );
-        Assert.Contains("Sky Temple - Storm League - Platinum", client.Created);
+        Assert.Null(record["v-old"].Draft);
+        Assert.Null(record["v-old"].FocusHero);
+        Assert.Contains("Sky Temple", client.Created);
+        Assert.Contains("Storm League - Platinum", client.Created);
         Assert.Contains("Patch 2.55 archive", client.Created);
-        Assert.Contains("Towers of Doom - Storm League - Master", client.Created);
+        Assert.Contains("Towers of Doom", client.Created);
+        Assert.Contains("Storm League - Master", client.Created);
+        Assert.DoesNotContain(client.Created, title => title.StartsWith("Unusual drafts"));
+        Assert.DoesNotContain(YouTubePlaylistNames.ViewerReviews, client.Created);
+    }
+
+    [Fact]
+    public async Task RunOnce_CurrentTemplateDraftAndNamedPlayerAreFiled()
+    {
+        var client = new FakeClient();
+        client.Pages.Add(
+            Page(
+                Video(
+                    "v-review",
+                    "Illidan focus - Dragon Shire - Storm League - Diamond 3 - Blue no tank, Red double healer - 65600003",
+                    "Full match.\nReplay ID: 65600003\nBuild: 2.57.0.98304\nMap: Dragon Shire\nMode: Storm League\nRank: Diamond 3\nFeatured: Illidan\nDraft: Blue no tank, Red double healer"
+                )
+            )
+        );
+
+        YouTubeLibraryPass pass = await Library(client).RunOnceAsync(true, CancellationToken.None);
+
+        YouTubeLibraryVideo video = YouTubeLibraryRecord.Read(
+            YouTubeLibraryRecord.PathFor(directory)
+        )["v-review"];
+        Assert.Equal("Blue no tank, Red double healer", video.Draft);
+        Assert.Equal("Illidan", video.FocusHero);
+        Assert.Equal(
+            new[]
+            {
+                "Dragon Shire",
+                "Storm League",
+                "Storm League - Diamond",
+                "Unusual drafts - No tank",
+                "Unusual drafts - Double healer",
+                YouTubePlaylistNames.ViewerReviews,
+                "Season 2026",
+            },
+            pass.Planned.Select(item => item.PlaylistTitle)
+        );
+        Assert.Equal(7, pass.Filed);
+    }
+
+    [Fact]
+    public async Task RunOnce_ListsEveryPageOnceSoKnownVideosLearnTheNewFacts()
+    {
+        AppendRecord("v-2", "Cursed Hollow", "2.57.0.98304");
+        new YouTubeUploadsIndex
+        {
+            PlaylistId = "UU-uploads",
+            ListedToEnd = true,
+            VideoIds = { "v-1", "v-2" },
+            LastRunAt = Noon.AddDays(-1),
+        }.Save(YouTubeUploadsIndex.PathFor(directory));
+        var client = new FakeClient();
+        client.Pages.Add(
+            Page(
+                Video(
+                    "v-1",
+                    "Sky Temple - Storm League - Gold - 1",
+                    "Replay ID: 1\nBuild: 2.57.0.98304\nMap: Sky Temple\nMode: Storm League\nRank: Gold"
+                )
+            )
+        );
+        client.Pages.Add(
+            Page(
+                Video(
+                    "v-2",
+                    "Cursed Hollow - Storm League - Platinum - Double healer - 2",
+                    "Replay ID: 2\nBuild: 2.57.0.98304\nFeatured: Uther\nDraft: Double healer"
+                )
+            )
+        );
+        YouTubeLibrary library = Library(client);
+
+        YouTubeLibraryPass first = await library.RunOnceAsync(true, CancellationToken.None);
+        client.PageCalls = 0;
+        await library.RunOnceAsync(true, CancellationToken.None);
+
+        YouTubeLibraryVideo known = YouTubeLibraryRecord.Read(
+            YouTubeLibraryRecord.PathFor(directory)
+        )["v-2"];
+        Assert.Equal("Double healer", known.Draft);
+        Assert.Equal("Uther", known.FocusHero);
+        Assert.Contains(
+            first.Planned,
+            item => item.PlaylistTitle == "Unusual drafts - Double healer"
+        );
+        Assert.Contains(
+            first.Planned,
+            item => item.PlaylistTitle == YouTubePlaylistNames.ViewerReviews
+        );
+        Assert.Equal(
+            YouTubeVideoFacts.Version,
+            YouTubeUploadsIndex.Load(YouTubeUploadsIndex.PathFor(directory)).FactsVersion
+        );
+        Assert.Equal(1, client.PageCalls);
     }
 
     [Fact]
@@ -477,7 +599,8 @@ public sealed class YouTubeLibraryTests : IDisposable
         YouTubeLibraryPass shown = await library.RunOnceAsync(true, CancellationToken.None);
 
         Assert.Empty(hidden.Planned);
-        Assert.Contains(shown.Planned, item => item.PlaylistTitle == "Sky Temple - Quick Match");
+        Assert.Contains(shown.Planned, item => item.PlaylistTitle == "Sky Temple");
+        Assert.Contains(shown.Planned, item => item.PlaylistTitle == "Quick Match");
     }
 
     [Fact]
@@ -572,7 +695,9 @@ public sealed class YouTubeLibraryTests : IDisposable
             Path.Combine(directory, YouTubeLibrary.DryRunFileName)
         );
         Assert.Contains("\"Simulated\": true", plan, StringComparison.Ordinal);
-        Assert.Contains("Sky Temple - Storm League - Platinum", plan, StringComparison.Ordinal);
+        Assert.Contains("\"Storm League - Platinum\"", plan, StringComparison.Ordinal);
+        Assert.Contains("\"Sky Temple\"", plan, StringComparison.Ordinal);
+        Assert.Contains("\"InsertUnits\": 200", plan, StringComparison.Ordinal);
         Assert.Contains("\"WouldResolve\"", plan, StringComparison.Ordinal);
         Assert.Contains("v-x", plan, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(directory, YouTubeLibrary.CacheFileName)));
@@ -639,6 +764,21 @@ public sealed class YouTubeLibraryTests : IDisposable
                 PrivacyStatus = "public",
             }
         );
+
+    private static YouTubeEntry PublicEntry(
+        int replayId,
+        string videoId,
+        string map,
+        string mode
+    ) =>
+        new()
+        {
+            ReplayId = replayId,
+            VideoId = videoId,
+            Map = map,
+            GameType = mode,
+            PrivacyStatus = "public",
+        };
 
     private void WriteEntry(YouTubeEntry entry, string folderName = "1")
     {

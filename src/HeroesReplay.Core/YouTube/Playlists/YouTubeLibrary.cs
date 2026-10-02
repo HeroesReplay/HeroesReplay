@@ -49,7 +49,8 @@ public interface IYouTubeLibrary
 /// The uploader's housekeeping. It lists the channel's uploads, records every video that
 /// <c>Data\youtube-library.jsonl</c> does not have yet (Heroes Profile fills a missing map,
 /// mode, rank, or build), adds the replay ids to the duplicate catalog, and files the record
-/// into map and patch playlists. Each call reserves its units in <see cref="YouTubeQuotaUnits"/>
+/// into the playlist groups that <c>YouTube:Playlists</c> turns on (map, mode, rank, draft,
+/// viewer review, patch). Each call reserves its units in <see cref="YouTubeQuotaUnits"/>
 /// first and the pass stops when the day's library room is gone.
 /// </summary>
 public class YouTubeLibrary : IYouTubeLibrary
@@ -209,6 +210,13 @@ public class YouTubeLibrary : IYouTubeLibrary
             }
         }
 
+        // A new fact (the draft note, the named player) is read from every page once, so the
+        // videos already in the record pick it up. That costs one unit per 50 videos.
+        if (index.FactsVersion < YouTubeVideoFacts.Version)
+        {
+            index.ListedToEnd = false;
+        }
+
         string catalog = YouTubeReplayCatalog.PathFor(settings.Location?.DataDirectory);
         var seen = new HashSet<string>(index.VideoIds, StringComparer.Ordinal);
         var waiting = index.Unresolved.ToDictionary(
@@ -253,6 +261,7 @@ public class YouTubeLibrary : IYouTubeLibrary
             if (string.IsNullOrEmpty(pageToken))
             {
                 index.ListedToEnd = true;
+                index.FactsVersion = YouTubeVideoFacts.Version;
             }
             else if (newOnPage == 0 && index.ListedToEnd)
             {
@@ -275,15 +284,26 @@ public class YouTubeLibrary : IYouTubeLibrary
     )
     {
         string privacy = video.PrivacyStatus;
+        YouTubeLibraryVideo facts = YouTubeVideoFacts.Read(
+            videoId,
+            video.Title,
+            video.Description,
+            privacy
+        );
         if (record.TryGetValue(videoId, out YouTubeLibraryVideo known))
         {
             // A scheduled upload is recorded private and becomes public later.
-            if (
+            bool changed =
                 !string.IsNullOrWhiteSpace(privacy)
-                && !string.Equals(known.PrivacyStatus, privacy, StringComparison.Ordinal)
-            )
+                && !string.Equals(known.PrivacyStatus, privacy, StringComparison.Ordinal);
+            if (changed)
             {
                 known.PrivacyStatus = privacy;
+            }
+
+            // A line written before the record kept the draft note or the named player.
+            if (YouTubeVideoFacts.Learn(known, facts) || changed)
+            {
                 YouTubeLibraryRecord.Append(recordPath, known);
             }
 
@@ -297,15 +317,10 @@ public class YouTubeLibrary : IYouTubeLibrary
                 pending.Video.PrivacyStatus = privacy;
             }
 
+            YouTubeVideoFacts.Learn(pending.Video, facts);
             return;
         }
 
-        YouTubeLibraryVideo facts = YouTubeVideoFacts.Read(
-            videoId,
-            video.Title,
-            video.Description,
-            privacy
-        );
         if (facts.IsResolved)
         {
             facts.UploadedAt = video.PublishedAt;
@@ -431,15 +446,7 @@ public class YouTubeLibrary : IYouTubeLibrary
         IReadOnlyDictionary<string, YouTubeLibraryVideo> record
     )
     {
-        var entries = new List<YouTubeEntry>();
-        foreach (YouTubeLibraryVideo video in record.Values)
-        {
-            if (video.IsResolved && PatchPlaylist.MayFile(video.PrivacyStatus))
-            {
-                entries.Add(video.ToEntry());
-            }
-        }
-
+        var videos = record.Values.Where(video => video.IsResolved).ToList();
         foreach (YouTubeEntry entry in ReadUploadedEntries())
         {
             if (
@@ -447,14 +454,15 @@ public class YouTubeLibrary : IYouTubeLibrary
                 && !record.ContainsKey(entry.VideoId.Trim())
             )
             {
-                entries.Add(entry);
+                videos.Add(YouTubeLibraryRecord.FromEntry(entry, uploadedAt: null));
             }
         }
 
-        string patchLine = GameVersionOrder.PatchLine(settings.Spectate?.MinimumGameVersion);
-        return YouTubeLibraryPlanner.Combine(
-            YouTubeLibraryPlanner.Select(entries),
-            YouTubeLibraryPlanner.Roll(entries, patchLine, settings.YouTube?.SeasonName)
+        return YouTubeLibraryPlanner.Plan(
+            videos,
+            settings.YouTube?.Playlists,
+            settings.Spectate?.MinimumGameVersion,
+            settings.YouTube?.SeasonName
         );
     }
 
@@ -637,6 +645,10 @@ public class YouTubeLibrary : IYouTubeLibrary
                 Simulated = true,
                 Recorded = record.Count,
                 Planned = items.Count,
+                InsertUnits = items.Count * YouTubeQuotaUnits.PlaylistItemInsert,
+                Playlists = items
+                    .GroupBy(item => item.PlaylistTitle, StringComparer.Ordinal)
+                    .Select(group => new { Title = group.Key, Videos = group.Count() }),
                 Items = items,
                 Discovery = new
                 {

@@ -1,122 +1,131 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HeroesReplay.Core.HeroesProfile;
 
 namespace HeroesReplay.Core.YouTube.Playlists;
 
 public sealed record YouTubeLibraryItem(string PlaylistTitle, string VideoId, int? ReplayId);
 
+/// <summary>
+/// The playlist inserts for the library pass. Each public video goes into one playlist per
+/// group that is on in <c>YouTube:Playlists</c> and that its facts allow, and into each
+/// playlist only once. The newest upload comes first, so a new video is not left behind
+/// the backlog of older ones.
+/// </summary>
 public static class YouTubeLibraryPlanner
 {
-    public static IReadOnlyList<YouTubeLibraryItem> Select(IEnumerable<YouTubeEntry> entries)
+    public static IReadOnlyList<YouTubeLibraryItem> Plan(
+        IEnumerable<YouTubeLibraryVideo> videos,
+        YouTubePlaylistSettings groups,
+        string currentPatchLine,
+        string seasonName = null
+    )
     {
-        if (entries == null)
+        if (videos == null)
         {
             return Array.Empty<YouTubeLibraryItem>();
         }
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var items = new List<YouTubeLibraryItem>();
-        foreach (YouTubeEntry entry in entries)
+        foreach (
+            YouTubeLibraryVideo video in videos
+                .Where(video => video != null)
+                .OrderByDescending(video => video.UploadedAt ?? DateTimeOffset.MinValue)
+        )
         {
-            if (entry == null || string.IsNullOrWhiteSpace(entry.VideoId))
+            if (
+                string.IsNullOrWhiteSpace(video.VideoId)
+                || !PatchPlaylist.MayFile(video.PrivacyStatus)
+            )
             {
                 continue;
             }
 
-            string videoId = entry.VideoId.Trim();
+            string videoId = video.VideoId.Trim();
             if (!seen.Add(videoId))
             {
                 continue;
             }
 
-            string playlist = YouTubePlaylistNames.For(entry);
-            if (string.IsNullOrWhiteSpace(playlist))
+            foreach (string title in Titles(video, groups, currentPatchLine, seasonName))
             {
-                continue;
+                items.Add(new YouTubeLibraryItem(title, videoId, video.ReplayId));
             }
-
-            items.Add(new YouTubeLibraryItem(playlist, videoId, entry.ReplayId));
         }
 
         return items;
     }
 
-    public static IReadOnlyList<YouTubeLibraryItem> Roll(
-        IEnumerable<YouTubeEntry> entries,
-        string currentPatchLine
-    ) => Roll(entries, currentPatchLine, seasonName: null);
-
-    public static IReadOnlyList<YouTubeLibraryItem> Roll(
-        IEnumerable<YouTubeEntry> entries,
+    /// <summary>
+    /// The playlists one video belongs in, in group order, each title once. A full match needs
+    /// a filed mode (Storm League, Quick Match, ARAM, or Unranked Draft) for every group except
+    /// the patch. A clip goes into the patch playlist only.
+    /// </summary>
+    public static IReadOnlyList<string> Titles(
+        YouTubeLibraryVideo video,
+        YouTubePlaylistSettings groups,
         string currentPatchLine,
-        string seasonName
+        string seasonName = null
     )
     {
-        if (entries == null)
+        var titles = new List<string>();
+        if (video == null)
         {
-            return Array.Empty<YouTubeLibraryItem>();
+            return titles;
         }
 
-        string line = GameVersionOrder.PatchLine(currentPatchLine) ?? currentPatchLine;
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var items = new List<YouTubeLibraryItem>();
-        foreach (YouTubeEntry entry in entries)
+        groups ??= new YouTubePlaylistSettings();
+        if (!video.IsClip && YouTubePlaylistNames.Mode(video.Mode) != null)
         {
-            if (!PatchPlaylist.MayFile(entry))
+            if (groups.Map)
             {
-                continue;
+                Add(YouTubePlaylistNames.Map(video.Map));
             }
 
-            if (string.IsNullOrWhiteSpace(entry.VideoId))
+            if (groups.Mode)
             {
-                continue;
+                Add(YouTubePlaylistNames.Mode(video.Mode));
             }
 
-            string videoId = entry.VideoId.Trim();
-            string playlist = PatchPlaylist.Name(entry.GameVersion, line, seasonName);
-            string key = playlist + "\n" + videoId;
-            if (!seen.Add(key))
+            if (groups.Rank)
             {
-                continue;
+                Add(YouTubePlaylistNames.Rank(video.Mode, video.Rank));
             }
 
-            items.Add(new YouTubeLibraryItem(playlist, videoId, entry.ReplayId));
+            if (groups.Draft)
+            {
+                foreach (string draft in YouTubePlaylistNames.Drafts(video.Draft))
+                {
+                    Add(draft);
+                }
+            }
+
+            if (groups.ViewerReview && video.IsViewerReview)
+            {
+                Add(YouTubePlaylistNames.ViewerReviews);
+            }
+
+            if (groups.MapMode)
+            {
+                Add(YouTubePlaylistNames.Title(video.Map, video.Mode, video.Rank));
+            }
         }
 
-        return items;
-    }
-
-    public static IReadOnlyList<YouTubeLibraryItem> Combine(
-        IReadOnlyList<YouTubeLibraryItem> first,
-        IReadOnlyList<YouTubeLibraryItem> second
-    )
-    {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var items = new List<YouTubeLibraryItem>();
-        Add(first);
-        Add(second);
-        return items;
-
-        void Add(IReadOnlyList<YouTubeLibraryItem> source)
+        if (groups.Patch)
         {
-            if (source == null)
-            {
-                return;
-            }
+            string line = GameVersionOrder.PatchLine(currentPatchLine) ?? currentPatchLine;
+            Add(YouTubePlaylistNames.Fit(PatchPlaylist.Name(video.GameVersion, line, seasonName)));
+        }
 
-            foreach (YouTubeLibraryItem item in source)
-            {
-                if (item == null || string.IsNullOrWhiteSpace(item.VideoId))
-                {
-                    continue;
-                }
+        return titles;
 
-                string key = (item.PlaylistTitle ?? string.Empty) + "\n" + item.VideoId.Trim();
-                if (seen.Add(key))
-                {
-                    items.Add(item);
-                }
+        void Add(string title)
+        {
+            if (!string.IsNullOrWhiteSpace(title) && !titles.Contains(title))
+            {
+                titles.Add(title);
             }
         }
     }

@@ -24,8 +24,28 @@ public sealed class YouTubeLibraryVideo
     public string PrivacyStatus { get; set; }
     public DateTimeOffset? UploadedAt { get; set; }
 
+    /// <summary>
+    /// The description's <c>Draft:</c> note (<c>Blue no tank, Red double healer</c>). Null for
+    /// a usual draft, a clip, or a video from before the template wrote the note.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Draft { get; set; }
+
+    /// <summary>
+    /// The hero a viewer's request named (<c>{replayId},{slot}</c>), from the description's
+    /// <c>Featured:</c> line. Null when the request named no player or there was no request.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string FocusHero { get; set; }
+
     [JsonIgnore]
     public bool IsClip => string.Equals(Kind, YouTubeLibraryRecord.Clip, StringComparison.Ordinal);
+
+    /// <summary>
+    /// A viewer asked to review this replay from one player's view.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsViewerReview => !IsClip && !string.IsNullOrWhiteSpace(FocusHero);
 
     /// <summary>
     /// A full match needs its map, mode, and build before it is filed. A clip needs its build.
@@ -34,19 +54,6 @@ public sealed class YouTubeLibraryVideo
     public bool IsResolved =>
         !string.IsNullOrWhiteSpace(GameVersion)
         && (IsClip || (EnglishMapNames.IsCatalog(Map) && !string.IsNullOrWhiteSpace(Mode)));
-
-    public YouTubeEntry ToEntry() =>
-        new()
-        {
-            VideoId = VideoId,
-            ReplayId = ReplayId,
-            Map = Map,
-            GameType = IsClip ? null : Mode,
-            Rank = Rank,
-            GameVersion = GameVersion,
-            PrivacyStatus = PrivacyStatus,
-            ActualPrivacyStatus = PrivacyStatus,
-        };
 }
 
 /// <summary>
@@ -65,7 +72,11 @@ public static class YouTubeLibraryRecord
     public static string PathFor(string dataDirectory) =>
         string.IsNullOrWhiteSpace(dataDirectory) ? null : Path.Combine(dataDirectory, FileName);
 
-    public static YouTubeLibraryVideo FromEntry(YouTubeEntry entry, DateTimeOffset uploadedAt)
+    /// <summary>
+    /// The record line for an entry. The draft note and the named player come from the entry's
+    /// description lines, the same lines the library pass reads back from YouTube.
+    /// </summary>
+    public static YouTubeLibraryVideo FromEntry(YouTubeEntry entry, DateTimeOffset? uploadedAt)
     {
         if (entry == null || string.IsNullOrWhiteSpace(entry.VideoId))
         {
@@ -73,6 +84,7 @@ public static class YouTubeLibraryRecord
         }
 
         bool clip = IsClipEntry(entry);
+        string[] lines = entry.DescriptionLines ?? [];
         return new YouTubeLibraryVideo
         {
             VideoId = entry.VideoId.Trim(),
@@ -86,6 +98,8 @@ public static class YouTubeLibraryRecord
                 ? entry.PrivacyStatus
                 : entry.ActualPrivacyStatus,
             UploadedAt = uploadedAt,
+            Draft = clip ? null : YouTubeVideoFacts.Draft(lines),
+            FocusHero = clip ? null : YouTubeVideoFacts.FocusHero(lines),
         };
     }
 
