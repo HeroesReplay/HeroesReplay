@@ -173,6 +173,19 @@ public sealed class UploadOutbox
         );
     }
 
+    public Task<UploadAttemptResult> ReturnUnsentAsync(
+        string attemptId,
+        DateTimeOffset at,
+        CancellationToken cancellationToken
+    )
+    {
+        return store.UpdateAsync(
+            attemptId,
+            current => UploadAttemptMachine.ReturnUnsent(current, at),
+            cancellationToken
+        );
+    }
+
     public Task<UploadAttemptResult> CompleteAsync(
         string attemptId,
         string videoId,

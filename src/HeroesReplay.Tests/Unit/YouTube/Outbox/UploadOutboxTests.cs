@@ -460,6 +460,78 @@ public class UploadOutboxTests
     }
 
     [Fact]
+    public async Task QuotaRefusalBeforeASession_ReturnsToPendingAndDispatchesAgain()
+    {
+        using var temp = new TempAttempts();
+        var outbox = new UploadOutbox(temp.Root);
+        string mediaPath = Path.Combine(temp.Root, "attempt-quota", "final.mp4");
+        await ReachUploadingAsync(outbox, "attempt-quota", 12, mediaPath, "hash-quota");
+
+        UploadAttemptResult returned = await outbox.ReturnUnsentAsync(
+            "attempt-quota",
+            Stamp.AddMinutes(5),
+            CancellationToken.None
+        );
+        UploadAttemptResult again = await outbox.DispatchAsync(
+            "attempt-quota",
+            youtubeEnabled: true,
+            dryRun: false,
+            operatorRetry: false,
+            Stamp.AddMinutes(6),
+            CancellationToken.None
+        );
+
+        Assert.True(returned.Succeeded, returned.Reason);
+        Assert.Equal(UploadAttemptState.UploadPending, returned.Manifest.State);
+        Assert.Null(returned.Manifest.VideoId);
+        Assert.True(again.Succeeded, again.Reason);
+        Assert.Equal(UploadAttemptState.Uploading, again.Manifest.State);
+    }
+
+    [Fact]
+    public async Task ReturnUnsent_AfterASessionStarted_IsRefused()
+    {
+        using var temp = new TempAttempts();
+        var outbox = new UploadOutbox(temp.Root);
+        string mediaPath = Path.Combine(temp.Root, "attempt-session", "final.mp4");
+        await ReachUploadingAsync(outbox, "attempt-session", 13, mediaPath, "hash-session");
+        await outbox.NoteSessionAsync(
+            "attempt-session",
+            "https://www.googleapis.com/upload/youtube/v3/videos?upload_id=abc",
+            Stamp.AddMinutes(4),
+            CancellationToken.None
+        );
+
+        UploadAttemptResult returned = await outbox.ReturnUnsentAsync(
+            "attempt-session",
+            Stamp.AddMinutes(5),
+            CancellationToken.None
+        );
+
+        Assert.False(returned.Succeeded);
+        Assert.Equal(UploadAttemptReasons.IllegalTransition, returned.Reason);
+        Assert.Equal(UploadAttemptState.Uploading, returned.Manifest.State);
+    }
+
+    [Fact]
+    public async Task ReturnUnsent_FromPending_IsRefused()
+    {
+        using var temp = new TempAttempts();
+        var outbox = new UploadOutbox(temp.Root);
+        string mediaPath = Path.Combine(temp.Root, "attempt-pending", "final.mp4");
+        await ReachPendingAsync(outbox, "attempt-pending", 14, mediaPath, "hash-pending");
+
+        UploadAttemptResult returned = await outbox.ReturnUnsentAsync(
+            "attempt-pending",
+            Stamp.AddMinutes(5),
+            CancellationToken.None
+        );
+
+        Assert.False(returned.Succeeded);
+        Assert.Equal(UploadAttemptReasons.IllegalTransition, returned.Reason);
+    }
+
+    [Fact]
     public async Task AmbiguousUpload_OrdinaryRetryDoesNotReturnToUploading()
     {
         using var temp = new TempAttempts();
