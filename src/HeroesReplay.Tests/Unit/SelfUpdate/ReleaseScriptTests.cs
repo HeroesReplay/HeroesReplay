@@ -122,6 +122,19 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void ApplyRelease_StartsTheStackWithoutTheTaskAndInItsOwnEnvironment()
+    {
+        // 2026-10-02 on ASA-SERVER: with no HeroesReplay-live task, Windows PowerShell turned
+        // schtasks' stderr into a terminating error under Stop, and the stack never started.
+        string script = File.ReadAllText(FindScript());
+
+        Assert.DoesNotContain("/Query /TN HeroesReplay-live *> $null", script);
+        Assert.Contains("/Query /TN HeroesReplay-live >nul 2>&1", script);
+        Assert.DoesNotContain("$env:HEROES_REPLAY_ENV = 'prod'", script);
+        Assert.Contains("$env:HEROES_REPLAY_ENV = $environment", script);
+    }
+
+    [Fact]
     public void ApplyRelease_LeavesTheProfileToTheMachineAndNeverCopiesTheStreamKey()
     {
         string script = File.ReadAllText(FindScript());

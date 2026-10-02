@@ -51,9 +51,12 @@ function Clear-ServiceStop {
 }
 
 function Start-HeroesReplayStack {
-    $env:HEROES_REPLAY_ENV = 'prod'
+    # The stack restarts in the environment it was updated in. The stream PC passes none, so prod.
+    $env:HEROES_REPLAY_ENV = $environment
     $schtasks = Join-Path $env:SystemRoot 'System32\schtasks.exe'
-    & $schtasks /Query /TN HeroesReplay-live *> $null
+    # cmd owns the redirect. In Windows PowerShell, schtasks' stderr ("cannot find the file") on a
+    # machine without the task became a terminating error under Stop, and the stack never started.
+    & cmd.exe /d /c "`"$schtasks`" /Query /TN HeroesReplay-live >nul 2>&1"
     if ($LASTEXITCODE -eq 0) {
         & $schtasks /Run /TN HeroesReplay-live
         if ($LASTEXITCODE -ne 0) {
