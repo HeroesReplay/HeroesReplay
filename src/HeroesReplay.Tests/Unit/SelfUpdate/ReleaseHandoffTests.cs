@@ -585,6 +585,8 @@ public class ReleaseHandoffTests
         public void ReleaseClientAfterDefer() { }
 
         public MatchOutcome LastOutcome => Outcome;
+
+        public bool LastMatchClockSeen => Outcome == MatchOutcome.VerifiedCompleted;
     }
 
     private sealed class ScriptedReplays : IReplayProvider

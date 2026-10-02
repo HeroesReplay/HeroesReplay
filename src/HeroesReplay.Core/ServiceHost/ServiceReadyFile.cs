@@ -26,9 +26,18 @@ public sealed class ServiceReadyReport
     /// <summary>The interval the role refreshes this file on. Null in files from older roles.</summary>
     public int? HeartbeatIntervalSeconds { get; set; }
 
-    /// <summary>Role-defined: a spectate tick, a Twitch reconcile, a download pass, an upload pass.</summary>
+    /// <summary>Role-defined: match progress, a Twitch reconcile, a download pass, an upload pass.</summary>
     public DateTimeOffset? LastSuccessfulWorkAt { get; set; }
     public ServiceRoleError LastError { get; set; }
+
+    /// <summary>
+    /// Spectate only: replay sessions in a row that ended without match progress (no match clock,
+    /// no award screen). Null for the other roles and before the first session ends.
+    /// </summary>
+    public int? SessionsWithoutProgress { get; set; }
+
+    /// <summary>Spectate only: how the last replay session ended (<c>LoadTimedOut</c>, ...).</summary>
+    public string LastOutcome { get; set; }
 }
 
 public sealed class ServiceRoleError

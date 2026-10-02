@@ -41,6 +41,12 @@ public static class ServiceHealthCodes
     /// </summary>
     public const string RestartBudgetExhausted = "service.restart_budget_exhausted";
 
+    /// <summary>
+    /// The cause of a degraded spectate role: the last sessions in a row ended without match
+    /// progress (<see cref="ServiceRoleHealth.CauseCode"/>).
+    /// </summary>
+    public const string SpectateNoMatchProgress = "spectate.no_match_progress";
+
     public static string For(ServiceRoleState state) =>
         state switch
         {
@@ -60,6 +66,12 @@ public sealed record ServiceRoleHealth
 
     /// <summary>What was seen, in a sentence a person or an agent can act on.</summary>
     public string Cause { get; init; }
+
+    /// <summary>
+    /// A stable code for a specific cause, next to the state's <see cref="Code"/>
+    /// (<c>spectate.no_match_progress</c>). Null when the state says it all.
+    /// </summary>
+    public string CauseCode { get; init; }
 
     /// <summary>What to do about it. Null when the role is ready.</summary>
     public string Remediation { get; init; }
@@ -82,6 +94,12 @@ public sealed record ServiceRoleHealth
     public long? WorkAgeSeconds { get; init; }
     public long WorkThresholdSeconds { get; init; }
     public ServiceRoleError LastError { get; init; }
+
+    /// <summary>Spectate: replay sessions in a row without match progress. Null for other roles.</summary>
+    public int? SessionsWithoutProgress { get; init; }
+
+    /// <summary>Spectate: how the last replay session ended.</summary>
+    public string LastOutcome { get; init; }
 
     /// <summary>The role's newest log file, or the file it writes today when there is none yet.</summary>
     public string LogPath { get; init; }
