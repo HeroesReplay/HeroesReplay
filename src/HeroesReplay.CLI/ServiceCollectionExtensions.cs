@@ -163,6 +163,13 @@ public static class ServiceCollectionExtensions
         return BindSettings(GetConfiguration());
     }
 
+    /// <summary>
+    /// The effective <c>OBS</c> section without resolving secrets, for commands that only need
+    /// names and flags.
+    /// </summary>
+    public static OBSSettings LoadObsSettings() =>
+        GetConfiguration().GetSection("OBS").Get<OBSSettings>() ?? new OBSSettings();
+
     public static AppSettings BindSettings(IConfiguration configuration)
     {
         ReplayMediaPolicySettings media = ReplayMediaPolicyStartup.Require(configuration);
@@ -533,21 +540,33 @@ public static class ServiceCollectionExtensions
 
     private static IConfigurationRoot GetConfiguration()
     {
-        var env = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV");
         string basePath = Directory.GetCurrentDirectory();
         if (!File.Exists(Path.Combine(basePath, "appsettings.json")))
         {
             basePath = AppContext.BaseDirectory;
         }
 
+        return BuildConfiguration(
+            basePath,
+            Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV")
+        );
+    }
+
+    /// <summary>
+    /// The effective settings of the install in <paramref name="basePath"/>: appsettings.json,
+    /// secrets, the <paramref name="environment"/> overlay, then <c>HEROES_REPLAY_</c> variables.
+    /// The release update reads the install it replaces through this.
+    /// </summary>
+    public static IConfigurationRoot BuildConfiguration(string basePath, string environment)
+    {
         var builder = new ConfigurationBuilder()
             .SetBasePath(basePath)
             .AddJsonFile("appsettings.json")
             .AddJsonFile("appsettings.secrets.json", optional: true);
 
-        if (!string.IsNullOrWhiteSpace(env))
+        if (!string.IsNullOrWhiteSpace(environment))
         {
-            builder.AddJsonFile($"appsettings.{env}.json", optional: true);
+            builder.AddJsonFile($"appsettings.{environment}.json", optional: true);
         }
 
         builder.AddEnvironmentVariables("HEROES_REPLAY_");

@@ -263,6 +263,40 @@ public class ConnectivityWatchdogTests
     }
 
     [Fact]
+    public void Apply_WritesTheStreamBlockReasonWhenItChanges()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
+        fixture.Obs.StartResult = ObsStreamResult.NotArmed();
+        fixture.Obs.State = new ObsRuntimeSnapshot
+        {
+            StreamDesired = true,
+            Stream = ObsStreamResult.NotArmed(),
+            StreamBlockedBy = ObsStreamArm.NotArmedReason,
+        };
+
+        fixture.Watchdog.Apply(OkSnapshot());
+
+        Assert.Equal(1, fixture.Obs.StartCalls);
+        Assert.False(fixture.Obs.IsStreaming());
+        SpectatorStatus blocked = fixture.Store.Read();
+        Assert.Equal("obs.stream_not_armed", blocked.ObsStreamBlockedBy);
+        Assert.Equal(TwitchIngestGuard.NotArmedMessage, blocked.ObsDetail);
+
+        // Same connectivity: only the cleared reason makes the watchdog write again.
+        fixture.Obs.State = new ObsRuntimeSnapshot
+        {
+            StreamDesired = true,
+            StreamActive = true,
+            Stream = ObsStreamResult.ConfirmedActive(),
+        };
+        fixture.Watchdog.Apply(OkSnapshot());
+
+        SpectatorStatus cleared = fixture.Store.Read();
+        Assert.Null(cleared.ObsStreamBlockedBy);
+        Assert.Equal(true, cleared.ObsStreamActive);
+    }
+
+    [Fact]
     public void AppSettings_StreamingEnabledIsFalse()
     {
         string path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
@@ -417,6 +451,7 @@ public class ConnectivityWatchdogTests
         public int StopCalls { get; private set; }
         public bool Streaming { get; set; }
         public ObsRuntimeSnapshot State { get; set; }
+        public ObsStreamResult StartResult { get; set; }
 
         public void BeginSession() { }
 
@@ -442,6 +477,11 @@ public class ConnectivityWatchdogTests
         public ObsStreamResult StartStreaming()
         {
             StartCalls++;
+            if (StartResult != null)
+            {
+                return StartResult;
+            }
+
             Streaming = true;
             return ObsStreamResult.ConfirmedActive();
         }

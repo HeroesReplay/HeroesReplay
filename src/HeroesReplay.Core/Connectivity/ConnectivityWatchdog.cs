@@ -25,6 +25,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     private int recoverCount;
     private string lastWrittenDetail;
     private bool? lastWrittenOnline;
+    private string lastWrittenBlocked;
 
     public ConnectivityWatchdog(
         ILogger<ConnectivityWatchdog> logger,
@@ -142,15 +143,23 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
 
         ReconcileDesiredStream();
         string detail = snapshot.Describe();
-        if (changed != null || lastWrittenOnline != IsOnline || lastWrittenDetail != detail)
+        ObsRuntimeSnapshot obs = obsController?.ReadObsState();
+        string blocked = obs?.StreamBlockedBy;
+        if (
+            changed != null
+            || lastWrittenOnline != IsOnline
+            || lastWrittenDetail != detail
+            || lastWrittenBlocked != blocked
+        )
         {
             lastWrittenOnline = IsOnline;
             lastWrittenDetail = detail;
+            lastWrittenBlocked = blocked;
             statusStore.Patch(status =>
             {
                 status.ConnectivityOnline = IsOnline;
                 status.Connectivity = detail;
-                ObsStatus.Copy(status, obsController?.ReadObsState());
+                ObsStatus.Copy(status, obs);
             });
         }
 

@@ -1,7 +1,14 @@
-# Creates C:\heroesreplay folders, copies the OBS collection and profile from this
-# clone, then fills gitignored secrets from 1Password. Scene paths in Default.json
-# are relative to obs\. heroesreplay rewrites the live collection to this folder
-# when OBS is closed. See AGENTS.md and .grok/skills/op-service-account/SKILL.md.
+# Creates C:\heroesreplay folders, copies the OBS collection from this clone, installs the
+# OBS profile template only when the machine has no profile of that name, then fills
+# gitignored secrets from 1Password. Scene paths in Default.json are relative to obs\.
+# heroesreplay rewrites the live collection to this folder when OBS is closed. Pass the
+# names when OBS:ProfileName or OBS:SceneCollectionName is not HeroesReplay on this machine.
+# See AGENTS.md and .grok/skills/op-service-account/SKILL.md.
+param(
+    [string]$ProfileName = 'HeroesReplay',
+    [string]$SceneCollectionName = 'HeroesReplay'
+)
+
 $ErrorActionPreference = 'Stop'
 $root = git rev-parse --show-toplevel
 if (-not $root) {
@@ -25,19 +32,40 @@ foreach ($d in $dirs) {
 
 $obsBasic = Join-Path $env:APPDATA 'obs-studio\basic'
 $scenesDir = Join-Path $obsBasic 'scenes'
-$profileDir = Join-Path $obsBasic 'profiles\HeroesReplay'
-New-Item -ItemType Directory -Force -Path $scenesDir, $profileDir | Out-Null
+$profileDir = Join-Path $obsBasic "profiles\$ProfileName"
+$collectionFile = Join-Path $scenesDir "$SceneCollectionName.json"
+$profileIni = Join-Path $profileDir 'basic.ini'
+$utf8 = New-Object System.Text.UTF8Encoding $false
 if (Get-Process obs64 -ErrorAction SilentlyContinue) {
-    Write-Warning 'OBS is running. The live collection and profile were not overwritten.'
+    Write-Warning 'OBS is running. The live collection and profile were not touched.'
 }
 else {
-    Copy-Item -Force (Join-Path $root 'obs\Default.json') (Join-Path $scenesDir 'HeroesReplay.json')
-    Copy-Item -Force (Join-Path $root 'obs\Default\basic.ini') (Join-Path $profileDir 'basic.ini')
-    Write-Host "OBS collection -> $scenesDir\HeroesReplay.json"
-    Write-Host "OBS profile    -> $profileDir\basic.ini"
+    New-Item -ItemType Directory -Force -Path $scenesDir | Out-Null
+    $collection = [System.IO.File]::ReadAllText((Join-Path $root 'obs\Default.json'))
+    if ($SceneCollectionName -ne 'HeroesReplay') {
+        # OBS lists a collection by its top-level name. Default.json opens with that property.
+        $collection = ([regex]'"name"\s*:\s*"[^"]*"').Replace($collection, '"name": ' + ($SceneCollectionName | ConvertTo-Json), 1)
+    }
+
+    [System.IO.File]::WriteAllText($collectionFile, $collection, $utf8)
+    Write-Host "OBS collection -> $collectionFile"
     Write-Host 'Scene paths are relative to obs\. heroesreplay rewrites the live collection when OBS is closed.'
+
+    # The profile (encoder, bitrate, resolution, stream service) belongs to this machine.
+    # The packaged basic.ini is only a starting template.
+    if (Test-Path -LiteralPath $profileIni) {
+        Write-Host "OBS profile kept: $profileIni already exists and was not overwritten."
+    }
+    else {
+        New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
+        $ini = [System.IO.File]::ReadAllText((Join-Path $root 'obs\Default\basic.ini'))
+        $ini = ([regex]'(?m)^Name=[^\r\n]*').Replace($ini, "Name=$ProfileName", 1)
+        [System.IO.File]::WriteAllText($profileIni, $ini, $utf8)
+        Write-Host "OBS profile    -> $profileIni (template). Run the OBS Auto-Configuration Wizard and set the stream service in OBS."
+    }
 }
-Write-Host 'Do not copy service.json (stream key). Enable Tools → WebSocket Server on port 4455.'
+Write-Host 'Do not copy service.json (stream key). Enable Tools > WebSocket Server Settings on port 4455.'
+Write-Host 'Twitch ingest also needs this machine armed: heroesreplay obs arm (stream PC only).'
 
 $fill = Join-Path $root 'tools\fill-secrets-from-op.ps1'
 if (Test-Path $fill) {

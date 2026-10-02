@@ -13,6 +13,9 @@ public enum ObsOutputFailure
     Disconnected,
     Timeout,
     SplitFile,
+
+    /// <summary>OBS has another profile or scene collection active. Nothing was started.</summary>
+    SelectionMismatch,
 }
 
 /// <summary>
@@ -27,6 +30,9 @@ public sealed class ObsRecordingResult
     public ObsOutputFailure Failure { get; private init; }
     public string Detail { get; private init; }
 
+    /// <summary>Stable code for a refused start, such as <c>obs.profile_mismatch</c>.</summary>
+    public string Reason { get; private init; }
+
     public static ObsRecordingResult Started() => new() { Succeeded = true, Owned = true };
 
     public static ObsRecordingResult FinalizedAt(string path) =>
@@ -38,8 +44,17 @@ public sealed class ObsRecordingResult
             OutputPath = path,
         };
 
-    public static ObsRecordingResult Failed(ObsOutputFailure failure, string detail) =>
-        new() { Failure = failure, Detail = detail };
+    public static ObsRecordingResult Failed(
+        ObsOutputFailure failure,
+        string detail,
+        string reason = null
+    ) =>
+        new()
+        {
+            Failure = failure,
+            Detail = detail,
+            Reason = reason,
+        };
 }
 
 /// <summary>
@@ -54,6 +69,12 @@ public sealed class ObsStreamResult
     public bool Active { get; private init; }
     public ObsOutputFailure Failure { get; private init; }
     public string Detail { get; private init; }
+
+    /// <summary>
+    /// Stable code when the settings want a stream but it was not started, such as
+    /// <c>obs.stream_not_armed</c> or <c>obs.collection_mismatch</c>.
+    /// </summary>
+    public string Reason { get; private init; }
 
     public static ObsStreamResult ConfirmedActive() =>
         new()
@@ -80,8 +101,29 @@ public sealed class ObsStreamResult
             Detail = string.IsNullOrWhiteSpace(detail) ? "OBS streaming is disabled." : detail,
         };
 
-    public static ObsStreamResult Failed(ObsOutputFailure failure, string detail) =>
-        new() { Failure = failure, Detail = detail };
+    /// <summary>
+    /// The settings want a stream, but this machine is not armed. Like a disabled stream,
+    /// this is not retried and OBS is not contacted.
+    /// </summary>
+    public static ObsStreamResult NotArmed() =>
+        new()
+        {
+            Failure = ObsOutputFailure.NotRequested,
+            Detail = TwitchIngestGuard.NotArmedMessage,
+            Reason = ObsStreamArm.NotArmedReason,
+        };
+
+    public static ObsStreamResult Failed(
+        ObsOutputFailure failure,
+        string detail,
+        string reason = null
+    ) =>
+        new()
+        {
+            Failure = failure,
+            Detail = detail,
+            Reason = reason,
+        };
 }
 
 /// <summary>

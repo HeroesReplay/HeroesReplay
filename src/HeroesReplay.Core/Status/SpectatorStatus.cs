@@ -39,6 +39,19 @@ public sealed class SpectatorStatus
     public string ObsSceneActual { get; set; }
     public bool? ObsStreamDesired { get; set; }
     public bool? ObsStreamActive { get; set; }
+
+    /// <summary>
+    /// Why a desired stream was not started: <c>obs.stream_not_armed</c> (OBS:StreamingEnabled
+    /// is true but this machine is not armed), <c>obs.profile_mismatch</c>,
+    /// <c>obs.collection_mismatch</c>, or <c>obs.selection_unreadable</c>. Null otherwise.
+    /// </summary>
+    public string ObsStreamBlockedBy { get; set; }
+
+    /// <summary>
+    /// Why the last recording start was refused (a profile or scene collection code). Null
+    /// after a recording starts.
+    /// </summary>
+    public string ObsRecordBlockedBy { get; set; }
     public string ObsDetail { get; set; }
     public SpectatorFocusStatus Focus { get; set; }
 }

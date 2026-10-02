@@ -19,7 +19,10 @@ internal sealed class ObsCoordinator
     private readonly Action<TimeSpan> wait;
     private readonly TimeSpan identifyTimeout;
     private readonly Action beforeLaunch;
+    private readonly Func<bool> streamArmed;
     private bool recordingDesired;
+    private bool notArmedLogged;
+    private ObsSelectionResult lastSelection;
     private ObsLaunchDecision lastLaunch = new()
     {
         Kind = ObsLaunchKind.Skipped,
@@ -35,7 +38,8 @@ internal sealed class ObsCoordinator
         ObsBackoff backoff,
         Action<TimeSpan> wait,
         TimeSpan identifyTimeout,
-        Action beforeLaunch = null
+        Action beforeLaunch = null,
+        Func<bool> streamArmed = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -48,6 +52,8 @@ internal sealed class ObsCoordinator
         this.identifyTimeout =
             identifyTimeout > TimeSpan.Zero ? identifyTimeout : TimeSpan.FromSeconds(10);
         this.beforeLaunch = beforeLaunch;
+        // No arm reader means not armed: ingest fails closed.
+        this.streamArmed = streamArmed ?? (() => false);
     }
 
     public ObsRuntimeSnapshot State { get; private set; }
@@ -94,7 +100,8 @@ internal sealed class ObsCoordinator
             EnsureIdentified,
             replayId,
             reason,
-            prepareOutput
+            prepareOutput,
+            CheckSelection
         );
     }
 
@@ -123,6 +130,25 @@ internal sealed class ObsCoordinator
             return Remember(refused, ReadScene());
         }
 
+        // The arm is read every time, so `obs arm` and `obs disarm` apply without a restart.
+        if (!Armed())
+        {
+            ObsStreamResult notArmed = ObsStreamResult.NotArmed();
+            if (!notArmedLogged)
+            {
+                notArmedLogged = true;
+                logger.LogWarning(
+                    "{Detail} Reason {Reason}. Arm file {Path}.",
+                    notArmed.Detail,
+                    notArmed.Reason,
+                    ObsStreamArm.DefaultPath()
+                );
+            }
+
+            return Remember(notArmed, ReadScene());
+        }
+
+        notArmedLogged = false;
         try
         {
             beforeLaunch?.Invoke();
@@ -154,6 +180,20 @@ internal sealed class ObsCoordinator
                 ObsStreamResult.Failed(
                     ObsOutputFailure.NotConfirmed,
                     "Waiting scene is not configured."
+                ),
+                ReadScene()
+            );
+        }
+
+        // Before the scene changes: a wrong collection must not be touched either.
+        ObsSelectionResult selection = CheckSelection();
+        if (!selection.Ok)
+        {
+            return Remember(
+                ObsStreamResult.Failed(
+                    ObsOutputFailure.SelectionMismatch,
+                    selection.Detail,
+                    selection.Reason
                 ),
                 ReadScene()
             );
@@ -299,7 +339,9 @@ internal sealed class ObsCoordinator
             obs?.Enabled == true,
             running,
             path,
-            exists
+            exists,
+            ObsNames.Profile(obs),
+            ObsNames.SceneCollection(obs)
         );
         if (decision.Kind != ObsLaunchKind.Launch)
         {
@@ -403,7 +445,59 @@ internal sealed class ObsCoordinator
         }
     }
 
-    private string Refusal() => TwitchIngestGuard.Refusal(SessionMedia.ShouldStream(settings.OBS));
+    private string Refusal() =>
+        TwitchIngestGuard.Refusal(SessionMedia.ShouldStream(settings.OBS), Armed());
+
+    private bool Armed()
+    {
+        try
+        {
+            return streamArmed();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not read the stream arm. Twitch ingest stays off.");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Reads the active profile and scene collection. Logs an error when the answer changes
+    /// to a mismatch, so a wrong selection is reported once rather than on every probe.
+    /// </summary>
+    private ObsSelectionResult CheckSelection()
+    {
+        ObsSelectionResult result;
+        try
+        {
+            result = ObsSelection.Check(
+                ObsNames.Profile(settings.OBS),
+                ObsNames.SceneCollection(settings.OBS),
+                socket.CurrentProfile(),
+                socket.CurrentSceneCollection()
+            );
+        }
+        catch (Exception e)
+        {
+            result = ObsSelection.NotRead(e.Message);
+        }
+
+        if (!result.Ok && result != lastSelection)
+        {
+            logger.LogError(
+                "OBS output was not started ({Reason}). {Detail}",
+                result.Reason,
+                result.Detail
+            );
+        }
+        else if (result.Ok && lastSelection is { Ok: false })
+        {
+            logger.LogInformation("{Detail}", result.Detail);
+        }
+
+        lastSelection = result;
+        return result;
+    }
 
     private string Endpoint() =>
         string.IsNullOrWhiteSpace(settings.OBS?.WebSocketEndpoint)

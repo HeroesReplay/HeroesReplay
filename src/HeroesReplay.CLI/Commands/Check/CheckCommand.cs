@@ -45,7 +45,7 @@ public class CheckCommand : Command
         Subcommands.Add(
             Build(
                 "obs",
-                "Connect to obs-websocket 5, read the server version, and verify scene files.",
+                "Connect to obs-websocket 5, read the server version, verify scene files, and check the active profile and scene collection.",
                 CheckObsAsync
             )
         );
@@ -154,6 +154,8 @@ public class CheckCommand : Command
                 $"OBS endpoint: {settings.OBS?.WebSocketEndpoint}",
                 $"OBS password: {SecretResolver.Describe(settings.OBS?.WebSocketPassword)}",
                 $"OBS streaming enabled: {settings.OBS?.StreamingEnabled == true}",
+                $"OBS stream arm (this machine): {(new ObsStreamArm().IsArmed() ? "armed" : "not armed")}",
+                $"OBS profile / scene collection: {ObsNames.Profile(settings.OBS)} / {ObsNames.SceneCollection(settings.OBS)}",
                 $"OBS report scenes enabled: {DescribeReportScenes(settings)}",
                 $"Twitch channel: {NullToMissing(settings.Twitch?.Channel)}",
                 $"Twitch access token: {SecretResolver.Describe(settings.Twitch?.AccessToken)}",
@@ -252,7 +254,20 @@ public class CheckCommand : Command
                 var version = obs.GetVersion();
                 string connected =
                     $"Connected. OBS {version.OBSStudioVersion}, websocket {version.PluginVersion}.";
-                return new CheckResult("obs", filesOk, files + " " + connected);
+                ObsSelectionResult selection = ReadSelection(obs, settings.OBS);
+                return new CheckResult(
+                    "obs",
+                    filesOk && selection.Ok,
+                    files
+                        + " "
+                        + connected
+                        + " "
+                        + (
+                            selection.Ok
+                                ? selection.Detail
+                                : selection.Reason + ": " + selection.Detail
+                        )
+                );
             }
             finally
             {
@@ -279,6 +294,23 @@ public class CheckCommand : Command
             }
 
             return new CheckResult("obs", false, detail);
+        }
+    }
+
+    private static ObsSelectionResult ReadSelection(OBSWebsocket obs, OBSSettings settings)
+    {
+        try
+        {
+            return ObsSelection.Check(
+                ObsNames.Profile(settings),
+                ObsNames.SceneCollection(settings),
+                obs.GetProfileList()?.CurrentProfileName,
+                obs.GetCurrentSceneCollection()
+            );
+        }
+        catch (Exception e)
+        {
+            return ObsSelection.NotRead(e.Message);
         }
     }
 
