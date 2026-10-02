@@ -25,36 +25,6 @@ public class SpectateSettings
 
     public TimeSpan EndScreenTime { get; set; }
 
-    /// <summary>OCR reads per tick when the clock jumps (1–5).</summary>
-    public int OcrConfirmReads { get; set; } = 3;
-
-    /// <summary>Reject an OCR clock that leaps more than this from the last accepted time.</summary>
-    public TimeSpan MaxTimerJump { get; set; } = TimeSpan.FromSeconds(8);
-
-    /// <summary>
-    /// After the core dies, consecutive OCR misses (timer hidden on end screens)
-    /// required before ending the session.
-    /// </summary>
-    public int MissingTimerReadsToEnd { get; set; } = 3;
-
-    /// <summary>
-    /// Read the fixed 2.55.17.98025 tick RVAs and use that as the match clock.
-    /// OCR is used when the read fails or the client build is different.
-    /// The dynamic page scan is separate (MemoryTimerEnabled, UseMemoryTimer).
-    /// </summary>
-    public bool StableMatchClockEnabled { get; set; }
-
-    /// <summary>
-    /// Scan HeroesOfTheStorm_x64 for a live match clock and log it next to HUD OCR.
-    /// A locked address is used only when the stable clock and OCR both miss.
-    /// </summary>
-    public bool MemoryTimerEnabled { get; set; }
-
-    /// <summary>
-    /// When the stable memory clock and OCR both miss, use a locked scan address.
-    /// OCR remains the fallback whenever that scan is missing or out of range.
-    /// </summary>
-    public bool UseMemoryTimer { get; set; }
     public TimeSpan PanelDownTime { get; set; }
     public TimeSpan TalentsPanelStartTime { get; set; }
     public TimeSpan TalentPanelHold { get; set; } = TimeSpan.FromSeconds(8);

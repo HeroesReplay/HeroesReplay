@@ -71,14 +71,17 @@ public class SessionMediaTests
     }
 
     [Fact]
-    public void ReplayId_WithoutRecordAndUpload_DoesNotRecordOrWriteEntry()
+    public void ReplayId_PlainReward_AlsoRecordsAndWritesEntry()
     {
+        // #165: both ReplayId rewards are uploaded. The plain reward keeps its flag.
         var obs = new OBSSettings { RecordingEnabled = false, RecordRequestedReplays = true };
         var youtube = new YouTubeSettings { Enabled = false, UploadRequestedReplays = true };
         var replay = ReplayIdLoaded(recordAndUpload: false);
 
-        Assert.False(SessionMedia.ShouldRecord(obs, replay));
-        Assert.False(SessionMedia.ShouldWriteYouTubeEntry(youtube, replay));
+        Assert.False(replay.RewardQueueItem.Request.RecordAndUpload);
+        Assert.True(SessionMedia.WantsRecording(replay));
+        Assert.True(SessionMedia.ShouldRecord(obs, replay));
+        Assert.True(SessionMedia.ShouldWriteYouTubeEntry(youtube, replay));
     }
 
     [Fact]

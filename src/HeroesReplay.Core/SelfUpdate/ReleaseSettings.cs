@@ -1,3 +1,5 @@
+using System;
+
 namespace HeroesReplay.Core.SelfUpdate;
 
 public class ReleaseSettings
@@ -15,4 +17,10 @@ public class ReleaseSettings
     public string AssetName { get; set; } = DefaultAssetName;
 
     public string SecretsPath { get; set; } = DefaultSecretsPath;
+
+    /// <summary>
+    /// How long <c>apply-release.ps1</c> gives a new install to be healthy
+    /// (<see cref="ReleaseHealth"/>) before it restores <c>.previous</c>.
+    /// </summary>
+    public TimeSpan HealthWindow { get; set; } = ReleaseHealth.DefaultWindow;
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
@@ -95,6 +96,12 @@ public sealed class ServiceHeartbeat : IDisposable
     /// <summary>The running role did one unit of its work. No-op outside a service role.</summary>
     public static void RecordWork() => Volatile.Read(ref current)?.Work();
 
+    /// <summary>
+    /// A spectate replay session ended. No-op outside a service role. See <see cref="Session"/>.
+    /// </summary>
+    public static void RecordSession(bool matchProgress, string outcome) =>
+        Volatile.Read(ref current)?.Session(matchProgress, outcome);
+
     /// <summary>The running role hit an error. No-op outside a service role.</summary>
     public static void RecordError(string message) => Volatile.Read(ref current)?.Error(message);
 
@@ -113,11 +120,42 @@ public sealed class ServiceHeartbeat : IDisposable
         stopRegistration = stop.Register(MarkStopping);
     }
 
+    /// <summary>Work also ends a run of spectate sessions without match progress.</summary>
     public void Work()
     {
         lock (gate)
         {
             report.LastSuccessfulWorkAt = time.GetUtcNow();
+            if (report.SessionsWithoutProgress != null)
+            {
+                report.SessionsWithoutProgress = 0;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A spectate replay session ended with <paramref name="outcome"/>. Match progress (the match
+    /// clock, or the award screen) is work and ends the run of sessions without it. Any other end
+    /// (a defer, a hold, a load timeout, a crash) is not work and adds one to that run. Every end
+    /// is also counted by outcome (<see cref="ServiceReadyReport.SessionOutcomes"/>).
+    /// </summary>
+    public void Session(bool matchProgress, string outcome)
+    {
+        lock (gate)
+        {
+            report.LastOutcome = string.IsNullOrWhiteSpace(outcome) ? null : outcome;
+            report.SessionOutcomes ??= new Dictionary<string, int>(StringComparer.Ordinal);
+            string key = report.LastOutcome ?? "None";
+            report.SessionOutcomes[key] = report.SessionOutcomes.GetValueOrDefault(key) + 1;
+            if (matchProgress)
+            {
+                report.LastSuccessfulWorkAt = time.GetUtcNow();
+                report.SessionsWithoutProgress = 0;
+            }
+            else
+            {
+                report.SessionsWithoutProgress = (report.SessionsWithoutProgress ?? 0) + 1;
+            }
         }
     }
 
@@ -186,6 +224,12 @@ public sealed class ServiceHeartbeat : IDisposable
                             Message = report.LastError.Message,
                             At = report.LastError.At,
                         },
+                SessionsWithoutProgress = report.SessionsWithoutProgress,
+                LastOutcome = report.LastOutcome,
+                SessionOutcomes =
+                    report.SessionOutcomes == null
+                        ? null
+                        : new Dictionary<string, int>(report.SessionOutcomes),
             };
         }
     }

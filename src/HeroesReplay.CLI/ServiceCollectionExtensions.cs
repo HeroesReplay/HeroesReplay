@@ -23,9 +23,7 @@ using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating;
 using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Clock;
-using HeroesReplay.Core.Spectating.Clock.Hybrid;
 using HeroesReplay.Core.Spectating.Clock.Memory;
-using HeroesReplay.Core.Spectating.Clock.Ocr;
 using HeroesReplay.Core.Spectating.Control;
 using HeroesReplay.Core.Spectating.Reports;
 using HeroesReplay.Core.Status;
@@ -359,7 +357,9 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton(new CancellationTokenProvider(token))
             .AddSingleton<SpectatorStatusStore>()
+            .AddSingleton<IRedemptionStatusClient, HelixRedemptionStatus>()
             .AddSingleton<IRedemptionCanceller, RedemptionCanceller>()
+            .AddSingleton<RedemptionFulfiller>()
             .AddSingleton<PredictionReportWriter>()
             .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>()
             .AddSingleton<StatusPredictionWatcher>()
@@ -451,10 +451,14 @@ public static class ServiceCollectionExtensions
                     _ => typeof(PrintWindowCapture),
                 }
             )
-            .AddSingleton<MatchTimerFilter>()
-            .AddSingleton<StableGameTimer>()
-            .AddSingleton<OcrGameTimer>()
-            .AddSingleton<IGameTimer, FallbackGameTimer>()
+            .AddSingleton(
+                typeof(IGameTimer),
+                settings.Capture.Method switch
+                {
+                    CaptureMethod.None => typeof(StubGameTimer),
+                    _ => typeof(StableGameTimer),
+                }
+            )
             .AddSingleton<GameTimerLog>()
             .AddSingleton(
                 typeof(IGameController),

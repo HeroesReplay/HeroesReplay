@@ -12,7 +12,6 @@ using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Clock;
-using HeroesReplay.Core.Spectating.Clock.Memory;
 using HeroesReplay.Core.Spectating.Control;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
@@ -39,8 +38,6 @@ public class Spectator : ISpectator
 
     private TimeSpan Timer { get; set; }
 
-    private readonly MemoryMatchClock memoryClock;
-
     private readonly IGameTimer gameTimer;
 
     private readonly GameTimerLog clockLog;
@@ -54,7 +51,7 @@ public class Spectator : ISpectator
     private DateTimeOffset lastAdvancedHudAt;
 
     private DateTimeOffset nextEndScreenProbe;
-    private DateTimeOffset lastOcrMissLog;
+    private DateTimeOffset lastClockMissLog;
 
     private bool endScreenSeen;
 
@@ -110,7 +107,6 @@ public class Spectator : ISpectator
             panelRequests ?? throw new ArgumentNullException(nameof(panelRequests));
         this.obsController =
             obsController ?? throw new ArgumentNullException(nameof(obsController));
-        memoryClock = new MemoryMatchClock(logger);
         this.gameTimer = gameTimer ?? throw new ArgumentNullException(nameof(gameTimer));
         this.clockLog = clockLog ?? throw new ArgumentNullException(nameof(clockLog));
         this.recordingClock =
@@ -147,6 +143,8 @@ public class Spectator : ISpectator
 
     public void RecordHold(ClientHoldReason hold)
     {
+        // A held session never reached the clock. Do not report the last match's clock as this one's.
+        matchClockSeen = false;
         outcome = MatchCompletion.FromHold(hold);
     }
 
@@ -168,7 +166,6 @@ public class Spectator : ISpectator
         outcome = MatchOutcome.None;
         completion.Reset();
         gameTimer.Reset();
-        memoryClock.Reset();
         endScreenStarted = null;
         lastAdvancedHud = TimeSpan.MinValue;
         lastAdvancedHudAt = default;
@@ -258,12 +255,11 @@ public class Spectator : ISpectator
                 GameTimerReading reading = await gameTimer
                     .ReadAsync(LinkedTokenSource.Token)
                     .ConfigureAwait(false);
-                reading = PreferLockedScan(reading);
                 clockLog.Write(sessionActivity, reading);
-                bool fromOcr = reading.Ok && reading.Time.HasValue;
+                bool clockRead = reading.Ok && reading.Time.HasValue;
 
-                bool clockAdvanced = fromOcr && reading.Time.Value > lastAdvancedHud;
-                if (fromOcr)
+                bool clockAdvanced = clockRead && reading.Time.Value > lastAdvancedHud;
+                if (clockRead)
                 {
                     matchClockSeen = true;
                     Timer = reading.Time.Value;
@@ -274,24 +270,20 @@ public class Spectator : ISpectator
                         lastAdvancedHudAt = DateTimeOffset.UtcNow;
                         ServiceHeartbeat.RecordWork();
                     }
-
-                    if (reading.Source != "memory")
-                    {
-                        ObserveMemoryTimer(reading.Time.Value);
-                    }
                 }
                 else if (State != State.TimerDetected)
                 {
-                    if (DateTimeOffset.UtcNow - lastOcrMissLog > TimeSpan.FromSeconds(10))
+                    if (DateTimeOffset.UtcNow - lastClockMissLog > TimeSpan.FromSeconds(10))
                     {
-                        lastOcrMissLog = DateTimeOffset.UtcNow;
-                        logger.LogWarning(
-                            "Timer OCR missed. No hero is selected until the HUD clock reads MM:SS."
+                        lastClockMissLog = DateTimeOffset.UtcNow;
+                        logger.LogInformation(
+                            "Match clock has not started ({ClockReason}). No hero is selected until the memory clock ticks.",
+                            reading.Reason
                         );
                     }
 
-                    // The award screen has no clock. A match can reach it without a single
-                    // MM:SS read if capture was denied, so look for MVP before the first lock.
+                    // The award screen has no running clock. A match can reach it without a
+                    // single clock read (an unsupported build), so look for MVP before the first lock.
                     if (
                         MatchRecording.ShouldStopLoading(
                             matchClockSeen,
@@ -316,13 +308,13 @@ public class Spectator : ISpectator
                     await ProbeEndScreenAsync().ConfigureAwait(false);
                 }
 
-                bool firstTimer = State != State.TimerDetected && fromOcr;
+                bool firstTimer = State != State.TimerDetected && clockRead;
                 State =
                     CancelSessionSource.IsCancellationRequested ? State.EndDetected
-                    : fromOcr || State == State.TimerDetected ? State.TimerDetected
+                    : clockRead || State == State.TimerDetected ? State.TimerDetected
                     : State.Loading;
 
-                if (fromOcr)
+                if (clockRead)
                 {
                     logger.LogInformation("{State}, HUD Time: {Timer}", State, Timer);
                     context.Current.Timer = Timer;
@@ -337,7 +329,7 @@ public class Spectator : ISpectator
                             "heroesreplay.timer.detected",
                             sessionActivity
                         );
-                        detected?.SetTag("timer.source", "ocr");
+                        detected?.SetTag("timer.source", reading.Source);
                         detected?.SetTag("timer.replay", Timer.ToString());
                         if (settings.OBS.Enabled)
                         {
@@ -388,7 +380,7 @@ public class Spectator : ISpectator
                     hungChecks = 0;
                 }
 
-                TryEndAfterCore(fromOcr);
+                TryEndAfterCore(clockRead);
 
                 PublishStatus();
 
@@ -458,77 +450,6 @@ public class Spectator : ISpectator
         );
     }
 
-    private GameTimerReading PreferLockedScan(GameTimerReading reading)
-    {
-        if (reading.Ok || !settings.Spectate.UseMemoryTimer || !memoryClock.IsLocked)
-        {
-            return reading;
-        }
-
-        if (memoryClock.LastRead is not TimeSpan ui)
-        {
-            return reading;
-        }
-
-        TimeSpan gates = Data?.GatesOpen ?? TimeSpan.Zero;
-        TimeSpan replayTime;
-        try
-        {
-            replayTime = ui + gates;
-        }
-        catch (OverflowException)
-        {
-            return reading;
-        }
-
-        if (replayTime < TimeSpan.FromMinutes(-3) || replayTime > TimeSpan.FromMinutes(90))
-        {
-            return reading;
-        }
-
-        return new GameTimerReading(true, "memory-scan", "locked", replayTime);
-    }
-
-    private void ObserveMemoryTimer(TimeSpan hudTime)
-    {
-        if (!settings.Spectate.MemoryTimerEnabled)
-        {
-            return;
-        }
-
-        Process process = controller.GetGameProcess();
-        if (process == null)
-        {
-            return;
-        }
-
-        // The on-screen clock starts at 0:00 when gates open. Replay time is that
-        // clock plus GatesOpen. The client stores the on-screen seconds.
-        TimeSpan gates = Data?.GatesOpen ?? TimeSpan.Zero;
-        TimeSpan uiTime = hudTime - gates;
-        if (uiTime < TimeSpan.Zero)
-        {
-            uiTime = hudTime;
-        }
-
-        memoryClock.Observe(process, uiTime);
-        if (memoryClock.LastRead != null || memoryClock.CandidateCount > 0)
-        {
-            TimeSpan? memoryReplay =
-                memoryClock.LastRead == null ? null : memoryClock.LastRead + gates;
-            logger.LogInformation(
-                "HUD {Hud} ui={Ui} memory={Memory} asReplay={MemoryReplay} locked={Locked} phase={Phase} candidates={Candidates}",
-                hudTime,
-                uiTime,
-                memoryClock.LastRead,
-                memoryReplay,
-                memoryClock.IsLocked,
-                memoryClock.Phase,
-                memoryClock.CandidateCount
-            );
-        }
-    }
-
     private async Task ProbeEndScreenAsync()
     {
         if (endScreenSeen || DateTimeOffset.UtcNow < nextEndScreenProbe)
@@ -559,7 +480,7 @@ public class Spectator : ISpectator
         }
     }
 
-    private void TryEndAfterCore(bool ocrTimerVisible)
+    private void TryEndAfterCore(bool clockRead)
     {
         if (Data?.CoreKilled <= TimeSpan.Zero)
         {
@@ -575,10 +496,7 @@ public class Spectator : ISpectator
             && lastAdvancedHudAt != default
             && DateTimeOffset.UtcNow - lastAdvancedHudAt >= TimeSpan.FromSeconds(90);
         bool pastCore =
-            Timer >= Data.CoreKilled
-            || (!ocrTimerVisible && nearCore)
-            || hudFrozen
-            || endScreenSeen;
+            Timer >= Data.CoreKilled || (!clockRead && nearCore) || hudFrozen || endScreenSeen;
 
         if (!pastCore)
         {
@@ -586,15 +504,15 @@ public class Spectator : ISpectator
             return;
         }
 
-        // HUD clock vanishing is the START of victory/MVP/votes, not the end.
+        // The match clock stopping is the START of victory/MVP/votes, not the end.
         endScreenStarted ??= DateTimeOffset.UtcNow;
         TimeSpan held = DateTimeOffset.UtcNow - endScreenStarted.Value;
         TimeSpan need = EndScreenHold.Duration(endScreenSeen, settings.Spectate.EndScreenTime);
 
-        if (ocrTimerVisible)
+        if (clockRead)
         {
             logger.LogDebug(
-                "Past core {CoreKilled}; clock still visible at {Timer}, held {Held}.",
+                "Past core {CoreKilled}; clock still running at {Timer}, held {Held}.",
                 Data.CoreKilled,
                 Timer,
                 held
@@ -604,12 +522,12 @@ public class Spectator : ISpectator
         if (held >= need)
         {
             logger.LogInformation(
-                "Ending session after {Held} of end screen (core {CoreKilled}, tracker {TrackerEnd}, timer {Timer}, clockVisible={ClockVisible}).",
+                "Ending session after {Held} of end screen (core {CoreKilled}, tracker {TrackerEnd}, timer {Timer}, clockRunning={ClockRunning}).",
                 held,
                 Data.CoreKilled,
                 Data.SessionEnd,
                 Timer,
-                ocrTimerVisible
+                clockRead
             );
             EndSession(matchClockSeen ? MatchOutcome.VerifiedCompleted : MatchOutcome.Canceled);
         }

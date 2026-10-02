@@ -94,6 +94,7 @@ public class GameManager : IGameManager
             );
         }
 
+        LinkRequest(loadedReplay);
         MediaRetention.SweepAndLog(settings, logger);
         await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
         MediaPolicySnapshot preLaunch = await mediaPolicy
@@ -108,23 +109,7 @@ public class GameManager : IGameManager
         await contextSetter.SetContextAsync(loadedReplay);
         bool obsSession = false;
         bool enteredMatch = false;
-        statusStore.Patch(status =>
-        {
-            status.SpectatorRunning = true;
-            status.Phase = "Loading";
-            status.Map = EnglishMapNames.Prefer(
-                loadedReplay?.HeroesProfileReplay?.Map,
-                loadedReplay?.Replay?.Map,
-                loadedReplay?.Replay?.MapAlternativeName
-            );
-            status.ReplayPath = loadedReplay?.FileInfo?.FullName;
-            status.ReplayVersion = loadedReplay?.Replay?.ReplayVersion;
-            status.ReplayId = loadedReplay?.ReplayId;
-            status.Outcome = null;
-            status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(loadedReplay);
-            status.GatesOpen = context.Current?.GatesOpen.ToString();
-            status.CoreKilled = context.Current?.CoreKilled.ToString();
-        });
+        statusStore.Patch(status => ShowLoading(status, loadedReplay, context.Current));
 
         try
         {
@@ -267,7 +252,8 @@ public class GameManager : IGameManager
                 }
                 else
                 {
-                    UnpublishRecording(loadedReplay, stopped, allowsMedia);
+                    await UnpublishRecordingAsync(loadedReplay, stopped, allowsMedia)
+                        .ConfigureAwait(false);
                 }
             }
 
@@ -350,6 +336,57 @@ public class GameManager : IGameManager
 
     public MatchOutcome LastOutcome => spectator.Outcome;
 
+    /// <summary>
+    /// The status the Twitch process reads while the replay loads. A viewer-entered replay id
+    /// turns predictions off for the whole session (#166).
+    /// </summary>
+    internal static void ShowLoading(
+        SpectatorStatus status,
+        LoadedReplay loadedReplay,
+        ContextData current
+    )
+    {
+        status.SpectatorRunning = true;
+        status.Phase = "Loading";
+        status.Map = EnglishMapNames.Prefer(
+            loadedReplay?.HeroesProfileReplay?.Map,
+            loadedReplay?.Replay?.Map,
+            loadedReplay?.Replay?.MapAlternativeName
+        );
+        status.ReplayPath = loadedReplay?.FileInfo?.FullName;
+        status.ReplayVersion = loadedReplay?.Replay?.ReplayVersion;
+        status.ReplayId = loadedReplay?.ReplayId;
+        status.Outcome = null;
+        status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(loadedReplay);
+        status.GatesOpen = current?.GatesOpen.ToString();
+        status.CoreKilled = current?.CoreKilled.ToString();
+    }
+
+    /// <summary>
+    /// Every path that hands a replay to the session (the cache, the report preload, a requeue,
+    /// a connectivity resume) is linked to its request here, by replay id (#165).
+    /// </summary>
+    private void LinkRequest(LoadedReplay loadedReplay)
+    {
+        string requests =
+            string.IsNullOrWhiteSpace(settings.Location?.DataDirectory)
+            || string.IsNullOrWhiteSpace(settings.HeroesProfileApi?.RequestsCacheDirectoryName)
+                ? null
+                : settings.RequestedReplayCachePath;
+        if (CachedRequestReward.Attach(loadedReplay, requests))
+        {
+            logger.LogInformation(
+                "Replay {ReplayId} is the request of {Login} ({Reward}, redemption {RedemptionId}).",
+                loadedReplay.ReplayId,
+                loadedReplay.RewardQueueItem.Request.Login,
+                loadedReplay.RewardQueueItem.Request.RewardTitle,
+                loadedReplay.RewardQueueItem.Request.RedemptionId
+            );
+        }
+    }
+
+    public bool LastMatchClockSeen => spectator.MatchClockSeen;
+
     public void ReleaseClientAfterDefer()
     {
         logger.LogWarning(
@@ -419,26 +456,62 @@ public class GameManager : IGameManager
         return new DiskBacklogInput { FreeBytes = free, PendingUploadBytes = pending };
     }
 
+    /// <summary>
+    /// A verified match is written for twitch connect, which marks the redemption FULFILLED.
+    /// Any other outcome leaves it UNFULFILLED: the replay stays queued and plays again (#169).
+    /// </summary>
     private void RecordRedemption(LoadedReplay loaded, MatchOutcome outcome)
     {
-        Guid redemptionId = loaded?.RewardQueueItem?.Request?.RedemptionId ?? Guid.Empty;
+        RewardRequest request = loaded?.RewardQueueItem?.Request;
+        Guid redemptionId = request?.RedemptionId ?? Guid.Empty;
         RedemptionEnd end = RedemptionDisposition.Decide(
             redemptionId != Guid.Empty,
             outcome == MatchOutcome.VerifiedCompleted
         );
-        if (end == RedemptionEnd.None || settings.Location?.DataDirectory == null)
+        if (end == RedemptionEnd.None)
+        {
+            if (redemptionId != Guid.Empty)
+            {
+                logger.LogInformation(
+                    "Redemption {RedemptionId} for replay {ReplayId} stays UNFULFILLED ({Outcome}). The replay stays queued.",
+                    redemptionId,
+                    loaded.ReplayId,
+                    outcome
+                );
+            }
+
+            return;
+        }
+
+        if (settings.Location?.DataDirectory == null)
         {
             return;
         }
 
-        string status = RewardRedemptionStatus.Decide(RewardRedemptionStatus.FromOutcome(outcome));
-        string path = Path.Combine(settings.Location.DataDirectory, "redemption-dispositions.txt");
-        RedemptionDispositionLog.Append(path, loaded.ReplayId, redemptionId, end);
+        string path = Path.Combine(
+            settings.Location.DataDirectory,
+            RedemptionDispositionLog.FileName
+        );
+        try
+        {
+            RedemptionDispositionLog.Append(path, loaded.ReplayId, request, end);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not record redemption {RedemptionId} for replay {ReplayId}.",
+                redemptionId,
+                loaded.ReplayId
+            );
+            return;
+        }
+
         logger.LogInformation(
-            "Redemption {RedemptionId} for replay {ReplayId} is {Status}. Twitch was not called.",
+            "Redemption {RedemptionId} for replay {ReplayId} is {Status}. twitch connect sends it to Twitch.",
             redemptionId,
             loaded.ReplayId,
-            status
+            RewardRedemptionStatus.Decide(RewardRedemptionStatus.FromOutcome(outcome))
         );
     }
 
@@ -582,7 +655,9 @@ public class GameManager : IGameManager
                 return NextMatchLaunch.NotStarted;
             }
 
-            TimeSpan? matchClock = gameController.TryReadMatchClock();
+            TimeSpan? matchClock = await gameController
+                .TryReadRunningMatchClockAsync()
+                .ConfigureAwait(false);
             if (ReportHandoff.ShouldCutReport(mapLoading: false, matchClock))
             {
                 logger.LogInformation(
@@ -617,7 +692,7 @@ public class GameManager : IGameManager
             if (ReportHandoff.ShouldCutReport(mapLoading, matchClock))
             {
                 logger.LogInformation(
-                    "Next replay {ReplayId} is on the map loading screen or the on-screen timer. The report stops so OBS shows the game.",
+                    "Next replay {ReplayId} is on the map loading screen or its match clock is running. The report stops so OBS shows the game.",
                     next.ReplayId
                 );
                 cutReport.Cancel();
@@ -854,7 +929,7 @@ public class GameManager : IGameManager
         if (!MatchRecording.ShouldStart(recordingClock.IsRunning, presented))
         {
             logger.LogInformation(
-                "OBS recording for replay {ReplayId} waits until the loading screen or the match clock is visible.",
+                "OBS recording for replay {ReplayId} waits until the loading screen is visible or the match clock is running.",
                 loadedReplay?.ReplayId
             );
             return;
@@ -876,7 +951,7 @@ public class GameManager : IGameManager
         recordingClock.Start();
     }
 
-    private void UnpublishRecording(
+    private async Task UnpublishRecordingAsync(
         LoadedReplay loadedReplay,
         ObsRecordingResult stopped,
         bool allowsMedia
@@ -901,7 +976,9 @@ public class GameManager : IGameManager
             ? "youtube-entry.json"
             : settings.YouTube.EntryFileName;
         bool removedEntry = TryDelete(Path.Combine(directory, entryName));
-        bool removedFile = TryDelete(RecordingOwnership.FileToDiscard(stopped, allowsMedia));
+        bool removedFile = await RecordingDiscard
+            .DeleteAsync(RecordingOwnership.FileToDiscard(stopped, allowsMedia), logger)
+            .ConfigureAwait(false);
         if (
             !removedEntry
             && !removedFile

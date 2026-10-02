@@ -15,8 +15,8 @@ public static class SessionMedia
         replay?.RewardQueueItem?.Request != null;
 
     /// <summary>
-    /// ReplayId (500) spectates only. ReplayId + YouTube (1000) records and writes
-    /// youtube-entry.json. Other Twitch requests still record when requested.
+    /// Both ReplayId rewards ("ReplayId" and "ReplayId + YouTube") record and write
+    /// youtube-entry.json (#165). Other Twitch requests still record when requested.
     /// </summary>
     public static bool WantsRecording(LoadedReplay replay)
     {
@@ -28,7 +28,7 @@ public static class SessionMedia
 
         if (request.ReplayId.HasValue)
         {
-            return request.RecordAndUpload;
+            return ReplayRequestKind.RecordsAndUploads(request);
         }
 
         return true;

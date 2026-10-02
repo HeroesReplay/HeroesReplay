@@ -76,6 +76,75 @@ public sealed class YouTubeQuotaUnitsTests : IDisposable
     }
 
     [Fact]
+    public void UploadsResumeAt_IsTheNextPacificMidnightNotNull()
+    {
+        // #161: "uploads paused until (null)" when the units, not a quota response, held it.
+        var units = new YouTubeQuotaUnits(directory, settings);
+        Assert.Null(units.UploadsResumeAt(units.Read(LateInDay), LateInDay));
+
+        for (int i = 0; i < 6; i++)
+        {
+            units.SpendUpload(YouTubeQuotaUnits.VideoInsert, LateInDay);
+        }
+
+        YouTubeQuotaDay spent = units.Read(LateInDay);
+        Assert.Equal(9600, spent.Total);
+        Assert.Null(spent.UploadsPausedUntil);
+        Assert.Equal(
+            new DateTimeOffset(2026, 10, 3, 7, 0, 0, TimeSpan.Zero),
+            units.UploadsResumeAt(spent, LateInDay)
+        );
+
+        var paused = new YouTubeQuotaUnits(Path.Combine(directory, "paused"), settings);
+        DateTimeOffset until = LateInDay.AddHours(3);
+        paused.PauseUploads(until, LateInDay);
+        Assert.Equal(until, paused.UploadsResumeAt(paused.Read(LateInDay), LateInDay));
+    }
+
+    [Fact]
+    public void NextQuotaDay_FollowsPacificDaylightSaving()
+    {
+        Assert.Equal(
+            new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero),
+            YouTubeQuotaUnits.NextQuotaDay(new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero))
+        );
+        Assert.Equal(
+            new DateTimeOffset(2027, 3, 15, 7, 0, 0, TimeSpan.Zero),
+            YouTubeQuotaUnits.NextQuotaDay(new DateTimeOffset(2027, 3, 14, 12, 0, 0, TimeSpan.Zero))
+        );
+        Assert.Equal(
+            new DateTimeOffset(2026, 10, 4, 7, 0, 0, TimeSpan.Zero),
+            YouTubeQuotaUnits.NextQuotaDay(NextDay)
+        );
+    }
+
+    [Fact]
+    public void MayUpload_LeavesTheLastInsertsToWaitingRequests()
+    {
+        var units = new YouTubeQuotaUnits(directory, settings);
+        for (int i = 0; i < 4; i++)
+        {
+            units.SpendUpload(YouTubeQuotaUnits.VideoInsert, LateInDay);
+        }
+
+        YouTubeQuotaDay twoLeft = units.Read(LateInDay);
+        Assert.Equal(2, units.InsertsLeft(twoLeft));
+        Assert.True(units.MayUpload(twoLeft, LateInDay, requested: false, requestsWaiting: 1));
+        Assert.False(units.MayUpload(twoLeft, LateInDay, requested: false, requestsWaiting: 2));
+
+        units.SpendUpload(YouTubeQuotaUnits.VideoInsert, LateInDay);
+        YouTubeQuotaDay oneLeft = units.Read(LateInDay);
+        Assert.False(units.MayUpload(oneLeft, LateInDay, requested: false, requestsWaiting: 1));
+        Assert.True(units.MayUpload(oneLeft, LateInDay, requested: true, requestsWaiting: 1));
+        Assert.True(units.MayUpload(oneLeft, LateInDay, requested: false, requestsWaiting: 0));
+
+        units.SpendUpload(YouTubeQuotaUnits.VideoInsert, LateInDay);
+        Assert.False(
+            units.MayUpload(units.Read(LateInDay), LateInDay, requested: true, requestsWaiting: 0)
+        );
+    }
+
+    [Fact]
     public void Library_StopsAtItsDailyUnits()
     {
         var units = new YouTubeQuotaUnits(directory, settings);

@@ -17,6 +17,7 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
 {
     private readonly ILogger<ReleaseUpdateGate> logger;
     private readonly AppSettings settings;
+    private string loggedSkip;
 
     public ReleaseUpdateGate(ILogger<ReleaseUpdateGate> logger, AppSettings settings)
     {
@@ -59,9 +60,23 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
             );
             string json = await http.GetStringAsync(latestUrl, cancellationToken)
                 .ConfigureAwait(false);
-            ReleaseOffer? offer = GitHubReleaseJson.Read(json, assetName, local);
+            ReleaseOffer? offer = Pick(
+                GitHubReleaseJson.Read(json, assetName, local),
+                ReleaseSkipList.Load(),
+                out string skipped
+            );
             if (offer is not ReleaseOffer found)
             {
+                if (skipped != null && skipped != loggedSkip)
+                {
+                    loggedSkip = skipped;
+                    logger.LogWarning(
+                        "Release {Version} failed its health gate on this machine and was rolled back, so it is not installed again. Remove it from {SkipList} to allow it.",
+                        skipped,
+                        ReleaseSkipList.DefaultPath
+                    );
+                }
+
                 return false;
             }
 
@@ -106,7 +121,8 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
                 Path.Combine(install, "appsettings.json"),
                 Path.Combine(prepared, "appsettings.json")
             );
-            StartHelper(install, prepared);
+            // The stop file ends the supervisor too. Tell the helper so the restart is supervised again.
+            StartHelper(install, prepared, found.Version, ServiceSupervisorFile.IsRunning());
             ServiceStopFile.Request();
             logger.LogInformation(
                 "Release {Version} is staged. Services will stop and the new build will start.",
@@ -121,7 +137,47 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
         }
     }
 
-    private static void StartHelper(string install, string prepared)
+    /// <summary>
+    /// The offer, unless this machine rolled that tag back. Then null, and
+    /// <paramref name="skipped"/> names it.
+    /// </summary>
+    public static ReleaseOffer? Pick(
+        ReleaseOffer? offer,
+        ReleaseSkipList skipList,
+        out string skipped
+    )
+    {
+        skipped = null;
+        if (offer is ReleaseOffer found && skipList?.Contains(found.Version) == true)
+        {
+            skipped = found.Version;
+            return null;
+        }
+
+        return offer;
+    }
+
+    /// <summary>
+    /// The helper's command line. <paramref name="supervised"/> passes <c>-Supervise</c>, so the
+    /// stack comes back under a supervisor after the install or a rollback.
+    /// </summary>
+    public static string HelperArguments(
+        string script,
+        string install,
+        string prepared,
+        int waitForPid,
+        string version,
+        bool supervised
+    ) =>
+        $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -InstallDir \"{install}\" -StagingDir \"{prepared}\" -WaitForPid {waitForPid} -Version \"{version}\""
+        + (supervised ? " -Supervise" : string.Empty);
+
+    private static void StartHelper(
+        string install,
+        string prepared,
+        string version,
+        bool supervised
+    )
     {
         string script = Path.Combine(prepared, "apply-release.ps1");
         if (!File.Exists(script))
@@ -137,8 +193,14 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
         var start = new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments =
-                $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -InstallDir \"{install}\" -StagingDir \"{prepared}\" -WaitForPid {Environment.ProcessId}",
+            Arguments = HelperArguments(
+                script,
+                install,
+                prepared,
+                Environment.ProcessId,
+                version,
+                supervised
+            ),
             UseShellExecute = true,
             WindowStyle = ProcessWindowStyle.Hidden,
         };

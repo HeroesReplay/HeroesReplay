@@ -23,20 +23,18 @@ jobs:
           versionSpec: 6.8.x
       - id: gitversion
         uses: gittools/actions/gitversion/execute@v4.7.0
-      - name: Test
-        run: dotnet test heroes-replay.slnx --nologo
-      - name: Publish
+      - name: Build
+        run: dotnet build heroes-replay.slnx -c Release --nologo
+      - name: Unit tests
+        run: dotnet test heroes-replay.slnx -c Release --no-build --nologo -p:TestCategory=Unit
+      - name: Smoke tests
+        run: dotnet test heroes-replay.slnx -c Release --no-build --nologo -p:TestCategory=Smoke
+      - name: Package release zip
         shell: pwsh
-        run: |
-          $out = Join-Path $env:RUNNER_TEMP 'heroesreplay-publish'
-          dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c Release -r win-x64 --self-contained false -o $out
-          New-Item -ItemType Directory -Force -Path (Join-Path $out 'obs\Default') | Out-Null
-          Copy-Item obs/Default.json (Join-Path $out 'obs\Default.json')
-          Copy-Item obs/Default/basic.ini (Join-Path $out 'obs\Default\basic.ini')
-          Remove-Item (Join-Path $out 'appsettings.secrets.json') -ErrorAction SilentlyContinue
-          Get-ChildItem $out -Recurse -Filter service.json | Remove-Item -Force
-          Set-Content -Path (Join-Path $out 'version.txt') -Value 'v${{ steps.gitversion.outputs.semVer }}' -NoNewline
-          Compress-Archive -Path (Join-Path $out '*') -DestinationPath heroesreplay-win-x64.zip
+        run: pwsh -NoProfile -File tools/package-release.ps1 -OutputPath heroesreplay-win-x64.zip -Version 'v${{ steps.gitversion.outputs.semVer }}' -Configuration Release
+      - name: Verify release zip
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/verify-release.ps1 -ZipPath heroesreplay-win-x64.zip -Version 'v${{ steps.gitversion.outputs.semVer }}'
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.gitversion.outputs.semVer }}

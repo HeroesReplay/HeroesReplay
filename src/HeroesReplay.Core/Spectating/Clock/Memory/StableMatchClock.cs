@@ -22,11 +22,13 @@ internal readonly record struct StableClockModule(
 
 /// <summary>
 /// Read-only match clock. Pattern discovery runs once per process module on every client build.
-/// Fixed 98025 RVAs are only a candidate; a failed check stays unlocked so OCR can take over.
+/// Fixed 98025 RVAs are only a candidate; a failed check stays unlocked and reports no clock.
+/// This is the only match clock. The HUD timer is never cropped or OCR'd.
 /// </summary>
 public sealed class StableMatchClock : IDisposable
 {
     private const double MaxCoherentStepSeconds = 8;
+    private static readonly TimeSpan RediscoverAfter = TimeSpan.FromSeconds(10);
 
     private IntPtr handle;
     private int attachedPid;
@@ -44,6 +46,7 @@ public sealed class StableMatchClock : IDisposable
     private float lastScale;
     private double lastOkSeconds = double.NaN;
     private DateTimeOffset lastOkChange;
+    private DateTimeOffset rediscoverAt;
     private string attachReason = "no-process";
     private ClockTelemetryReport lastReport;
     private int telemetryEmissions;
@@ -101,7 +104,7 @@ public sealed class StableMatchClock : IDisposable
         }
 
         UseModule(module);
-        if (!discovered)
+        if (!discovered || (tickRva == 0 && UtcNow() >= rediscoverAt))
         {
             ReportTelemetry(attachReason);
             Discover(read);
@@ -128,7 +131,7 @@ public sealed class StableMatchClock : IDisposable
             return Finish(new StableClockSample(false, "bad-scale", ticks, speed, seconds));
         }
 
-        // Zero is also the menu. Leave that second to OCR so a dead read cannot freeze the clock.
+        // Zero is also the menu and the loading screen, so it is not a started match.
         if (Math.Abs(seconds) < 0.5)
         {
             return Finish(new StableClockSample(false, "near-zero", ticks, speed, seconds));
@@ -137,6 +140,13 @@ public sealed class StableMatchClock : IDisposable
         if (!located && !TryConfirm(ticks, speed, seconds, out string reason))
         {
             return Finish(new StableClockSample(false, reason, ticks, speed, seconds));
+        }
+
+        // A clock that went back is a new match in the same client, not a frozen cell. Without
+        // this, the previous match's last second stayed the baseline and every read was stalled.
+        if (StartedOver(lastOkSeconds, seconds))
+        {
+            BeginMatch();
         }
 
         if (SameCellIsStale(lastOkSeconds, seconds, lastOkChange, UtcNow()))
@@ -177,7 +187,36 @@ public sealed class StableMatchClock : IDisposable
     }
 
     /// <summary>
-    /// A locked cell that stops moving is not the HUD. OCR has to read the screen.
+    /// Forgets the stall baseline for a new replay. The located clock address is kept.
+    /// </summary>
+    public void BeginMatch()
+    {
+        lastOkSeconds = double.NaN;
+        lastOkChange = default;
+    }
+
+    /// <summary>
+    /// Gap between the two reads that prove the clock is moving. The clock counts ticks / 4096
+    /// per second, so a running match is about a quarter second ahead on the second read.
+    /// </summary>
+    public static readonly TimeSpan RunningProbe = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// A match is running only when both reads succeed and the second is ahead of the first.
+    /// The menu's zero does not read, and a frozen clock from the last match does not move.
+    /// </summary>
+    public static bool IsRunning(TimeSpan? first, TimeSpan? second)
+    {
+        return first.HasValue && second.HasValue && second.Value > first.Value;
+    }
+
+    public static bool StartedOver(double previousSeconds, double seconds)
+    {
+        return !double.IsNaN(previousSeconds) && seconds < previousSeconds - 5;
+    }
+
+    /// <summary>
+    /// A locked cell that stops moving is not a running match: it is paused, over, or not the clock.
     /// </summary>
     public static bool SameCellIsStale(
         double previousSeconds,
@@ -225,6 +264,7 @@ public sealed class StableMatchClock : IDisposable
         moduleSize = module.Size;
         version = fileVersion;
         discovered = false;
+        rediscoverAt = default;
         located = false;
         lastReport = default;
         DiscoveryTelemetry = default;
@@ -233,11 +273,14 @@ public sealed class StableMatchClock : IDisposable
         hasSample = false;
         lastTicks = 0;
         lastScale = 0;
+        BeginMatch();
     }
 
     private void Discover(Func<long, byte[], bool> read)
     {
         discovered = true;
+        // A client still unpacking its code has no pattern yet. A miss is scanned again later.
+        rediscoverAt = UtcNow() + RediscoverAfter;
         located = false;
         tickRva = 0;
         speedRva = 0;
@@ -532,6 +575,7 @@ public sealed class StableMatchClock : IDisposable
         tickRva = 0;
         speedRva = 0;
         discovered = false;
+        rediscoverAt = default;
         located = false;
         hasSample = false;
         lastTicks = 0;

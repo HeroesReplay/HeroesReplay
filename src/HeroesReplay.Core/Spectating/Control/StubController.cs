@@ -1,25 +1,23 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Replays;
-using HeroesReplay.Core.Replays.Context;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Spectating.Control;
 
+/// <summary>
+/// Headless controller for Capture:Method None. Its clock is <see cref="Clock.StubGameTimer"/>.
+/// </summary>
 public sealed class StubController : IGameController
 {
     private readonly ILogger<StubController> logger;
-    private readonly IReplayContext context;
-    private readonly Queue<TimeSpan?> timers = new();
 
-    public StubController(ILogger<StubController> logger, IReplayContext context)
+    public StubController(ILogger<StubController> logger)
     {
         this.logger = logger;
-        this.context = context;
     }
 
     public void Kill() { }
@@ -41,20 +39,7 @@ public sealed class StubController : IGameController
 
     public Task<bool> OpenReplayFromHomeScreenAsync(string replayPath) => Task.FromResult(false);
 
-    public Task<ClientHoldReason> LaunchAsync()
-    {
-        int duration = Math.Max(
-            1,
-            (int)context.Current.LoadedReplay.Replay.ReplayLength.TotalSeconds
-        );
-        timers.Clear();
-        for (int second = 0; second <= duration; second++)
-        {
-            timers.Enqueue(TimeSpan.FromSeconds(second));
-        }
-
-        return Task.FromResult(ClientHoldReason.None);
-    }
+    public Task<ClientHoldReason> LaunchAsync() => Task.FromResult(ClientHoldReason.None);
 
     public void SendFocus(int player) => logger.LogInformation("Selected player {Player}", player);
 
@@ -64,17 +49,7 @@ public sealed class StubController : IGameController
 
     public Task<bool> IsReplayPresentedAsync(LoadedReplay replay) => Task.FromResult(false);
 
-    public TimeSpan? TryReadMatchClock() => null;
-
-    public Task<TimeSpan?> TryGetTimerAsync()
-    {
-        if (timers.Count == 0)
-        {
-            return Task.FromResult<TimeSpan?>(null);
-        }
-
-        return Task.FromResult(timers.Dequeue());
-    }
+    public Task<TimeSpan?> TryReadRunningMatchClockAsync() => Task.FromResult<TimeSpan?>(null);
 
     public Task<bool> TrySeeEndScreenAsync(bool nearCore) => Task.FromResult(false);
 }

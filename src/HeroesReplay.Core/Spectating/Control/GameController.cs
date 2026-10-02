@@ -18,7 +18,6 @@ using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Clock.Memory;
-using HeroesReplay.Core.Spectating.Clock.Ocr;
 using HeroesReplay.Core.Spectating.Session;
 using Microsoft.Extensions.Logging;
 using Windows.Graphics.Imaging;
@@ -42,8 +41,9 @@ public class GameController : IGameController
 
     private readonly object controllerLock = new object();
     private readonly StableMatchClock matchClock = new();
+    private readonly LoadingScreenMemory loadingScreen = new();
+    private LoadingScreenSample lastScreen;
     private Process cachedProcess;
-    private string lastRejectedTimer;
     private bool replayFileOpened;
     private string openedReplayPath;
     private ReplayClientPatch launchPatch = ReplayClientPatch.Current;
@@ -576,11 +576,15 @@ public class GameController : IGameController
                 continue;
             }
 
-            bool loading = searchTerms.Any(word =>
-                !string.IsNullOrWhiteSpace(word)
-                && text.Contains(word, StringComparison.OrdinalIgnoreCase)
-            );
-            bool timer = await IsReplay().ConfigureAwait(false);
+            // Memory decides the map loading screen. The OCR'd words only count when it cannot.
+            bool? memoryLoading = IsMapLoadingInMemory();
+            bool loading =
+                memoryLoading
+                ?? searchTerms.Any(word =>
+                    !string.IsNullOrWhiteSpace(word)
+                    && text.Contains(word, StringComparison.OrdinalIgnoreCase)
+                );
+            bool timer = await IsMatchClockRunning().ConfigureAwait(false);
             if (!recoveredLogin && !loading && !timer && ClientScreenText.IsLoginForm(text))
             {
                 recoveredLogin = true;
@@ -613,7 +617,7 @@ public class GameController : IGameController
                 WordScan homeScan = await ScanPrimaryAsync(settings.OCR.HomeScreenText)
                     .ConfigureAwait(false);
                 laterText = homeScan.Text;
-                home = homeScan.Found;
+                home = SeesHome(homeScan);
             }
 
             if (await HoldForGameDataDownloadAsync(text, laterText).ConfigureAwait(false))
@@ -622,7 +626,8 @@ public class GameController : IGameController
             }
 
             bool laterLoading =
-                !string.IsNullOrWhiteSpace(laterText)
+                memoryLoading == null
+                && !string.IsNullOrWhiteSpace(laterText)
                 && searchTerms.Any(word =>
                     !string.IsNullOrWhiteSpace(word)
                     && laterText.Contains(word, StringComparison.OrdinalIgnoreCase)
@@ -809,13 +814,15 @@ public class GameController : IGameController
                 )
             )
             {
-                ShowGameScene("loading screen");
+                ShowGameScene(
+                    memoryLoading == true ? "loading screen in memory" : "loading screen"
+                );
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
             if (!oweAhliObs && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, timer))
             {
-                ShowGameScene("timer visible");
+                ShowGameScene("match clock running");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
@@ -1281,7 +1288,68 @@ public class GameController : IGameController
         obsController.SwapToGameScene();
     }
 
-    public TimeSpan? TryReadMatchClock()
+    /// <summary>
+    /// The memory clock, only while it moves. The menu reads zero, and the last match's clock
+    /// can sit frozen until the next one starts, so one read is not a running match.
+    /// </summary>
+    public async Task<TimeSpan?> TryReadRunningMatchClockAsync()
+    {
+        TimeSpan? first = TryReadMatchClock();
+        if (first == null)
+        {
+            return null;
+        }
+
+        await Task.Delay(StableMatchClock.RunningProbe).ConfigureAwait(false);
+        TimeSpan? second = TryReadMatchClock();
+        return StableMatchClock.IsRunning(first, second) ? second : null;
+    }
+
+    /// <summary>
+    /// The map loading screen from memory, or null when memory cannot tell: an unsupported
+    /// build, or the boot splash before this client's first menu. Null reads the screen.
+    /// </summary>
+    private bool? IsMapLoadingInMemory() => ReadScreenInMemory()?.MapLoading;
+
+    /// <summary>
+    /// Home is memory first (<see cref="HomeScreenCue"/>). OCR's words decide only when memory
+    /// cannot tell, and its text still vetoes a login form.
+    /// </summary>
+    private bool SeesHome(WordScan scan) =>
+        HomeScreenCue.Sees(ReadScreenInMemory()?.OnMenu, scan.Found, scan.Text);
+
+    private LoadingScreenSample? ReadScreenInMemory()
+    {
+        Process process = GetGameProcess();
+        if (process == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            LoadingScreenSample sample = loadingScreen.Read(process);
+            if (sample.Screen != lastScreen.Screen || sample.MenuSeen != lastScreen.MenuSeen)
+            {
+                logger.LogInformation(
+                    "Client screen in memory is {Screen} ({Reason}, menu seen {MenuSeen}).",
+                    sample.Screen,
+                    sample.Reason,
+                    sample.MenuSeen
+                );
+                lastScreen = sample;
+            }
+
+            return sample;
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not read the client screen from memory.");
+            return null;
+        }
+    }
+
+    private TimeSpan? TryReadMatchClock()
     {
         Process process = GetGameProcess();
         if (process == null)
@@ -1305,36 +1373,6 @@ public class GameController : IGameController
         }
     }
 
-    public async Task<TimeSpan?> TryGetTimerAsync()
-    {
-        try
-        {
-            using (Bitmap timerBitmap = GetNegativeOffsetTimer())
-            {
-                if (timerBitmap == null)
-                    return null;
-
-                if (settings.Capture.SaveTimerRegion)
-                {
-                    timerBitmap.Save(
-                        Path.Combine(
-                            settings.CapturesPath,
-                            "timer-" + Guid.NewGuid().ToString() + ".bmp"
-                        )
-                    );
-                }
-
-                return await ConvertBitmapTimerToTimeSpan(timerBitmap).ConfigureAwait(false);
-            }
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Could not get timer from bitmap");
-        }
-
-        return null;
-    }
-
     public async Task<bool> IsReplayPresentedAsync(LoadedReplay replay)
     {
         if (!IsLaunched())
@@ -1342,24 +1380,28 @@ public class GameController : IGameController
             return false;
         }
 
-        var parsed = replay?.Replay;
-        string text = await ReadWindowTextAsync().ConfigureAwait(false);
-        if (
-            ReplayLoadCue.SeesLoadingScreen(
-                text,
-                parsed?.Map,
-                parsed?.MapAlternativeName,
-                parsed?.Players?.Select(player => player.Name),
-                parsed?.Players?.Select(player => player.Character),
-                settings.OCR.LoadingScreenText
-            )
-        )
+        // The match clock is memory only. The loading screen is memory first; OCR reads
+        // "WELCOME TO" only when memory cannot tell.
+        if ((await TryReadRunningMatchClockAsync().ConfigureAwait(false)).HasValue)
         {
             return true;
         }
 
-        // HUD crop only. The memory clock stays unused until the map and this timer are on screen.
-        return (await TryGetTimerAsync().ConfigureAwait(false)).HasValue;
+        if (IsMapLoadingInMemory() is bool loading)
+        {
+            return loading;
+        }
+
+        var parsed = replay?.Replay;
+        string text = await ReadWindowTextAsync().ConfigureAwait(false);
+        return ReplayLoadCue.SeesLoadingScreen(
+            text,
+            parsed?.Map,
+            parsed?.MapAlternativeName,
+            parsed?.Players?.Select(player => player.Name),
+            parsed?.Players?.Select(player => player.Character),
+            settings.OCR.LoadingScreenText
+        );
     }
 
     public async Task<bool> TrySeeEndScreenAsync(bool nearCore)
@@ -1404,64 +1446,6 @@ public class GameController : IGameController
         }
     }
 
-    private async Task<TimeSpan?> ConvertBitmapTimerToTimeSpan(Bitmap bitmap)
-    {
-        using (Bitmap resized = bitmap.GetResized(zoom: 4))
-        {
-            using (
-                SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized)
-                    .ConfigureAwait(false)
-            )
-            {
-                OcrResult ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap);
-                TimeSpan? timer = TryParseTimeSpan(ocrResult.Text);
-
-                if (timer.HasValue)
-                    return timer;
-
-                try
-                {
-                    Directory.CreateDirectory(settings.CapturesPath);
-                    resized.Save(
-                        Path.Combine(settings.CapturesPath, "timer-rejected.png"),
-                        ImageFormat.Png
-                    );
-                }
-                catch (Exception saveError)
-                {
-                    logger.LogDebug(saveError, "Could not save the rejected timer crop.");
-                }
-
-                if (settings.Capture.SaveCaptureFailureCondition)
-                {
-                    Directory.CreateDirectory(settings.CapturesPath);
-                    resized.Save(
-                        Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp")
-                    );
-                }
-
-                return null;
-            }
-        }
-    }
-
-    private Bitmap GetNegativeOffsetTimer()
-    {
-        if (!TryGetGameHandle(out IntPtr handle))
-        {
-            return null;
-        }
-
-        Rectangle dimensions = capture.GetClientSize(handle);
-        Rectangle crop = HudTimerCrop.ForClient(dimensions.Width, dimensions.Height);
-        if (crop.Width <= 0 || crop.Height <= 0)
-        {
-            return null;
-        }
-
-        return capture.Capture(handle, crop);
-    }
-
     private static async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
     {
         if (bitmap == null)
@@ -1482,39 +1466,6 @@ public class GameController : IGameController
         }
     }
 
-    private TimeSpan? TryParseTimeSpan(string text)
-    {
-        try
-        {
-            if (!HudClock.TryParse(text, out TimeSpan clock))
-            {
-                string sanitized = HudClock.Sanitize(text);
-                if (
-                    !string.IsNullOrEmpty(sanitized)
-                    && !string.Equals(sanitized, lastRejectedTimer, StringComparison.Ordinal)
-                )
-                {
-                    lastRejectedTimer = sanitized;
-                    logger.LogWarning(
-                        "Timer OCR is not -MM:SS or MM:SS. Saw \"{Text}\", sanitized to \"{Sanitized}\".",
-                        text,
-                        sanitized
-                    );
-                }
-
-                return null;
-            }
-
-            return clock;
-        }
-        catch (Exception)
-        {
-            logger.LogDebug("Could not parse the timer: {Text}", text ?? string.Empty);
-        }
-
-        return null;
-    }
-
     private async Task<bool> IsHomeScreen()
     {
         if (!IsGameProcessRunning())
@@ -1523,7 +1474,7 @@ public class GameController : IGameController
         }
 
         WordScan scan = await ScanPrimaryAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
-        return scan.Found;
+        return SeesHome(scan);
     }
 
     private bool IsGameProcessRunning()
@@ -1552,8 +1503,8 @@ public class GameController : IGameController
         }
     }
 
-    private async Task<bool> IsReplay() =>
-        IsLaunched() && (await TryGetTimerAsync().ConfigureAwait(false)) != null;
+    private async Task<bool> IsMatchClockRunning() =>
+        IsLaunched() && (await TryReadRunningMatchClockAsync().ConfigureAwait(false)) != null;
 
     private async Task<WordScan> ScanPrimaryAsync(IEnumerable<string> words)
     {

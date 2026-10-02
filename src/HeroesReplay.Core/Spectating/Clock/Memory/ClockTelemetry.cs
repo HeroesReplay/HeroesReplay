@@ -5,14 +5,14 @@ namespace HeroesReplay.Core.Spectating.Clock.Memory;
 public readonly record struct ClockTelemetryReport(string State, string Reason);
 
 /// <summary>
-/// Pattern discovery is the default read. OCR is the fallback when that read is not locked.
+/// Pattern discovery finds the clock. Until a read is locked and ok, there is no match clock.
 /// The same state and reason are reported once, not on every poll.
 /// </summary>
 public static class ClockTelemetry
 {
     public const string Discovering = "discovering";
     public const string MemoryLocked = "memory-locked";
-    public const string OcrFallback = "ocr-fallback";
+    public const string Unlocked = "memory-unlocked";
 
     public static ClockTelemetryReport Describe(bool discovered, bool located, string reason)
     {
@@ -27,7 +27,7 @@ public static class ClockTelemetry
             return new ClockTelemetryReport(MemoryLocked, detail);
         }
 
-        return new ClockTelemetryReport(OcrFallback, detail);
+        return new ClockTelemetryReport(Unlocked, detail);
     }
 
     public static bool Changed(ClockTelemetryReport previous, ClockTelemetryReport next)

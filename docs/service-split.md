@@ -21,7 +21,7 @@ Design for [#14](https://github.com/HeroesReplay/HeroesReplay/issues/14). Merged
 
 `TwitchBot` is not started by `Engine`. Chat, rewards, and predictions belong to `twitch connect`.
 
-`GameManager` configures the Storm client, launches Heroes of the Storm, sends keys through `GameWindowInput`, runs `Spectator` (match clock from game memory, WinRT `OcrEngine` on an `IGameCapture` frame as the fallback), opens one OBS websocket session per replay, then kills the game. It does not call Helix. When the session ends it writes `completedReplayId`, `completedAt`, and `completedWinnerTeam` on `status.json` for the Twitch process. `heroesprofile download` lists and saves replays. `spectate heroesprofile` only plays files already on disk (`ReplayCacheProvider`). `ReplayFileProvider` plays a local queue once and does not loop the API.
+`GameManager` configures the Storm client, launches Heroes of the Storm, sends keys through `GameWindowInput`, runs `Spectator` (match clock from game memory only; WinRT `OcrEngine` on an `IGameCapture` frame reads the home, loading, and end screens, never the timer), opens one OBS websocket session per replay, then kills the game. It does not call Helix. When the session ends it writes `completedReplayId`, `completedAt`, and `completedWinnerTeam` on `status.json` for the Twitch process. `heroesprofile download` lists and saves replays. `spectate heroesprofile` only plays files already on disk (`ReplayCacheProvider`). `ReplayFileProvider` plays a local queue once and does not loop the API.
 
 `youtube uploader` is not inside `Engine`, but it is still an in-process service of the CLI. It watches `Data\Contexts` for `*.mp4` plus the YouTube entry json.
 
@@ -49,6 +49,8 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 - `Data\requests.json` (and the failed file) — Twitch enqueues; the downloader fulfills; the spectator only sees local `.StormReplay` files. Both processes lock the files with a named mutex.
 - `%LOCALAPPDATA%\HeroesReplay\panel-requests.json` — `!talents` and `!stats` from `twitch connect`. The spectator consumes the pending panel and sends the hotkey.
 - `Data\Standard` and `Data\Requests` — replay cache. `spectate heroesprofile` plays that cache (same shape as `spectate file`).
+- `Data\Requests\<replay>.request.json` — the redemption of a requested replay. The downloader writes it before the replay file appears. The spectator links the session to it by replay id, whichever folder or path loaded the file (#165).
+- `Data\redemption-dispositions.txt` — the spectator appends a line when a requested match is verified. `twitch connect` marks that redemption FULFILLED on Twitch and records it in `Data\redemption-fulfilled.txt`. A session that was not verified writes nothing: the redemption stays UNFULFILLED and the replay plays again (#169).
 - `Data\Contexts\<id>\` — recording, end screenshot, YouTube entry. The uploader already keys off these files.
 
 ## Order of work
@@ -65,13 +67,13 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 
 ## Role health
 
-Each role writes its ready file, `%LOCALAPPDATA%\HeroesReplay\ready\<nonce>.json`, when it is ready, then rewrites it every `ServiceHealth:HeartbeatInterval` (15 s) from a timer (`ServiceHeartbeat`). The file carries `role`, `version`, `executablePath`, `nonce`, `pid`, `readiness` (`ready`, `stopping` once the stop file or Ctrl+C reaches the role, `exited` when it left its loop without one), `readyAt`, `heartbeatAt`, `heartbeatIntervalSeconds`, `lastSuccessfulWorkAt`, and `lastError` (`message`, `at`). Error and critical logs become `lastError`, with tokens redacted.
+Each role writes its ready file, `%LOCALAPPDATA%\HeroesReplay\ready\<nonce>.json`, when it is ready, then rewrites it every `ServiceHealth:HeartbeatInterval` (15 s) from a timer (`ServiceHeartbeat`). The file carries `role`, `version`, `executablePath`, `nonce`, `pid`, `readiness` (`ready`, `stopping` once the stop file or Ctrl+C reaches the role, `exited` when it left its loop without one), `readyAt`, `heartbeatAt`, `heartbeatIntervalSeconds`, `lastSuccessfulWorkAt`, and `lastError` (`message`, `at`). Spectate also writes `sessionsWithoutProgress`, `lastOutcome`, and `sessionOutcomes` (sessions this process ended, by outcome; the release health gate reads it). Error and critical logs become `lastError`, with tokens redacted.
 
 Successful work is role-defined:
 
 | Role | Work | Default `ServiceHealth` threshold |
 | --- | --- | --- |
-| spectate | A spectate tick: the HUD clock advanced, or one pass of the replay loop ended | `SpectateWorkThreshold` 20 min |
+| spectate | Match progress: the match clock advanced, or a replay session reached the clock or the award screen. A deferred, held, timed-out, or failed session, an idle wait, and an outage pause are not work | `SpectateWorkThreshold` 20 min |
 | twitch | A Twitch reconcile: one prediction watcher pass (every second) | `TwitchWorkThreshold` 5 min |
 | download | A download pass (every 2 to 15 s) | `DownloadWorkThreshold` 15 min |
 | youtube | An upload pass: the pending drain, or the one-minute poll | `YouTubeWorkThreshold` 30 min |
@@ -81,12 +83,12 @@ Successful work is role-defined:
 | State | Code | Rule |
 | --- | --- | --- |
 | ready | `service.ready` | Alive, heartbeat fresh, work inside the threshold, no newer error |
-| degraded | `service.degraded` | Alive and heartbeating, but the last successful work (or `readyAt` before the first) is older than the role's threshold, or `lastError` is newer than it |
+| degraded | `service.degraded` | Alive and heartbeating, but the last successful work (or `readyAt` before the first) is older than the role's threshold, or `lastError` is newer than it. Spectate is also degraded, with `causeCode` `spectate.no_match_progress` and the last outcome in the cause, once `SpectateNoProgressSessions` (3) replay sessions in a row end without match progress |
 | stale | `service.stale` | Alive, but the heartbeat is older than `StaleAfterIntervals` (3) intervals, or missing |
 | stopped | `service.stopped` | Not in `services.json`, or exited after a stop request |
 | failed | `service.failed` | In `services.json`, gone, and no stop request was recorded |
 
-`--output json` prints `schemaVersion` (1), `ok`, `code` (the worst role: failed, stale, degraded, ready, stopped; `service.restart_budget_exhausted` wins over all of them), `message`, `environment`, `checkedAt`, `stopRequested`, `roles[]` (state, code, cause, remediation, pid, path, version, readiness, heartbeat and work ages with their limits, `lastError`, `logPath`, `restarts`), a `spectator` summary of `status.json`, and `supervisor`. It exits 1 when any role is failed, stale, or degraded.
+`--output json` prints `schemaVersion` (1), `ok`, `code` (the worst role: failed, stale, degraded, ready, stopped; `service.restart_budget_exhausted` wins over all of them), `message`, `environment`, `checkedAt`, `stopRequested`, `roles[]` (state, code, cause, `causeCode`, remediation, pid, path, version, readiness, heartbeat and work ages with their limits, `lastError`, `sessionsWithoutProgress`, `lastOutcome`, `sessionOutcomes`, `logPath`, `restarts`), a `spectator` summary of `status.json`, and `supervisor`. It exits 1 when any role is failed, stale, or degraded.
 
 ## Role logs
 

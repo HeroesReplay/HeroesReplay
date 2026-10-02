@@ -61,6 +61,19 @@ public class CliHelpTests
         Assert.Empty(root.Parse("update migrate-stream-arm --previous C:\\app").Errors);
         Assert.NotEmpty(root.Parse("update migrate-stream-arm").Errors);
         Assert.Empty(root.Parse("update install-obs --install C:\\app --environment prod").Errors);
+        // The exact arguments apply-release.ps1 passes to the health gate.
+        Assert.Empty(
+            root.Parse(
+                "update release-health --since 2026-10-02T12:00:00.0000000Z --install C:\\app --environment prod --wait"
+            ).Errors
+        );
+        Assert.Empty(
+            root.Parse(
+                "update release-health --since 2026-10-02T12:00:00Z --window 00:05:00"
+            ).Errors
+        );
+        Assert.NotEmpty(root.Parse("update release-health").Errors);
+        Assert.NotEmpty(root.Parse("update release-health --role-file role-ready.txt").Errors);
     }
 
     [Fact]

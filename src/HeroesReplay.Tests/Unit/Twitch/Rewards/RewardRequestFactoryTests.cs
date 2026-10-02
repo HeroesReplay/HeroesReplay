@@ -34,7 +34,7 @@ public class RewardRequestFactoryTests
     }
 
     [Fact]
-    public void ReplayId_DefaultDoesNotRecordAndUpload()
+    public void ReplayId_PlainRewardKeepsItsFlagAndStillUploads()
     {
         var factory = new RewardRequestFactory();
         var reward = new SupportedReward(RewardType.ReplayId, "ReplayId", cost: 500);
@@ -50,7 +50,39 @@ public class RewardRequestFactoryTests
 
         Assert.Equal(65268119, request.ReplayId);
         Assert.False(request.RecordAndUpload);
+        Assert.True(ReplayRequestKind.RecordsAndUploads(request));
         Assert.Null(request.PlayerIndex);
+    }
+
+    [Fact]
+    public void Create_KeepsTheRewardAndChannelForFulfilment()
+    {
+        var factory = new RewardRequestFactory();
+        var rewardId = System.Guid.NewGuid();
+        var args = new OnRewardRedeemedArgs
+        {
+            Login = "viewer",
+            ChannelId = "123456",
+            RewardId = rewardId,
+            RedemptionId = System.Guid.NewGuid(),
+            RewardTitle = "ReplayId",
+            Message = "65268119",
+        };
+
+        RewardRequest replayId = factory.Create(
+            new SupportedReward(RewardType.ReplayId, "ReplayId", cost: 250),
+            args
+        );
+        RewardRequest map = factory.Create(
+            new SupportedReward(RewardType.ARAM, "Random (ARAM)", cost: 125),
+            args
+        );
+
+        Assert.Equal(rewardId, replayId.RewardId);
+        Assert.Equal("123456", replayId.BroadcasterId);
+        Assert.Equal(rewardId, map.RewardId);
+        Assert.Equal("123456", map.BroadcasterId);
+        Assert.False(ReplayRequestKind.RecordsAndUploads(map));
     }
 
     [Fact]
