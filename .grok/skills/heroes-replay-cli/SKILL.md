@@ -9,7 +9,7 @@ description: >
 
 # heroesreplay CLI
 
-Entry: `src/HeroesReplay.CLI`. Assembly name `heroesreplay`. System.CommandLine 2 (`Subcommands`, `SetAction`). `spectate` and its subcommands, including `--help`, exit 1 unless the process is elevated.
+Entry: `src/HeroesReplay.CLI`. Assembly name `heroesreplay`. System.CommandLine 2 (`Subcommands`, `SetAction`). No command needs administrator rights except `client firewall`. `spectate` runs unelevated (issue #133): launching Battle.net and HeroesSwitcher, PrintWindow capture, OCR, the memory clock, and hotkeys all work at normal integrity. Only adding Windows Firewall rules needs an elevated shell.
 
 ```powershell
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
@@ -45,6 +45,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check twitch-extension` | Report `TwitchExtension:Enabled`, or call uploader/whoami when the extension is on |
 | `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). Spectate applies this automatically if the game is not running. Windowed 1080p is required. Capture is `PrintWindow` by default (`Capture:Method`); `BitBlt` is used only when configured. |
 | `client status` | Report preset mismatches |
+| `client firewall` | Elevated only. Adds one inbound Windows Firewall rule per installed `Versions\Base*\HeroesOfTheStorm_x64.exe` and replaces duplicate copies. Spectate checks the rules unelevated and warns when one is missing; it never adds them itself unless it is elevated. |
 | `otel up` / `otel down` / `otel status` | Standalone Aspire dashboard via the local `Aspire.Cli` tool (`dotnet tool restore`, then `dotnet aspire dashboard run --allow-anonymous`). UI http://127.0.0.1:18888, OTLP gRPC http://127.0.0.1:4317. No Docker. Spectate, Twitch, download, and YouTube each export logs, metrics, and traces under their own service name. |
 | `twitch connect` | Chat, channel-point reward sync, EventSub redemptions, and Blue/Red predictions from `status.json`. Does not launch the game. Blocks. |
 | `twitch say --message text` | Connect chat and send one message to the configured channel |
