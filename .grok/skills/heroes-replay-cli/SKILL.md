@@ -9,7 +9,7 @@ description: >
 
 # heroesreplay CLI
 
-Entry: `src/HeroesReplay.CLI`. Assembly name `heroesreplay`. System.CommandLine 2 (`Subcommands`, `SetAction`). `spectate` and its subcommands, including `--help`, exit 1 unless the process is elevated.
+Entry: `src/HeroesReplay.CLI`. Assembly name `heroesreplay`. System.CommandLine 2 (`Subcommands`, `SetAction`). A real `spectate file` or `spectate heroesprofile` run exits 1 unless the process is elevated. `--help`, `--version`, `[suggest]` completion, and parse errors never check elevation, so `spectate --help` works from a normal shell. Invalid input is a parse error and exits 1 before anything runs.
 
 ```powershell
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
@@ -23,12 +23,12 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 
 | Command | Behavior |
 | --- | --- |
-| `spectate file [--file path] [--player 0-9]` | Play one `.StormReplay` or each file in a directory, then exit. `--file` defaults to `Location:ReplaySource`. `--player` follows that hero (1-9, or 0 for the tenth) while it is alive. Starts the Aspire dashboard when OTLP :4317 is down; dashboard failure does not fail the replay. |
+| `spectate file [--file path] [--player 1-10]` | Play one `.StormReplay` or each file in a directory, then exit. `--file` defaults to `Location:ReplaySource`. `--player` follows that hero (1-10, or 0 for the tenth) while it is alive. A `--player` outside that, or a `--file` path that does not exist, is a parse error (exit 1). Exits 1 when the engine stops on an unexpected error. Starts the Aspire dashboard when OTLP :4317 is down; dashboard failure does not fail the replay. |
 | `spectate heroesprofile` | Play `.StormReplay` files already in `Data\Standard` and `Data\Requests`. Does not call Heroes Profile. Same dashboard startup as `spectate file`. |
 | `heroesprofile download` | List and download Storm League replays into `Data\Standard`, and requested replays into `Data\Requests`. Does not launch the game. |
 | `heroesprofile patch-index [--write]` | Find the first Heroes Profile replay id on the latest replay's patch line. `--write` stores it as `MinReplayId` in `appsettings.json`. |
 | `services start` | Start `spectate heroesprofile`, `twitch connect`, `heroesprofile download`, and `youtube uploader` as separate processes, each in its own console window. Pid files go under `%LOCALAPPDATA%\HeroesReplay\logs`. Updates the OBS collection paths first when OBS is closed. Does not start Twitch ingest. Starts the Aspire dashboard first when OTLP :4317 is not listening; a dashboard failure does not fail the services. |
-| `services stop` | Write `services.stop`, wait up to 20s, kill any `heroesreplay` pid still recorded, and close Heroes of the Storm. Do not leave the game client open after this. |
+| `services stop` | Write `services.stop`, wait up to 20s, kill any `heroesreplay` pid still recorded, and close Heroes of the Storm. Prints each role as `graceful`, `killed`, `already exited`, or `still running`. After every role has exited it reads OBS `GetStreamStatus` once; it never stops the stream. Exits 1 when a role is still running (that role stays in `services.json`), the game is still open, or OBS is still streaming or did not report its stream state. OBS that is closed or has no reachable websocket counts as not streaming. Do not leave the game client open after this. |
 | `services status` | Which of those processes are still alive, plus `status.json`. |
 | `calculators coordinates [--file path]` | Parse replay, print coordinate samples, build Kill/NearEnemy/Roaming focus map |
 | `calculators report [--file path]` | Spectator report for a file/directory |
@@ -37,7 +37,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check config` | Bind settings; print which secrets are present (never print values) |
 | `check heroesprofile` | Kiota `GET /replays` max_replay_id with Bearer key |
 | `check obs` | obs-websocket 5 Identify + `GetVersion`, and verify scene files |
-| `check twitch` | Helix `GetUsers` for configured channel, `GetPredictions` when predictions are enabled, and the token scopes |
+| `check twitch` | Helix `GetUsers` for configured channel, `GetPredictions` when predictions are enabled, and the token scopes. Fails when predictions are enabled and `GetPredictions` fails |
 | `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
 | `check battlenet` | Capture the Battle.net window and report the Play or Update button |
 | `check connectivity` | Probe 1.1.1.1, Twitch, and Heroes Profile. Does not start an OBS stream. |
@@ -49,7 +49,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `twitch connect` | Chat, channel-point reward sync, EventSub redemptions, and Blue/Red predictions from `status.json`. Does not launch the game. Blocks. |
 | `twitch say --message text` | Connect chat and send one message to the configured channel |
 | `twitch rewards generate\|submit\|list\|remove-unranked-draft\|test` | Helix custom rewards. `submit` also deletes leftover Unranked Draft titles. `remove-unranked-draft` deletes only `(UD)` / `Unranked Draft` titles. `test [--title] [--message]` runs the local redeem handler |
-| `twitch predictions test [--outcome Blue\|Red\|cancel]` | Create then resolve/cancel a 30s Blue/Red prediction. Default `cancel`. |
+| `twitch predictions test [--outcome Blue\|Red\|cancel]` | Create then resolve/cancel a 30s Blue/Red prediction. Default `cancel`. Any other outcome is a parse error. |
 | `youtube uploader` | Watch `Data\Contexts` for `.mp4` + `youtube-entry.json`. `YouTube:DryRun` true (dev and base) writes `youtube-dry-run.json` and does not call YouTube. Production (`HEROES_REPLAY_ENV=prod`) sets `DryRun` false, `YouTube:Enabled` true, and `OBS:RecordingEnabled` true, so every spectated replay is recorded from the loading screen until the MVP screen and this process uploads it. Public uploads are paced by the `ReplayMedia` limits (`MaxPublicPerDay`, `MaxPublicPerWeek`, `MinimumPublicInterval`). A completed upload saves `VideoId` on `youtube-entry-uploaded.json`. Real uploads need `Data\client_secrets.json`. `services start` launches this process. Each successful insert appends a line to `Data\youtube-library.jsonl`, which retention never deletes. It also runs the `youtube library` pass at most every `YouTube:LibraryInterval` (1 hour), and it is the only process that calls YouTube; the spectator's duplicate check reads `Data\youtube-replay-ids.txt` and the receipts only. |
 | `youtube library [--once]` | Run the uploader's library pass now. Lists the channel's uploads with the `{ChannelId}:library` consent (full `https://www.googleapis.com/auth/youtube` scope), adds every replay id to `Data\youtube-replay-ids.txt`, records videos missing from `Data\youtube-library.jsonl` (Heroes Profile fills a missing map, mode, rank, or build; unresolved videos retry with backoff), and files the record into `{Map} - {Mode}` playlists (`{Map} - Storm League - {League}` for ranked games, division dropped) and patch playlists (`Patch {line}`, or the season name, for the current line; `Patch {line} archive` for older lines). Prints the planned inserts. `--once` runs one pass and exits; without it the pass repeats each `YouTube:LibraryInterval` until stopped. Shares the uploader's daily units in `Data\youtube-quota-units.json` (`LibraryUnitsPerDay` 3000, `DailyQuotaUnits` 10000 minus `QuotaReserveUnits` 1600) and its lock, so the two cannot double-spend. A quota response pauses the pass until the next Pacific day. Not started by `services start`; `youtube uploader` runs the same pass there. Dry-run writes `Data\youtube-library-dry-run.json` and calls neither YouTube nor Heroes Profile. Playlist ids are cached in `Data\youtube-playlists.json`. |
 | `update check` | Print the installed version and the latest release tag. Does not download or restart. |
@@ -71,7 +71,7 @@ Skill `op-service-account`. Clone to `C:\heroesreplay\HeroesReplay`. `pwsh -File
 | Filter | What |
 | --- | --- |
 | default / `Category=Unit` | Everything under `src/HeroesReplay.Tests/Unit` (one folder per Core slice) |
-| `Category=Smoke` | Parse `--help`; asserts root, `check`, `client`, `otel`, `services`, `heroesprofile`, `twitch`, `calculators`, and `youtube` subcommands exist |
+| `Category=Smoke` | Parse `--help`; asserts root, `check`, `client`, `otel`, `services`, `heroesprofile`, `twitch`, `calculators`, and `youtube` subcommands exist. Exit codes: `spectate --help` and `spectate file --help` exit 0 without elevation; an invalid `--player` or a missing `--file` exits 1 |
 | `Category=Integration` | Live Heroes Profile v1 list/download (needs `op` or env key), YouTube dry-run upload, medium-integrity process launch |
 
 After changing a check target, run that CLI command, not only unit tests.

@@ -1,5 +1,6 @@
 using System;
 using System.CommandLine;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands;
@@ -16,30 +17,47 @@ public class CommandLineService
         this.adminChecker = adminChecker;
     }
 
-    public async Task<int> InvokeAsync(string[] args)
+    public Task<int> InvokeAsync(string[] args) => InvokeAsync(args, null);
+
+    public async Task<int> InvokeAsync(string[] args, InvocationConfiguration configuration)
     {
         var root = new HeroesReplayCommand();
         ParseResult parseResult = root.Parse(args);
+        TextWriter error = configuration?.Error ?? Console.Error;
 
         if (Environment.OSVersion.Platform != PlatformID.Win32NT)
         {
-            Console.Error.WriteLine("Windows is the only supported OS.");
+            error.WriteLine("Windows is the only supported OS.");
             return 1;
         }
 
         if (RequiresAdministrator(parseResult) && !adminChecker.IsAdministrator())
         {
-            Console.Error.WriteLine("You must be running this application as an administrator.");
+            error.WriteLine("You must be running this application as an administrator.");
             return 1;
         }
 
-        return await parseResult.InvokeAsync();
+        return await parseResult.InvokeAsync(configuration);
     }
 
-    private static bool RequiresAdministrator(ParseResult parseResult)
+    /// <summary>
+    /// True only when a <c>spectate</c> command will run its own action. Help, version,
+    /// completion directives, and parse errors do not run it, so they do not need elevation.
+    /// </summary>
+    public static bool RequiresAdministrator(ParseResult parseResult)
     {
+        Command target = parseResult.CommandResult.Command;
+        if (
+            parseResult.Errors.Count > 0
+            || target.Action == null
+            || !ReferenceEquals(parseResult.Action, target.Action)
+        )
+        {
+            return false;
+        }
+
         for (
-            Command command = parseResult.CommandResult.Command;
+            Command command = target;
             command != null;
             command = command.Parents.OfType<Command>().FirstOrDefault()
         )
