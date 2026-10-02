@@ -1,11 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Obs;
 
 namespace HeroesReplay.Core.SelfUpdate;
 
 public static class ReleaseInstall
 {
+    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
+
     public static string ReadVersion(string installDirectory)
     {
         if (string.IsNullOrWhiteSpace(installDirectory))
@@ -198,49 +203,79 @@ public static class ReleaseInstall
         }
     }
 
-    public static void CopyObsScenesIfClosed(
+    /// <summary>
+    /// What <c>apply-release.ps1</c> does with the release's OBS files. While OBS is closed the
+    /// scene collection is replaced, as before, and <c>services start</c> then points its paths at
+    /// this install. The profile (<c>basic.ini</c>) is machine-owned: the packaged one is only a
+    /// template, copied when this machine has no profile of that name. <c>service.json</c> (the
+    /// stream key) is never copied. Returns one line per decision for the update log.
+    /// </summary>
+    public static IReadOnlyList<string> CopyObsScenesIfClosed(
         string installDirectory,
         string appData,
-        bool obsIsRunning
+        bool obsIsRunning,
+        string profileName = null,
+        string collectionName = null
     )
     {
-        if (
-            obsIsRunning
-            || string.IsNullOrWhiteSpace(installDirectory)
-            || string.IsNullOrWhiteSpace(appData)
-        )
+        var notes = new List<string>();
+        if (string.IsNullOrWhiteSpace(installDirectory) || string.IsNullOrWhiteSpace(appData))
         {
-            return;
+            return notes;
+        }
+
+        if (obsIsRunning)
+        {
+            notes.Add(
+                "OBS is open. Scene files in the release were left under obs\\ and were not copied."
+            );
+            return notes;
         }
 
         string scene = Path.Combine(installDirectory, "obs", "Default.json");
         if (File.Exists(scene))
         {
-            string destination = Path.Combine(
-                appData,
-                "obs-studio",
-                "basic",
-                "scenes",
-                "HeroesReplay.json"
-            );
+            string destination = ObsNames.CollectionFile(appData, collectionName);
+            string json = File.ReadAllText(scene);
+            if (!string.IsNullOrWhiteSpace(collectionName))
+            {
+                json = ObsNames.WithCollectionName(json, collectionName);
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(scene, destination, overwrite: true);
+            File.WriteAllText(destination, json, Utf8);
+            notes.Add("OBS collection -> " + destination);
         }
 
         string ini = Path.Combine(installDirectory, "obs", "Default", "basic.ini");
         if (File.Exists(ini))
         {
-            string destination = Path.Combine(
-                appData,
-                "obs-studio",
-                "basic",
-                "profiles",
-                "HeroesReplay",
-                "basic.ini"
-            );
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(ini, destination, overwrite: true);
+            string profile = ObsNames.ProfileIni(appData, profileName);
+            if (File.Exists(profile))
+            {
+                notes.Add(
+                    "Kept the existing OBS profile "
+                        + profile
+                        + ". The profile belongs to this machine; a release does not replace it."
+                );
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(profile)!);
+                File.WriteAllText(
+                    profile,
+                    ObsNames.WithProfileName(File.ReadAllText(ini), profileName),
+                    Utf8
+                );
+                notes.Add(
+                    "OBS profile -> "
+                        + profile
+                        + " (template; this machine had none). Set its encoder, bitrate, and stream service in OBS."
+                );
+            }
         }
+
+        return notes;
     }
 
     private static string ReleaseSettingsFileName() => "version.txt";

@@ -109,6 +109,7 @@ dotnet run --no-launch-profile -- --help
 | `check config` / `check heroesprofile` / `check obs` / `check twitch` / `check client` / `check battlenet` / `check connectivity` | One integration at a time |
 | `check timer` / `check twitch-extension` | Read-only memory scan for the match clock; Heroes Profile Twitch extension key |
 | `otel up` / `otel down` / `otel status` | Standalone Aspire dashboard |
+| `obs arm` / `obs disarm` / `obs status` | Machine-local Twitch ingest arm. Ingest needs it and `OBS:StreamingEnabled` |
 | `update check` | Compare this install with the latest GitHub Release |
 | `mcp` | Stdio MCP server for agents (`get_spectator_status`, `get_current_focus`, checks). Pair with a running `spectate` process. |
 

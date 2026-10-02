@@ -113,13 +113,15 @@ The match clock reads memory first. `StableMatchClock` is read-only. It finds th
 
 The environment variable and its appsettings overlay decide behavior. Code never compares the machine name: Twitch ingest follows `OBS:StreamingEnabled`, and the YouTube title marker, privacy, and publication budgets follow `YouTube:TitlePrefix` and `YouTube:PrivacyStatus`. The hostnames below only tell an agent which box it is on.
 
+Ingest also needs a machine-local arm, `%LOCALAPPDATA%\HeroesReplay\stream-armed` (`heroesreplay obs arm` / `obs disarm` / `obs status`). It is not in the repo or the release zip, and no setting can move it, so the overlay alone cannot start production ingest. Only the live box is armed. Never arm ASA-SERVER. Recording does not need the arm.
+
 | | **dev** | **live** |
 | --- | --- | --- |
 | Config | `HEROES_REPLAY_ENV=dev` (`appsettings.dev.json`) | `HEROES_REPLAY_ENV=prod` (`appsettings.prod.json`) |
 | Hostname | `ASA-SERVER` | `DESKTOP-8SJEK72` |
 | Role | Develop, prove, and harden the spectator, CLI, and services. Not a broadcast. | Real spectating and the 24/7 Twitch stream (`saltysadism`). Intel Arc A310 guest vs this live box. |
 | Repo | `C:\heroesreplay\HeroesReplay` | Same path. A release install rewrites OBS assets under its own `obs` folder (`C:\heroesreplay\app\obs`), not this checkout. |
-| Stream | **Do not go live.** OBS, chat, rewards, and requested-replay recording/YouTube are for testing only. Predictions are off (`Twitch:EnablePredictions` false in `appsettings.dev.json`): this box uses the live channel, and opening a game here would cancel the live prediction. | Production ingest. Do not experiment on the live stream. |
+| Stream | **Do not go live** and do not run `obs arm`. OBS, chat, rewards, and requested-replay recording/YouTube are for testing only. Predictions are off (`Twitch:EnablePredictions` false in `appsettings.dev.json`): this box uses the live channel, and opening a game here would cancel the live prediction. | Production ingest (`OBS:StreamingEnabled` plus the machine arm). Do not experiment on the live stream. |
 | Upgrades | Safe to stop spectate, rebuild, reboot the guest (not Unraid/Tower). | Schedule **downtime** before pull, rebuild, client/OBS upgrades, or reboots. |
 | Spectator engine | **Normal** to kill `heroesreplay`, quit HotS, rebuild Release, and relaunch only long enough to prove a change. Stop when the proof is done. | Do **not** kill/rebuild/restart the spectator as a routine. This is the production spectate. |
 
@@ -154,10 +156,11 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `C:\heroesreplay\Data\HeroesData` | heroes-data2 JSON cache (Heroes.Element). Downloaded from HeroesToolChest/heroes-data2 when that cache is missing |
 | `C:\heroesreplay\secrets` | Local backup of gitignored `appsettings.secrets.json` |
 | `%USERPROFILE%\Documents\Heroes of the Storm\Interfaces` | AhliObs (`client configure`) |
-| `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` |
-| `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile from `obs/Default/basic.ini` |
+| `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` (`OBS:SceneCollectionName`) |
+| `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile (`OBS:ProfileName`). Machine-owned: `obs/Default/basic.ini` is copied only when it does not exist, and updates keep it |
+| `%LOCALAPPDATA%\HeroesReplay\stream-armed` | Machine-local Twitch ingest arm. Live box only |
 
-`Location:DataDirectory` is `C:\heroesreplay\Data`. Contexts are `Data\Contexts` (not a sibling of Data). Do not copy OBS `service.json` (stream key).
+`Location:DataDirectory` is `C:\heroesreplay\Data`. Contexts are `Data\Contexts` (not a sibling of Data). Do not copy OBS `service.json` (stream key). The OBS profile and scene collection names are `OBS:ProfileName` and `OBS:SceneCollectionName` (default `HeroesReplay`); a stream or recording does not start while OBS has another one active.
 
 Detect with `hostname`. If `DESKTOP-8SJEK72`, ask before stopping `heroesreplay` / HotS / OBS, and do not start a Twitch stream from a test build. If `ASA-SERVER`, do not SSH to Unraid (`Tower` / 192.168.1.102), do not bind the host 3090/iGPU, and do not reboot Tower.
 

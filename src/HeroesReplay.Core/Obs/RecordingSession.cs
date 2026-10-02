@@ -37,12 +37,17 @@ internal sealed class RecordingSession
         socket.RecordSignal += OnSignal;
     }
 
+    /// <param name="verifySelection">
+    /// Runs once the websocket is identified and before OBS is asked to stop or start a
+    /// recording. A failed result returns <see cref="ObsOutputFailure.SelectionMismatch"/>.
+    /// </param>
     public ObsRecordingResult StartRecording(
         Func<bool> shouldRecord,
         Action ensureConnected,
         int? replayId,
         string reason,
-        Action prepareOutput = null
+        Action prepareOutput = null,
+        Func<ObsSelectionResult> verifySelection = null
     )
     {
         if (shouldRecord != null && !shouldRecord())
@@ -60,7 +65,15 @@ internal sealed class RecordingSession
 
         var attempt = new Attempt();
         ObsRecordingResult result = Execute(
-            () => StartCore(attempt, ensureConnected, replayId, reason, prepareOutput),
+            () =>
+                StartCore(
+                    attempt,
+                    ensureConnected,
+                    replayId,
+                    reason,
+                    prepareOutput,
+                    verifySelection
+                ),
             error => ObsRecordingResult.Failed(ObsOutputFailure.RequestError, error.Message),
             "start OBS recording"
         );
@@ -223,7 +236,8 @@ internal sealed class RecordingSession
         Action ensureConnected,
         int? replayId,
         string reason,
-        Action prepareOutput
+        Action prepareOutput,
+        Func<ObsSelectionResult> verifySelection
     )
     {
         if (ownsRecording)
@@ -240,6 +254,21 @@ internal sealed class RecordingSession
                 ObsOutputFailure.Disconnected,
                 "OBS websocket disconnected."
             );
+        }
+
+        // Once per start, before a foreign recording is stopped or a new one is started.
+        if (!attempt.SelectionChecked)
+        {
+            ObsSelectionResult selection = verifySelection?.Invoke();
+            attempt.SelectionChecked = true;
+            if (selection is { Ok: false })
+            {
+                return ObsRecordingResult.Failed(
+                    ObsOutputFailure.SelectionMismatch,
+                    selection.Detail,
+                    selection.Reason
+                );
+            }
         }
 
         if (socket.IsRecording() && !attempt.Called)
@@ -653,6 +682,8 @@ internal sealed class RecordingSession
             || result.Succeeded
             || result.Failure == ObsOutputFailure.NotOwned
             || result.Failure == ObsOutputFailure.NotRequested
+            // The coordinator already logged which profile or collection is wrong.
+            || result.Failure == ObsOutputFailure.SelectionMismatch
         )
         {
             return;
@@ -751,5 +782,7 @@ internal sealed class RecordingSession
         public bool Called { get; set; }
 
         public bool ForeignStopRequested { get; set; }
+
+        public bool SelectionChecked { get; set; }
     }
 }

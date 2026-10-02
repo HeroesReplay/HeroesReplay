@@ -42,6 +42,7 @@ public class ObsController : IObsController
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         var socket = new ObsWebsocketRecordSocket(this.obs);
+        var arm = new ObsStreamArm();
         coordinator = new ObsCoordinator(
             logger,
             settings,
@@ -51,7 +52,8 @@ public class ObsController : IObsController
             ObsBackoff.Default,
             Thread.Sleep,
             TimeSpan.FromSeconds(10),
-            PatchInstalledCollection
+            PatchInstalledCollection,
+            arm.IsArmed
         );
     }
 
@@ -69,7 +71,8 @@ public class ObsController : IObsController
             ObsCollectionApplyResult result = ObsCollectionPatcher.ApplyForInstall(
                 AppContext.BaseDirectory,
                 settings.Location?.DataDirectory,
-                obsRunning
+                obsRunning,
+                ObsNames.SceneCollection(settings.OBS)
             );
             if (result.Drift)
             {

@@ -126,6 +126,144 @@ public class ObsCollectionBundleTests
     }
 
     [Fact]
+    public void Collection_HasNoDefaultMicrophoneAndKeepsDesktopAudio()
+    {
+        string json = File.ReadAllText(Path.Combine(RepoRoot(), "obs", "Default.json"));
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement root = document.RootElement;
+
+        // OBS keeps Mic/Aux as top-level AuxAudioDevice1..4. No entry is the same as "Disabled".
+        foreach (JsonProperty property in root.EnumerateObject())
+        {
+            Assert.False(
+                property.Name.StartsWith("AuxAudioDevice", StringComparison.Ordinal),
+                property.Name
+            );
+            if (property.Value.ValueKind == JsonValueKind.Object)
+            {
+                Assert.False(
+                    property.Value.TryGetProperty("id", out JsonElement id)
+                        && id.GetString() == "wasapi_input_capture",
+                    property.Name
+                );
+            }
+        }
+
+        Assert.DoesNotContain(
+            ObsCollectionPaths.SourceNames(json),
+            name => name.Equals("Mic/Aux", StringComparison.OrdinalIgnoreCase)
+        );
+        Assert.Equal(
+            "wasapi_output_capture",
+            root.GetProperty("DesktopAudioDevice1").GetProperty("id").GetString()
+        );
+        Assert.Equal("HeroesReplay", root.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void Apply_LiveCollectionThatStillHasTheMicrophone_IsNotCustom()
+    {
+        string root = TempRoot();
+        try
+        {
+            string template = WriteTemplate(root, "Ranks/bronze.png");
+            string destination = Path.Combine(root, "live", "HeroesReplay.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            const string mic = """
+                {
+                  "AuxAudioDevice1": {
+                    "name": "Mic/Aux",
+                    "id": "wasapi_input_capture",
+                    "settings": { "device_id": "default" },
+                    "enabled": true,
+                    "muted": false
+                  },
+                  "sources": [
+                    {
+                      "name": "bronze-image",
+                      "id": "image_source",
+                      "settings": { "file": "C:/heroesreplay/HeroesReplay/obs/Ranks/bronze.png" }
+                    }
+                  ]
+                }
+                """;
+            File.WriteAllText(destination, mic);
+
+            ObsCollectionApplyResult closed = ObsCollectionPatcher.Apply(
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: false
+            );
+
+            Assert.False(closed.Drift, closed.Message);
+            Assert.True(closed.Wrote);
+            string updated = File.ReadAllText(destination);
+            Assert.False(ObsCollectionPaths.ContainsCheckoutPath(updated));
+
+            ObsCollectionApplyResult running = ObsCollectionPatcher.Apply(
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: true
+            );
+
+            Assert.False(running.Drift, running.Message);
+            Assert.False(running.Wrote);
+            Assert.Equal(updated, File.ReadAllText(destination));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Apply_InstallsAMissingCollectionUnderTheConfiguredName()
+    {
+        string root = TempRoot();
+        try
+        {
+            string template = WriteTemplate(root, "Ranks/bronze.png");
+            string appData = Path.Combine(root, "appdata");
+            string destination = ObsCollectionPatcher.LiveCollectionPath(
+                appData,
+                "HeroesReplay-dev"
+            );
+
+            ObsCollectionApplyResult result = ObsCollectionPatcher.Apply(
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: false,
+                collectionName: "HeroesReplay-dev"
+            );
+
+            Assert.True(result.Wrote);
+            Assert.EndsWith(
+                Path.Combine("scenes", "HeroesReplay-dev.json"),
+                destination,
+                StringComparison.OrdinalIgnoreCase
+            );
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(destination));
+            Assert.Equal("HeroesReplay-dev", document.RootElement.GetProperty("name").GetString());
+            Assert.Contains(
+                "/Ranks/bronze.png",
+                document
+                    .RootElement.GetProperty("sources")[0]
+                    .GetProperty("settings")
+                    .GetProperty("file")
+                    .GetString(),
+                StringComparison.Ordinal
+            );
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Rewrite_UsesTheInstallAndDataDirectories()
     {
         const string json = """

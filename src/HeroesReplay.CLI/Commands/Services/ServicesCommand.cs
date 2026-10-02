@@ -273,7 +273,8 @@ public class ServicesCommand : Command
             ObsCollectionApplyResult result = ObsCollectionPatcher.ApplyForInstall(
                 installDirectory,
                 ObsCollectionPatcher.ReadDataDirectory(installDirectory),
-                Process.GetProcessesByName("obs64").Length > 0
+                Process.GetProcessesByName("obs64").Length > 0,
+                ObsNames.SceneCollection(ServiceCollectionExtensions.LoadObsSettings())
             );
             if (result.Drift || result.Wrote)
             {

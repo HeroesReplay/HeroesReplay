@@ -16,7 +16,8 @@ public static class ObsCollectionPatcher
     public static ObsCollectionApplyResult ApplyForInstall(
         string startDirectory,
         string dataDirectory,
-        bool obsIsRunning
+        bool obsIsRunning,
+        string collectionName = null
     )
     {
         string template = ObsCollectionPaths.FindCollection(startDirectory);
@@ -27,18 +28,17 @@ public static class ObsCollectionPatcher
             );
         }
 
-        return Apply(template, LiveCollectionPath(null), dataDirectory, obsIsRunning);
+        return Apply(
+            template,
+            LiveCollectionPath(null, collectionName),
+            dataDirectory,
+            obsIsRunning,
+            collectionName
+        );
     }
 
-    public static string LiveCollectionPath(string appData)
-    {
-        if (string.IsNullOrWhiteSpace(appData))
-        {
-            appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        }
-
-        return Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json");
-    }
+    public static string LiveCollectionPath(string appData, string collectionName = null) =>
+        ObsNames.CollectionFile(appData, collectionName);
 
     public static string ReadDataDirectory(string installDirectory)
     {
@@ -73,11 +73,16 @@ public static class ObsCollectionPatcher
         return fallback;
     }
 
+    /// <param name="collectionName">
+    /// Name written into a collection installed from the template. OBS lists a collection
+    /// by that name. An existing live collection keeps its name.
+    /// </param>
     public static ObsCollectionApplyResult Apply(
         string templatePath,
         string destinationPath,
         string dataDirectory,
-        bool obsIsRunning
+        bool obsIsRunning,
+        string collectionName = null
     )
     {
         if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
@@ -111,11 +116,13 @@ public static class ObsCollectionPatcher
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(destinationFull));
-            File.WriteAllText(
-                destinationFull,
-                ObsCollectionPaths.Rewrite(template, assetRoot, dataDirectory),
-                Utf8
-            );
+            string installed = ObsCollectionPaths.Rewrite(template, assetRoot, dataDirectory);
+            if (!string.IsNullOrWhiteSpace(collectionName))
+            {
+                installed = ObsNames.WithCollectionName(installed, collectionName);
+            }
+
+            File.WriteAllText(destinationFull, installed, Utf8);
             return ObsCollectionApplyResult.Installed(
                 "Installed the OBS collection for this install."
             );

@@ -48,7 +48,10 @@ public class ObsDesiredStateTests
             snapshot.Launch.ExecutablePath,
             StringComparison.OrdinalIgnoreCase
         );
-        Assert.Equal(ObsLaunchDecision.ArgumentsForHeroesReplay(), snapshot.Launch.Arguments);
+        Assert.Equal(
+            ObsLaunchDecision.ArgumentsFor("HeroesReplay", "HeroesReplay"),
+            snapshot.Launch.Arguments
+        );
         Assert.Contains("--profile \"HeroesReplay\"", snapshot.Launch.Arguments);
         Assert.Contains("--collection \"HeroesReplay\"", snapshot.Launch.Arguments);
         Assert.DoesNotContain(
@@ -524,10 +527,257 @@ public class ObsDesiredStateTests
     }
 
     [Fact]
-    public void Guard_RefusalNamesTheStreamingSetting()
+    public void Guard_RefusalNamesTheStreamingSettingAndTheArm()
     {
-        Assert.Equal(TwitchIngestGuard.NotStartedMessage, TwitchIngestGuard.Refusal(true));
-        Assert.Equal("OBS streaming is disabled.", TwitchIngestGuard.Refusal(false));
+        Assert.Equal(TwitchIngestGuard.NotStartedMessage, TwitchIngestGuard.Refusal(true, true));
+        Assert.Equal(TwitchIngestGuard.NotArmedMessage, TwitchIngestGuard.Refusal(true, false));
+        Assert.Equal("OBS streaming is disabled.", TwitchIngestGuard.Refusal(false, true));
+        Assert.Equal("OBS streaming is disabled.", TwitchIngestGuard.Refusal(false, false));
+        Assert.Contains("obs arm", TwitchIngestGuard.NotArmedMessage, StringComparison.Ordinal);
+        Assert.Equal(ObsStreamArm.NotArmedReason, TwitchIngestGuard.BlockedBy(true, false));
+        Assert.Null(TwitchIngestGuard.BlockedBy(true, true));
+        Assert.Null(TwitchIngestGuard.BlockedBy(false, false));
+    }
+
+    [Fact]
+    public void Reconcile_NotArmed_DoesNotTouchObsAndReportsTheReason()
+    {
+        var socket = new FakeSession { IsIdentified = true, IsConnected = true };
+        int patches = 0;
+        Harness harness = Open(
+            Settings(),
+            socket,
+            beforeLaunch: () => patches++,
+            armed: () => false
+        );
+
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+        ObsRuntimeSnapshot again = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(0, patches);
+        Assert.Equal(0, socket.ConnectCalls);
+        Assert.Equal(0, socket.SelectionReads);
+        Assert.Equal(0, socket.SelectCalls);
+        Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal(0, harness.Process.LaunchCalls);
+        Assert.True(snapshot.StreamDesired);
+        Assert.False(snapshot.StreamActive);
+        Assert.False(snapshot.Stream.Succeeded);
+        Assert.Equal(ObsOutputFailure.NotRequested, snapshot.Stream.Failure);
+        Assert.Equal(ObsStreamArm.NotArmedReason, snapshot.Stream.Reason);
+        Assert.Equal("obs.stream_not_armed", snapshot.StreamBlockedBy);
+        Assert.Equal(TwitchIngestGuard.NotArmedMessage, snapshot.Stream.Detail);
+        Assert.Equal("obs.stream_not_armed", again.StreamBlockedBy);
+
+        var status = new SpectatorStatus();
+        ObsStatus.Copy(status, snapshot);
+        Assert.Equal("obs.stream_not_armed", status.ObsStreamBlockedBy);
+        Assert.Contains(
+            "blocked=obs.stream_not_armed",
+            ObsStatus.Describe(status),
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public void Reconcile_ArmIsReadEachTime()
+    {
+        bool armed = false;
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        Harness harness = Open(Settings(), socket, armed: () => armed);
+
+        ObsRuntimeSnapshot blocked = harness.Coordinator.ReconcileStream();
+        armed = true;
+        ObsRuntimeSnapshot started = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(ObsStreamArm.NotArmedReason, blocked.StreamBlockedBy);
+        Assert.True(started.Stream.Succeeded);
+        Assert.True(started.StreamActive);
+        Assert.Null(started.StreamBlockedBy);
+        Assert.Equal(1, socket.StartStreamCalls);
+    }
+
+    [Fact]
+    public void Reconcile_StreamingDisabled_IsNotReportedAsBlocked()
+    {
+        var socket = new FakeSession { IsIdentified = true, IsConnected = true };
+        Harness harness = Open(Settings(streaming: false), socket, armed: () => false);
+
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.False(snapshot.StreamDesired);
+        Assert.Null(snapshot.StreamBlockedBy);
+        Assert.Equal("OBS streaming is disabled.", snapshot.Stream.Detail);
+    }
+
+    [Fact]
+    public void Reconcile_NoArmReader_FailsClosed()
+    {
+        var socket = new FakeSession { IsIdentified = true, IsConnected = true };
+        var coordinator = new ObsCoordinator(
+            NullLogger.Instance,
+            new AppSettings { OBS = Settings() },
+            socket,
+            new FakeProcess(),
+            new RecordingSession(NullLogger.Instance, socket, Fast(0)),
+            new ObsBackoff(1, TimeSpan.Zero, TimeSpan.Zero),
+            _ => { },
+            TimeSpan.FromMilliseconds(20)
+        );
+
+        ObsRuntimeSnapshot snapshot = coordinator.ReconcileStream();
+
+        Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal(ObsStreamArm.NotArmedReason, snapshot.StreamBlockedBy);
+    }
+
+    [Theory]
+    [InlineData("Untitled", "HeroesReplay", "obs.profile_mismatch")]
+    [InlineData("HeroesReplay", "Untitled", "obs.collection_mismatch")]
+    [InlineData("Untitled", "Untitled", "obs.profile_mismatch")]
+    public void Reconcile_WrongProfileOrCollection_DoesNotChangeSceneOrStart(
+        string profile,
+        string collection,
+        string reason
+    )
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+            ProgramScene = "game-scene",
+            ActiveProfile = profile,
+            ActiveCollection = collection,
+        };
+        Harness harness = Open(Settings(), socket);
+
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(1, socket.SelectionReads);
+        Assert.Equal(0, socket.SelectCalls);
+        Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal("game-scene", snapshot.SceneActual);
+        Assert.False(snapshot.Stream.Succeeded);
+        Assert.Equal(ObsOutputFailure.SelectionMismatch, snapshot.Stream.Failure);
+        Assert.Equal(reason, snapshot.Stream.Reason);
+        Assert.Equal(reason, snapshot.StreamBlockedBy);
+        Assert.Contains("'Untitled'", snapshot.Stream.Detail, StringComparison.Ordinal);
+        Assert.Contains("were not started", snapshot.Stream.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Reconcile_ConfiguredNames_AreTheOnesChecked()
+    {
+        OBSSettings obs = Settings();
+        obs.ProfileName = "HeroesReplay-live";
+        obs.SceneCollectionName = "HeroesReplay-live";
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+            ActiveProfile = "HeroesReplay-live",
+            ActiveCollection = "HeroesReplay-live",
+        };
+        Harness harness = Open(obs, socket);
+
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.True(snapshot.Stream.Succeeded);
+        Assert.Equal(1, socket.StartStreamCalls);
+        Assert.Equal(
+            "--profile \"HeroesReplay-live\" --collection \"HeroesReplay-live\"",
+            ObsLaunchDecision
+                .Decide(
+                    true,
+                    false,
+                    "obs64.exe",
+                    true,
+                    ObsNames.Profile(obs),
+                    ObsNames.SceneCollection(obs)
+                )
+                .Arguments
+        );
+    }
+
+    [Fact]
+    public void Reconcile_SelectionUnreadable_FailsClosed()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+            SelectionError = new InvalidOperationException("request failed"),
+        };
+        Harness harness = Open(Settings(), socket);
+
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(0, socket.SelectCalls);
+        Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal(ObsOutputFailure.SelectionMismatch, snapshot.Stream.Failure);
+        Assert.Equal(ObsSelection.Unreadable, snapshot.StreamBlockedBy);
+        Assert.Contains("request failed", snapshot.Stream.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StartRecording_WrongCollection_DoesNotStopOrStartARecording()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            Recording = true,
+            ActiveCollection = "Untitled",
+        };
+        Harness harness = Open(Settings(streaming: false), socket, armed: () => false);
+
+        ObsRecordingResult started = harness.Coordinator.StartRecording(() => true, 7, "unit");
+
+        Assert.False(started.Succeeded);
+        Assert.False(started.Owned);
+        Assert.Equal(ObsOutputFailure.SelectionMismatch, started.Failure);
+        Assert.Equal(ObsSelection.CollectionMismatch, started.Reason);
+        Assert.Equal(0, socket.StopRecordCalls);
+        Assert.Equal(0, socket.StartRecordCalls);
+        Assert.Equal(1, socket.SelectionReads);
+
+        var status = new SpectatorStatus();
+        ObsStatus.CopyRecording(status, started);
+        Assert.Equal(ObsSelection.CollectionMismatch, status.ObsRecordBlockedBy);
+        Assert.Contains("'Untitled'", started.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StartRecording_IsNotGatedByTheArm()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            RecordOnStart = true,
+        };
+        Harness harness = Open(Settings(streaming: true), socket, armed: () => false);
+
+        ObsRecordingResult started = harness.Coordinator.StartRecording(() => true, 7, "unit");
+
+        Assert.True(started.Succeeded);
+        Assert.True(started.Owned);
+        Assert.Null(started.Reason);
+        Assert.Equal(1, socket.StartRecordCalls);
+        Assert.Equal(1, socket.SelectionReads);
+        Assert.Equal(0, socket.StartStreamCalls);
+
+        var status = new SpectatorStatus { ObsRecordBlockedBy = ObsSelection.ProfileMismatch };
+        ObsStatus.CopyRecording(status, started);
+        Assert.Null(status.ObsRecordBlockedBy);
     }
 
     [Fact]
@@ -685,7 +935,8 @@ public class ObsDesiredStateTests
         FakeProcess process = null,
         ObsBackoff backoff = null,
         ObsRecordingBudget budget = null,
-        Action beforeLaunch = null
+        Action beforeLaunch = null,
+        Func<bool> armed = null
     )
     {
         socket ??= new FakeSession();
@@ -700,7 +951,8 @@ public class ObsDesiredStateTests
             backoff ?? new ObsBackoff(1, TimeSpan.Zero, TimeSpan.Zero),
             waits.Add,
             TimeSpan.FromMilliseconds(20),
-            beforeLaunch
+            beforeLaunch,
+            armed ?? (() => true)
         );
         return new Harness
         {
@@ -798,6 +1050,11 @@ public class ObsDesiredStateTests
         public bool IdentifyOnConnect { get; set; }
         public Exception StartStreamError { get; set; }
         public Exception SelectError { get; set; }
+        public Exception SelectionError { get; set; }
+        public bool RecordOnStart { get; set; }
+        public string ActiveProfile { get; set; } = "HeroesReplay";
+        public string ActiveCollection { get; set; } = "HeroesReplay";
+        public int SelectionReads { get; private set; }
         public string ProgramScene { get; set; }
         public string LastEndpoint { get; private set; }
         public string LastPassword { get; private set; }
@@ -843,9 +1100,29 @@ public class ObsDesiredStateTests
             ProgramScene = sceneName;
         }
 
+        public string CurrentProfile()
+        {
+            SelectionReads++;
+            if (SelectionError != null)
+            {
+                throw SelectionError;
+            }
+
+            return ActiveProfile;
+        }
+
+        public string CurrentSceneCollection() => ActiveCollection;
+
         public bool IsRecording() => Recording;
 
-        public void StartRecord() => StartRecordCalls++;
+        public void StartRecord()
+        {
+            StartRecordCalls++;
+            if (RecordOnStart)
+            {
+                Recording = true;
+            }
+        }
 
         public string StopRecord()
         {

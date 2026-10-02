@@ -48,7 +48,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check heroespro
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check twitch
 ```
 
-`bootstrap-workstation.ps1` creates `C:\heroesreplay\Battle.net`, `Replays`, `Data\Standard`, `Data\Requests`, `Data\Contexts`, `Data\HeroesData`, and `secrets`, copies the OBS HeroesReplay collection/profile while OBS is closed, runs `fill-secrets-from-op.ps1`, then installs the git hooks. Install Battle.net with `winget install Blizzard.BattleNet --location C:\heroesreplay\Battle.net`. Quit HotS and run `heroesreplay client configure` for AhliObs + windowed 1080p. Report only `op whoami` user type and secret **lengths**. Layout: `AGENTS.md` Environments.
+`bootstrap-workstation.ps1` creates `C:\heroesreplay\Battle.net`, `Replays`, `Data\Standard`, `Data\Requests`, `Data\Contexts`, `Data\HeroesData`, and `secrets`, copies the OBS collection while OBS is closed and installs the OBS profile template only when the machine has none (an existing `basic.ini` is kept), runs `fill-secrets-from-op.ps1`, then installs the git hooks. Install Battle.net with `winget install Blizzard.BattleNet --location C:\heroesreplay\Battle.net`. Quit HotS and run `heroesreplay client configure` for AhliObs + windowed 1080p. Report only `op whoami` user type and secret **lengths**. Layout: `AGENTS.md` Environments.
 
 ## Vault
 

@@ -861,6 +861,7 @@ public class GameManager : IGameManager
         }
 
         ObsRecordingResult started = obsController.StartRecording();
+        statusStore.Patch(status => ObsStatus.CopyRecording(status, started));
         if (!started.Owned)
         {
             logger.LogWarning(

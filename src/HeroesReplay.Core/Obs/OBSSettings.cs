@@ -13,9 +13,22 @@ public class OBSSettings
 
     /// <summary>
     /// When false (the default), HeroesReplay never calls OBS StartStream/StopStream.
-    /// Dev VMs must leave this off so connectivity recovery cannot go live.
+    /// Dev VMs must leave this off so connectivity recovery cannot go live. A stream also
+    /// needs this machine's arm (<see cref="ObsStreamArm"/>), which no settings file can set.
     /// </summary>
     public bool StreamingEnabled { get; set; }
+
+    /// <summary>
+    /// OBS profile that must be active before HeroesReplay starts a stream or a recording.
+    /// The profile folder under <c>%APPDATA%\obs-studio\basic\profiles</c> has this name.
+    /// </summary>
+    public string ProfileName { get; set; } = ObsNames.Default;
+
+    /// <summary>
+    /// OBS scene collection that must be active. The live file is
+    /// <c>%APPDATA%\obs-studio\basic\scenes\{SceneCollectionName}.json</c>.
+    /// </summary>
+    public string SceneCollectionName { get; set; } = ObsNames.Default;
 
     /// <summary>
     /// When true, shutdown may close an OBS process this coordinator launched.

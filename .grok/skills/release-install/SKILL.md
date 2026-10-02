@@ -26,13 +26,20 @@ Stop any source-built `heroesreplay` and close Heroes of the Storm. OBS should b
 1. Download `heroesreplay-win-x64.zip` from the latest release.
 2. Extract it to `C:\heroesreplay\app`.
 3. Put secrets at `C:\heroesreplay\secrets\appsettings.secrets.json`.
-4. From `C:\heroesreplay\app`, run `heroesreplay services start` with `HEROES_REPLAY_ENV=prod`.
+4. On the stream PC only, run `heroesreplay obs arm`. Twitch ingest needs this machine-local arm (`%LOCALAPPDATA%\HeroesReplay\stream-armed`) as well as `OBS:StreamingEnabled` from `appsettings.prod.json`. A first install has no previous install to migrate from, so nothing arms it for you.
+5. From `C:\heroesreplay\app`, run `heroesreplay services start` with `HEROES_REPLAY_ENV=prod`.
 
-Do not point the install at the git worktree.
+Do not point the install at the git worktree. The OBS profile (`basic.ini`) belongs to the machine: if `%APPDATA%\obs-studio\basic\profiles\{OBS:ProfileName}\basic.ini` already exists it is kept. Otherwise copy `app\obs\Default\basic.ini` there as a starting template and tune it in OBS.
 
 ## Later updates
 
-After a replay finishes, the spectator compares `version.txt` with the latest release. A newer zip is downloaded and prepared under `%LOCALAPPDATA%\HeroesReplay\updates\<version>` (secrets and the higher `MinReplayId` carried over), the spectator writes `services.stop` so every service exits, and `apply-release.ps1` waits until `heroesreplay.exe` has exited. When `app.previous` exists it runs `update release-health`. If the previous install is still inside the stabilization window, `app.previous` stays the rollback and the current install is not backed up; the update still installs. Otherwise it backs up `C:\heroesreplay\app` to `app.previous`. Either way it copies the new files over it, copies secrets back, and starts the stack again: scheduled task `HeroesReplay-live` if it exists, else `%LOCALAPPDATA%\HeroesReplay\start-live.cmd`, else `heroesreplay services start`. A failed copy restores `app.previous`. The next replay is the next unplayed file. If OBS is open, scene files stay in `app\obs` and are not copied over the live collection. If OBS is closed, `Default.json` and `basic.ini` are copied. `service.json` is never copied.
+After a replay finishes, the spectator compares `version.txt` with the latest release. A newer zip is downloaded and prepared under `%LOCALAPPDATA%\HeroesReplay\updates\<version>` (secrets and the higher `MinReplayId` carried over), the spectator writes `services.stop` so every service exits, and `apply-release.ps1` waits until `heroesreplay.exe` has exited. When `app.previous` exists it runs `update release-health`. If the previous install is still inside the stabilization window, `app.previous` stays the rollback and the current install is not backed up; the update still installs. Otherwise it backs up `C:\heroesreplay\app` to `app.previous`. Either way it copies the new files over it, copies secrets back, and starts the stack again: scheduled task `HeroesReplay-live` if it exists, else `%LOCALAPPDATA%\HeroesReplay\start-live.cmd`, else `heroesreplay services start`. A failed copy restores `app.previous`. The next replay is the next unplayed file.
+
+OBS files: after the copy, the new exe runs `update install-obs`, which reads `OBS:SceneCollectionName` and `OBS:ProfileName` from the install. If OBS is open, scene files stay in `app\obs` and are not copied over the live collection. If OBS is closed, `Default.json` replaces `scenes\{collection}.json`. The profile `basic.ini` is copied only when the machine has no profile of that name; an existing profile is kept and the log says so. `service.json` is never copied.
+
+Stream arm migration: before the files are replaced, the staged exe runs `update migrate-stream-arm --previous C:\heroesreplay\app`. It reads the effective settings of the install being replaced (`appsettings.json`, secrets, `appsettings.{HEROES_REPLAY_ENV or prod}.json`, `HEROES_REPLAY_` variables). When `OBS:StreamingEnabled` is true there and the machine is not armed, it arms the machine once, so the update that introduces the arm keeps production live. It never arms when `OBS:StreamingEnabled` is false. It writes `%LOCALAPPDATA%\HeroesReplay\stream-arm.migrated` and never runs again, so a later `obs disarm` survives updates.
+
+`apply-release.ps1` runs hidden. It appends what it did (OBS files kept or copied, the arm decision) to `%LOCALAPPDATA%\HeroesReplay\logs\apply-release.log`.
 
 `heroesreplay update check` prints the installed version and the latest tag. It does not download or restart.
 

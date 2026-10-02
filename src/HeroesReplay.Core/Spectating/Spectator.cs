@@ -437,6 +437,7 @@ public class Spectator : ISpectator
         }
 
         ObsRecordingResult started = obsController.StartRecording();
+        statusStore.Patch(status => ObsStatus.CopyRecording(status, started));
         if (started == null || !started.Owned)
         {
             logger.LogWarning(

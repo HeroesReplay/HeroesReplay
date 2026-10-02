@@ -18,8 +18,6 @@ public enum ObsLaunchKind
 /// </summary>
 public sealed record ObsLaunchDecision
 {
-    public const string ProfileName = "HeroesReplay";
-    public const string CollectionName = "HeroesReplay";
     public const string ProcessName = "obs64";
 
     public ObsLaunchKind Kind { get; init; }
@@ -28,8 +26,12 @@ public sealed record ObsLaunchDecision
     public bool Started { get; init; }
     public string Detail { get; init; }
 
-    public static string ArgumentsForHeroesReplay() =>
-        "--profile \"" + ProfileName + "\" --collection \"" + CollectionName + "\"";
+    public static string ArgumentsFor(string profileName, string collectionName) =>
+        "--profile \""
+        + ObsNames.Pick(profileName)
+        + "\" --collection \""
+        + ObsNames.Pick(collectionName)
+        + "\"";
 
     public static string ResolveExecutable(string configured)
     {
@@ -47,7 +49,14 @@ public sealed record ObsLaunchDecision
         );
     }
 
-    public static ObsLaunchDecision Decide(bool enabled, bool running, string path, bool exists)
+    public static ObsLaunchDecision Decide(
+        bool enabled,
+        bool running,
+        string path,
+        bool exists,
+        string profileName = null,
+        string collectionName = null
+    )
     {
         if (!enabled)
         {
@@ -82,8 +91,9 @@ public sealed record ObsLaunchDecision
         {
             Kind = ObsLaunchKind.Launch,
             ExecutablePath = path,
-            Arguments = ArgumentsForHeroesReplay(),
-            Detail = "OBS is not running. Launch it with the HeroesReplay profile and collection.",
+            Arguments = ArgumentsFor(profileName, collectionName),
+            Detail =
+                "OBS is not running. Launch it with the configured profile and scene collection.",
         };
     }
 }
@@ -139,6 +149,12 @@ public sealed record ObsRuntimeSnapshot
     public bool RecordingDesired { get; init; }
     public bool RecordingActive { get; init; }
     public ObsStreamResult Stream { get; init; }
+
+    /// <summary>
+    /// Stable code when the stream is desired but was not started, such as
+    /// <c>obs.stream_not_armed</c> or <c>obs.profile_mismatch</c>. Null otherwise.
+    /// </summary>
+    public string StreamBlockedBy { get; init; }
 }
 
 public static class ObsDesired
@@ -176,6 +192,8 @@ public static class ObsDesired
             RecordingDesired = recordingDesired,
             RecordingActive = recordingActive,
             Stream = stream,
+            StreamBlockedBy =
+                streamDesired && stream is { Succeeded: false } ? stream.Reason : null,
         };
     }
 }
@@ -274,7 +292,22 @@ public static class ObsStatus
         status.ObsSceneActual = snapshot.SceneActual;
         status.ObsStreamDesired = snapshot.StreamDesired;
         status.ObsStreamActive = snapshot.StreamActive;
+        status.ObsStreamBlockedBy = snapshot.StreamBlockedBy;
         status.ObsDetail = snapshot.Stream?.Detail ?? snapshot.Launch?.Detail;
+    }
+
+    /// <summary>
+    /// Sets the code of a refused recording start and clears it on the next start. The detail
+    /// (which profile or collection is active) is in the spectator log and <c>check obs</c>.
+    /// </summary>
+    public static void CopyRecording(SpectatorStatus status, ObsRecordingResult started)
+    {
+        if (status == null || started == null)
+        {
+            return;
+        }
+
+        status.ObsRecordBlockedBy = started.Reason;
     }
 
     public static string Describe(SpectatorStatus status)
@@ -293,7 +326,17 @@ public static class ObsStatus
             + " stream desired="
             + status.ObsStreamDesired
             + " active="
-            + status.ObsStreamActive;
+            + status.ObsStreamActive
+            + (
+                string.IsNullOrWhiteSpace(status.ObsStreamBlockedBy)
+                    ? string.Empty
+                    : " blocked=" + status.ObsStreamBlockedBy
+            )
+            + (
+                string.IsNullOrWhiteSpace(status.ObsRecordBlockedBy)
+                    ? string.Empty
+                    : " record blocked=" + status.ObsRecordBlockedBy
+            );
     }
 }
 

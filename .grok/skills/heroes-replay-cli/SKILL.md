@@ -2,7 +2,7 @@
 name: heroes-replay-cli
 description: >
   heroesreplay CLI: spectate, services, heroesprofile, calculators, check, client, otel, twitch,
-  youtube, update, mcp, secrets, op://.
+  youtube, obs, update, mcp, secrets, op://.
   Use when adding or changing commands, validating integrations, running the exe,
   or /heroes-replay-cli.
 ---
@@ -36,7 +36,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check` | Runs config, heroesprofile, obs, twitch, client, battlenet, and connectivity; continues on failure; exit 1 if any fail |
 | `check config` | Bind settings; print which secrets are present (never print values) |
 | `check heroesprofile` | Kiota `GET /replays` max_replay_id with Bearer key |
-| `check obs` | obs-websocket 5 Identify + `GetVersion`, and verify scene files |
+| `check obs` | obs-websocket 5 Identify + `GetVersion`, verify scene files, and fail when the active profile or scene collection is not `OBS:ProfileName` / `OBS:SceneCollectionName` |
 | `check twitch` | Helix `GetUsers` for configured channel, `GetPredictions` when predictions are enabled, and the token scopes. Fails when predictions are enabled and `GetPredictions` fails |
 | `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
 | `check battlenet` | Capture the Battle.net window and report the Play or Update button |
@@ -52,15 +52,19 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `twitch predictions test [--outcome Blue\|Red\|cancel]` | Create then resolve/cancel a 30s Blue/Red prediction. Default `cancel`. Any other outcome is a parse error. |
 | `youtube uploader` | Watch `Data\Contexts` for `.mp4` + `youtube-entry.json`. `YouTube:DryRun` true (dev and base) writes `youtube-dry-run.json` and does not call YouTube. Production (`HEROES_REPLAY_ENV=prod`) sets `DryRun` false, `YouTube:Enabled` true, and `OBS:RecordingEnabled` true, so every spectated replay is recorded from the loading screen until the MVP screen and this process uploads it. Public uploads are paced by the `ReplayMedia` limits (`MaxPublicPerDay`, `MaxPublicPerWeek`, `MinimumPublicInterval`). A completed upload saves `VideoId` on `youtube-entry-uploaded.json`. Real uploads need `Data\client_secrets.json`. `services start` launches this process. Each successful insert appends a line to `Data\youtube-library.jsonl`, which retention never deletes. It also runs the `youtube library` pass at most every `YouTube:LibraryInterval` (1 hour), and it is the only process that calls YouTube; the spectator's duplicate check reads `Data\youtube-replay-ids.txt` and the receipts only. |
 | `youtube library [--once]` | Run the uploader's library pass now. Lists the channel's uploads with the `{ChannelId}:library` consent (full `https://www.googleapis.com/auth/youtube` scope), adds every replay id to `Data\youtube-replay-ids.txt`, records videos missing from `Data\youtube-library.jsonl` (Heroes Profile fills a missing map, mode, rank, or build; unresolved videos retry with backoff), and files the record into `{Map} - {Mode}` playlists (`{Map} - Storm League - {League}` for ranked games, division dropped) and patch playlists (`Patch {line}`, or the season name, for the current line; `Patch {line} archive` for older lines). Prints the planned inserts. `--once` runs one pass and exits; without it the pass repeats each `YouTube:LibraryInterval` until stopped. Shares the uploader's daily units in `Data\youtube-quota-units.json` (`LibraryUnitsPerDay` 3000, `DailyQuotaUnits` 10000 minus `QuotaReserveUnits` 1600) and its lock, so the two cannot double-spend. A quota response pauses the pass until the next Pacific day. Not started by `services start`; `youtube uploader` runs the same pass there. Dry-run writes `Data\youtube-library-dry-run.json` and calls neither YouTube nor Heroes Profile. Playlist ids are cached in `Data\youtube-playlists.json`. |
+| `obs arm` | Allow this machine to start Twitch ingest: writes `%LOCALAPPDATA%\HeroesReplay\stream-armed`. Ingest needs this arm **and** `OBS:StreamingEnabled` (prod). Stream PC only; never on ASA-SERVER. The spectator picks it up on its next reconcile. |
+| `obs disarm` | Delete the arm. No new stream starts; a live stream keeps running until `services stop` or OBS stops it. |
+| `obs status` | Print the arm, `OBS:StreamingEnabled`, and the expected `OBS:ProfileName` / `OBS:SceneCollectionName`. Does not connect to OBS and does not resolve secrets. |
 | `update check` | Print the installed version and the latest release tag. Does not download or restart. |
 | `update preserve-min-replay-id` / `update release-health` | Called by `apply-release.ps1`: keep the higher `MinReplayId` when a release replaces `appsettings.json`, and exit 0 once `role-ready.txt` shows every role ready for the stabilization window. |
+| `update migrate-stream-arm --previous <dir> [--environment env]` / `update install-obs --install <dir> [--environment env]` | Called by `apply-release.ps1`. The first arms the machine once when the replaced install's effective `OBS:StreamingEnabled` is true (never when false, never twice). The second copies the scene collection while OBS is closed and installs the profile template only when the machine has no profile. Do not run them by hand on a dev box: they write `%LOCALAPPDATA%\HeroesReplay` and `%APPDATA%\obs-studio`. |
 | `mcp` | Stdio MCP server. Logs on stderr. Snapshot: `%LOCALAPPDATA%/HeroesReplay/status.json` |
 
 New commands go on `HeroesReplayCommand` and need a **Smoke** test in `src/HeroesReplay.Tests/Smoke`.
 
 ## Secrets
 
-Skill `op-service-account`. Clone to `C:\heroesreplay\HeroesReplay`. `pwsh -File tools/bootstrap-workstation.ps1` creates Data/Replays dirs, copies OBS collection, fills secrets, installs git hooks. Live file `src/HeroesReplay.CLI/appsettings.secrets.json` (gitignored). `BindSettings` runs `SecretResolver.Apply`. Env prefix `HEROES_REPLAY_`. Do not log resolved tokens. Layout: `AGENTS.md` Environments.
+Skill `op-service-account`. Clone to `C:\heroesreplay\HeroesReplay`. `pwsh -File tools/bootstrap-workstation.ps1` creates Data/Replays dirs, copies the OBS collection, installs the OBS profile template only when none exists, fills secrets, installs git hooks. Live file `src/HeroesReplay.CLI/appsettings.secrets.json` (gitignored). `BindSettings` runs `SecretResolver.Apply`. Env prefix `HEROES_REPLAY_`. Do not log resolved tokens. Layout: `AGENTS.md` Environments.
 
 ## Config load
 
@@ -71,7 +75,7 @@ Skill `op-service-account`. Clone to `C:\heroesreplay\HeroesReplay`. `pwsh -File
 | Filter | What |
 | --- | --- |
 | default / `Category=Unit` | Everything under `src/HeroesReplay.Tests/Unit` (one folder per Core slice) |
-| `Category=Smoke` | Parse `--help`; asserts root, `check`, `client`, `otel`, `services`, `heroesprofile`, `twitch`, `calculators`, and `youtube` subcommands exist. Exit codes: `spectate --help` and `spectate file --help` exit 0 without elevation; an invalid `--player` or a missing `--file` exits 1 |
+| `Category=Smoke` | Parse `--help`; asserts root, `check`, `client`, `otel`, `services`, `heroesprofile`, `twitch`, `calculators`, `youtube`, `obs`, and `update` subcommands exist. Exit codes: `spectate --help` and `spectate file --help` exit 0 without elevation; an invalid `--player` or a missing `--file` exits 1 |
 | `Category=Integration` | Live Heroes Profile v1 list/download (needs `op` or env key), YouTube dry-run upload, medium-integrity process launch |
 
 After changing a check target, run that CLI command, not only unit tests.

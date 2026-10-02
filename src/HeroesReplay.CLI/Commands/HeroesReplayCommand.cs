@@ -3,6 +3,7 @@ using HeroesReplay.CLI.Commands.Calculators;
 using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
 using HeroesReplay.CLI.Commands.HeroesProfile;
+using HeroesReplay.CLI.Commands.Obs;
 using HeroesReplay.CLI.Commands.Otel;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.CLI.Commands.Spectate;
@@ -27,6 +28,7 @@ public class HeroesReplayCommand : RootCommand
         Subcommands.Add(new YouTubeCommand());
         Subcommands.Add(new HeroesProfileCommand());
         Subcommands.Add(new ServicesCommand());
+        Subcommands.Add(new ObsCommand());
         Subcommands.Add(new UpdateCommand());
     }
 }

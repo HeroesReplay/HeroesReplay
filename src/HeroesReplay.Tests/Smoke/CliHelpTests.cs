@@ -21,6 +21,44 @@ public class CliHelpTests
         Assert.Contains(root.Subcommands, c => c.Name == "client");
         Assert.Contains(root.Subcommands, c => c.Name == "otel");
         Assert.Contains(root.Subcommands, c => c.Name == "update");
+        Assert.Contains(root.Subcommands, c => c.Name == "obs");
+    }
+
+    [Fact]
+    public void ObsHelp_HasArmDisarmStatus()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("obs --help");
+        Assert.Empty(result.Errors);
+        Command obs = root.Subcommands.Single(c => c.Name == "obs");
+        Assert.Contains("OBS:StreamingEnabled", obs.Description);
+        Command arm = obs.Subcommands.Single(c => c.Name == "arm");
+        Assert.Contains("stream-armed", arm.Description);
+        Assert.Contains(obs.Subcommands, c => c.Name == "disarm");
+        Assert.Contains(obs.Subcommands, c => c.Name == "status");
+        foreach (
+            string help in new[] { "obs arm --help", "obs disarm --help", "obs status --help" }
+        )
+        {
+            Assert.Empty(root.Parse(help).Errors);
+        }
+    }
+
+    [Fact]
+    public void UpdateHelp_HasTheReleaseHelpers()
+    {
+        var root = new HeroesReplayCommand();
+        ParseResult result = root.Parse("update --help");
+        Assert.Empty(result.Errors);
+        Command update = root.Subcommands.Single(c => c.Name == "update");
+        Assert.Contains(update.Subcommands, c => c.Name == "check");
+        Assert.Contains(update.Subcommands, c => c.Name == "preserve-min-replay-id");
+        Assert.Contains(update.Subcommands, c => c.Name == "release-health");
+        Assert.Contains(update.Subcommands, c => c.Name == "migrate-stream-arm");
+        Assert.Contains(update.Subcommands, c => c.Name == "install-obs");
+        Assert.Empty(root.Parse("update migrate-stream-arm --previous C:\\app").Errors);
+        Assert.NotEmpty(root.Parse("update migrate-stream-arm").Errors);
+        Assert.Empty(root.Parse("update install-obs --install C:\\app --environment prod").Errors);
     }
 
     [Fact]

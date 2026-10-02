@@ -54,6 +54,12 @@ internal interface IObsSession : IObsRecordSocket
     void Disconnect();
     void SelectProgramScene(string sceneName);
     string ProgramScene { get; }
+
+    /// <summary>GetProfileList → currentProfileName.</summary>
+    string CurrentProfile();
+
+    /// <summary>GetSceneCollectionList → currentSceneCollectionName.</summary>
+    string CurrentSceneCollection();
 }
 
 internal sealed class ObsWebsocketRecordSocket : IObsSession
@@ -97,6 +103,10 @@ internal sealed class ObsWebsocketRecordSocket : IObsSession
     public string ProgramScene => obs.GetCurrentProgramScene();
 
     public void SelectProgramScene(string sceneName) => obs.SetCurrentProgramScene(sceneName);
+
+    public string CurrentProfile() => obs.GetProfileList()?.CurrentProfileName;
+
+    public string CurrentSceneCollection() => obs.GetCurrentSceneCollection();
 
     public void Connect(string endpoint, string password, TimeSpan identifyTimeout)
     {
