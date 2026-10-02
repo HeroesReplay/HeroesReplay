@@ -242,7 +242,7 @@ public class Engine : IEngine
             }
             catch (Exception) when (!consoleTokenProvider.Token.IsCancellationRequested)
             {
-                recordSession(false, "Error");
+                recordSession(false, ReplaySession.ErrorOutcome);
                 throw;
             }
 

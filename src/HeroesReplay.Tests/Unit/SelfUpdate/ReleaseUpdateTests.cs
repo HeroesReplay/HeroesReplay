@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-using System.Threading.Tasks;
-using HeroesReplay.CLI.Commands;
 using HeroesReplay.Core.SelfUpdate;
 using Xunit;
 
@@ -47,7 +45,7 @@ public class ReleaseUpdateTests
     }
 
     [Fact]
-    public void Swap_ReplacesTheInstallAndLeavesTheQueueAlone()
+    public void CopyPublish_PreparesTheReleaseAndLeavesTheQueueAlone()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-release-" + Path.GetRandomFileName());
         string install = Path.Combine(root, "app");
@@ -74,116 +72,16 @@ public class ReleaseUpdateTests
             string prepared = Path.Combine(root, "prepared");
             ReleaseInstall.CopyPublish(staged, prepared);
             ReleaseInstall.PreserveSecrets(secrets, install, prepared);
-            ReleaseInstall.Swap(install, prepared);
 
-            Assert.Equal("new", File.ReadAllText(Path.Combine(install, "heroesreplay.exe")));
+            Assert.Equal("new", File.ReadAllText(Path.Combine(prepared, "heroesreplay.exe")));
             Assert.Equal(
                 "secret",
-                File.ReadAllText(Path.Combine(install, "appsettings.secrets.json"))
+                File.ReadAllText(Path.Combine(prepared, "appsettings.secrets.json"))
             );
-            Assert.False(File.Exists(Path.Combine(install, "obs", "Default", "service.json")));
+            Assert.False(File.Exists(Path.Combine(prepared, "obs", "Default", "service.json")));
+            Assert.Equal("old", File.ReadAllText(Path.Combine(install, "heroesreplay.exe")));
             Assert.Equal("65268119", File.ReadAllText(Path.Combine(data, "spectated-ids.txt")));
             Assert.Equal("[]", File.ReadAllText(Path.Combine(data, "requests.json")));
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, recursive: true);
-            }
-        }
-    }
-
-    [Fact]
-    public void MayDiscardPrevious_WaitsUntilTheStackHasBeenHealthy()
-    {
-        Assert.False(ReleaseHealth.MayDiscardPrevious(false, ReleaseHealth.StabilizeFor));
-        Assert.False(ReleaseHealth.MayDiscardPrevious(true, TimeSpan.FromMinutes(-1)));
-        Assert.False(
-            ReleaseHealth.MayDiscardPrevious(
-                true,
-                ReleaseHealth.StabilizeFor.Subtract(TimeSpan.FromTicks(1))
-            )
-        );
-        Assert.True(ReleaseHealth.MayDiscardPrevious(true, ReleaseHealth.StabilizeFor));
-    }
-
-    [Fact]
-    public void MayDiscardRoleFile_WaitsForReadyRolesInsteadOfFolderAge()
-    {
-        DateTimeOffset since = new(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
-        string text = ReleaseHealth.FormatRoleFile(since);
-
-        Assert.False(ReleaseHealth.MayDiscardRoleFile(null, since.AddMinutes(3)));
-        Assert.False(ReleaseHealth.MayDiscardRoleFile("", since.AddMinutes(3)));
-        Assert.False(ReleaseHealth.MayDiscardRoleFile("roles=ready", since.AddMinutes(3)));
-        Assert.False(ReleaseHealth.MayDiscardRoleFile(text, since.AddMinutes(1)));
-        Assert.True(ReleaseHealth.MayDiscardRoleFile(text, since.Add(ReleaseHealth.StabilizeFor)));
-    }
-
-    [Fact]
-    public async Task ReleaseHealthCommand_RefusesAMissingRoleFile()
-    {
-        string root = Path.Combine(Path.GetTempPath(), "hr-role-cmd-" + Path.GetRandomFileName());
-        Directory.CreateDirectory(root);
-        string path = Path.Combine(root, "role-ready.txt");
-        try
-        {
-            int missing = await new HeroesReplayCommand()
-                .Parse("update release-health --role-file " + path)
-                .InvokeAsync();
-            File.WriteAllText(path, ReleaseHealth.FormatRoleFile(DateTimeOffset.UtcNow));
-            int early = await new HeroesReplayCommand()
-                .Parse("update release-health --role-file " + path)
-                .InvokeAsync();
-            File.WriteAllText(
-                path,
-                ReleaseHealth.FormatRoleFile(
-                    DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(3))
-                )
-            );
-            int ready = await new HeroesReplayCommand()
-                .Parse("update release-health --role-file " + path)
-                .InvokeAsync();
-
-            Assert.Equal(1, missing);
-            Assert.Equal(1, early);
-            Assert.Equal(0, ready);
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-            {
-                Directory.Delete(root, true);
-            }
-        }
-    }
-
-    [Fact]
-    public void Swap_KeepsThePreviousInstallInsideTheStabilizationWindow()
-    {
-        string root = Path.Combine(Path.GetTempPath(), "hr-window-" + Path.GetRandomFileName());
-        string install = Path.Combine(root, "app");
-        string staged = Path.Combine(root, "staged");
-        string previous = install + ".previous";
-        try
-        {
-            Directory.CreateDirectory(install);
-            Directory.CreateDirectory(staged);
-            Directory.CreateDirectory(previous);
-            File.WriteAllText(Path.Combine(install, "heroesreplay.exe"), "old");
-            File.WriteAllText(Path.Combine(staged, "heroesreplay.exe"), "new");
-            File.WriteAllText(Path.Combine(previous, "marker.txt"), "keep");
-
-            Assert.Throws<InvalidOperationException>(() => ReleaseInstall.Swap(install, staged));
-            Assert.Equal("keep", File.ReadAllText(Path.Combine(previous, "marker.txt")));
-            Assert.Equal("old", File.ReadAllText(Path.Combine(install, "heroesreplay.exe")));
-
-            ReleaseInstall.Swap(install, staged, healthyFor: ReleaseHealth.StabilizeFor);
-
-            Assert.Equal("new", File.ReadAllText(Path.Combine(install, "heroesreplay.exe")));
-            Assert.Equal("old", File.ReadAllText(Path.Combine(previous, "heroesreplay.exe")));
-            Assert.False(File.Exists(Path.Combine(previous, "marker.txt")));
         }
         finally
         {

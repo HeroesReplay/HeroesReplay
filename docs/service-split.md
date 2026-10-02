@@ -67,7 +67,7 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 
 ## Role health
 
-Each role writes its ready file, `%LOCALAPPDATA%\HeroesReplay\ready\<nonce>.json`, when it is ready, then rewrites it every `ServiceHealth:HeartbeatInterval` (15 s) from a timer (`ServiceHeartbeat`). The file carries `role`, `version`, `executablePath`, `nonce`, `pid`, `readiness` (`ready`, `stopping` once the stop file or Ctrl+C reaches the role, `exited` when it left its loop without one), `readyAt`, `heartbeatAt`, `heartbeatIntervalSeconds`, `lastSuccessfulWorkAt`, and `lastError` (`message`, `at`). Spectate also writes `sessionsWithoutProgress` and `lastOutcome`. Error and critical logs become `lastError`, with tokens redacted.
+Each role writes its ready file, `%LOCALAPPDATA%\HeroesReplay\ready\<nonce>.json`, when it is ready, then rewrites it every `ServiceHealth:HeartbeatInterval` (15 s) from a timer (`ServiceHeartbeat`). The file carries `role`, `version`, `executablePath`, `nonce`, `pid`, `readiness` (`ready`, `stopping` once the stop file or Ctrl+C reaches the role, `exited` when it left its loop without one), `readyAt`, `heartbeatAt`, `heartbeatIntervalSeconds`, `lastSuccessfulWorkAt`, and `lastError` (`message`, `at`). Spectate also writes `sessionsWithoutProgress`, `lastOutcome`, and `sessionOutcomes` (sessions this process ended, by outcome; the release health gate reads it). Error and critical logs become `lastError`, with tokens redacted.
 
 Successful work is role-defined:
 
@@ -88,7 +88,7 @@ Successful work is role-defined:
 | stopped | `service.stopped` | Not in `services.json`, or exited after a stop request |
 | failed | `service.failed` | In `services.json`, gone, and no stop request was recorded |
 
-`--output json` prints `schemaVersion` (1), `ok`, `code` (the worst role: failed, stale, degraded, ready, stopped; `service.restart_budget_exhausted` wins over all of them), `message`, `environment`, `checkedAt`, `stopRequested`, `roles[]` (state, code, cause, `causeCode`, remediation, pid, path, version, readiness, heartbeat and work ages with their limits, `lastError`, `sessionsWithoutProgress`, `lastOutcome`, `logPath`, `restarts`), a `spectator` summary of `status.json`, and `supervisor`. It exits 1 when any role is failed, stale, or degraded.
+`--output json` prints `schemaVersion` (1), `ok`, `code` (the worst role: failed, stale, degraded, ready, stopped; `service.restart_budget_exhausted` wins over all of them), `message`, `environment`, `checkedAt`, `stopRequested`, `roles[]` (state, code, cause, `causeCode`, remediation, pid, path, version, readiness, heartbeat and work ages with their limits, `lastError`, `sessionsWithoutProgress`, `lastOutcome`, `sessionOutcomes`, `logPath`, `restarts`), a `spectator` summary of `status.json`, and `supervisor`. It exits 1 when any role is failed, stale, or degraded.
 
 ## Role logs
 

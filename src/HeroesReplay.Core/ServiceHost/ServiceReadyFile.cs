@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
@@ -38,6 +39,12 @@ public sealed class ServiceReadyReport
 
     /// <summary>Spectate only: how the last replay session ended (<c>LoadTimedOut</c>, ...).</summary>
     public string LastOutcome { get; set; }
+
+    /// <summary>
+    /// Spectate only: how many replay sessions this process ended with each outcome. The release
+    /// health gate reads it to tell a build that cannot play from a stack with nothing to play.
+    /// </summary>
+    public Dictionary<string, int> SessionOutcomes { get; set; }
 }
 
 public sealed class ServiceRoleError

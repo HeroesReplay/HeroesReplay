@@ -159,50 +159,6 @@ public static class ReleaseInstall
         }
     }
 
-    public static void Swap(
-        string installDirectory,
-        string stagedDirectory,
-        bool allRolesReady = true,
-        TimeSpan? healthyFor = null
-    )
-    {
-        if (LooksLikeSourceBuild(installDirectory))
-        {
-            throw new InvalidOperationException(
-                $"Refusing to replace a source build at {installDirectory}."
-            );
-        }
-
-        string previous = installDirectory.TrimEnd(Path.DirectorySeparatorChar) + ".previous";
-        if (Directory.Exists(previous))
-        {
-            TimeSpan healthy = healthyFor ?? TimeSpan.Zero;
-            if (!ReleaseHealth.MayDiscardPrevious(allRolesReady, healthy))
-            {
-                throw new InvalidOperationException(
-                    "The previous install is still inside the stabilization window."
-                );
-            }
-
-            Directory.Delete(previous, recursive: true);
-        }
-
-        Directory.Move(installDirectory, previous);
-        try
-        {
-            Directory.Move(stagedDirectory, installDirectory);
-        }
-        catch
-        {
-            if (!Directory.Exists(installDirectory) && Directory.Exists(previous))
-            {
-                Directory.Move(previous, installDirectory);
-            }
-
-            throw;
-        }
-    }
-
     /// <summary>
     /// What <c>apply-release.ps1</c> does with the release's OBS files. While OBS is closed the
     /// scene collection is replaced, as before, and <c>services start</c> then points its paths at
