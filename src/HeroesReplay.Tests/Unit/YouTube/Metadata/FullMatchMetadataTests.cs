@@ -91,7 +91,7 @@ public class FullMatchMetadataTests
         Assert.Equal(first.Description, second.Description);
         Assert.Equal(first.Tags, second.Tags);
         Assert.Equal(FullMatchMetadataBuilder.TemplateVersion, first.TemplateVersion);
-        Assert.Equal("5", first.TemplateVersion);
+        Assert.Equal("6", first.TemplateVersion);
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public class FullMatchMetadataTests
         Assert.False(empty.ClaimsFullMatch);
         Assert.False(missing.ClaimsPentakill);
         Assert.False(missing.ClaimsTeamWipe);
-        Assert.Equal("5", missing.TemplateVersion);
+        Assert.Equal("6", missing.TemplateVersion);
         Assert.Null(missing.ReplayId);
         Assert.Null(missing.HeroesProfileUrl);
     }

@@ -11,5 +11,6 @@ public class CalculatorsCommand : Command
         Subcommands.Add(new ReportCommand());
         Subcommands.Add(new CoordinatesCommand());
         Subcommands.Add(new UnitsCommand());
+        Subcommands.Add(new CompositionsCommand());
     }
 }

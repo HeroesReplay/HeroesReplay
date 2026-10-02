@@ -48,4 +48,7 @@ public class YouTubeTitleSettings
     public string Support { get; set; } = "Support";
     public string MeleeAssassin { get; set; } = "Melee Assassin";
     public string RangedAssassin { get; set; } = "Ranged Assassin";
+
+    /// <summary>Team-composition labels such as double soak or dive (<c>YouTube:Titles:Compositions</c>).</summary>
+    public TeamCompositionSettings Compositions { get; set; } = new TeamCompositionSettings();
 }

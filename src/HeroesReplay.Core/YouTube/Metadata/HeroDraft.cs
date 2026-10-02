@@ -25,20 +25,8 @@ public static class HeroDraft
         YouTubeTitleSettings titles = null
     )
     {
-        titles ??= new YouTubeTitleSettings();
-        if (
-            !titles.DraftNotes
-            || catalog == null
-            || catalog.Count == 0
-            || roster == null
-            || roster.Count == 0
-        )
-        {
-            return null;
-        }
-
-        string blue = TeamPhrase(catalog, roster, titles, team: 0);
-        string red = TeamPhrase(catalog, roster, titles, team: 1);
+        string blue = TeamNote(catalog, roster, titles, team: 0)?.Text;
+        string red = TeamNote(catalog, roster, titles, team: 1)?.Text;
         if (blue == null && red == null)
         {
             return null;
@@ -62,13 +50,29 @@ public static class HeroDraft
         return WithTeam("Blue", blue) + ", " + WithTeam("Red", red);
     }
 
-    private static string TeamPhrase(
+    /// <summary>
+    /// One team's role note, or null for a usual draft, a short team, or a hero the catalog
+    /// cannot match. The key is the note's switch name in <c>YouTube:Titles</c>.
+    /// </summary>
+    public static DraftNote TeamNote(
         IReadOnlyList<Hero> catalog,
         IReadOnlyList<ReplayMediaPlayer> roster,
         YouTubeTitleSettings titles,
         int team
     )
     {
+        titles ??= new YouTubeTitleSettings();
+        if (
+            !titles.DraftNotes
+            || catalog == null
+            || catalog.Count == 0
+            || roster == null
+            || roster.Count == 0
+        )
+        {
+            return null;
+        }
+
         string tank = Label(titles.Tank, Tank);
         string bruiser = Label(titles.Bruiser, Bruiser);
         string healer = Label(titles.Healer, Healer);
@@ -130,58 +134,64 @@ public static class HeroDraft
 
         if (titles.NoTankOrHealer && healers == 0 && tanks == 0)
         {
-            return "No " + Lower(tank) + " or " + Lower(healer);
+            return new DraftNote(
+                nameof(titles.NoTankOrHealer),
+                "No " + Lower(tank) + " or " + Lower(healer)
+            );
         }
 
         if (titles.NoHealer && healers == 0)
         {
-            return "No " + Lower(healer);
+            return new DraftNote(nameof(titles.NoHealer), "No " + Lower(healer));
         }
 
         if (titles.TripleHealer && healers >= 3)
         {
-            return Counted(healers, Lower(healer));
+            return new DraftNote(nameof(titles.TripleHealer), Counted(healers, Lower(healer)));
         }
 
         if (titles.DoubleHealer && healers == 2)
         {
-            return "Double " + Lower(healer);
+            return new DraftNote(nameof(titles.DoubleHealer), "Double " + Lower(healer));
         }
 
         if (titles.DoubleBruiserWithoutTank && tanks == 0 && bruisers >= 2)
         {
-            return Counted(bruisers, Lower(bruiser));
+            return new DraftNote(
+                nameof(titles.DoubleBruiserWithoutTank),
+                Counted(bruisers, Lower(bruiser))
+            );
         }
 
         if (titles.NoTank && tanks == 0)
         {
-            return "No " + Lower(tank);
+            return new DraftNote(nameof(titles.NoTank), "No " + Lower(tank));
         }
 
         if (titles.DoubleTank && tanks >= 2)
         {
-            return Counted(tanks, Lower(tank));
+            return new DraftNote(nameof(titles.DoubleTank), Counted(tanks, Lower(tank)));
         }
 
         if (titles.TripleBruiser && bruisers >= 3)
         {
-            return Counted(bruisers, Lower(bruiser));
+            return new DraftNote(nameof(titles.TripleBruiser), Counted(bruisers, Lower(bruiser)));
         }
 
         if (titles.DoubleSupport && supports >= 2)
         {
-            return Counted(supports, Lower(support));
+            return new DraftNote(nameof(titles.DoubleSupport), Counted(supports, Lower(support)));
         }
 
         if (titles.NoRangedAssassin && ranged == 0)
         {
-            return "No " + Lower(rangedRole);
+            return new DraftNote(nameof(titles.NoRangedAssassin), "No " + Lower(rangedRole));
         }
 
         return null;
     }
 
-    private static string Label(string configured, string fallback)
+    internal static string Label(string configured, string fallback)
     {
         return string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
     }
@@ -191,7 +201,7 @@ public static class HeroDraft
         return label.ToLowerInvariant();
     }
 
-    private static string Counted(int count, string singular)
+    internal static string Counted(int count, string singular)
     {
         if (count == 2)
         {
@@ -209,7 +219,7 @@ public static class HeroDraft
             + "s";
     }
 
-    private static string WithTeam(string team, string phrase)
+    internal static string WithTeam(string team, string phrase)
     {
         if (string.IsNullOrEmpty(phrase))
         {
@@ -219,7 +229,8 @@ public static class HeroDraft
         return team + " " + char.ToLowerInvariant(phrase[0]) + phrase.Substring(1);
     }
 
-    internal static Hero Find(IReadOnlyList<Hero> catalog, string heroName)
+    /// <summary>The catalog hero by name, hyperlink id, unit id, or attribute id, ignoring case and punctuation.</summary>
+    public static Hero Find(IReadOnlyList<Hero> catalog, string heroName)
     {
         string key = Key(heroName);
         if (key == null)
@@ -285,7 +296,7 @@ public static class HeroDraft
         return count == 0 ? null : new string(chars, 0, count);
     }
 
-    private static bool Is(Hero hero, string role)
+    internal static bool Is(Hero hero, string role)
     {
         return string.Equals(hero.Role, role, StringComparison.OrdinalIgnoreCase);
     }

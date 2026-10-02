@@ -266,6 +266,20 @@ public class YouTubeTitleTests
         Assert.True(youtube.Titles.NoRangedAssassin);
         Assert.Equal("Ranged Assassin", youtube.Titles.RangedAssassin);
         Assert.Equal("Bruiser", youtube.Titles.Bruiser);
+        TeamCompositionSettings compositions = youtube.Titles.Compositions;
+        Assert.True(compositions.Enabled);
+        Assert.Equal(0.1, compositions.MaxFrequency);
+        Assert.Equal("Split push", compositions.SplitPush.Label);
+        Assert.Equal(3, compositions.SplitPush.MinHeroes);
+        Assert.Equal(4, compositions.Dive.MinHeroes);
+        Assert.Equal(4, compositions.Dive.MinEscapers);
+        Assert.Equal(4.4, compositions.GlassCannon.MaxSurvivability);
+        Assert.Equal(7, compositions.GlassCannon.MinDamage);
+        Assert.Contains("Brightwing", compositions.HeroTagOverrides.Keys);
+        Assert.Equal(
+            TeamCompositionSettings.CorpusFrequencies.Count,
+            compositions.Frequencies.Count
+        );
 
         string prod = FindRepoFile(
             Path.Combine("src", "HeroesReplay.CLI", "appsettings.prod.json")
@@ -273,6 +287,7 @@ public class YouTubeTitleTests
         string prodText = File.ReadAllText(prod);
         Assert.Contains("\"Xal'atath\"", prodText, StringComparison.Ordinal);
         Assert.Contains("\"BeforeNextReplay\": \"00:01:30\"", prodText, StringComparison.Ordinal);
+        Assert.Contains("\"Compositions\"", prodText, StringComparison.Ordinal);
     }
 
     private static LoadedReplay ReplayWith(params string[] heroes)

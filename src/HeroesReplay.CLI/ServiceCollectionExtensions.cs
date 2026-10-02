@@ -166,6 +166,13 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// The effective settings without resolving secrets or the media policy, for offline
+    /// commands that only read local files such as the hero catalog.
+    /// </summary>
+    public static AppSettings LoadOfflineSettings() =>
+        GetConfiguration().Get<AppSettings>() ?? new AppSettings();
+
+    /// <summary>
     /// The effective <c>OBS</c> section without resolving secrets, for commands that only need
     /// names and flags.
     /// </summary>

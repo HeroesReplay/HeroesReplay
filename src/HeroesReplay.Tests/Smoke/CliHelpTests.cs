@@ -201,6 +201,7 @@ public class CliHelpTests
         Assert.Contains(calculators.Subcommands, c => c.Name == "report");
         Assert.Contains(calculators.Subcommands, c => c.Name == "coordinates");
         Assert.Contains(calculators.Subcommands, c => c.Name == "units");
+        Assert.Contains(calculators.Subcommands, c => c.Name == "compositions");
     }
 
     [Fact]
