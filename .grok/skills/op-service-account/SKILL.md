@@ -13,7 +13,7 @@ HeroesReplay development uses a **1Password service account**, not desktop `op s
 
 ## Token
 
-User env **`OP_SERVICE_ACCOUNT`** holds the token (`ops_…`). The official CLI only reads **`OP_SERVICE_ACCOUNT_TOKEN`**. Map before every `op` call:
+User env **`OP_SERVICE_ACCOUNT`** holds the token (`ops_…`). `OP_SERVICE_ACCOUNT_TOKEN` is not set at User scope, and the official CLI only reads **`OP_SERVICE_ACCOUNT_TOKEN`**. Map it in the process before every `op` call:
 
 ```powershell
 if (-not $env:OP_SERVICE_ACCOUNT_TOKEN) {
@@ -65,9 +65,16 @@ Name: `Heroes Replay` (id `fk7tudovwzuaa64lvomn6rxwtq`). Quote `op://` URIs that
 | YouTube OAuth client id | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Client ID` |
 | YouTube OAuth client secret | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Client Secret` |
 | YouTube GCP project id | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Project ID` |
-| Heroes Profile Twitch extension key | `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password` (template only; `fill-secrets-from-op.ps1` does not write it) |
 
-Items with `(` in the title: use the item UUID, not the name.
+`appsettings.secrets.example.json` also names `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password` for `TwitchExtension:ApiKey`. That item is not in the vault, so the reference does not resolve, and `fill-secrets-from-op.ps1` does not write it. The Twitch extension is off (`TwitchExtension:Enabled` false) until that key exists.
+
+Other items in the vault (`Heroes Profile` and `TikTok` logins, `Salty Sadism - Live` / `PreLive`, the service-account token item) are not read by HeroesReplay. Use the item UUID instead of the name when a title has `(` or would be ambiguous.
+
+To check the table without exposing values, print only whether each URI resolves and its length:
+
+```powershell
+$v = op read "op://Heroes Replay/Heroes Profile API Key/password"; "len=$($v.Length)"; $v = $null
+```
 
 ```powershell
 op read "op://Heroes Replay/Heroes Profile API Key/password"
