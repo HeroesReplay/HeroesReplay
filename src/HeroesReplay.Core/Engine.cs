@@ -62,7 +62,7 @@ public class Engine : IEngine
             releaseUpdate ?? throw new ArgumentNullException(nameof(releaseUpdate));
     }
 
-    public async Task RunAsync()
+    public async Task<bool> RunAsync()
     {
         try
         {
@@ -82,11 +82,16 @@ public class Engine : IEngine
             }
 
             await Task.WhenAll(spectator, connectivity).ConfigureAwait(false);
+            return true;
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            return true;
+        }
         catch (Exception e)
         {
             logger.LogError(e, "An unexpected error in the replay engine.");
+            return false;
         }
     }
 
