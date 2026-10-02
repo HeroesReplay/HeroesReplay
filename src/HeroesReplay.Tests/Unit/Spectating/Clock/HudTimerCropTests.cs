@@ -8,34 +8,39 @@ namespace HeroesReplay.Tests.Unit.Spectating.Clock;
 public class HudTimerCropTests
 {
     [Fact]
-    public void ForClient_1280x720_CoversTheScoreWellDigitsAndSkipsTheFortScores()
+    public void ForClient_1920x1080_CoversTheCenterClockAndSkipsTheFortScores()
     {
-        Rectangle crop = HudTimerCrop.ForClient(1280, 720);
+        Rectangle crop = HudTimerCrop.ForClient(1920, 1080);
 
+        // The box that read the clock on the stream PC before #142: {X=900,Y=18,Width=120,Height=34}.
+        Assert.Equal(new Rectangle(900, 18, 120, 34), crop);
         Assert.True(crop.Contains(930, 25));
         Assert.True(crop.Contains(994, 41));
-        Assert.True(crop.Contains(962, 33));
+        Assert.True(crop.Contains(1920 / 2, 33));
         Assert.False(crop.Contains(888, 32));
         Assert.False(crop.Contains(1034, 32));
-        Assert.NotEqual(new Rectangle(600, 9, 80, 36), crop);
-        Assert.True(crop.X > 1280 / 2);
-        Assert.InRange(crop.Right, 1, 1280);
-        Assert.InRange(crop.Bottom, 1, 720);
     }
 
     [Fact]
-    public void ForClient_ScalesTheSameHudFractionTo1920x1080()
+    public void ForClient_DoesNotMoveTheDpiAwareClientOffTheClock()
     {
-        Rectangle source = HudTimerCrop.ForClient(1280, 720);
-        Rectangle scaled = HudTimerCrop.ForClient(1920, 1080);
+        // #142 made the process DPI aware. A 1280x720 reference scaled this 1920x1080 client
+        // by 1.5 to {X=1350,Y=27,Width=180,Height=51}, right of the clock, and every replay timed out.
+        Rectangle crop = HudTimerCrop.ForClient(1920, 1080);
 
-        Assert.Equal(source.X * 1920 / 1280, scaled.X);
-        Assert.Equal(source.Y * 1080 / 720, scaled.Y);
-        Assert.Equal(source.Width * 1920 / 1280, scaled.Width);
-        Assert.Equal(source.Height * 1080 / 720, scaled.Height);
-        Assert.True(scaled.Contains(962 * 1920 / 1280, 33 * 1080 / 720));
-        Assert.False(scaled.Contains(888 * 1920 / 1280, 32 * 1080 / 720));
-        Assert.False(scaled.Contains(1034 * 1920 / 1280, 32 * 1080 / 720));
+        Assert.NotEqual(new Rectangle(1350, 27, 180, 51), crop);
+        Assert.True(crop.Left < 1920 / 2 && crop.Right > 1920 / 2);
+    }
+
+    [Fact]
+    public void ForClient_ScalesTheSameHudFractionTo2560x1440()
+    {
+        Rectangle source = HudTimerCrop.ForClient(1920, 1080);
+        Rectangle scaled = HudTimerCrop.ForClient(2560, 1440);
+
+        Assert.Equal(source.X * 2560 / 1920, scaled.X);
+        Assert.Equal(source.Y * 1440 / 1080, scaled.Y);
+        Assert.True(scaled.Contains(2560 / 2, 33 * 1440 / 1080));
     }
 
     [Theory]
