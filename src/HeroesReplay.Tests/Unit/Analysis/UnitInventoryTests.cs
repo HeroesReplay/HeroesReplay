@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using HeroesReplay.CLI.Commands.Calculators.Commands;
-using HeroesReplay.Core.Services.Analysis.Reports;
+using HeroesReplay.Core.Analysis.Reports;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Analysis;

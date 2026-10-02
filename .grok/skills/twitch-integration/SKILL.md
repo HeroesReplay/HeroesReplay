@@ -53,6 +53,8 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch predicti
 
 `twitch connect` opens the real match prediction. It watches `%LOCALAPPDATA%\HeroesReplay\status.json` and does not call into the spectator. Phase `TimerDetected` opens Blue/Red for `map`. When the session ends, the spectator writes `completedReplayId`, `completedAt`, and `completedWinnerTeam` (0 blue, 1 red, null cancels) and leaves them in place while the next replay loads. The spectator process does not call Helix.
 
+Twitch allows one ACTIVE or LOCKED prediction per channel. When a new game opens and the channel already has one that is not this replay's (a prediction from another machine, another data directory, or a previous replay that never settled), it is cancelled first, which refunds every point, and then the new Blue/Red prediction is created. If that cancel fails, no prediction opens for this game.
+
 After a resolved prediction, `PredictionReportWriter` writes `Data/prediction-report.html` and updates `Data/prediction-streaks.json`. Helix only returns `top_predictors` for each outcome, not every viewer. Winners increment a streak; losers reset to 0. The same prediction id is not applied twice. OBS scene `prediction-report` shows that file for 20 seconds at the start of the end-of-match report cycle, and is skipped when the file is not there yet. The Heroes Profile report after it is one scene, `match-report`, the full match page scrolled slowly.
 
 `check twitch` is Helix `GetUsers` plus `GetPredictions` when `EnablePredictions` is true. `twitch connect` blocks. Command map: skill `heroes-replay-cli`.

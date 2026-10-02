@@ -1,7 +1,7 @@
 using System;
 using System.CommandLine;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.Client;
+using HeroesReplay.Core.GameClient;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands.Client;

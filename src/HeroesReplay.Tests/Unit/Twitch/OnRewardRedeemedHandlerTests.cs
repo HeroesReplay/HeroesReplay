@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
-using HeroesReplay.Core.Services.Twitch.Rewards;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Twitch.RedeemedRewards;
+using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.Logging.Abstractions;
 using TwitchLib.PubSub.Events;
 using Xunit;

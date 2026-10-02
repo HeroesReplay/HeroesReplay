@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
-using HeroesReplay.Core.Services.Observer;
+using HeroesReplay.Core.GameClient;
 using Xunit;
 
 namespace HeroesReplay.Tests.Integration.Observer;

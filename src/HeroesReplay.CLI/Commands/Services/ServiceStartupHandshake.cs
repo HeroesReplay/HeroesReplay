@@ -1,5 +1,5 @@
 using System;
-using HeroesReplay.Core.Services.Processes;
+using HeroesReplay.Core.ServiceHost;
 
 namespace HeroesReplay.CLI.Commands.Services;
 

@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Retention;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Retention;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Retention;

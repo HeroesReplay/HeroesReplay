@@ -3,10 +3,10 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Connectivity;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-using HeroesReplay.Core.Services.Shared;
-using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

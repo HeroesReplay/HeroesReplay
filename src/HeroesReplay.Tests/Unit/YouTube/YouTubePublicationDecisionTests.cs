@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using HeroesReplay.Core.Services.Analysis;
-using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.YouTube.Publication;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 

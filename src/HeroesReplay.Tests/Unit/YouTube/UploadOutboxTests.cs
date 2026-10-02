@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.YouTube.Outbox;
+using HeroesReplay.Core.YouTube.Outbox;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube;

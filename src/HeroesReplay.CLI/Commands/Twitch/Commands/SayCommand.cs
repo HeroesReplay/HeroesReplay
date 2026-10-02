@@ -3,8 +3,8 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.Twitch;
 using Microsoft.Extensions.DependencyInjection;
 using TwitchLib.Client.Interfaces;
 
@@ -69,6 +69,8 @@ public class SayCommand : Command
 
     private static bool HasJoined(ITwitchClient client)
     {
-        return client.IsConnected && client.JoinedChannels != null && client.JoinedChannels.Count > 0;
+        return client.IsConnected
+            && client.JoinedChannels != null
+            && client.JoinedChannels.Count > 0;
     }
 }

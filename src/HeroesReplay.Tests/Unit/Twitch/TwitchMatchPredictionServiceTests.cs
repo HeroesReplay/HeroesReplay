@@ -5,8 +5,9 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.Spectating.Capture;
+using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.Twitch.Predictions;
 using Microsoft.Extensions.Logging.Abstractions;
 using TwitchLib.Api.Core.Enums;
 using TwitchLib.Api.Core.Interfaces;
@@ -97,7 +98,7 @@ public class TwitchMatchPredictionServiceTests
     }
 
     [Fact]
-    public async Task Open_LockedPredictionForAnotherMap_DoesNotResolveIt()
+    public async Task Open_LockedPredictionForAnotherMap_CancelsItInsteadOfResolving()
     {
         var http = new RecordingHttpHandler();
         http.LockedTitle = "Towers of Doom: who wins?";
@@ -122,11 +123,13 @@ public class TwitchMatchPredictionServiceTests
             )
         );
 
-        bool opened = await service.OpenAsync(11, "Garden of Terror", CancellationToken.None);
+        await service.OpenAsync(11, "Garden of Terror", CancellationToken.None);
 
-        Assert.False(opened);
-        Assert.Null(http.EndPredictionBody);
-        Assert.Equal(0, http.CreateCount);
+        Assert.NotNull(http.EndPredictionBody);
+        Assert.Contains("\"CANCELED\"", http.EndPredictionBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"RESOLVED\"", http.EndPredictionBody, StringComparison.Ordinal);
+        Assert.Contains(PredictionId, http.EndPredictionBody, StringComparison.Ordinal);
+        Assert.Equal(1, http.CreateCount);
     }
 
     private sealed class RecordingHttpHandler : IHttpCallHandler

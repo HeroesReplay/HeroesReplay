@@ -1,8 +1,7 @@
 using System.Collections.Generic;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.YouTube.Metadata;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube;

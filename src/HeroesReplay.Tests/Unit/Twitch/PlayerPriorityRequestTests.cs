@@ -1,4 +1,4 @@
-using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Requests;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Twitch;

@@ -6,9 +6,9 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-using HeroesReplay.Core.Services.Processes;
-using HeroesReplay.Core.Services.Status;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Status;
 
 namespace HeroesReplay.CLI.Commands.Services;
 

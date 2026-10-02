@@ -1,6 +1,7 @@
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.YouTube;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs;
@@ -117,7 +118,9 @@ public class SessionMediaTests
             PolicyAllowsPublication = true,
         };
 
-        Assert.False(SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = false }, replay));
+        Assert.False(
+            SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = false }, replay)
+        );
         Assert.True(SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = true }, replay));
         Assert.False(
             SessionMedia.ShouldWriteYouTubeEntry(new YouTubeSettings { Enabled = false }, replay)

@@ -1,8 +1,8 @@
 using System.CommandLine;
 using System.IO;
 using HeroesReplay.CLI.Commands;
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.SelfUpdate;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.SelfUpdate;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;

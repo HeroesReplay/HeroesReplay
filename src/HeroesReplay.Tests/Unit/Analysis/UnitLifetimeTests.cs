@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using HeroesReplay.Core.Extensions;
+using HeroesReplay.Core.Analysis;
 using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 

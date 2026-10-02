@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
+using HeroesReplay.Core.Spectating.Capture;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -34,6 +34,8 @@ public class DevSettingsTests
         Assert.Equal(CaptureMethod.PrintWindow, capture.Method);
         Assert.False(configuration.GetValue<bool>("OBS:StreamingEnabled"));
         Assert.True(configuration.GetValue<bool>("YouTube:DryRun"));
+        // The dev box shares the live Twitch channel. A dev prediction would cancel the live one.
+        Assert.False(configuration.GetValue<bool>("Twitch:EnablePredictions"));
     }
 
     [Fact]

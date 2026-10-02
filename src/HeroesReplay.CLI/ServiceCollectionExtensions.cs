@@ -5,35 +5,43 @@ using System.Net.Http;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Update;
 using HeroesReplay.Core;
+using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Analysis.Calculators;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Analysis;
-using HeroesReplay.Core.Services.Analysis.Calculators;
-using HeroesReplay.Core.Services.Client;
-using HeroesReplay.Core.Services.Connectivity;
-using HeroesReplay.Core.Services.Context;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.HeroesProfileExtension;
-using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Core.Services.Observer;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
-using HeroesReplay.Core.Services.Providers;
-using HeroesReplay.Core.Services.Queue;
-using HeroesReplay.Core.Services.Reports;
-using HeroesReplay.Core.Services.SelfUpdate;
-using HeroesReplay.Core.Services.Shared;
-using HeroesReplay.Core.Services.Status;
-using HeroesReplay.Core.Services.Twitch;
-using HeroesReplay.Core.Services.Twitch.ChatMessages;
-using HeroesReplay.Core.Services.Twitch.RedeemedRewards;
-using HeroesReplay.Core.Services.Twitch.Rewards;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Replays.Context;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Capture;
+using HeroesReplay.Core.Spectating.Clock;
+using HeroesReplay.Core.Spectating.Clock.Hybrid;
+using HeroesReplay.Core.Spectating.Clock.Memory;
+using HeroesReplay.Core.Spectating.Clock.Ocr;
+using HeroesReplay.Core.Spectating.Reports;
+using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.Twitch.ChatMessages;
+using HeroesReplay.Core.Twitch.Predictions;
+using HeroesReplay.Core.Twitch.RedeemedRewards;
+using HeroesReplay.Core.Twitch.Rewards;
+using HeroesReplay.Core.TwitchExtension;
+using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Playlists;
+using HeroesReplay.Core.YouTube.Search;
 using HeroesReplay.HeroesProfile.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OBSWebsocketDotNet;
+using Polly.Telemetry;
 using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
@@ -102,6 +110,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
             .AddSingleton<IAbilityDetector, AbilityDetector>()
+            .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
             .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
             .AddSingleton<IReplayLoader, ReplayLoader>()
             .AddSingleton<IContextFileManager, ContextFileManager>()
@@ -507,6 +516,9 @@ public static class ServiceCollectionExtensions
                 client => client.Timeout = Timeout.InfiniteTimeSpan
             )
             .AddResilienceHandler(HeroesProfileHttp.ClientName, HeroesProfileHttp.Configure);
+        services.Configure<TelemetryOptions>(options =>
+            options.SeverityProvider = HeroesProfileHttp.Severity
+        );
 
         return services.AddSingleton(sp =>
         {

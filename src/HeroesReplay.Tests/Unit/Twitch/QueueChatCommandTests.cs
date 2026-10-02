@@ -1,5 +1,5 @@
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Twitch.ChatMessages;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Twitch.ChatMessages;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Twitch;

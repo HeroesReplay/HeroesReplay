@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core;
-using HeroesReplay.Core.Services.Connectivity;
-using HeroesReplay.Core.Services.Processes;
-using HeroesReplay.Core.Services.Providers;
+using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
