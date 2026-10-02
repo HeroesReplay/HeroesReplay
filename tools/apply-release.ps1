@@ -127,28 +127,33 @@ if (-not (Test-Path -LiteralPath $stagedExe)) {
 Protect-MinReplayId (Join-Path $source 'heroesreplay.exe') (Join-Path $InstallDir 'appsettings.json') (Join-Path $source 'appsettings.json')
 
 $previous = "$InstallDir.previous"
+$backUpInstall = $true
 if (Test-Path -LiteralPath $previous) {
     $roleFile = Join-Path $InstallDir 'role-ready.txt'
     $healthExe = Join-Path $source 'heroesreplay.exe'
     & $healthExe update release-health --role-file $roleFile
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Previous install is still inside the stabilization window."
-        Clear-ServiceStop
-        exit 1
+        # The services are already stopped for this update. Exiting here left the live stream down.
+        # Keep the older proven rollback, do not back up this unproven install, and install the release.
+        Write-Host "Previous install is still inside the stabilization window. It stays the rollback; this install is not backed up."
+        $backUpInstall = $false
     }
-
-    Remove-Item -LiteralPath $previous -Recurse -Force
+    else {
+        Remove-Item -LiteralPath $previous -Recurse -Force
+    }
 }
 
 # cmd /k consoles keep this directory as their cwd, so renaming the folder fails while those windows are open. Overwriting the files does not.
-try {
-    Copy-Item -LiteralPath $InstallDir -Destination $previous -Recurse -Force
-}
-catch {
-    Write-Host "Could not back up the install: $($_.Exception.Message)"
-    Clear-ServiceStop
-    Start-HeroesReplayStack
-    exit 1
+if ($backUpInstall) {
+    try {
+        Copy-Item -LiteralPath $InstallDir -Destination $previous -Recurse -Force
+    }
+    catch {
+        Write-Host "Could not back up the install: $($_.Exception.Message)"
+        Clear-ServiceStop
+        Start-HeroesReplayStack
+        exit 1
+    }
 }
 
 try {
