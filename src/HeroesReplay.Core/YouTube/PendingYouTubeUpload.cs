@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube.Outbox;
 
@@ -90,6 +91,59 @@ public static class PendingYouTubeUpload
                 File.GetLastWriteTimeUtc(left).CompareTo(File.GetLastWriteTimeUtc(right))
         );
         return found;
+    }
+
+    /// <summary>
+    /// A viewer request is sent first, so it reserves the earliest free publish time. The
+    /// rest keep their order, oldest recording first.
+    /// </summary>
+    public static IReadOnlyList<string> RequestsFirst(
+        IReadOnlyList<string> recordings,
+        string entryFileName
+    )
+    {
+        var requests = new List<string>();
+        var others = new List<string>();
+        if (recordings == null)
+        {
+            return requests;
+        }
+
+        foreach (string recording in recordings)
+        {
+            if (IsRequested(recording, entryFileName))
+            {
+                requests.Add(recording);
+            }
+            else
+            {
+                others.Add(recording);
+            }
+        }
+
+        requests.AddRange(others);
+        return requests;
+    }
+
+    private static bool IsRequested(string recording, string entryFileName)
+    {
+        string directory = Path.GetDirectoryName(recording);
+        if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(entryFileName))
+        {
+            return false;
+        }
+
+        string path = Path.Combine(directory, entryFileName);
+        try
+        {
+            return File.Exists(path)
+                && JsonSerializer.Deserialize<YouTubeEntry>(File.ReadAllText(path))?.Requested
+                    == true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return false;
+        }
     }
 
     public static string AttemptsDirectory(string dataDirectory)

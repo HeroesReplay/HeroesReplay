@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
@@ -57,6 +58,34 @@ public class PendingYouTubeUploadTests
             );
 
             Assert.Empty(found);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RequestsFirst_SendsAViewerRequestBeforeOlderRecordings()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-yt-" + Path.GetRandomFileName());
+        try
+        {
+            string oldest = Recording(root, "1", "{\"Requested\":false}");
+            string unreadable = Recording(root, "2", "not json");
+            string request = Recording(root, "3", "{\"Requested\":true}");
+            string missing = Path.Combine(root, "4", "match.mp4");
+
+            IReadOnlyList<string> ordered = PendingYouTubeUpload.RequestsFirst(
+                new[] { oldest, unreadable, request, missing },
+                "youtube-entry.json"
+            );
+
+            Assert.Equal(new[] { request, oldest, unreadable, missing }, ordered);
+            Assert.Empty(PendingYouTubeUpload.RequestsFirst(null, "youtube-entry.json"));
         }
         finally
         {
@@ -220,5 +249,15 @@ public class PendingYouTubeUploadTests
             Path.Combine(directory, UploadAttemptStore.ManifestFileName),
             UploadAttemptManifestCodec.Write(manifest)
         );
+    }
+
+    private static string Recording(string root, string name, string entry)
+    {
+        string context = Path.Combine(root, name);
+        Directory.CreateDirectory(context);
+        File.WriteAllText(Path.Combine(context, "youtube-entry.json"), entry);
+        string recording = Path.Combine(context, "match.mp4");
+        File.WriteAllText(recording, "video");
+        return recording;
     }
 }

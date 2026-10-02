@@ -26,6 +26,14 @@ public class ReplayMediaPolicySettings
 
     public TimeSpan MinimumPublicInterval { get; set; } = PublicationSchedule.MinimumInterval;
 
+    /// <summary>
+    /// How far ahead a public video may be scheduled. A replay whose earliest allowed publish
+    /// time is later than this stays on disk and is tried again on a later pass. Seven days
+    /// keeps a scheduled video among the newest 50 uploads, the page the library pass always
+    /// reads, when it goes public.
+    /// </summary>
+    public TimeSpan MaxPublishAhead { get; set; } = PublicationSchedule.PublishAhead;
+
     public TimeSpan MapCooldown { get; set; } = PublicationSchedule.DiversityCooldown;
 
     public TimeSpan RankCooldown { get; set; } = PublicationSchedule.DiversityCooldown;

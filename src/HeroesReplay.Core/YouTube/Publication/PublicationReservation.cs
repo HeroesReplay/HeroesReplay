@@ -12,18 +12,26 @@ public sealed class PublicationReservationResult
     public string Kind { get; init; }
     public string Reason { get; init; }
 
+    /// <summary>
+    /// The slot's publish time for a public listing. Null for a private listing and a refusal.
+    /// </summary>
+    public DateTimeOffset? PublishAtUtc { get; init; }
+
     public bool Allow => Kind == PublicationReservation.Granted;
 }
 
 /// <summary>
-/// One slot is written with a temp file and rename, then read back.
-/// A schedule refusal is not stored as an upload. Stale ordinary work is terminal.
+/// One slot is written with a temp file and rename, then read back. A slot's time is when the
+/// video publishes, which can be later than the upload, so later replays plan around it. A
+/// refusal is not stored as an upload. Stale ordinary work is terminal.
 /// </summary>
 public static class PublicationReservation
 {
     public const string Granted = "granted";
     public const string Refused = "refused";
     public const string Terminal = "terminal";
+
+    private static readonly object Sync = new();
 
     public static PublicationReservationResult TryReserve(
         string path,
@@ -53,121 +61,134 @@ public static class PublicationReservation
             return Result(Refused, "work");
         }
 
-        Ledger ledger = Read(path);
-        if (ledger.Terminal.Contains(workKey))
+        // One uploader can plan two recordings at once. Each plan must see the other's slot.
+        lock (Sync)
         {
-            return Result(Terminal, "stale");
-        }
-
-        if (Holds(ledger, workKey))
-        {
-            if (Enrich(ledger, workKey, map, rank, hero, heroes))
+            Ledger ledger = Read(path);
+            if (ledger.Terminal.Contains(workKey))
             {
-                Write(path, ledger);
-            }
-
-            return Result(Granted, "reserved");
-        }
-
-        var times = new List<DateTimeOffset>();
-        if (publicAtUtc != null)
-        {
-            times.AddRange(publicAtUtc);
-        }
-
-        DateTimeOffset? last = lastPublicUtc;
-        int reservedRequests = 0;
-        var recent = new List<PublicationSample>();
-        foreach (Slot slot in ledger.Reserved)
-        {
-            times.Add(slot.At);
-            if (last == null || slot.At > last.Value)
-            {
-                last = slot.At;
-            }
-
-            if (slot.Requested && now - slot.At < TimeSpan.FromHours(24) && now >= slot.At)
-            {
-                reservedRequests++;
-            }
-
-            recent.Add(
-                new PublicationSample
-                {
-                    At = slot.At,
-                    Map = slot.Map,
-                    Rank = slot.Rank,
-                    Hero = slot.Hero,
-                    Heroes = slot.Heroes,
-                }
-            );
-        }
-
-        PublicationSendFacts send =
-            facts
-            ?? new PublicationSendFacts
-            {
-                Criteria = requested ? ReplayMediaPriority.Requested : ReplayMediaPriority.Ordinary,
-                RecordedAtUtc = recordedAtUtc,
-            };
-        bool isRequest = send.Criteria == ReplayMediaPriority.Requested;
-        PublicationDecision decision = PublicationSchedule.Decide(
-            settings ?? PublicationSchedule.CanarySettings(),
-            send,
-            publicListing,
-            insertsThisQuotaDay,
-            now,
-            last,
-            times,
-            requestedInDay + reservedRequests,
-            map,
-            lastMap,
-            lastMapUtc,
-            hero,
-            lastHero,
-            lastHeroUtc,
-            rank,
-            heroes,
-            recent
-        );
-        if (!decision.Allow)
-        {
-            if (decision.Reason == "stale" && !isRequest)
-            {
-                ledger.Terminal.Add(workKey);
-                Write(path, ledger);
-                Ledger saved = Read(path);
-                if (!saved.Terminal.Contains(workKey))
-                {
-                    return Result(Refused, "stale");
-                }
-
                 return Result(Terminal, "stale");
             }
 
-            return Result(Refused, decision.Reason);
-        }
-
-        ledger.Reserved.Add(
-            new Slot
+            if (Holds(ledger, workKey))
             {
-                WorkKey = workKey,
-                At = now,
-                Requested = isRequest,
-                Map = BlankToNull(map),
-                Rank = BlankToNull(rank),
-                Hero = BlankToNull(hero),
-                Heroes = CopyHeroes(heroes),
+                if (Enrich(ledger, workKey, map, rank, hero, heroes))
+                {
+                    Write(path, ledger);
+                }
+
+                return Result(Granted, "reserved", publicListing ? Find(ledger, workKey).At : null);
             }
-        );
-        Write(path, ledger);
-        Ledger written = Read(path);
-        if (CountKey(written, workKey) != 1)
+
+            List<PublicationSample> slots = PublicationSchedule.History(
+                publicAtUtc,
+                lastPublicUtc,
+                requestedInDay,
+                now
+            );
+            foreach (Slot slot in ledger.Reserved)
+            {
+                slots.Add(
+                    new PublicationSample
+                    {
+                        At = slot.At,
+                        Requested = slot.Requested,
+                        Map = slot.Map,
+                        Rank = slot.Rank,
+                        Hero = slot.Hero,
+                        Heroes = slot.Heroes,
+                    }
+                );
+            }
+
+            PublicationSendFacts send =
+                facts
+                ?? new PublicationSendFacts
+                {
+                    Criteria = requested
+                        ? ReplayMediaPriority.Requested
+                        : ReplayMediaPriority.Ordinary,
+                    RecordedAtUtc = recordedAtUtc,
+                };
+            bool isRequest = send.Criteria == ReplayMediaPriority.Requested;
+            PublicationDecision decision = PublicationSchedule.Plan(
+                settings ?? PublicationSchedule.CanarySettings(),
+                send,
+                publicListing,
+                insertsThisQuotaDay,
+                now,
+                slots,
+                map,
+                rank,
+                hero,
+                heroes,
+                PublicationSchedule.Seen(lastMap, lastMapUtc, lastHero, lastHeroUtc)
+            );
+            if (!decision.Allow)
+            {
+                if (decision.Reason == "stale" && !isRequest)
+                {
+                    ledger.Terminal.Add(workKey);
+                    Write(path, ledger);
+                    Ledger saved = Read(path);
+                    if (!saved.Terminal.Contains(workKey))
+                    {
+                        return Result(Refused, "stale");
+                    }
+
+                    return Result(Terminal, "stale");
+                }
+
+                return Result(Refused, decision.Reason);
+            }
+
+            ledger.Reserved.Add(
+                new Slot
+                {
+                    WorkKey = workKey,
+                    At = decision.PublishAtUtc ?? now,
+                    Requested = isRequest,
+                    Map = BlankToNull(map),
+                    Rank = BlankToNull(rank),
+                    Hero = BlankToNull(hero),
+                    Heroes = CopyHeroes(heroes),
+                }
+            );
+            Write(path, ledger);
+            Ledger written = Read(path);
+            if (CountKey(written, workKey) != 1)
+            {
+                return Result(Refused, "conflict");
+            }
+
+            return Result(Granted, decision.Reason, decision.PublishAtUtc);
+        }
+    }
+
+    /// <summary>
+    /// The latest slot in the ledger, which is the last scheduled publish time. Null when the
+    /// ledger is empty or missing.
+    /// </summary>
+    public static DateTimeOffset? Latest(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
         {
-            return Result(Refused, "conflict");
+            return null;
         }
 
-        return Result(Granted, decision.Reason);
+        DateTimeOffset? latest = null;
+        lock (Sync)
+        {
+            foreach (Slot slot in Read(path).Reserved)
+            {
+                if (latest == null || slot.At > latest.Value)
+                {
+                    latest = slot.At;
+                }
+            }
+        }
+
+        return latest;
     }
 
     public static bool IsWorkKey(string workKey)
@@ -198,6 +219,19 @@ public static class PublicationReservation
         return CountKey(ledger, workKey) == 1;
     }
 
+    private static Slot Find(Ledger ledger, string workKey)
+    {
+        foreach (Slot slot in ledger.Reserved)
+        {
+            if (string.Equals(slot.WorkKey, workKey, StringComparison.Ordinal))
+            {
+                return slot;
+            }
+        }
+
+        return null;
+    }
+
     private static int CountKey(Ledger ledger, string workKey)
     {
         int count = 0;
@@ -212,9 +246,18 @@ public static class PublicationReservation
         return count;
     }
 
-    private static PublicationReservationResult Result(string kind, string reason)
+    private static PublicationReservationResult Result(
+        string kind,
+        string reason,
+        DateTimeOffset? publishAtUtc = null
+    )
     {
-        return new PublicationReservationResult { Kind = kind, Reason = reason };
+        return new PublicationReservationResult
+        {
+            Kind = kind,
+            Reason = reason,
+            PublishAtUtc = publishAtUtc,
+        };
     }
 
     private static Ledger Read(string path)
@@ -332,16 +375,7 @@ public static class PublicationReservation
         IReadOnlyList<string> heroes
     )
     {
-        Slot held = null;
-        foreach (Slot slot in ledger.Reserved)
-        {
-            if (string.Equals(slot.WorkKey, workKey, StringComparison.Ordinal))
-            {
-                held = slot;
-                break;
-            }
-        }
-
+        Slot held = Find(ledger, workKey);
         if (held == null)
         {
             return false;

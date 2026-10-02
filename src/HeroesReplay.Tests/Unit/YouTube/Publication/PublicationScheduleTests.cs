@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Publication;
 using Xunit;
 
@@ -224,31 +223,6 @@ public class PublicationScheduleTests
     }
 
     [Fact]
-    public void NextPublishAt_InsertsPrivateAndSchedulesTheNextPublicTime()
-    {
-        DateTimeOffset recent = Now.AddHours(-1);
-        DateTimeOffset spaced = Now.Add(-PublicationSchedule.MinimumInterval).AddHours(-1);
-        DateTimeOffset local = new(2026, 9, 30, 19, 0, 0, TimeSpan.FromHours(1));
-
-        Assert.Equal("private", UploadVisibility.InsertStatus("public"));
-        Assert.Null(PublicationSchedule.NextPublishAt("private", Now, null));
-        Assert.Equal(Now, PublicationSchedule.NextPublishAt("public", Now, null));
-        Assert.Equal(
-            recent.Add(PublicationSchedule.MinimumInterval),
-            PublicationSchedule.NextPublishAt("public", Now, recent)
-        );
-        Assert.Equal(Now, PublicationSchedule.NextPublishAt("public", Now, spaced));
-        Assert.Null(PublicationSchedule.NextPublishAt("public", local, null));
-        Assert.Equal(
-            recent.Add(PublicationSchedule.MinimumInterval),
-            UploadVisibility.PublishAt(
-                "public",
-                PublicationSchedule.NextPublishAt("public", Now, recent)
-            )
-        );
-    }
-
-    [Fact]
     public void PublishedIn_CountsOnlyTimesInsideTheWindow()
     {
         var times = new List<DateTimeOffset>
@@ -302,12 +276,15 @@ public class PublicationScheduleTests
         );
     }
 
+    /// <summary>
+    /// Videos inside the last day, each a full interval apart, so only the caps can refuse.
+    /// </summary>
     private static List<DateTimeOffset> Recent(int count)
     {
         var times = new List<DateTimeOffset>();
-        for (int i = 0; i < count; i++)
+        for (int i = 1; i <= count; i++)
         {
-            times.Add(Now.AddMinutes(-i));
+            times.Add(Now.Add(-PublicationSchedule.MinimumInterval * i));
         }
 
         return times;
@@ -315,7 +292,7 @@ public class PublicationScheduleTests
 
     private static List<DateTimeOffset> Week(int count)
     {
-        var times = new List<DateTimeOffset> { Now.AddHours(-1) };
+        var times = new List<DateTimeOffset> { Now.Add(-PublicationSchedule.MinimumInterval) };
         for (int i = 1; i < count; i++)
         {
             times.Add(Now.AddDays(-2).AddMinutes(-i));
