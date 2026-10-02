@@ -26,7 +26,7 @@ public sealed class StableGameTimer : IGameTimer
         this.filter = filter;
     }
 
-    public void Reset() { }
+    public void Reset() => clock.BeginMatch();
 
     public Task<GameTimerReading> ReadAsync(CancellationToken cancellationToken)
     {

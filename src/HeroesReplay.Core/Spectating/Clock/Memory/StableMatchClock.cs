@@ -139,6 +139,13 @@ public sealed class StableMatchClock : IDisposable
             return Finish(new StableClockSample(false, reason, ticks, speed, seconds));
         }
 
+        // A clock that went back is a new match in the same client, not a frozen cell. Without
+        // this, the previous match's last second stayed the baseline and every read was stalled.
+        if (StartedOver(lastOkSeconds, seconds))
+        {
+            BeginMatch();
+        }
+
         if (SameCellIsStale(lastOkSeconds, seconds, lastOkChange, UtcNow()))
         {
             return Finish(new StableClockSample(false, "stalled", ticks, speed, seconds));
@@ -179,6 +186,20 @@ public sealed class StableMatchClock : IDisposable
     /// <summary>
     /// A locked cell that stops moving is not the HUD. OCR has to read the screen.
     /// </summary>
+    /// <summary>
+    /// Forgets the stall baseline for a new replay. The located clock address is kept.
+    /// </summary>
+    public void BeginMatch()
+    {
+        lastOkSeconds = double.NaN;
+        lastOkChange = default;
+    }
+
+    public static bool StartedOver(double previousSeconds, double seconds)
+    {
+        return !double.IsNaN(previousSeconds) && seconds < previousSeconds - 5;
+    }
+
     public static bool SameCellIsStale(
         double previousSeconds,
         double seconds,
@@ -233,6 +254,7 @@ public sealed class StableMatchClock : IDisposable
         hasSample = false;
         lastTicks = 0;
         lastScale = 0;
+        BeginMatch();
     }
 
     private void Discover(Func<long, byte[], bool> read)
