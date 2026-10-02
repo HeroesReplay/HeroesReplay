@@ -2,11 +2,14 @@ using System;
 using System.IO;
 using System.Text.Json;
 using Heroes.ReplayParser;
-using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Media;
-using HeroesReplay.Core.Services.YouTube;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Metadata;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -78,7 +81,7 @@ public class YouTubeTitleTests
         YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
 
         Assert.Equal(
-            "Xal'atath requested by ViewerZZ - Volskaya Foundry - Storm League - Diamond - 65550001",
+            "Xal'atath focus - Volskaya Foundry - Storm League - Diamond - 65550001",
             entry.Title
         );
         Assert.DoesNotContain("Ft.", entry.Title, StringComparison.Ordinal);
@@ -102,13 +105,13 @@ public class YouTubeTitleTests
         YouTubeEntry entry = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
 
         Assert.Equal(
-            "Illidan requested by ViewerZZ - Ft. Xal'atath - Volskaya Foundry - Storm League - Diamond - 65550001",
+            "Illidan focus - Ft. Xal'atath - Volskaya Foundry - Storm League - Diamond - 65550001",
             entry.Title
         );
     }
 
     [Fact]
-    public void RequestedByTitles_CanBeTurnedOff()
+    public void Title_NeverNamesTheRequestor()
     {
         FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(
             new FullMatchMetadataInput
@@ -122,13 +125,12 @@ public class YouTubeTitleTests
                 RecordAndUpload = true,
                 RequestedBy = "ViewerZZ",
             },
-            new FullMatchMetadataOptions
-            {
-                Titles = new YouTubeTitleSettings { RequestedByTitles = false },
-            }
+            new FullMatchMetadataOptions { Titles = new YouTubeTitleSettings() }
         );
 
-        Assert.Equal("Illidan - Dragon Shire - Storm League - Diamond - 7", metadata.Title);
+        Assert.Equal("Illidan focus - Dragon Shire - Storm League - Diamond - 7", metadata.Title);
+        Assert.DoesNotContain("ViewerZZ", metadata.Title, StringComparison.Ordinal);
+        Assert.Contains("Requested by: ViewerZZ", metadata.Description);
     }
 
     [Fact]
@@ -257,7 +259,6 @@ public class YouTubeTitleTests
         Assert.Contains("\"Xal'atath\"", text, StringComparison.Ordinal);
         Assert.True(youtube.Titles.DraftNotes);
         Assert.True(youtube.Titles.NamedPlayerTitles);
-        Assert.True(youtube.Titles.RequestedByTitles);
         Assert.True(youtube.Titles.FeatureNewHeroes);
         Assert.Equal("Ft.", youtube.Titles.FeaturePrefix);
         Assert.Equal(60, youtube.Titles.RecentHeroDays);

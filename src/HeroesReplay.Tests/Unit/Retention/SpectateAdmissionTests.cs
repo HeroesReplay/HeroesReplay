@@ -1,4 +1,4 @@
-using HeroesReplay.Core.Services.Retention;
+using HeroesReplay.Core.Retention;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Retention;

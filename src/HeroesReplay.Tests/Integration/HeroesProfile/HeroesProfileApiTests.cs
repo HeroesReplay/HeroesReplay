@@ -6,9 +6,8 @@ using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.CLI;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

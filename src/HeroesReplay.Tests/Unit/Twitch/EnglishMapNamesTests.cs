@@ -1,5 +1,5 @@
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Twitch.Predictions;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Twitch;

@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Twitch.Rewards;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Twitch.Rewards;
 using Xunit;
 using static Heroes.ReplayParser.Unit;
 

@@ -1,0 +1,18 @@
+using System;
+
+namespace HeroesReplay.Core.Connectivity;
+
+public class ConnectivitySettings
+{
+    public bool Enabled { get; set; } = true;
+    public TimeSpan Interval { get; set; } = TimeSpan.FromSeconds(15);
+
+    // Used when OBS streaming is off. That path does not HEAD twitch.tv.
+    public TimeSpan IdleInterval { get; set; } = TimeSpan.FromMinutes(5);
+    public int FailThreshold { get; set; } = 3;
+    public int RecoverThreshold { get; set; } = 2;
+    public TimeSpan ProbeTimeout { get; set; } = TimeSpan.FromSeconds(3);
+    public string InternetHost { get; set; } = "1.1.1.1";
+    public Uri TwitchUri { get; set; } = new("https://www.twitch.tv");
+    public Uri HeroesProfileUri { get; set; } = new("https://www.heroesprofile.com");
+}

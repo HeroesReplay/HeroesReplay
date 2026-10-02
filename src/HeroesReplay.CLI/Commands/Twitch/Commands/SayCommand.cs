@@ -3,8 +3,8 @@ using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Services.Data;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.Twitch;
 using Microsoft.Extensions.DependencyInjection;
 using TwitchLib.Client.Interfaces;
 

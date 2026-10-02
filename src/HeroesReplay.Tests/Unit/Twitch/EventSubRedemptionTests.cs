@@ -1,5 +1,5 @@
 using System;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.Twitch.Rewards;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Twitch;

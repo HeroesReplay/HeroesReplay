@@ -2,7 +2,7 @@ using System;
 using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Services.Twitch;
+using HeroesReplay.Core.Twitch.Predictions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands.Twitch.Commands;

@@ -3,7 +3,7 @@ using System.CommandLine;
 using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands;
-using HeroesReplay.Core.Services.Shared;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI;
 

@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Heroes.ReplayParser;
-using HeroesReplay.Core.Models;
-using HeroesReplay.Core.Services.Analysis;
+using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Shared;
 using Xunit;
 using ReplayUnit = Heroes.ReplayParser.Unit;
 

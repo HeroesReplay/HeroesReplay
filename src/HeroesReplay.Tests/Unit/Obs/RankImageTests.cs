@@ -1,5 +1,5 @@
-using HeroesReplay.Core.Services.HeroesProfile;
-using HeroesReplay.Core.Services.OpenBroadcasterSoftware;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Obs;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs;
