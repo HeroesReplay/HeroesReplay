@@ -21,7 +21,7 @@ Design for [#14](https://github.com/HeroesReplay/HeroesReplay/issues/14). Merged
 
 `TwitchBot` is not started by `Engine`. Chat, rewards, and predictions belong to `twitch connect`.
 
-`GameManager` configures the Storm client, launches Heroes of the Storm, sends keys through `GameWindowInput`, runs `Spectator` (match clock from game memory, WinRT `OcrEngine` on an `IGameCapture` frame as the fallback), opens one OBS websocket session per replay, then kills the game. It does not call Helix. When the session ends it writes `completedReplayId`, `completedAt`, and `completedWinnerTeam` on `status.json` for the Twitch process. `heroesprofile download` lists and saves replays. `spectate heroesprofile` only plays files already on disk (`ReplayCacheProvider`). `ReplayFileProvider` plays a local queue once and does not loop the API.
+`GameManager` configures the Storm client, launches Heroes of the Storm, sends keys through `GameWindowInput`, runs `Spectator` (match clock from game memory only; WinRT `OcrEngine` on an `IGameCapture` frame reads the home, loading, and end screens, never the timer), opens one OBS websocket session per replay, then kills the game. It does not call Helix. When the session ends it writes `completedReplayId`, `completedAt`, and `completedWinnerTeam` on `status.json` for the Twitch process. `heroesprofile download` lists and saves replays. `spectate heroesprofile` only plays files already on disk (`ReplayCacheProvider`). `ReplayFileProvider` plays a local queue once and does not loop the API.
 
 `youtube uploader` is not inside `Engine`, but it is still an in-process service of the CLI. It watches `Data\Contexts` for `*.mp4` plus the YouTube entry json.
 
@@ -71,7 +71,7 @@ Successful work is role-defined:
 
 | Role | Work | Default `ServiceHealth` threshold |
 | --- | --- | --- |
-| spectate | A spectate tick: the HUD clock advanced, or one pass of the replay loop ended | `SpectateWorkThreshold` 20 min |
+| spectate | A spectate tick: the match clock advanced, or one pass of the replay loop ended | `SpectateWorkThreshold` 20 min |
 | twitch | A Twitch reconcile: one prediction watcher pass (every second) | `TwitchWorkThreshold` 5 min |
 | download | A download pass (every 2 to 15 s) | `DownloadWorkThreshold` 15 min |
 | youtube | An upload pass: the pending drain, or the one-minute poll | `YouTubeWorkThreshold` 30 min |

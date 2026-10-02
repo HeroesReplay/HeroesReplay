@@ -22,7 +22,8 @@ internal readonly record struct StableClockModule(
 
 /// <summary>
 /// Read-only match clock. Pattern discovery runs once per process module on every client build.
-/// Fixed 98025 RVAs are only a candidate; a failed check stays unlocked so OCR can take over.
+/// Fixed 98025 RVAs are only a candidate; a failed check stays unlocked and reports no clock.
+/// This is the only match clock. The HUD timer is never cropped or OCR'd.
 /// </summary>
 public sealed class StableMatchClock : IDisposable
 {
@@ -128,7 +129,7 @@ public sealed class StableMatchClock : IDisposable
             return Finish(new StableClockSample(false, "bad-scale", ticks, speed, seconds));
         }
 
-        // Zero is also the menu. Leave that second to OCR so a dead read cannot freeze the clock.
+        // Zero is also the menu and the loading screen, so it is not a started match.
         if (Math.Abs(seconds) < 0.5)
         {
             return Finish(new StableClockSample(false, "near-zero", ticks, speed, seconds));
@@ -184,9 +185,6 @@ public sealed class StableMatchClock : IDisposable
     }
 
     /// <summary>
-    /// A locked cell that stops moving is not the HUD. OCR has to read the screen.
-    /// </summary>
-    /// <summary>
     /// Forgets the stall baseline for a new replay. The located clock address is kept.
     /// </summary>
     public void BeginMatch()
@@ -195,11 +193,29 @@ public sealed class StableMatchClock : IDisposable
         lastOkChange = default;
     }
 
+    /// <summary>
+    /// Gap between the two reads that prove the clock is moving. The clock counts ticks / 4096
+    /// per second, so a running match is about a quarter second ahead on the second read.
+    /// </summary>
+    public static readonly TimeSpan RunningProbe = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// A match is running only when both reads succeed and the second is ahead of the first.
+    /// The menu's zero does not read, and a frozen clock from the last match does not move.
+    /// </summary>
+    public static bool IsRunning(TimeSpan? first, TimeSpan? second)
+    {
+        return first.HasValue && second.HasValue && second.Value > first.Value;
+    }
+
     public static bool StartedOver(double previousSeconds, double seconds)
     {
         return !double.IsNaN(previousSeconds) && seconds < previousSeconds - 5;
     }
 
+    /// <summary>
+    /// A locked cell that stops moving is not a running match: it is paused, over, or not the clock.
+    /// </summary>
     public static bool SameCellIsStale(
         double previousSeconds,
         double seconds,

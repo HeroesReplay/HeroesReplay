@@ -15,7 +15,7 @@ Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `Her
 | Slice | Owns |
 | --- | --- |
 | `Analysis` (`Calculators`, `Reports`) | Replay timeline, focus calculators, `Focus`, `Panel`, kill streaks, calculator and weight settings |
-| `Spectating` (`Session`, `Control`, `Capture`, `Clock/{Memory,Ocr,Hybrid}`, `Reports`) | The live spectator loop (`Spectator`). `Session`: match outcome, session holds, report handoff, retry and shutdown. `Control`: `GameController`, window input, observer panels. Also the HUD clock and frame capture |
+| `Spectating` (`Session`, `Control`, `Capture`, `Clock/Memory`, `Reports`) | The live spectator loop (`Spectator`). `Session`: match outcome, session holds, report handoff, retry and shutdown. `Control`: `GameController`, window input, observer panels. Also the memory match clock and frame capture |
 | `GameClient` | Launching the right Heroes build, Battle.net, HeroesSwitcher, firewall, `Variables.txt`, client and process settings |
 | `Replays` (`Context`) | Replay providers and loaders, `LoadedReplay`, the spectate queue and queue pick, the per-replay context folder |
 | `Requests` | Twitch request queue, leases, played ids, reward request models |
@@ -120,7 +120,7 @@ On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: `services stop` (t
 
 OBS game capture also sees the frame when the window is covered, because it hooks the swap chain. Issue 27 (closed) timed five `GetSourceScreenshot` calls one second apart at 37–72 ms each. OBS is not the clock.
 
-The match clock reads memory first. `StableMatchClock` is read-only. It finds the tick global from the clock instruction pattern on each client build (`MatchClockPattern`). Build `2.55.17.98025` also has fixed addresses (`MatchTickClock`, seconds = ticks / 4096) as a candidate. OCR of `-MM:SS` or `MM:SS` is the fallback when that read is not usable. The dynamic page scan (`Spectate:MemoryTimerEnabled`, `Spectate:UseMemoryTimer`) is on in the base and prod settings. Its locked address is used only when the stable clock and OCR both miss.
+The match clock is memory only. `StableMatchClock` is read-only. It finds the tick global from the clock instruction pattern on each client build (`MatchClockPattern`). Build `2.55.17.98025` also has fixed addresses (`MatchTickClock`, seconds = ticks / 4096) as a candidate. The HUD timer is never cropped or OCR'd, and there is no screen fallback: a read that is not ok means the match has not started, is between matches, or is over. Hero selection starts on the first ok read. The launch wait, the recording start, and the next-match handoff count a match as running only when two reads 250 ms apart move forward (`StableMatchClock.IsRunning`), so the menu's zero or the last match's frozen clock never counts. OCR reads screens only: the home screen, the map loading screen (`OCR:LoadingScreenText`, "WELCOME TO"), and the end screen. `heroesreplay check timer` reads the same memory clock.
 
 ## Environments
 
@@ -184,7 +184,7 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 - Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. WinRT OCR and the PrintWindow/BitBlt capture need the Windows TFM.
 - File-scoped namespaces, usings outside the namespace, `using` declarations where they reduce nesting.
 - Calculators implement `IFocusCalculator.Contribute(ReplayTimeline)`. Do not bring back `GetFocusPlayers(TimeSpan, Replay)` × PLINQ.
-- Focus pipeline: parse replay → calculators offer weighted events → hold last winner across empty seconds → spectator looks up by the match clock (memory read, OCR fallback) until core kill. Do not recompute calculators in the live loop.
+- Focus pipeline: parse replay → calculators offer weighted events → hold last winner across empty seconds → spectator looks up by the memory match clock until core kill. Do not recompute calculators in the live loop.
 - Living units: `unit.IsAliveAt(now)` (`TimeSpanDied == null` means alive).
 - OBS: websocket **5**, port **4455**, **one connection per replay** (`BeginSession` / `EndSession`). Do not connect-disconnect per request. The read-only MCP OBS tools are a separate client: one short session per tool call, Get requests only.
 - Cache the Heroes of the Storm HWND after launch; do not `GetProcessesByName` on every keystroke.

@@ -63,9 +63,7 @@ public class ReplayShutdownTests
         public Task<bool> OpenReplayFromHomeScreenAsync(string replayPath) =>
             throw new NotSupportedException();
 
-        public Task<TimeSpan?> TryGetTimerAsync() => throw new NotSupportedException();
-
-        public TimeSpan? TryReadMatchClock() => null;
+        public Task<TimeSpan?> TryReadRunningMatchClockAsync() => throw new NotSupportedException();
 
         public Task<bool> IsReplayPresentedAsync(LoadedReplay replay) =>
             throw new NotSupportedException();

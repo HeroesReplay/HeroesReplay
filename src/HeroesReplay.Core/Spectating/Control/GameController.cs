@@ -18,7 +18,6 @@ using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Clock.Memory;
-using HeroesReplay.Core.Spectating.Clock.Ocr;
 using HeroesReplay.Core.Spectating.Session;
 using Microsoft.Extensions.Logging;
 using Windows.Graphics.Imaging;
@@ -43,7 +42,6 @@ public class GameController : IGameController
     private readonly object controllerLock = new object();
     private readonly StableMatchClock matchClock = new();
     private Process cachedProcess;
-    private string lastRejectedTimer;
     private bool replayFileOpened;
     private string openedReplayPath;
     private ReplayClientPatch launchPatch = ReplayClientPatch.Current;
@@ -580,7 +578,7 @@ public class GameController : IGameController
                 !string.IsNullOrWhiteSpace(word)
                 && text.Contains(word, StringComparison.OrdinalIgnoreCase)
             );
-            bool timer = await IsReplay().ConfigureAwait(false);
+            bool timer = await IsMatchClockRunning().ConfigureAwait(false);
             if (!recoveredLogin && !loading && !timer && ClientScreenText.IsLoginForm(text))
             {
                 recoveredLogin = true;
@@ -815,7 +813,7 @@ public class GameController : IGameController
 
             if (!oweAhliObs && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, timer))
             {
-                ShowGameScene("timer visible");
+                ShowGameScene("match clock running");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
@@ -1281,7 +1279,24 @@ public class GameController : IGameController
         obsController.SwapToGameScene();
     }
 
-    public TimeSpan? TryReadMatchClock()
+    /// <summary>
+    /// The memory clock, only while it moves. The menu reads zero, and the last match's clock
+    /// can sit frozen until the next one starts, so one read is not a running match.
+    /// </summary>
+    public async Task<TimeSpan?> TryReadRunningMatchClockAsync()
+    {
+        TimeSpan? first = TryReadMatchClock();
+        if (first == null)
+        {
+            return null;
+        }
+
+        await Task.Delay(StableMatchClock.RunningProbe).ConfigureAwait(false);
+        TimeSpan? second = TryReadMatchClock();
+        return StableMatchClock.IsRunning(first, second) ? second : null;
+    }
+
+    private TimeSpan? TryReadMatchClock()
     {
         Process process = GetGameProcess();
         if (process == null)
@@ -1305,36 +1320,6 @@ public class GameController : IGameController
         }
     }
 
-    public async Task<TimeSpan?> TryGetTimerAsync()
-    {
-        try
-        {
-            using (Bitmap timerBitmap = GetNegativeOffsetTimer())
-            {
-                if (timerBitmap == null)
-                    return null;
-
-                if (settings.Capture.SaveTimerRegion)
-                {
-                    timerBitmap.Save(
-                        Path.Combine(
-                            settings.CapturesPath,
-                            "timer-" + Guid.NewGuid().ToString() + ".bmp"
-                        )
-                    );
-                }
-
-                return await ConvertBitmapTimerToTimeSpan(timerBitmap).ConfigureAwait(false);
-            }
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, "Could not get timer from bitmap");
-        }
-
-        return null;
-    }
-
     public async Task<bool> IsReplayPresentedAsync(LoadedReplay replay)
     {
         if (!IsLaunched())
@@ -1342,24 +1327,22 @@ public class GameController : IGameController
             return false;
         }
 
-        var parsed = replay?.Replay;
-        string text = await ReadWindowTextAsync().ConfigureAwait(false);
-        if (
-            ReplayLoadCue.SeesLoadingScreen(
-                text,
-                parsed?.Map,
-                parsed?.MapAlternativeName,
-                parsed?.Players?.Select(player => player.Name),
-                parsed?.Players?.Select(player => player.Character),
-                settings.OCR.LoadingScreenText
-            )
-        )
+        // The match clock is memory only. OCR reads the loading screen, never the HUD timer.
+        if ((await TryReadRunningMatchClockAsync().ConfigureAwait(false)).HasValue)
         {
             return true;
         }
 
-        // HUD crop only. The memory clock stays unused until the map and this timer are on screen.
-        return (await TryGetTimerAsync().ConfigureAwait(false)).HasValue;
+        var parsed = replay?.Replay;
+        string text = await ReadWindowTextAsync().ConfigureAwait(false);
+        return ReplayLoadCue.SeesLoadingScreen(
+            text,
+            parsed?.Map,
+            parsed?.MapAlternativeName,
+            parsed?.Players?.Select(player => player.Name),
+            parsed?.Players?.Select(player => player.Character),
+            settings.OCR.LoadingScreenText
+        );
     }
 
     public async Task<bool> TrySeeEndScreenAsync(bool nearCore)
@@ -1404,64 +1387,6 @@ public class GameController : IGameController
         }
     }
 
-    private async Task<TimeSpan?> ConvertBitmapTimerToTimeSpan(Bitmap bitmap)
-    {
-        using (Bitmap resized = bitmap.GetResized(zoom: 4))
-        {
-            using (
-                SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized)
-                    .ConfigureAwait(false)
-            )
-            {
-                OcrResult ocrResult = await ocrEngine.RecognizeAsync(softwareBitmap);
-                TimeSpan? timer = TryParseTimeSpan(ocrResult.Text);
-
-                if (timer.HasValue)
-                    return timer;
-
-                try
-                {
-                    Directory.CreateDirectory(settings.CapturesPath);
-                    resized.Save(
-                        Path.Combine(settings.CapturesPath, "timer-rejected.png"),
-                        ImageFormat.Png
-                    );
-                }
-                catch (Exception saveError)
-                {
-                    logger.LogDebug(saveError, "Could not save the rejected timer crop.");
-                }
-
-                if (settings.Capture.SaveCaptureFailureCondition)
-                {
-                    Directory.CreateDirectory(settings.CapturesPath);
-                    resized.Save(
-                        Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp")
-                    );
-                }
-
-                return null;
-            }
-        }
-    }
-
-    private Bitmap GetNegativeOffsetTimer()
-    {
-        if (!TryGetGameHandle(out IntPtr handle))
-        {
-            return null;
-        }
-
-        Rectangle dimensions = capture.GetClientSize(handle);
-        Rectangle crop = HudTimerCrop.ForClient(dimensions.Width, dimensions.Height);
-        if (crop.Width <= 0 || crop.Height <= 0)
-        {
-            return null;
-        }
-
-        return capture.Capture(handle, crop);
-    }
-
     private static async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
     {
         if (bitmap == null)
@@ -1480,39 +1405,6 @@ public class GameController : IGameController
             );
             return await decoder.GetSoftwareBitmapAsync();
         }
-    }
-
-    private TimeSpan? TryParseTimeSpan(string text)
-    {
-        try
-        {
-            if (!HudClock.TryParse(text, out TimeSpan clock))
-            {
-                string sanitized = HudClock.Sanitize(text);
-                if (
-                    !string.IsNullOrEmpty(sanitized)
-                    && !string.Equals(sanitized, lastRejectedTimer, StringComparison.Ordinal)
-                )
-                {
-                    lastRejectedTimer = sanitized;
-                    logger.LogWarning(
-                        "Timer OCR is not -MM:SS or MM:SS. Saw \"{Text}\", sanitized to \"{Sanitized}\".",
-                        text,
-                        sanitized
-                    );
-                }
-
-                return null;
-            }
-
-            return clock;
-        }
-        catch (Exception)
-        {
-            logger.LogDebug("Could not parse the timer: {Text}", text ?? string.Empty);
-        }
-
-        return null;
     }
 
     private async Task<bool> IsHomeScreen()
@@ -1552,8 +1444,8 @@ public class GameController : IGameController
         }
     }
 
-    private async Task<bool> IsReplay() =>
-        IsLaunched() && (await TryGetTimerAsync().ConfigureAwait(false)) != null;
+    private async Task<bool> IsMatchClockRunning() =>
+        IsLaunched() && (await TryReadRunningMatchClockAsync().ConfigureAwait(false)) != null;
 
     private async Task<WordScan> ScanPrimaryAsync(IEnumerable<string> words)
     {
