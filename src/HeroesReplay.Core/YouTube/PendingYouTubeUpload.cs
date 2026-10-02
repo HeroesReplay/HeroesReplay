@@ -125,6 +125,77 @@ public static class PendingYouTubeUpload
         return requests;
     }
 
+    /// <summary>
+    /// Viewer requests with a recording on disk that still need a <c>videos.insert</c>: the entry
+    /// says <c>Requested</c> and has no video id yet. The context of
+    /// <paramref name="excludingRecording"/> is not counted.
+    /// </summary>
+    public static int CountRequestsWaiting(
+        string contextsDirectory,
+        string entryFileName,
+        string uploadedFileName,
+        string excludingRecording
+    )
+    {
+        if (
+            string.IsNullOrWhiteSpace(contextsDirectory)
+            || string.IsNullOrWhiteSpace(entryFileName)
+            || !Directory.Exists(contextsDirectory)
+        )
+        {
+            return 0;
+        }
+
+        string excluded = string.IsNullOrWhiteSpace(excludingRecording)
+            ? null
+            : Path.GetDirectoryName(Path.GetFullPath(excludingRecording));
+        int waiting = 0;
+        foreach (string directory in Directory.GetDirectories(contextsDirectory))
+        {
+            if (
+                excluded != null
+                && string.Equals(
+                    Path.GetFullPath(directory),
+                    excluded,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                continue;
+            }
+
+            if (
+                !AwaitingUpload(directory, entryFileName, uploadedFileName)
+                || Directory.GetFiles(directory, "*.mp4", SearchOption.TopDirectoryOnly).Length == 0
+            )
+            {
+                continue;
+            }
+
+            YouTubeEntry entry = ReadEntry(Path.Combine(directory, entryFileName));
+            if (entry?.Requested == true && string.IsNullOrWhiteSpace(entry.VideoId))
+            {
+                waiting++;
+            }
+        }
+
+        return waiting;
+    }
+
+    private static YouTubeEntry ReadEntry(string path)
+    {
+        try
+        {
+            return File.Exists(path)
+                ? JsonSerializer.Deserialize<YouTubeEntry>(File.ReadAllText(path))
+                : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
+    }
+
     private static bool IsRequested(string recording, string entryFileName)
     {
         string directory = Path.GetDirectoryName(recording);
@@ -133,17 +204,7 @@ public static class PendingYouTubeUpload
             return false;
         }
 
-        string path = Path.Combine(directory, entryFileName);
-        try
-        {
-            return File.Exists(path)
-                && JsonSerializer.Deserialize<YouTubeEntry>(File.ReadAllText(path))?.Requested
-                    == true;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return false;
-        }
+        return ReadEntry(Path.Combine(directory, entryFileName))?.Requested == true;
     }
 
     public static string AttemptsDirectory(string dataDirectory)

@@ -9,6 +9,14 @@ public class RewardRequestFactory : IRewardRequestFactory
 {
     public RewardRequest Create(SupportedReward reward, OnRewardRedeemedArgs args)
     {
+        RewardRequest request = Build(reward, args);
+        request.RewardId = args.RewardId;
+        request.BroadcasterId = args.ChannelId;
+        return request;
+    }
+
+    private static RewardRequest Build(SupportedReward reward, OnRewardRedeemedArgs args)
+    {
         if (
             reward.RewardType == RewardType.ReplayId
             && PlayerPriorityRequest.TryRead(args.Message, out int replayId, out int? playerIndex)
@@ -28,37 +36,31 @@ public class RewardRequestFactory : IRewardRequestFactory
                 PlayerIndex = playerIndex,
             };
         }
-        else
+
+        if (
+            reward.RewardType.HasFlag(RewardType.Rank)
+            && Enum.TryParse(args.Message, ignoreCase: true, out GameRank rank)
+        )
         {
-            if (
-                reward.RewardType.HasFlag(RewardType.Rank)
-                && Enum.TryParse(args.Message, ignoreCase: true, out GameRank rank)
-            )
-            {
-                return new RewardRequest(
-                    args.Login,
-                    args.RedemptionId,
-                    reward.Title,
-                    replayId: null,
-                    rank: rank,
-                    reward.Map,
-                    reward.Mode
-                );
-            }
-            else
-            {
-                return new RewardRequest(
-                    args.Login,
-                    args.RedemptionId,
-                    reward.Title,
-                    replayId: null,
-                    rank: null,
-                    reward.Map,
-                    reward.Mode
-                );
-            }
+            return new RewardRequest(
+                args.Login,
+                args.RedemptionId,
+                reward.Title,
+                replayId: null,
+                rank: rank,
+                reward.Map,
+                reward.Mode
+            );
         }
 
-        throw new NotSupportedException();
+        return new RewardRequest(
+            args.Login,
+            args.RedemptionId,
+            reward.Title,
+            replayId: null,
+            rank: null,
+            reward.Map,
+            reward.Mode
+        );
     }
 }

@@ -125,6 +125,60 @@ public sealed class YouTubeQuotaUnits
         return settings.DailyQuotaUnits - day.Total >= VideoInsert;
     }
 
+    /// <summary>
+    /// <see cref="MayUpload(YouTubeQuotaDay, DateTimeOffset)"/>, and an ordinary upload also
+    /// leaves one insert for each viewer request still waiting (#161). With 6 inserts a day and
+    /// one request waiting, ordinary uploads take 5 and the request gets the last one, so a
+    /// request never waits behind older ordinary recordings.
+    /// </summary>
+    public bool MayUpload(
+        YouTubeQuotaDay day,
+        DateTimeOffset utcNow,
+        bool requested,
+        int requestsWaiting
+    )
+    {
+        if (!MayUpload(day, utcNow))
+        {
+            return false;
+        }
+
+        if (requested || requestsWaiting <= 0 || day == null)
+        {
+            return true;
+        }
+
+        return InsertsLeft(day) > requestsWaiting;
+    }
+
+    /// <summary>How many more <c>videos.insert</c> calls fit in the day's units.</summary>
+    public int InsertsLeft(YouTubeQuotaDay day)
+    {
+        int room = settings.DailyQuotaUnits - (day?.Total ?? 0);
+        return room <= 0 ? 0 : room / VideoInsert;
+    }
+
+    /// <summary>
+    /// When a held upload may start again: the pause a quota response set, or the next Pacific
+    /// quota day when the day's units are spent. Null when an upload may start now.
+    /// </summary>
+    public DateTimeOffset? UploadsResumeAt(YouTubeQuotaDay day, DateTimeOffset utcNow)
+    {
+        if (day?.UploadsPausedUntil is DateTimeOffset until && utcNow < until)
+        {
+            return until;
+        }
+
+        return MayUpload(day, utcNow) ? null : NextQuotaDay(utcNow);
+    }
+
+    /// <summary>Midnight Pacific after <paramref name="utcNow"/>, on a 23 or 25 hour day too.</summary>
+    public static DateTimeOffset NextQuotaDay(DateTimeOffset utcNow)
+    {
+        DateTimeOffset start = PublicationSchedule.QuotaDayStart(utcNow);
+        return PublicationSchedule.QuotaDayStart(start.AddHours(25));
+    }
+
     public int LibraryRoom(YouTubeQuotaDay day)
     {
         int byLibrary = settings.LibraryUnitsPerDay - day.LibraryUnits;

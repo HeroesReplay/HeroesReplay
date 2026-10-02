@@ -126,10 +126,21 @@ public class HeroesProfileProvider : IReplayProvider
                     .EnrichRankAsync(item.HeroesProfileReplay, provider.Token)
                     .ConfigureAwait(false);
                 FileInfo requested = GetFileInfo(RequestsDirectory, item.HeroesProfileReplay);
+                // The spectator reads the redemption beside the replay. Write it before the
+                // replay appears, so the file is never seen without its request (#165).
+                StoreRequest(requested, item);
                 if (!requested.Exists)
                 {
-                    await DownloadReplayAsync(item.HeroesProfileReplay, requested)
-                        .ConfigureAwait(false);
+                    try
+                    {
+                        await DownloadReplayAsync(item.HeroesProfileReplay, requested)
+                            .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        ForgetRequest(requested);
+                        throw;
+                    }
                 }
 
                 return true;
@@ -271,18 +282,7 @@ public class HeroesProfileProvider : IReplayProvider
                 }
 
                 fileInfo.Refresh();
-                try
-                {
-                    CachedRequestReward.Write(fileInfo.FullName, item);
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    logger.LogWarning(
-                        e,
-                        "Could not store the request beside replay {ReplayId}.",
-                        item.HeroesProfileReplay?.Id
-                    );
-                }
+                StoreRequest(fileInfo, item);
 
                 Replay replay = await replayLoader
                     .LoadAsync(fileInfo.FullName)
@@ -356,6 +356,38 @@ public class HeroesProfileProvider : IReplayProvider
         }
 
         return null;
+    }
+
+    private void StoreRequest(FileInfo replayFile, RewardQueueItem item)
+    {
+        try
+        {
+            CachedRequestReward.Write(replayFile.FullName, item);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not store the request beside replay {ReplayId}.",
+                item.HeroesProfileReplay?.Id
+            );
+        }
+    }
+
+    private void ForgetRequest(FileInfo replayFile)
+    {
+        try
+        {
+            CachedRequestReward.Delete(replayFile.FullName);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not remove the request beside {Path}.",
+                replayFile.FullName
+            );
+        }
     }
 
     private async Task DownloadReplayAsync(HeroesProfileReplay replay, FileInfo fileInfo)

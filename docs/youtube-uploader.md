@@ -65,13 +65,13 @@ The uploader process keeps that catalog current. It adds a replay id when its in
 | `Selected` | A request or a notable replay, when it is on patch, dated, and inside its age. When publication is `Curated` or `AllEligible`, ordinary and high-skill replays are recorded on those same terms. |
 | `All` | Every spectated replay, including one that is too old to publish |
 
-`All` still requires OBS `RecordingEnabled` (true in production). A viewer request that is spectate-only, with no `RecordAndUpload`, is not a publication.
+`All` still requires OBS `RecordingEnabled` (true in production). Both ReplayId rewards, `ReplayId` and `ReplayId + YouTube`, are recorded and uploaded as requests (#165). A map, rank, or random reward with no `RecordAndUpload` is spectate-only and is not a publication.
 
 ## Why a replay is one class
 
 The first matching class wins.
 
-1. **Requested.** The Twitch reward is `RecordAndUpload`. A spectate-only reward is not requested.
+1. **Requested.** The viewer typed a replay id (either ReplayId reward), or the Twitch reward is `RecordAndUpload`. A spectate-only map, rank, or random reward is not requested.
 2. **Notable.** The replay has a pentakill or a team wipe. Both come from one player. A pentakill is five or more killing blows by that player, each within 12 seconds of the previous blow. A team wipe is five unique enemy heroes killed by that same player inside that streak. The blow has to be one of that player's own hero units, and the victim has to be an enemy player's hero unit. Lost Vikings and Rexxar with Misha count as that one player. A summon, a structure, a suicide, or a wipe split across several players is not a clip.
 3. **High-skill.** Rank or MMR meets the configured floor. With no floor, this class never matches.
 4. **Ordinary.** Everything else.
@@ -97,14 +97,14 @@ The day count at this step is `Data`'s publication ledger of videos already obse
 
 ## When a video is sent
 
-The uploader watches `Data\Contexts` for an mp4. It also retries pending files every 5 minutes. A pass sends a viewer request first (`Requested` in the entry), then the oldest recording first. A dry-run process does not retry on that timer. It writes `youtube-dry-run.json` and does not call YouTube.
+The uploader watches `Data\Contexts` for an mp4. It also retries pending files every 5 minutes. A pass sends a viewer request first (`Requested` in the entry), then the oldest recording first. A request never waits behind ordinary recordings for the quota: an ordinary upload leaves one of the day's remaining inserts for each request still waiting for its insert (#161). A dry-run process does not retry on that timer. It writes `youtube-dry-run.json` and does not call YouTube.
 
 A recording stays on disk only for the YouTube quota or for the media rules. These lines decide whether it is sent now. The first refusal wins.
 
 1. Configuration is valid.
 2. The replay is not already published, incomplete, or uncorrelated.
 3. The mode allows this class. `Disabled` refuses everyone. `RequestedOnly` refuses anything except a request. `Curated` refuses ordinary. `AllEligible` allows every class.
-4. The day's quota has room. `Data\youtube-quota-units.json` has at least 1600 units (one `videos.insert`) left under `YouTube:DailyQuotaUnits`, library spend included, and no quota response from an upload paused uploads. `videos.insert` calls today are under `MaxInsertsPerQuotaDay`. The quota day starts at midnight Pacific.
+4. The day's quota has room. `Data\youtube-quota-units.json` has at least 1600 units (one `videos.insert`) left under `YouTube:DailyQuotaUnits`, library spend included, and no quota response from an upload paused uploads. `videos.insert` calls today are under `MaxInsertsPerQuotaDay`. The quota day starts at midnight Pacific. A held upload logs when uploads resume: the pause a quota response set, or the next Pacific midnight.
 5. When `YouTube:PrivacyStatus` is public, an ordinary replay's game time is inside `OrdinaryCandidateMaxAge`. A request, a notable replay, and a high-skill replay do not use this age at send time. They already expired by their own windows above. An ordinary replay that is too old is not retried, and its recording is deleted.
 6. When `YouTube:PrivacyStatus` is public, a publish time inside `MaxPublishAhead` (14 days) keeps every rule below. With none, the reason is `horizon` and the recording waits for a later pass.
 

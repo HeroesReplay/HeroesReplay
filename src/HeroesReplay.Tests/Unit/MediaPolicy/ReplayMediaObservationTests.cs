@@ -823,10 +823,39 @@ public class ReplayMediaObservationTests
     }
 
     [Fact]
+    public async Task PlainReplayIdRequest_IsARequestedRecordingAndPublication()
+    {
+        // #165: replay 65625279 was redeemed with "ReplayId" and queued Ordinary. Both
+        // ReplayId rewards now record and upload with request priority.
+        using var temp = new TempAttempts();
+        LoadedReplay loaded = Loaded(RecordRequest(upload: false));
+
+        MediaPolicySnapshot snapshot = await Log(temp)
+            .RecordPreLaunchAsync(
+                loaded,
+                Settings(ReplayRecordingMode.All, ReplayPublicationMode.AllEligible),
+                Now,
+                CancellationToken.None
+            );
+
+        Assert.True(snapshot.Decision.Record);
+        Assert.Equal(ReplayMediaPriority.Requested, snapshot.Decision.Priority);
+        Assert.Equal(ReplayMediaReason.RecordedAll, snapshot.Decision.RecordingReason);
+        Assert.NotEqual(ReplayMediaReason.SpectateOnly, snapshot.Decision.PublicationReason);
+    }
+
+    [Fact]
     public async Task SpectateOnlyRequest_KeepsTheCurrentRecordFlag()
     {
         using var temp = new TempAttempts();
-        LoadedReplay loaded = Loaded(RecordRequest(upload: false));
+        LoadedReplay loaded = Loaded(
+            new RewardRequest
+            {
+                Login = "viewer",
+                RewardTitle = "Cursed Hollow (SL)",
+                RecordAndUpload = false,
+            }
+        );
         OBSSettings obs = new OBSSettings { RecordingEnabled = true };
         YouTubeSettings youtube = new YouTubeSettings { Enabled = true };
 

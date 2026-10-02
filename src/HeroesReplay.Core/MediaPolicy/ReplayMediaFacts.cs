@@ -51,7 +51,7 @@ public static class ReplayMediaFacts
             Roster = Roster(replay, heroes),
             FocusHero = PlayerPriorityRequest.HeroName(replay, request?.PlayerIndex),
             ViewerRequested = request != null,
-            RecordAndUpload = request?.RecordAndUpload == true,
+            RecordAndUpload = ReplayRequestKind.RecordsAndUploads(request),
             RequestedBy = FirstText(request?.Login),
             NotableEvents = TeamKillClips.Select(TeamKillDeaths.FromReplay(replay, heroes)),
             AlreadyPublished = alreadyPublished,

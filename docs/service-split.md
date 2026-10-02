@@ -49,6 +49,8 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 - `Data\requests.json` (and the failed file) — Twitch enqueues; the downloader fulfills; the spectator only sees local `.StormReplay` files. Both processes lock the files with a named mutex.
 - `%LOCALAPPDATA%\HeroesReplay\panel-requests.json` — `!talents` and `!stats` from `twitch connect`. The spectator consumes the pending panel and sends the hotkey.
 - `Data\Standard` and `Data\Requests` — replay cache. `spectate heroesprofile` plays that cache (same shape as `spectate file`).
+- `Data\Requests\<replay>.request.json` — the redemption of a requested replay. The downloader writes it before the replay file appears. The spectator links the session to it by replay id, whichever folder or path loaded the file (#165).
+- `Data\redemption-dispositions.txt` — the spectator appends a line when a requested match is verified. `twitch connect` marks that redemption FULFILLED on Twitch and records it in `Data\redemption-fulfilled.txt`. A session that was not verified writes nothing: the redemption stays UNFULFILLED and the replay plays again (#169).
 - `Data\Contexts\<id>\` — recording, end screenshot, YouTube entry. The uploader already keys off these files.
 
 ## Order of work
