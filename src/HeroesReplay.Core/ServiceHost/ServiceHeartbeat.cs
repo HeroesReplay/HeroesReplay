@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace HeroesReplay.Core.ServiceHost;
@@ -18,14 +17,6 @@ namespace HeroesReplay.Core.ServiceHost;
 public sealed class ServiceHeartbeat : IDisposable
 {
     private const int MaxErrorLength = 400;
-    private static readonly Regex SecretAssignment = new(
-        @"(?i)\b(access_token|api_token|api_key|apikey|token|key|secret|password)=([^&\s""']+)",
-        RegexOptions.Compiled
-    );
-    private static readonly Regex BearerToken = new(
-        @"(?i)\b(bearer|oauth:)\s*[A-Za-z0-9._\-]+",
-        RegexOptions.Compiled
-    );
     private static ServiceHeartbeat current;
 
     private readonly object gate = new();
@@ -226,17 +217,8 @@ public sealed class ServiceHeartbeat : IDisposable
         Interlocked.CompareExchange(ref current, null, this);
     }
 
-    public static string Redact(string message)
-    {
-        if (string.IsNullOrWhiteSpace(message))
-        {
-            return message;
-        }
-
-        string redacted = SecretAssignment.Replace(message, "$1=[redacted]");
-        redacted = BearerToken.Replace(redacted, "$1 [redacted]");
-        return redacted.Length <= MaxErrorLength ? redacted : redacted[..MaxErrorLength] + "...";
-    }
+    public static string Redact(string message) =>
+        ServiceLogRedaction.Redact(message, MaxErrorLength);
 
     // Callers hold the gate. A status read can hold the file for a moment; the next beat retries.
     private void Write()

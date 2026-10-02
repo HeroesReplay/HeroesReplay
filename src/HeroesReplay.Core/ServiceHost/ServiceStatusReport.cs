@@ -35,6 +35,12 @@ public static class ServiceHealthCodes
     public const string Stopped = "service.stopped";
     public const string Failed = "service.failed";
 
+    /// <summary>
+    /// A failed role the supervisor restarted as often as its budget allows. It stays down until
+    /// the stack is stopped and started again.
+    /// </summary>
+    public const string RestartBudgetExhausted = "service.restart_budget_exhausted";
+
     public static string For(ServiceRoleState state) =>
         state switch
         {
@@ -76,6 +82,49 @@ public sealed record ServiceRoleHealth
     public long? WorkAgeSeconds { get; init; }
     public long WorkThresholdSeconds { get; init; }
     public ServiceRoleError LastError { get; init; }
+
+    /// <summary>The role's newest log file, or the file it writes today when there is none yet.</summary>
+    public string LogPath { get; init; }
+
+    /// <summary>The supervisor's restarts of this role. Null when no supervisor has run it.</summary>
+    public ServiceRoleRestartStatus Restarts { get; init; }
+}
+
+/// <summary>One role's restarts and budget, as <c>services status</c> reports them.</summary>
+public sealed record ServiceRoleRestartStatus
+{
+    public int Count { get; init; }
+    public DateTimeOffset? LastRestartAt { get; init; }
+
+    /// <summary><c>failed</c> or <c>stale</c>.</summary>
+    public string LastReason { get; init; }
+
+    /// <summary>Why the last attempt did not get ready. Null when it did.</summary>
+    public string LastFailure { get; init; }
+
+    /// <summary>When the supervisor restarts the role next. Null unless it is waiting out a backoff.</summary>
+    public DateTimeOffset? NextRestartAt { get; init; }
+    public int BudgetUsed { get; init; }
+    public int BudgetLimit { get; init; }
+    public long BudgetWindowSeconds { get; init; }
+    public bool BudgetExhausted { get; init; }
+    public DateTimeOffset? ExhaustedAt { get; init; }
+}
+
+/// <summary>The supervisor next to the roles: whether it runs, and its rules.</summary>
+public sealed record ServiceSupervisorSummary
+{
+    public bool Running { get; init; }
+    public int? Pid { get; init; }
+    public DateTimeOffset? StartedAt { get; init; }
+    public DateTimeOffset? UpdatedAt { get; init; }
+    public bool Stopping { get; init; }
+    public string LogPath { get; init; }
+    public IReadOnlyList<string> Supervised { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<long> BackoffSeconds { get; init; } = Array.Empty<long>();
+    public int Budget { get; init; }
+    public long BudgetWindowSeconds { get; init; }
+    public long StaleRestartAfterSeconds { get; init; }
 }
 
 /// <summary>The spectator's own status file, summarised next to the roles.</summary>
@@ -137,6 +186,9 @@ public sealed record ServiceStatusReport
     public bool StopRequested { get; init; }
     public IReadOnlyList<ServiceRoleHealth> Roles { get; init; } = Array.Empty<ServiceRoleHealth>();
     public ServiceSpectatorSummary Spectator { get; init; }
+
+    /// <summary>Null when no supervisor runs and none left a state file.</summary>
+    public ServiceSupervisorSummary Supervisor { get; init; }
 
     [JsonIgnore]
     public int ExitCode => Ok ? 0 : 1;

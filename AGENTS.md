@@ -103,6 +103,15 @@ A version-mismatch or region-unavailable dialog leaves the front on the first mi
 
 Live-proof logs: Aspire dashboard at `http://127.0.0.1:18888`. The Aspire CLI on this machine is 13.5.4 and its MCP server is `aspire agent mcp`. This app has no AppHost, so connect it in dashboard-only mode: `aspire agent mcp --dashboard-url http://127.0.0.1:18888`. That mode exposes only `list_structured_logs`, `list_traces`, and `list_trace_structured_logs`. `list_resources` and `execute_resource_command` need an AppHost and are not available here. If that MCP is not connected, use `aspire otel logs`. Spectate, Twitch, download, and YouTube. No unhandled error stacks. No repeated invalid-timer flood. Service consoles must not cover the clock pill.
 
+Role logs do not need Aspire. Each role that `services start` launches writes `%LOCALAPPDATA%\HeroesReplay\logs\<role>-<yyyy-MM-dd>.log` (Information and up, tokens redacted, 20 MB parts, kept 14 days; `ServiceLogs`), and the supervisor writes `supervisor-<date>.log` there. `services status` prints each role's file. Read it first when a role is failed, degraded, or was restarted.
+
+### Supervision
+
+`services start --supervise` keeps its console as the supervisor once the roles are ready (`services supervise` attaches to a stack that is already running). It restarts a failed role after 10 s, 30 s, 2 min, then 5 min, kills and restarts a role whose heartbeat is 2 min old, and after 5 restarts in 30 min leaves the role down with one error and `service.restart_budget_exhausted` in `services status`. Degraded roles are not restarted. `services stop` stops the supervisor before the roles, so nothing restarts during a stop. One supervisor per session. Rules: `ServiceRestart`; details: `docs/service-split.md`.
+
+- **DESKTOP-8SJEK72:** run the stack supervised. In a scheduled downtime, `services stop`, then `heroesreplay services start --supervise` in its own console window, and leave that console open. Closing it ends supervision only; `heroesreplay services supervise` attaches again. Do not kill the supervisor to stop the stack; use `services stop`.
+- **ASA-SERVER:** prove supervision with `HEROES_REPLAY_ENV=dev` and `services start --supervise --roles download,youtube` only. Not spectate, not `twitch connect`. Kill a role with `Stop-Process -Force` to see a restart. End with `services stop`, then confirm `tasklist` shows no `heroesreplay.exe` and no `services.json`, `services.stop`, or `supervisor.json` is left in `%LOCALAPPDATA%\HeroesReplay`.
+
 On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: `services stop` (this closes HotS), `dotnet build heroes-replay.slnx -c Release` (the build copies `src/HeroesReplay.CLI/appsettings.secrets.json` into the Release bin), and start a proof only if phase 3 or 4 applies. Never start Twitch ingest here.
 
 ### Capture

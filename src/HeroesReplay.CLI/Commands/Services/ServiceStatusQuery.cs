@@ -25,6 +25,15 @@ public sealed class ServiceStatusQuery
     public string Environment { get; set; }
     public TextWriter Out { get; set; }
 
+    /// <summary>Where the role log files are. Null means the default folder.</summary>
+    public string LogDirectory { get; set; }
+
+    /// <summary><c>supervisor.json</c>. Null reads no supervisor.</summary>
+    public Func<ServiceSupervisorState> ReadSupervisor { get; set; }
+
+    /// <summary>True while a supervisor holds its mutex.</summary>
+    public Func<bool> SupervisorRunning { get; set; }
+
     public static ServiceStatusOutput ParseOutput(string value) =>
         string.Equals(value, "json", StringComparison.OrdinalIgnoreCase)
             ? ServiceStatusOutput.Json

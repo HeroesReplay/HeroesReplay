@@ -103,6 +103,8 @@ public static class HeroesReplayOpenTelemetry
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<ILoggerProvider, ServiceHeartbeatLoggerProvider>()
         );
+        // A role launched by `services start` also keeps its own rolling log file.
+        services.AddServiceRoleLog(ServiceRoleLog.RoleFromEnvironment());
         ServiceProvider provider =
             options == null
                 ? services.BuildServiceProvider()
