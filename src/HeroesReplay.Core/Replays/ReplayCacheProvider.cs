@@ -11,7 +11,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Session;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Replays;

@@ -12,6 +12,8 @@ using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Clock;
 using HeroesReplay.Core.Spectating.Clock.Memory;
+using HeroesReplay.Core.Spectating.Control;
+using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
 using HeroesReplay.Core.Twitch.Predictions;
 using HeroesReplay.Core.TwitchExtension;

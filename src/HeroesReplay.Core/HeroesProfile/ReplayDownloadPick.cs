@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Replays;
 
 namespace HeroesReplay.Core.HeroesProfile;
 

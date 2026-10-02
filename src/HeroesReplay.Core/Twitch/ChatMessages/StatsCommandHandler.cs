@@ -1,7 +1,7 @@
 using System;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Configuration;
-using HeroesReplay.Core.Spectating;
+using HeroesReplay.Core.Spectating.Control;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Interfaces;
 using TwitchLib.Client.Models;
