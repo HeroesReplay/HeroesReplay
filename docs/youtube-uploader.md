@@ -156,26 +156,67 @@ After a successful upload, retention deletes the mp4 on the next sweep. The cont
 
 ## The library record
 
-Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode and without a build.
+Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. A full match also keeps `Draft`, the description's `Draft:` note (`Blue no tank, Red double healer`), and `FocusHero`, the description's `Featured:` hero. Only a viewer request that named a player (`{replayId},{slot}` on the ReplayId reward, or `spectate file --player`) writes `Featured:`. Both keys are left out of the line when the video has neither. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode, a build, a draft note, or a named player.
 
 ## The library pass
 
 The uploader process owns every YouTube call. Besides uploads, it runs one library pass at most every `YouTube:LibraryInterval` (1 hour). The time of the last pass is kept in `Data\youtube-uploads-index.json`, so a restart does not run it again early. `heroesreplay youtube library --once` runs the same pass at once. Only one process runs it at a time (`Data\youtube-library.lock`). A pass does three things.
 
-1. **List the channel.** `channels.list` once for the uploads playlist id (1 unit), then `playlistItems.list` with `snippet,status`, 50 videos and 1 unit per page, newest first. Every replay id found goes into `Data\youtube-replay-ids.txt`. A video in the record whose privacy changed (a scheduled upload that went public) gets a new line. Until a listing has once reached the last page, every page is read (7 units for 338 videos). After that a listing stops at the first page with no new video, so a pass usually costs 1 or 2 units.
-2. **Backfill.** A channel video missing from the record is read from its title and description. The current template has `Map:`, `Mode:`, `Rank:`, and `Build:` lines. Older uploads (`Sky Temple - 65269475 - Platinum` with only `Game type:` and `Rank:` lines) have no build, and a few have a localized map name. Whatever is missing comes from Heroes Profile by replay id, with the rank looked up from player MMR only when a Storm League video has none. At most `YouTube:LibraryLookupsPerPass` (50) lookups run per pass. A video that resolves is recorded and never looked up again. One that does not stays in the index as unresolved and is tried again 6 hours later, then 12, 24, and so on up to every 7 days. An inserted clip is resolved the same way to get its build.
-3. **File.** The record's resolved public videos, plus any `youtube-entry-uploaded.json` still under `Data\Contexts` that the record does not have, are planned with the playlist rules below. Each video id is filed once per playlist (`Data\youtube-playlists.json`). The channel's playlists are listed once per pass when a title is not cached (1 unit per 50), a missing playlist is created (50 units), and each video insert costs 50 units. Three failures in a row stop the filing for that pass. Nothing is removed from a playlist.
-
-Two playlists are created when missing, both public:
-
-- Map and mode. `Alterac Pass - Storm League - Diamond`. The league is Grandmaster, Master, Diamond, Platinum, Gold, Silver, or Bronze, without division. Unranked Storm League is `Alterac Pass - Storm League`. Quick Match, ARAM, and Unranked Draft use `Alterac Pass - Quick Match` and the same shape. Other modes are skipped. A clip has no mode, so it is not filed on a map playlist.
-- Patch. The current patch line of `Spectate:MinimumGameVersion` uses `YouTube:SeasonName` when that is set, otherwise `Patch 2.57`. An older line uses `Patch 2.55 archive`. A record video waits for its build before it is filed. A context entry with no build uses `Unknown patch`. Only a public video is filed. Nothing is deleted when the patch rolls.
+1. **List the channel.** `channels.list` once for the uploads playlist id (1 unit), then `playlistItems.list` with `snippet,status`, 50 videos and 1 unit per page, newest first. Every replay id found goes into `Data\youtube-replay-ids.txt`. A video in the record whose privacy changed (a scheduled upload that went public) gets a new line. Until a listing has once reached the last page, every page is read (7 units for 338 videos). After that a listing stops at the first page with no new video, so a pass usually costs 1 or 2 units. When the pass learns to read a new fact (`YouTubeVideoFacts.Version`, now 2 for the draft note and the named player), the next listing reads every page once more, and a video already in the record gets a new line with the draft note or named player its description shows. Nothing the record already has is replaced.
+2. **Backfill.** A channel video missing from the record is read from its title and description. The current template has `Map:`, `Mode:`, `Rank:`, and `Build:` lines, plus `Draft:` and `Featured:` when they apply. Older uploads (`Sky Temple - 65269475 - Platinum` with only `Game type:` and `Rank:` lines) have no build, and a few have a localized map name. Whatever is missing comes from Heroes Profile by replay id, with the rank looked up from player MMR only when a Storm League video has none. At most `YouTube:LibraryLookupsPerPass` (50) lookups run per pass. A video that resolves is recorded and never looked up again. One that does not stays in the index as unresolved and is tried again 6 hours later, then 12, 24, and so on up to every 7 days. An inserted clip is resolved the same way to get its build.
+3. **File.** The record's resolved public videos, plus any public `youtube-entry-uploaded.json` still under `Data\Contexts` that the record does not have, are planned with the playlist groups below. The newest upload is planned first, so a new video is filed before the backlog of older ones. Each video id is filed once per playlist (`Data\youtube-playlists.json`). The channel's playlists are listed once per pass when a title is not cached (1 unit per 50), a missing playlist is created (50 units), and each video insert costs 50 units. Three failures in a row stop the filing for that pass. Nothing is removed from a playlist.
 
 Upload OAuth is the `youtube.upload` scope. The library pass (listing, playlist create, and insert) uses a separate consent, the full `youtube` scope, stored for `{ChannelId}:library`. That consent also lists private and scheduled uploads. Channel id in the base file is `UCpf5rn5UlJTUZF9n98HXS5A`.
 
-`YouTube:DryRun` true never calls YouTube or Heroes Profile. It writes `Data\youtube-library-dry-run.json` with the playlist inserts it would make from the record and the contexts, the unresolved videos it would look up, and the day's units.
+`YouTube:DryRun` true never calls YouTube or Heroes Profile. It writes `Data\youtube-library-dry-run.json` with the playlist inserts it would make from the record and the contexts (`Items`), the video count per playlist (`Playlists`), their units (`InsertUnits`, 50 each, playlist creates not counted), the unresolved videos it would look up, and the day's units.
 
 Renaming or retitling published videos is not part of the pass. That stays in `tools/youtube-fix-descriptions.cs`.
+
+## Playlists
+
+`YouTube:Playlists` lists the groups, one switch each. A playlist is created public the first time a video needs it. Its title is its key: the same facts always give the same title, at most 150 characters (YouTube's limit). A video goes into each playlist at most once, even when two groups give the same title.
+
+```json
+"Playlists": {
+  "Map": true,
+  "Mode": true,
+  "Rank": true,
+  "Draft": true,
+  "ViewerReview": true,
+  "Patch": true,
+  "MapMode": false
+}
+```
+
+| Group | Title | Filed when |
+| --- | --- | --- |
+| `Map` | `Alterac Pass` | A full match with a filed mode. Every mode shares one playlist per map. The map is the English catalog name. |
+| `Mode` | `Storm League`, `Quick Match`, `ARAM`, `Unranked Draft` | A full match in one of those modes. Other modes (brawls, custom) are not filed in any group except the patch. |
+| `Rank` | `Storm League - Diamond` | A Storm League game with a known league: Grandmaster, Master, Diamond, Platinum, Gold, Silver, or Bronze, without division. Unranked Storm League, Quick Match, and ARAM have no rank playlist. |
+| `Draft` | `Unusual drafts - Double healer` | The description has a `Draft:` note. One playlist per note, without the team: `Blue no tank, Red double healer` goes into `Unusual drafts - No tank` and `Unusual drafts - Double healer`. |
+| `ViewerReview` | `Viewer requested reviews` | The description has a `Featured:` hero, which only a request that named a player writes. A paid upload that named no player is not a review. |
+| `Patch` | `Patch 2.57`, `YouTube:SeasonName`, `Patch 2.55 archive`, `Unknown patch` | Every public video, clips included. The current line of `Spectate:MinimumGameVersion` uses `SeasonName` when that is set. An older line is an archive. A record video waits for its build. A context entry with no build uses `Unknown patch`. Nothing is deleted when the patch rolls. |
+| `MapMode` | `Alterac Pass - Storm League - Diamond`, `Alterac Pass - Quick Match` | Off by default. The earlier combined playlist. |
+
+A clip goes into the patch playlist only. Every other group needs a full match in a filed mode. Only a public video is filed.
+
+The draft notes are the title's notes (see "What the video contains"): no tank or healer, no healer, double or triple healer, double bruiser without a tank, no tank, double tank, triple bruiser, double support, and no ranged assassin, with counts above three written as a number (`4 healers`). That is about ten playlists in practice. One playlist per note, rather than a single `Unusual drafts` list, lets a viewer open "every double healer game". It costs the same insert for a video with one note. Only a match where the two teams have different notes costs a second insert.
+
+`MapMode` is off because it is one playlist per map and tier: 15 maps times 8 Storm League shapes, plus Quick Match and ARAM, is well over 100 playlists of a few videos each, and every one of them repeats what the map and rank playlists already show. Turning it off stops new inserts. The combined playlists already on the channel keep their videos and are not filled any further. Delete them in YouTube Studio if they are not wanted, or set `MapMode` true to keep them growing.
+
+Old videos. The first template (`Sky Temple - 65269475 - Platinum`, with a `Game type:` line) has no `Draft:` or `Featured:` line, and Heroes Profile does not know about a draft note or a Twitch request. Those videos go into the map, mode, rank, and patch playlists only. A current-template video gets the draft note only when `YouTube:Titles:DraftNotes` was on at upload.
+
+Cost per video. Each group that applies is one `playlistItems.insert`, 50 units:
+
+| Video | Inserts with the defaults | Units |
+| --- | --- | --- |
+| Ranked Storm League (map, mode, rank, patch) | 4 | 200 |
+| Unranked Storm League, Quick Match, or ARAM (map, mode, patch) | 3 | 150 |
+| Plus an unusual draft | +1 per note (usually 1, at most 2) | +50 to +100 |
+| Plus a viewer review | +1 | +50 |
+| Clip (patch) | 1 | 50 |
+
+The earlier rules cost 2 inserts (100 units) per full match.
 
 ## Quota units
 
@@ -195,7 +236,7 @@ Uploads go first. An insert is counted when it is sent, and the units never refu
 
 A quota response from YouTube, during the pass or an upload, pauses the pass until the next Pacific quota day. Uploads continue.
 
-Backfilling the 338 videos on the channel today (4 already on the current template) costs about 7 units of listing, 334 Heroes Profile lookups (the older template has no build) spread over 7 passes, and two playlist inserts per public video: about 676 × 50 = 33,800 units, plus 50 for each playlist that does not exist yet (roughly one per map and league seen, plus one per patch line). At 3000 units a day that is about 12 to 13 days, longer on days when uploads leave less room under the ceiling.
+Backfilling the 338 videos on the channel today (4 already on the current template) costs about 7 units of listing (and 7 more once, for the full re-listing that reads the draft note and named player), 334 Heroes Profile lookups (the older template has no build) spread over 7 passes, and the playlist inserts. Each group that is on adds one insert per video: 338 × 50 = 16,900 units, about 6 days at 3000 units a day. With the defaults a ranked Storm League video is 4 inserts (map, mode, rank, patch), so the backlog is about 1,352 × 50 = 67,600 units, plus 50 for each playlist that does not exist yet (about 30: one per map, mode, league, patch line, draft note, and the review playlist). At 3000 units a day that is about 23 days. New uploads share that room (200 units each, so about 1,200 on a day with 6 uploads), which makes it closer to 5 to 6 weeks, and longer on days when uploads leave less room under the ceiling. An insert an earlier pass already made (the patch playlist) is not made again. To shorten the backlog, turn `Mode` off first: almost every video is Storm League, so the `Storm League` playlist is close to the whole channel.
 
 ## The score
 

@@ -102,7 +102,7 @@ dotnet run --no-launch-profile -- --help
 | `calculators units --directory <path>` | Sample 1–5 replays per map, one file at a time, and write unit CSVs |
 | `twitch connect` / `twitch rewards …` | Chat bot and channel-point rewards |
 | `youtube uploader` | Upload OBS recordings |
-| `youtube library` | File uploaded matches into map and patch playlists |
+| `youtube library` | File uploaded matches into map, mode, rank, unusual-draft, viewer-review, and patch playlists (`YouTube:Playlists`) |
 | `client configure` | Windowed 1080p + AhliObs in `Documents\Heroes of the Storm` (Variables.txt + StormInterface). Quit the game first. |
 | `client status` / `check client` | Verify that preset |
 | `check` | Config + Heroes Profile + OBS + Twitch + client + Battle.net + connectivity (continues on failure) |

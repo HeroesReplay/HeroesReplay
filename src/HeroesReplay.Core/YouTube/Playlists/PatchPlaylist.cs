@@ -37,14 +37,4 @@ public static class PatchPlaylist
     {
         return string.Equals(privacyStatus, "public", StringComparison.OrdinalIgnoreCase);
     }
-
-    public static bool MayFile(YouTubeEntry entry)
-    {
-        if (entry == null)
-        {
-            return false;
-        }
-
-        return MayFile(entry.ActualPrivacyStatus) || MayFile(entry.PrivacyStatus);
-    }
 }
