@@ -28,6 +28,40 @@ public static class MediumIntegrityProcess
     private const int TokenElevationClass = 20;
     private const uint PrivilegeEnabled = 0x00000002;
 
+    /// <summary>
+    /// True or false when the process token can be read. Null when it cannot, which is what an
+    /// unelevated caller sees for an elevated process.
+    /// </summary>
+    public static bool? IsProcessElevated(int processId)
+    {
+        IntPtr process = OpenProcess(ProcessQueryLimitedInformation, false, (uint)processId);
+        if (process == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (!OpenProcessToken(process, TokenQuery, out IntPtr token))
+            {
+                return null;
+            }
+
+            try
+            {
+                return IsTokenElevated(token);
+            }
+            finally
+            {
+                CloseHandle(token);
+            }
+        }
+        finally
+        {
+            CloseHandle(process);
+        }
+    }
+
     public static bool IsCurrentProcessElevated()
     {
         if (!OpenProcessToken(GetCurrentProcess(), TokenQuery, out IntPtr token))

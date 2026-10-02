@@ -7,43 +7,76 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.GameClient;
 
+/// <summary>
+/// Reading rules needs no elevation. Adding one does, so an unelevated process only reports
+/// a missing rule; <c>heroesreplay client firewall</c> from an elevated shell adds it.
+/// </summary>
 public sealed class NetshGameFirewall : IGameFirewall
 {
     private readonly ILogger<NetshGameFirewall> logger;
+    private readonly Func<bool> isElevated;
+    private readonly Func<string, bool, NetshResult> run;
 
     public NetshGameFirewall(ILogger<NetshGameFirewall> logger)
+        : this(logger, MediumIntegrityProcess.IsCurrentProcessElevated, Run) { }
+
+    internal NetshGameFirewall(
+        ILogger<NetshGameFirewall> logger,
+        Func<bool> isElevated,
+        Func<string, bool, NetshResult> run
+    )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.isElevated = isElevated ?? throw new ArgumentNullException(nameof(isElevated));
+        this.run = run ?? throw new ArgumentNullException(nameof(run));
     }
 
-    public void AllowInboundClients(IReadOnlyList<string> exePaths)
+    public IReadOnlyList<FirewallRuleOutcome> AllowInboundClients(IReadOnlyList<string> exePaths)
     {
+        var outcomes = new List<FirewallRuleOutcome>();
+        bool elevated = isElevated();
         foreach (HeroesFirewallRule rule in HeroesFirewallConsent.ForClients(exePaths))
         {
+            FirewallRuleState state;
             try
             {
-                AllowOne(rule);
+                state = AllowOne(rule, elevated);
             }
             catch (Win32Exception e)
             {
                 LogFailure(rule, e);
+                state = FirewallRuleState.Failed;
             }
             catch (InvalidOperationException e)
             {
                 LogFailure(rule, e);
+                state = FirewallRuleState.Failed;
             }
+
+            outcomes.Add(new FirewallRuleOutcome(rule.ProgramPath, state));
         }
+
+        return outcomes;
     }
 
-    private void AllowOne(HeroesFirewallRule rule)
+    private FirewallRuleState AllowOne(HeroesFirewallRule rule, bool elevated)
     {
         if (AlreadyAllows(rule))
         {
             logger.LogDebug("Inbound access for {Program} is already allowed.", rule.ProgramPath);
-            return;
+            return FirewallRuleState.AlreadyAllowed;
         }
 
-        int code = Run(AddArguments(rule), capture: false).Code;
+        if (!elevated)
+        {
+            logger.LogWarning(
+                "No inbound firewall rule for {Program}. Windows may ask to allow it the first time it listens. Run `heroesreplay client firewall` once from an elevated shell to add it.",
+                rule.ProgramPath
+            );
+            return FirewallRuleState.MissingNeedsElevation;
+        }
+
+        int code = run(AddArguments(rule), false).Code;
         if (code != 0)
         {
             throw new InvalidOperationException("netsh could not add the allow rule. Exit " + code);
@@ -53,11 +86,12 @@ public sealed class NetshGameFirewall : IGameFirewall
             "Allowed inbound network access for {Program}. Windows Firewall will not ask for this Heroes client.",
             rule.ProgramPath
         );
+        return FirewallRuleState.Added;
     }
 
-    private static bool AlreadyAllows(HeroesFirewallRule rule)
+    private bool AlreadyAllows(HeroesFirewallRule rule)
     {
-        NetshResult shown = Run(ShowArguments(rule), capture: true);
+        NetshResult shown = run(ShowArguments(rule), true);
         return shown.Code == 0
             && shown.Text.IndexOf(rule.ProgramPath, StringComparison.OrdinalIgnoreCase) >= 0
             && shown.Text.IndexOf("Allow", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -131,5 +165,5 @@ public sealed class NetshGameFirewall : IGameFirewall
         return new NetshResult(process.ExitCode, text ?? string.Empty);
     }
 
-    private readonly record struct NetshResult(int Code, string Text);
+    internal readonly record struct NetshResult(int Code, string Text);
 }

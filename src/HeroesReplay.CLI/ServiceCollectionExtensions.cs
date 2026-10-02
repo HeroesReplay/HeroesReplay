@@ -183,7 +183,8 @@ public static class ServiceCollectionExtensions
         return services
             .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-client")
             .AddSingleton(settings)
-            .AddSingleton<StormClientConfigurator>();
+            .AddSingleton<StormClientConfigurator>()
+            .AddSingleton<IGameFirewall, NetshGameFirewall>();
     }
 
     public static IServiceCollection AddFocusCalculators(this IServiceCollection services)
