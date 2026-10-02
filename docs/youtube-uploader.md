@@ -170,9 +170,59 @@ A draft note is added before the replay id when the current hero-select roles ar
 
 `YouTube:Titles` in `appsettings.json` and `appsettings.prod.json` turns each form on or off: `DraftNotes`, `NamedPlayerTitles`, and `FeatureNewHeroes`. Each draft note has its own switch (`NoTankOrHealer`, `NoHealer`, `DoubleHealer`, `TripleHealer`, `DoubleBruiserWithoutTank`, `NoTank`, `DoubleTank`, `TripleBruiser`, `DoubleSupport`, `NoRangedAssassin`). The six role labels are in the same section. Turning a form off leaves the map, mode, rank, and replay id.
 
+### Team compositions
+
+A team can also get a composition label (issue #140). The rules read the heroes-data2 catalog: the hero-select role, the `playstyles` tags, `isMelee`, and the 1 to 10 ratings. A team with a hero the catalog cannot match, or with fewer than five heroes, gets no label.
+
+| Label | Key | One team has | Games in the corpus |
+| --- | --- | --- | --- |
+| Split push | `SplitPush` | 3 or more `SoloLaner` heroes | 4.7% |
+| Siege | `Siege` | 4 or more heroes that are `TowerPusher` or `WaveClearer` | 6.1% |
+| Dive | `Dive` | 4 or more `Ganker` heroes and 4 or more `Escaper` heroes | 3.7% |
+| Poke | `Poke` | 3 or more ranged `RoleCaster` heroes | 1.7% |
+| Double melee assassin | `MeleeAssassins` | 2 or more Melee Assassins. Three is `Triple melee assassin` | 2.7% |
+| All melee | `AllMelee` | 5 melee heroes | 0% |
+| One ranged | `OneRanged` | 4 melee heroes | 6.4% |
+| Triple sustain | `Sustain` | 3 or more heroes that are `AllyHealer` or `SelfHealer`, the healer included | 2.4% |
+| Triple specialist | `Specialists` | 3 or more `RoleSpecialist` heroes | 1.0% |
+| Merc control | `MercControl` | 2 or more `MercKiller` heroes | 7.1% |
+| Glass cannon | `GlassCannon` | Average survivability 4.4 or less and average damage 7 or more | 1.0% |
+
+The corpus is 295 Storm League games on build 2.57.0.98304, replay ids 65635951 to 65645361, read by `heroesreplay calculators compositions`. A label is named only while its share of games in `YouTube:Titles:Compositions:Frequencies` is below `MaxFrequency` (0.1). The first run used the plan's thresholds and named double soak in 77% of games, dive in 71%, siege in 39%, two specialists in 17%, and one ranged in 10.2%, so those rules went up. A tower pusher that also clears waves is not counted as a soaker, because Kael'thas, Jaina, Sylvanas, and Sgt. Hammer have both tags. Two solo laners are still 45% of games (the offlaner plus one soaker), so the label needs three and is called Split push.
+
+`HeroTagOverrides` changes a hero's tags before any rule counts them. The defaults:
+
+| Hero | Change | Why |
+| --- | --- | --- |
+| Brightwing | Remove `SoloLaner` | A healer. She was her team's only healer in 76 of 78 corpus teams. |
+| Cho | Remove `SoloLaner` | Cho and Gall share one body, so Cho does not hold a lane alone. |
+| Hogger | Add `Ganker`, `SoloLaner`, `WaveClearer` | The catalog has no playstyles for him. Tagged like Sonya, the offlaner he is picked as. |
+| The Lost Vikings | Add `RoleSpecialist`, `SoloLaner`, `WaveClearer` | No playstyles in the catalog. The three Vikings soak lanes apart. |
+| Maiev | Add `Escaper`, `Ganker` | No playstyles in the catalog. Tagged like Illidan and Zeratul. |
+| Abathur | `IsMelee` false | His 1-range attack makes him melee in the catalog, but he plays from behind the wall. He was in 13 of the 31 corpus teams with four melee heroes. |
+
+`YouTube:Titles:Compositions` holds `Enabled` (true), `MaxFrequency`, one rule per label (`Enabled`, `Label`, `MinHeroes`, and `MinEscapers` for Dive, or `MaxSurvivability` and `MinDamage` for Glass cannon), `Frequencies`, and `HeroTagOverrides` (`Add`, `Remove`, `IsMelee`, and an unused `Reason`). A configured key replaces that one default. A key missing from `Frequencies` counts as rare.
+
+The labels go into four places:
+
+- **Title.** At most one composition label, the rarest by `Frequencies`, in the draft note's slot. The role notes keep the slot unless the label is rarer than each of them: `Blue double bruiser, Red dive` in the description is `Red dive` in the title, because dive is 3.7% of games and double bruiser 14.9%. A label both teams have has no team. The slot is still the first part dropped at 100 characters.
+- **Description.** The `Draft:` line lists every role note and every named label for both teams: `Draft: Red double tank, Blue dive, Red triple sustain`.
+- **Tags.** One tag per label (`Dive`, `Triple sustain`), after `Heroes of the Storm`, so the 500-character limit drops them first.
+- **Playlists.** Each label is a draft note to the library pass: `Unusual drafts - Dive`.
+
+Titles from the corpus:
+
+- `Cursed Hollow - Storm League - Gold 4 - Red split push - 65636323`
+- `Alterac Pass - Storm League - Silver 2 - Blue dive - 65635953`
+- `Sky Temple - Storm League - Master - Red triple sustain - 65641053`
+- `Ft. Xal'atath - Alterac Pass - Storm League - Bronze 2 - Red glass cannon - 65644212`
+- `Ft. Xal'atath - Haunted Mines - Storm League - Bronze 1 - Red triple specialist - 65636653`
+
+To retune, download a fresh corpus into a scratch folder (not `Data\Standard`), run `heroesreplay calculators compositions --directory <folder> --output report.md`, change the thresholds, run it again, and copy each game share into `Frequencies` (or `TeamCompositionSettings.CorpusFrequencies`).
+
 A hero is featured when its name is in `RecentHeroes`, or when the catalog `releaseDate` is within `RecentHeroDays` (60) of the match. `RecentHeroDays` of 0 or less uses the name list only. The newest release date wins. A name on the list is still featured when the local catalog does not have that hero yet. Xal'atath is on the list. The description adds `Featuring: Xal'atath` when the title does. Clips are unchanged.
 
-The description starts with `Twitch: https://twitch.tv/saltysadism`, then `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note, `Featuring:` when a new hero is in the title, the pentakill or team wipe as a highlight, and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, and those events. The entry records `TemplateVersion` 5.
+The description starts with `Twitch: https://twitch.tv/saltysadism`, then `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the pentakill or team wipe as a highlight, and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 6.
 
 Every `videos.insert`, full match or clip, is built by `UploadBody` with the `snippet,status` parts:
 
@@ -192,7 +242,7 @@ After a successful upload, retention deletes the mp4 on the next sweep, which th
 
 ## The library record
 
-Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. A full match also keeps `Draft`, the description's `Draft:` note (`Blue no tank, Red double healer`), and `FocusHero`, the description's `Featured:` hero. Only a viewer request that named a player (`{replayId},{slot}` on the ReplayId reward, or `spectate file --player`) writes `Featured:`. Both keys are left out of the line when the video has neither. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode, a build, a draft note, or a named player.
+Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. A full match also keeps `Draft`, the description's `Draft:` note with its composition labels (`Blue no tank, Red double healer, Red dive`), and `FocusHero`, the description's `Featured:` hero. Only a viewer request that named a player (`{replayId},{slot}` on the ReplayId reward, or `spectate file --player`) writes `Featured:`. Both keys are left out of the line when the video has neither. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode, a build, a draft note, or a named player.
 
 ## The library pass
 
@@ -231,18 +281,18 @@ Renaming or retitling published videos is not part of the pass. That stays in `t
 | `Map` | `Alterac Pass` | A full match with a filed mode. Every mode shares one playlist per map. The map is the English catalog name. |
 | `Mode` | `Storm League`, `Quick Match`, `ARAM`, `Unranked Draft` | A full match in one of those modes. Other modes (brawls, custom) are not filed in any group except the patch. |
 | `Rank` | `Storm League - Diamond` | A Storm League game with a known league: Grandmaster, Master, Diamond, Platinum, Gold, Silver, or Bronze, without division. Unranked Storm League, Quick Match, and ARAM have no rank playlist. |
-| `Draft` | `Unusual drafts - Double healer` | The description has a `Draft:` note. One playlist per note, without the team: `Blue no tank, Red double healer` goes into `Unusual drafts - No tank` and `Unusual drafts - Double healer`. |
+| `Draft` | `Unusual drafts - Double healer` | The description has a `Draft:` note. One playlist per note, without the team: `Blue no tank, Red double healer` goes into `Unusual drafts - No tank` and `Unusual drafts - Double healer`. A composition label is a note too: `Red dive` goes into `Unusual drafts - Dive`. |
 | `ViewerReview` | `Viewer requested reviews` | The description has a `Featured:` hero, which only a request that named a player writes. A paid upload that named no player is not a review. |
 | `Patch` | `Patch 2.57`, `YouTube:SeasonName`, `Patch 2.55 archive`, `Unknown patch` | Every public video, clips included. The current line of `Spectate:MinimumGameVersion` uses `SeasonName` when that is set. An older line is an archive. A record video waits for its build. A context entry with no build uses `Unknown patch`. Nothing is deleted when the patch rolls. |
 | `MapMode` | `Alterac Pass - Storm League - Diamond`, `Alterac Pass - Quick Match` | Off by default. The earlier combined playlist. |
 
 A clip goes into the patch playlist only. Every other group needs a full match in a filed mode. Only a public video is filed.
 
-The draft notes are the title's notes (see "What the video contains"): no tank or healer, no healer, double or triple healer, double bruiser without a tank, no tank, double tank, triple bruiser, double support, and no ranged assassin, with counts above three written as a number (`4 healers`). That is about ten playlists in practice. One playlist per note, rather than a single `Unusual drafts` list, lets a viewer open "every double healer game". It costs the same insert for a video with one note. Only a match where the two teams have different notes costs a second insert.
+The draft notes are the title's notes (see "What the video contains"): no tank or healer, no healer, double or triple healer, double bruiser without a tank, no tank, double tank, triple bruiser, double support, and no ranged assassin, with counts above three written as a number (`4 healers`), plus the composition labels: split push, siege, dive, poke, double or triple melee assassin, all melee, one ranged, triple sustain, triple specialist, merc control, and glass cannon. That is about twenty playlists in practice. One playlist per note, rather than a single `Unusual drafts` list, lets a viewer open "every double healer game". Each distinct note costs one insert. In the issue #140 corpus, half the games had no note, 94 of 295 had one, 43 had two, and 11 had three or four, so about 0.7 inserts a game.
 
 `MapMode` is off because it is one playlist per map and tier: 15 maps times 8 Storm League shapes, plus Quick Match and ARAM, is well over 100 playlists of a few videos each, and every one of them repeats what the map and rank playlists already show. Turning it off stops new inserts. The combined playlists already on the channel keep their videos and are not filled any further. Delete them in YouTube Studio if they are not wanted, or set `MapMode` true to keep them growing.
 
-Old videos. The first template (`Sky Temple - 65269475 - Platinum`, with a `Game type:` line) has no `Draft:` or `Featured:` line, and Heroes Profile does not know about a draft note or a Twitch request. Those videos go into the map, mode, rank, and patch playlists only. A current-template video gets the draft note only when `YouTube:Titles:DraftNotes` was on at upload.
+Old videos. The first template (`Sky Temple - 65269475 - Platinum`, with a `Game type:` line) has no `Draft:` or `Featured:` line, and Heroes Profile does not know about a draft note or a Twitch request. Those videos go into the map, mode, rank, and patch playlists only. A current-template video gets the draft note only when `YouTube:Titles:DraftNotes` was on at upload, and composition labels only from `TemplateVersion` 6 with `YouTube:Titles:Compositions:Enabled` on. The `Draft:` line kept its shape, so the library pass reads both templates the same way.
 
 Cost per video. Each group that applies is one `playlistItems.insert`, 50 units:
 
@@ -250,7 +300,7 @@ Cost per video. Each group that applies is one `playlistItems.insert`, 50 units:
 | --- | --- | --- |
 | Ranked Storm League (map, mode, rank, patch) | 4 | 200 |
 | Unranked Storm League, Quick Match, or ARAM (map, mode, patch) | 3 | 150 |
-| Plus an unusual draft | +1 per note (usually 1, at most 2) | +50 to +100 |
+| Plus an unusual draft | +1 per note (usually 1 or 2, at most 4 in the corpus) | +50 to +200 |
 | Plus a viewer review | +1 | +50 |
 | Clip (patch) | 1 | 50 |
 

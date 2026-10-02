@@ -106,6 +106,23 @@ public class YouTubeVideoFactsTests
     }
 
     [Fact]
+    public void Read_TemplateSixKeepsTheCompositionLabelsInTheDraftNote()
+    {
+        YouTubeLibraryVideo video = YouTubeVideoFacts.Read(
+            "v",
+            "Cursed Hollow - Storm League - Diamond - Red dive - 65550001",
+            "Twitch: https://twitch.tv/saltysadism\nFull match.\nReplay ID: 65550001\nBuild: 2.57.0.98304\nMap: Cursed Hollow\nMode: Storm League\nRank: Diamond\nDraft: Blue double bruiser, Red dive, Split push\nBlue: Chen (A), Thrall (B)",
+            "public"
+        );
+
+        Assert.Equal("Blue double bruiser, Red dive, Split push", video.Draft);
+        Assert.Equal(
+            new[] { "Double bruiser", "Dive", "Split push" },
+            YouTubePlaylistNames.DraftNotes(video.Draft)
+        );
+    }
+
+    [Fact]
     public void Read_ANewHeroIsNotANamedPlayer()
     {
         YouTubeLibraryVideo video = YouTubeVideoFacts.Read(

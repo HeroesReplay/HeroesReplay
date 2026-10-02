@@ -33,6 +33,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `calculators coordinates [--file path]` | Parse replay, print coordinate samples, build Kill/NearEnemy/Roaming focus map |
 | `calculators report [--file path]` | Spectator report for a file/directory |
 | `calculators units --directory <path> [--per-map 1-5] [--output path]` | Survey a replay folder one file at a time, keep up to 5 per map, then parse those units into CSV reports |
+| `calculators compositions --directory <path> [--output report.md\|report.csv]` | Read every `.StormReplay` in the folder (top level, one file at a time, no events) against the heroes-data2 catalog under `Location:DataDirectory`. Prints one line per replay (each team's draft note and composition labels, and the title slot), then each composition label and draft note per team and per game, with `Named` when the game share is under `YouTube:Titles:Compositions:MaxFrequency`. `.md` adds a row per replay with both rosters; `.csv` writes the frequency table. Read-only. Use it to retune `YouTube:Titles:Compositions` and its `Frequencies` on a fresh corpus (issue #140). |
 | `check` | Runs config, heroesprofile, obs, twitch, client, battlenet, and connectivity; continues on failure; exit 1 if any fail |
 | `check config` | Bind settings; print which secrets are present (never print values) |
 | `check heroesprofile` | Kiota `GET /replays` max_replay_id with Bearer key |
@@ -76,7 +77,7 @@ Skill `op-service-account`. Clone to `C:\heroesreplay\HeroesReplay`. `pwsh -File
 | Filter | What |
 | --- | --- |
 | default / `Category=Unit` | Everything under `src/HeroesReplay.Tests/Unit` (one folder per Core slice) |
-| `Category=Smoke` | Parse `--help`; asserts root, `check`, `client`, `otel`, `services`, `heroesprofile`, `twitch`, `calculators`, `youtube`, `obs`, and `update` subcommands exist. Exit codes: `spectate --help` and `spectate file --help` exit 0 without elevation; an invalid `--player` or a missing `--file` exits 1 |
+| `Category=Smoke` | Parse `--help`; asserts root, `check`, `client`, `otel`, `services`, `heroesprofile`, `twitch`, `calculators`, `youtube`, `obs`, and `update` subcommands exist. Exit codes: `spectate --help` and `spectate file --help` exit 0 without elevation; an invalid `--player` or a missing `--file` exits 1. `calculators compositions` exits 1 for a missing folder or an `--output` that is not `.md` or `.csv`, and reports the bundled replay against a test catalog |
 | `Category=Integration` | Live Heroes Profile v1 list/download (needs `op` or env key), YouTube dry-run upload, medium-integrity process launch |
 
 After changing a check target, run that CLI command, not only unit tests.

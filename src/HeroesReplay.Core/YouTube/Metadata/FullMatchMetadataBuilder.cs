@@ -64,7 +64,7 @@ public sealed class FullMatchMetadata
 
 public static class FullMatchMetadataBuilder
 {
-    public const string TemplateVersion = "5";
+    public const string TemplateVersion = "6";
     public const int TitleMaxCharacters = 100;
     public const int DescriptionMaxCharacters = 5000;
     public const int TagMaxCharacters = 30;
@@ -115,7 +115,7 @@ public static class FullMatchMetadataBuilder
         int? mmr = RoundedMmr(input.AverageMmr);
         string describedWhen = DateLabel(input.GameDateUtc);
         string winner = options.IncludeSpoilers ? Clean(input.Winner, 80) : null;
-        string draft = HeroDraft.Phrase(input.HeroCatalog, input.Roster, titles);
+        MatchDraft draft = MatchDraft.Read(input.HeroCatalog, input.Roster, titles);
         string featuredHero = HeroFeature.Select(
             titles,
             input.HeroCatalog,
@@ -137,7 +137,7 @@ public static class FullMatchMetadataBuilder
             rank,
             focus,
             feature,
-            draft,
+            draft.Title,
             replayText
         );
 
@@ -155,7 +155,7 @@ public static class FullMatchMetadataBuilder
         AddLine(lines, mode == null ? null : "Mode: " + mode);
         AddLine(lines, rank == null ? null : "Rank: " + rank);
         AddLine(lines, focus == null ? null : "Featured: " + focus);
-        AddLine(lines, draft == null ? null : "Draft: " + draft);
+        AddLine(lines, draft.Line == null ? null : "Draft: " + draft.Line);
         AddLine(lines, featuredHero == null ? null : "Featuring: " + featuredHero);
         AddLine(lines, Highlights(events));
         AddLine(lines, requestor == null ? null : "Requested by: " + requestor);
@@ -165,7 +165,16 @@ public static class FullMatchMetadataBuilder
 
         IReadOnlyList<string> kept = FitLines(lines);
         string description = string.Join("\n", kept);
-        string[] tags = Tags(map, mode, rank, focus, pentakill, teamWipe, replayId != null);
+        string[] tags = Tags(
+            map,
+            mode,
+            rank,
+            focus,
+            pentakill,
+            teamWipe,
+            replayId != null,
+            draft.Labels
+        );
         string combined = title + "\n" + description;
         return new FullMatchMetadata
         {
@@ -233,6 +242,7 @@ public static class FullMatchMetadataBuilder
     )
     {
         // A title never names the Twitch viewer. A reward that picked a player leads with that hero.
+        // The draft note sits just before the replay id, so it is the first part dropped at 100 characters.
         string lead =
             namedPlayer && titles.NamedPlayerTitles && hero != null ? hero + " focus" : null;
         return ComposeTitle(lead, feature, map, mode, rank, draft, replayId);
@@ -373,7 +383,8 @@ public static class FullMatchMetadataBuilder
         string focus,
         bool pentakill,
         bool teamWipe,
-        bool replayKnown
+        bool replayKnown,
+        IReadOnlyList<string> compositions
     )
     {
         var tags = new List<string>();
@@ -394,6 +405,15 @@ public static class FullMatchMetadataBuilder
         if (tags.Count > 0 || replayKnown)
         {
             AddTag(tags, "Heroes of the Storm");
+        }
+
+        // One tag per composition label. They come last, so the 500-character budget drops them first.
+        if (compositions != null)
+        {
+            foreach (string label in compositions)
+            {
+                AddTag(tags, label);
+            }
         }
 
         while (tags.Count > 0 && string.Join(",", tags).Length > TagsMaxCharacters)

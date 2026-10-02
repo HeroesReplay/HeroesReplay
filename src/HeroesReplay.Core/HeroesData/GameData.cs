@@ -18,6 +18,7 @@ using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 using static Heroes.ReplayParser.Unit;
 using ElementHero = Heroes.Element.Models.Hero;
+using ElementRatings = Heroes.Element.Models.HeroRatings;
 using ElementUnit = Heroes.Element.Models.Unit;
 
 namespace HeroesReplay.Core.HeroesData;
@@ -110,7 +111,9 @@ public class GameData : IGameData
                             ? Array.Empty<string>()
                             : hero.HeroPlayStyles.ToArray(),
                         Plain(hero.ExpandedRole),
-                        ReleaseDay(hero.ReleaseDate)
+                        ReleaseDay(hero.ReleaseDate),
+                        hero.IsMelee,
+                        Ratings(hero.Ratings)
                     )
                 );
             }
@@ -160,6 +163,21 @@ public class GameData : IGameData
         }
 
         return DateTime.SpecifyKind(day.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+    }
+
+    private static HeroRatings Ratings(ElementRatings ratings)
+    {
+        if (ratings == null)
+        {
+            return null;
+        }
+
+        return new HeroRatings(
+            ratings.Damage,
+            ratings.Survivability,
+            ratings.Utility,
+            ratings.Complexity
+        );
     }
 
     private static string Plain(GameStringText text)
