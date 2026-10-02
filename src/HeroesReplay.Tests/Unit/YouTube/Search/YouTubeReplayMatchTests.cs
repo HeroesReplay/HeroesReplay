@@ -7,18 +7,17 @@ namespace HeroesReplay.Tests.Unit.YouTube.Search;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class YouTubeReplayMatchTests
 {
-    [Theory]
-    [InlineData("Volskaya Foundry - 65389750 - Storm League - Diamond", 65389750, true)]
-    [InlineData(
-        "Heroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID=65389750",
-        65389750,
-        true
-    )]
-    [InlineData("Volskaya Foundry - 653897501 - Storm League", 65389750, false)]
-    [InlineData("no id here", 65389750, false)]
-    public void Mentions_RequiresTheWholeReplayId(string text, int replayId, bool expected)
+    [Fact]
+    public void IdsIn_ReadsTheTitleAndTheDescriptionLines()
     {
-        Assert.Equal(expected, YouTubeReplayMatch.Mentions(text, replayId));
+        Assert.Equal(
+            new[] { 65550001, 65550002, 65550003 },
+            YouTubeReplayMatch.IdsIn(
+                "Cursed Hollow - Storm League - Diamond - 65550001",
+                "Replay ID: 65550002\nHeroes Profile Match: https://www.heroesprofile.com/Match/Single/?replayID=65550003\nBuild 2.57.0.98285"
+            )
+        );
+        Assert.Empty(YouTubeReplayMatch.IdsIn("Diamond 3 highlights", "Build 2.57.0.98285"));
     }
 
     [Fact]

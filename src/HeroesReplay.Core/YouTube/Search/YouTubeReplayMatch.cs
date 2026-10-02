@@ -1,32 +1,48 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace HeroesReplay.Core.YouTube.Search;
 
 public static class YouTubeReplayMatch
 {
-    public static bool Mentions(string text, int replayId)
+    private static readonly Regex DescriptionId = new(
+        @"(?:replayID=|Replay ID:\s*)(\d+)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+    );
+
+    /// <summary>
+    /// Replay ids an uploaded video names: the title's id part, and the description's
+    /// <c>Replay ID:</c> line or Heroes Profile <c>replayID=</c> link.
+    /// </summary>
+    public static IEnumerable<int> IdsIn(string title, string description)
     {
-        if (string.IsNullOrEmpty(text) || replayId <= 0)
+        if (TryReadTitleId(title, out int titleId))
         {
-            return false;
+            yield return titleId;
         }
 
-        string id = replayId.ToString();
-        int index = 0;
-        while ((index = text.IndexOf(id, index, StringComparison.Ordinal)) >= 0)
+        if (string.IsNullOrEmpty(description))
         {
-            bool left = index == 0 || !char.IsDigit(text[index - 1]);
-            int end = index + id.Length;
-            bool right = end >= text.Length || !char.IsDigit(text[end]);
-            if (left && right)
+            yield break;
+        }
+
+        foreach (Match match in DescriptionId.Matches(description))
+        {
+            if (
+                int.TryParse(
+                    match.Groups[1].Value,
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out int id
+                )
+                && id > 0
+            )
             {
-                return true;
+                yield return id;
             }
-
-            index = end;
         }
-
-        return false;
     }
 
     public static int? FromEntry(YouTubeEntry entry)

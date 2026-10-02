@@ -15,12 +15,12 @@ public class LibraryCommand : Command
     public LibraryCommand()
         : base(
             "library",
-            "File uploaded matches into map and patch playlists. The uploader does this during services start. This command polls until stopped. Dry-run does not call YouTube."
+            "Run the YouTube library pass now: list the channel's uploads, record videos missing from Data\\youtube-library.jsonl (Heroes Profile fills a missing map, mode, rank, or build), and file them into map and patch playlists. The uploader runs the same pass at most every YouTube:LibraryInterval. Both share the daily quota units in Data\\youtube-quota-units.json, and only one process runs the pass at a time. Without --once this repeats the pass each LibraryInterval until stopped. Dry-run writes Data\\youtube-library-dry-run.json and does not call YouTube."
         )
     {
         var onceOption = new Option<bool>("--once")
         {
-            Description = "File one pass and exit instead of polling.",
+            Description = "Run one pass and exit.",
             DefaultValueFactory = _ => false,
         };
         Options.Add(onceOption);
@@ -41,16 +41,38 @@ public class LibraryCommand : Command
         using Activity ready = HeroesReplayTelemetry.StartSpan("heroesreplay.service.ready");
         using IServiceScope scope = provider.CreateScope();
         IYouTubeLibrary library = scope.ServiceProvider.GetRequiredService<IYouTubeLibrary>();
+        bool force = true;
         try
         {
             while (!stop.Token.IsCancellationRequested)
             {
-                int code = await library.RunOnceAsync(stop.Token).ConfigureAwait(false);
-                if (once)
+                YouTubeLibraryPass pass;
+                try
                 {
-                    return code;
+                    pass = await library.RunOnceAsync(force, stop.Token).ConfigureAwait(false);
+                }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    Console.Error.WriteLine("YouTube library pass failed: " + e.Message);
+                    if (once)
+                    {
+                        return 1;
+                    }
+
+                    pass = null;
                 }
 
+                if (pass != null && (force || pass.Skipped == null))
+                {
+                    Print(pass);
+                }
+
+                if (once)
+                {
+                    return 0;
+                }
+
+                force = false;
                 await Task.Delay(TimeSpan.FromSeconds(60), stop.Token).ConfigureAwait(false);
             }
         }
@@ -60,5 +82,24 @@ public class LibraryCommand : Command
         }
 
         return 0;
+    }
+
+    private static void Print(YouTubeLibraryPass pass)
+    {
+        if (pass.Skipped != null)
+        {
+            Console.WriteLine("YouTube library pass skipped: " + pass.Skipped + ".");
+            return;
+        }
+
+        Console.WriteLine(
+            pass.DryRun
+                ? $"YouTube library dry-run: {pass.Planned.Count} playlist insert(s) planned, {pass.Unresolved} unresolved. YouTube was not called."
+                : $"YouTube library pass: {pass.NewVideos} new channel video(s), {pass.Recorded} recorded, {pass.Unresolved} unresolved, {pass.Filed} of {pass.Planned.Count} playlist insert(s) filed, {pass.UnitsSpent} units."
+        );
+        foreach (YouTubeLibraryItem item in pass.Planned)
+        {
+            Console.WriteLine($"  {item.PlaylistTitle} <- {item.VideoId} (replay {item.ReplayId})");
+        }
     }
 }

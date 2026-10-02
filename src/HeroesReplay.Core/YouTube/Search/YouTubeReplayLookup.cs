@@ -4,101 +4,45 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Replays;
-using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.YouTube.Search;
 
+/// <summary>
+/// A replay is already on YouTube when <c>Data\youtube-replay-ids.txt</c> or an upload
+/// receipt names it. This reads local files only. The uploader process keeps the catalog
+/// current: it adds each replay it inserts, and its library pass adds every replay id it
+/// finds on the channel.
+/// </summary>
 public sealed class YouTubeReplayLookup : IYouTubeReplayLookup
 {
-    private readonly ILogger<YouTubeReplayLookup> logger;
     private readonly AppSettings settings;
-    private readonly IYouTubeVideoSearch search;
-    private DateTimeOffset searchPausedUntil;
 
-    public YouTubeReplayLookup(
-        ILogger<YouTubeReplayLookup> logger,
-        AppSettings settings,
-        IYouTubeVideoSearch search
-    )
+    public YouTubeReplayLookup(AppSettings settings)
     {
-        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        this.search = search ?? throw new ArgumentNullException(nameof(search));
     }
 
-    public async Task<bool> AlreadyUploadedAsync(
-        LoadedReplay replay,
-        CancellationToken cancellationToken
-    )
+    public Task<bool> AlreadyUploadedAsync(LoadedReplay replay, CancellationToken cancellationToken)
     {
         int? replayId = replay?.HeroesProfileReplay?.Id ?? replay?.ReplayId;
         if (replayId is not > 0)
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         string catalog = YouTubeReplayCatalog.PathFor(settings.Location?.DataDirectory);
         if (YouTubeReplayCatalog.Contains(catalog, replayId.Value))
         {
-            return true;
+            return Task.FromResult(true);
         }
 
         if (HasUploadReceipt(replayId.Value))
         {
             YouTubeReplayCatalog.Remember(catalog, replayId.Value);
-            return true;
+            return Task.FromResult(true);
         }
 
-        if (DateTimeOffset.UtcNow < searchPausedUntil)
-        {
-            return false;
-        }
-
-        try
-        {
-            foreach (
-                YouTubeVideoText video in await search.SearchAsync(
-                    replayId.Value,
-                    cancellationToken
-                )
-            )
-            {
-                if (
-                    YouTubeReplayMatch.Mentions(video?.Title, replayId.Value)
-                    || YouTubeReplayMatch.Mentions(video?.Description, replayId.Value)
-                )
-                {
-                    YouTubeReplayCatalog.Remember(catalog, replayId.Value);
-                    logger.LogInformation(
-                        "YouTube already has replay {ReplayId} ({Title}).",
-                        replayId.Value,
-                        video?.Title
-                    );
-                    return true;
-                }
-            }
-        }
-        catch (Exception e) when (e is not OperationCanceledException)
-        {
-            if (YouTubeSearchQuota.IsExhausted(e))
-            {
-                searchPausedUntil = YouTubeSearchQuota.ResumeAt(DateTimeOffset.UtcNow);
-                logger.LogWarning(
-                    "YouTube search quota is exhausted. Duplicate checks use the local catalog until {ResumeAt:o}. Recording stays on.",
-                    searchPausedUntil
-                );
-                return false;
-            }
-
-            logger.LogWarning(
-                e,
-                "Could not search YouTube for replay {ReplayId}. Recording stays on.",
-                replayId.Value
-            );
-            return false;
-        }
-
-        return false;
+        return Task.FromResult(false);
     }
 
     private bool HasUploadReceipt(int replayId)

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Threading;
@@ -28,32 +29,79 @@ public sealed class GoogleYouTubePlaylistClient : IYouTubePlaylistClient
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
     }
 
-    public async Task<string> FindOrCreateAsync(string title, CancellationToken cancellationToken)
+    public async Task<string> UploadsPlaylistIdAsync(CancellationToken cancellationToken)
     {
         YouTubeService youtube = await ServiceAsync(cancellationToken).ConfigureAwait(false);
-        string page = null;
-        do
+        ChannelsResource.ListRequest request = youtube.Channels.List("contentDetails");
+        if (string.IsNullOrWhiteSpace(settings.YouTube?.ChannelId))
         {
-            PlaylistsResource.ListRequest list = youtube.Playlists.List("snippet");
-            list.Mine = true;
-            list.MaxResults = 50;
-            list.PageToken = page;
-            PlaylistListResponse response = await list.ExecuteAsync(cancellationToken)
-                .ConfigureAwait(false);
-            if (response.Items != null)
-            {
-                foreach (Playlist playlist in response.Items)
+            request.Mine = true;
+        }
+        else
+        {
+            request.Id = settings.YouTube.ChannelId;
+        }
+
+        ChannelListResponse response = await request
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return response?.Items?.FirstOrDefault()?.ContentDetails?.RelatedPlaylists?.Uploads;
+    }
+
+    public async Task<YouTubeUploadsPage> UploadsAsync(
+        string playlistId,
+        string pageToken,
+        CancellationToken cancellationToken
+    )
+    {
+        YouTubeService youtube = await ServiceAsync(cancellationToken).ConfigureAwait(false);
+        PlaylistItemsResource.ListRequest request = youtube.PlaylistItems.List("snippet,status");
+        request.PlaylistId = playlistId;
+        request.MaxResults = 50;
+        request.PageToken = pageToken;
+        PlaylistItemListResponse response = await request
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return new YouTubeUploadsPage
+        {
+            NextPageToken = response?.NextPageToken,
+            Videos = (response?.Items ?? Array.Empty<PlaylistItem>())
+                .Select(item => new YouTubeUploadedVideo
                 {
-                    if (string.Equals(playlist.Snippet?.Title, title, StringComparison.Ordinal))
-                    {
-                        return playlist.Id;
-                    }
-                }
-            }
+                    VideoId = item.Snippet?.ResourceId?.VideoId,
+                    Title = item.Snippet?.Title,
+                    Description = item.Snippet?.Description,
+                    PrivacyStatus = item.Status?.PrivacyStatus,
+                    PublishedAt = item.Snippet?.PublishedAtDateTimeOffset,
+                })
+                .ToList(),
+        };
+    }
 
-            page = response.NextPageToken;
-        } while (!string.IsNullOrEmpty(page));
+    public async Task<YouTubePlaylistsPage> PlaylistsAsync(
+        string pageToken,
+        CancellationToken cancellationToken
+    )
+    {
+        YouTubeService youtube = await ServiceAsync(cancellationToken).ConfigureAwait(false);
+        PlaylistsResource.ListRequest list = youtube.Playlists.List("snippet");
+        list.Mine = true;
+        list.MaxResults = 50;
+        list.PageToken = pageToken;
+        PlaylistListResponse response = await list.ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return new YouTubePlaylistsPage
+        {
+            NextPageToken = response?.NextPageToken,
+            Playlists = (response?.Items ?? Array.Empty<Playlist>())
+                .Select(playlist => new YouTubePlaylist(playlist.Id, playlist.Snippet?.Title))
+                .ToList(),
+        };
+    }
 
+    public async Task<string> CreateAsync(string title, CancellationToken cancellationToken)
+    {
+        YouTubeService youtube = await ServiceAsync(cancellationToken).ConfigureAwait(false);
         Playlist created = await youtube
             .Playlists.Insert(
                 new Playlist

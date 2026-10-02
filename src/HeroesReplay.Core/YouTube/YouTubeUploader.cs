@@ -38,6 +38,7 @@ public class YouTubeUploader : IYouTubeUploader
         StringComparer.OrdinalIgnoreCase
     );
     private readonly IYouTubeLibrary library;
+    private readonly YouTubeQuotaUnits quotaUnits;
     private readonly List<DateTimeOffset> publicAtUtc = new();
     private readonly List<bool> publicRequested = new();
     private int insertsToday;
@@ -69,6 +70,7 @@ public class YouTubeUploader : IYouTubeUploader
         this.settings = settings;
         this.cancellationTokenSource = cancellationTokenSource;
         this.library = library;
+        quotaUnits = new YouTubeQuotaUnits(settings?.Location?.DataDirectory, settings?.YouTube);
     }
 
     private void JoinKnownReplaySessions()
@@ -437,6 +439,13 @@ public class YouTubeUploader : IYouTubeUploader
             videosInsertRequest_ResponseReceived(video);
         };
         bool resume = UploadAttemptIds.IsSessionUri(dispatched.Manifest?.SessionUri);
+        if (!resume)
+        {
+            Bookkeep(() =>
+                quotaUnits.SpendUpload(YouTubeQuotaUnits.VideoInsert, DateTimeOffset.UtcNow)
+            );
+        }
+
         IUploadProgress result;
         try
         {
@@ -459,6 +468,12 @@ public class YouTubeUploader : IYouTubeUploader
             if (ex is OperationCanceledException)
             {
                 throw;
+            }
+
+            if (YouTubeListQuota.IsExhausted(ex))
+            {
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                Bookkeep(() => quotaUnits.PauseLibrary(YouTubeListQuota.ResumeAt(now), now));
             }
 
             logger.LogError(
@@ -513,6 +528,12 @@ public class YouTubeUploader : IYouTubeUploader
             insertsToday++;
             lastInsertUtc = DateTimeOffset.UtcNow;
             RememberUploaded(entry);
+            Bookkeep(() =>
+                YouTubeLibraryRecord.Append(
+                    YouTubeLibraryRecord.PathFor(settings.Location?.DataDirectory),
+                    YouTubeLibraryRecord.FromEntry(entry, lastInsertUtc.Value)
+                )
+            );
             if (
                 UploadVisibility.ReconcileUntilPublic(
                     entry.ActualPrivacyStatus,
@@ -1036,6 +1057,22 @@ public class YouTubeUploader : IYouTubeUploader
         );
     }
 
+    /// <summary>
+    /// The quota units and the library record never stop an upload. A file that stays
+    /// locked is logged and the upload goes on.
+    /// </summary>
+    private void Bookkeep(Action write)
+    {
+        try
+        {
+            write();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not update the YouTube quota units or library record.");
+        }
+    }
+
     private void DeleteRecording(string path)
     {
         try
@@ -1072,7 +1109,9 @@ public class YouTubeUploader : IYouTubeUploader
 
         try
         {
-            await library.RunOnceAsync(cancellationTokenSource.Token).ConfigureAwait(false);
+            await library
+                .RunOnceAsync(force: false, cancellationTokenSource.Token)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
