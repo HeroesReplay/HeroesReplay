@@ -198,19 +198,28 @@ public static class ObsCollectionPatcher
         }
     }
 
+    /// <summary>
+    /// Source names (scenes included) in the live collection and not in the package, and the
+    /// reverse. Any difference makes the live collection custom: it is not rewritten.
+    /// </summary>
+    public static ObsNameDrift Drift(IEnumerable<string> packaged, IEnumerable<string> live)
+    {
+        var packagedSet = new HashSet<string>(packaged ?? [], StringComparer.Ordinal);
+        var liveSet = new HashSet<string>(live ?? [], StringComparer.Ordinal);
+        return new ObsNameDrift(
+            liveSet.Where(name => !packagedSet.Contains(name)).ToList(),
+            packagedSet.Where(name => !liveSet.Contains(name)).ToList()
+        );
+    }
+
     private static bool IsCustom(string templateJson, string liveJson)
     {
         try
         {
-            var packaged = new HashSet<string>(
+            return Drift(
                 ObsCollectionPaths.SourceNames(templateJson),
-                StringComparer.Ordinal
-            );
-            var live = new HashSet<string>(
-                ObsCollectionPaths.SourceNames(liveJson),
-                StringComparer.Ordinal
-            );
-            return !packaged.SetEquals(live);
+                ObsCollectionPaths.SourceNames(liveJson)
+            ).Custom;
         }
         catch (JsonException)
         {
@@ -222,23 +231,14 @@ public static class ObsCollectionPatcher
     {
         try
         {
-            var packaged = new HashSet<string>(
+            ObsNameDrift drift = Drift(
                 ObsCollectionPaths.SourceNames(templateJson),
-                StringComparer.Ordinal
-            );
-            var live = new HashSet<string>(
-                ObsCollectionPaths.SourceNames(liveJson),
-                StringComparer.Ordinal
-            );
-            string extra = string.Join(", ", live.Where(name => !packaged.Contains(name)).Take(8));
-            string missing = string.Join(
-                ", ",
-                packaged.Where(name => !live.Contains(name)).Take(8)
+                ObsCollectionPaths.SourceNames(liveJson)
             );
             return "The live OBS collection does not match the packaged scenes (extra: "
-                + extra
+                + string.Join(", ", drift.Extra.Take(8))
                 + "; missing: "
-                + missing
+                + string.Join(", ", drift.Missing.Take(8))
                 + "). It was not overwritten.";
         }
         catch (JsonException)
@@ -246,6 +246,11 @@ public static class ObsCollectionPatcher
             return "The live OBS collection could not be compared. It was not overwritten.";
         }
     }
+}
+
+public sealed record ObsNameDrift(IReadOnlyList<string> Extra, IReadOnlyList<string> Missing)
+{
+    public bool Custom => Extra.Count > 0 || Missing.Count > 0;
 }
 
 public sealed record ObsCollectionApplyResult(bool Wrote, bool Drift, string Message)

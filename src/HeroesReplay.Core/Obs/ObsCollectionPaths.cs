@@ -133,6 +133,40 @@ public static class ObsCollectionPaths
     public static IReadOnlyList<string> MissingSources(string json, IEnumerable<string> required) =>
         MissingNames(SourceNames(json), required);
 
+    /// <summary>Source name → unversioned kind (<c>id</c>), such as <c>browser_source</c>.</summary>
+    public static IReadOnlyDictionary<string, string> SourceKinds(string json)
+    {
+        var kinds = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return kinds;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        if (
+            !document.RootElement.TryGetProperty("sources", out JsonElement sources)
+            || sources.ValueKind != JsonValueKind.Array
+        )
+        {
+            return kinds;
+        }
+
+        foreach (JsonElement source in sources.EnumerateArray())
+        {
+            if (
+                source.TryGetProperty("name", out JsonElement name)
+                && name.ValueKind == JsonValueKind.String
+                && source.TryGetProperty("id", out JsonElement id)
+                && id.ValueKind == JsonValueKind.String
+            )
+            {
+                kinds.TryAdd(name.GetString(), id.GetString());
+            }
+        }
+
+        return kinds;
+    }
+
     public static string Rewrite(string json, string assetRoot, string dataDirectory)
     {
         if (string.IsNullOrEmpty(json))
@@ -386,7 +420,7 @@ public static class ObsCollectionPaths
         return names;
     }
 
-    private static IReadOnlyList<string> MissingNames(
+    public static IReadOnlyList<string> MissingNames(
         IReadOnlyList<string> present,
         IEnumerable<string> required
     )

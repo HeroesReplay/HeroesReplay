@@ -51,7 +51,7 @@ Two stdio servers, both already installed separately from the zip:
 
 | Server | Command | What the agent gets |
 | --- | --- | --- |
-| Spectator | `C:\heroesreplay\app\heroesreplay.exe mcp` with `HEROES_REPLAY_ENV=prod` | `get_spectator_status`, `get_current_focus`, `check_twitch`, `check_obs`, `check_heroesprofile`, `check_config`, `check_battlenet`. Reads `%LOCALAPPDATA%\HeroesReplay\status.json`. A second process from the one playing the match. |
+| Spectator | `C:\heroesreplay\app\heroesreplay.exe mcp` with `HEROES_REPLAY_ENV=prod` | `get_spectator_status`, `get_current_focus`, `check_twitch`, `check_obs`, `check_heroesprofile`, `check_config`, `check_battlenet`, and the read-only `obs_inspect`, `obs_validate`, `obs_screenshot`. Reads `%LOCALAPPDATA%\HeroesReplay\status.json`. A second process from the one playing the match. No tool changes OBS. |
 | Aspire | `aspire agent mcp --dashboard-url http://127.0.0.1:18888` | On CLI 13.5.4, dashboard-only mode: `list_structured_logs`, `list_traces`, `list_trace_structured_logs`. The dashboard UI stays `http://127.0.0.1:18888`. `list_resources` and start/stop need an AppHost, which this app does not run. |
 
 `aspire` is the machine dotnet tool (`aspire.cli` 13.5.4), not a file inside the zip. The release should still ship `.mcp.json` next to the exe so an agent started in `C:\heroesreplay\app` finds both commands. `aspire agent init` writes that file for a source tree; it does not know the published exe path.

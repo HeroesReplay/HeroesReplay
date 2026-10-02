@@ -170,6 +170,23 @@ public static class ServiceCollectionExtensions
     public static OBSSettings LoadObsSettings() =>
         GetConfiguration().GetSection("OBS").Get<OBSSettings>() ?? new OBSSettings();
 
+    /// <summary>
+    /// What the read-only OBS MCP tools need, read on each call. No secret is resolved here;
+    /// the tools resolve only <c>OBS:WebSocketPassword</c>.
+    /// </summary>
+    public static ObsInspectionSettings LoadObsInspectionSettings()
+    {
+        IConfigurationRoot configuration = GetConfiguration();
+        var arm = new ObsStreamArm();
+        return new ObsInspectionSettings(
+            configuration.GetSection("OBS").Get<OBSSettings>() ?? new OBSSettings(),
+            AppContext.BaseDirectory,
+            configuration.GetSection("Location").Get<LocationSettings>()?.DataDirectory,
+            arm.IsArmed(),
+            arm.FilePath
+        );
+    }
+
     public static AppSettings BindSettings(IConfiguration configuration)
     {
         ReplayMediaPolicySettings media = ReplayMediaPolicyStartup.Require(configuration);

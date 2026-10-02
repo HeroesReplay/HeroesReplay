@@ -316,47 +316,12 @@ public class CheckCommand : Command
 
     private static ObsCollectionInspection InspectObsFiles(AppSettings settings)
     {
-        var scenes = new List<string>();
-        var sources = new List<string>();
-        if (settings?.OBS != null)
-        {
-            AddName(scenes, settings.OBS.GameSceneName);
-            AddName(scenes, settings.OBS.WaitingSceneName);
-            AddName(sources, settings.OBS.InfoSourceName);
-            AddName(sources, settings.OBS.TierDivisionSourceName);
-            AddName(sources, settings.OBS.TierRankPointsSourceName);
-            if (settings.OBS.RankImagesSourceNames != null)
-            {
-                foreach (string name in settings.OBS.RankImagesSourceNames)
-                {
-                    AddName(sources, name);
-                }
-            }
-
-            if (settings.OBS.ReportScenes != null)
-            {
-                foreach (var scene in settings.OBS.ReportScenes)
-                {
-                    if (scene == null || !scene.Enabled)
-                    {
-                        continue;
-                    }
-
-                    AddName(scenes, scene.SceneName);
-                    AddName(sources, scene.SourceName);
-                }
-            }
-        }
-
-        return ObsCollectionPaths.Inspect(AppContext.BaseDirectory, scenes, sources);
-    }
-
-    private static void AddName(List<string> names, string value)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            names.Add(value);
-        }
+        ObsContract contract = ObsContract.From(settings?.OBS);
+        return ObsCollectionPaths.Inspect(
+            AppContext.BaseDirectory,
+            contract.Scenes,
+            contract.Sources
+        );
     }
 
     public static async Task<CheckResult> CheckTwitchAsync(CancellationToken cancellationToken)
