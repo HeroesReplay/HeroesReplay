@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 
 namespace HeroesReplay.Core.ServiceHost;
 
@@ -76,6 +77,55 @@ public static class ServiceProcessPlan
             ("download", "heroesprofile download"),
             ("youtube", "youtube uploader"),
         };
+
+    public static IReadOnlyList<string> Names { get; } = All.Select(item => item.Name).ToList();
+
+    /// <summary>The command line of <paramref name="role"/>, or null for an unknown role.</summary>
+    public static string ArgumentsFor(string role) =>
+        All.FirstOrDefault(item =>
+            string.Equals(item.Name, role, StringComparison.OrdinalIgnoreCase)
+        ).Arguments;
+
+    /// <summary>The plan, or only <paramref name="roles"/> from it, in plan order.</summary>
+    public static IReadOnlyList<(string Name, string Arguments)> Select(IEnumerable<string> roles)
+    {
+        if (roles == null)
+        {
+            return All;
+        }
+
+        var wanted = new HashSet<string>(roles, StringComparer.OrdinalIgnoreCase);
+        return All.Where(item => wanted.Contains(item.Name)).ToList();
+    }
+
+    /// <summary>
+    /// Parses <c>--roles download,youtube</c>. Empty means every role. Returns null and sets
+    /// <paramref name="error"/> when a name is not a role.
+    /// </summary>
+    public static IReadOnlyList<string> ParseRoles(string value, out string error)
+    {
+        error = null;
+        string[] names = (value ?? string.Empty).Split(
+            new[] { ',', ';', ' ' },
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+        );
+        if (names.Length == 0)
+        {
+            return Names;
+        }
+
+        string[] unknown = names
+            .Where(name => !Names.Contains(name, StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+        if (unknown.Length > 0)
+        {
+            error =
+                $"Unknown role {string.Join(", ", unknown)}. Roles are {string.Join(", ", Names)}.";
+            return null;
+        }
+
+        return Select(names).Select(item => item.Name).ToList();
+    }
 
     public static bool IsHeroesReplay(string processName)
     {

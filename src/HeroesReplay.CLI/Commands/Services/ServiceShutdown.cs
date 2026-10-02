@@ -26,4 +26,10 @@ public sealed class ServiceShutdown
 
     /// <summary>Read-only OBS stream state. Called only after every role has exited.</summary>
     public Func<ServiceStreamCheck> ReadStream { get; set; }
+
+    /// <summary>
+    /// Called after the stop file is down: waits for a running supervisor to exit, killing it
+    /// after its budget. Null when no supervisor was running.
+    /// </summary>
+    public Func<ServiceRoleStop> StopSupervisor { get; set; }
 }

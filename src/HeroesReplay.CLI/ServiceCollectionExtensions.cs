@@ -41,6 +41,7 @@ using HeroesReplay.Core.YouTube.Search;
 using HeroesReplay.HeroesProfile.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using OBSWebsocketDotNet;
 using Polly.Telemetry;
@@ -184,6 +185,56 @@ public static class ServiceCollectionExtensions
     public static ServiceHealthSettings LoadServiceHealthSettings() =>
         GetConfiguration().GetSection("ServiceHealth").Get<ServiceHealthSettings>()
         ?? new ServiceHealthSettings();
+
+    /// <summary>The effective <c>ServiceLogs</c> section. No secret is resolved.</summary>
+    public static ServiceLogSettings LoadServiceLogSettings() =>
+        GetConfiguration().GetSection("ServiceLogs").Get<ServiceLogSettings>()
+        ?? new ServiceLogSettings();
+
+    /// <summary>The effective <c>ServiceRestart</c> section. No secret is resolved.</summary>
+    public static ServiceRestartSettings LoadServiceRestartSettings() =>
+        GetConfiguration().GetSection("ServiceRestart").Get<ServiceRestartSettings>()
+        ?? new ServiceRestartSettings();
+
+    /// <summary>
+    /// Writes this process's logs to <c>&lt;role&gt;-&lt;date&gt;.log</c> under
+    /// <c>ServiceLogs:Directory</c>. Does nothing without a role or when the section is disabled.
+    /// </summary>
+    public static IServiceCollection AddServiceRoleLog(
+        this IServiceCollection services,
+        string role
+    )
+    {
+        if (!ServiceRoleLog.IsSafeRole(role))
+        {
+            return services;
+        }
+
+        ServiceLogSettings settings = LoadServiceLogSettings();
+        if (!settings.Enabled)
+        {
+            return services;
+        }
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<ILoggerProvider, ServiceRoleLogProvider>(
+                _ => new ServiceRoleLogProvider(role, settings)
+            )
+        );
+        return services;
+    }
+
+    /// <summary>Console, the supervisor's own log file, and OpenTelemetry for the supervisor.</summary>
+    public static IServiceCollection AddSupervisorServices(this IServiceCollection services)
+    {
+        IConfigurationRoot configuration = GetConfiguration();
+        return services
+            .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-supervisor")
+            .AddLogging(builder =>
+                builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole()
+            )
+            .AddServiceRoleLog(ServiceRoleLog.SupervisorRole);
+    }
 
     /// <summary>
     /// What the read-only OBS MCP tools need, read on each call. No secret is resolved here;

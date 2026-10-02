@@ -52,6 +52,8 @@ public class AppSettings
     public RetentionSettings Retention { get; set; }
     public ReleaseSettings Release { get; set; }
     public ServiceHealthSettings ServiceHealth { get; set; } = new ServiceHealthSettings();
+    public ServiceLogSettings ServiceLogs { get; set; } = new ServiceLogSettings();
+    public ServiceRestartSettings ServiceRestart { get; set; } = new ServiceRestartSettings();
     public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
     public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
     public string ContextsDirectory => Path.Combine(Location.DataDirectory, "Contexts");

@@ -140,6 +140,31 @@ public class CliHelpTests
     }
 
     [Fact]
+    public void ServicesSupervise_AndStartSuperviseRolesHelp_Parse()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("services supervise --help").Errors);
+        Assert.Empty(root.Parse("services start --supervise --help").Errors);
+        Assert.Empty(
+            root.Parse("services start --supervise --roles download,youtube --help").Errors
+        );
+        Assert.Empty(root.Parse("services start --roles download").Errors);
+        Command services = root.Subcommands.Single(c => c.Name == "services");
+        Command supervise = services.Subcommands.Single(c => c.Name == "supervise");
+        Assert.Contains("service.restart_budget_exhausted", supervise.Description);
+        Assert.Contains("services stop", supervise.Description);
+        Command start = services.Subcommands.Single(c => c.Name == "start");
+        Assert.Contains(
+            "10s, 30s, 2m, 5m",
+            start.Options.Single(o => o.Name == "--supervise").Description
+        );
+        Assert.Contains(
+            "download,youtube",
+            start.Options.Single(o => o.Name == "--roles").Description
+        );
+    }
+
+    [Fact]
     public void HeroesProfileHelp_HasDownload()
     {
         var root = new HeroesReplayCommand();

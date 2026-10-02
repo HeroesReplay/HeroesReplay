@@ -109,10 +109,16 @@ public sealed class ServiceStopResult
     /// <summary>Null when OBS was not read: a role is still running, or no reader was given.</summary>
     public ServiceStreamCheck Stream { get; init; }
 
+    /// <summary>Null when no supervisor was running.</summary>
+    public ServiceRoleStop Supervisor { get; init; }
+
     public bool RolesExited => Roles.All(role => role.Exited);
 
     public bool Succeeded =>
-        RolesExited && GameClosed != false && (Stream == null || Stream.ConfirmsStopped);
+        RolesExited
+        && GameClosed != false
+        && (Stream == null || Stream.ConfirmsStopped)
+        && Supervisor?.Exited != false;
 
     public int ExitCode => Succeeded ? 0 : 1;
 
@@ -122,6 +128,13 @@ public sealed class ServiceStopResult
         foreach (ServiceRoleStop role in Roles.Where(role => !role.Exited))
         {
             failures.Add($"{role.Name} pid {role.Pid} is still running.");
+        }
+
+        if (Supervisor?.Exited == false)
+        {
+            failures.Add(
+                $"The supervisor pid {Supervisor.Pid} is still running. The stop file stays down so it restarts nothing."
+            );
         }
 
         if (GameClosed == false)

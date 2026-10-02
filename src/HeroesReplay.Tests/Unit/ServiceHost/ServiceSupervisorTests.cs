@@ -1219,6 +1219,226 @@ public class ServiceSupervisorTests
         }
     }
 
+    [Fact]
+    public void Start_WithRoles_StartsOnlyThoseInPlanOrder()
+    {
+        string path = TempLock();
+        try
+        {
+            var args = new List<string>();
+            int code = ServiceSupervisor.Start(
+                path,
+                Exe,
+                pid => null,
+                (name, arguments) =>
+                {
+                    args.Add(arguments);
+                    return 300 + args.Count;
+                },
+                handshake: ServiceStartupHandshake.ReadyNow(),
+                roles: new[] { "youtube", "download" }
+            );
+
+            Assert.Equal(0, code);
+            Assert.Equal(new[] { "heroesprofile download", "youtube uploader" }, args);
+            Assert.Equal(
+                new[] { "download", "youtube" },
+                ServiceLockStore.TryLoad(path).Processes.Select(record => record.Name)
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, "spectate,twitch,download,youtube")]
+    [InlineData("", "spectate,twitch,download,youtube")]
+    [InlineData("youtube,download", "download,youtube")]
+    [InlineData(" Download ; youtube ", "download,youtube")]
+    public void ParseRoles_KeepsPlanOrder(string value, string expected)
+    {
+        IReadOnlyList<string> roles = ServiceProcessPlan.ParseRoles(value, out string error);
+        Assert.Null(error);
+        Assert.Equal(expected, string.Join(",", roles));
+    }
+
+    [Fact]
+    public void ParseRoles_RejectsAnUnknownRole()
+    {
+        Assert.Null(ServiceProcessPlan.ParseRoles("download,obs", out string error));
+        Assert.Contains("Unknown role obs", error);
+        Assert.Contains("spectate, twitch, download, youtube", error);
+    }
+
+    [Fact]
+    public void Stop_WaitsForTheSupervisor_ThenStopsTheRoleItWasRestarting()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 40);
+            var processes = new FakeProcesses(40);
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            var order = new List<string>();
+            shutdown.RequestGracefulStop = () => order.Add("stop file");
+            shutdown.StopSupervisor = () =>
+            {
+                order.Add("supervisor");
+                // It recorded a restarted youtube before it saw the stop file.
+                ServiceLock current = ServiceLockStore.TryLoad(path);
+                current.Processes.Add(
+                    new ServiceProcessRecord
+                    {
+                        Name = "youtube",
+                        Pid = 41,
+                        Nonce = "restarted",
+                    }
+                );
+                ServiceLockStore.Save(path, current);
+                processes.Start(41);
+                return new ServiceRoleStop("supervisor", 9, ServiceStopOutcome.Graceful);
+            };
+            bool cleared = false;
+            shutdown.ClearStopFile = () => cleared = true;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(new[] { "stop file", "supervisor" }, order);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(ServiceStopOutcome.Graceful, result.Supervisor.Outcome);
+            Assert.Equal(new[] { 40, 41 }, processes.Killed);
+            Assert.Equal(new[] { "spectate", "youtube" }, result.Roles.Select(role => role.Name));
+            Assert.Null(ServiceLockStore.TryLoad(path));
+            Assert.True(cleared);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_FailsAndKeepsTheStopFileWhileTheSupervisorIsStillRunning()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.StopSupervisor = () =>
+                new ServiceRoleStop(
+                    "supervisor",
+                    9,
+                    ServiceStopOutcome.StillRunning,
+                    "Kill failed: Access is denied."
+                );
+            bool cleared = false;
+            shutdown.ClearStopFile = () => cleared = true;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.False(cleared);
+            Assert.Contains(result.Failures(), failure => failure.Contains("supervisor pid 9"));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Status_ShowsEachRolesLogPathAndTheSupervisor()
+    {
+        string path = TempLock();
+        string logs = Path.Combine(
+            Path.GetTempPath(),
+            "heroesreplay-logs-" + Guid.NewGuid().ToString("N")
+        );
+        try
+        {
+            Directory.CreateDirectory(logs);
+            File.WriteAllText(Path.Combine(logs, "download-2026-10-01.log"), "");
+            var output = new StringWriter();
+            int code = ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery
+                {
+                    Output = ServiceStatusOutput.Json,
+                    Out = output,
+                    Time = new FixedClock(new DateTimeOffset(2026, 10, 2, 9, 0, 0, TimeSpan.Zero)),
+                    LogDirectory = logs,
+                    SupervisorRunning = () => true,
+                    ReadSupervisor = () =>
+                        new ServiceSupervisorState
+                        {
+                            Pid = 77,
+                            Budget = 5,
+                            BudgetWindowSeconds = 1800,
+                            BackoffSeconds = new List<long> { 10, 30, 120, 300 },
+                            Supervised = new List<string> { "download" },
+                        },
+                }
+            );
+
+            Assert.Equal(0, code);
+            using var json = System.Text.Json.JsonDocument.Parse(output.ToString());
+            var roles = json.RootElement.GetProperty("roles").EnumerateArray().ToList();
+            Assert.Equal(
+                Path.Combine(logs, "download-2026-10-01.log"),
+                roles
+                    .Single(role => role.GetProperty("role").GetString() == "download")
+                    .GetProperty("logPath")
+                    .GetString()
+            );
+            Assert.Equal(
+                Path.Combine(logs, "twitch-2026-10-02.log"),
+                roles
+                    .Single(role => role.GetProperty("role").GetString() == "twitch")
+                    .GetProperty("logPath")
+                    .GetString()
+            );
+            System.Text.Json.JsonElement supervisor = json.RootElement.GetProperty("supervisor");
+            Assert.True(supervisor.GetProperty("running").GetBoolean());
+            Assert.Equal(77, supervisor.GetProperty("pid").GetInt32());
+
+            var text = new StringWriter();
+            ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery { Out = text, LogDirectory = logs }
+            );
+            Assert.Contains("Supervisor: not running.", text.ToString());
+            Assert.Contains(
+                "Log: " + Path.Combine(logs, "download-2026-10-01.log"),
+                text.ToString()
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+            Directory.Delete(logs, recursive: true);
+        }
+    }
+
+    private sealed class FixedClock : TimeProvider
+    {
+        private readonly DateTimeOffset now;
+
+        public FixedClock(DateTimeOffset now)
+        {
+            this.now = now;
+        }
+
+        public override DateTimeOffset GetUtcNow() => now;
+
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+    }
+
     private static void SaveRoles(string path, params int[] pids)
     {
         string[] names = { "spectate", "twitch", "download", "youtube" };
@@ -1251,6 +1471,8 @@ public class ServiceSupervisorTests
         public string Name(int pid) => alive.Contains(pid) ? "heroesreplay" : null;
 
         public void Exit(int pid) => alive.Remove(pid);
+
+        public void Start(int pid) => alive.Add(pid);
 
         public void Kill(int pid)
         {

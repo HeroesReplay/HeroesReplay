@@ -148,7 +148,7 @@ public static class ServiceHealthClassifier
                 health,
                 ServiceRoleState.Failed,
                 exit + LastSeen(heartbeatAge) + LastError(heartbeat, now),
-                $"Check the {role} console or the Aspire logs, then " + RestartStack
+                $"Check the {role} console, its log file, or the Aspire logs, then " + RestartStack
             );
         }
 
@@ -179,7 +179,8 @@ public static class ServiceHealthClassifier
         DateTimeOffset? workSince = heartbeat.LastSuccessfulWorkAt ?? heartbeat.ReadyAt;
         TimeSpan? sinceWork = Age(now, workSince);
         string degradedFix =
-            $"Check the {role} console or the Aspire logs. If it does not recover, " + RestartStack;
+            $"Check the {role} console, its log file, or the Aspire logs. If it does not recover, "
+            + RestartStack;
         if (sinceWork != null && sinceWork.Value > workThreshold)
         {
             string late =
@@ -219,6 +220,141 @@ public static class ServiceHealthClassifier
             $"Heartbeat {Describe(heartbeatAge.Value)} ago, {done}." + stopping,
             null
         );
+    }
+
+    /// <summary>Sets each role's log file from <paramref name="logPath"/> (role name to path).</summary>
+    public static ServiceStatusReport WithLogPaths(
+        ServiceStatusReport report,
+        Func<string, string> logPath
+    )
+    {
+        if (report == null || logPath == null)
+        {
+            return report;
+        }
+
+        return report with
+        {
+            Roles = report
+                .Roles.Select(role => role with { LogPath = logPath(role.Role) })
+                .ToList(),
+        };
+    }
+
+    /// <summary>
+    /// Adds the supervisor: whether it runs, and each role's restarts and budget. A failed role
+    /// whose budget is exhausted reports <c>service.restart_budget_exhausted</c>, and so does the
+    /// envelope. A failed role the running supervisor will restart says when.
+    /// </summary>
+    public static ServiceStatusReport WithSupervisor(
+        ServiceStatusReport report,
+        ServiceSupervisorState state,
+        bool running,
+        DateTimeOffset now
+    )
+    {
+        if (report == null || (state == null && !running))
+        {
+            return report;
+        }
+
+        TimeSpan window = TimeSpan.FromSeconds(Math.Max(0, state?.BudgetWindowSeconds ?? 0));
+        var roles = new List<ServiceRoleHealth>();
+        foreach (ServiceRoleHealth role in report.Roles)
+        {
+            ServiceRoleRestarts ledger = state?.Roles?.FirstOrDefault(item =>
+                item != null
+                && string.Equals(item.Role, role.Role, StringComparison.OrdinalIgnoreCase)
+                && (
+                    string.IsNullOrWhiteSpace(item.Nonce)
+                    || string.Equals(item.Nonce, role.Nonce, StringComparison.Ordinal)
+                )
+            );
+            if (ledger == null)
+            {
+                roles.Add(role);
+                continue;
+            }
+
+            int used = ledger.Recent?.Count(at => now - at < window) ?? 0;
+            ServiceRoleHealth annotated = role with
+            {
+                Restarts = new ServiceRoleRestartStatus
+                {
+                    Count = ledger.Count,
+                    LastRestartAt = ledger.LastRestartAt,
+                    LastReason = ledger.LastReason,
+                    LastFailure = ledger.LastFailure,
+                    NextRestartAt = running ? ledger.NextRestartAt : null,
+                    BudgetUsed = used,
+                    BudgetLimit = state.Budget,
+                    BudgetWindowSeconds = state.BudgetWindowSeconds,
+                    BudgetExhausted = ledger.Exhausted,
+                    ExhaustedAt = ledger.ExhaustedAt,
+                },
+            };
+            string log = string.IsNullOrWhiteSpace(role.LogPath)
+                ? $"the {role.Role} log"
+                : role.LogPath;
+            if (role.State == ServiceRoleState.Failed && ledger.Exhausted)
+            {
+                annotated = annotated with
+                {
+                    Code = ServiceHealthCodes.RestartBudgetExhausted,
+                    Cause =
+                        $"The supervisor restarted it {ledger.Count} times and its budget of {state.Budget} restarts in {Describe(window)} is exhausted, so it stays down. "
+                        + role.Cause,
+                    Remediation =
+                        $"Read {log}, fix the cause, then run `heroesreplay services stop` and `heroesreplay services start --supervise`.",
+                };
+            }
+            else if (
+                role.State == ServiceRoleState.Failed
+                && running
+                && !state.Stopping
+                && ledger.NextRestartAt is DateTimeOffset next
+            )
+            {
+                annotated = annotated with
+                {
+                    Cause =
+                        role.Cause
+                        + $" The supervisor restarts it in {Describe(next - now)} (restart {used + 1} of {state.Budget} in {Describe(window)}).",
+                    Remediation =
+                        $"Nothing yet: the supervisor restarts it. If it keeps failing, read {log}.",
+                };
+            }
+
+            roles.Add(annotated);
+        }
+
+        List<string> exhausted = roles
+            .Where(role => role.Code == ServiceHealthCodes.RestartBudgetExhausted)
+            .Select(role => role.Role)
+            .ToList();
+        return report with
+        {
+            Roles = roles,
+            Code = exhausted.Count > 0 ? ServiceHealthCodes.RestartBudgetExhausted : report.Code,
+            Message =
+                exhausted.Count > 0
+                    ? $"{report.Message} Restart budget exhausted: {string.Join(", ", exhausted)}."
+                    : report.Message,
+            Supervisor = new ServiceSupervisorSummary
+            {
+                Running = running,
+                Pid = state?.Pid,
+                StartedAt = state?.StartedAt,
+                UpdatedAt = state?.UpdatedAt,
+                Stopping = state?.Stopping == true,
+                LogPath = state?.LogPath,
+                Supervised = state?.Supervised ?? new List<string>(),
+                BackoffSeconds = state?.BackoffSeconds ?? new List<long>(),
+                Budget = state?.Budget ?? 0,
+                BudgetWindowSeconds = state?.BudgetWindowSeconds ?? 0,
+                StaleRestartAfterSeconds = state?.StaleRestartAfterSeconds ?? 0,
+            },
+        };
     }
 
     /// <summary>failed, then stale, then degraded, then ready, then stopped.</summary>
