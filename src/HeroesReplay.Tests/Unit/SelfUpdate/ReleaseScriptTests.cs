@@ -27,6 +27,19 @@ public class ReleaseScriptTests
         Assert.DoesNotContain("CreationTime", script);
     }
 
+    [Fact]
+    public void ApplyRelease_StabilizationWindowStillInstallsInsteadOfLeavingTheStackStopped()
+    {
+        string script = File.ReadAllText(FindScript());
+        int health = script.IndexOf("update release-health", StringComparison.Ordinal);
+        int backup = script.IndexOf("if ($backUpInstall)", StringComparison.Ordinal);
+
+        Assert.True(health > 0 && backup > health);
+        string branch = script.Substring(health, backup - health);
+        Assert.Contains("$backUpInstall = $false", branch);
+        Assert.DoesNotContain("exit", branch);
+    }
+
     private static string FindScript([CallerFilePath] string sourceFile = "")
     {
         var dir = new DirectoryInfo(Path.GetDirectoryName(sourceFile) ?? AppContext.BaseDirectory);
