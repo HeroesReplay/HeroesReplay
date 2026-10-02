@@ -110,9 +110,8 @@ public static class ServiceReadyFile
             return false;
         }
 
-        DateTimeOffset heartbeat = at > existing.ReadyAt.Value
-            ? at
-            : existing.ReadyAt.Value.AddTicks(1);
+        DateTimeOffset heartbeat =
+            at > existing.ReadyAt.Value ? at : existing.ReadyAt.Value.AddTicks(1);
         existing.HeartbeatAt = heartbeat;
         Report(existing, directory);
         return true;

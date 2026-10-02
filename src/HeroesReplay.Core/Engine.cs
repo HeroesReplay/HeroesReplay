@@ -213,8 +213,7 @@ public class Engine : IEngine
                             loadedReplay.ReplayId,
                             recovery
                         );
-                        await Task
-                            .Delay(ClientHold.RetryAfter, consoleTokenProvider.Token)
+                        await Task.Delay(ClientHold.RetryAfter, consoleTokenProvider.Token)
                             .ConfigureAwait(false);
                         return true;
                     }

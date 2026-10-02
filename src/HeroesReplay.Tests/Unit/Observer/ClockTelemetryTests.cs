@@ -68,10 +68,7 @@ public class ClockTelemetryTests
         StableClockSample sample = clock.Read(module, (_, _) => false);
 
         Assert.Equal("read-failed", sample.Reason);
-        Assert.Equal(
-            ClockTelemetry.Describe(false, false, "no-process"),
-            clock.DiscoveryTelemetry
-        );
+        Assert.Equal(ClockTelemetry.Describe(false, false, "no-process"), clock.DiscoveryTelemetry);
         Assert.Equal(ClockTelemetry.Describe(true, false, "read-failed"), clock.LastTelemetry);
         int emitted = clock.TelemetryEmissions;
         Assert.True(emitted >= 2);

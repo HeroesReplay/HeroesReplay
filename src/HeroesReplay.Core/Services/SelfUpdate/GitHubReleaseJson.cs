@@ -26,13 +26,7 @@ public static class GitHubReleaseJson
             return null;
         }
 
-        if (
-            string.Equals(
-                tag,
-                localVersion?.Trim(),
-                StringComparison.OrdinalIgnoreCase
-            )
-        )
+        if (string.Equals(tag, localVersion?.Trim(), StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }

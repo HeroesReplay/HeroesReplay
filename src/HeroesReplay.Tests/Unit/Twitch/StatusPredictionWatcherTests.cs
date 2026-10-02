@@ -33,7 +33,11 @@ public class StatusPredictionWatcherTests
         SpectatorStatus status = Finished("ClientCrashed", winner: 0);
         status.Timer = "00:10:00";
 
-        PredictionSignal decided = StatusPredictionWatcher.DecideObserved(observed, status, settled);
+        PredictionSignal decided = StatusPredictionWatcher.DecideObserved(
+            observed,
+            status,
+            settled
+        );
 
         Assert.Equal(PredictionSignalKind.Cancel, decided.Kind);
         Assert.Null(decided.WinnerTeam);
