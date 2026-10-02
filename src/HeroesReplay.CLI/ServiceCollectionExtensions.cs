@@ -41,6 +41,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OBSWebsocketDotNet;
+using Polly.Telemetry;
 using TwitchLib.Api;
 using TwitchLib.Api.Core;
 using TwitchLib.Api.Core.Interfaces;
@@ -515,6 +516,9 @@ public static class ServiceCollectionExtensions
                 client => client.Timeout = Timeout.InfiniteTimeSpan
             )
             .AddResilienceHandler(HeroesProfileHttp.ClientName, HeroesProfileHttp.Configure);
+        services.Configure<TelemetryOptions>(options =>
+            options.SeverityProvider = HeroesProfileHttp.Severity
+        );
 
         return services.AddSingleton(sp =>
         {

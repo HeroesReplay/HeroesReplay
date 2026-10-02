@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.HeroesProfile;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
+using Polly.Telemetry;
 using Polly.Timeout;
 using Xunit;
 
@@ -61,6 +62,33 @@ public class HeroesProfileHttpTests
                 CancellationToken.None
             )
         );
+    }
+
+    [Fact]
+    public void Severity_LogsACancelledAttemptAtDebug()
+    {
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        var source = new ResilienceTelemetrySource("heroes-profile", null, "Retry");
+        var attempt = new ResilienceEvent(ResilienceEventSeverity.Information, "ExecutionAttempt");
+        ResilienceContext stopped = ResilienceContextPool.Shared.Get(cancelled.Token);
+        ResilienceContext running = ResilienceContextPool.Shared.Get(CancellationToken.None);
+        try
+        {
+            Assert.Equal(
+                ResilienceEventSeverity.Debug,
+                HeroesProfileHttp.Severity(new SeverityProviderArguments(source, attempt, stopped))
+            );
+            Assert.Equal(
+                ResilienceEventSeverity.Information,
+                HeroesProfileHttp.Severity(new SeverityProviderArguments(source, attempt, running))
+            );
+        }
+        finally
+        {
+            ResilienceContextPool.Shared.Return(stopped);
+            ResilienceContextPool.Shared.Return(running);
+        }
     }
 
     [Fact]
