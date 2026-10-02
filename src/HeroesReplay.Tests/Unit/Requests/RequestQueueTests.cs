@@ -8,7 +8,9 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
+using TwitchLib.PubSub.Events;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Requests;
@@ -150,6 +152,71 @@ public class RequestQueueTests
         }
     }
 
+    [Fact]
+    public void Create_WritesTheQueuePageWithTheConfiguredRewardTitles()
+    {
+        string directory = TempDirectory();
+        RequestQueue queue = CreateQueue(
+            directory,
+            new FixedRewards(
+                new SupportedReward(RewardType.QM, "Random (QM)"),
+                new SupportedReward(RewardType.ReplayId, "ReplayId")
+            )
+        );
+        try
+        {
+            string html = File.ReadAllText(Path.Combine(directory, QueueBoard.FileName));
+
+            Assert.Contains("<span class=\"label\">Random (QM)</span> play a random match.", html);
+            Assert.Contains("Redeem <span class=\"label\">ReplayId</span>", html);
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Create_RewardsNotLoaded_StillWritesTheQueuePage()
+    {
+        string directory = TempDirectory();
+        RequestQueue queue = CreateQueue(directory, new FixedRewards(null));
+        try
+        {
+            string html = File.ReadAllText(Path.Combine(directory, QueueBoard.FileName));
+
+            Assert.Contains("Pick a random match, a map, or a rank.", html);
+            Assert.Contains("Redeem the replay reward", html);
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private sealed class FixedRewards : ICustomRewardsHolder
+    {
+        private readonly SupportedReward[] rewards;
+
+        public FixedRewards(params SupportedReward[] rewards)
+        {
+            this.rewards = rewards;
+        }
+
+        public List<SupportedReward> Rewards =>
+            rewards == null
+                ? throw new InvalidOperationException("Maps are not loaded.")
+                : new List<SupportedReward>(rewards);
+
+        public bool TryGetReward(OnRewardRedeemedArgs args, out SupportedReward reward)
+        {
+            reward = null;
+            return false;
+        }
+    }
+
     private static string TempDirectory()
     {
         string directory = Path.Combine(
@@ -160,7 +227,7 @@ public class RequestQueueTests
         return directory;
     }
 
-    private static RequestQueue CreateQueue(string directory)
+    private static RequestQueue CreateQueue(string directory, ICustomRewardsHolder rewards = null)
     {
         return new RequestQueue(
             new RecordingLogger(),
@@ -176,7 +243,8 @@ public class RequestQueueTests
             },
             TimeSpan.FromSeconds(5),
             @"Local\HeroesReplay.RequestQueue.Test." + Guid.NewGuid().ToString("N"),
-            @"Local\HeroesReplay.FailedRequests.Test." + Guid.NewGuid().ToString("N")
+            @"Local\HeroesReplay.FailedRequests.Test." + Guid.NewGuid().ToString("N"),
+            rewards
         );
     }
 

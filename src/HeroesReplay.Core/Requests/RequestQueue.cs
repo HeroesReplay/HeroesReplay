@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Requests;
@@ -20,6 +21,7 @@ public class RequestQueue : IRequestQueue, IDisposable
     private readonly ILogger<RequestQueue> logger;
     private readonly IHeroesProfileService heroesProfileService;
     private readonly AppSettings settings;
+    private readonly ICustomRewardsHolder rewardsHolder;
     private readonly JsonSerializerOptions options;
     private readonly Mutex queueMutex;
     private readonly Mutex failedMutex;
@@ -29,7 +31,8 @@ public class RequestQueue : IRequestQueue, IDisposable
     public RequestQueue(
         ILogger<RequestQueue> logger,
         IHeroesProfileService heroesProfileService,
-        AppSettings settings
+        AppSettings settings,
+        ICustomRewardsHolder rewardsHolder
     )
         : this(
             logger,
@@ -37,7 +40,8 @@ public class RequestQueue : IRequestQueue, IDisposable
             settings,
             TimeSpan.FromSeconds(30),
             @"Local\HeroesReplay.RequestQueue",
-            @"Local\HeroesReplay.FailedRequests"
+            @"Local\HeroesReplay.FailedRequests",
+            rewardsHolder
         ) { }
 
     public RequestQueue(
@@ -46,12 +50,14 @@ public class RequestQueue : IRequestQueue, IDisposable
         AppSettings settings,
         TimeSpan mutexWait,
         string queueMutexName,
-        string failedMutexName
+        string failedMutexName,
+        ICustomRewardsHolder rewardsHolder = null
     )
     {
         this.logger = logger;
         this.heroesProfileService = heroesProfileService;
         this.settings = settings;
+        this.rewardsHolder = rewardsHolder;
         this.mutexWait = mutexWait;
         queueMutex = new Mutex(false, queueMutexName);
         failedMutex = new Mutex(false, failedMutexName);
@@ -69,7 +75,7 @@ public class RequestQueue : IRequestQueue, IDisposable
         };
         try
         {
-            QueueBoard.Write(boardPath, ReadItems(queueFile));
+            QueueBoard.Write(boardPath, ReadItems(queueFile), Rewards());
         }
         catch (Exception e)
         {
@@ -392,7 +398,21 @@ public class RequestQueue : IRequestQueue, IDisposable
     private void SaveQueue(List<RewardQueueItem> items)
     {
         WriteItems(queueFile, items);
-        QueueBoard.Write(boardPath, items);
+        QueueBoard.Write(boardPath, items, Rewards());
+    }
+
+    private IReadOnlyList<SupportedReward> Rewards()
+    {
+        try
+        {
+            return rewardsHolder?.Rewards;
+        }
+        catch (Exception e)
+        {
+            // Rewards come from the map catalog, which may not be loaded yet.
+            logger.LogDebug(e, "Could not read the channel-point rewards for the queue page.");
+            return null;
+        }
     }
 
     private List<RewardQueueItem> ReadItems(FileInfo file)
