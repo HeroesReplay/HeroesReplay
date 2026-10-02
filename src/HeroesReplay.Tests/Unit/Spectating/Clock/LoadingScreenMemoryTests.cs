@@ -77,6 +77,10 @@ public class LoadingScreenMemoryTests
         Assert.True(map.MapLoading);
         Assert.Equal(ClientScreen.Match, match.Screen);
         Assert.False(match.MapLoading);
+        Assert.Null(boot.OnMenu);
+        Assert.True(home.OnMenu);
+        Assert.False(map.OnMenu);
+        Assert.False(match.OnMenu);
     }
 
     [Fact]

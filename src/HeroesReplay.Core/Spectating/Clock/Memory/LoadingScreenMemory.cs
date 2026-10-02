@@ -25,6 +25,15 @@ public readonly record struct LoadingScreenSample(ClientScreen Screen, bool Menu
         : Screen == ClientScreen.Loading ? true
         : Screen is ClientScreen.Menu or ClientScreen.Match ? false
         : null;
+
+    /// <summary>
+    /// True on a menu, false on a loading screen or in a match once this process has shown a
+    /// menu, null when memory cannot tell.
+    /// </summary>
+    public bool? OnMenu =>
+        Screen == ClientScreen.Menu ? true
+        : MenuSeen && Screen is ClientScreen.Loading or ClientScreen.Match ? false
+        : null;
 }
 
 /// <summary>
