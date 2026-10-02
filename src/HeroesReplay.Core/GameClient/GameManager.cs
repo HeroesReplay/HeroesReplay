@@ -582,7 +582,9 @@ public class GameManager : IGameManager
                 return NextMatchLaunch.NotStarted;
             }
 
-            TimeSpan? matchClock = gameController.TryReadMatchClock();
+            TimeSpan? matchClock = await gameController
+                .TryReadRunningMatchClockAsync()
+                .ConfigureAwait(false);
             if (ReportHandoff.ShouldCutReport(mapLoading: false, matchClock))
             {
                 logger.LogInformation(
@@ -617,7 +619,7 @@ public class GameManager : IGameManager
             if (ReportHandoff.ShouldCutReport(mapLoading, matchClock))
             {
                 logger.LogInformation(
-                    "Next replay {ReplayId} is on the map loading screen or the on-screen timer. The report stops so OBS shows the game.",
+                    "Next replay {ReplayId} is on the map loading screen or its match clock is running. The report stops so OBS shows the game.",
                     next.ReplayId
                 );
                 cutReport.Cancel();
@@ -854,7 +856,7 @@ public class GameManager : IGameManager
         if (!MatchRecording.ShouldStart(recordingClock.IsRunning, presented))
         {
             logger.LogInformation(
-                "OBS recording for replay {ReplayId} waits until the loading screen or the match clock is visible.",
+                "OBS recording for replay {ReplayId} waits until the loading screen is visible or the match clock is running.",
                 loadedReplay?.ReplayId
             );
             return;

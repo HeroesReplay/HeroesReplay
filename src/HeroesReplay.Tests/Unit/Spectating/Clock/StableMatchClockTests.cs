@@ -260,6 +260,62 @@ public class StableMatchClockTests
     }
 
     [Fact]
+    public void IsRunning_OnlyWhenBothReadsSucceedAndTheSecondIsAhead()
+    {
+        TimeSpan at = TimeSpan.FromSeconds(42);
+
+        Assert.True(StableMatchClock.IsRunning(at, at + TimeSpan.FromMilliseconds(250)));
+        Assert.False(StableMatchClock.IsRunning(at, at));
+        Assert.False(StableMatchClock.IsRunning(at, at - TimeSpan.FromSeconds(1)));
+        Assert.False(StableMatchClock.IsRunning(null, at));
+        Assert.False(StableMatchClock.IsRunning(at, null));
+        Assert.False(StableMatchClock.IsRunning(null, null));
+    }
+
+    [Fact]
+    public void Read_FrozenClockFromTheLastMatch_ReadsButIsNotRunning()
+    {
+        // The last match's clock can sit at its final second until the next one starts.
+        // Each read is ok until the stall window passes, so one read must not start a match.
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new(2026, 10, 2, 19, 0, 0, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        StableClockModule module = Module(23, SmallModule, "2.57.0.98304");
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 1439);
+        clock.Read(module, memory.Read);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 1440);
+        clock.Read(module, memory.Read);
+
+        clock.BeginMatch();
+        now = now.AddSeconds(1);
+        StableClockSample first = clock.Read(module, memory.Read);
+        now = now.AddMilliseconds(250);
+        StableClockSample second = clock.Read(module, memory.Read);
+
+        Assert.True(first.Ok);
+        Assert.True(second.Ok);
+        Assert.False(
+            StableMatchClock.IsRunning(
+                TimeSpan.FromSeconds(first.Seconds),
+                TimeSpan.FromSeconds(second.Seconds)
+            )
+        );
+    }
+
+    [Fact]
+    public void Read_MenuZero_IsNotAMatchClock()
+    {
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        StableClockModule module = Module(24, SmallModule, "2.57.0.98304");
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 0);
+
+        Assert.Equal("near-zero", clock.Read(module, memory.Read).Reason);
+        Assert.Equal("near-zero", clock.Read(module, memory.Read).Reason);
+    }
+
+    [Fact]
     public void SameCellIsStale_EightSecondsWithoutAStep_IsStale()
     {
         DateTimeOffset changed = new DateTimeOffset(2026, 9, 30, 17, 49, 39, TimeSpan.Zero);

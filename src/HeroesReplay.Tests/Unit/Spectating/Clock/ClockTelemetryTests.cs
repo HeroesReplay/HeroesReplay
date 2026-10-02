@@ -26,24 +26,24 @@ public class ClockTelemetryTests
     }
 
     [Fact]
-    public void Describe_ReportsOcrFallbackWithTheReadReason()
+    public void Describe_ReportsUnlockedWithTheReadReason()
     {
         ClockTelemetryReport missing = ClockTelemetry.Describe(true, false, "read-failed");
         ClockTelemetryReport stalled = ClockTelemetry.Describe(true, true, "stalled");
         ClockTelemetryReport malformed = ClockTelemetry.Describe(true, false, "bad-scale");
 
-        Assert.Equal(ClockTelemetry.OcrFallback, missing.State);
+        Assert.Equal(ClockTelemetry.Unlocked, missing.State);
         Assert.Equal("read-failed", missing.Reason);
-        Assert.Equal(ClockTelemetry.OcrFallback, stalled.State);
+        Assert.Equal(ClockTelemetry.Unlocked, stalled.State);
         Assert.Equal("stalled", stalled.Reason);
-        Assert.Equal(ClockTelemetry.OcrFallback, malformed.State);
+        Assert.Equal(ClockTelemetry.Unlocked, malformed.State);
         Assert.Equal("bad-scale", malformed.Reason);
     }
 
     [Fact]
     public void Changed_IsFalseWhenTheStateAndReasonStayTheSame()
     {
-        var report = new ClockTelemetryReport(ClockTelemetry.OcrFallback, "read-failed");
+        var report = new ClockTelemetryReport(ClockTelemetry.Unlocked, "read-failed");
 
         Assert.False(ClockTelemetry.Changed(report, report));
         Assert.True(
@@ -55,7 +55,7 @@ public class ClockTelemetryTests
     }
 
     [Fact]
-    public void Read_TransientFailureFallsBackOnceAndDoesNotScanAgain()
+    public void Read_TransientFailureReportsOnceAndDoesNotScanAgain()
     {
         using var clock = new StableMatchClock();
         var module = new StableClockModule(
@@ -91,6 +91,6 @@ public class ClockTelemetryTests
 
         Assert.True(clock.TelemetryEmissions > emitted);
         Assert.Equal(ClockTelemetry.Discovering, clock.DiscoveryTelemetry.State);
-        Assert.Equal(ClockTelemetry.OcrFallback, clock.LastTelemetry.State);
+        Assert.Equal(ClockTelemetry.Unlocked, clock.LastTelemetry.State);
     }
 }

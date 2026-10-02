@@ -24,10 +24,10 @@ public sealed class GameTimerLog
             reading.Reason
             is "read-failed"
                 or "unsupported-build"
+                or "pattern-disagreed"
+                or "out-of-range"
                 or "open-failed"
-                or "bad-scale"
-                or "implausible-jump"
-                or "memory-unplayable";
+                or "bad-scale";
         bool changed =
             reading.Source != lastSource
             || reading.Reason != lastReason
@@ -44,7 +44,7 @@ public sealed class GameTimerLog
         if (warning)
         {
             logger.LogWarning(
-                "Match clock fallback {ClockSource} reason {ClockReason} ticks {ClockTicks} scale {ClockScale} candidate {Timer}",
+                "Match clock unreadable {ClockSource} reason {ClockReason} ticks {ClockTicks} scale {ClockScale} candidate {Timer}",
                 reading.Source,
                 reading.Reason,
                 reading.Ticks,
@@ -88,7 +88,7 @@ public sealed class GameTimerLog
 
         session.AddEvent(
             new ActivityEvent(
-                warning ? "clock.fallback" : "clock.memory",
+                warning ? "clock.unreadable" : "clock.memory",
                 tags: new ActivityTagsCollection
                 {
                     { "clock.source", reading.Source },
