@@ -50,6 +50,42 @@ public static class DurableFile
         }
     }
 
+    /// <summary>
+    /// Opens <paramref name="path"/> with no sharing, so a second process gets null until
+    /// the returned stream is disposed. Null also means the path is blank.
+    /// </summary>
+    public static FileStream TryLock(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        string directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        try
+        {
+            return new FileStream(
+                path,
+                FileMode.OpenOrCreate,
+                FileAccess.ReadWrite,
+                FileShare.None
+            );
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     public static void Aside(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
