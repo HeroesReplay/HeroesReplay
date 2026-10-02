@@ -71,6 +71,18 @@ public sealed class RecordingClock
     {
         lock (gate)
         {
+            if (watch != null)
+            {
+                ObserveAt(hud, watch.Elapsed.TotalSeconds);
+            }
+        }
+    }
+
+    /// <summary>Records one HUD time against a known recording time.</summary>
+    internal void ObserveAt(TimeSpan hud, double fileSeconds)
+    {
+        lock (gate)
+        {
             if (watch == null)
             {
                 return;
@@ -83,7 +95,7 @@ public sealed class RecordingClock
             }
 
             lastHud = hudSeconds;
-            samples.Add((hudSeconds, watch.Elapsed.TotalSeconds));
+            samples.Add((hudSeconds, fileSeconds));
         }
     }
 

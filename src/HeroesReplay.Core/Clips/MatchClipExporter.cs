@@ -42,7 +42,34 @@ public static class MatchClipExporter
         IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
             TeamKillDeaths.FromReplay(replay, heroes)
         );
-        if (clips.Count == 0)
+        await ExportAsync(
+                clips,
+                replay,
+                replayId,
+                contextDirectory,
+                recordingPath,
+                clock,
+                youtube,
+                entryFileName,
+                logger
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Cuts the given clips out of the finalized recording.</summary>
+    internal static async Task ExportAsync(
+        IReadOnlyList<TeamKillClip> clips,
+        Replay replay,
+        int? replayId,
+        string contextDirectory,
+        string recordingPath,
+        RecordingClock clock,
+        YouTubeSettings youtube,
+        string entryFileName,
+        ILogger logger
+    )
+    {
+        if (clips == null || clips.Count == 0)
         {
             return;
         }
