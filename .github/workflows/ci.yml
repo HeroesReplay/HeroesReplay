@@ -42,3 +42,10 @@ jobs:
         run: dotnet test heroes-replay.slnx -c Release --no-build -p:TestCategory=Unit
       - name: Smoke tests
         run: dotnet test heroes-replay.slnx -c Release --no-build -p:TestCategory=Smoke
+      # The same zip release.yml uploads, built and checked before it can reach master.
+      - name: Package release zip
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/package-release.ps1 -OutputPath "$env:RUNNER_TEMP\heroesreplay-win-x64.zip" -Version "v0.0.0-ci.$env:GITHUB_RUN_NUMBER" -Configuration Release
+      - name: Verify release zip
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/verify-release.ps1 -ZipPath "$env:RUNNER_TEMP\heroesreplay-win-x64.zip" -Version "v0.0.0-ci.$env:GITHUB_RUN_NUMBER"
