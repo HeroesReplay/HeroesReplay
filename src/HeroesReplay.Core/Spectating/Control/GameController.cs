@@ -617,7 +617,7 @@ public class GameController : IGameController
                 WordScan homeScan = await ScanPrimaryAsync(settings.OCR.HomeScreenText)
                     .ConfigureAwait(false);
                 laterText = homeScan.Text;
-                home = homeScan.Found;
+                home = SeesHome(homeScan);
             }
 
             if (await HoldForGameDataDownloadAsync(text, laterText).ConfigureAwait(false))
@@ -1309,7 +1309,16 @@ public class GameController : IGameController
     /// The map loading screen from memory, or null when memory cannot tell: an unsupported
     /// build, or the boot splash before this client's first menu. Null reads the screen.
     /// </summary>
-    private bool? IsMapLoadingInMemory()
+    private bool? IsMapLoadingInMemory() => ReadScreenInMemory()?.MapLoading;
+
+    /// <summary>
+    /// Home is memory first (<see cref="HomeScreenCue"/>). OCR's words decide only when memory
+    /// cannot tell, and its text still vetoes a login form.
+    /// </summary>
+    private bool SeesHome(WordScan scan) =>
+        HomeScreenCue.Sees(ReadScreenInMemory()?.OnMenu, scan.Found, scan.Text);
+
+    private LoadingScreenSample? ReadScreenInMemory()
     {
         Process process = GetGameProcess();
         if (process == null)
@@ -1331,11 +1340,11 @@ public class GameController : IGameController
                 lastScreen = sample;
             }
 
-            return sample.MapLoading;
+            return sample;
         }
         catch (Exception e)
         {
-            logger.LogDebug(e, "Could not read the loading screen from memory.");
+            logger.LogDebug(e, "Could not read the client screen from memory.");
             return null;
         }
     }
@@ -1465,7 +1474,7 @@ public class GameController : IGameController
         }
 
         WordScan scan = await ScanPrimaryAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
-        return scan.Found;
+        return SeesHome(scan);
     }
 
     private bool IsGameProcessRunning()
