@@ -30,7 +30,7 @@ This account is **SERVICE_ACCOUNT**. It cannot see vault `Private`. Do not use d
 ## New machine (clone / pull)
 
 1. Install Git, .NET 10 SDK, and 1Password CLI (`winget install --exact Git.Git Microsoft.DotNet.SDK.10 AgileBits.1Password.CLI`). Open a new shell so `op` is on PATH.
-2. Clone into **`C:\heroesreplay\HeroesReplay`** (required: OBS `obs/Default.json` uses that path). `git clone https://github.com/HeroesReplay/HeroesReplay.git C:\heroesreplay\HeroesReplay`
+2. Clone into **`C:\heroesreplay\HeroesReplay`** (the layout in `AGENTS.md`; the bootstrap and `Location` defaults assume `C:\heroesreplay`). OBS asset paths in `obs/Default.json` are relative, and heroesreplay rewrites them to the checkout when OBS is closed. `git clone https://github.com/HeroesReplay/HeroesReplay.git C:\heroesreplay\HeroesReplay`
 3. Set the service-account token **once** at User scope (paste the `ops_` value; do not commit it):
 
 ```powershell
@@ -48,7 +48,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check heroespro
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- check twitch
 ```
 
-`bootstrap-workstation.ps1` creates `C:\heroesreplay\Replays`, `Data\Standard`, `Data\Contexts`, copies the OBS HeroesReplay collection/profile, then runs `fill-secrets-from-op.ps1`. Install Battle.net with `winget install Blizzard.BattleNet --location C:\heroesreplay\Battle.net`. Quit HotS and run `heroesreplay client configure` for AhliObs + windowed 1080p. Report only `op whoami` user type and secret **lengths**. Layout: `AGENTS.md` Environments.
+`bootstrap-workstation.ps1` creates `C:\heroesreplay\Battle.net`, `Replays`, `Data\Standard`, `Data\Requests`, `Data\Contexts`, `Data\HeroesData`, and `secrets`, copies the OBS HeroesReplay collection/profile while OBS is closed, runs `fill-secrets-from-op.ps1`, then installs the git hooks. Install Battle.net with `winget install Blizzard.BattleNet --location C:\heroesreplay\Battle.net`. Quit HotS and run `heroesreplay client configure` for AhliObs + windowed 1080p. Report only `op whoami` user type and secret **lengths**. Layout: `AGENTS.md` Environments.
 
 ## Vault
 
@@ -65,6 +65,7 @@ Name: `Heroes Replay` (id `fk7tudovwzuaa64lvomn6rxwtq`). Quote `op://` URIs that
 | YouTube OAuth client id | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Client ID` |
 | YouTube OAuth client secret | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Client Secret` |
 | YouTube GCP project id | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Project ID` |
+| Heroes Profile Twitch extension key | `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password` (template only; `fill-secrets-from-op.ps1` does not write it) |
 
 Items with `(` in the title: use the item UUID, not the name.
 
@@ -74,8 +75,8 @@ op whoami   # User Type: SERVICE_ACCOUNT
 op vault list
 ```
 
-Twitch Helix Predictions need `channel:manage:predictions` on the access token. `check twitch` reports whether that scope is present.
+Twitch Helix Predictions need `channel:manage:predictions` on the access token. EventSub channel-point redemptions need `channel:read:redemptions` or `channel:manage:redemptions`. `check twitch` lists the token scopes and reports what is missing.
 
 ## App secrets file
 
-Live values go in gitignored `src/HeroesReplay.CLI/appsettings.secrets.json` (Twitch Helix, Heroes Profile v1 Bearer, YouTube API key). `fill-secrets-from-op.ps1` also writes `C:\heroesreplay\Data\client_secrets.json` (Google OAuth desktop client for `youtube uploader`). Template: `appsettings.secrets.example.json`. Copy into CLI `bin/...` when running the exe. Env override prefix `HEROES_REPLAY_`. Do not grep or echo that file for secret values; report `source=literal|op` and length only. The Google account password on the YouTube Uploader item is not used; upload uses OAuth.
+Live values go in gitignored `src/HeroesReplay.CLI/appsettings.secrets.json` (Twitch access token, client id, and refresh token, Heroes Profile v1 Bearer, YouTube API key). `fill-secrets-from-op.ps1` also writes `C:\heroesreplay\Data\client_secrets.json` (Google OAuth desktop client for `youtube uploader` and `youtube library`), copies both files to `C:\heroesreplay\secrets`, and copies the secrets file into every existing CLI `bin` output. The build also copies it to the output directory. Template: `appsettings.secrets.example.json`. Env override prefix `HEROES_REPLAY_`. Do not grep or echo that file for secret values. `check config` prints only `missing`, `set (N chars)`, or `1Password reference (unresolved)`; report the same. The Google account password on the YouTube Uploader item is not used; upload uses OAuth.

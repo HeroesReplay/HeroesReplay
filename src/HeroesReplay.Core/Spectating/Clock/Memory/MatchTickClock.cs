@@ -5,7 +5,7 @@ namespace HeroesReplay.Core.Spectating.Clock.Memory;
 /// <summary>
 /// Build 2.55.17.98025 match clock from HeroesOfTheStorm_x64.exe.
 /// Ghidra FUN_7ff7438a95e0 returns the live tick accumulator times 1/4096.
-/// Read-only. The dynamic page scan is a different thing and stays off.
+/// Read-only. The dynamic page scan (Spectate:MemoryTimerEnabled) is a separate path.
 /// </summary>
 public static class MatchTickClock
 {

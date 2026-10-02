@@ -98,10 +98,10 @@
     <script>
       (function () {
         var params = new URLSearchParams(location.search);
-        var minutes = Math.max(0, parseInt(params.get("m") || "5", 10) || 0);
+        var minutes = Math.max(0, parseInt(params.get("m") || "2", 10) || 0);
         var extra = Math.max(0, parseInt(params.get("s") || "0", 10) || 0);
         var totalMs = (minutes * 60 + extra) * 1000;
-        if (totalMs <= 0) totalMs = 5 * 60 * 1000;
+        if (totalMs <= 0) totalMs = 2 * 60 * 1000;
         var title = params.get("title") || "STREAM STARTING";
         var endText = params.get("end") || "LIVE";
         var autostart = params.get("autostart") !== "0";

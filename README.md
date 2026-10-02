@@ -4,18 +4,16 @@ Automated spectator for Heroes of the Storm `.StormReplay` files. It parses a re
 
 Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Modernized to **.NET 10 LTS**. The product vision and the 24/7 cycle are in [docs/vision.md](docs/vision.md). What the YouTube uploader records, publishes, and files is in [docs/youtube-uploader.md](docs/youtube-uploader.md).
 
-`develop` is the default branch. A clone checks it out, and day-to-day work lands there. `master` is only the production branch. Merging into `master` runs the release workflow and publishes `heroesreplay-win-x64.zip`: the executable, `appsettings.json`, `appsettings.prod.json`, and the OBS scene collection. The stream PC installs that zip. It does not build from this checkout.
+`develop` is the default branch. A clone checks it out, and day-to-day work lands there. `master` is only the production branch. Merging into `master` runs the release workflow and publishes `heroesreplay-win-x64.zip`: the executable, `appsettings.json` with its `dev` and `prod` overlays, and the OBS scene collection with its assets. The stream PC installs that zip. It does not build from this checkout.
 
 ## What it does
 
-1. Load a local `.StormReplay`, a directory of them, or download Storm League games from Heroes Profile (HTTPS, not AWS S3).
+1. Load a local `.StormReplay`, a directory of them, or download Storm League games from Heroes Profile.
 2. Build a **focus timeline**: kills, proximity, camps, objectives, structures, emotes. Weights live in `appsettings.json`.
-3. Launch Heroes of the Storm (Battle.net when the replay is the latest client build), wait for the in-game timer (WinRT OCR + **BitBlt** of the windowed client).
-4. Send spectator hotkeys (`1`–`0`, Ctrl+panels) as the OCR timer advances. Player focus uses Observe Player 1–10, not Follow Player Camera (C). AhliObs already hides the replay control panel; do not send Ctrl+Shift+O (that chord toggles it back on).
-5. Optionally control **OBS Studio 28+** (obs-websocket **5**, default `ws://127.0.0.1:4455`): game scene, recording folder, rank images, post-game Heroes Profile report scenes (`summary`, `match-scores`, `talents`, `experience`, team stats).
+3. Launch Heroes of the Storm (Battle.net when the replay is the latest client build, HeroesSwitcher for an older installed build), wait for the match clock (read from game memory, with WinRT OCR of a **PrintWindow** capture of the windowed client as the fallback).
+4. Send spectator hotkeys (`1`–`0`, Ctrl+panels) as the match clock advances. Player focus uses Observe Player 1–10, not Follow Player Camera (`C`) and not Shift+Z ultra zoom (that jittered on hero swaps). AhliObs already hides the replay control panel; do not send Ctrl+Shift+O (that chord toggles it back on).
+5. Optionally control **OBS Studio 28+** (obs-websocket **5**, default `ws://127.0.0.1:4455`): game scene, recording folder, rank images, post-game report scenes (`match-report` for the Heroes Profile match page, `prediction-report`, `request-queue`).
 6. Chat **`!talents`** (Ctrl+1) and **`!stats`** (Ctrl+2) show those Ahli panels for 10 seconds (2 minute cooldown each). Talents still open automatically at talent times.
-
-Spectator camera uses **Observe Player 1–10** (`1`–`0`). It does **not** send Follow Player Camera (`C`) and does **not** send Shift+Z ultra zoom (that jittered on hero swaps).
 
 ## Maps and modes
 
@@ -31,11 +29,11 @@ Catalog: `Maps:Catalog` in `appsettings.json` (`Playable`, `RankedRotation`, `Ty
 
 ## Requirements
 
-- Windows 10/11 (OCR, **BitBlt**, process control). The client must be **windowed 1080p** (`heroesreplay client configure`). Fullscreen D3D11 is not supported.
+- Windows 10/11 (WinRT OCR, **PrintWindow** capture, process control). The client must be **windowed 1080p** (`heroesreplay client configure`). Fullscreen D3D11 is not supported.
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Heroes of the Storm + Battle.net
 - Optional: OBS Studio 28+ with **Tools → WebSocket Server Settings** enabled (port **4455**)
-- Optional: Twitch app credentials, Heroes Profile API key (Bearer). S3/AWS keys are not used.
+- Optional: Twitch app credentials, Heroes Profile API key (Bearer).
 
 ## Build
 
@@ -98,16 +96,21 @@ dotnet run --no-launch-profile -- --help
 | `services start` / `services stop` / `services status` | Run spectate, Twitch, the Heroes Profile downloader, and the YouTube uploader as separate processes |
 | `spectate heroesprofile` | Spectate `.StormReplay` files already in `Data\Standard` and `Data\Requests` |
 | `heroesprofile download` | List and download Storm League replays into those folders |
+| `heroesprofile patch-index` | Find the first replay id of the current patch line (`--write` sets `MinReplayId`) |
 | `calculators coordinates` | Parse the newest Documents replay and prove coordinates + focus timeline |
 | `calculators report --file <path>` | Write a spectator report |
 | `calculators units --directory <path>` | Sample 1–5 replays per map, one file at a time, and write unit CSVs |
 | `twitch connect` / `twitch rewards …` | Chat bot and channel-point rewards |
 | `youtube uploader` | Upload OBS recordings |
+| `youtube library` | File uploaded matches into map and patch playlists |
 | `client configure` | Windowed 1080p + AhliObs in `Documents\Heroes of the Storm` (Variables.txt + StormInterface). Quit the game first. |
 | `client status` / `check client` | Verify that preset |
-| `check` | Config + Heroes Profile + OBS + Twitch + client (continues on failure) |
-| `check config` / `check heroesprofile` / `check obs` / `check twitch` / `check client` | One integration at a time |
-| `mcp` | Stdio MCP server for agents (`get_spectator_status`, checks). Pair with a running `spectate` process. |
+| `check` | Config + Heroes Profile + OBS + Twitch + client + Battle.net + connectivity (continues on failure) |
+| `check config` / `check heroesprofile` / `check obs` / `check twitch` / `check client` / `check battlenet` / `check connectivity` | One integration at a time |
+| `check timer` / `check twitch-extension` | Read-only memory scan for the match clock; Heroes Profile Twitch extension key |
+| `otel up` / `otel down` / `otel status` | Standalone Aspire dashboard |
+| `update check` | Compare this install with the latest GitHub Release |
+| `mcp` | Stdio MCP server for agents (`get_spectator_status`, `get_current_focus`, checks). Pair with a running `spectate` process. |
 
 Grok picks up the server from `.grok/config.toml` (`mcp_servers.heroesreplay`). Status snapshot: `%LOCALAPPDATA%\HeroesReplay\status.json`.
 
@@ -128,7 +131,8 @@ OBS password:
 | Project | Role |
 | --- | --- |
 | `src/HeroesReplay.CLI` | `heroesreplay` executable, System.CommandLine 2 |
-| `src/HeroesReplay.Core` | Analysis, game/OBS/Twitch/YouTube |
+| `src/HeroesReplay.Core` | Feature slices: analysis, spectating, game client, OBS, Twitch, YouTube, service host |
+| `src/HeroesReplay.HeroesProfile.Client` | Kiota client for the Heroes Profile v1 API ([docs/heroesprofile-api.md](docs/heroesprofile-api.md)) |
 | `src/HeroesReplay.Tests` | xUnit |
 
 The solution file is **`heroes-replay.slnx`** (XML). Do not add a parallel `.sln`.

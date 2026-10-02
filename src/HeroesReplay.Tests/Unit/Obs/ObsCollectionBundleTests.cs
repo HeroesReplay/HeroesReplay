@@ -139,7 +139,7 @@ public class ObsCollectionBundleTests
                 {
                   "name": "countdown",
                   "id": "browser_source",
-                  "settings": { "url": "file:///countdown/index.html?m=5&s=0&autostart=1" }
+                  "settings": { "url": "file:///countdown/index.html?m=2&s=0&autostart=1" }
                 },
                 {
                   "name": "queue",
@@ -181,7 +181,7 @@ public class ObsCollectionBundleTests
             settings["bronze-image"].GetProperty("file").GetString()
         );
         Assert.Equal(
-            "file:///C:/heroesreplay/app/obs/countdown/index.html?m=5&s=0&autostart=1",
+            "file:///C:/heroesreplay/app/obs/countdown/index.html?m=2&s=0&autostart=1",
             settings["countdown"].GetProperty("url").GetString()
         );
         Assert.Equal(

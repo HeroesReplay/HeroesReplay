@@ -13,7 +13,7 @@ Production runs the zip attached to a GitHub Release. It does not clone the repo
 
 | Path | What |
 | --- | --- |
-| `C:\heroesreplay\app` | The published exe, `appsettings.json`, `appsettings.prod.json`, `apply-release.ps1`, and `obs\`. This is the directory that gets replaced. |
+| `C:\heroesreplay\app` | The published exe, `appsettings.json`, `appsettings.prod.json`, `apply-release.ps1`, `version.txt`, and `obs\`. This is the directory that gets replaced. The update keeps the previous copy at `C:\heroesreplay\app.previous`. |
 | `C:\heroesreplay\Data` | Queue, replays, `spectated-ids.txt`, `requests.json`, contexts. Not in the zip. An update must not delete or rewrite it. |
 | `C:\heroesreplay\secrets\appsettings.secrets.json` | Tokens. Not in the zip. The helper copies it back to `appsettings.secrets.json` beside the exe. |
 
@@ -32,7 +32,7 @@ Do not point the install at the git worktree.
 
 ## Later updates
 
-After a replay finishes, the spectator compares `version.txt` with the latest release. A newer zip is downloaded, `services stop` runs, and `apply-release.ps1` waits until `heroesreplay.exe` has exited, swaps `C:\heroesreplay\app`, copies secrets back, and starts services again. The next replay is the next unplayed file. If OBS is open, scene files stay in `app\obs` and are not copied over the live collection. If OBS is closed, `Default.json` and `basic.ini` are copied. `service.json` is never copied.
+After a replay finishes, the spectator compares `version.txt` with the latest release. A newer zip is downloaded and prepared under `%LOCALAPPDATA%\HeroesReplay\updates\<version>` (secrets and the higher `MinReplayId` carried over), the spectator writes `services.stop` so every service exits, and `apply-release.ps1` waits until `heroesreplay.exe` has exited. It refuses to replace while the previous install is still inside the stabilization window (`update release-health`). Otherwise it backs up `C:\heroesreplay\app` to `app.previous`, copies the new files over it, copies secrets back, and starts the stack again: scheduled task `HeroesReplay-live` if it exists, else `%LOCALAPPDATA%\HeroesReplay\start-live.cmd`, else `heroesreplay services start`. A failed copy restores `app.previous`. The next replay is the next unplayed file. If OBS is open, scene files stay in `app\obs` and are not copied over the live collection. If OBS is closed, `Default.json` and `basic.ini` are copied. `service.json` is never copied.
 
 `heroesreplay update check` prints the installed version and the latest tag. It does not download or restart.
 
@@ -44,7 +44,7 @@ Two stdio servers, both already installed separately from the zip:
 
 | Server | Command | What the agent gets |
 | --- | --- | --- |
-| Spectator | `C:\heroesreplay\app\heroesreplay.exe mcp` with `HEROES_REPLAY_ENV=prod` | `get_spectator_status`, `get_current_focus`, `check_twitch`, `check_obs`, `check_heroesprofile`, `check_config`. Reads `%LOCALAPPDATA%\HeroesReplay\status.json`. A second process from the one playing the match. |
+| Spectator | `C:\heroesreplay\app\heroesreplay.exe mcp` with `HEROES_REPLAY_ENV=prod` | `get_spectator_status`, `get_current_focus`, `check_twitch`, `check_obs`, `check_heroesprofile`, `check_config`, `check_battlenet`. Reads `%LOCALAPPDATA%\HeroesReplay\status.json`. A second process from the one playing the match. |
 | Aspire | `aspire agent mcp --dashboard-url http://127.0.0.1:18888` | On CLI 13.5.4, dashboard-only mode: `list_structured_logs`, `list_traces`, `list_trace_structured_logs`. The dashboard UI stays `http://127.0.0.1:18888`. `list_resources` and start/stop need an AppHost, which this app does not run. |
 
 `aspire` is the machine dotnet tool (`aspire.cli` 13.5.4), not a file inside the zip. The release should still ship `.mcp.json` next to the exe so an agent started in `C:\heroesreplay\app` finds both commands. `aspire agent init` writes that file for a source tree; it does not know the published exe path.

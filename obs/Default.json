@@ -318,7 +318,7 @@
       "id": "browser_source",
       "versioned_id": "browser_source",
       "settings": {
-        "url": "file:///countdown/index.html?m=5\u0026s=0\u0026autostart=1",
+        "url": "file:///countdown/index.html?m=2\u0026s=0\u0026autostart=1\u0026title=NEXT%20MATCH\u0026end=STARTING",
         "width": 720,
         "height": 240,
         "shutdown": true,

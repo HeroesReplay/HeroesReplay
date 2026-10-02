@@ -34,12 +34,12 @@ pwsh -File tools/verify.ps1
 
 - File-scoped namespaces; usings at file top.
 - `using` declarations over nested `using` blocks when dispose scope is the method.
-- Do not enable ImplicitUsings unless you strip redundant usings in the same change.
-- After file-scoped conversion, `Polly.Context` collided with the old `HeroesReplay.Core.Services.Context` namespace (now `HeroesReplay.Core.Replays.Context`). Alias: `using PollyContext = Polly.Context`.
+- Do not enable ImplicitUsings unless you strip redundant usings in the same change. `Directory.Build.props` sets ImplicitUsings and Nullable to `disable`.
+- Core is grouped by feature slice, and the namespace is the folder (`Core/Twitch/Predictions` is `HeroesReplay.Core.Twitch.Predictions`). See `AGENTS.md` "Source layout".
 
 ## Packages
 
-Stay on .NET 10 LTS lines (`Microsoft.Extensions.*` 10.0.x). Skip CommandLine 3 / Extensions 11 prereleases. Do not add a direct Polly package reference. Retries use Microsoft.Extensions.Resilience, and the replay cache is IMemoryCache.
+Stay on .NET 10 LTS lines (`Microsoft.Extensions.*` 10.0.x; `Microsoft.Extensions.Resilience` and `Microsoft.Extensions.Http.Resilience` are 10.10.x). Skip CommandLine 3 / Extensions 11 prereleases. Do not add a direct Polly package reference. Heroes Profile HTTP retries use Microsoft.Extensions.Http.Resilience, other retries use Microsoft.Extensions.Resilience pipelines, and the replay cache is IMemoryCache.
 
 ## CLI
 

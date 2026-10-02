@@ -40,7 +40,7 @@ public class SpectateSettings
     /// <summary>
     /// Read the fixed 2.55.17.98025 tick RVAs and use that as the match clock.
     /// OCR is used when the read fails or the client build is different.
-    /// The dynamic page scan stays off.
+    /// The dynamic page scan is separate (MemoryTimerEnabled, UseMemoryTimer).
     /// </summary>
     public bool StableMatchClockEnabled { get; set; }
 

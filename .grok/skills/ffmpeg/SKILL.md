@@ -16,7 +16,9 @@ Official pages, read these before inventing flags:
 - [Seeking](https://trac.ffmpeg.org/wiki/Seeking)
 - [Concatenate](https://trac.ffmpeg.org/wiki/Concatenate)
 
-`ffprobe` first. Times in `clips.json` are seconds in the match file, not HUD time.
+The spectator already cuts pentakill clips after a recorded match (`HeroesReplay.Core.Clips.MatchClipExporter`, arguments in `FfmpegArguments.Cut`). It uses `C:\ffmpeg\bin\ffmpeg.exe` when present, otherwise `ffmpeg` on PATH, and writes `Data\Contexts\<id>\clips\<kind>-<hero>-<hudStart>\clip.mp4` plus an index `Data\Contexts\<id>\clips.json`.
+
+`ffprobe` first. In `clips.json`, `fileStart` and `duration` are seconds in the match file. `hudStart` and `hudEnd` are HUD time; do not cut with them.
 
 ```powershell
 ffprobe -v error -show_entries format=duration:stream=index,codec_type,codec_name,width,height,r_frame_rate -of json match.mp4
@@ -42,4 +44,4 @@ ffmpeg -y -f concat -safe 0 -i list.txt -c copy clips.mp4
 
 `list.txt` lines are `file 'clip-1.mp4'`.
 
-After either command, `ffprobe` the output and check duration, width, and height. Width and height match the source, 1920x1080 for an OBS match recording. Delete nothing from `Data\Contexts` until that check passes. The dry-run uploader deletes the match mp4 once `youtube-dry-run.json` exists.
+After either command, `ffprobe` the output and check duration, width, and height. Width and height match the source, 1920x1080 for an OBS match recording. Delete nothing from `Data\Contexts` until that check passes. `MediaRetention` deletes old match mp4s on its own (`Retention:VideoKeepDays` 3, `VideoMaxAgeDays` 7), so cut from a recent recording.

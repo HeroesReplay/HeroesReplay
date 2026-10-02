@@ -12,7 +12,7 @@ Do **not** commit `service.json` (Twitch stream key).
 - `waiting-screen` + `game-scene` at 1080p60
 - Local countdown: `countdown/index.html`
 - SoundCloud widget on Desktop Audio (`reroute_audio` off — Control audio via OBS cannot capture that player)
-- Heroes Profile report scenes (`summary`, `match-scores`, `talents`, `experience`, `team-1-stats`, `team-2-stats`) **hidden** until Cloudflare is sorted
+- Report scenes `match-report` (Heroes Profile match page), `prediction-report`, and `request-queue`
 - QSV local recording into `C:\heroesreplay\Data\Contexts` — no start-streaming
 
 ## Paths

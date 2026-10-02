@@ -22,7 +22,7 @@ public class YouTubeSettings
     public string PrivacyStatus { get; set; }
 
     /// <summary>
-    /// Optional title prefix such as [TEST]. Non-production uploads are marked even when this is empty.
+    /// Optional title prefix such as [TEST]. An empty prefix leaves the title unmarked.
     /// </summary>
     public string TitlePrefix { get; set; }
     public string EntryFileNameUploaded { get; set; }

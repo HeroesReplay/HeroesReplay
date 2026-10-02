@@ -10,7 +10,7 @@ Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `Her
 
 ### Source layout: feature slices
 
-`HeroesReplay.Core` is grouped by feature, not by kind. There are no `Models/`, `Services/`, or `Extensions/` folders. A feature's types, settings class, interfaces, and extension methods sit together. The namespace is the folder (`Core/YouTube/Metadata` is `HeroesReplay.Core.YouTube.Metadata`). `HeroesReplay.Tests/Unit/<Slice>` mirrors the slice names.
+`HeroesReplay.Core` is grouped by feature, not by kind. There are no `Models/`, `Services/`, or `Extensions/` folders. A feature's types, settings class, interfaces, and extension methods sit together. The namespace is the folder (`Core/YouTube/Metadata` is `HeroesReplay.Core.YouTube.Metadata`). `Engine`, `IEngine`, and `HeroesReplayTelemetry` sit at the Core root. `HeroesReplay.Tests/Unit/<Slice>` mirrors the slice names; `Unit/Check`, `Unit/Support`, and `Unit/Telemetry` are the extra test folders.
 
 | Slice | Owns |
 | --- | --- |
@@ -99,13 +99,15 @@ A version-mismatch or region-unavailable dialog leaves the front on the first mi
 
 Live-proof logs: Aspire dashboard at `http://127.0.0.1:18888`. The Aspire CLI on this machine is 13.5.4 and its MCP server is `aspire agent mcp`. This app has no AppHost, so connect it in dashboard-only mode: `aspire agent mcp --dashboard-url http://127.0.0.1:18888`. That mode exposes only `list_structured_logs`, `list_traces`, and `list_trace_structured_logs`. `list_resources` and `execute_resource_command` need an AppHost and are not available here. If that MCP is not connected, use `aspire otel logs`. Spectate, Twitch, download, and YouTube. No unhandled error stacks. No repeated invalid-timer flood. Service consoles must not cover the clock pill.
 
-On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: `services stop` (this closes HotS), `dotnet build heroes-replay.slnx -c Release`, copy `appsettings.secrets.json` into the CLI Release bin, and start a proof only if phase 3 or 4 applies. Never start Twitch ingest here.
+On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: `services stop` (this closes HotS), `dotnet build heroes-replay.slnx -c Release` (the build copies `src/HeroesReplay.CLI/appsettings.secrets.json` into the Release bin), and start a proof only if phase 3 or 4 applies. Never start Twitch ingest here.
 
 ### Capture
 
 `IGameCapture` is the capture port. `PrintWindowCapture` is the default (`Capture:Method` = `PrintWindow`): the game HWND's composed frame, cropped to the client area, including DirectX. Another window on top of the game does not replace the clock. `BitBltCapture` is the desktop copy and is only used when `Capture:Method` is `BitBlt`. Windowed mode is still required so DWM has a frame.
 
-OBS game capture also sees the frame when the window is covered, because it hooks the swap chain. One-off `GetSourceScreenshot` calls have worked. A sustained one-screenshot-per-second measurement has **not** been done. That comparison is issue 27. The dynamic memory scan stays off. Build `2.55.17.98025` also has a fixed read-only tick address (`MatchTickClock`, seconds = ticks / 4096). It is preferred when that read succeeds. OCR of `-MM:SS` or `MM:SS` remains the fallback. A different client build does not use those offsets.
+OBS game capture also sees the frame when the window is covered, because it hooks the swap chain. Issue 27 (closed) timed five `GetSourceScreenshot` calls one second apart at 37–72 ms each. OBS is not the clock.
+
+The match clock reads memory first. `StableMatchClock` is read-only. It finds the tick global from the clock instruction pattern on each client build (`MatchClockPattern`). Build `2.55.17.98025` also has fixed addresses (`MatchTickClock`, seconds = ticks / 4096) as a candidate. OCR of `-MM:SS` or `MM:SS` is the fallback when that read is not usable. The dynamic page scan (`Spectate:MemoryTimerEnabled`, `Spectate:UseMemoryTimer`) is on in the base and prod settings. Its locked address is used only when the stable clock and OCR both miss.
 
 ## Environments
 
@@ -130,11 +132,13 @@ On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\He
 - ARAM: Silver City, Lost Cavern, Industrial District, Braxis Outpost.
 - ReplayId rewards: the current patch line (`MinimumGameVersion` and every newer build, including each `2.57.*` iteration). A reward still needs that build's exe. Older replays need a local `Versions\Base*` folder; old clients are often no longer downloadable.
 - Spectator keys: `1`–`0` observe player. Do not send `C` (follow player camera) or Shift+Z ultra zoom.
-- Twitch: chat + PubSub reconnect with backoff; Helix predictions; channel-point rewards queue `Data\requests.json`. Reward prompts must say recent patch ReplayIds.
+- Twitch: chat and EventSub redemptions reconnect with backoff; Helix predictions; channel-point rewards queue `Data\requests.json`. Reward prompts must say recent patch ReplayIds.
 
 ### Calculators
 
 `Calculators:Enabled` in appsettings (type name, default on) for A/B. Example: `"EmotingCalculator": false`.
+
+### Directory tree
 
 Both are Windows 11. Use the **same directory tree** so spectate, downloads, and OBS assets match.
 
@@ -161,10 +165,10 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 
 ## Hard rules
 
-- Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. WinRT OCR and BitBlt need the Windows TFM.
+- Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. WinRT OCR and the PrintWindow/BitBlt capture need the Windows TFM.
 - File-scoped namespaces, usings outside the namespace, `using` declarations where they reduce nesting.
 - Calculators implement `IFocusCalculator.Contribute(ReplayTimeline)`. Do not bring back `GetFocusPlayers(TimeSpan, Replay)` × PLINQ.
-- Focus pipeline: parse replay → calculators offer weighted events → hold last winner across empty seconds → spectator looks up by OCR game timer until core kill. Do not recompute calculators in the live loop.
+- Focus pipeline: parse replay → calculators offer weighted events → hold last winner across empty seconds → spectator looks up by the match clock (memory read, OCR fallback) until core kill. Do not recompute calculators in the live loop.
 - Living units: `unit.IsAliveAt(now)` (`TimeSpanDied == null` means alive).
 - OBS: websocket **5**, port **4455**, **one connection per replay** (`BeginSession` / `EndSession`). Do not connect-disconnect per request.
 - Cache the Heroes of the Storm HWND after launch; do not `GetProcessesByName` on every keystroke.
@@ -209,4 +213,4 @@ These are installed under `.grok/skills/<name>/` from [dotnet/skills](https://gi
 
 Grok already provides `review`, `create-skill`, and `long-running-background-tasks`. They stay with the tool and are not copied into this repo.
 
-There is no high-quality public skill specifically for **obs-websocket 5** or **TwitchLib 3.x** — that is why the two repo skills exist. Twitch EventSub (not PubSub) is the long-term replacement for channel-point redemptions.
+There is no high-quality public skill specifically for **obs-websocket 5** or **TwitchLib 3.x** — that is why the two repo skills exist. Channel-point redemptions arrive over Twitch EventSub (`EventSubRewardListener`), not PubSub.
