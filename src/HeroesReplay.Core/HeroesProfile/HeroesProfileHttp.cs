@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
+using Polly.Telemetry;
 using Polly.Timeout;
 
 namespace HeroesReplay.Core.HeroesProfile;
@@ -48,6 +49,15 @@ public static class HeroesProfileHttp
             )
             .AddTimeout(new HttpTimeoutStrategyOptions { Timeout = AttemptTimeout });
     }
+
+    /// <summary>
+    /// A request cancelled by a stop is not a failure. Its attempt is logged at Debug,
+    /// not as an Information line with a stack trace.
+    /// </summary>
+    public static ResilienceEventSeverity Severity(SeverityProviderArguments args) =>
+        args.Context?.CancellationToken.IsCancellationRequested == true
+            ? ResilienceEventSeverity.Debug
+            : args.Event.Severity;
 
     public static bool ShouldRetry(
         Outcome<HttpResponseMessage> outcome,
