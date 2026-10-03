@@ -117,30 +117,64 @@ public class HeroesProfileProviderDownloadTests
             Assert.True(await provider.DownloadNextAsync());
 
             Assert.Equal(65657001, Assert.Single(service.Downloaded));
+            Assert.Equal(1, service.MaxIdLookups);
         }
         finally
         {
             Directory.Delete(root, recursive: true);
         }
-
-        static ReplayListing Replay(int id, DateTime played) =>
-            new(
-                new[]
-                {
-                    new HeroesProfileReplay
-                    {
-                        Id = id,
-                        GameType = "Storm League",
-                        Map = "Cursed Hollow",
-                        Fingerprint = "abc",
-                        GameDate = played.ToString("yyyy-MM-dd HH:mm:ss"),
-                    },
-                },
-                hadRows: true,
-                highestId: id,
-                nextAfter: id
-            );
     }
+
+    /// <summary>#217: a max age of zero turns catch-up off, with no newest-id lookup.</summary>
+    [Fact]
+    public async Task DownloadNextAsync_ZeroMaxAgeKeepsTheCursorWithoutAMaxIdLookup()
+    {
+        string root = NewRoot();
+        DateTime now = DateTime.UtcNow;
+        var service = new ListedDownloads(
+            newest: 65660000,
+            listPage: minId => Replay(minId + 1, now - TimeSpan.FromDays(3))
+        );
+
+        try
+        {
+            HeroesProfileProvider provider = Provider(
+                root,
+                service,
+                resume: null,
+                CancellationToken.None,
+                enableRequests: false,
+                maxReplayAge: TimeSpan.Zero
+            );
+
+            Assert.True(await provider.DownloadNextAsync());
+
+            Assert.Equal(65580001, Assert.Single(service.Downloaded));
+            Assert.Equal(0, service.MaxIdLookups);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static ReplayListing Replay(int id, DateTime played) =>
+        new(
+            new[]
+            {
+                new HeroesProfileReplay
+                {
+                    Id = id,
+                    GameType = "Storm League",
+                    Map = "Cursed Hollow",
+                    Fingerprint = "abc",
+                    GameDate = played.ToString("yyyy-MM-dd HH:mm:ss"),
+                },
+            },
+            hadRows: true,
+            highestId: id,
+            nextAfter: id
+        );
 
     private static string NewRoot()
     {
@@ -157,7 +191,8 @@ public class HeroesProfileProviderDownloadTests
         IHeroesProfileService service,
         IHeroesProfileResume resume,
         CancellationToken token,
-        bool enableRequests = true
+        bool enableRequests = true,
+        TimeSpan? maxReplayAge = null
     )
     {
         var settings = new AppSettings
@@ -169,6 +204,7 @@ public class HeroesProfileProviderDownloadTests
                 RequestsCacheDirectoryName = "Requests",
                 MinReplayId = 65580000,
                 GameTypes = new[] { "Storm League" },
+                StandardMaxReplayAge = maxReplayAge ?? TimeSpan.FromHours(12),
             },
             StormReplay = new StormReplaySettings
             {
@@ -253,7 +289,13 @@ public class HeroesProfileProviderDownloadTests
             await destination.WriteAsync(new byte[] { 1 }, cancellationToken);
         }
 
-        public Task<int> GetMaxReplayIdAsync() => Task.FromResult(newest);
+        public int MaxIdLookups { get; private set; }
+
+        public Task<int> GetMaxReplayIdAsync()
+        {
+            MaxIdLookups++;
+            return Task.FromResult(newest);
+        }
 
         public Task<IEnumerable<HeroesProfileReplay>> GetReplaysByFilters(
             GameType? gameType = null,
