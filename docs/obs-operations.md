@@ -32,7 +32,7 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
   - in a release, the replaced install's template (`--previous`)
 
   Any other collection is custom: an operator added or removed a scene or source. A custom collection is never overwritten, and the output names the extra and missing names.
-- **Template changed.** A managed collection is replaced with the new template. A release with no record yet replaces it too.
+- **Template changed.** A managed collection is replaced with the new template. A managed collection with no record yet is replaced once too: equal names do not mean equal filters and settings, so an older build's collection is never taken for this template.
 - **Template unchanged.** Only the asset and data paths are pointed at this install. Positions, volumes and filters that OBS saved are kept.
 - **Backup and atomic write.** Every write copies the current file to `%LOCALAPPDATA%\HeroesReplay\obs\backups\<folder>-<file>.<UTC>.bak` (the newest 10 per file), writes a temp file beside it, and swaps it in. A failed write leaves the original. To roll back, close OBS and copy a backup over the collection.
 - **Effective settings.** The data folder and collection name come from the install's `appsettings.json`, with the `HEROES_REPLAY_ENV` overlay and `HEROES_REPLAY_` variables applied.
@@ -54,6 +54,7 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 | `obs.request_unavailable` | error (stops the stream) | Update OBS to 30.0 or later. |
 | `obs.fps_low` | warning | Settings > Video: 30 or 60 FPS. |
 | `obs.stream_service_unexpected` | warning | Settings > Stream: Twitch. |
+| `obs.filter_stale` | warning | An old `Scroll` filter on the match report source. Right-click the source > Filters, and disable or remove it. With loop off it moves the page out of its frame and the scene looks blank (transparent). |
 | `obs.filter_missing`, `obs.path_stale`, `obs.collection_custom` | warning | Let `services start` update a managed collection while OBS is closed, or fix the source by hand. |
 
 The full list is in the `heroes-replay-cli` skill (`obs_validate`).

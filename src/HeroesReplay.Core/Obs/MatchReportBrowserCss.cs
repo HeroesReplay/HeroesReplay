@@ -25,6 +25,15 @@ public static class MatchReportBrowserCss
     /// </summary>
     public const int SourceHeight = 1080;
 
+    /// <summary>
+    /// How far the page moves: the Heroes Profile match page with both team sections is about
+    /// 10,350 to 10,650px tall at 1920px wide. The scroll animates <c>top</c>, not
+    /// <c>transform</c>, so it needs a length: OBS's browser source (CEF without GPU) stops
+    /// drawing a transformed body once it is about 8,000px down, and the frame freezes or goes
+    /// blank. A <c>top</c> offset is laid out and painted like a scrolled page.
+    /// </summary>
+    public const int PageHeight = 10600;
+
     public const string ScrollStart = "/*heroesreplay-report-scroll*/";
     public const string ScrollEnd = "/*heroesreplay-report-scroll-end*/";
 
@@ -72,14 +81,16 @@ public static class MatchReportBrowserCss
         string block =
             ScrollStart
             + "html{height:100vh!important;overflow:hidden!important;}"
-            + "body{height:auto!important;min-height:0!important;overflow:visible!important;"
-            + "animation:heroesreplay-report-scroll "
+            + "body{position:relative!important;height:auto!important;min-height:0!important;"
+            + "overflow:visible!important;animation:heroesreplay-report-scroll "
             + Seconds(duration)
             + " linear "
             + Seconds(delay)
             + " both!important;}"
-            + "@keyframes heroesreplay-report-scroll{from{transform:translateY(0);}"
-            + "to{transform:translateY(min(0px,calc(100vh - 100%)));}}"
+            + "@keyframes heroesreplay-report-scroll{from{top:0;}"
+            + "to{top:min(0px,calc(100vh - "
+            + PageHeight.ToString(CultureInfo.InvariantCulture)
+            + "px));}}"
             + ScrollEnd;
         return string.IsNullOrWhiteSpace(kept) ? block : kept + "\n" + block;
     }

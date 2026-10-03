@@ -166,13 +166,12 @@ public static class ObsCollectionPatcher
 
         if (record == null)
         {
-            // The first run with a record. A release assumes the live collection came from an
-            // older template, as every release before the record replaced it. Saved now, so a
-            // replacement deferred while OBS runs still happens once it is closed.
+            // The first run with a record. Nothing says which template wrote the live collection:
+            // the same scene and source names do not mean the same filters and settings (an
+            // older build's match report Scroll filter, #197). So it is replaced once. Saved
+            // now, so a replacement deferred while OBS runs still happens once it is closed.
             record = new ObsManagedCollection(
-                update.Release || Drift(templateNames, liveNames).Custom
-                    ? UnknownTemplate
-                    : target.Hash,
+                UnknownTemplate,
                 liveNames.Order(StringComparer.Ordinal).ToList(),
                 update.UtcNow
             );

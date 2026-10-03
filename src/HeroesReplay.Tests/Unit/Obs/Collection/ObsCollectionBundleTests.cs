@@ -61,10 +61,9 @@ public class ObsCollectionBundleTests
         Assert.NotEmpty(assets);
         Assert.Contains("Ranks/bronze.png", assets, StringComparer.OrdinalIgnoreCase);
         Assert.Contains("countdown/index.html", assets, StringComparer.OrdinalIgnoreCase);
-        Assert.Contains(
-            "Popups/settings-and-images/icon-sheet.png",
+        Assert.DoesNotContain(
             assets,
-            StringComparer.OrdinalIgnoreCase
+            asset => asset.StartsWith("Popups/", StringComparison.OrdinalIgnoreCase)
         );
         Assert.DoesNotContain(
             assets,
@@ -158,6 +157,28 @@ public class ObsCollectionBundleTests
             root.GetProperty("DesktopAudioDevice1").GetProperty("id").GetString()
         );
         Assert.Equal("HeroesReplay", root.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void Collection_MatchReportSitsInFrontOfSoundcloud()
+    {
+        string json = File.ReadAllText(Path.Combine(RepoRoot(), "obs", "Default.json"));
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement scene = document
+            .RootElement.GetProperty("sources")
+            .EnumerateArray()
+            .Single(source => source.GetProperty("name").GetString() == "match-report");
+
+        // OBS lists scene items bottom first: the report page covers the soundcloud player.
+        Assert.Equal(
+            ["soundcloud", "match-report-browser"],
+            scene
+                .GetProperty("settings")
+                .GetProperty("items")
+                .EnumerateArray()
+                .Select(item => item.GetProperty("name").GetString())
+                .ToArray()
+        );
     }
 
     [Fact]
@@ -559,6 +580,42 @@ public class ObsCollectionBundleTests
             Assert.Contains("\"unload\": true", File.ReadAllText(destination));
             Assert.Equal(installed, File.ReadAllText(result.Backup));
             Assert.Contains(result.Backup, result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Apply_FirstRunWithoutARecord_ReplacesAnOlderCollectionWithTheSameNames()
+    {
+        string root = TempRoot();
+        try
+        {
+            string template = WriteTemplate(root, "Ranks/bronze.png");
+            string destination = Path.Combine(root, "live", "HeroesReplay.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            // An older build's collection: the same names, plus a filter this template dropped.
+            string older = File.ReadAllText(template)
+                .Replace(
+                    "\"settings\"",
+                    "\"filters\": [{ \"name\": \"Scroll\", \"id\": \"scroll_filter\" }], \"settings\""
+                );
+            File.WriteAllText(destination, older);
+
+            ObsCollectionApplyResult result = Apply(
+                root,
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: false
+            );
+
+            Assert.True(result.Wrote, result.Message);
+            Assert.False(result.Drift);
+            Assert.DoesNotContain("scroll_filter", File.ReadAllText(destination));
+            Assert.Equal(older, File.ReadAllText(result.Backup));
         }
         finally
         {
