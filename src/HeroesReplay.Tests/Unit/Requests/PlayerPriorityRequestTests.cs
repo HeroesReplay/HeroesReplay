@@ -74,6 +74,32 @@ public class PlayerPriorityRequestTests
         );
     }
 
+    /// <summary>#215: a queue entry saved before the BattleTag change still focuses its slot.</summary>
+    [Fact]
+    public void PlayerIndex_KeepsTheSlotOfARequestQueuedBeforeTheBattleTagChange()
+    {
+        Replay replay = Players(("A", 1), ("B", 2), ("C", 3), ("D", 4), ("E", 5));
+        RewardRequest legacy = System.Text.Json.JsonSerializer.Deserialize<RewardRequest>(
+            """{ "Login": "viewer", "ReplayId": 65268119, "PlayerIndex": 3 }"""
+        );
+
+        Assert.Equal(3, PlayerPriorityRequest.PlayerIndex(replay, legacy));
+        Assert.Null(
+            PlayerPriorityRequest.PlayerIndex(replay, new RewardRequest { LegacyPlayerIndex = 7 })
+        );
+        Assert.Equal(
+            1,
+            PlayerPriorityRequest.PlayerIndex(
+                replay,
+                new RewardRequest { BattleTag = "B#2", LegacyPlayerIndex = 3 }
+            )
+        );
+        Assert.DoesNotContain(
+            "PlayerIndex",
+            System.Text.Json.JsonSerializer.Serialize(new RewardRequest { BattleTag = "B#2" })
+        );
+    }
+
     [Fact]
     public void BlocksBecauseMatchStarted_OnlyForTheReplayAlreadyOnScreen()
     {

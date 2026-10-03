@@ -73,15 +73,23 @@ public static class PlayerPriorityRequest
     }
 
     /// <summary>
-    /// The observe slot of the requested BattleTag among the replay's players. Null when the
-    /// request names no BattleTag, or when that BattleTag did not play in this replay.
+    /// The observe slot of the requested BattleTag among the replay's players. A request queued
+    /// before the BattleTag change keeps the slot it named (#215). Null when the request names
+    /// neither, or when that BattleTag did not play in this replay.
     /// </summary>
     public static int? PlayerIndex(Replay replay, RewardRequest request)
     {
         Player[] players = replay?.Players;
-        if (players == null || string.IsNullOrWhiteSpace(request?.BattleTag))
+        if (players == null)
         {
             return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(request?.BattleTag))
+        {
+            return request?.LegacyPlayerIndex is int slot && slot >= 0 && slot < players.Length
+                ? slot
+                : null;
         }
 
         for (int index = 0; index < players.Length; index++)
