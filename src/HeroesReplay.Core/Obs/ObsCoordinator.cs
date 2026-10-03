@@ -475,10 +475,6 @@ internal sealed class ObsCoordinator
     }
 
     /// <summary>
-    /// Reads the active profile and scene collection. Logs an error when the answer changes
-    /// to a mismatch, so a wrong selection is reported once rather than on every probe.
-    /// </summary>
-    /// <summary>
     /// Validates the loaded collection once per process, before the first StartStream. A
     /// <see cref="ObsValidator.StreamBlockers"/> error stops the stream (retried on the next
     /// reconcile); every other finding is logged and the stream starts. A preflight that cannot
@@ -540,6 +536,10 @@ internal sealed class ObsCoordinator
         return null;
     }
 
+    /// <summary>
+    /// Reads the active profile and scene collection. Logs an error when the answer changes
+    /// to a mismatch, so a wrong selection is reported once rather than on every probe.
+    /// </summary>
     private ObsSelectionResult CheckSelection()
     {
         ObsSelectionResult result;

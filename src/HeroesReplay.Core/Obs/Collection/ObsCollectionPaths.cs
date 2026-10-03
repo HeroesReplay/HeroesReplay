@@ -134,7 +134,6 @@ public static class ObsCollectionPaths
     public static IReadOnlyList<string> MissingSources(string json, IEnumerable<string> required) =>
         MissingNames(SourceNames(json), required);
 
-    /// <summary>Source name → unversioned kind (<c>id</c>), such as <c>browser_source</c>.</summary>
     /// <summary>The filters each source has in the collection: source name → (filter name, filter kind).</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<ObsFilterInfo>> SourceFilters(
         string json
@@ -196,6 +195,7 @@ public static class ObsCollectionPaths
         return filters;
     }
 
+    /// <summary>Source name → unversioned kind (<c>id</c>), such as <c>browser_source</c>.</summary>
     public static IReadOnlyDictionary<string, string> SourceKinds(string json)
     {
         var kinds = new Dictionary<string, string>(StringComparer.Ordinal);

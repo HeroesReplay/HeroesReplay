@@ -613,6 +613,12 @@ public class HeroesProfileProvider : IReplayProvider
     private async Task<bool> CatchUpAsync(int currentMin, HeroesProfileReplay found)
     {
         HeroesProfileApiSettings api = settings.HeroesProfileApi;
+        if (api.StandardMaxReplayAge <= TimeSpan.Zero)
+        {
+            // Zero turns catch-up off: no newest-id lookup and no log line per listing (#217).
+            return false;
+        }
+
         DateTime now = DateTime.UtcNow;
         if (StandardCatchUp.Age(found, now) is not TimeSpan age || age <= api.StandardMaxReplayAge)
         {
