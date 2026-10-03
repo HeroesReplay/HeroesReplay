@@ -227,12 +227,14 @@ public class Engine : IEngine
                 loadedReplay.Replay?.ReplayVersion
             );
             Task<LoadedReplay> nextLoad = null;
+            bool marked = false;
             ReplaySessionKind session;
             try
             {
                 session = await gameManager
                     .LaunchAndSpectate(
                         loadedReplay,
+                        outcome => marked = MarkSpectatedWhenFinal(loadedReplay, outcome),
                         () =>
                         {
                             nextLoad = StartNextLoad(loadedReplay);
@@ -348,10 +350,9 @@ public class Engine : IEngine
                     frontAttempts.Remove(playedId);
                 }
 
-                WorkState completed = WorkState.VerifiedCompleted;
-                if (WorkEnvelope.CountsAsPlayed(completed))
+                if (!marked)
                 {
-                    replayProvider.MarkSpectated(loadedReplay);
+                    MarkSpectatedWhenFinal(loadedReplay, session);
                 }
             }
 
@@ -380,6 +381,38 @@ public class Engine : IEngine
 
         statusStore.MarkIdle();
         await Task.Delay(TimeSpan.FromSeconds(5), consoleTokenProvider.Token).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
+    /// A verified match is written to spectated-ids as soon as its outcome is known, before the
+    /// report scenes and the next replay's launch. A stop or a kill during the report then
+    /// cannot play it again. Held, deferred, and requeued replays are not marked.
+    /// </summary>
+    private bool MarkSpectatedWhenFinal(LoadedReplay loaded, ReplaySessionKind session)
+    {
+        if (session != ReplaySessionKind.Played)
+        {
+            return false;
+        }
+
+        WorkState completed = WorkState.VerifiedCompleted;
+        if (!WorkEnvelope.CountsAsPlayed(completed))
+        {
+            return false;
+        }
+
+        try
+        {
+            replayProvider.MarkSpectated(loaded);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not mark replay {ReplayId} spectated.", loaded?.ReplayId);
+            return false;
+        }
+
+        logger.LogInformation("Replay {ReplayId} is marked spectated.", loaded?.ReplayId);
         return true;
     }
 

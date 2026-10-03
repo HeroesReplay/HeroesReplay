@@ -44,6 +44,7 @@ public class GameManager : IGameManager
     private readonly ILogger<GameManager> logger;
     private readonly MediaPolicyAttemptLog mediaPolicy;
     private readonly IGameData gameData;
+    private readonly CancellationTokenProvider tokenProvider;
 
     public GameManager(
         AppSettings settings,
@@ -58,7 +59,8 @@ public class GameManager : IGameManager
         RecordingClock recordingClock,
         ILogger<GameManager> logger,
         MediaPolicyAttemptLog mediaPolicy,
-        IGameData gameData
+        IGameData gameData,
+        CancellationTokenProvider tokenProvider
     )
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -80,10 +82,13 @@ public class GameManager : IGameManager
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.mediaPolicy = mediaPolicy ?? throw new ArgumentNullException(nameof(mediaPolicy));
         this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
+        this.tokenProvider =
+            tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
     }
 
     public async Task<ReplaySessionKind> LaunchAndSpectate(
         LoadedReplay loadedReplay,
+        Action<ReplaySessionKind> outcomeKnown,
         Func<Task<LoadedReplay>> whileReporting
     )
     {
@@ -207,8 +212,7 @@ public class GameManager : IGameManager
                 {
                     ParkWaitingScene();
                 }
-                RecordRedemption(loadedReplay, spectator.Outcome);
-                return ReplaySession.Classify(spectator.Outcome);
+                return DecideOutcome(loadedReplay, outcomeKnown);
             }
         }
         finally
@@ -267,20 +271,95 @@ public class GameManager : IGameManager
             }
         }
 
+        return await FinishSessionAsync(
+                loadedReplay,
+                enteredMatch,
+                obsSession,
+                outcomeKnown,
+                whileReporting
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The recording is stopped, its publication is decided, and Heroes is closed. The outcome
+    /// is heard first, then the report scenes run and the next replay launches behind them.
+    /// </summary>
+    internal async Task<ReplaySessionKind> FinishSessionAsync(
+        LoadedReplay loadedReplay,
+        bool enteredMatch,
+        bool obsSession,
+        Action<ReplaySessionKind> outcomeKnown,
+        Func<Task<LoadedReplay>> whileReporting
+    )
+    {
+        ReplaySessionKind kind = DecideOutcome(loadedReplay, outcomeKnown);
+        await ReportAndHandOffAsync(enteredMatch, obsSession, whileReporting).ConfigureAwait(false);
+        return kind;
+    }
+
+    /// <summary>
+    /// The outcome is final here. The redemption and the caller hear it now, before the report
+    /// scenes and the next replay's launch, so a stop or a kill during the report cannot lose it.
+    /// </summary>
+    private ReplaySessionKind DecideOutcome(
+        LoadedReplay loadedReplay,
+        Action<ReplaySessionKind> outcomeKnown
+    )
+    {
+        ReplaySessionKind kind = ReplaySession.Classify(spectator.Outcome);
+        RecordRedemption(loadedReplay, spectator.Outcome);
+        try
+        {
+            outcomeKnown?.Invoke(kind);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Could not record the {Session} outcome of replay {ReplayId}.",
+                kind,
+                loadedReplay?.ReplayId
+            );
+        }
+
+        return kind;
+    }
+
+    /// <summary>
+    /// The report scenes and the next replay's launch, then this session's OBS connection ends.
+    /// A stop skips the report or cuts it short, and the next replay is not launched.
+    /// </summary>
+    private async Task ReportAndHandOffAsync(
+        bool enteredMatch,
+        bool obsSession,
+        Func<Task<LoadedReplay>> whileReporting
+    )
+    {
+        bool reports =
+            enteredMatch
+            && obsSession
+            && (
+                spectator.Outcome == MatchOutcome.VerifiedCompleted
+                || spectator.Outcome == MatchOutcome.AwardScreen
+            );
+        if (reports && tokenProvider.Token.IsCancellationRequested)
+        {
+            logger.LogInformation(
+                "Spectate is stopping. The report scenes are skipped and the next replay is not launched."
+            );
+            reports = false;
+        }
+
         try
         {
             // A verified match or an award screen preloads the next replay and runs the report scenes.
-            if (
-                enteredMatch
-                && obsSession
-                && (
-                    spectator.Outcome == MatchOutcome.VerifiedCompleted
-                    || spectator.Outcome == MatchOutcome.AwardScreen
-                )
-            )
+            if (reports)
             {
                 Task<LoadedReplay> nextLoad = InvokeNextLoad(whileReporting);
-                using var cutReport = new CancellationTokenSource();
+                using var cutReport = CancellationTokenSource.CreateLinkedTokenSource(
+                    tokenProvider.Token
+                );
                 Task report = obsController.CycleReportAsync(cutReport.Token);
                 Task<NextMatchLaunch> launch = LaunchNextDuringReportAsync(
                     nextLoad,
@@ -332,9 +411,6 @@ public class GameManager : IGameManager
                 obsController.EndSession();
             }
         }
-
-        RecordRedemption(loadedReplay, spectator.Outcome);
-        return ReplaySession.Classify(spectator.Outcome);
     }
 
     public MatchOutcome LastOutcome => spectator.Outcome;
@@ -580,10 +656,19 @@ public class GameManager : IGameManager
             return NextMatchLaunch.NotStarted;
         }
 
+        // services stop gives spectate 20 s to exit. Every wait below ends on the stop request,
+        // so a stop during the report never waits out the hold or launches the next replay.
+        CancellationToken stop = tokenProvider.Token;
         DateTimeOffset exitBy = DateTimeOffset.UtcNow.AddSeconds(20);
         while (gameController.IsGameRunning() && DateTimeOffset.UtcNow < exitBy)
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+            if (
+                !await WaitUnlessStoppingAsync(TimeSpan.FromMilliseconds(500), stop)
+                    .ConfigureAwait(false)
+            )
+            {
+                return HandOffStopped(next);
+            }
         }
 
         if (gameController.IsGameRunning())
@@ -596,11 +681,21 @@ public class GameManager : IGameManager
             "Waiting {Seconds:0}s for Battle.net to finish closing the previous Heroes session.",
             ClientRelaunch.SettleAfterExit.TotalSeconds
         );
-        await Task.Delay(ClientRelaunch.SettleAfterExit).ConfigureAwait(false);
+        if (
+            !await WaitUnlessStoppingAsync(ClientRelaunch.SettleAfterExit, stop)
+                .ConfigureAwait(false)
+        )
+        {
+            return HandOffStopped(next);
+        }
+
         TimeSpan beforeNext = NextReplayHold.Duration(
             settings.OBS?.BeforeNextReplay ?? NextReplayHold.Default
         );
-        await HoldBeforeNextLaunchAsync(report, beforeNext).ConfigureAwait(false);
+        if (!await HoldBeforeNextLaunchAsync(report, beforeNext, stop).ConfigureAwait(false))
+        {
+            return HandOffStopped(next);
+        }
 
         // Heroes is closed here, so Variables.txt can be repaired. The next session starts with
         // this client already running and could only warn (#206).
@@ -622,7 +717,13 @@ public class GameManager : IGameManager
         DateTimeOffset seenBy = DateTimeOffset.UtcNow.AddMinutes(2);
         while (!gameController.IsGameRunning() && DateTimeOffset.UtcNow < seenBy)
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+            if (
+                !await WaitUnlessStoppingAsync(TimeSpan.FromMilliseconds(500), stop)
+                    .ConfigureAwait(false)
+            )
+            {
+                return HandOffStopped(next);
+            }
         }
 
         if (!gameController.IsGameRunning())
@@ -712,7 +813,10 @@ public class GameManager : IGameManager
                 break;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            if (!await WaitUnlessStoppingAsync(TimeSpan.FromSeconds(1), stop).ConfigureAwait(false))
+            {
+                return HandOffStopped(next);
+            }
         }
 
         if (!gameController.IsGameRunning())
@@ -727,25 +831,37 @@ public class GameManager : IGameManager
         return NextMatchLaunch.ProcessOnly;
     }
 
-    private async Task HoldBeforeNextLaunchAsync(Task report, TimeSpan hold)
+    /// <summary>
+    /// True when the hold and the report cycle are done and the next replay may launch. False as
+    /// soon as spectate is stopping: the hold ends at once and the next replay is not launched.
+    /// </summary>
+    internal async Task<bool> HoldBeforeNextLaunchAsync(
+        Task report,
+        TimeSpan hold,
+        CancellationToken stop
+    )
     {
         if (hold <= TimeSpan.Zero)
         {
-            return;
+            return !stop.IsCancellationRequested;
         }
 
         logger.LogInformation(
             "Waiting {Hold} before launching the next replay so match-report, prediction-report, and request-queue can finish.",
             hold
         );
-        Task pause = Task.Delay(hold);
+        Task pause = Task.Delay(hold, stop);
         Task finished = await Task.WhenAny(pause, report).ConfigureAwait(false);
+        if (pause.IsCanceled)
+        {
+            return false;
+        }
+
         if (ReferenceEquals(finished, report))
         {
             await ObserveReportAsync(report).ConfigureAwait(false);
             ShowWaitingSceneBeforeNextLaunch();
-            await pause.ConfigureAwait(false);
-            return;
+            return await RanOutAsync(pause).ConfigureAwait(false);
         }
 
         if (!report.IsCompleted)
@@ -757,6 +873,33 @@ public class GameManager : IGameManager
         }
 
         ShowWaitingSceneBeforeNextLaunch();
+        return !stop.IsCancellationRequested;
+    }
+
+    /// <summary>True when <paramref name="delay"/> ran out. False as soon as spectate is stopping.</summary>
+    private static Task<bool> WaitUnlessStoppingAsync(TimeSpan delay, CancellationToken stop) =>
+        RanOutAsync(Task.Delay(delay, stop));
+
+    private static async Task<bool> RanOutAsync(Task pause)
+    {
+        try
+        {
+            await pause.ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    private NextMatchLaunch HandOffStopped(LoadedReplay next)
+    {
+        logger.LogInformation(
+            "Spectate is stopping. The handoff to next replay {ReplayId} ends here, and that replay stays queued for the next start.",
+            next?.ReplayId
+        );
+        return NextMatchLaunch.NotStarted;
     }
 
     private async Task ObserveReportAsync(Task report)

@@ -6,8 +6,14 @@ namespace HeroesReplay.Core.Spectating.Session;
 
 public interface IGameManager
 {
+    /// <summary>
+    /// Plays one replay through to the next replay's handoff. <paramref name="outcomeKnown"/>
+    /// hears the session's outcome once, as soon as it is final: after the recording stops and
+    /// Heroes closes, before <paramref name="whileReporting"/> and the report scenes.
+    /// </summary>
     Task<ReplaySessionKind> LaunchAndSpectate(
         LoadedReplay loadedReplay,
+        Action<ReplaySessionKind> outcomeKnown,
         Func<Task<LoadedReplay>> whileReporting
     );
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
@@ -478,9 +479,20 @@ public sealed class ReplayCacheProvider : IReplayProvider
         }
     }
 
+    /// <summary>
+    /// The id reaches the disk before this returns, so a kill or a power cut during the report
+    /// scenes that follow cannot play the replay again.
+    /// </summary>
     private void AppendPlayed(int replayId)
     {
-        File.AppendAllText(PlayedPath(), replayId + Environment.NewLine);
+        using var stream = new FileStream(
+            PlayedPath(),
+            FileMode.Append,
+            FileAccess.Write,
+            FileShare.Read
+        );
+        stream.Write(Encoding.UTF8.GetBytes(replayId + Environment.NewLine));
+        stream.Flush(flushToDisk: true);
     }
 
     private void AppendQuarantine(int replayId)
