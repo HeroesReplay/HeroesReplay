@@ -79,7 +79,18 @@ public static class MediaRetention
                 result
             );
         }
-        DeleteOldContexts(settings.ContextsDirectory, protectedId, keepBefore, dropBefore, result);
+        TimeSpan grace =
+            settings.Retention?.UnpublishedGrace > TimeSpan.Zero
+                ? settings.Retention.UnpublishedGrace
+                : TimeSpan.FromHours(1);
+        DeleteOldContexts(
+            settings.ContextsDirectory,
+            protectedId,
+            keepBefore,
+            dropBefore,
+            utcNow - grace,
+            result
+        );
         return result;
     }
 
@@ -136,6 +147,7 @@ public static class MediaRetention
         string protectedId,
         DateTimeOffset keepBefore,
         DateTimeOffset dropBefore,
+        DateTimeOffset quietBefore,
         RetentionSweep result
     )
     {
@@ -175,14 +187,24 @@ public static class MediaRetention
                 continue;
             }
 
-            // The spectator writes the YouTube entry when its session ends, before the next
-            // context exists. An older context with a recording and no entry can never be
-            // published, so its mp4 goes on this sweep, not after VideoMaxAgeDays (#204).
+            // The spectator writes the YouTube entry seconds after OBS stops. A recording with no
+            // entry that has not been written for UnpublishedGrace can never be published, so it
+            // goes now, not after VideoMaxAgeDays (#204). The newest context by time is not
+            // always the live session, so the file's own write time protects it (#212).
             if (videos.Length > 0 && !remoteUpload)
             {
                 foreach (FileInfo video in videos)
                 {
-                    DeleteFile(video.FullName, result, warning: null);
+                    if (video.LastWriteTimeUtc >= quietBefore.UtcDateTime)
+                    {
+                        continue;
+                    }
+
+                    DeleteFile(
+                        video.FullName,
+                        result,
+                        "Removed recording that was never uploaded: " + video.FullName
+                    );
                 }
 
                 continue;
