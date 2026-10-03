@@ -3,7 +3,7 @@
 # gitignored secrets from 1Password. Scene paths in Default.json are relative to obs\.
 # heroesreplay rewrites the live collection to this folder when OBS is closed. Pass the
 # names when OBS:ProfileName or OBS:SceneCollectionName is not HeroesReplay on this machine.
-# See AGENTS.md and .grok/skills/op-service-account/SKILL.md.
+# See AGENTS.md and .agents/skills/op-service-account/SKILL.md.
 param(
     [string]$ProfileName = 'HeroesReplay',
     [string]$SceneCollectionName = 'HeroesReplay'

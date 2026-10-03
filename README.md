@@ -143,7 +143,7 @@ The solution file is **`heroes-replay.slnx`** (XML). Do not add a parallel `.sln
 
 ## Agent instructions
 
-See [AGENTS.md](AGENTS.md). Repo skills live in [`.grok/skills/`](.grok/skills/).
+See [AGENTS.md](AGENTS.md). Repo skills live in [`.agents/skills/`](.agents/skills/).
 
 ## License
 

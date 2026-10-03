@@ -34,7 +34,7 @@ Put a new type in the slice that uses it. Move it to `Shared` only when two or m
 
 ## Before editing
 
-1. Load the matching skill under `.grok/skills/` (HeroesReplay skills and the vendored official .NET skills).
+1. Load the matching skill under `.agents/skills/` (HeroesReplay skills and the vendored official .NET skills).
 2. For generic .NET work, use the vendored `dotnet/skills` set in that folder (`csharp-refactoring`, MSBuild, NuGet, test, diagnostics, upgrade).
 3. Format with CSharpier. Do not hand-format.
 
@@ -206,28 +206,30 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 
 | Skill | Use when |
 | --- | --- |
-| `.grok/skills/heroes-replay-cli` | spectate, check, calculators, secrets, `op://` |
-| `.grok/skills/op-service-account` | `OP_SERVICE_ACCOUNT`, fill secrets on a new clone |
-| `.grok/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, test categories |
-| `.grok/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
-| `.grok/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
-| `.grok/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. Binary is ffmpeg 9.0.2 at `C:\ffmpeg\bin`. |
-| `.grok/skills/release-install` | Install production from the GitHub Release zip instead of cloning and building. |
+| `.agents/skills/heroes-replay-cli` | spectate, check, calculators, secrets, `op://` |
+| `.agents/skills/op-service-account` | `OP_SERVICE_ACCOUNT`, fill secrets on a new clone |
+| `.agents/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, test categories |
+| `.agents/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
+| `.agents/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
+| `.agents/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. Binary is ffmpeg 9.0.2 at `C:\ffmpeg\bin`. |
+| `.agents/skills/release-install` | Install production from the GitHub Release zip instead of cloning and building. |
 
 Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`, `/ffmpeg`, `/release-install`. `csharp-solid` is also in this folder.
 
 ## Official .NET skills
 
-These are installed under `.grok/skills/<name>/` from [dotnet/skills](https://github.com/dotnet/skills) commit `e115891bd2ac` (MIT, `.grok/skills/dotnet-skills.LICENSE.txt`). Load the skill whose name matches the task. Each `SKILL.md` is the source of truth for when to use it.
+These are installed under `.agents/skills/<name>/` from [dotnet/skills](https://github.com/dotnet/skills) commit `e115891bd2ac` (MIT, `.agents/skills/dotnet-skills.LICENSE.txt`). Load the skill whose name matches the task. Each `SKILL.md` is the source of truth for when to use it.
 
 | Plugin | Skills |
 | --- | --- |
 | `dotnet` | `csharp-refactoring`, `setup-local-sdk` |
-| `dotnet-upgrade` | `dotnet-aot-compat`, `migrate-dotnet8-to-dotnet9`, `migrate-dotnet9-to-dotnet10`, `migrate-dotnet10-to-dotnet11`, `migrate-nullable-references`, `thread-abort-migration` |
+| `dotnet-upgrade` | `dotnet-aot-compat`, `migrate-dotnet10-to-dotnet11`, `migrate-nullable-references` |
 | `dotnet-msbuild` | `binlog-failure-analysis`, `binlog-generation`, `build-parallelism`, `build-perf-baseline`, `build-perf-diagnostics`, `check-bin-obj-clash`, `copy-to-output-directory`, `directory-build-organization`, `eval-performance`, `extension-points`, `including-generated-files`, `incremental-build`, `item-management`, `msbuild-antipatterns`, `msbuild-modernization`, `property-patterns`, `resolve-project-references`, `target-authoring` |
 | `dotnet-nuget` | `convert-to-cpm` |
-| `dotnet-test` | `assertion-quality`, `code-testing-agent`, `code-testing-extensions`, `coverage-analysis`, `crap-score`, `detect-static-dependencies`, `filter-syntax`, `find-untested-sources`, `generate-testability-wrappers`, `grade-tests`, `migrate-static-to-wrapper`, `mtp-hot-reload`, `platform-detection`, `run-tests`, `scaffold-dotnet-test-project`, `test-analysis-extensions`, `test-anti-patterns`, `test-gap-analysis`, `test-smell-detection`, `test-tagging`, `testability-obstacle`, `writing-mstest-tests` |
-| `dotnet-diag` | `analyzing-dotnet-performance`, `android-tombstone-symbolication`, `apple-crash-symbolication`, `clr-activation-debugging`, `dotnet-trace-collect`, `dump-collect`, `microbenchmarking` |
+| `dotnet-test` | `assertion-quality`, `code-testing-agent`, `code-testing-extensions`, `coverage-analysis`, `crap-score`, `detect-static-dependencies`, `filter-syntax`, `find-untested-sources`, `generate-testability-wrappers`, `grade-tests`, `migrate-static-to-wrapper`, `mtp-hot-reload`, `platform-detection`, `run-tests`, `scaffold-dotnet-test-project`, `test-analysis-extensions`, `test-anti-patterns`, `test-gap-analysis`, `test-smell-detection`, `test-tagging`, `testability-obstacle` |
+| `dotnet-diag` | `analyzing-dotnet-performance`, `clr-activation-debugging`, `dotnet-trace-collect`, `dump-collect`, `microbenchmarking` |
+
+Not vendored because they do not apply to this repo: `migrate-dotnet8-to-dotnet9` and `migrate-dotnet9-to-dotnet10` (already on .NET 10), `thread-abort-migration` (no .NET Framework code), `writing-mstest-tests` (tests use xUnit), and `android-tombstone-symbolication` and `apple-crash-symbolication` (Windows only). Some vendored skills still point to `writing-mstest-tests` for MSTest work. Ignore those pointers.
 
 Grok already provides `review`, `create-skill`, and `long-running-background-tasks`. They stay with the tool and are not copied into this repo.
 
