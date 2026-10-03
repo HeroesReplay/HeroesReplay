@@ -25,7 +25,9 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 
 `services start`, `heroesreplay update install-obs` (run by `apply-release.ps1`), and an OBS launch by the spectator all go through `ObsCollectionPatcher`.
 
-- **Never while OBS runs.** The result is `Deferred`, and the change happens the next time HeroesReplay finds OBS closed. A release installed while OBS streams is not lost.
+- **Never over the active collection.** While OBS runs, `services start`, `update install-obs`, and the stream reconcile only defer (`Deferred`).
+- **Live swap, between replays.** When the deferred change is a new template, the spectator's next `BeginSession` puts it in without stopping the stream or a recording (`OBS:LiveCollectionSwap`, default true; `ObsLiveCollectionSwap`). It writes the new layout to the spare collection `{SceneCollectionName}-next`, switches OBS to it (OBS saves the old one as it leaves), rewrites the main file, which is no longer active, with a backup and the template's record, and switches back to the main name and the scene that was on program. It needs `{SceneCollectionName}` active; another active collection is left alone. OBS lists collection files only when it starts, so the first swap on a machine creates the spare through OBS, which shows an empty collection until the switch back. If the switch back fails, OBS stays on the spare, which has the new layout under the wrong name, and an error is logged. Proven on ASA-SERVER (OBS 32.2.2): stream and recording stayed connected through every switch.
+- **Closed OBS.** With the swap off, or when it cannot run, the change happens the next time HeroesReplay finds OBS closed. A release installed while OBS streams is not lost.
 - **Managed or custom.** `%LOCALAPPDATA%\HeroesReplay\obs\managed-collections.json` records, per live collection file, the template it was last written from (SHA-256) and its scene and source names. The collection is managed when its names equal one of:
   - that record
   - this install's template

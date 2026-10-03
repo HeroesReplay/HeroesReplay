@@ -182,7 +182,13 @@ public static class ObsCollectionPatcher
         {
             return update.ObsIsRunning
                 ? ObsCollectionApplyResult.Defer(
-                    "This install's OBS collection template is newer than the live collection. OBS is running, so the collection is replaced the next time HeroesReplay finds OBS closed."
+                    "This install's OBS collection template is newer than the live collection. OBS is running, so the collection is replaced the next time HeroesReplay finds OBS closed.",
+                    new ObsCollectionReplacement(
+                        target.DestinationPath,
+                        Installed(target),
+                        target.Hash,
+                        target.TemplateNames.Order(StringComparer.Ordinal).ToList()
+                    )
                 )
                 : Install(target, "Replaced the live OBS collection with this install's template.");
         }
@@ -248,24 +254,53 @@ public static class ObsCollectionPatcher
     private static ObsCollectionApplyResult Install(Target target, string message)
     {
         ObsCollectionUpdate update = target.Update;
-        string installed = ObsCollectionPaths.Rewrite(
-            target.Template,
-            target.AssetRoot,
-            update.DataDirectory
-        );
-        if (!string.IsNullOrWhiteSpace(update.CollectionName))
-        {
-            installed = ObsNames.WithCollectionName(installed, update.CollectionName);
-        }
-
         string backup = ObsFileTransaction.Write(
             target.DestinationPath,
-            installed,
+            Installed(target),
             update.Managed.BackupDirectory,
             update.UtcNow
         );
         Remember(target, target.TemplateNames);
         return ObsCollectionApplyResult.Installed(message + Saved(backup), backup);
+    }
+
+    /// <summary>The template as this install writes it: its paths, under the collection's name.</summary>
+    private static string Installed(Target target)
+    {
+        ObsCollectionUpdate update = target.Update;
+        string installed = ObsCollectionPaths.Rewrite(
+            target.Template,
+            target.AssetRoot,
+            update.DataDirectory
+        );
+        return string.IsNullOrWhiteSpace(update.CollectionName)
+            ? installed
+            : ObsNames.WithCollectionName(installed, update.CollectionName);
+    }
+
+    /// <summary>
+    /// Writes <paramref name="replacement"/> over the live collection file and records its
+    /// template. Only for a collection OBS does not have active (<see cref="ObsLiveCollectionSwap"/>).
+    /// </summary>
+    public static string WriteReplacement(
+        ObsCollectionReplacement replacement,
+        ObsManagedFiles managed,
+        DateTime utcNow
+    )
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+        ArgumentNullException.ThrowIfNull(managed);
+        string backup = ObsFileTransaction.Write(
+            replacement.DestinationPath,
+            replacement.Contents,
+            managed.BackupDirectory,
+            utcNow
+        );
+        managed.Save(
+            replacement.DestinationPath,
+            new ObsManagedCollection(replacement.TemplateSha256, replacement.Names, utcNow)
+        );
+        return backup;
     }
 
     private static void Remember(Target target, IReadOnlyList<string> names) =>
@@ -332,12 +367,17 @@ public sealed record ObsNameDrift(IReadOnlyList<string> Extra, IReadOnlyList<str
 /// <param name="Drift">The live collection is custom or unreadable and was left as it is.</param>
 /// <param name="Deferred">A write is due but OBS is running; it happens when OBS is closed.</param>
 /// <param name="Backup">The copy of the collection taken before the write, when there was one.</param>
+/// <param name="Replacement">
+/// When the write is deferred because OBS runs and the template changed: the collection this
+/// install would write, for <see cref="ObsLiveCollectionSwap"/>.
+/// </param>
 public sealed record ObsCollectionApplyResult(
     bool Wrote,
     bool Drift,
     string Message,
     bool Deferred = false,
-    string Backup = null
+    string Backup = null,
+    ObsCollectionReplacement Replacement = null
 )
 {
     public static ObsCollectionApplyResult Installed(string message, string backup = null) =>
@@ -350,6 +390,20 @@ public sealed record ObsCollectionApplyResult(
 
     public static ObsCollectionApplyResult Drifted(string message) => new(false, true, message);
 
-    public static ObsCollectionApplyResult Defer(string message) =>
-        new(false, false, message, Deferred: true);
+    public static ObsCollectionApplyResult Defer(
+        string message,
+        ObsCollectionReplacement replacement = null
+    ) => new(false, false, message, Deferred: true, Replacement: replacement);
 }
+
+/// <summary>A managed live collection's new contents, written while OBS has it inactive.</summary>
+/// <param name="DestinationPath">The live collection file.</param>
+/// <param name="Contents">The template with this install's paths and the collection's name.</param>
+/// <param name="TemplateSha256">The template's hash, recorded once the file is written.</param>
+/// <param name="Names">The template's scene and source names, recorded with it.</param>
+public sealed record ObsCollectionReplacement(
+    string DestinationPath,
+    string Contents,
+    string TemplateSha256,
+    IReadOnlyList<string> Names
+);
