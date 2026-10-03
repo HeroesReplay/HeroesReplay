@@ -55,7 +55,7 @@ public class ObsController : IObsController
             ObsBackoff.Default,
             Thread.Sleep,
             TimeSpan.FromSeconds(10),
-            PatchInstalledCollection,
+            () => PatchInstalledCollection(),
             arm.IsArmed,
             () =>
                 ObsValidator.Validate(
@@ -73,11 +73,12 @@ public class ObsController : IObsController
 
     public void BeginSession()
     {
-        PatchInstalledCollection();
+        ObsCollectionApplyResult patch = PatchInstalledCollection();
         coordinator.EnsureIdentified();
+        SwapLiveCollection(patch);
     }
 
-    private void PatchInstalledCollection()
+    private ObsCollectionApplyResult PatchInstalledCollection()
     {
         try
         {
@@ -93,14 +94,65 @@ public class ObsController : IObsController
             {
                 logger.LogWarning("OBS collection was not updated. {Reason}", result.Message);
             }
-            else if (result.Wrote || result.Deferred)
+            else if (result.Wrote || result.Deferred && result.Replacement == null)
             {
                 logger.LogInformation("{Reason}", result.Message);
             }
+
+            return result;
         }
         catch (Exception e)
         {
             logger.LogWarning(e, "OBS collection paths were not updated.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Between replays: a newer collection template that waits only because OBS runs goes in
+    /// now, through the spare collection, so a release with OBS changes needs no stream stop.
+    /// </summary>
+    private void SwapLiveCollection(ObsCollectionApplyResult patch)
+    {
+        if (patch?.Replacement == null)
+        {
+            return;
+        }
+
+        if (settings.OBS?.LiveCollectionSwap != true)
+        {
+            logger.LogInformation("{Reason}", patch.Message);
+            return;
+        }
+
+        try
+        {
+            ObsLiveSwapResult swap = ObsLiveCollectionSwap.Run(
+                new ObsWebsocketCollectionSwitch(obs),
+                patch.Replacement,
+                ObsNames.SceneCollection(settings.OBS),
+                ObsManagedFiles.ForThisUser(),
+                DateTime.UtcNow
+            );
+            if (swap.Stranded)
+            {
+                logger.LogError("OBS collection swap. {Reason}", swap.Message);
+            }
+            else if (swap.Swapped)
+            {
+                logger.LogInformation("{Reason}", swap.Message);
+            }
+            else
+            {
+                logger.LogWarning("OBS collection was not swapped. {Reason}", swap.Message);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "OBS collection was not swapped while OBS runs. It is replaced the next time HeroesReplay finds OBS closed."
+            );
         }
     }
 

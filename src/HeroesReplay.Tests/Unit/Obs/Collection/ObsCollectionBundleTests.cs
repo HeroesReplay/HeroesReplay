@@ -409,6 +409,15 @@ public class ObsCollectionBundleTests
             Assert.True(result.Deferred);
             Assert.Contains("OBS is running", result.Message, StringComparison.Ordinal);
             Assert.Equal(before, File.ReadAllText(destination));
+
+            // A replacement is due, so the result carries it for a live swap.
+            ObsCollectionReplacement replacement = Assert.IsType<ObsCollectionReplacement>(
+                result.Replacement
+            );
+            Assert.Equal(Path.GetFullPath(destination), replacement.DestinationPath);
+            Assert.Equal(["bronze-image"], replacement.Names);
+            Assert.False(ObsCollectionPaths.ContainsCheckoutPath(replacement.Contents));
+            Assert.Contains("bronze.png", replacement.Contents, StringComparison.Ordinal);
         }
         finally
         {
