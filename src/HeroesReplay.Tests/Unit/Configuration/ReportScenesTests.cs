@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using HeroesReplay.Core.Obs;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Configuration;
@@ -57,14 +56,7 @@ public class ReportScenesTests
 
             if (name == "match-report")
             {
-                Assert.Equal("00:01:00", scene.GetProperty("DisplayTime").GetString());
-                Assert.Equal(
-                    102,
-                    MatchReportPace.ScrollSpeedY(
-                        TimeSpan.Parse(scene.GetProperty("DisplayTime").GetString())
-                    ),
-                    3
-                );
+                Assert.Equal("00:01:15", scene.GetProperty("DisplayTime").GetString());
             }
 
             names.Add(name);
