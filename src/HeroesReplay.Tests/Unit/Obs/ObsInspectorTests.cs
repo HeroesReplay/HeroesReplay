@@ -81,7 +81,7 @@ public class ObsInspectorTests : IDisposable
         Assert.Equal(12.35, inspection.Stats.CpuUsagePercent);
         Assert.Equal(1, inspection.Stats.RenderSkippedFrames);
         Assert.Equal(2, inspection.Stats.OutputSkippedFrames);
-        Assert.Equal(new ObsStreamService("rtmp_common", true), inspection.StreamService);
+        Assert.Equal(new ObsStreamService("rtmp_common", true, "Twitch"), inspection.StreamService);
         Assert.False(inspection.StreamArm.Armed);
         Assert.False(inspection.StreamArm.StreamingEnabled);
         Assert.False(inspection.StreamArm.MayStart);
@@ -142,7 +142,7 @@ public class ObsInspectorTests : IDisposable
     }
 
     [Fact]
-    public void StreamService_KeepsOnlyTheTypeAndWhetherAKeyIsSet()
+    public void StreamService_KeepsOnlyTheTypeTheNamedServiceAndWhetherAKeyIsSet()
     {
         var response = new JObject
         {
@@ -159,12 +159,34 @@ public class ObsInspectorTests : IDisposable
 
         Assert.Equal("rtmp_common", service.Type);
         Assert.True(service.KeySet);
+        Assert.Equal("Twitch", service.Service);
         Assert.Equal(
-            new[] { nameof(ObsStreamService.KeySet), nameof(ObsStreamService.Type) },
+            new[]
+            {
+                nameof(ObsStreamService.KeySet),
+                nameof(ObsStreamService.Service),
+                nameof(ObsStreamService.Type),
+            },
             typeof(ObsStreamService).GetProperties().Select(property => property.Name).Order()
         );
         Assert.False(ObsStreamService.Summarize(new JObject()).KeySet);
         Assert.False(ObsStreamService.Summarize(null).KeySet);
+        // A custom server is an address, not a service name, and is not kept.
+        Assert.Null(
+            ObsStreamService
+                .Summarize(
+                    new JObject
+                    {
+                        ["streamServiceType"] = "rtmp_custom",
+                        ["streamServiceSettings"] = new JObject
+                        {
+                            ["server"] = "rtmp://example.test/live",
+                            ["key"] = FakeObs.StreamKey,
+                        },
+                    }
+                )
+                .Service
+        );
     }
 
     private ObsInspection Inspect(FakeObs obs) =>

@@ -46,6 +46,28 @@ internal sealed class FakeObs : IObsReadSessionFactory
             },
         };
     public byte[] Png { get; set; } = TinyPng.Create(32, 18);
+
+    /// <summary>GetVideoSettings: a 1920x1080 canvas scaled to 720p at 59.94 FPS.</summary>
+    public JObject Video { get; } =
+        new()
+        {
+            ["fpsNumerator"] = 60000,
+            ["fpsDenominator"] = 1001,
+            ["baseWidth"] = 1920,
+            ["baseHeight"] = 1080,
+            ["outputWidth"] = 1280,
+            ["outputHeight"] = 720,
+        };
+
+    /// <summary>GetProfileParameter answers, as the packaged basic.ini sets them.</summary>
+    public Dictionary<(string Category, string Name), string> ProfileParameters { get; } =
+        new()
+        {
+            [("Output", "Mode")] = "Simple",
+            [("SimpleOutput", "RecFormat2")] = "mp4",
+            [("SimpleOutput", "RecEncoder")] = "qsv_h264",
+            [("SimpleOutput", "StreamEncoder")] = "x264",
+        };
     public int Opened { get; private set; }
     public int Disposed { get; private set; }
     public string OpenedEndpoint { get; private set; }
@@ -199,15 +221,18 @@ internal sealed class FakeObs : IObsReadSessionFactory
                 ["currentSceneCollectionName"] = Collection,
                 ["sceneCollections"] = new JArray(Collection),
             },
-            "GetVideoSettings" => new JObject
+            "GetVideoSettings" => (JObject)Video.DeepClone(),
+            "GetProfileParameter" => new JObject
             {
-                ["fpsNumerator"] = 60000,
-                ["fpsDenominator"] = 1001,
-                ["baseWidth"] = 1920,
-                ["baseHeight"] = 1080,
-                ["outputWidth"] = 1280,
-                ["outputHeight"] = 720,
+                ["parameterValue"] = ProfileParameters.TryGetValue(
+                    ((string)data?["parameterCategory"], (string)data?["parameterName"]),
+                    out string value
+                )
+                    ? value
+                    : null,
+                ["defaultParameterValue"] = null,
             },
+            "GetSourceFilterList" => Filters((string)data?["sourceName"]),
             "GetCurrentProgramScene" => new JObject
             {
                 ["currentProgramSceneName"] = ProgramScene,
@@ -396,6 +421,35 @@ internal sealed class FakeObs : IObsReadSessionFactory
             604,
             "The specified input does not support audio."
         );
+    }
+
+    /// <summary>GetSourceFilterList from the source's <c>filters</c> in the collection.</summary>
+    private JObject Filters(string sourceName)
+    {
+        JObject source = Sources()
+            .FirstOrDefault(candidate => (string)candidate["name"] == sourceName);
+        if (source == null)
+        {
+            throw new ObsRequestException("GetSourceFilterList", 600, "No source was found.");
+        }
+
+        return new JObject
+        {
+            ["filters"] = new JArray(
+                (source["filters"] as JArray ?? new JArray())
+                    .OfType<JObject>()
+                    .Select(
+                        (filter, index) =>
+                            new JObject
+                            {
+                                ["filterName"] = filter["name"],
+                                ["filterKind"] = filter["id"],
+                                ["filterEnabled"] = filter["enabled"] ?? true,
+                                ["filterIndex"] = index,
+                            }
+                    )
+            ),
+        };
     }
 
     private JObject Screenshot(string sourceName)

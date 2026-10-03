@@ -53,7 +53,18 @@ public class ObsController : IObsController
             Thread.Sleep,
             TimeSpan.FromSeconds(10),
             PatchInstalledCollection,
-            arm.IsArmed
+            arm.IsArmed,
+            () =>
+                ObsValidator.Validate(
+                    new ObsBorrowedReadSession(this.obs),
+                    new ObsInspectionSettings(
+                        settings.OBS,
+                        AppContext.BaseDirectory,
+                        settings.Location?.DataDirectory,
+                        arm.IsArmed(),
+                        arm.FilePath
+                    )
+                )
         );
     }
 

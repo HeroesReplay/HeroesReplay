@@ -19,6 +19,21 @@ public sealed record ObsContract(
     IReadOnlyList<ObsContractItem> Items
 )
 {
+    /// <summary>
+    /// The base (canvas) resolution the collection is laid out for: the scene items, the
+    /// full-canvas report browser sources, and the match report's one-canvas scroll. The output
+    /// (scaled) resolution is the machine's choice.
+    /// </summary>
+    public const int CanvasWidth = 1920;
+
+    public const int CanvasHeight = 1080;
+
+    /// <summary>Below this the stream and recordings stutter on the game's motion.</summary>
+    public const double MinimumFps = 30;
+
+    /// <summary>The named service (<c>rtmp_common</c>) the stream goes to.</summary>
+    public const string StreamService = "Twitch";
+
     public static ObsContract From(OBSSettings obs)
     {
         var scenes = new List<string>();

@@ -136,7 +136,7 @@ internal sealed class ObsWebsocketRecordSocket : IObsSession
                     "OBS websocket at "
                         + endpoint
                         + " did not identify in time. "
-                        + "OBS Studio 28+ uses obs-websocket 5 on port 4455 (Tools > WebSocket Server Settings)."
+                        + "OBS Studio 30.0+ (obs-websocket 5.3+) is required, on port 4455 (Tools > WebSocket Server Settings)."
                 );
             }
         }

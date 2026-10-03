@@ -1,7 +1,6 @@
 using System;
 using System.ComponentModel;
 using HeroesReplay.Core.Obs;
-using HeroesReplay.Core.Shared;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -16,10 +15,10 @@ namespace HeroesReplay.CLI.Mcp;
 [McpServerToolType]
 public sealed class ObsMcpTools
 {
-    public const string PasswordUnresolved = "obs.password_unresolved";
-    public const string SettingsUnreadable = "obs.settings_unreadable";
-    public const string RequestFailed = "obs.request_failed";
-    public const string SourceNotFound = "obs.source_not_found";
+    public const string PasswordUnresolved = ObsLiveRead.PasswordUnresolved;
+    public const string SettingsUnreadable = ObsLiveRead.SettingsUnreadable;
+    public const string RequestFailed = ObsLiveRead.RequestFailed;
+    public const string SourceNotFound = ObsLiveRead.SourceNotFound;
 
     private readonly IObsReadSessionFactory sessions;
     private readonly Func<ObsInspectionSettings> settings;
@@ -45,7 +44,7 @@ public sealed class ObsMcpTools
     ]
     public ObsInspection Inspect()
     {
-        ToolRun<ObsInspection> run = Run(ObsInspector.Inspect);
+        ObsLiveReadResult<ObsInspection> run = Run(ObsInspector.Inspect);
         return run.Value ?? ObsInspector.Unavailable(run.Settings, run.Code, run.Message);
     }
 
@@ -59,12 +58,12 @@ public sealed class ObsMcpTools
             UseStructuredContent = true
         ),
         Description(
-            "Compare the collection OBS has loaded with the packaged obs/Default.json contract without changing it. Findings have stable codes: obs.profile_mismatch, obs.collection_mismatch, obs.scene_missing, obs.source_missing, obs.source_kind_mismatch, obs.scene_item_missing, obs.file_missing, obs.runtime_file_missing, obs.path_stale, obs.url_invalid, obs.mic_enabled, obs.mic_muted, obs.collection_custom, obs.request_unavailable, obs.asset_missing. ok is false when any finding is an error."
+            "Compare the collection OBS has loaded with the packaged obs/Default.json contract without changing it. Findings have stable codes: obs.profile_mismatch, obs.collection_mismatch, obs.scene_missing, obs.source_missing, obs.source_kind_mismatch, obs.scene_item_missing, obs.file_missing, obs.runtime_file_missing, obs.path_stale, obs.url_invalid, obs.mic_enabled, obs.mic_muted, obs.collection_custom, obs.request_unavailable, obs.asset_missing, obs.canvas_mismatch, obs.fps_low, obs.profile_unreadable, obs.recording_format, obs.stream_key_missing, obs.stream_service_unexpected, obs.filter_missing. ok is false when any finding is an error."
         )
     ]
     public ObsValidation Validate()
     {
-        ToolRun<ObsValidation> run = Run(ObsValidator.Validate);
+        ObsLiveReadResult<ObsValidation> run = Run(ObsValidator.Validate);
         return run.Value ?? ObsValidator.Unavailable(run.Settings, run.Code, run.Message);
     }
 
@@ -89,7 +88,7 @@ public sealed class ObsMcpTools
             int width = ObsScreenshot.DefaultWidth
     )
     {
-        ToolRun<ObsScreenshot> run = Run(
+        ObsLiveReadResult<ObsScreenshot> run = Run(
             (session, _) => ObsScreenshot.Capture(session, source, width)
         );
         if (run.Value == null)
@@ -124,79 +123,6 @@ public sealed class ObsMcpTools
         };
     }
 
-    private sealed record ToolRun<T>(
-        T Value,
-        ObsInspectionSettings Settings,
-        string Code,
-        string Message
-    );
-
-    private ToolRun<T> Run<T>(Func<IObsReadSession, ObsInspectionSettings, T> read)
-        where T : class
-    {
-        ObsInspectionSettings current;
-        try
-        {
-            current = settings();
-        }
-        catch (Exception e)
-        {
-            return new ToolRun<T>(
-                null,
-                null,
-                SettingsUnreadable,
-                "Settings could not be loaded. " + e.Message
-            );
-        }
-
-        string password;
-        try
-        {
-            password = SecretResolver.Resolve(current.Obs?.WebSocketPassword);
-        }
-        catch (Exception e)
-        {
-            return new ToolRun<T>(
-                null,
-                current,
-                PasswordUnresolved,
-                "OBS:WebSocketPassword could not be resolved. " + e.Message
-            );
-        }
-
-        IObsReadSession session;
-        try
-        {
-            session = sessions.Open(current.Obs?.WebSocketEndpoint, password);
-        }
-        catch (ObsUnavailableException e)
-        {
-            return new ToolRun<T>(null, current, e.Code, e.Message);
-        }
-
-        using (session)
-        {
-            try
-            {
-                return new ToolRun<T>(read(session, current), current, null, null);
-            }
-            catch (ObsRequestException e)
-            {
-                return new ToolRun<T>(
-                    null,
-                    current,
-                    e.Status == ObsRequestException.ResourceNotFound
-                        ? SourceNotFound
-                        : RequestFailed,
-                    e.Message
-                );
-            }
-            catch (Exception e)
-            {
-                // A dropped connection or a malformed answer. Report it instead of a generic
-                // MCP error; no response body is part of the message.
-                return new ToolRun<T>(null, current, RequestFailed, e.Message);
-            }
-        }
-    }
+    private ObsLiveReadResult<T> Run<T>(Func<IObsReadSession, ObsInspectionSettings, T> read)
+        where T : class => ObsLiveRead.Run(sessions, settings, read);
 }
