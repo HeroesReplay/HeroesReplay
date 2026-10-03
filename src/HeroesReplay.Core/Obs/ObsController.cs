@@ -114,6 +114,7 @@ public class ObsController : IObsController
     /// </summary>
     private void SwapLiveCollection(ObsCollectionApplyResult patch)
     {
+        RecoverFromSpareCollection();
         if (patch?.Replacement == null)
         {
             return;
@@ -153,6 +154,33 @@ public class ObsController : IObsController
                 e,
                 "OBS collection was not swapped while OBS runs. It is replaced the next time HeroesReplay finds OBS closed."
             );
+        }
+    }
+
+    /// <summary>
+    /// An earlier swap that could not switch back left OBS on the spare collection. The template
+    /// record may already match, so this runs before every replay, not only on a new template (#214).
+    /// </summary>
+    private void RecoverFromSpareCollection()
+    {
+        try
+        {
+            ObsLiveSwapResult recovered = ObsLiveCollectionSwap.Recover(
+                new ObsWebsocketCollectionSwitch(obs),
+                ObsNames.SceneCollection(settings.OBS)
+            );
+            if (recovered?.Stranded == true)
+            {
+                logger.LogError("OBS collection swap. {Reason}", recovered.Message);
+            }
+            else if (recovered != null)
+            {
+                logger.LogWarning("OBS collection swap. {Reason}", recovered.Message);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Could not check whether OBS was left on the spare collection.");
         }
     }
 

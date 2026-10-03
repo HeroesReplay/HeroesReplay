@@ -96,6 +96,64 @@ public sealed class ObsLiveCollectionSwapTests : IDisposable
         Assert.False(result.Swapped);
         Assert.True(result.Stranded);
         Assert.Equal("HeroesReplay-next", obs.Current);
+        Assert.Equal(ObsLiveCollectionSwap.ReturnAttempts, obs.FailedSelects);
+    }
+
+    /// <summary>#214: the first swap creates an empty spare, and the switch back throws.</summary>
+    [Fact]
+    public void Run_FailedSwitchBackAfterCreatingTheSpare_ReportsStrandedInsteadOfThrowing()
+    {
+        var obs = new FakeObs(Scenes, "HeroesReplay") { FailSelect = "HeroesReplay" };
+
+        ObsLiveSwapResult result = Swap(obs);
+
+        Assert.True(result.Stranded);
+        Assert.False(result.Swapped);
+        Assert.Equal("HeroesReplay-next", obs.Current);
+        Assert.Contains("left 'HeroesReplay'", result.Message);
+    }
+
+    [Fact]
+    public void Run_RetriesTheSwitchBack_AndEndsOnTheMainCollection()
+    {
+        var obs = new FakeObs(Scenes, "HeroesReplay")
+        {
+            FailSelect = "HeroesReplay",
+            FailSelectTimes = 1,
+        };
+
+        ObsLiveSwapResult result = Swap(obs);
+
+        Assert.False(result.Stranded);
+        Assert.Equal("HeroesReplay", obs.Current);
+    }
+
+    /// <summary>#214: a later session switches back even though the template record already matches.</summary>
+    [Fact]
+    public void Recover_SwitchesAStrandedOBSBackToTheMainCollection()
+    {
+        File.WriteAllText(
+            Path.Combine(Scenes, "HeroesReplaynext.json"),
+            Collection("HeroesReplay-next", "new-layout")
+        );
+        var onSpare = new FakeObs(Scenes, "HeroesReplay-next", "HeroesReplay");
+        var onMain = new FakeObs(Scenes, "HeroesReplay", "HeroesReplay-next");
+
+        ObsLiveSwapResult recovered = ObsLiveCollectionSwap.Recover(
+            onSpare,
+            "HeroesReplay",
+            _ => { }
+        );
+        ObsLiveSwapResult untouched = ObsLiveCollectionSwap.Recover(
+            onMain,
+            "HeroesReplay",
+            _ => { }
+        );
+
+        Assert.False(recovered.Stranded);
+        Assert.Equal("HeroesReplay", onSpare.Current);
+        Assert.Null(untouched);
+        Assert.Empty(onMain.Selected);
     }
 
     [Fact]
@@ -125,7 +183,8 @@ public sealed class ObsLiveCollectionSwapTests : IDisposable
             ),
             "HeroesReplay",
             Managed(),
-            new DateTime(2026, 10, 3, 18, 0, 0, DateTimeKind.Utc)
+            new DateTime(2026, 10, 3, 18, 0, 0, DateTimeKind.Utc),
+            _ => { }
         );
 
     private ObsManagedFiles Managed() => new(Path.Combine(root, "managed"));
@@ -178,10 +237,16 @@ public sealed class ObsLiveCollectionSwapTests : IDisposable
             memory = $$"""{ "name": "{{name}}", "sources": [] }""";
         }
 
+        /// <summary>How many selects of <see cref="FailSelect"/> fail before OBS answers.</summary>
+        public int FailSelectTimes { get; init; } = int.MaxValue;
+
+        public int FailedSelects { get; private set; }
+
         public void Select(string name)
         {
-            if (name == FailSelect)
+            if (name == FailSelect && FailedSelects < FailSelectTimes)
             {
+                FailedSelects++;
                 throw new InvalidOperationException("OBS did not answer.");
             }
 
