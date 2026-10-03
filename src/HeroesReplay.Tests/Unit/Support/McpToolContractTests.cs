@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
-using HeroesReplay.CLI.Mcp;
+using HeroesReplay.CLI.Commands.Mcp;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Xunit;
