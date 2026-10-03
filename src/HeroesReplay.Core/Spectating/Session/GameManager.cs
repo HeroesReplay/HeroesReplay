@@ -796,7 +796,7 @@ public class GameManager : IGameManager
             return;
         }
 
-        loaded.PolicyAllowsRecording = snapshot?.Decision?.Record == true;
+        loaded.PolicyAllowsRecording = snapshot?.AllowsRecording == true;
         loaded.PolicyAllowsPublication = false;
     }
 

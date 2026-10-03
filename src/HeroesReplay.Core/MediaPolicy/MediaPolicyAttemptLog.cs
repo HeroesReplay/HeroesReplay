@@ -27,6 +27,15 @@ public sealed class MediaPolicySnapshot
 
     /// <summary>Always false. The record flag is not evidence that OBS started.</summary>
     public bool RecordingStarted { get; init; }
+
+    /// <summary>
+    /// The current settings' reason when a reused decision records but they would not (#204).
+    /// The stored decision is kept. Only this launch does not record.
+    /// </summary>
+    public string RecordingWithheld { get; init; }
+
+    /// <summary>This launch may record: the decision records and the current settings agree.</summary>
+    public bool AllowsRecording => Decision?.Record == true && RecordingWithheld == null;
 }
 
 public sealed class MediaPolicyAttemptLog
@@ -151,7 +160,10 @@ public sealed class MediaPolicyAttemptLog
             .ConfigureAwait(false);
         if (existing.Succeeded && existing.Manifest.Policy != null)
         {
-            return Reuse(attemptId, existing.Manifest);
+            return WithholdUnlessCurrentRecords(
+                Reuse(attemptId, existing.Manifest),
+                Evaluate(loaded, settings, utcNow, false, false, false, heroes)
+            );
         }
 
         if (!existing.Succeeded && existing.Reason != UploadAttemptReasons.ManifestMissing)
@@ -255,6 +267,37 @@ public sealed class MediaPolicyAttemptLog
             )
             .ConfigureAwait(false);
         return FromSave(attemptId, final, saved, reusedOnMatch: true);
+    }
+
+    /// <summary>
+    /// A decision stored under older settings (RecordingMode All, or before the replay expired)
+    /// must not record what the current settings refuse (#204).
+    /// </summary>
+    private MediaPolicySnapshot WithholdUnlessCurrentRecords(
+        MediaPolicySnapshot reused,
+        ReplayMediaDecision current
+    )
+    {
+        if (reused?.Decision?.Record != true || current == null || current.Record)
+        {
+            return reused;
+        }
+
+        logger.LogInformation(
+            "Replay {ReplayId} has a stored decision that records ({StoredReason}), but the current settings do not ({CurrentReason}). This launch does not record.",
+            reused.Decision.ReplayId,
+            reused.Decision.RecordingReason,
+            current.RecordingReason
+        );
+        return new MediaPolicySnapshot
+        {
+            AttemptId = reused.AttemptId,
+            Decision = reused.Decision,
+            Reused = reused.Reused,
+            Persisted = reused.Persisted,
+            RecordingStarted = false,
+            RecordingWithheld = current.RecordingReason,
+        };
     }
 
     private MediaPolicySnapshot Reuse(string attemptId, UploadAttemptManifest manifest)
