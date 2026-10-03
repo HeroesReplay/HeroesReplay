@@ -641,6 +641,27 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// The effective <c>OBS</c> section and <c>Location:DataDirectory</c> of the install in
+    /// <paramref name="installDirectory"/>, through <see cref="BuildConfiguration"/>, so the
+    /// <paramref name="environment"/> overlay and <c>HEROES_REPLAY_</c> variables apply as they do
+    /// for that install's roles. No secret is resolved.
+    /// </summary>
+    public static (OBSSettings Obs, string DataDirectory) LoadInstallObsSettings(
+        string installDirectory,
+        string environment
+    )
+    {
+        IConfigurationRoot configuration = BuildConfiguration(
+            Path.GetFullPath(installDirectory),
+            environment
+        );
+        return (
+            configuration.GetSection("OBS").Get<OBSSettings>() ?? new OBSSettings(),
+            configuration.GetSection("Location").Get<LocationSettings>()?.DataDirectory
+        );
+    }
+
+    /// <summary>
     /// The effective settings of the install in <paramref name="basePath"/>: appsettings.json,
     /// secrets, the <paramref name="environment"/> overlay, then <c>HEROES_REPLAY_</c> variables.
     /// The release update reads the install it replaces through this.

@@ -70,6 +70,12 @@ public class CliHelpTests
         Assert.Empty(root.Parse("update migrate-stream-arm --previous C:\\app").Errors);
         Assert.NotEmpty(root.Parse("update migrate-stream-arm").Errors);
         Assert.Empty(root.Parse("update install-obs --install C:\\app --environment prod").Errors);
+        // The exact arguments apply-release.ps1 passes when it installs a release.
+        Assert.Empty(
+            root.Parse(
+                "update install-obs --install C:\\app --previous C:\\app.previous --environment prod"
+            ).Errors
+        );
         // The exact arguments apply-release.ps1 passes to the health gate.
         Assert.Empty(
             root.Parse(

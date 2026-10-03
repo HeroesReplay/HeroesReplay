@@ -529,13 +529,19 @@ public class ServicesCommand : Command
             }
 
             string installDirectory = Path.GetDirectoryName(exe);
+            (OBSSettings obs, string dataDirectory) =
+                ServiceCollectionExtensions.LoadInstallObsSettings(
+                    installDirectory,
+                    Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV")
+                );
             ObsCollectionApplyResult result = ObsCollectionPatcher.ApplyForInstall(
                 installDirectory,
-                ObsCollectionPatcher.ReadDataDirectory(installDirectory),
+                dataDirectory,
                 Process.GetProcessesByName("obs64").Length > 0,
-                ObsNames.SceneCollection(ServiceCollectionExtensions.LoadObsSettings())
+                ObsNames.SceneCollection(obs),
+                ObsManagedFiles.ForThisUser()
             );
-            if (result.Drift || result.Wrote)
+            if (result.Drift || result.Wrote || result.Deferred)
             {
                 Console.WriteLine(result.Message);
             }

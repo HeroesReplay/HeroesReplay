@@ -40,16 +40,26 @@ if (Get-Process obs64 -ErrorAction SilentlyContinue) {
     Write-Warning 'OBS is running. The live collection and profile were not touched.'
 }
 else {
-    New-Item -ItemType Directory -Force -Path $scenesDir | Out-Null
-    $collection = [System.IO.File]::ReadAllText((Join-Path $root 'obs\Default.json'))
-    if ($SceneCollectionName -ne 'HeroesReplay') {
-        # OBS lists a collection by its top-level name. Default.json opens with that property.
-        $collection = ([regex]'"name"\s*:\s*"[^"]*"').Replace($collection, '"name": ' + ($SceneCollectionName | ConvertTo-Json), 1)
+    # An existing collection may hold the operator's scenes. heroesreplay updates one it manages
+    # (services start, after a backup under %LOCALAPPDATA%\HeroesReplay\obs\backups) and keeps a custom one.
+    if (Test-Path -LiteralPath $collectionFile) {
+        Write-Host "OBS collection kept: $collectionFile already exists. services start updates it when HeroesReplay manages it."
     }
+    else {
+        New-Item -ItemType Directory -Force -Path $scenesDir | Out-Null
+        $collection = [System.IO.File]::ReadAllText((Join-Path $root 'obs\Default.json'))
+        if ($SceneCollectionName -ne 'HeroesReplay') {
+            # OBS lists a collection by its top-level name. Default.json opens with that property.
+            $collection = ([regex]'"name"\s*:\s*"[^"]*"').Replace($collection, '"name": ' + ($SceneCollectionName | ConvertTo-Json), 1)
+        }
 
-    [System.IO.File]::WriteAllText($collectionFile, $collection, $utf8)
-    Write-Host "OBS collection -> $collectionFile"
-    Write-Host 'Scene paths are relative to obs\. heroesreplay rewrites the live collection when OBS is closed.'
+        # Written beside the target and then moved, so OBS never finds half a file.
+        $temp = "$collectionFile.$([guid]::NewGuid().ToString('N')).tmp"
+        [System.IO.File]::WriteAllText($temp, $collection, $utf8)
+        Move-Item -LiteralPath $temp -Destination $collectionFile
+        Write-Host "OBS collection -> $collectionFile"
+        Write-Host 'Scene paths are relative to obs\. heroesreplay rewrites the live collection when OBS is closed.'
+    }
 
     # The profile (encoder, bitrate, resolution, stream service) belongs to this machine.
     # The packaged basic.ini is only a starting template.
@@ -60,7 +70,9 @@ else {
         New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
         $ini = [System.IO.File]::ReadAllText((Join-Path $root 'obs\Default\basic.ini'))
         $ini = ([regex]'(?m)^Name=[^\r\n]*').Replace($ini, "Name=$ProfileName", 1)
-        [System.IO.File]::WriteAllText($profileIni, $ini, $utf8)
+        $temp = "$profileIni.$([guid]::NewGuid().ToString('N')).tmp"
+        [System.IO.File]::WriteAllText($temp, $ini, $utf8)
+        Move-Item -LiteralPath $temp -Destination $profileIni
         Write-Host "OBS profile    -> $profileIni (template). Run the OBS Auto-Configuration Wizard and set the stream service in OBS."
     }
 }

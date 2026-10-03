@@ -139,9 +139,17 @@ public class ReleaseScriptTests
     {
         string script = File.ReadAllText(FindScript());
 
-        // The build applies the OBS files: the collection while OBS is closed, the profile only
-        // when the machine has none (ReleaseInstall.CopyObsScenesIfClosed).
-        Assert.Contains("'update', 'install-obs', '--install', $InstallDir", script);
+        // The build applies the OBS files (ReleaseInstall.InstallObsFiles): a managed collection is
+        // replaced after a backup, the profile only when the machine has none. The install compares
+        // the live collection with the replaced install's template too; the rollback has none.
+        Assert.Contains(
+            "'update', 'install-obs', '--install', $InstallDir, '--previous', $previous, '--environment'",
+            script
+        );
+        Assert.Contains(
+            "'update', 'install-obs', '--install', $InstallDir, '--environment'",
+            script
+        );
         Assert.DoesNotContain("Default\\basic.ini'", script);
         Assert.DoesNotContain("profiles\\HeroesReplay", script);
         Assert.DoesNotContain("scenes\\HeroesReplay.json", script);
@@ -177,10 +185,13 @@ public class ReleaseScriptTests
     }
 
     [Fact]
-    public void Bootstrap_KeepsAnExistingProfile()
+    public void Bootstrap_KeepsAnExistingCollectionAndProfile()
     {
         string script = File.ReadAllText(FindScript("bootstrap-workstation.ps1"));
 
+        Assert.Contains("Test-Path -LiteralPath $collectionFile", script);
+        Assert.Contains("OBS collection kept", script);
+        Assert.DoesNotContain("WriteAllText($collectionFile", script);
         Assert.Contains("Test-Path -LiteralPath $profileIni", script);
         Assert.Contains("OBS profile kept", script);
         Assert.DoesNotContain(

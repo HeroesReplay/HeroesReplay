@@ -355,11 +355,14 @@ catch {
     exit 1
 }
 
-# The new build reads OBS:SceneCollectionName and OBS:ProfileName from this install. While OBS is
-# closed it replaces the scene collection. The profile (basic.ini) belongs to the machine: the
-# packaged one is only copied when the machine has none, and an existing profile is kept.
-# service.json (stream key) is never copied.
-Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'install-obs', '--install', $InstallDir, '--environment', $environment) 'OBS scene files'
+# The new build reads OBS:SceneCollectionName and OBS:ProfileName from this install. It replaces a
+# scene collection HeroesReplay manages (its scenes and sources match what it last wrote, or this
+# release's or the replaced install's template), after a backup under
+# %LOCALAPPDATA%\HeroesReplay\obs\backups. A custom collection is kept. While OBS is running the
+# replacement waits until HeroesReplay finds OBS closed. The profile (basic.ini) belongs to the
+# machine: the packaged one is only copied when the machine has none, and an existing profile is
+# kept. service.json (stream key) is never copied.
+Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'install-obs', '--install', $InstallDir, '--previous', $previous, '--environment', $environment) 'OBS scene files'
 
 Clear-ServiceStop
 $since = (Get-Date).ToUniversalTime().ToString('o')
