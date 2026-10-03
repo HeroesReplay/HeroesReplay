@@ -61,6 +61,8 @@ Secrets: skill `op-service-account`. On a new clone, set user env `OP_SERVICE_AC
 
 CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
 
+OBS ownership, updates, validation, and the machine profile policy: `docs/obs-operations.md`. MCP discovery: `.mcp.json` at the repo root (source, `dotnet run`) and in the release zip (`heroesreplay.exe mcp`).
+
 Production MCP is read-only. `heroesreplay mcp` reads OBS with `obs_inspect`, `obs_validate`, and `obs_screenshot`, which send only Get requests (`ObsReadOnly`) and never return the stream key. Nothing in it starts or stops a stream or recording, changes a scene, or arms a machine; that stays with guarded CLI commands. obs-mcp (royshil, about 120 unrestricted tools, returns the stream key) is **dev-only**: register it per machine on ASA-SERVER (`claude mcp add obs --scope user …`) if wanted. Never add it to the repo, the release zip, or DESKTOP-8SJEK72.
 
 ## Purpose of the work
@@ -176,7 +178,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` (`OBS:SceneCollectionName`) |
 | `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile (`OBS:ProfileName`). Machine-owned: `obs/Default/basic.ini` is copied only when it does not exist, and updates keep it |
 | `%LOCALAPPDATA%\HeroesReplay\stream-armed` | Machine-local Twitch ingest arm. Live box only |
-| `%LOCALAPPDATA%\HeroesReplay\obs` | `backups\` (the live collection or profile before each write, newest 10) and `managed-collections.json` (the template each live collection was written from). A custom collection is never overwritten. See `obs/README.md` |
+| `%LOCALAPPDATA%\HeroesReplay\obs` | `backups\` (the live collection or profile before each write, newest 10) and `managed-collections.json` (the template each live collection was written from). A custom collection is never overwritten. See `docs/obs-operations.md` |
 
 `Location:DataDirectory` is `C:\heroesreplay\Data`. Contexts are `Data\Contexts` (not a sibling of Data). Do not copy OBS `service.json` (stream key). The OBS profile and scene collection names are `OBS:ProfileName` and `OBS:SceneCollectionName` (default `HeroesReplay`); a stream or recording does not start while OBS has another one active.
 
@@ -221,7 +223,7 @@ Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/ob
 
 ## Official .NET skills
 
-These are installed under `.agents/skills/<name>/` from [dotnet/skills](https://github.com/dotnet/skills) commit `e115891bd2ac` (MIT, `.agents/skills/dotnet-skills.LICENSE.txt`). Load the skill whose name matches the task. Each `SKILL.md` is the source of truth for when to use it.
+These are installed under `.agents/skills/<name>/` from [dotnet/skills](https://github.com/dotnet/skills) commit `e115891bd2ac` (MIT, `.agents/skills/dotnet-skills.LICENSE.txt`). Load the skill whose name matches the task. Each `SKILL.md` is the source of truth for when to use it. `.agents/skills/vendored.json` pins the source commit, the license file, and the list; `AgentDocsTests` fails when a folder under `.agents/skills` is neither in it nor a first-party skill in the table above, or when the CLI skill misses a command.
 
 | Plugin | Skills |
 | --- | --- |

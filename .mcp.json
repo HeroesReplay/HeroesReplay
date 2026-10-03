@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "heroesreplay": {
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "src/HeroesReplay.CLI/HeroesReplay.CLI.csproj",
+        "--no-launch-profile",
+        "--",
+        "mcp"
+      ]
+    }
+  }
+}
