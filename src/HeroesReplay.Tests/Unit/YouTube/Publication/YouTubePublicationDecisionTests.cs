@@ -188,7 +188,7 @@ public class YouTubePublicationDecisionTests
                 "All",
                 "AllEligible",
                 """
-                , "MaxPublicPerDay": 1
+                , "MaxPublicPerDay": 1, "ReservedRequestSlotsPerDay": 0
                 """
             )
         );
@@ -549,7 +549,7 @@ public class YouTubePublicationDecisionTests
             settings,
             new PublicationSendFacts
             {
-                Criteria = ReplayMediaPriority.Requested,
+                Criteria = ReplayMediaPriority.Ordinary,
                 RecordedAtUtc = Now,
             }
         );

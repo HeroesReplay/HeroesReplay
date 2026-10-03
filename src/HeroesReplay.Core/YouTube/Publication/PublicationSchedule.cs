@@ -190,9 +190,8 @@ public static class PublicationSchedule
     /// <summary>
     /// The earliest publish time from <paramref name="now"/> that every pacing rule allows.
     /// Each rule looks both ways, at videos already public and at slots already scheduled, so a
-    /// later replay can take a free time between two earlier ones. A request skips the map,
-    /// rank, and hero checks and may use the reserved request room, so it gets the earliest
-    /// time. No time inside <see cref="ReplayMediaPolicySettings.MaxPublishAhead"/> is
+    /// later replay can take a free time between two earlier ones. A request is not paced: it
+    /// publishes now. No time inside <see cref="ReplayMediaPolicySettings.MaxPublishAhead"/> is
     /// <c>horizon</c>, and the recording waits. A granted reason is <c>ready</c> when the time is
     /// now, otherwise the rule that pushed it later. A private listing has no publish time.
     /// <paramref name="seen"/> only feeds the map, rank, and hero checks.
@@ -217,7 +216,14 @@ public static class PublicationSchedule
             return gate;
         }
 
+        // A viewer's request is published as soon as it is uploaded. It is not paced.
+        // Its slot is still kept, so the Standard queue paces around it.
         bool requested = facts.Criteria == ReplayMediaPriority.Requested;
+        if (requested)
+        {
+            return PublicationDecision.Scheduled("ready", now);
+        }
+
         DateTimeOffset horizon = now + settings.MaxPublishAhead;
         TimeSpan reach = Reach(settings);
         List<PublicationSample> paced = Within(slots, now - reach, horizon + reach);
