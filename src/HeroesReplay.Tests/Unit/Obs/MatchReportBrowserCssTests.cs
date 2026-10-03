@@ -51,11 +51,64 @@ public class MatchReportBrowserCssTests
     }
 
     [Fact]
-    public void Build_LeavesTheHeaderWhenHideIsOff()
+    public void Build_LeavesTheHeaderWhenHideIsOff_ButStillHidesEventOverlays()
     {
         string css = MatchReportBrowserCss.Build("nav{display:none}", hideHeader: false);
 
-        Assert.Equal("nav{display:none}", css);
+        Assert.Equal("nav{display:none}\n" + MatchReportBrowserCss.EventOverlays, css);
+        Assert.DoesNotContain("#main-menu", css);
+        Assert.Contains("xalatath-scoreboard", css);
+    }
+
+    /// <summary>
+    /// #213: Build replaces the CSS OBS saved from the template, so every element the template
+    /// hides must be hidden by Build too.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Build_HidesEverySelectorTheTemplateHides(bool hideHeader)
+    {
+        string built = MatchReportBrowserCss.Build(AppSettingsReportCss(), hideHeader);
+        string[] navigation = { "#main-menu", ".main-navigation-wrapper", ".alt-acct-nav" };
+
+        foreach (string selector in TemplateHiddenSelectors())
+        {
+            if (!hideHeader && Array.IndexOf(navigation, selector) >= 0)
+            {
+                continue;
+            }
+
+            Assert.Contains(selector, built);
+        }
+    }
+
+    private static string[] TemplateHiddenSelectors()
+    {
+        string root = AppContext.BaseDirectory;
+        while (!File.Exists(Path.Combine(root, "heroes-replay.slnx")))
+        {
+            root = Path.GetDirectoryName(root.TrimEnd(Path.DirectorySeparatorChar));
+        }
+
+        using JsonDocument template = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(root, "obs", "Default.json"))
+        );
+        foreach (JsonElement source in template.RootElement.GetProperty("sources").EnumerateArray())
+        {
+            if (source.GetProperty("name").GetString() != "match-report-browser")
+            {
+                continue;
+            }
+
+            string css = source.GetProperty("settings").GetProperty("css").GetString();
+            int rule = css.IndexOf("{display:none", StringComparison.Ordinal);
+            int start = css.LastIndexOf('}', rule) + 1;
+            return css.Substring(start, rule - start)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
+        throw new InvalidOperationException("obs/Default.json has no match-report-browser source.");
     }
 
     [Fact]
