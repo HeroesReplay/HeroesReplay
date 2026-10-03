@@ -54,6 +54,7 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 | `obs.request_unavailable` | error (stops the stream) | Update OBS to 30.0 or later. |
 | `obs.fps_low` | warning | Settings > Video: 30 or 60 FPS. |
 | `obs.stream_service_unexpected` | warning | Settings > Stream: Twitch. |
+| `obs.filter_stale` | warning | An old `Scroll` filter on the match report source. Right-click the source > Filters, and disable or remove it. With loop off it moves the page out of its frame and the scene looks blank (transparent). |
 | `obs.filter_missing`, `obs.path_stale`, `obs.collection_custom` | warning | Let `services start` update a managed collection while OBS is closed, or fix the source by hand. |
 
 The full list is in the `heroes-replay-cli` skill (`obs_validate`).

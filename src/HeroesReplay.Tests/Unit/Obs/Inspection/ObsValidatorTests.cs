@@ -426,6 +426,44 @@ public class ObsValidatorTests : IDisposable
     }
 
     [Fact]
+    public void AnEnabledScrollFilter_TheCollectionDoesNotHave_IsStale()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.Source("match-report-browser")["filters"] = new Newtonsoft.Json.Linq.JArray(
+            new Newtonsoft.Json.Linq.JObject
+            {
+                ["name"] = "Scroll",
+                ["id"] = "scroll_filter",
+                ["enabled"] = true,
+            }
+        );
+
+        ObsFinding finding = Single(Validate(obs), ObsValidator.FilterStale);
+
+        Assert.Equal(ObsValidator.Warning, finding.Severity);
+        Assert.Equal("match-report-browser/Scroll", finding.Subject);
+    }
+
+    [Fact]
+    public void ADisabledScrollFilter_IsNotAFinding()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.Source("match-report-browser")["filters"] = new Newtonsoft.Json.Linq.JArray(
+            new Newtonsoft.Json.Linq.JObject
+            {
+                ["name"] = "Scroll",
+                ["id"] = "scroll_filter",
+                ["enabled"] = false,
+            }
+        );
+
+        Assert.DoesNotContain(
+            Validate(obs).Findings,
+            finding => finding.Code == ObsValidator.FilterStale
+        );
+    }
+
+    [Fact]
     public void AMissingStreamRequest_StopsTheStream_AndAnUnmutedMic_DoesNot()
     {
         FakeObs missing = FakeObs.Installed(data);

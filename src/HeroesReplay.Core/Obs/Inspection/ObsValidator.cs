@@ -72,6 +72,10 @@ public static class ObsValidator
     public const string StreamKeyMissing = "obs.stream_key_missing";
     public const string StreamServiceUnexpected = "obs.stream_service_unexpected";
     public const string FilterMissing = "obs.filter_missing";
+    public const string FilterStale = "obs.filter_stale";
+
+    private const string BrowserSourceKind = "browser_source";
+    private const string ScrollFilterKind = "scroll_filter";
 
     /// <summary>
     /// The obs-websocket requests HeroesReplay sends while it spectates: the minimum capability
@@ -895,16 +899,18 @@ public static class ObsValidator
         List<ObsFinding> findings
     )
     {
-        if (packaged.Filters == null || packaged.Filters.Count == 0)
-        {
-            return;
-        }
-
+        IReadOnlyDictionary<string, IReadOnlyList<ObsFilterInfo>> packagedFilters =
+            packaged.Filters ?? new Dictionary<string, IReadOnlyList<ObsFilterInfo>>();
+        IEnumerable<string> browserSources = (packaged.Kinds ?? new Dictionary<string, string>())
+            .Where(pair => string.Equals(pair.Value, BrowserSourceKind, StringComparison.Ordinal))
+            .Select(pair => pair.Key);
         var live = new HashSet<string>(
             inputs.Select(input => ObsResponse.String(input, "inputName")).Concat(scenes),
             StringComparer.Ordinal
         );
-        foreach ((string source, IReadOnlyList<ObsFilterInfo> expected) in packaged.Filters)
+        foreach (
+            string source in packagedFilters.Keys.Union(browserSources, StringComparer.Ordinal)
+        )
         {
             if (!live.Contains(source))
             {
@@ -912,24 +918,34 @@ public static class ObsValidator
                 continue;
             }
 
-            List<ObsFilterInfo> have;
+            List<JObject> filters;
             try
             {
-                have = ObsResponse
+                filters = ObsResponse
                     .Objects(
                         session.Get("GetSourceFilterList", new JObject { ["sourceName"] = source }),
                         "filters"
                     )
-                    .Select(filter => new ObsFilterInfo(
-                        ObsResponse.String(filter, "filterName"),
-                        ObsResponse.String(filter, "filterKind")
-                    ))
                     .ToList();
             }
             catch (ObsRequestException)
             {
                 continue;
             }
+
+            List<ObsFilterInfo> have = filters
+                .Select(filter => new ObsFilterInfo(
+                    ObsResponse.String(filter, "filterName"),
+                    ObsResponse.String(filter, "filterKind")
+                ))
+                .ToList();
+            IReadOnlyList<ObsFilterInfo> expected = packagedFilters.TryGetValue(
+                source,
+                out IReadOnlyList<ObsFilterInfo> listed
+            )
+                ? listed
+                : [];
+            CheckStaleScroll(source, expected, filters, findings);
 
             foreach (ObsFilterInfo filter in expected)
             {
@@ -961,6 +977,53 @@ public static class ObsValidator
                     )
                 );
             }
+        }
+    }
+
+    /// <summary>
+    /// An enabled Scroll filter on a browser source that obs/Default.json does not give one.
+    /// The match report scrolls itself inside a one-canvas source. A Scroll filter left from an
+    /// earlier collection, with loop off, moves that source out of its frame within seconds, and
+    /// OBS draws nothing (transparent) for the rest of the scene.
+    /// </summary>
+    private static void CheckStaleScroll(
+        string source,
+        IReadOnlyList<ObsFilterInfo> expected,
+        IReadOnlyList<JObject> filters,
+        List<ObsFinding> findings
+    )
+    {
+        foreach (JObject filter in filters)
+        {
+            string name = ObsResponse.String(filter, "filterName");
+            bool enabled = filter.Value<bool?>("filterEnabled") ?? true;
+            if (
+                !enabled
+                || !string.Equals(
+                    ObsResponse.String(filter, "filterKind"),
+                    ScrollFilterKind,
+                    StringComparison.Ordinal
+                )
+                || expected.Any(packaged =>
+                    string.Equals(packaged.Name, name, StringComparison.Ordinal)
+                )
+            )
+            {
+                continue;
+            }
+
+            findings.Add(
+                new ObsFinding(
+                    FilterStale,
+                    Warning,
+                    source + "/" + name,
+                    "Source '"
+                        + source
+                        + "' has an enabled Scroll filter '"
+                        + name
+                        + "' that obs/Default.json does not. It moves the page out of the frame, so the source shows nothing after a few seconds. Disable or remove the filter in OBS."
+                )
+            );
         }
     }
 
