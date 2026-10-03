@@ -317,43 +317,6 @@
     },
     {
       "prev_ver": 537001986,
-      "name": "social-media",
-      "uuid": "88e6dea3-50bb-4877-a9f7-43de2c3c266e",
-      "id": "browser_source",
-      "versioned_id": "browser_source",
-      "settings": {
-        "is_local_file": true,
-        "local_file": "Popups/_right-social-media-popup-v2.html",
-        "url": "file:///Popups/_right-social-media-popup-v2.html",
-        "width": 1000,
-        "shutdown": true,
-        "restart_when_active": true
-      },
-      "mixers": 255,
-      "sync": 0,
-      "flags": 0,
-      "volume": 1.0,
-      "balance": 0.5,
-      "enabled": true,
-      "muted": false,
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "hotkeys": {
-        "libobs.mute": [],
-        "libobs.unmute": [],
-        "libobs.push-to-mute": [],
-        "libobs.push-to-talk": [],
-        "ObsBrowser.Refresh": []
-      },
-      "deinterlace_mode": 0,
-      "deinterlace_field_order": 0,
-      "monitoring_type": 0,
-      "private_settings": {}
-    },
-    {
-      "prev_ver": 537001986,
       "name": "tier-division",
       "uuid": "8c5b961a-691b-4f6f-9f57-d8cfc694d041",
       "id": "text_gdiplus",
@@ -1683,45 +1646,6 @@
             "scale": {
               "x": 0.6575000286102295,
               "y": 0.6566265225410461
-            },
-            "bounds": {
-              "x": 0.0,
-              "y": 0.0
-            },
-            "scale_filter": "disable",
-            "blend_method": "default",
-            "blend_type": "normal",
-            "show_transition": {
-              "duration": 0
-            },
-            "hide_transition": {
-              "duration": 0
-            },
-            "private_settings": {}
-          },
-          {
-            "name": "social-media",
-            "source_uuid": "88e6dea3-50bb-4877-a9f7-43de2c3c266e",
-            "visible": true,
-            "locked": false,
-            "rot": 0.0,
-            "align": 5,
-            "bounds_type": 0,
-            "bounds_align": 0,
-            "bounds_crop": false,
-            "crop_left": 0,
-            "crop_top": 0,
-            "crop_right": 0,
-            "crop_bottom": 0,
-            "id": 21,
-            "group_item_backup": false,
-            "pos": {
-              "x": 1000.0,
-              "y": 102.0
-            },
-            "scale": {
-              "x": 0.9200000166893005,
-              "y": 0.9200000166893005
             },
             "bounds": {
               "x": 0.0,

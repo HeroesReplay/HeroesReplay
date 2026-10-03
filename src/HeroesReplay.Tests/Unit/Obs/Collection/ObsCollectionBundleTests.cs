@@ -61,10 +61,9 @@ public class ObsCollectionBundleTests
         Assert.NotEmpty(assets);
         Assert.Contains("Ranks/bronze.png", assets, StringComparer.OrdinalIgnoreCase);
         Assert.Contains("countdown/index.html", assets, StringComparer.OrdinalIgnoreCase);
-        Assert.Contains(
-            "Popups/settings-and-images/icon-sheet.png",
+        Assert.DoesNotContain(
             assets,
-            StringComparer.OrdinalIgnoreCase
+            asset => asset.StartsWith("Popups/", StringComparison.OrdinalIgnoreCase)
         );
         Assert.DoesNotContain(
             assets,
