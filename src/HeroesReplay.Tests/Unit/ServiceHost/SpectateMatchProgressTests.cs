@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Connectivity;
-using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.SelfUpdate;

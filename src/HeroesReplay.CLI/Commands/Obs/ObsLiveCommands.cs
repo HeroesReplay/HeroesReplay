@@ -6,7 +6,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Inspection;
 
 namespace HeroesReplay.CLI.Commands.Obs;
 

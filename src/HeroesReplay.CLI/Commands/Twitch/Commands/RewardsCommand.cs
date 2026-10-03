@@ -1,4 +1,5 @@
 using System.CommandLine;
+using HeroesReplay.CLI.Commands.Twitch.Commands.Rewards;
 
 namespace HeroesReplay.CLI.Commands.Twitch.Commands;
 

@@ -2,6 +2,7 @@ using System;
 using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Twitch.Predictions;
 using Microsoft.Extensions.DependencyInjection;
 

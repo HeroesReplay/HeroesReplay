@@ -8,7 +8,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 
-namespace HeroesReplay.CLI;
+namespace HeroesReplay.CLI.OpenTelemetry;
 
 public sealed record AspireCliInvocation(
     string FileName,

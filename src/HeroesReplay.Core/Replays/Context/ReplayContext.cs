@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Telemetry;
 
 namespace HeroesReplay.Core.Replays.Context;
 

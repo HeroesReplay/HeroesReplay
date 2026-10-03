@@ -6,6 +6,8 @@ using System.Linq;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging.Abstractions;

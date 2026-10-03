@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.OpenTelemetry;
 
 namespace HeroesReplay.CLI.Commands.Otel;
 

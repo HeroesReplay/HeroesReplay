@@ -8,6 +8,7 @@ using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Interfaces;
 

@@ -12,7 +12,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Replays;

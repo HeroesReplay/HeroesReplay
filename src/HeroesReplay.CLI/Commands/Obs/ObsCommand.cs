@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Pages;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Commands.Obs;
