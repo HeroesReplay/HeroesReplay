@@ -65,7 +65,7 @@ The uploader process keeps that catalog current. It adds a replay id when its in
 | `Selected` | A request or a notable replay, when it is on patch, dated, and inside its age. When publication is `Curated` or `AllEligible`, ordinary and high-skill replays are recorded on those same terms. |
 | `All` | Every spectated replay, including one that is too old to publish |
 
-Production and dev use `Selected` (#204): a replay that no publication window can still reach is spectated without an mp4. The spectator writes `youtube-entry.json` when the session ends, so a recording in an older context with no entry can never be published, and the next retention sweep deletes it.
+Production and dev use `Selected` (#204): a replay that no publication window can still reach is spectated without an mp4. The spectator writes `youtube-entry.json` when the session ends, so a recording with no entry that OBS has not written for `Retention:UnpublishedGrace` (1 hour) can never be published, and the next retention sweep deletes it with a warning.
 
 Every mode still requires OBS `RecordingEnabled` (true in production). Both ReplayId rewards, `ReplayId` and `ReplayId + YouTube`, are recorded and uploaded as requests (#165). A map, rank, or random reward with no `RecordAndUpload` is spectate-only and is not a publication.
 

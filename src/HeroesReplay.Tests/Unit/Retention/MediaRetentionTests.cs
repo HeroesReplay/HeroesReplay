@@ -88,20 +88,25 @@ public class MediaRetentionTests
             string contexts = Path.Combine(root, "Contexts");
             Directory.CreateDirectory(Path.Combine(contexts, "20"));
             Directory.CreateDirectory(Path.Combine(contexts, "21"));
-            File.WriteAllBytes(Path.Combine(contexts, "20", "stuck.mp4"), new byte[40]);
+            string stuck = Path.Combine(contexts, "20", "stuck.mp4");
+            File.WriteAllBytes(stuck, new byte[40]);
+            File.SetLastWriteTimeUtc(stuck, DateTime.UtcNow.AddHours(-2));
             File.WriteAllBytes(Path.Combine(contexts, "21", "current.mp4"), new byte[4]);
             Directory.SetLastWriteTimeUtc(
                 Path.Combine(contexts, "20"),
-                DateTime.UtcNow.AddHours(-1)
+                DateTime.UtcNow.AddHours(-2)
             );
             Directory.SetLastWriteTimeUtc(Path.Combine(contexts, "21"), DateTime.UtcNow);
 
             RetentionSweep sweep = MediaRetention.Sweep(Settings(root), DateTimeOffset.UtcNow);
 
-            Assert.False(File.Exists(Path.Combine(contexts, "20", "stuck.mp4")));
+            Assert.False(File.Exists(stuck));
             Assert.True(File.Exists(Path.Combine(contexts, "21", "current.mp4")));
             Assert.Equal(40, sweep.FreedBytes);
-            Assert.Empty(sweep.Warnings);
+            Assert.Contains(
+                sweep.Warnings,
+                warning => warning.Contains("never uploaded") && warning.Contains("stuck.mp4")
+            );
         }
         finally
         {
@@ -110,6 +115,28 @@ public class MediaRetentionTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    /// <summary>
+    /// #212: the uploader touched context A after context B's recording stopped, so A is the
+    /// newest folder. B's entry is not written yet. B's recording must survive the sweep.
+    /// </summary>
+    [Fact]
+    public void Sweep_KeepsAJustStoppedRecordingWhenAnotherContextIsNewer()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string stopped = library.AddContext("stopped");
+        string uploaded = library.AddContext("uploaded");
+        TempLibrary.WriteFile(stopped, "match.mp4", 32, now.AddMinutes(-1));
+        TempLibrary.WriteText(uploaded, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.SetDirectoryTime(stopped, now.AddMinutes(-1));
+        TempLibrary.SetDirectoryTime(uploaded, now);
+
+        RetentionSweep sweep = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(stopped, "match.mp4")));
+        Assert.Empty(sweep.Warnings);
     }
 
     [Fact]
@@ -255,7 +282,11 @@ public class MediaRetentionTests
         Assert.True(File.Exists(Path.Combine(reused, "match.mp4")));
         Assert.False(File.Exists(Path.Combine(finished, "match.mp4")));
         Assert.False(File.Exists(Path.Combine(abandoned, "match.mp4")));
-        Assert.Empty(sweep.Warnings);
+        Assert.Contains(
+            sweep.Warnings,
+            warning => warning.Contains("never uploaded") && warning.Contains("abandoned")
+        );
+        Assert.DoesNotContain(sweep.Warnings, warning => warning.Contains("active"));
     }
 
     [Fact]
