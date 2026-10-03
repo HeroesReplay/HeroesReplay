@@ -236,7 +236,12 @@ public class YouTubeEntryBuilderTests
                 Map = "Dragon Shire",
                 Players = new[]
                 {
-                    new Player { Character = "Illidan" },
+                    new Player
+                    {
+                        Character = "Illidan",
+                        Name = "Kazpa",
+                        BattleTag = 2345,
+                    },
                     new Player { Character = "Johanna" },
                 },
             },
@@ -249,7 +254,7 @@ public class YouTubeEntryBuilderTests
             },
             RewardQueueItem = new RewardQueueItem
             {
-                Request = new RewardRequest { ReplayId = 1, PlayerIndex = 0 },
+                Request = new RewardRequest { ReplayId = 1, BattleTag = "Kazpa#2345" },
             },
         };
 

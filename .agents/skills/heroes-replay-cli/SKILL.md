@@ -23,7 +23,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 
 | Command | Behavior |
 | --- | --- |
-| `spectate file [--file path] [--player 1-10]` | Play one `.StormReplay` or each file in a directory, then exit. `--file` defaults to `Location:ReplaySource`. `--player` follows that hero (1-10, or 0 for the tenth) while it is alive. A `--player` outside that, or a `--file` path that does not exist, is a parse error (exit 1). Exits 1 when the engine stops on an unexpected error. Starts the Aspire dashboard when OTLP :4317 is down; dashboard failure does not fail the replay. |
+| `spectate file [--file path] [--player Name#1234]` | Play one `.StormReplay` or each file in a directory, then exit. `--file` defaults to `Location:ReplaySource`. `--player` follows the player with that BattleTag while their hero is alive (the normal camera when that BattleTag did not play). A `--player` that is not a BattleTag, or a `--file` path that does not exist, is a parse error (exit 1). Exits 1 when the engine stops on an unexpected error. Starts the Aspire dashboard when OTLP :4317 is down; dashboard failure does not fail the replay. |
 | `spectate heroesprofile` | Play `.StormReplay` files already in `Data\Standard` and `Data\Requests`. Does not call Heroes Profile. Same dashboard startup as `spectate file`. |
 | `heroesprofile download` | List and download Storm League replays into `Data\Standard`, and requested replays into `Data\Requests`. Does not launch the game. |
 | `heroesprofile patch-index [--write]` | Find the first Heroes Profile replay id on the latest replay's patch line. `--write` stores it as `MinReplayId` in `appsettings.json`. |

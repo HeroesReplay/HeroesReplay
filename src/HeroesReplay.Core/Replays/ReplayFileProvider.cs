@@ -19,7 +19,7 @@ public sealed class ReplayFileProvider : IReplayProvider
     private readonly IReplayHelper replayHelper;
     private readonly Queue<FileInfo> remaining = new();
     private readonly bool playOnce;
-    private readonly int? playerIndex;
+    private readonly string battleTag;
     private LoadedReplay staged;
     private int? heldBackId;
 
@@ -42,7 +42,7 @@ public sealed class ReplayFileProvider : IReplayProvider
         }
 
         playOnce = pathOptions?.PlayOnce ?? true;
-        playerIndex = pathOptions?.PlayerIndex;
+        battleTag = pathOptions?.BattleTag;
         string path = !string.IsNullOrWhiteSpace(pathOptions?.Path)
             ? pathOptions.Path
             : settings.Location.ReplaySource;
@@ -84,11 +84,11 @@ public sealed class ReplayFileProvider : IReplayProvider
                 replay.ReplayVersion
             );
             RewardQueueItem reward = null;
-            if (playerIndex is int slot)
+            if (!string.IsNullOrWhiteSpace(battleTag))
             {
                 reward = new RewardQueueItem
                 {
-                    Request = new RewardRequest { ReplayId = replayId, PlayerIndex = slot },
+                    Request = new RewardRequest { ReplayId = replayId, BattleTag = battleTag },
                 };
             }
 

@@ -16,12 +16,10 @@ public class RewardRequest
     public string Login { get; set; }
     public int? ReplayId { get; set; }
 
-    /// <summary>Observe slot 0-9. 0 is hotkey 1 and 9 is hotkey 0. Set by <c>spectate file</c>.</summary>
-    public int? PlayerIndex { get; set; }
-
     /// <summary>
-    /// The player a viewer asked to follow, Name#1234. Resolved to an observe slot from the
-    /// parsed replay by <see cref="PlayerPriorityRequest.PlayerIndex"/>.
+    /// The player to follow, Name#1234, from the ReplayId reward or <c>spectate file --player</c>.
+    /// Resolved to an observe slot from the parsed replay by
+    /// <see cref="PlayerPriorityRequest.PlayerIndex"/>.
     /// </summary>
     public string BattleTag { get; set; }
     public GameRank? Rank { get; set; }

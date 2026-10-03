@@ -21,7 +21,7 @@ public class CliExitCodeTests
     [InlineData("spectate file --help")]
     [InlineData("spectate file -h")]
     [InlineData("spectate heroesprofile --help")]
-    [InlineData("spectate file --player 11 --help")]
+    [InlineData("spectate file --player 3 --help")]
     [InlineData("--help")]
     [InlineData("--version")]
     public async Task HelpAndVersion_ExitZero(string line)
@@ -55,10 +55,10 @@ public class CliExitCodeTests
     }
 
     [Theory]
-    [InlineData("spectate file --player 11")]
-    [InlineData("spectate file --player -1")]
-    [InlineData("spectate file --player 1.5")]
-    [InlineData("spectate file --player abc")]
+    [InlineData("spectate file --player 3")]
+    [InlineData("spectate file --player 0")]
+    [InlineData("spectate file --player Kazpa")]
+    [InlineData("spectate file --player Kazpa#")]
     [InlineData("spectate file --player")]
     public async Task InvalidPlayer_ExitsNonZeroWithoutRunning(string line)
     {
@@ -73,17 +73,14 @@ public class CliExitCodeTests
     }
 
     [Theory]
-    [InlineData("1", 0)]
-    [InlineData("5", 4)]
-    [InlineData("9", 8)]
-    [InlineData("10", 9)]
-    [InlineData("0", 9)]
-    public void ValidPlayer_IsTheZeroBasedHero(string player, int index)
+    [InlineData("Kazpa#2345", "Kazpa#2345")]
+    [InlineData("Sæmund#11", "Sæmund#11")]
+    public void ValidPlayer_IsTheBattleTag(string player, string battleTag)
     {
         ParseResult parse = new HeroesReplayCommand().Parse("spectate file --player " + player);
 
         Assert.Empty(parse.Errors);
-        Assert.Equal(index, parse.GetValue<int?>("--player"));
+        Assert.Equal(battleTag, parse.GetValue<string>("--player"));
     }
 
     [Fact]
