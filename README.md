@@ -110,6 +110,7 @@ dotnet run --no-launch-profile -- --help
 | `check timer` / `check twitch-extension` | Read-only memory scan for the match clock; Heroes Profile Twitch extension key |
 | `otel up` / `otel down` / `otel status` | Standalone Aspire dashboard |
 | `obs arm` / `obs disarm` / `obs status` | Machine-local Twitch ingest arm. Ingest needs it and `OBS:StreamingEnabled` |
+| `obs pages [--no-reload]` | Render `Data\queue.html` and `Data\prediction-report.html` with this build, then reload the OBS browser sources that show them. Run it after a build or an update so OBS shows the new page layout |
 | `update check` | Compare this install with the latest GitHub Release |
 | `mcp` | Stdio MCP server for agents (`get_spectator_status`, `get_current_focus`, checks, and read-only OBS tools `obs_inspect`, `obs_validate`, `obs_screenshot`). Pair with a running `spectate` process. No MCP tool changes OBS or exposes the stream key. |
 

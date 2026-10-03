@@ -27,7 +27,7 @@ public class CliHelpTests
     }
 
     [Fact]
-    public void ObsHelp_HasArmDisarmStatus()
+    public void ObsHelp_HasArmDisarmStatusPages()
     {
         var root = new HeroesReplayCommand();
         ParseResult result = root.Parse("obs --help");
@@ -38,8 +38,17 @@ public class CliHelpTests
         Assert.Contains("stream-armed", arm.Description);
         Assert.Contains(obs.Subcommands, c => c.Name == "disarm");
         Assert.Contains(obs.Subcommands, c => c.Name == "status");
+        Command pages = obs.Subcommands.Single(c => c.Name == "pages");
+        Assert.Contains("queue.html", pages.Description);
+        Assert.Contains("prediction-report.html", pages.Description);
         foreach (
-            string help in new[] { "obs arm --help", "obs disarm --help", "obs status --help" }
+            string help in new[]
+            {
+                "obs arm --help",
+                "obs disarm --help",
+                "obs status --help",
+                "obs pages --help",
+            }
         )
         {
             Assert.Empty(root.Parse(help).Errors);

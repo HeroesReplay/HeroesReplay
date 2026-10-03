@@ -38,7 +38,9 @@ Names come from `OBS:ProfileName` and `OBS:SceneCollectionName` (default `Heroes
 - **Validation** reuses `ObsContract` (also used by `check obs`), `ObsSelection`, `ObsCollectionPaths.RewriteValue` / `MissingAssets` / `SourceKinds`, and `ObsCollectionPatcher.Drift`. Mic/Aux comes from `GetSpecialInputs` (`mic1`–`mic4`): unmuted is `obs.mic_enabled` (error), muted is `obs.mic_muted` (warning). The fix for both is Settings > Audio > Global Audio Devices > Mic/Auxiliary Audio > Disabled.
 - `obs_screenshot` returns the whole PNG as an MCP image (default width 960, at most 1920). It never changes the program scene.
 
-Fixes stay out of MCP: `obs arm` / `obs disarm` today, and later `obs plan` / `apply` (#130 workstream B).
+Fixes stay out of MCP: `obs arm` / `obs disarm` and `obs pages` today, and later `obs plan` / `apply` (#130 workstream B).
+
+**Generated pages.** `Data\queue.html` and `Data\prediction-report.html` are not collection assets. The roles render them when the queue changes or a prediction opens or resolves, so a new build's layout reaches OBS only then. `heroesreplay obs pages` renders both with the current build and reloads every browser source whose local file or `file://` URL is one of them (`IObsPageSession`: the read-only Gets plus `PressInputPropertiesButton` `refreshnocache`, nothing else).
 
 **obs-mcp (royshil) is dev-only.** It registers about 120 tools with no read-only mode, including `StartStream`, `StopStream`, `SetCurrentProfile`, `RemoveInput`, and `GetStreamServiceSettings` (which returns the stream key). On ASA-SERVER it may be registered per machine for interactive tweaking (`claude mcp add obs --scope user -e OBS_WEBSOCKET_URL=ws://127.0.0.1:4455 -- cmd /c npx -y obs-mcp@latest`). It is never in the repo, the release zip, or the production machine's agent config. Its `obs-get-source-screenshot` returns only the first 100 base64 characters; use `obs_screenshot`.
 
