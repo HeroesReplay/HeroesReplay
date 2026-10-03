@@ -8,6 +8,7 @@ using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
 using HeroesReplay.Core.YouTube.Publication;
+using HeroesReplay.Core.YouTube.Quota;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

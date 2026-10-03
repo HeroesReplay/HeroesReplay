@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
 
 namespace HeroesReplay.Core.SelfUpdate;
 

@@ -1,5 +1,7 @@
 using System;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Obs.Recording;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Obs;

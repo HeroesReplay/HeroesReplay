@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.GameClient.Firewall;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HeroesReplay.CLI.Commands.Client;

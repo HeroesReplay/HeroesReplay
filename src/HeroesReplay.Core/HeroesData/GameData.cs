@@ -15,6 +15,7 @@ using Heroes.Element;
 using Heroes.LocaleText;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
 using static Heroes.ReplayParser.Unit;
 using ElementHero = Heroes.Element.Models.Hero;

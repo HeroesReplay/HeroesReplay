@@ -1,6 +1,6 @@
 using System;
 using HeroesReplay.Core.GameClient;
-using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
 using Xunit;

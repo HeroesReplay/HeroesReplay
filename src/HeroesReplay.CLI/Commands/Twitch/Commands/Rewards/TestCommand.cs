@@ -2,6 +2,7 @@ using System;
 using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.Twitch.RedeemedRewards;
@@ -9,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TwitchLib.Client.Interfaces;
 using TwitchLib.PubSub.Events;
 
-namespace HeroesReplay.CLI.Commands.Twitch.Commands;
+namespace HeroesReplay.CLI.Commands.Twitch.Commands.Rewards;
 
 public class TestCommand : Command
 {

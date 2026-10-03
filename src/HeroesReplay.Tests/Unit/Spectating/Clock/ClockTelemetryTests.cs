@@ -1,5 +1,5 @@
 using System;
-using HeroesReplay.Core.Spectating.Clock.Memory;
+using HeroesReplay.Core.Spectating.Clock;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Spectating.Clock;

@@ -1,5 +1,5 @@
 using HeroesReplay.Core.Clips;
-using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Recording;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Clips;

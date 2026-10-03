@@ -4,8 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.ServiceHost.Logs;
 using HeroesReplay.Core.Status;
 
 namespace HeroesReplay.CLI.Commands.Services;

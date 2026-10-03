@@ -3,11 +3,12 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

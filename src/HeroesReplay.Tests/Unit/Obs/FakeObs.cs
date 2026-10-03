@@ -5,6 +5,9 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Obs.Pages;
 using Newtonsoft.Json.Linq;
 
 namespace HeroesReplay.Tests.Unit.Obs;

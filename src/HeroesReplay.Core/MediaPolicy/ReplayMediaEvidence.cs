@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Obs;
 
 namespace HeroesReplay.Core.MediaPolicy;

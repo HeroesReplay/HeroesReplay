@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube.Publication;
 using Microsoft.Extensions.Configuration;
