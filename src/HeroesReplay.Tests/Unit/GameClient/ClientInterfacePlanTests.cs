@@ -68,6 +68,37 @@ public class ClientInterfacePlanTests
         );
     }
 
+    /// <summary>
+    /// #206: the stream PC's drifted root file (blank interfaces, no background audio) is a
+    /// write while Heroes is closed, which is when the next replay's client is prepared.
+    /// </summary>
+    [Fact]
+    public void Preset_RepairsADriftedRootFileOnlyWhileHeroesIsClosed()
+    {
+        Assert.Equal(
+            ClientPresetAction.Write,
+            ClientInterfacePlan.Preset(presetMatches: false, heroesRunning: false, true)
+        );
+        Assert.Equal(
+            ClientPresetAction.LeaveRunning,
+            ClientInterfacePlan.Preset(presetMatches: false, heroesRunning: true, true)
+        );
+    }
+
+    [Theory]
+    [InlineData(65675662, 65675662, true)]
+    [InlineData(65675662, 65675674, false)]
+    [InlineData(65675662, null, false)]
+    [InlineData(null, null, false)]
+    public void CheckedBeforeLaunch_OnlyForTheReplayPreparedDuringTheReport(
+        int? replayId,
+        int? checkedFor,
+        bool expected
+    )
+    {
+        Assert.Equal(expected, ClientInterfacePlan.CheckedBeforeLaunch(replayId, checkedFor));
+    }
+
     [Theory]
     [InlineData(true, false, true, false, 0)]
     [InlineData(true, false, false, true, 0)]

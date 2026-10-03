@@ -38,6 +38,7 @@ public class GameManager : IGameManager
     private readonly IReplayContext context;
     private readonly SpectatorStatusStore statusStore;
     private readonly StormClientConfigurator clientConfigurator;
+    private int? clientPreparedFor;
     private readonly IYouTubeReplayLookup youTubeReplayLookup;
     private readonly RecordingClock recordingClock;
     private readonly ILogger<GameManager> logger;
@@ -125,7 +126,7 @@ public class GameManager : IGameManager
                 loadedReplay?.Replay?.ReplayVersion
             );
 
-            EnsureWindowedClient();
+            EnsureWindowedClient(loadedReplay?.ReplayId);
             recordingClock.Reset();
             ClientHoldReason hold = await gameController.LaunchAsync().ConfigureAwait(false);
             if (hold == ClientHoldReason.AwardScreen)
@@ -601,6 +602,11 @@ public class GameManager : IGameManager
         );
         await HoldBeforeNextLaunchAsync(report, beforeNext).ConfigureAwait(false);
 
+        // Heroes is closed here, so Variables.txt can be repaired. The next session starts with
+        // this client already running and could only warn (#206).
+        EnsureWindowedClient(next.ReplayId);
+        clientPreparedFor = next.ReplayId;
+
         try
         {
             await gameController
@@ -1028,7 +1034,27 @@ public class GameManager : IGameManager
         }
     }
 
-    private void EnsureWindowedClient()
+    /// <summary>
+    /// Writes windowed 1080p, background audio, and AhliObs into the root and account
+    /// Variables.txt while Heroes is closed. A running client is never touched.
+    /// </summary>
+    private void EnsureWindowedClient(int? replayId)
+    {
+        try
+        {
+            ApplyClientPreset(replayId);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not write the Heroes client settings before replay {ReplayId}.",
+                replayId
+            );
+        }
+    }
+
+    private void ApplyClientPreset(int? replayId)
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.client.configure");
         ClientStatusResult status = clientConfigurator.GetStatus();
@@ -1059,6 +1085,18 @@ public class GameManager : IGameManager
 
         if (action == ClientPresetAction.LeaveRunning)
         {
+            if (ClientInterfacePlan.CheckedBeforeLaunch(replayId, clientPreparedFor))
+            {
+                // The files were checked right before this client started. The running
+                // client is left alone, and the next launch repairs them again (#206).
+                logger.LogInformation(
+                    "Replay {ReplayId} started after Variables.txt was checked. The running client is left alone ({Mismatches}).",
+                    replayId,
+                    string.Join("; ", status.Mismatches)
+                );
+                return;
+            }
+
             logger.LogWarning(
                 "Heroes client is not windowed 1080p with background audio and AhliObs ({Mismatches}). Quit the game and run `heroesreplay client configure`, then relaunch windowed.",
                 string.Join("; ", status.Mismatches)

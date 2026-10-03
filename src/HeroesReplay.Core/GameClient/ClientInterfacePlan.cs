@@ -57,6 +57,14 @@ public static class ClientInterfacePlan
         );
     }
 
+    /// <summary>
+    /// The replay's client was started during the report, right after Variables.txt was
+    /// checked with Heroes closed. A running client found at session start is then expected,
+    /// not a fault (#206).
+    /// </summary>
+    public static bool CheckedBeforeLaunch(int? replayId, int? checkedFor) =>
+        replayId is int id && checkedFor == id;
+
     public static ClientPresetAction Preset(
         bool presetMatches,
         bool heroesRunning,
