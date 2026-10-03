@@ -175,20 +175,14 @@ public static class MediaRetention
                 continue;
             }
 
+            // The spectator writes the YouTube entry when its session ends, before the next
+            // context exists. An older context with a recording and no entry can never be
+            // published, so its mp4 goes on this sweep, not after VideoMaxAgeDays (#204).
             if (videos.Length > 0 && !remoteUpload)
             {
-                if (written >= dropBefore.UtcDateTime)
-                {
-                    continue;
-                }
-
                 foreach (FileInfo video in videos)
                 {
-                    DeleteFile(
-                        video.FullName,
-                        result,
-                        "Removed recording that was never uploaded: " + video.FullName
-                    );
+                    DeleteFile(video.FullName, result, warning: null);
                 }
 
                 continue;

@@ -77,7 +77,7 @@ public class MediaRetentionTests
     }
 
     [Fact]
-    public void Sweep_DropsARecordingThatNeverUploaded()
+    public void Sweep_DropsAnUnentriedRecordingOnTheNextSweep()
     {
         string root = Path.Combine(
             Path.GetTempPath(),
@@ -92,7 +92,7 @@ public class MediaRetentionTests
             File.WriteAllBytes(Path.Combine(contexts, "21", "current.mp4"), new byte[4]);
             Directory.SetLastWriteTimeUtc(
                 Path.Combine(contexts, "20"),
-                DateTime.UtcNow.AddDays(-8)
+                DateTime.UtcNow.AddHours(-1)
             );
             Directory.SetLastWriteTimeUtc(Path.Combine(contexts, "21"), DateTime.UtcNow);
 
@@ -100,7 +100,8 @@ public class MediaRetentionTests
 
             Assert.False(File.Exists(Path.Combine(contexts, "20", "stuck.mp4")));
             Assert.True(File.Exists(Path.Combine(contexts, "21", "current.mp4")));
-            Assert.Contains(sweep.Warnings, warning => warning.Contains("never uploaded"));
+            Assert.Equal(40, sweep.FreedBytes);
+            Assert.Empty(sweep.Warnings);
         }
         finally
         {
@@ -254,11 +255,7 @@ public class MediaRetentionTests
         Assert.True(File.Exists(Path.Combine(reused, "match.mp4")));
         Assert.False(File.Exists(Path.Combine(finished, "match.mp4")));
         Assert.False(File.Exists(Path.Combine(abandoned, "match.mp4")));
-        Assert.Contains(
-            sweep.Warnings,
-            warning => warning.Contains("never uploaded") && warning.Contains("abandoned")
-        );
-        Assert.DoesNotContain(sweep.Warnings, warning => warning.Contains("active"));
+        Assert.Empty(sweep.Warnings);
     }
 
     [Fact]
