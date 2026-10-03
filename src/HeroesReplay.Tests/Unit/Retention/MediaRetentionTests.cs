@@ -314,6 +314,35 @@ public class MediaRetentionTests
         Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
     }
 
+    /// <summary>#207: a recording another process still has open is retried, not warned about.</summary>
+    [Fact]
+    public void Sweep_RetriesARecordingStillOpenInAnotherProcess()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string inserted = library.AddContext("inserted");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(inserted, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.WriteFile(inserted, "match.mp4", 32, now.AddHours(-1));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(inserted, now.AddHours(-1));
+        TempLibrary.SetDirectoryTime(live, now);
+        string video = Path.Combine(inserted, "match.mp4");
+
+        RetentionSweep busy;
+        using (new FileStream(video, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            busy = MediaRetention.Sweep(Settings(library.Root), now);
+        }
+
+        RetentionSweep retried = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.Equal([video], busy.InUse);
+        Assert.Empty(busy.Warnings);
+        Assert.False(File.Exists(video));
+        Assert.Equal(32, retried.FreedBytes);
+    }
+
     [Fact]
     public void Sweep_RemovesAScheduledVideoContextAfterVideoKeepDays()
     {
