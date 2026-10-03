@@ -72,7 +72,7 @@ public static class ServiceCollectionExtensions
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
                     .AddConsole()
-                    .AddEventLog(config => config.SourceName = "HeroesReplay.YouTubeService")
+                    .AddSafeEventLog("HeroesReplay.YouTubeService")
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton<IYouTubeUploader, YouTubeUploader>()
@@ -105,7 +105,7 @@ public static class ServiceCollectionExtensions
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
                     .AddConsole()
-                    .AddEventLog(config => config.SourceName = "HeroesReplay.ReportService")
+                    .AddSafeEventLog("HeroesReplay.ReportService")
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
@@ -335,7 +335,7 @@ public static class ServiceCollectionExtensions
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
                     .AddConsole()
-                    .AddEventLog(config => config.SourceName = "HeroesReplay.TwitchService")
+                    .AddSafeEventLog("HeroesReplay.TwitchService")
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
@@ -436,7 +436,7 @@ public static class ServiceCollectionExtensions
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
                     .AddConsole()
-                    .AddEventLog(config => config.SourceName = "HeroesReplay.SpectatorService")
+                    .AddSafeEventLog("HeroesReplay.SpectatorService")
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
@@ -552,6 +552,17 @@ public static class ServiceCollectionExtensions
             .AddSingleton<SpectatorStatusStore>()
             .AddConnectivityServices()
             .AddFocusCalculators();
+    }
+
+    // A refused Event Log write must not throw out of a logger and fail a constructor that logs.
+    private static ILoggingBuilder AddSafeEventLog(this ILoggingBuilder builder, string sourceName)
+    {
+        builder.Services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<ILoggerProvider, SafeEventLogProvider>(
+                _ => new SafeEventLogProvider(sourceName)
+            )
+        );
+        return builder;
     }
 
     private static IServiceCollection AddConnectivityServices(this IServiceCollection services)
