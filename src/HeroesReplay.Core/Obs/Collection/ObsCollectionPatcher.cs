@@ -164,9 +164,10 @@ public static class ObsCollectionPatcher
             );
         }
 
-        if (record == null)
+        bool unrecorded = record == null;
+        if (unrecorded && update.Release)
         {
-            // The first run with a record. Nothing says which template wrote the live collection:
+            // A release with no record. Nothing says which template wrote the live collection:
             // the same scene and source names do not mean the same filters and settings (an
             // older build's match report Scroll filter, #197). So it is replaced once. Saved
             // now, so a replacement deferred while OBS runs still happens once it is closed.
@@ -178,7 +179,12 @@ public static class ObsCollectionPatcher
             update.Managed.Save(destinationFull, record);
         }
 
-        if (!string.Equals(record.TemplateSha256, target.Hash, StringComparison.Ordinal))
+        // Not a release and no record (services start, the spectator): only the paths are
+        // updated, and no record is saved, so the next release still replaces it once (#218).
+        if (
+            record != null
+            && !string.Equals(record.TemplateSha256, target.Hash, StringComparison.Ordinal)
+        )
         {
             return update.ObsIsRunning
                 ? ObsCollectionApplyResult.Defer(
@@ -216,7 +222,11 @@ public static class ObsCollectionPatcher
             update.Managed.BackupDirectory,
             update.UtcNow
         );
-        Remember(target, liveNames);
+        if (!unrecorded)
+        {
+            Remember(target, liveNames);
+        }
+
         return ObsCollectionApplyResult.Updated(
             "Updated OBS collection paths for this install." + Saved(backup),
             backup

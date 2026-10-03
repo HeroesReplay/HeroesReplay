@@ -401,7 +401,8 @@ public class ObsCollectionBundleTests
                 template,
                 destination,
                 @"C:\heroesreplay\Data",
-                obsIsRunning: true
+                obsIsRunning: true,
+                release: true
             );
 
             Assert.False(result.Wrote);
@@ -597,7 +598,7 @@ public class ObsCollectionBundleTests
     }
 
     [Fact]
-    public void Apply_FirstRunWithoutARecord_ReplacesAnOlderCollectionWithTheSameNames()
+    public void Apply_FirstReleaseWithoutARecord_ReplacesAnOlderCollectionWithTheSameNames()
     {
         string root = TempRoot();
         try
@@ -605,12 +606,7 @@ public class ObsCollectionBundleTests
             string template = WriteTemplate(root, "Ranks/bronze.png");
             string destination = Path.Combine(root, "live", "HeroesReplay.json");
             Directory.CreateDirectory(Path.GetDirectoryName(destination));
-            // An older build's collection: the same names, plus a filter this template dropped.
-            string older = File.ReadAllText(template)
-                .Replace(
-                    "\"settings\"",
-                    "\"filters\": [{ \"name\": \"Scroll\", \"id\": \"scroll_filter\" }], \"settings\""
-                );
+            string older = OlderCollection(template);
             File.WriteAllText(destination, older);
 
             ObsCollectionApplyResult result = Apply(
@@ -618,7 +614,8 @@ public class ObsCollectionBundleTests
                 template,
                 destination,
                 @"C:\heroesreplay\Data",
-                obsIsRunning: false
+                obsIsRunning: false,
+                release: true
             );
 
             Assert.True(result.Wrote, result.Message);
@@ -631,6 +628,67 @@ public class ObsCollectionBundleTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    /// <summary>
+    /// #218: services start or the spectator, with no record, keep the operator's collection and
+    /// only update its paths. They save no record, so the next release still replaces it once.
+    /// </summary>
+    [Fact]
+    public void Apply_NotAReleaseWithoutARecord_KeepsTheCollectionUntilTheNextRelease()
+    {
+        string root = TempRoot();
+        try
+        {
+            string template = WriteTemplate(root, "Ranks/bronze.png");
+            string destination = Path.Combine(root, "live", "HeroesReplay.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            File.WriteAllText(
+                destination,
+                OlderCollection(template)
+                    .Replace(
+                        "Ranks/bronze.png",
+                        "C:/heroesreplay/HeroesReplay/obs/Ranks/bronze.png"
+                    )
+            );
+
+            ObsCollectionApplyResult start = Apply(
+                root,
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: false
+            );
+
+            Assert.True(start.Wrote, start.Message);
+            Assert.Contains("scroll_filter", File.ReadAllText(destination));
+            Assert.False(ObsCollectionPaths.ContainsCheckoutPath(File.ReadAllText(destination)));
+            Assert.Null(Managed(root).Read(destination));
+
+            ObsCollectionApplyResult release = Apply(
+                root,
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: false,
+                release: true
+            );
+
+            Assert.True(release.Wrote, release.Message);
+            Assert.DoesNotContain("scroll_filter", File.ReadAllText(destination));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>An older build's collection: the same names, plus a filter this template dropped.</summary>
+    private static string OlderCollection(string template) =>
+        File.ReadAllText(template)
+            .Replace(
+                "\"settings\"",
+                "\"filters\": [{ \"name\": \"Scroll\", \"id\": \"scroll_filter\" }], \"settings\""
+            );
 
     [Fact]
     public void Apply_OperatorAddedAScene_KeepsTheCollectionEvenWhenTheTemplateChanges()
