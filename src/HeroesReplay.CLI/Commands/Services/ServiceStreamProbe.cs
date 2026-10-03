@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.ServiceHost;
 using OBSWebsocketDotNet;
 using OBSWebsocketDotNet.Communication;
@@ -26,11 +27,13 @@ internal static class ServiceStreamProbe
 
         string endpoint;
         string password;
+        bool streamedHere;
         try
         {
             AppSettings settings = ServiceCollectionExtensions.LoadAppSettings();
             endpoint = settings.OBS?.WebSocketEndpoint;
             password = settings.OBS?.WebSocketPassword;
+            streamedHere = SessionMedia.ShouldStream(settings.OBS);
         }
         catch (Exception e)
         {
@@ -41,7 +44,10 @@ internal static class ServiceStreamProbe
 
         if (string.IsNullOrWhiteSpace(endpoint))
         {
-            return ServiceStreamCheck.Unreachable("No OBS websocket endpoint is configured.");
+            return ServiceStreamCheck.WhenUnreachable(
+                streamedHere,
+                "No OBS websocket endpoint is configured."
+            );
         }
 
         var obs = new OBSWebsocket();
@@ -62,14 +68,16 @@ internal static class ServiceStreamProbe
             }
             catch (Exception e)
             {
-                return ServiceStreamCheck.Unreachable(
+                return ServiceStreamCheck.WhenUnreachable(
+                    streamedHere,
                     $"OBS websocket at {endpoint} did not connect. {e.Message}"
                 );
             }
 
             if (!obs.IsIdentified)
             {
-                return ServiceStreamCheck.Unreachable(
+                return ServiceStreamCheck.WhenUnreachable(
+                    streamedHere,
                     $"OBS websocket at {endpoint} did not identify within {IdentifyTimeout.TotalSeconds:0}s."
                 );
             }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,7 +17,8 @@ namespace HeroesReplay.CLI.Commands.Services;
 /// through the <c>services start</c> launch, a role stale past the limit is killed and then
 /// restarts the same way, and a role with no budget left stays down with one error. A stop
 /// request ends the loop before any restart. It never opens OBS or the game; restarting
-/// spectate only closes a game the dead spectator left behind.
+/// spectate only closes a game the dead spectator left behind, and when spectate stays down for
+/// good <see cref="SpectateDown"/> makes a live stream safe.
 /// </summary>
 public sealed class ServiceSupervision
 {
@@ -52,6 +54,12 @@ public sealed class ServiceSupervision
 
     /// <summary>Closes Heroes of the Storm before spectate starts again.</summary>
     public Func<bool> CloseGame { get; init; }
+
+    /// <summary>
+    /// Called once when spectate used its restart budget: makes a live OBS stream safe
+    /// (<see cref="ObsFailSafe"/>) and returns what it did, for the log.
+    /// </summary>
+    public Func<string> SpectateDown { get; init; }
 
     /// <summary>The pause between passes. Production returns early on Ctrl+C.</summary>
     public Action<TimeSpan> Wait { get; init; }
@@ -205,6 +213,11 @@ public sealed class ServiceSupervision
                         ServiceHealthCodes.RestartBudgetExhausted,
                         health.Cause
                     );
+                    if (string.Equals(role, "spectate", StringComparison.OrdinalIgnoreCase))
+                    {
+                        MakeObsSafe();
+                    }
+
                     break;
                 case ServiceRestartAction.Restart:
                     if (Stopping())
@@ -224,6 +237,28 @@ public sealed class ServiceSupervision
 
         Save(changed);
         return true;
+    }
+
+    /// <summary>
+    /// Spectate is down for good, so nothing drives OBS: apply
+    /// <see cref="ServiceRestartSettings.SpectateDownObs"/> to a live stream through
+    /// <see cref="SpectateDown"/>.
+    /// </summary>
+    private void MakeObsSafe()
+    {
+        if (SpectateDown == null)
+        {
+            return;
+        }
+
+        try
+        {
+            Logger.LogWarning("Spectate is down for good. {Obs}", SpectateDown());
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning(e, "Spectate is down for good, and OBS was not made safe.");
+        }
     }
 
     private bool Restart(string role, ServiceProcessRecord previous, ServiceRoleRestarts ledger)

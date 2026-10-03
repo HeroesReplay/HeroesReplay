@@ -94,6 +94,7 @@ dotnet run --no-launch-profile -- --help
 | --- | --- |
 | `spectate file --file <path>` | Play one replay (or each file in a directory) then exit |
 | `services start` / `services stop` / `services status` | Run spectate, Twitch, the Heroes Profile downloader, and the YouTube uploader as separate processes |
+| `services install-task [--environment prod]` | Register the logon task `HeroesReplay-live` that starts the stack supervised (no administrator rights). Release updates restart through it |
 | `spectate heroesprofile` | Spectate `.StormReplay` files already in `Data\Standard` and `Data\Requests` |
 | `heroesprofile download` | List and download Storm League replays into those folders |
 | `heroesprofile patch-index` | Find the first replay id of the current patch line (`--write` sets `MinReplayId`) |
