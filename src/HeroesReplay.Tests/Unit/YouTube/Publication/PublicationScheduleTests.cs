@@ -31,8 +31,8 @@ public class PublicationScheduleTests
     [Fact]
     public void Decide_DeniesTheWeekAtThirtyAndAllowsTwentyNine()
     {
-        PublicationDecision full = Decide(publicAt: Week(30), requested: true);
-        PublicationDecision room = Decide(publicAt: Week(29), requested: true);
+        PublicationDecision full = Decide(publicAt: Week(30));
+        PublicationDecision room = Decide(publicAt: Week(29));
 
         Assert.False(full.Allow);
         Assert.Equal("week", full.Reason);
@@ -43,13 +43,10 @@ public class PublicationScheduleTests
     [Fact]
     public void Decide_DeniesTheDayAtSix()
     {
-        PublicationDecision full = Decide(publicAt: Recent(6), requested: true);
-        PublicationDecision room = Decide(publicAt: Recent(5), requested: true);
+        PublicationDecision full = Decide(publicAt: Recent(6));
 
         Assert.False(full.Allow);
         Assert.Equal("day", full.Reason);
-        Assert.True(room.Allow);
-        Assert.Equal("ready", room.Reason);
     }
 
     [Fact]
@@ -57,30 +54,29 @@ public class PublicationScheduleTests
     {
         PublicationDecision ordinaryFull = Decide(publicAt: Recent(4), requested: false);
         PublicationDecision ordinaryRoom = Decide(publicAt: Recent(3), requested: false);
-        PublicationDecision requestStillFits = Decide(
-            publicAt: Recent(4),
-            requested: true,
-            requestedInDay: 1
-        );
-        PublicationDecision requestsFull = Decide(
-            publicAt: Recent(4),
-            requested: true,
-            requestedInDay: PublicationSchedule.ReservedRequestSlotsPerDay
-        );
-        PublicationDecision requestBeforeTheDayCap = Decide(
-            publicAt: Recent(5),
-            requested: true,
-            requestedInDay: 1
-        );
 
         Assert.False(ordinaryFull.Allow);
         Assert.Equal("reserved", ordinaryFull.Reason);
         Assert.True(ordinaryRoom.Allow);
-        Assert.True(requestStillFits.Allow);
-        Assert.Equal("ready", requestStillFits.Reason);
-        Assert.False(requestsFull.Allow);
-        Assert.Equal("reserved", requestsFull.Reason);
-        Assert.True(requestBeforeTheDayCap.Allow);
+    }
+
+    /// <summary>#216: a request is never paced, in Decide as in Plan. Only the gate stops it.</summary>
+    [Fact]
+    public void Decide_NeverPacesARequest()
+    {
+        PublicationDecision weekFull = Decide(publicAt: Week(30), requested: true);
+        PublicationDecision dayFull = Decide(
+            publicAt: Recent(6),
+            requested: true,
+            requestedInDay: PublicationSchedule.ReservedRequestSlotsPerDay
+        );
+        PublicationDecision quota = Decide(publicAt: Recent(6), requested: true, inserts: 80);
+
+        Assert.True(weekFull.Allow);
+        Assert.Equal("ready", weekFull.Reason);
+        Assert.True(dayFull.Allow);
+        Assert.False(quota.Allow);
+        Assert.Equal("quota", quota.Reason);
     }
 
     [Fact]
