@@ -411,7 +411,17 @@ internal sealed class FakeObs : IObsReadSessionFactory
         };
     }
 
-    private sealed class Session : IObsReadSession
+    /// <summary>A session that may also reload browser sources, as <c>obs pages</c> opens.</summary>
+    public IObsPageSession OpenPage()
+    {
+        Opened++;
+        return new Session(this);
+    }
+
+    /// <summary>The browser sources reloaded through <see cref="IObsPageSession.Reload"/>, in order.</summary>
+    public List<string> Reloaded { get; } = new();
+
+    private sealed class Session : IObsPageSession
     {
         private readonly FakeObs owner;
 
@@ -422,6 +432,12 @@ internal sealed class FakeObs : IObsReadSessionFactory
 
         public JObject Get(string requestType, JObject requestData = null) =>
             owner.Answer(requestType, requestData);
+
+        public void Reload(string inputName)
+        {
+            owner.Requests.Add("PressInputPropertiesButton");
+            owner.Reloaded.Add(inputName);
+        }
 
         public void Dispose() => owner.Disposed++;
     }

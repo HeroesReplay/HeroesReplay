@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using static Heroes.ReplayParser.Unit;
@@ -48,6 +49,37 @@ public class GameDataCatalogTests
         Assert.Equal(98304, GameData.BuildNumber(archive.FileName));
         Assert.Equal(98304, GameData.BuildNumber("herodata_98304.json"));
         Assert.Equal(96370, GameData.BuildNumber("herodata_96370_localized.json"));
+    }
+
+    [Fact]
+    public void Maps_AreTheCatalogBeforeTheHeroDataLoads()
+    {
+        var data = new GameData(
+            NullLogger<GameData>.Instance,
+            new AppSettings
+            {
+                Maps = new MapSettings
+                {
+                    Catalog = new[]
+                    {
+                        new MapDefinition
+                        {
+                            Name = "Silver City",
+                            ShortName = "SilverCity",
+                            Type = "ARAM",
+                            Playable = true,
+                        },
+                    },
+                },
+            }
+        );
+
+        Map map = Assert.Single(data.Maps);
+        Assert.Equal("Silver City", map.Name);
+        Assert.Contains(
+            new SupportedRewardsHolder(data).Rewards,
+            reward => reward.Title == "Silver City (ARAM)"
+        );
     }
 
     [Fact]

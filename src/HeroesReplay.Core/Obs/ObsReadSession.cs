@@ -65,7 +65,12 @@ public sealed class ObsWebsocketReadSessionFactory : IObsReadSessionFactory
 
     public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
 
-    public IObsReadSession Open(string endpoint, string password)
+    public IObsReadSession Open(string endpoint, string password) =>
+        new ObsWebsocketReadSession(Connect(endpoint, password));
+
+    /// <summary>Connects and waits for OBS to identify the session.</summary>
+    /// <exception cref="ObsUnavailableException">OBS did not identify within <see cref="IdentifyTimeout"/>.</exception>
+    internal static OBSWebsocket Connect(string endpoint, string password)
     {
         if (string.IsNullOrWhiteSpace(endpoint))
         {
@@ -109,7 +114,7 @@ public sealed class ObsWebsocketReadSessionFactory : IObsReadSessionFactory
 
         if (obs.IsIdentified)
         {
-            return new ObsWebsocketReadSession(obs);
+            return obs;
         }
 
         Close(obs);
