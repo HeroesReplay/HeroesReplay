@@ -4,7 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Shared;

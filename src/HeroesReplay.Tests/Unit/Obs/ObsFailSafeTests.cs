@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Inspection;
 using Newtonsoft.Json.Linq;
 using Xunit;
 

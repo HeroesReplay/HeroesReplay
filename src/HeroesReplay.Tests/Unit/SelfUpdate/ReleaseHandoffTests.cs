@@ -7,7 +7,6 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
-using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;

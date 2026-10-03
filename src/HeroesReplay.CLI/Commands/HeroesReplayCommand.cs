@@ -3,6 +3,7 @@ using HeroesReplay.CLI.Commands.Calculators;
 using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
 using HeroesReplay.CLI.Commands.HeroesProfile;
+using HeroesReplay.CLI.Commands.Mcp;
 using HeroesReplay.CLI.Commands.Obs;
 using HeroesReplay.CLI.Commands.Otel;
 using HeroesReplay.CLI.Commands.Services;

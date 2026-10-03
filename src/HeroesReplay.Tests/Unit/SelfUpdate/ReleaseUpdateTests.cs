@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.SelfUpdate;
 using Xunit;
 

@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;

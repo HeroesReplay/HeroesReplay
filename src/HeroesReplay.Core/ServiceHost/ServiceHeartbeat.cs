@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using HeroesReplay.Core.ServiceHost.Logs;
 
 namespace HeroesReplay.Core.ServiceHost;
 

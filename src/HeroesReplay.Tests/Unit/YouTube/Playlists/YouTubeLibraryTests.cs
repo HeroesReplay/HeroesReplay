@@ -12,7 +12,7 @@ using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Playlists;
-using HeroesReplay.Core.YouTube.Publication;
+using HeroesReplay.Core.YouTube.Quota;
 using HeroesReplay.Core.YouTube.Search;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;

@@ -1,5 +1,5 @@
 using System;
-using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.YouTube.Outbox;
 
 namespace HeroesReplay.Core.MediaPolicy;

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Replays;

@@ -4,6 +4,7 @@ using System.CommandLine.Parsing;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;

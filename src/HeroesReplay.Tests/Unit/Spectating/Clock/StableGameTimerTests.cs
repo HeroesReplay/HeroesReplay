@@ -1,6 +1,5 @@
 using System.Threading;
 using HeroesReplay.Core.Spectating.Clock;
-using HeroesReplay.Core.Spectating.Clock.Memory;
 using HeroesReplay.Core.Spectating.Control;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;

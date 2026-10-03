@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Heroes.ReplayParser;
-using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;

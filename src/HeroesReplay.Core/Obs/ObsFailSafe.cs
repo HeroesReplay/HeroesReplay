@@ -1,4 +1,5 @@
 using System;
+using HeroesReplay.Core.Obs.Inspection;
 using Newtonsoft.Json.Linq;
 using OBSWebsocketDotNet;
 
