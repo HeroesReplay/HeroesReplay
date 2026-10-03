@@ -33,6 +33,8 @@ public static class ObsReadOnly
         "GetRecordStatus",
         "GetStreamServiceSettings",
         "GetSourceScreenshot",
+        "GetProfileParameter",
+        "GetSourceFilterList",
     };
 
     public static bool IsAllowed(string requestType) =>

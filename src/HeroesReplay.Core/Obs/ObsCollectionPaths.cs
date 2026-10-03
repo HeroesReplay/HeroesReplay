@@ -134,6 +134,67 @@ public static class ObsCollectionPaths
         MissingNames(SourceNames(json), required);
 
     /// <summary>Source name → unversioned kind (<c>id</c>), such as <c>browser_source</c>.</summary>
+    /// <summary>The filters each source has in the collection: source name → (filter name, filter kind).</summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<ObsFilterInfo>> SourceFilters(
+        string json
+    )
+    {
+        var filters = new Dictionary<string, IReadOnlyList<ObsFilterInfo>>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return filters;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        if (
+            !document.RootElement.TryGetProperty("sources", out JsonElement sources)
+            || sources.ValueKind != JsonValueKind.Array
+        )
+        {
+            return filters;
+        }
+
+        foreach (JsonElement source in sources.EnumerateArray())
+        {
+            if (
+                !source.TryGetProperty("name", out JsonElement name)
+                || name.ValueKind != JsonValueKind.String
+                || !source.TryGetProperty("filters", out JsonElement list)
+                || list.ValueKind != JsonValueKind.Array
+            )
+            {
+                continue;
+            }
+
+            var named = new List<ObsFilterInfo>();
+            foreach (JsonElement filter in list.EnumerateArray())
+            {
+                if (
+                    filter.TryGetProperty("name", out JsonElement filterName)
+                    && filterName.ValueKind == JsonValueKind.String
+                )
+                {
+                    named.Add(
+                        new ObsFilterInfo(
+                            filterName.GetString(),
+                            filter.TryGetProperty("id", out JsonElement kind)
+                            && kind.ValueKind == JsonValueKind.String
+                                ? kind.GetString()
+                                : null
+                        )
+                    );
+                }
+            }
+
+            if (named.Count > 0)
+            {
+                filters[name.GetString()] = named;
+            }
+        }
+
+        return filters;
+    }
+
     public static IReadOnlyDictionary<string, string> SourceKinds(string json)
     {
         var kinds = new Dictionary<string, string>(StringComparer.Ordinal);

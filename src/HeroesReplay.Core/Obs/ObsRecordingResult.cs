@@ -16,6 +16,9 @@ public enum ObsOutputFailure
 
     /// <summary>OBS has another profile or scene collection active. Nothing was started.</summary>
     SelectionMismatch,
+
+    /// <summary>The preflight (<see cref="ObsValidator.StreamBlockers"/>) found OBS cannot stream. Nothing was started.</summary>
+    PreflightFailed,
 }
 
 /// <summary>

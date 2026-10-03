@@ -40,7 +40,9 @@ public sealed record ObsValidation
 /// active profile and collection (<see cref="ObsSelection"/>), the scenes and sources it drives
 /// (<see cref="ObsContract"/>), source kinds and scene-item placement against
 /// <c>obs/Default.json</c>, local asset paths after <see cref="ObsCollectionPaths.RewriteValue"/>,
-/// and the Mic/Aux global input.
+/// the Mic/Aux global input, the canvas and FPS, the recording format, the stream service when
+/// this install streams, and the filters the packaged sources have. <c>obs validate</c>,
+/// <c>obs_validate</c>, and the spectator's preflight before its first StartStream run it.
 /// </summary>
 public static class ObsValidator
 {
@@ -62,8 +64,20 @@ public static class ObsValidator
     public const string UrlInvalid = "obs.url_invalid";
     public const string MicEnabled = "obs.mic_enabled";
     public const string MicMuted = "obs.mic_muted";
+    public const string CanvasMismatch = "obs.canvas_mismatch";
+    public const string FpsLow = "obs.fps_low";
+    public const string ProfileUnreadable = "obs.profile_unreadable";
+    public const string RecordingFormat = "obs.recording_format";
+    public const string StreamKeyMissing = "obs.stream_key_missing";
+    public const string StreamServiceUnexpected = "obs.stream_service_unexpected";
+    public const string FilterMissing = "obs.filter_missing";
 
-    /// <summary>The obs-websocket requests HeroesReplay sends while it spectates.</summary>
+    /// <summary>
+    /// The obs-websocket requests HeroesReplay sends while it spectates: the minimum capability
+    /// set. OBS must offer all of them (GetVersion <c>availableRequests</c>). SetRecordDirectory
+    /// arrived in obs-websocket 5.3.0 (OBS 30.0), the newest one here, so OBS 30.0 or later is
+    /// required.
+    /// </summary>
     public static readonly IReadOnlyList<string> RequiredRequests =
     [
         "GetVersion",
@@ -76,7 +90,7 @@ public static class ObsValidator
         "SetInputSettings",
         "GetSceneItemId",
         "SetSceneItemEnabled",
-        "SetSourceFilterSettings",
+        "SetSourceFilterEnabled",
         "SetRecordDirectory",
         "GetRecordStatus",
         "StartRecord",
@@ -87,6 +101,24 @@ public static class ObsValidator
     ];
 
     private static readonly string[] MicSlots = { "mic1", "mic2", "mic3", "mic4" };
+
+    /// <summary>
+    /// Findings that stop the spectator's first StartStream: a stream could not work, so it is
+    /// not started. Everything else is logged and the stream starts.
+    /// </summary>
+    public static readonly IReadOnlySet<string> StreamBlockers = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    {
+        RequestUnavailable,
+        StreamKeyMissing,
+    };
+
+    /// <summary>The first error in <paramref name="validation"/> that stops a stream, or null.</summary>
+    public static ObsFinding BlocksStream(ObsValidation validation) =>
+        validation?.Findings.FirstOrDefault(finding =>
+            finding.Severity == Error && StreamBlockers.Contains(finding.Code)
+        );
 
     public static ObsValidation Unavailable(
         ObsInspectionSettings settings,
@@ -140,6 +172,10 @@ public static class ObsValidator
         );
         CheckPaths(session, inputs, global, packaged.AssetRoot, settings?.DataDirectory, findings);
         CheckMicrophone(session, global, findings);
+        CheckVideo(session.Get("GetVideoSettings"), findings);
+        CheckProfile(session, settings?.Obs, findings);
+        CheckStreamService(session, settings?.Obs, findings);
+        CheckFilters(session, packaged, scenes, inputs, findings);
 
         List<ObsFinding> ordered = findings
             .OrderBy(finding => finding.Severity == Error ? 0 : 1)
@@ -165,7 +201,8 @@ public static class ObsValidator
         string Path,
         string AssetRoot,
         IReadOnlyList<string> Names,
-        IReadOnlyDictionary<string, string> Kinds
+        IReadOnlyDictionary<string, string> Kinds,
+        IReadOnlyDictionary<string, IReadOnlyList<ObsFilterInfo>> Filters = null
     );
 
     private static Packaged ReadPackaged(string installDirectory, List<ObsFinding> findings)
@@ -206,7 +243,8 @@ public static class ObsValidator
                 path,
                 assetRoot,
                 ObsCollectionPaths.SourceNames(json),
-                ObsCollectionPaths.SourceKinds(json)
+                ObsCollectionPaths.SourceKinds(json),
+                ObsCollectionPaths.SourceFilters(json)
             );
         }
         catch (Exception e) when (e is IOException or JsonException)
@@ -685,6 +723,243 @@ public static class ObsValidator
                             + ") is enabled and not muted, so OBS captures whichever microphone Windows selects. Set Settings > Audio > Global Audio Devices > Mic/Auxiliary Audio to Disabled."
                     )
             );
+        }
+    }
+
+    private static void CheckVideo(JObject video, List<ObsFinding> findings)
+    {
+        long? width = ObsResponse.Long(video, "baseWidth");
+        long? height = ObsResponse.Long(video, "baseHeight");
+        if (
+            width.HasValue
+            && height.HasValue
+            && (width != ObsContract.CanvasWidth || height != ObsContract.CanvasHeight)
+        )
+        {
+            findings.Add(
+                new ObsFinding(
+                    CanvasMismatch,
+                    Error,
+                    width + "x" + height,
+                    "The OBS canvas (base resolution) is "
+                        + width
+                        + "x"
+                        + height
+                        + ", but the collection is laid out for "
+                        + ObsContract.CanvasWidth
+                        + "x"
+                        + ObsContract.CanvasHeight
+                        + ": the game capture, the report pages, and the rank and info sources would be cropped or misplaced. Set Settings > Video > Base (Canvas) Resolution to "
+                        + ObsContract.CanvasWidth
+                        + "x"
+                        + ObsContract.CanvasHeight
+                        + ". The output (scaled) resolution is this machine's choice."
+                )
+            );
+        }
+
+        long? numerator = ObsResponse.Long(video, "fpsNumerator");
+        long? denominator = ObsResponse.Long(video, "fpsDenominator");
+        if (numerator.HasValue && denominator is > 0)
+        {
+            double fps = Math.Round((double)numerator.Value / denominator.Value, 2);
+            if (fps < ObsContract.MinimumFps)
+            {
+                findings.Add(
+                    new ObsFinding(
+                        FpsLow,
+                        Warning,
+                        fps.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        "OBS renders at "
+                            + fps.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                            + " FPS. Below "
+                            + ObsContract.MinimumFps
+                            + " FPS the stream and the recordings stutter. Set Settings > Video > Common FPS Values to 30 or 60."
+                    )
+                );
+            }
+        }
+    }
+
+    private static void CheckProfile(
+        IObsReadSession session,
+        OBSSettings obs,
+        List<ObsFinding> findings
+    )
+    {
+        ObsProfileInfo profile;
+        try
+        {
+            profile = ObsProfileInfo.Read(session);
+        }
+        catch (ObsRequestException e)
+        {
+            findings.Add(
+                new ObsFinding(
+                    ProfileUnreadable,
+                    Warning,
+                    ObsNames.Profile(obs),
+                    "The OBS profile settings could not be read, so the recording format was not checked. "
+                        + e.Message
+                )
+            );
+            return;
+        }
+
+        if (profile.RecordsMp4)
+        {
+            return;
+        }
+
+        bool recording = obs?.RecordingEnabled == true;
+        findings.Add(
+            new ObsFinding(
+                RecordingFormat,
+                recording ? Error : Warning,
+                profile.RecordingFormat ?? "unknown",
+                "OBS records to "
+                    + (profile.RecordingFormat ?? "a format the profile does not name")
+                    + " ("
+                    + profile.OutputMode
+                    + " output), but the YouTube uploader, the pentakill clips, and retention only find .mp4 files in Data\\Contexts"
+                    + (
+                        recording
+                            ? ", so OBS:RecordingEnabled recordings would never be uploaded or cleaned up"
+                            : ""
+                    )
+                    + ". Set Settings > Output > Recording > Recording Format to MPEG-4 (.mp4) or Hybrid MP4."
+            )
+        );
+    }
+
+    private static void CheckStreamService(
+        IObsReadSession session,
+        OBSSettings obs,
+        List<ObsFinding> findings
+    )
+    {
+        // Only an install that streams needs a service. The key itself never leaves Summarize.
+        if (!SessionMedia.ShouldStream(obs))
+        {
+            return;
+        }
+
+        ObsStreamService service = ObsStreamService.Summarize(
+            session.Get("GetStreamServiceSettings")
+        );
+        if (!service.KeySet)
+        {
+            findings.Add(
+                new ObsFinding(
+                    StreamKeyMissing,
+                    Error,
+                    service.Service ?? service.Type ?? "stream service",
+                    "OBS:StreamingEnabled is true, but the OBS stream service has no stream key, so StartStream cannot go live. Set Settings > Stream > Service "
+                        + ObsContract.StreamService
+                        + " and its stream key in OBS on this machine."
+                )
+            );
+            return;
+        }
+
+        if (
+            !string.Equals(service.Type, "rtmp_common", StringComparison.Ordinal)
+            || !string.Equals(
+                service.Service,
+                ObsContract.StreamService,
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            findings.Add(
+                new ObsFinding(
+                    StreamServiceUnexpected,
+                    Warning,
+                    service.Service ?? service.Type ?? "stream service",
+                    "The OBS stream goes to "
+                        + (service.Service ?? service.Type ?? "an unnamed service")
+                        + ", not "
+                        + ObsContract.StreamService
+                        + ". Check Settings > Stream in OBS on this machine."
+                )
+            );
+        }
+    }
+
+    private static void CheckFilters(
+        IObsReadSession session,
+        Packaged packaged,
+        IReadOnlyList<string> scenes,
+        IReadOnlyList<JObject> inputs,
+        List<ObsFinding> findings
+    )
+    {
+        if (packaged.Filters == null || packaged.Filters.Count == 0)
+        {
+            return;
+        }
+
+        var live = new HashSet<string>(
+            inputs.Select(input => ObsResponse.String(input, "inputName")).Concat(scenes),
+            StringComparer.Ordinal
+        );
+        foreach ((string source, IReadOnlyList<ObsFilterInfo> expected) in packaged.Filters)
+        {
+            if (!live.Contains(source))
+            {
+                // A missing source is its own finding, or not one HeroesReplay drives.
+                continue;
+            }
+
+            List<ObsFilterInfo> have;
+            try
+            {
+                have = ObsResponse
+                    .Objects(
+                        session.Get("GetSourceFilterList", new JObject { ["sourceName"] = source }),
+                        "filters"
+                    )
+                    .Select(filter => new ObsFilterInfo(
+                        ObsResponse.String(filter, "filterName"),
+                        ObsResponse.String(filter, "filterKind")
+                    ))
+                    .ToList();
+            }
+            catch (ObsRequestException)
+            {
+                continue;
+            }
+
+            foreach (ObsFilterInfo filter in expected)
+            {
+                if (
+                    have.Any(candidate =>
+                        string.Equals(candidate.Name, filter.Name, StringComparison.Ordinal)
+                        && (
+                            filter.Kind == null
+                            || string.Equals(candidate.Kind, filter.Kind, StringComparison.Ordinal)
+                        )
+                    )
+                )
+                {
+                    continue;
+                }
+
+                findings.Add(
+                    new ObsFinding(
+                        FilterMissing,
+                        Warning,
+                        source + "/" + filter.Name,
+                        "Source '"
+                            + source
+                            + "' has no filter '"
+                            + filter.Name
+                            + "' ("
+                            + filter.Kind
+                            + ") as obs/Default.json does, so it looks different from the packaged layout. Add the filter in OBS, or let services start replace a collection HeroesReplay manages."
+                    )
+                );
+            }
         }
     }
 

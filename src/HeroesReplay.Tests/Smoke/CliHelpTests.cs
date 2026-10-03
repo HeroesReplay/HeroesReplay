@@ -48,11 +48,22 @@ public class CliHelpTests
                 "obs disarm --help",
                 "obs status --help",
                 "obs pages --help",
+                "obs inspect --help",
+                "obs validate --help",
+                "obs inspect --output json",
+                "obs validate -o json",
+                "obs validate --output text",
             }
         )
         {
             Assert.Empty(root.Parse(help).Errors);
         }
+
+        Assert.Contains(
+            "stable codes",
+            obs.Subcommands.Single(c => c.Name == "validate").Description
+        );
+        Assert.NotEmpty(root.Parse("obs validate --output yaml").Errors);
     }
 
     [Fact]

@@ -22,6 +22,9 @@ public sealed record ObsInspection
     public ObsVersionInfo Version { get; init; }
     public ObsSelectionInfo Selection { get; init; }
     public ObsVideoInfo Video { get; init; }
+
+    /// <summary>Output mode, recording format, and encoders from the active profile.</summary>
+    public ObsProfileInfo Profile { get; init; }
     public string ProgramScene { get; init; }
     public IReadOnlyList<ObsSceneInfo> Scenes { get; init; }
     public IReadOnlyList<ObsInputInfo> Inputs { get; init; }
@@ -215,6 +218,7 @@ public static class ObsInspector
                 Read("GetSceneCollectionList")
             ),
             Video = ReadVideo(Read("GetVideoSettings")),
+            Profile = ReadProfile(session, unread),
             ProgramScene = ProgramSceneName(program),
             Scenes = ReadScenes(Read("GetSceneList"), Read),
             Inputs = ReadInputs(session, Read("GetInputList"), Read("GetSpecialInputs")),
@@ -225,6 +229,19 @@ public static class ObsInspector
             StreamArm = ObsStreamArmInfo.From(settings),
             Unread = unread,
         };
+    }
+
+    private static ObsProfileInfo ReadProfile(IObsReadSession session, List<string> unread)
+    {
+        try
+        {
+            return ObsProfileInfo.Read(session);
+        }
+        catch (ObsRequestException e)
+        {
+            unread.Add(e.Message);
+            return null;
+        }
     }
 
     internal static string ProgramSceneName(JObject program) =>

@@ -1,7 +1,7 @@
 ---
 name: obs-websocket-v5
 description: >
-  OBS Studio 28+ obs-websocket 5 control for HeroesReplay (obs-websocket-dotnet 5.7).
+  OBS Studio 30.0+ obs-websocket 5.3+ control for HeroesReplay (obs-websocket-dotnet 5.7).
   Use when changing ObsController, OBS settings, scenes, recording, check obs, the read-only
   OBS MCP tools (obs_inspect, obs_validate, obs_screenshot), or /obs-websocket-v5.
 ---
@@ -10,7 +10,7 @@ description: >
 
 ## Protocol
 
-- OBS 28+ ships websocket **5**. Default URL `ws://127.0.0.1:4455` (not 4444).
+- OBS 28+ ships websocket **5**; HeroesReplay needs **OBS 30.0+ (obs-websocket 5.3+)**, because `SetRecordDirectory` arrived in 5.3.0. The minimum capability set is `ObsValidator.RequiredRequests` (the requests the spectator sends); `obs validate` reports any the running OBS lacks as `obs.request_unavailable`. Default URL `ws://127.0.0.1:4455` (not 4444).
 - Package: `obs-websocket-dotnet` 5.7.x (net10).
 - User enables **Tools → WebSocket Server Settings**. Password: `OBS:WebSocketPassword`.
 
@@ -32,10 +32,13 @@ Names come from `OBS:ProfileName` and `OBS:SceneCollectionName` (default `Heroes
 
 `heroesreplay mcp` has three OBS tools for agents on dev and production: `obs_inspect`, `obs_validate`, and `obs_screenshot` (output shapes and codes: skill `heroes-replay-cli`, MCP). They are the production way for an agent to look at OBS.
 
-- **Read-only by construction.** They talk to OBS only through `IObsReadSession` (`ObsWebsocketReadSessionFactory`). `ObsReadOnly.Require` runs before every request and allows only the Get requests in `ObsReadOnly.Requests` (`GetVersion`, `GetStats`, `GetProfileList`, `GetSceneCollectionList`, `GetVideoSettings`, `GetCurrentProgramScene`, `GetSceneList`, `GetSceneItemList`, `GetInputList`, `GetInputSettings`, `GetInputMute`, `GetInputVolume`, `GetSpecialInputs`, `GetStreamStatus`, `GetRecordStatus`, `GetStreamServiceSettings`, `GetSourceScreenshot`). No Set, Start, Stop, Create, Remove, or Save request can be sent. `ObsMcpToolsTests` runs all three tools against `FakeObs` and fails on any other request.
+- **Read-only by construction.** They talk to OBS only through `IObsReadSession` (`ObsWebsocketReadSessionFactory`). `ObsReadOnly.Require` runs before every request and allows only the Get requests in `ObsReadOnly.Requests` (`GetVersion`, `GetStats`, `GetProfileList`, `GetSceneCollectionList`, `GetVideoSettings`, `GetCurrentProgramScene`, `GetSceneList`, `GetSceneItemList`, `GetInputList`, `GetInputSettings`, `GetInputMute`, `GetInputVolume`, `GetSpecialInputs`, `GetStreamStatus`, `GetRecordStatus`, `GetStreamServiceSettings`, `GetSourceScreenshot`, `GetProfileParameter`, `GetSourceFilterList`). No Set, Start, Stop, Create, Remove, or Save request can be sent. `ObsMcpToolsTests` runs all three tools against `FakeObs` and fails on any other request.
 - **Own short session.** Each tool call identifies (3 s timeout), reads, and disconnects. This is per tool call, not per request, and it does not touch the spectator's one session per replay. A closed OBS returns `obs.unreachable` in about 2–3 s.
 - **Stream key.** `GetStreamServiceSettings` returns the key, server, and any username or password. `ObsStreamService.Summarize` keeps only `streamServiceType` and whether `key` is non-empty; nothing else from that response leaves it.
-- **Validation** reuses `ObsContract` (also used by `check obs`), `ObsSelection`, `ObsCollectionPaths.RewriteValue` / `MissingAssets` / `SourceKinds`, and `ObsCollectionPatcher.Drift`. Mic/Aux comes from `GetSpecialInputs` (`mic1`–`mic4`): unmuted is `obs.mic_enabled` (error), muted is `obs.mic_muted` (warning). The fix for both is Settings > Audio > Global Audio Devices > Mic/Auxiliary Audio > Disabled.
+- **Validation** reuses `ObsContract` (also used by `check obs`), `ObsSelection`, `ObsCollectionPaths.RewriteValue` / `MissingAssets` / `SourceKinds` / `SourceFilters`, and `ObsCollectionPatcher.Drift`. Mic/Aux comes from `GetSpecialInputs` (`mic1`–`mic4`): unmuted is `obs.mic_enabled` (error), muted is `obs.mic_muted` (warning). The fix for both is Settings > Audio > Global Audio Devices > Mic/Auxiliary Audio > Disabled.
+- **Canvas, profile, service, filters.** The base (canvas) resolution must be `ObsContract.CanvasWidth` x `CanvasHeight` (1920x1080; `obs.canvas_mismatch`, error); the output size is the machine's. Below 30 FPS is `obs.fps_low`. `ObsProfileInfo.Read` uses `GetProfileParameter` (`Output/Mode`, then `SimpleOutput/RecFormat2` or `AdvOut/RecFormat2`, or `AdvOut/FFExtension` for a Custom Output): a format outside `mp4`, `hybrid_mp4`, `fragmented_mp4` is `obs.recording_format`, an error when `OBS:RecordingEnabled`, because the uploader, clips, and retention only find `*.mp4`. When `OBS:StreamingEnabled`, no key is `obs.stream_key_missing` (error) and a service other than `rtmp_common`/`Twitch` is `obs.stream_service_unexpected`. Each filter `obs/Default.json` gives a source must be on the live source (`GetSourceFilterList`; `obs.filter_missing`, warning).
+- **CLI.** `heroesreplay obs inspect` and `obs validate` (`--output text|json`) run the same tools through `ObsLiveRead`, the harness the MCP tools use. `validate` exits 1 on any error finding.
+- **Preflight.** Before the spectator's first `StartStream` of a process (after the selection check), `ObsCoordinator` validates over its own connection (`ObsBorrowedReadSession`: the same Get guard, and it never disconnects). Only `ObsValidator.StreamBlockers` (`obs.request_unavailable`, `obs.stream_key_missing`) stop the stream: `ObsOutputFailure.PreflightFailed`, with the code in `status.json` `obsStreamBlockedBy`, retried on the next reconcile. Every other finding is logged once and the stream starts. A preflight that cannot run does not stop the stream.
 - `obs_screenshot` returns the whole PNG as an MCP image (default width 960, at most 1920). It never changes the program scene.
 
 Fixes stay out of MCP: `obs arm` / `obs disarm` and `obs pages` today, and later `obs plan` / `apply` (#130 workstream B).

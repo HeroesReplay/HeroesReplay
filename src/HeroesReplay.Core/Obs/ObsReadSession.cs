@@ -189,3 +189,36 @@ internal sealed class ObsWebsocketReadSession : IObsReadSession
 
     public void Dispose() => ObsWebsocketReadSessionFactory.Close(obs);
 }
+
+/// <summary>
+/// The read-only view of a connection someone else owns: the spectator's one connection per
+/// replay. The same <see cref="ObsReadOnly"/> guard applies, and disposing it leaves the
+/// connection open.
+/// </summary>
+internal sealed class ObsBorrowedReadSession : IObsReadSession
+{
+    private readonly OBSWebsocket obs;
+
+    public ObsBorrowedReadSession(OBSWebsocket obs)
+    {
+        this.obs = obs ?? throw new ArgumentNullException(nameof(obs));
+    }
+
+    public JObject Get(string requestType, JObject requestData = null)
+    {
+        ObsReadOnly.Require(requestType);
+        try
+        {
+            return obs.SendRequest(requestType, requestData) ?? new JObject();
+        }
+        catch (ErrorResponseException e)
+        {
+            throw new ObsRequestException(requestType, e.ErrorCode, e.Message);
+        }
+    }
+
+    public void Dispose()
+    {
+        // The owner disconnects.
+    }
+}
