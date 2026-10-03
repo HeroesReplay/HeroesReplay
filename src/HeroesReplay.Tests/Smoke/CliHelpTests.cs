@@ -163,6 +163,25 @@ public class CliHelpTests
     }
 
     [Fact]
+    public void ServicesInstallTask_Parses()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("services install-task --help").Errors);
+        Assert.Empty(root.Parse("services install-task --environment prod").Errors);
+        Assert.Empty(
+            root.Parse(
+                "services install-task --environment dev --roles download,youtube --name HeroesReplay-live"
+            ).Errors
+        );
+        Assert.Empty(root.Parse("services install-task --remove").Errors);
+        Command task = root
+            .Subcommands.Single(c => c.Name == "services")
+            .Subcommands.Single(c => c.Name == "install-task");
+        Assert.Contains("HeroesReplay-live", task.Description);
+        Assert.Contains("--supervise", task.Description);
+    }
+
+    [Fact]
     public void ServicesStatusHelp_HasTheJsonOutput()
     {
         var root = new HeroesReplayCommand();

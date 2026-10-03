@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;
@@ -119,6 +120,39 @@ public class ReleaseScriptTests
         Assert.Contains("$arguments += '--supervise'", script);
         Assert.Contains("'supervisor.json'", script);
         Assert.Contains("@('services', 'stop')", script);
+    }
+
+    [Fact]
+    public void ApplyRelease_AlwaysLeavesTheStackSupervised()
+    {
+        string script = File.ReadAllText(FindScript());
+        int start = script.IndexOf("function Start-HeroesReplayStack", StringComparison.Ordinal);
+        int end = script.IndexOf("function Test-SupervisorRunning", StringComparison.Ordinal);
+        string startStack = script.Substring(start, end - start);
+
+        // The direct start is supervised whether or not the replaced stack was.
+        Assert.DoesNotContain("if ($Supervise)", startStack);
+        Assert.Contains("$arguments += '--supervise'", startStack);
+        // A task or start-live.cmd that starts it unsupervised gets a supervisor attached.
+        Assert.Equal(2, CountOf(startStack, "Confirm-Supervised"));
+        Assert.Contains($"'{ServiceSupervisorFile.MutexName}'", script);
+        Assert.Contains("@('services', 'supervise')", script);
+        Assert.Contains("services status --output json 2>nul", script);
+    }
+
+    private static int CountOf(string text, string value)
+    {
+        int count = 0;
+        for (
+            int index = text.IndexOf(value, StringComparison.Ordinal);
+            index >= 0;
+            index = text.IndexOf(value, index + value.Length, StringComparison.Ordinal)
+        )
+        {
+            count++;
+        }
+
+        return count;
     }
 
     [Fact]
