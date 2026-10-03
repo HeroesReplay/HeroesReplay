@@ -67,7 +67,10 @@ public class MatchReportBrowserCssTests
         Assert.EndsWith(MatchReportBrowserCss.ScrollEnd, css);
         Assert.Contains("html{height:100vh!important;overflow:hidden!important;}", css);
         Assert.Contains("heroesreplay-report-scroll 69s linear 3s both!important", css);
-        Assert.Contains("to{transform:translateY(min(0px,calc(100vh - 100%)));}", css);
+        Assert.Contains("body{position:relative!important;", css);
+        Assert.Contains("to{top:min(0px,calc(100vh - 10600px));}", css);
+        // A transformed body stops being drawn about 8,000px down in OBS's browser source.
+        Assert.DoesNotContain("transform", css, StringComparison.Ordinal);
     }
 
     [Fact]
