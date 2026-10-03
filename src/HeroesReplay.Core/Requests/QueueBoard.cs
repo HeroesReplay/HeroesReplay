@@ -186,8 +186,9 @@ public static class QueueBoard
 
     private static void AppendHeroNumbers(StringBuilder html)
     {
+        // The board follows the portraits left to right: Blue 5 to 1, then Red 6 to 9 and 0.
         html.Append("<div class=\"slots\"><div class=\"team blue\"><i>Blue</i>");
-        for (int index = 0; index < 5; index++)
+        for (int index = 4; index >= 0; index--)
         {
             html.Append("<b>").Append(PlayerPriorityRequest.Digit(index)).Append("</b>");
         }
@@ -200,7 +201,7 @@ public static class QueueBoard
 
         html.Append("<i>Red</i></div></div>");
         html.Append(
-            "<p class=\"help\"><span class=\"label\">Hero numbers.</span> The numbers 1 to 0 sit above each hero portrait at the top of the game screen. 1 to 5 are the Blue team on the left. 6 to 9 and 0 are the Red team on the right, so 0 is the tenth hero.</p>"
+            "<p class=\"help\"><span class=\"label\">Hero numbers.</span> The numbers 1 to 0 sit above each hero portrait at the top of the game screen. 1 to 5 are the Blue team on the left, with 1 nearest the middle. 6 to 9 and 0 are the Red team on the right, so 0 is the tenth hero.</p>"
         );
     }
 

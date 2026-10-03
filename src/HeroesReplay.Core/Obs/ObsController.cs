@@ -389,8 +389,21 @@ public class ObsController : IObsController
                 JObject browserSettings = sourceSettings.Settings;
                 browserSettings["url"] = url;
                 ApplyReportBrowserCss(browserSettings);
+                if (IsMatchReport(segment))
+                {
+                    browserSettings["css"] = MatchReportBrowserCss.WithScroll(
+                        browserSettings["css"]?.ToString(),
+                        segment.DisplayTime
+                    );
+                    browserSettings["height"] = MatchReportBrowserCss.SourceHeight;
+                }
+
                 obs.SetInputSettings(source.InputName, browserSettings);
-                SetMatchReportScroll(segment);
+                if (IsMatchReport(segment))
+                {
+                    StopObsScroll(segment);
+                }
+
                 return true;
             }
             catch (Exception e)
@@ -402,31 +415,27 @@ public class ObsController : IObsController
         return false;
     }
 
-    private void SetMatchReportScroll(ReportScene segment)
-    {
-        if (!string.Equals(segment.SceneName, "match-report", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
+    private static bool IsMatchReport(ReportScene segment) =>
+        string.Equals(segment.SceneName, "match-report", StringComparison.OrdinalIgnoreCase);
 
-        double speed = MatchReportPace.ScrollSpeedY(segment.DisplayTime);
+    /// <summary>
+    /// The page scrolls itself now. A collection from an earlier build still has the OBS
+    /// Scroll filter on this source, and it would move the page a second time.
+    /// </summary>
+    private void StopObsScroll(ReportScene segment)
+    {
         try
         {
-            obs.SetSourceFilterSettings(
-                segment.SourceName,
-                "Scroll",
-                new JObject { ["speed_y"] = speed },
-                overlay: true
-            );
+            obs.SetSourceFilterEnabled(segment.SourceName, "Scroll", false);
             logger.LogInformation(
-                "Match report scroll speed {Speed} for {Duration}.",
-                speed,
+                "Match report scrolls itself for {Duration}. The OBS Scroll filter is off.",
                 segment.DisplayTime
             );
         }
         catch (Exception e)
         {
-            logger.LogWarning(e, "Could not set the match report scroll speed.");
+            // A collection from this build has no Scroll filter on the source.
+            logger.LogDebug(e, "No OBS Scroll filter to turn off on {Source}.", segment.SourceName);
         }
     }
 

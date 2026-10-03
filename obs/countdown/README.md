@@ -2,7 +2,7 @@
 
 Local page for the OBS **countdown** Browser Source on `waiting-screen`. No Streamerific, no iframe, no audio.
 
-The clock starts when `waiting-screen` becomes active. Between games that is after the report scenes (`match-report` 60s, `prediction-report` 10s, `request-queue` 10s) inside the `OBS:BeforeNextReplay` hold (90s), while the next replay launches and loads.
+The clock starts when `waiting-screen` becomes active. Between games that is after the report scenes (`match-report` 75s, `prediction-report` 10s, `request-queue` 10s), while the next replay launches and loads. The launch waits for the `OBS:BeforeNextReplay` hold (90s) or the end of that cycle, whichever is later.
 
 ## OBS Browser Source
 

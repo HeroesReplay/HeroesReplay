@@ -39,7 +39,7 @@ public class QueueBoardTests
         string html = Render(null);
 
         Assert.Contains(
-            "<div class=\"team blue\"><i>Blue</i><b>1</b><b>2</b><b>3</b><b>4</b><b>5</b></div>",
+            "<div class=\"team blue\"><i>Blue</i><b>5</b><b>4</b><b>3</b><b>2</b><b>1</b></div>",
             html
         );
         Assert.Contains(
