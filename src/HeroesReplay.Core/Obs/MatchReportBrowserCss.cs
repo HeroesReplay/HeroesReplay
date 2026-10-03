@@ -19,18 +19,6 @@ public static class MatchReportBrowserCss
         + "{display:none!important;}";
 
     /// <summary>
-    /// The rule earlier builds used to hide the Team Advanced HP MMR and Team Advanced Stats
-    /// sections. Those team sections are shown now. OBS saved the rule into the browser
-    /// source, so it is taken out of the current CSS rather than only left out of the new.
-    /// </summary>
-    public const string RetiredTeamSections =
-        "div[class~=\"max-sm:text-sm\"][class~=\"max-w-[1500px]\"][class~=\"mx-auto\"][class~=\"my-5\"]"
-        + "{display:none!important;}";
-
-    private const string ReplayLink =
-        " a[href*='/Match/Single/'],a[href*='replayID=']{font-size:0!important;color:transparent!important;pointer-events:none!important;}";
-
-    /// <summary>
     /// The match-report browser source is one canvas tall (1920x1080). The page scrolls itself,
     /// so a page of any height reaches its bottom. OBS limits a browser source to 8192px, and
     /// the page with its team sections is about 10,000px.
@@ -43,36 +31,20 @@ public static class MatchReportBrowserCss
     /// <summary>The page rests this long at the top before it scrolls, and at the bottom after.</summary>
     public static readonly TimeSpan ScrollHold = TimeSpan.FromSeconds(3);
 
-    public static string Apply(string current, string configured, bool hideHeader)
+    /// <summary>
+    /// The whole CSS of a report browser source: <c>OBS:ReportBrowserCss</c>, then the
+    /// <see cref="Header"/> rule. It replaces what OBS saved in the source, so rules that
+    /// earlier builds wrote there (hidden replay links, footer, team sections) do not pile up.
+    /// </summary>
+    public static string Build(string configured, bool hideHeader)
     {
-        string extra = configured ?? string.Empty;
-        extra += ReplayLink;
-        if (hideHeader)
+        string css = configured?.Trim() ?? string.Empty;
+        if (!hideHeader)
         {
-            extra += Header;
+            return css;
         }
 
-        string existing = (current ?? string.Empty).Replace(
-            RetiredTeamSections,
-            string.Empty,
-            StringComparison.Ordinal
-        );
-        if (string.IsNullOrWhiteSpace(extra))
-        {
-            return existing;
-        }
-
-        if (existing.Contains(extra, StringComparison.Ordinal))
-        {
-            return existing;
-        }
-
-        if (string.IsNullOrWhiteSpace(existing))
-        {
-            return extra;
-        }
-
-        return existing + "\n" + extra;
+        return css.Length == 0 ? Header : css + "\n" + Header;
     }
 
     /// <summary>
@@ -124,7 +96,7 @@ public static class MatchReportBrowserCss
                 break;
             }
 
-            kept = (kept.Substring(0, start) + kept.Substring(end + ScrollEnd.Length)).TrimEnd();
+            kept = (kept.Substring(0, start) + kept.Substring(end + ScrollEnd.Length)).Trim();
             start = kept.IndexOf(ScrollStart, StringComparison.Ordinal);
         }
 

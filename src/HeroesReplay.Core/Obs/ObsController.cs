@@ -456,8 +456,7 @@ public class ObsController : IObsController
 
     private void ApplyReportBrowserCss(JObject browserSettings)
     {
-        browserSettings["css"] = MatchReportBrowserCss.Apply(
-            browserSettings["css"]?.ToString(),
+        browserSettings["css"] = MatchReportBrowserCss.Build(
             settings.OBS.ReportBrowserCss,
             settings.OBS.HideReportHeader
         );
