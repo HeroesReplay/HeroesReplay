@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Text.Json;
 using HeroesReplay.Core.Obs;
 using Xunit;
 
@@ -8,9 +10,9 @@ namespace HeroesReplay.Tests.Unit.Obs;
 public class MatchReportBrowserCssTests
 {
     [Fact]
-    public void Apply_HidesTheSiteMenuAndEventBanner()
+    public void Build_HidesTheSiteMenuAndEventBanner()
     {
-        string css = MatchReportBrowserCss.Apply(string.Empty, string.Empty, hideHeader: true);
+        string css = MatchReportBrowserCss.Build(string.Empty, hideHeader: true);
 
         Assert.Contains("#main-menu", css);
         Assert.Contains(".main-navigation-wrapper", css);
@@ -21,40 +23,39 @@ public class MatchReportBrowserCssTests
     }
 
     [Fact]
-    public void Apply_ShowsTheTeamSections()
+    public void Build_WithTheConfiguredCss_HidesOnlyTheTopNavigationConsentAndAds()
     {
-        string css = MatchReportBrowserCss.Apply(string.Empty, string.Empty, hideHeader: true);
+        string css = MatchReportBrowserCss.Build(AppSettingsReportCss(), hideHeader: true);
 
+        Assert.Contains("#main-menu", css);
+        Assert.Contains(".main-navigation-wrapper", css);
+        Assert.Contains("#CybotCookiebotDialog", css);
+        Assert.Contains("horizontal-banner-ad", css);
+        Assert.DoesNotContain("/Match/Single/", css);
+        Assert.DoesNotContain("replayID=", css);
+        Assert.DoesNotContain(".footer-wrapper", css);
+        Assert.Contains(".disclaimer", css);
+        Assert.DoesNotContain("#hotsapi-alert", css);
+        Assert.DoesNotContain(".flyout-menu", css);
         Assert.DoesNotContain("max-sm:text-sm", css);
-        Assert.DoesNotContain("max-w-[1500px]", css);
     }
 
     [Fact]
-    public void Apply_RemovesTheTeamSectionsRuleAnEarlierBuildSaved()
+    public void Build_IsTheSameWhateverOBSSavedBefore()
     {
-        string fresh = MatchReportBrowserCss.Apply(string.Empty, "body{}", hideHeader: true);
-        // The collection's own CSS ended with the rule, and the earlier build appended its
-        // rules with the team sections rule before the header rule.
-        string earlier = fresh.Replace(
-            MatchReportBrowserCss.Header,
-            MatchReportBrowserCss.RetiredTeamSections + MatchReportBrowserCss.Header
-        );
-        string saved = "html{} " + MatchReportBrowserCss.RetiredTeamSections + "\n" + earlier;
+        string first = MatchReportBrowserCss.Build("body{}", hideHeader: true);
+        string second = MatchReportBrowserCss.Build("body{}", hideHeader: true);
 
-        string css = MatchReportBrowserCss.Apply(saved, "body{}", hideHeader: true);
-
-        Assert.Equal("html{} \n" + fresh, css);
+        Assert.Equal("body{}\n" + MatchReportBrowserCss.Header, first);
+        Assert.Equal(first, second);
     }
 
     [Fact]
-    public void Apply_LeavesTheHeaderWhenHideIsOff()
+    public void Build_LeavesTheHeaderWhenHideIsOff()
     {
-        string css = MatchReportBrowserCss.Apply("body{}", "nav{display:none}", hideHeader: false);
+        string css = MatchReportBrowserCss.Build("nav{display:none}", hideHeader: false);
 
-        Assert.DoesNotContain("#main-menu", css);
-        Assert.DoesNotContain("xalatath-scoreboard", css);
-        Assert.Contains("nav{display:none}", css);
-        Assert.StartsWith("body{}", css);
+        Assert.Equal("nav{display:none}", css);
     }
 
     [Fact]
@@ -98,27 +99,22 @@ public class MatchReportBrowserCssTests
     }
 
     [Fact]
-    public void Apply_KeepsTheScrollBlockForWithScrollToReplace()
+    public void WithScroll_OnTheBuiltCssIsStable()
     {
         string report = MatchReportBrowserCss.WithScroll(
-            MatchReportBrowserCss.Apply(string.Empty, "body{}", hideHeader: true),
+            MatchReportBrowserCss.Build("body{}", hideHeader: true),
             TimeSpan.FromSeconds(75)
         );
 
-        string again = MatchReportBrowserCss.WithScroll(
-            MatchReportBrowserCss.Apply(report, "body{}", hideHeader: true),
-            TimeSpan.FromSeconds(75)
-        );
+        string again = MatchReportBrowserCss.WithScroll(report, TimeSpan.FromSeconds(75));
 
         Assert.Equal(report, again);
     }
 
-    [Fact]
-    public void Apply_DoesNotDuplicateTheSameRules()
+    private static string AppSettingsReportCss()
     {
-        string once = MatchReportBrowserCss.Apply(string.Empty, "body{}", hideHeader: true);
-        string twice = MatchReportBrowserCss.Apply(once, "body{}", hideHeader: true);
-
-        Assert.Equal(once, twice);
+        string path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        using JsonDocument json = JsonDocument.Parse(File.ReadAllText(path));
+        return json.RootElement.GetProperty("OBS").GetProperty("ReportBrowserCss").GetString();
     }
 }
