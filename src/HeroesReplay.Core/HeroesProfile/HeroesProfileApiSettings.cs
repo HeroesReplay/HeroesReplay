@@ -15,6 +15,12 @@ public class HeroesProfileApiSettings
     public int FallbackMaxReplayId { get; set; }
     public int ApiMaxReturnedReplays { get; set; }
     public int CachedReplayLimit { get; set; } = 5;
+
+    /// <summary>A Standard candidate older than this makes the cursor jump to recent ids. Zero turns it off.</summary>
+    public TimeSpan StandardMaxReplayAge { get; set; } = TimeSpan.FromHours(12);
+
+    /// <summary>How many ids below the newest Heroes Profile id the cursor jumps to.</summary>
+    public int StandardCatchUpWindow { get; set; } = 3000;
     public TimeSpan APIRetryWaitTime { get; set; }
     public string StandardCacheDirectoryName { get; set; }
     public string RequestsCacheDirectoryName { get; set; }

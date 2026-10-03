@@ -91,6 +91,57 @@ public class HeroesProfileProviderDownloadTests
         }
     }
 
+    [Fact]
+    public async Task DownloadNextAsync_JumpsPastAStaleCursorToARecentReplay()
+    {
+        string root = NewRoot();
+        DateTime now = DateTime.UtcNow;
+        var service = new ListedDownloads(
+            newest: 65660000,
+            listPage: minId =>
+                minId < 65657000
+                    ? Replay(minId + 1, now - TimeSpan.FromDays(3))
+                    : Replay(minId + 1, now - TimeSpan.FromHours(1))
+        );
+
+        try
+        {
+            HeroesProfileProvider provider = Provider(
+                root,
+                service,
+                resume: null,
+                CancellationToken.None,
+                enableRequests: false
+            );
+
+            Assert.True(await provider.DownloadNextAsync());
+
+            Assert.Equal(65657001, Assert.Single(service.Downloaded));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+
+        static ReplayListing Replay(int id, DateTime played) =>
+            new(
+                new[]
+                {
+                    new HeroesProfileReplay
+                    {
+                        Id = id,
+                        GameType = "Storm League",
+                        Map = "Cursed Hollow",
+                        Fingerprint = "abc",
+                        GameDate = played.ToString("yyyy-MM-dd HH:mm:ss"),
+                    },
+                },
+                hadRows: true,
+                highestId: id,
+                nextAfter: id
+            );
+    }
+
     private static string NewRoot()
     {
         string root = Path.Combine(
@@ -105,7 +156,8 @@ public class HeroesProfileProviderDownloadTests
         string root,
         IHeroesProfileService service,
         IHeroesProfileResume resume,
-        CancellationToken token
+        CancellationToken token,
+        bool enableRequests = true
     )
     {
         var settings = new AppSettings
@@ -115,6 +167,8 @@ public class HeroesProfileProviderDownloadTests
             {
                 StandardCacheDirectoryName = "Standard",
                 RequestsCacheDirectoryName = "Requests",
+                MinReplayId = 65580000,
+                GameTypes = new[] { "Storm League" },
             },
             StormReplay = new StormReplaySettings
             {
@@ -122,7 +176,7 @@ public class HeroesProfileProviderDownloadTests
                 WildCard = "*.StormReplay",
                 FileExtension = ".StormReplay",
             },
-            Twitch = new TwitchSettings { EnableRequests = true },
+            Twitch = new TwitchSettings { EnableRequests = enableRequests },
             Retention = new RetentionSettings { Enabled = false },
         };
 
@@ -174,6 +228,56 @@ public class HeroesProfileProviderDownloadTests
     {
         public Task<Heroes.ReplayParser.Replay> LoadAsync(string path) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class ListedDownloads : IHeroesProfileService
+    {
+        private readonly int newest;
+        private readonly Func<int, ReplayListing> listPage;
+
+        public ListedDownloads(int newest, Func<int, ReplayListing> listPage)
+        {
+            this.newest = newest;
+            this.listPage = listPage;
+        }
+
+        public List<int> Downloaded { get; } = new();
+
+        public async Task DownloadReplayAsync(
+            int replayId,
+            Stream destination,
+            CancellationToken cancellationToken
+        )
+        {
+            Downloaded.Add(replayId);
+            await destination.WriteAsync(new byte[] { 1 }, cancellationToken);
+        }
+
+        public Task<int> GetMaxReplayIdAsync() => Task.FromResult(newest);
+
+        public Task<IEnumerable<HeroesProfileReplay>> GetReplaysByFilters(
+            GameType? gameType = null,
+            GameRank? gameRank = null,
+            string gameMap = null
+        ) => throw new NotSupportedException();
+
+        public Task<HeroesProfileReplay> GetReplayByIdAsync(int replayId) =>
+            throw new NotSupportedException();
+
+        public Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId) =>
+            throw new NotSupportedException();
+
+        public Task<ReplayListing> ListPageAsync(int minId) => Task.FromResult(listPage(minId));
+
+        public Task<IReadOnlyList<HeroesProfileReplay>> ListAfterAsync(
+            int after,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
+        public Task EnrichRankAsync(
+            HeroesProfileReplay replay,
+            CancellationToken cancellationToken
+        ) => Task.CompletedTask;
     }
 
     private sealed class ScriptedDownloads : IHeroesProfileService
