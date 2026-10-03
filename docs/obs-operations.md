@@ -32,7 +32,7 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
   - in a release, the replaced install's template (`--previous`)
 
   Any other collection is custom: an operator added or removed a scene or source. A custom collection is never overwritten, and the output names the extra and missing names.
-- **Template changed.** A managed collection is replaced with the new template. A release with no record yet replaces it too.
+- **Template changed.** A managed collection is replaced with the new template. A managed collection with no record yet is replaced once too: equal names do not mean equal filters and settings, so an older build's collection is never taken for this template.
 - **Template unchanged.** Only the asset and data paths are pointed at this install. Positions, volumes and filters that OBS saved are kept.
 - **Backup and atomic write.** Every write copies the current file to `%LOCALAPPDATA%\HeroesReplay\obs\backups\<folder>-<file>.<UTC>.bak` (the newest 10 per file), writes a temp file beside it, and swaps it in. A failed write leaves the original. To roll back, close OBS and copy a backup over the collection.
 - **Effective settings.** The data folder and collection name come from the install's `appsettings.json`, with the `HEROES_REPLAY_ENV` overlay and `HEROES_REPLAY_` variables applied.

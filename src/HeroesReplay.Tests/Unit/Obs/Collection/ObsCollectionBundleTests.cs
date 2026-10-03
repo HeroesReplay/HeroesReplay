@@ -567,6 +567,42 @@ public class ObsCollectionBundleTests
     }
 
     [Fact]
+    public void Apply_FirstRunWithoutARecord_ReplacesAnOlderCollectionWithTheSameNames()
+    {
+        string root = TempRoot();
+        try
+        {
+            string template = WriteTemplate(root, "Ranks/bronze.png");
+            string destination = Path.Combine(root, "live", "HeroesReplay.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            // An older build's collection: the same names, plus a filter this template dropped.
+            string older = File.ReadAllText(template)
+                .Replace(
+                    "\"settings\"",
+                    "\"filters\": [{ \"name\": \"Scroll\", \"id\": \"scroll_filter\" }], \"settings\""
+                );
+            File.WriteAllText(destination, older);
+
+            ObsCollectionApplyResult result = Apply(
+                root,
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: false
+            );
+
+            Assert.True(result.Wrote, result.Message);
+            Assert.False(result.Drift);
+            Assert.DoesNotContain("scroll_filter", File.ReadAllText(destination));
+            Assert.Equal(older, File.ReadAllText(result.Backup));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Apply_OperatorAddedAScene_KeepsTheCollectionEvenWhenTheTemplateChanges()
     {
         string root = TempRoot();
