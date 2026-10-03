@@ -108,17 +108,17 @@ A recording stays on disk only for the YouTube quota or for the media rules. The
 5. When `YouTube:PrivacyStatus` is public, an ordinary replay's game time is inside `OrdinaryCandidateMaxAge`. A request, a notable replay, and a high-skill replay do not use this age at send time. They already expired by their own windows above. An ordinary replay that is too old is not retried, and its recording is deleted.
 6. When `YouTube:PrivacyStatus` is public, a publish time inside `MaxPublishAhead` (14 days) keeps every rule below. With none, the reason is `horizon` and the recording waits for a later pass.
 
-The rules below no longer hold a recording back. They choose its publish time: the earliest time from now that keeps all of them. Each rule looks both ways, at videos already public and at slots already scheduled, so a later replay can take a free time between two earlier ones.
+A paid request is not paced. It publishes as soon as it is uploaded, whatever the rules below say. The rules below no longer hold an ordinary, notable, or high-skill recording back. They choose its publish time: the earliest time from now that keeps all of them. Each rule looks both ways, at videos already public and at slots already scheduled, so a later replay can take a free time between two earlier ones.
 
 - Week. No rolling 7 days holds more than `MaxPublicPerWeek` videos.
 - Day. No rolling 24 hours holds more than `MaxPublicPerDay` videos.
-- Reserved request room. With 6 and 2, a non-request may not join a rolling 24 hours that already holds 4 videos, requests included. A request may use the last 2, unless 2 requests already sit in that 24 hours and the ordinary room is full. A request does not skip the day cap, the week cap, or the interval.
+- Reserved request room. With 6 and 2, a non-request may not join a rolling 24 hours that already holds 4 videos, requests included, so the last 2 stay free for requests.
 - Interval. Every other publish time is at least `MinimumPublicInterval` away.
 - Map. No slot within `MapCooldown` has the same map. Comparison ignores case and surrounding spaces.
 - Rank. No slot within `RankCooldown` has the same tier. Division is ignored, so Diamond 3 and Diamond 1 are the same tier. An unrecognized rank is compared as written. MMR is not part of this check.
 - Heroes. No slot within `FeaturedHeroCooldown` has the same focus hero. Separately, fewer than `MaxSharedHeroes` heroes from this replay (4 unless configured otherwise, and 0 turns this roster check off) appear in slots within that window. One shared hero is fine.
 
-A paid request skips the map, rank, and hero rules and may use the reserved room, so it gets the earliest time. Its slot still records the map, the rank, the focus hero, and the roster, so later ordinary replays plan around them. Nothing sorts the queue by a score.
+A paid request publishes now. Its slot still records the map, the rank, the focus hero, and the roster, so later ordinary replays plan around them. Nothing sorts the queue by a score.
 
 The log names the rule that pushed the time later (`interval`, `day`, `reserved`, `week`, `map`, `rank`, or `hero`), or `ready` when the time is now.
 
@@ -153,7 +153,7 @@ Eight ordinary games that end at 10:00, 10:30, and every half hour to 13:30 UTC,
 | 7 | after the quota day turns (07:00 or 08:00 UTC) | next day 14:00 | quota held the upload, then reserved |
 | 8 | after the quota day turns | next day 16:00 | quota held the upload, then reserved |
 
-A paid request that ends at 14:00 that day publishes at 18:00, the first time 2 hours from every other video. A ninth ordinary game publishes on the third day at 10:00. The recordings of games 1 to 6 go on the retention sweep that follows each upload. Only games 7 and 8 wait on disk, for the quota.
+A paid request that ends at 14:00 that day publishes at 14:00, as soon as it is uploaded. A ninth ordinary game publishes on the third day at 10:00. The recordings of games 1 to 6 go on the retention sweep that follows each upload. Only games 7 and 8 wait on disk, for the quota.
 
 ## What the video contains
 
