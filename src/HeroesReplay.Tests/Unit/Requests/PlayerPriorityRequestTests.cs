@@ -63,27 +63,15 @@ public class PlayerPriorityRequestTests
     }
 
     [Fact]
-    public void PlayerIndex_UsesTheSlotWhenNoBattleTagIsGiven()
+    public void PlayerIndex_IsNullWithoutABattleTag()
     {
         Replay replay = Players(("Alpha", 100));
 
-        Assert.Equal(
-            4,
-            PlayerPriorityRequest.PlayerIndex(replay, new RewardRequest { PlayerIndex = 4 })
-        );
         Assert.Null(PlayerPriorityRequest.PlayerIndex(replay, new RewardRequest()));
         Assert.Null(PlayerPriorityRequest.PlayerIndex(replay, null));
-    }
-
-    [Theory]
-    [InlineData("1", 0)]
-    [InlineData("5", 4)]
-    [InlineData("6", 5)]
-    [InlineData("0", 9)]
-    public void TrySlot_MapsTheObserveHotkeyToItsSlot(string hotkey, int slot)
-    {
-        Assert.True(PlayerPriorityRequest.TrySlot(hotkey, out int playerIndex));
-        Assert.Equal(slot, playerIndex);
+        Assert.Null(
+            PlayerPriorityRequest.PlayerIndex(null, new RewardRequest { BattleTag = "Alpha#100" })
+        );
     }
 
     [Fact]

@@ -73,24 +73,13 @@ public static class PlayerPriorityRequest
     }
 
     /// <summary>
-    /// The observe slot to follow. A Twitch request names a BattleTag, which is looked up among
-    /// the replay's players. The CLI file option sets the slot directly. Null when neither is
-    /// set, or when the BattleTag did not play in this replay.
+    /// The observe slot of the requested BattleTag among the replay's players. Null when the
+    /// request names no BattleTag, or when that BattleTag did not play in this replay.
     /// </summary>
     public static int? PlayerIndex(Replay replay, RewardRequest request)
     {
-        if (request == null)
-        {
-            return null;
-        }
-
-        if (string.IsNullOrWhiteSpace(request.BattleTag))
-        {
-            return request.PlayerIndex;
-        }
-
         Player[] players = replay?.Players;
-        if (players == null)
+        if (players == null || string.IsNullOrWhiteSpace(request?.BattleTag))
         {
             return null;
         }
@@ -112,30 +101,6 @@ public static class PlayerPriorityRequest
         }
 
         return null;
-    }
-
-    public static bool TrySlot(string text, out int playerIndex)
-    {
-        playerIndex = -1;
-        if (string.IsNullOrWhiteSpace(text) || text.Trim().Length != 1)
-        {
-            return false;
-        }
-
-        char digit = text.Trim()[0];
-        if (digit == '0')
-        {
-            playerIndex = 9;
-            return true;
-        }
-
-        if (digit is < '1' or > '9')
-        {
-            return false;
-        }
-
-        playerIndex = digit - '1';
-        return true;
     }
 
     public static bool BlocksBecauseMatchStarted(

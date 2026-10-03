@@ -72,7 +72,7 @@ public class YouTubeTitleTests
             Request = new RewardRequest
             {
                 ReplayId = 65550001,
-                PlayerIndex = 1,
+                BattleTag = "Player1#1001",
                 Login = "ViewerZZ",
                 RecordAndUpload = true,
             },
@@ -96,7 +96,7 @@ public class YouTubeTitleTests
             Request = new RewardRequest
             {
                 ReplayId = 65550001,
-                PlayerIndex = 1,
+                BattleTag = "Player1#1001",
                 Login = "ViewerZZ",
                 RecordAndUpload = true,
             },
@@ -305,6 +305,8 @@ public class YouTubeTitleTests
             {
                 Team = 1,
                 Character = heroes[i],
+                Name = "Player" + (i + 1),
+                BattleTag = 1001 + i,
                 PlayerType = PlayerType.Human,
             };
         }

@@ -51,7 +51,7 @@ public class RewardRequestFactoryTests
         Assert.Equal(65268119, request.ReplayId);
         Assert.False(request.RecordAndUpload);
         Assert.True(ReplayRequestKind.RecordsAndUploads(request));
-        Assert.Null(request.PlayerIndex);
+        Assert.Null(request.BattleTag);
     }
 
     [Fact]
@@ -102,6 +102,5 @@ public class RewardRequestFactoryTests
 
         Assert.Equal(65268119, request.ReplayId);
         Assert.Equal("Kazpa#2345", request.BattleTag);
-        Assert.Null(request.PlayerIndex);
     }
 }

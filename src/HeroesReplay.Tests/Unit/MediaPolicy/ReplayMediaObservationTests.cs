@@ -948,7 +948,7 @@ public class ReplayMediaObservationTests
             Login = "viewer",
             ReplayId = ReplayId,
             RecordAndUpload = upload,
-            PlayerIndex = 0,
+            BattleTag = "Li-Ming#0",
         };
     }
 
