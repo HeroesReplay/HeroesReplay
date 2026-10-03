@@ -11,6 +11,12 @@ public sealed class ReplayMediaPlayer
     public string Name { get; init; }
     public int BattleTag { get; init; }
     public bool IsAi { get; init; }
+
+    /// <summary>
+    /// Talent ids the player picked, such as <c>VarianTaunt</c>. Empty when the replay was parsed
+    /// without game events and statistics.
+    /// </summary>
+    public IReadOnlyList<string> Talents { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>Null means completion is not known yet. A false flag is a hard miss.</summary>

@@ -9,6 +9,8 @@ namespace HeroesReplay.Tests.Unit.YouTube.Metadata;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class HeroDraftTests
 {
+    private const string Taunt = "VarianTaunt";
+
     private static readonly IReadOnlyList<Hero> Catalog = new[]
     {
         Hero("Johanna", HeroDraft.Tank),
@@ -18,6 +20,7 @@ public class HeroDraftTests
         Hero("Artanis", HeroDraft.Bruiser),
         Hero("Dehaka", HeroDraft.Bruiser),
         Hero("Sonya", HeroDraft.Bruiser),
+        Hero("Varian", HeroDraft.Bruiser),
         Hero("Rehgar", HeroDraft.Healer),
         Hero("Uther", HeroDraft.Healer),
         Hero("Valla", HeroDraft.RangedAssassin),
@@ -87,6 +90,55 @@ public class HeroDraftTests
                     Team(1, "Johanna", "Chen", "Rehgar", "Raynor", "Illidan")
                 )
             )
+        );
+    }
+
+    [Fact]
+    public void Phrase_CountsVarianWithTauntAsATank()
+    {
+        Assert.Equal(
+            "Blue double tank",
+            HeroDraft.Phrase(
+                Catalog,
+                With(Team(0, "Muradin", "Varian", "Rehgar", "Valla", "Jaina"), "Varian", Taunt)
+            )
+        );
+        Assert.Null(
+            HeroDraft.Phrase(
+                Catalog,
+                With(Team(0, "Varian", "Chen", "Rehgar", "Valla", "Jaina"), "Varian", Taunt)
+            )
+        );
+    }
+
+    [Fact]
+    public void Phrase_KeepsVarianABruiserWithoutTaunt()
+    {
+        Assert.Null(
+            HeroDraft.Phrase(
+                Catalog,
+                With(
+                    Team(0, "Muradin", "Varian", "Rehgar", "Valla", "Jaina"),
+                    "Varian",
+                    "VarianParryOverpower",
+                    "VarianColossusSmash"
+                )
+            )
+        );
+        Assert.Equal(
+            "Blue double bruiser",
+            HeroDraft.Phrase(
+                Catalog,
+                With(
+                    Team(0, "Varian", "Chen", "Rehgar", "Valla", "Jaina"),
+                    "Varian",
+                    "VarianTwinBladesOfFury"
+                )
+            )
+        );
+        Assert.Equal(
+            "Blue double bruiser",
+            HeroDraft.Phrase(Catalog, Team(0, "Varian", "Chen", "Rehgar", "Valla", "Jaina"))
         );
     }
 
@@ -178,6 +230,24 @@ public class HeroDraftTests
         }
 
         return players;
+    }
+
+    /// <summary>The team with <paramref name="hero"/> given the talents, in pick order.</summary>
+    private static List<ReplayMediaPlayer> With(
+        List<ReplayMediaPlayer> team,
+        string hero,
+        params string[] talents
+    )
+    {
+        int index = team.FindIndex(player => player.Hero == hero);
+        ReplayMediaPlayer player = team[index];
+        team[index] = new ReplayMediaPlayer
+        {
+            Team = player.Team,
+            Hero = player.Hero,
+            Talents = talents,
+        };
+        return team;
     }
 
     private static List<ReplayMediaPlayer> Join(
