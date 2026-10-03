@@ -28,8 +28,8 @@ public class SupportedReward
         Prompt =
             rewardType == RewardType.ReplayId
                 ? recordAndUpload
-                    ? "Enter a ReplayId, or ReplayId,player (1-9 or 0 for the tenth). Player focus must be redeemed before that match starts. This match is recorded and uploaded to YouTube."
-                    : "Enter a ReplayId, or ReplayId,player (1-9 or 0 for the tenth hero). Player focus must be redeemed before that match starts."
+                    ? "Enter a recent patch ReplayId, or ReplayId,BattleTag (12345678,Name#1234) to follow that player. Redeem before that match starts. This match is recorded and uploaded to YouTube."
+                    : "Enter a recent patch ReplayId, or ReplayId,BattleTag (12345678,Name#1234) to follow that player. Redeem before that match starts."
                 : rewardType.HasFlag(RewardType.Rank)
                     ? "Enter a rank without a division"
                     : null;

@@ -86,7 +86,7 @@ public class RewardRequestFactoryTests
     }
 
     [Fact]
-    public void ReplayId_WithPlayerDigit_SetsTheObserveSlot()
+    public void ReplayId_WithBattleTag_KeepsThePlayerToFollow()
     {
         var factory = new RewardRequestFactory();
         var reward = new SupportedReward(RewardType.ReplayId, "ReplayId", cost: 500);
@@ -95,12 +95,13 @@ public class RewardRequestFactoryTests
             Login = "viewer",
             RedemptionId = System.Guid.NewGuid(),
             RewardTitle = reward.Title,
-            Message = "65268119,0",
+            Message = "65268119, Kazpa#2345",
         };
 
         RewardRequest request = factory.Create(reward, args);
 
         Assert.Equal(65268119, request.ReplayId);
-        Assert.Equal(9, request.PlayerIndex);
+        Assert.Equal("Kazpa#2345", request.BattleTag);
+        Assert.Null(request.PlayerIndex);
     }
 }
