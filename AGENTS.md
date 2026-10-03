@@ -174,6 +174,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` (`OBS:SceneCollectionName`) |
 | `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile (`OBS:ProfileName`). Machine-owned: `obs/Default/basic.ini` is copied only when it does not exist, and updates keep it |
 | `%LOCALAPPDATA%\HeroesReplay\stream-armed` | Machine-local Twitch ingest arm. Live box only |
+| `%LOCALAPPDATA%\HeroesReplay\obs` | `backups\` (the live collection or profile before each write, newest 10) and `managed-collections.json` (the template each live collection was written from). A custom collection is never overwritten. See `obs/README.md` |
 
 `Location:DataDirectory` is `C:\heroesreplay\Data`. Contexts are `Data\Contexts` (not a sibling of Data). Do not copy OBS `service.json` (stream key). The OBS profile and scene collection names are `OBS:ProfileName` and `OBS:SceneCollectionName` (default `HeroesReplay`); a stream or recording does not start while OBS has another one active.
 

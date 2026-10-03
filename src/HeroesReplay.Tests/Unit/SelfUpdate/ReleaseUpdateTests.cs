@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.SelfUpdate;
 using Xunit;
 
@@ -93,7 +94,7 @@ public class ReleaseUpdateTests
     }
 
     [Fact]
-    public void CopyObsScenes_SkipsWhenObsIsRunning()
+    public void InstallObsFiles_SkipsWhenObsIsRunning()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
         string install = Path.Combine(root, "app");
@@ -103,20 +104,19 @@ public class ReleaseUpdateTests
             Directory.CreateDirectory(Path.Combine(install, "obs"));
             File.WriteAllText(Path.Combine(install, "obs", "Default.json"), "{\"scenes\":[]}");
 
-            IReadOnlyList<string> open = ReleaseInstall.CopyObsScenesIfClosed(
-                install,
-                appData,
-                obsIsRunning: true
-            );
+            IReadOnlyList<string> open = InstallObs(install, appData, obsIsRunning: true);
 
-            Assert.Contains(open, note => note.Contains("OBS is open", StringComparison.Ordinal));
+            Assert.Contains(
+                open,
+                note => note.Contains("OBS is running", StringComparison.Ordinal)
+            );
             Assert.False(
                 File.Exists(
                     Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json")
                 )
             );
 
-            ReleaseInstall.CopyObsScenesIfClosed(install, appData, obsIsRunning: false);
+            InstallObs(install, appData, obsIsRunning: false);
 
             Assert.Equal(
                 "{\"scenes\":[]}",
@@ -135,7 +135,7 @@ public class ReleaseUpdateTests
     }
 
     [Fact]
-    public void CopyObsScenes_KeepsAnExistingProfileAndNeverCopiesTheStreamKey()
+    public void InstallObsFiles_KeepsAnExistingProfileAndNeverCopiesTheStreamKey()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
         string install = Path.Combine(root, "app");
@@ -159,11 +159,7 @@ public class ReleaseUpdateTests
                 "[General]\r\nName=HeroesReplay\r\n\r\n[SimpleOutput]\r\nRecEncoder=nvenc\r\n";
             File.WriteAllText(Path.Combine(profileDir, "basic.ini"), machine);
 
-            IReadOnlyList<string> notes = ReleaseInstall.CopyObsScenesIfClosed(
-                install,
-                appData,
-                obsIsRunning: false
-            );
+            IReadOnlyList<string> notes = InstallObs(install, appData, obsIsRunning: false);
 
             Assert.Equal(machine, File.ReadAllText(Path.Combine(profileDir, "basic.ini")));
             Assert.Contains(
@@ -188,7 +184,7 @@ public class ReleaseUpdateTests
     }
 
     [Fact]
-    public void CopyObsScenes_InstallsTheProfileTemplateOnlyWhenMissing()
+    public void InstallObsFiles_InstallsTheProfileTemplateOnlyWhenMissing()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
         string install = Path.Combine(root, "app");
@@ -197,7 +193,7 @@ public class ReleaseUpdateTests
         {
             WriteObsBundle(install);
 
-            IReadOnlyList<string> notes = ReleaseInstall.CopyObsScenesIfClosed(
+            IReadOnlyList<string> notes = InstallObs(
                 install,
                 appData,
                 obsIsRunning: false,
@@ -232,7 +228,7 @@ public class ReleaseUpdateTests
             }
 
             File.WriteAllText(profile, "[General]\r\nName=HeroesReplay-live\r\n; tuned\r\n");
-            ReleaseInstall.CopyObsScenesIfClosed(
+            InstallObs(
                 install,
                 appData,
                 obsIsRunning: false,
@@ -258,6 +254,220 @@ public class ReleaseUpdateTests
             }
         }
     }
+
+    [Fact]
+    public void InstallObsFiles_ReplacesTheManagedCollectionAfterABackup()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string previous = Path.Combine(root, "app.previous");
+        string appData = Path.Combine(root, "appdata");
+        try
+        {
+            // The new release adds a source; the live collection is the previous release's.
+            WriteTemplate(previous, "rank-image");
+            WriteTemplate(install, "rank-image", "queue-browser");
+            string live = Path.Combine(
+                appData,
+                "obs-studio",
+                "basic",
+                "scenes",
+                "HeroesReplay.json"
+            );
+            Directory.CreateDirectory(Path.GetDirectoryName(live)!);
+            string before = "{\"current_scene\":\"x\"," + Collection("rank-image").Substring(1);
+            File.WriteAllText(live, before);
+
+            IReadOnlyList<string> notes = InstallObs(
+                install,
+                appData,
+                obsIsRunning: false,
+                previousInstall: previous
+            );
+
+            Assert.Contains("queue-browser", File.ReadAllText(live));
+            string backup = Assert.Single(
+                ObsFileTransaction.Backups(Managed(appData).BackupDirectory, live)
+            );
+            Assert.Equal(before, File.ReadAllText(backup));
+            Assert.Contains(notes, note => note.Contains(backup, StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void InstallObsFiles_NeverOverwritesACustomCollection()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string previous = Path.Combine(root, "app.previous");
+        string appData = Path.Combine(root, "appdata");
+        try
+        {
+            WriteTemplate(previous, "rank-image");
+            WriteTemplate(install, "rank-image", "queue-browser");
+            string live = Path.Combine(
+                appData,
+                "obs-studio",
+                "basic",
+                "scenes",
+                "HeroesReplay.json"
+            );
+            Directory.CreateDirectory(Path.GetDirectoryName(live)!);
+            string custom = Collection("rank-image", "my-webcam");
+            File.WriteAllText(live, custom);
+
+            IReadOnlyList<string> notes = InstallObs(
+                install,
+                appData,
+                obsIsRunning: false,
+                previousInstall: previous
+            );
+
+            Assert.Equal(custom, File.ReadAllText(live));
+            Assert.Contains(
+                notes,
+                note =>
+                    note.Contains("not overwritten", StringComparison.Ordinal)
+                    && note.Contains("my-webcam", StringComparison.Ordinal)
+            );
+            Assert.Empty(ObsFileTransaction.Backups(Managed(appData).BackupDirectory, live));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void InstallObsFiles_WhileObsRuns_ReplacesTheCollectionOnceObsIsClosed()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string previous = Path.Combine(root, "app.previous");
+        string appData = Path.Combine(root, "appdata");
+        try
+        {
+            WriteTemplate(previous, "rank-image");
+            WriteTemplate(install, "rank-image", "queue-browser");
+            string live = Path.Combine(
+                appData,
+                "obs-studio",
+                "basic",
+                "scenes",
+                "HeroesReplay.json"
+            );
+            Directory.CreateDirectory(Path.GetDirectoryName(live)!);
+            string before = Collection("rank-image");
+            File.WriteAllText(live, before);
+
+            IReadOnlyList<string> notes = InstallObs(
+                install,
+                appData,
+                obsIsRunning: true,
+                previousInstall: previous
+            );
+
+            Assert.Equal(before, File.ReadAllText(live));
+            Assert.Contains(
+                notes,
+                note => note.Contains("OBS is running", StringComparison.Ordinal)
+            );
+
+            // services start (no release, no previous install) with OBS closed.
+            ObsCollectionApplyResult start = ObsCollectionPatcher.Apply(
+                new ObsCollectionUpdate
+                {
+                    TemplatePath = Path.Combine(install, "obs", "Default.json"),
+                    DestinationPath = live,
+                    Managed = Managed(appData),
+                }
+            );
+
+            Assert.True(start.Wrote, start.Message);
+            Assert.Contains("queue-browser", File.ReadAllText(live));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void InstallObsSettings_UseTheEnvironmentOverlay()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        try
+        {
+            Directory.CreateDirectory(root);
+            File.WriteAllText(
+                Path.Combine(root, "appsettings.json"),
+                """{ "Location": { "DataDirectory": "C:\\heroesreplay\\Data" }, "OBS": { "SceneCollectionName": "HeroesReplay" } }"""
+            );
+            File.WriteAllText(
+                Path.Combine(root, "appsettings.dev.json"),
+                """{ "Location": { "DataDirectory": "D:\\dev-data" }, "OBS": { "SceneCollectionName": "HeroesReplay-dev" } }"""
+            );
+
+            (OBSSettings dev, string devData) =
+                HeroesReplay.CLI.ServiceCollectionExtensions.LoadInstallObsSettings(root, "dev");
+            (OBSSettings prod, string prodData) =
+                HeroesReplay.CLI.ServiceCollectionExtensions.LoadInstallObsSettings(root, "prod");
+
+            Assert.Equal(@"D:\dev-data", devData);
+            Assert.Equal("HeroesReplay-dev", ObsNames.SceneCollection(dev));
+            Assert.Equal(@"C:\heroesreplay\Data", prodData);
+            Assert.Equal("HeroesReplay", ObsNames.SceneCollection(prod));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static IReadOnlyList<string> InstallObs(
+        string install,
+        string appData,
+        bool obsIsRunning,
+        string profileName = null,
+        string collectionName = null,
+        string previousInstall = null
+    ) =>
+        ReleaseInstall.InstallObsFiles(
+            new ReleaseObsInstall
+            {
+                InstallDirectory = install,
+                AppData = appData,
+                ObsIsRunning = obsIsRunning,
+                Managed = Managed(appData),
+                ProfileName = profileName,
+                CollectionName = collectionName,
+                PreviousInstall = previousInstall,
+            }
+        );
+
+    private static ObsManagedFiles Managed(string appData) =>
+        new(Path.Combine(Path.GetDirectoryName(appData)!, "managed"));
+
+    private static void WriteTemplate(string install, params string[] sources)
+    {
+        Directory.CreateDirectory(Path.Combine(install, "obs"));
+        File.WriteAllText(Path.Combine(install, "obs", "Default.json"), Collection(sources));
+    }
+
+    private static string Collection(params string[] sources) =>
+        "{\"name\":\"HeroesReplay\",\"sources\":["
+        + string.Join(
+            ",",
+            Array.ConvertAll(
+                sources,
+                name => "{\"name\":\"" + name + "\",\"id\":\"image_source\",\"settings\":{}}"
+            )
+        )
+        + "]}";
 
     private static void WriteObsBundle(string install)
     {

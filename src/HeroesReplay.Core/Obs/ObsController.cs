@@ -72,13 +72,14 @@ public class ObsController : IObsController
                 AppContext.BaseDirectory,
                 settings.Location?.DataDirectory,
                 obsRunning,
-                ObsNames.SceneCollection(settings.OBS)
+                ObsNames.SceneCollection(settings.OBS),
+                ObsManagedFiles.ForThisUser()
             );
             if (result.Drift)
             {
                 logger.LogWarning("OBS collection was not updated. {Reason}", result.Message);
             }
-            else if (result.Wrote)
+            else if (result.Wrote || result.Deferred)
             {
                 logger.LogInformation("{Reason}", result.Message);
             }

@@ -189,7 +189,8 @@ public class ObsCollectionBundleTests
                 """;
             File.WriteAllText(destination, mic);
 
-            ObsCollectionApplyResult closed = ObsCollectionPatcher.Apply(
+            ObsCollectionApplyResult closed = Apply(
+                root,
                 template,
                 destination,
                 @"C:\heroesreplay\Data",
@@ -201,7 +202,8 @@ public class ObsCollectionBundleTests
             string updated = File.ReadAllText(destination);
             Assert.False(ObsCollectionPaths.ContainsCheckoutPath(updated));
 
-            ObsCollectionApplyResult running = ObsCollectionPatcher.Apply(
+            ObsCollectionApplyResult running = Apply(
+                root,
                 template,
                 destination,
                 @"C:\heroesreplay\Data",
@@ -231,7 +233,8 @@ public class ObsCollectionBundleTests
                 "HeroesReplay-dev"
             );
 
-            ObsCollectionApplyResult result = ObsCollectionPatcher.Apply(
+            ObsCollectionApplyResult result = Apply(
+                root,
                 template,
                 destination,
                 @"C:\heroesreplay\Data",
@@ -372,7 +375,8 @@ public class ObsCollectionBundleTests
             File.WriteAllText(destination, File.ReadAllText(template));
             string before = File.ReadAllText(destination);
 
-            ObsCollectionApplyResult result = ObsCollectionPatcher.Apply(
+            ObsCollectionApplyResult result = Apply(
+                root,
                 template,
                 destination,
                 @"C:\heroesreplay\Data",
@@ -380,7 +384,8 @@ public class ObsCollectionBundleTests
             );
 
             Assert.False(result.Wrote);
-            Assert.True(result.Drift);
+            Assert.False(result.Drift);
+            Assert.True(result.Deferred);
             Assert.Contains("OBS is running", result.Message, StringComparison.Ordinal);
             Assert.Equal(before, File.ReadAllText(destination));
         }
@@ -404,7 +409,8 @@ public class ObsCollectionBundleTests
                 """;
             File.WriteAllText(destination, custom);
 
-            ObsCollectionApplyResult result = ObsCollectionPatcher.Apply(
+            ObsCollectionApplyResult result = Apply(
+                root,
                 template,
                 destination,
                 @"C:\heroesreplay\Data",
@@ -445,7 +451,8 @@ public class ObsCollectionBundleTests
                 )
             );
 
-            ObsCollectionApplyResult result = ObsCollectionPatcher.Apply(
+            ObsCollectionApplyResult result = Apply(
+                root,
                 template,
                 destination,
                 @"D:\stream-data",
@@ -486,13 +493,15 @@ public class ObsCollectionBundleTests
             File.WriteAllText(service, streamService);
             string destination = Path.Combine(root, "live", "HeroesReplay.json");
 
-            ObsCollectionApplyResult sameFile = ObsCollectionPatcher.Apply(
+            ObsCollectionApplyResult sameFile = Apply(
+                root,
                 template,
                 template,
                 @"C:\heroesreplay\Data",
                 obsIsRunning: false
             );
-            ObsCollectionApplyResult result = ObsCollectionPatcher.Apply(
+            ObsCollectionApplyResult result = Apply(
+                root,
                 template,
                 destination,
                 @"C:\heroesreplay\Data",
@@ -521,6 +530,107 @@ public class ObsCollectionBundleTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [Fact]
+    public void Apply_TemplateChange_ReplacesTheManagedCollectionAfterABackup()
+    {
+        string root = TempRoot();
+        try
+        {
+            string template = WriteTemplate(root, "Ranks/bronze.png");
+            string destination = Path.Combine(root, "live", "HeroesReplay.json");
+            Assert.True(Apply(root, template, destination, @"C:\heroesreplay\Data", false).Wrote);
+            string installed = File.ReadAllText(destination);
+
+            // A new build changes a setting of a managed source; the names stay the same.
+            File.WriteAllText(
+                template,
+                File.ReadAllText(template).Replace("\"file\"", "\"unload\": true, \"file\"")
+            );
+            ObsCollectionApplyResult result = Apply(
+                root,
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: false
+            );
+
+            Assert.True(result.Wrote, result.Message);
+            Assert.Contains("\"unload\": true", File.ReadAllText(destination));
+            Assert.Equal(installed, File.ReadAllText(result.Backup));
+            Assert.Contains(result.Backup, result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Apply_OperatorAddedAScene_KeepsTheCollectionEvenWhenTheTemplateChanges()
+    {
+        string root = TempRoot();
+        try
+        {
+            string template = WriteTemplate(root, "Ranks/bronze.png");
+            string destination = Path.Combine(root, "live", "HeroesReplay.json");
+            Apply(root, template, destination, @"C:\heroesreplay\Data", false);
+            string custom = File.ReadAllText(destination)
+                .Replace(
+                    "\"sources\": [",
+                    "\"sources\": [ { \"name\": \"intermission\", \"id\": \"scene\", \"settings\": {} },"
+                );
+            File.WriteAllText(destination, custom);
+            File.WriteAllText(
+                template,
+                File.ReadAllText(template).Replace("\"file\"", "\"unload\": true, \"file\"")
+            );
+
+            ObsCollectionApplyResult result = Apply(
+                root,
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: false,
+                release: true
+            );
+
+            Assert.True(result.Drift);
+            Assert.False(result.Wrote);
+            Assert.Contains("intermission", result.Message, StringComparison.Ordinal);
+            Assert.Equal(custom, File.ReadAllText(destination));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static ObsCollectionApplyResult Apply(
+        string root,
+        string template,
+        string destination,
+        string dataDirectory,
+        bool obsIsRunning,
+        string collectionName = null,
+        bool release = false,
+        string previousTemplate = null
+    ) =>
+        ObsCollectionPatcher.Apply(
+            new ObsCollectionUpdate
+            {
+                TemplatePath = template,
+                DestinationPath = destination,
+                DataDirectory = dataDirectory,
+                ObsIsRunning = obsIsRunning,
+                CollectionName = collectionName,
+                Managed = Managed(root),
+                Release = release,
+                PreviousTemplatePath = previousTemplate,
+            }
+        );
+
+    private static ObsManagedFiles Managed(string root) => new(Path.Combine(root, "managed"));
 
     private static string WriteTemplate(string root, string relativeFile)
     {

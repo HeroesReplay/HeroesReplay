@@ -103,45 +103,59 @@ public class UpdateCommand : Command
     {
         var command = new Command(
             "install-obs",
-            "Called by apply-release.ps1: while OBS is closed, copy the release scene collection and install the profile template only when this machine has no profile. Never copies service.json."
+            "Called by apply-release.ps1: replace the scene collection HeroesReplay manages with the release's (backed up to %LOCALAPPDATA%\\HeroesReplay\\obs\\backups, written atomically), keep a custom one, and install the profile template only when this machine has no profile. While OBS is running nothing is written; the collection is replaced the next time HeroesReplay finds OBS closed. Never copies service.json."
         );
         Option<string> install = new("--install")
         {
             Description = "The install directory that holds obs\\Default.json and appsettings.",
             Required = true,
         };
+        Option<string> previous = new("--previous")
+        {
+            Description =
+                "The install being replaced (app.previous). A live collection with its template's scenes and sources is replaced too.",
+        };
         Option<string> environment = EnvironmentOption();
         command.Options.Add(install);
+        command.Options.Add(previous);
         command.Options.Add(environment);
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(
-                    InstallObs(parseResult.GetValue(install), parseResult.GetValue(environment))
+                    InstallObs(
+                        parseResult.GetValue(install),
+                        parseResult.GetValue(previous),
+                        parseResult.GetValue(environment)
+                    )
                 );
             }
         );
         return command;
     }
 
-    private static int InstallObs(string install, string environment)
+    private static int InstallObs(string install, string previous, string environment)
     {
         try
         {
-            OBSSettings obs =
-                ServiceCollectionExtensions
-                    .BuildConfiguration(Path.GetFullPath(install), environment)
-                    .GetSection("OBS")
-                    .Get<OBSSettings>()
-                ?? new OBSSettings();
+            (OBSSettings obs, string dataDirectory) =
+                ServiceCollectionExtensions.LoadInstallObsSettings(install, environment);
             foreach (
-                string note in ReleaseInstall.CopyObsScenesIfClosed(
-                    install,
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
-                    ObsNames.Profile(obs),
-                    ObsNames.SceneCollection(obs)
+                string note in ReleaseInstall.InstallObsFiles(
+                    new ReleaseObsInstall
+                    {
+                        InstallDirectory = install,
+                        AppData = Environment.GetFolderPath(
+                            Environment.SpecialFolder.ApplicationData
+                        ),
+                        ObsIsRunning = NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
+                        Managed = ObsManagedFiles.ForThisUser(),
+                        DataDirectory = dataDirectory,
+                        ProfileName = ObsNames.Profile(obs),
+                        CollectionName = ObsNames.SceneCollection(obs),
+                        PreviousInstall = previous,
+                    }
                 )
             )
             {
