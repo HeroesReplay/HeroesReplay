@@ -19,6 +19,15 @@ public static class MatchReportBrowserCss
         + "{display:none!important;}";
 
     /// <summary>
+    /// Heroes Profile's event overlays and its mobile menu. They are never part of the report,
+    /// so they stay hidden when <c>OBS:HideReportHeader</c> is off (#213).
+    /// </summary>
+    public const string EventOverlays =
+        "#mobile-toggle,xalatath-scoreboard,void-glitch,void-fallen-splash,void-stage-up,"
+        + "void-hidden-eye,void-whispers,mobile-nav-hack"
+        + "{display:none!important;}";
+
+    /// <summary>
     /// The match-report browser source is one canvas tall (1920x1080). The page scrolls itself,
     /// so a page of any height reaches its bottom. OBS limits a browser source to 8192px, and
     /// the page with its team sections is about 10,000px.
@@ -42,18 +51,15 @@ public static class MatchReportBrowserCss
 
     /// <summary>
     /// The whole CSS of a report browser source: <c>OBS:ReportBrowserCss</c>, then the
-    /// <see cref="Header"/> rule. It replaces what OBS saved in the source, so rules that
-    /// earlier builds wrote there (hidden replay links, footer, team sections) do not pile up.
+    /// <see cref="Header"/> rule, or only <see cref="EventOverlays"/> when the header stays.
+    /// It replaces what OBS saved in the source, so rules that earlier builds wrote there
+    /// (hidden replay links, footer, team sections) do not pile up.
     /// </summary>
     public static string Build(string configured, bool hideHeader)
     {
         string css = configured?.Trim() ?? string.Empty;
-        if (!hideHeader)
-        {
-            return css;
-        }
-
-        return css.Length == 0 ? Header : css + "\n" + Header;
+        string hidden = hideHeader ? Header : EventOverlays;
+        return css.Length == 0 ? hidden : css + "\n" + hidden;
     }
 
     /// <summary>
