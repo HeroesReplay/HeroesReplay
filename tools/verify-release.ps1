@@ -25,7 +25,8 @@ $failures = [System.Collections.Generic.List[string]]::new()
 
 # ReleaseInstall (heroesreplay.exe at the root, version.txt), ReleaseUpdateGate and
 # apply-release.ps1 (apply-release.ps1, appsettings.json for MinReplayId), the prod overlay,
-# client configure (AhliObs), and update install-obs (Default.json, Default\basic.ini).
+# client configure (AhliObs), update install-obs (Default.json, Default\basic.ini), and the MCP
+# discovery file (.mcp.json, which starts the read-only `heroesreplay mcp`).
 $required = [System.Collections.Generic.List[string]]::new()
 @(
     'heroesreplay.exe',
@@ -37,7 +38,8 @@ $required = [System.Collections.Generic.List[string]]::new()
     'version.txt',
     'Assets\Interfaces\AhliObs 0.75.StormInterface',
     'obs\Default.json',
-    'obs\Default\basic.ini'
+    'obs\Default\basic.ini',
+    '.mcp.json'
 ) | ForEach-Object { $required.Add($_) }
 
 $manifest = @(
@@ -67,6 +69,20 @@ try {
     foreach ($file in $required) {
         if (-not (Test-Path -LiteralPath (Join-Path $extract $file) -PathType Leaf)) {
             $failures.Add("Missing $file")
+        }
+    }
+
+    # MCP discovery for an agent started in the install folder must start the read-only server.
+    $mcp = Join-Path $extract '.mcp.json'
+    if (Test-Path -LiteralPath $mcp -PathType Leaf) {
+        try {
+            $server = (Get-Content -LiteralPath $mcp -Raw | ConvertFrom-Json).mcpServers.heroesreplay
+            if (-not $server -or (@($server.args) -join ' ') -ne 'mcp' -or $server.command -notmatch 'heroesreplay\.exe$') {
+                $failures.Add('.mcp.json does not start heroesreplay.exe mcp.')
+            }
+        }
+        catch {
+            $failures.Add(".mcp.json is not valid JSON. $($_.Exception.Message)")
         }
     }
 

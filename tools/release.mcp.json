@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "heroesreplay": {
+      "command": "${HEROESREPLAY_APP:-C:\\heroesreplay\\app}\\heroesreplay.exe",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "HEROES_REPLAY_ENV": "${HEROES_REPLAY_ENV:-prod}"
+      }
+    }
+  }
+}

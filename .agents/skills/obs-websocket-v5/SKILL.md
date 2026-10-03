@@ -8,6 +8,8 @@ description: >
 
 # OBS websocket 5
 
+The operating model (who owns what, collection updates, validation codes and fixes, the machine profile policy) is in `docs/obs-operations.md`; this skill covers the code.
+
 ## Protocol
 
 - OBS 28+ ships websocket **5**; HeroesReplay needs **OBS 30.0+ (obs-websocket 5.3+)**, because `SetRecordDirectory` arrived in 5.3.0. The minimum capability set is `ObsValidator.RequiredRequests` (the requests the spectator sends); `obs validate` reports any the running OBS lacks as `obs.request_unavailable`. Default URL `ws://127.0.0.1:4455` (not 4444).
