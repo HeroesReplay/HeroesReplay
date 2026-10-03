@@ -49,7 +49,10 @@ public static class ReplayMediaFacts
             Rank = FirstText(profile?.Rank),
             AverageMmr = profile?.AverageMmr,
             Roster = Roster(replay, heroes),
-            FocusHero = PlayerPriorityRequest.HeroName(replay, request?.PlayerIndex),
+            FocusHero = PlayerPriorityRequest.HeroName(
+                replay,
+                PlayerPriorityRequest.PlayerIndex(replay, request)
+            ),
             ViewerRequested = request != null,
             RecordAndUpload = ReplayRequestKind.RecordsAndUploads(request),
             RequestedBy = FirstText(request?.Login),

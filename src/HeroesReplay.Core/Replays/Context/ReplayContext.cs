@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Telemetry;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Replays.Context;
 
@@ -17,13 +19,16 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
     private readonly IContextFileManager contextFileManager;
     private readonly IReplayAnalyzer replayAnalyzer;
     private readonly AppSettings settings;
+    private readonly ILogger<ReplayContext> logger;
 
     public ReplayContext(
         IContextFileManager contextFileManager,
         IReplayAnalyzer replayAnalyzer,
-        AppSettings settings
+        AppSettings settings,
+        ILogger<ReplayContext> logger
     )
     {
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.contextFileManager = contextFileManager;
         this.replayAnalyzer =
             replayAnalyzer ?? throw new ArgumentNullException(nameof(replayAnalyzer));
@@ -48,7 +53,16 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
 
         Replay replay = loadedReplay.Replay;
 
-        int? priorityPlayer = loadedReplay.RewardQueueItem?.Request?.PlayerIndex;
+        RewardRequest request = loadedReplay.RewardQueueItem?.Request;
+        int? priorityPlayer = PlayerPriorityRequest.PlayerIndex(replay, request);
+        if (!string.IsNullOrWhiteSpace(request?.BattleTag) && priorityPlayer == null)
+        {
+            logger.LogWarning(
+                "{BattleTag} did not play in replay {ReplayId}. The normal camera is used.",
+                request.BattleTag,
+                loadedReplay.ReplayId
+            );
+        }
         var players = replayAnalyzer.GetPlayers(replay, priorityPlayer);
         var panels = replayAnalyzer.GetPanels(replay);
         var talentTimes = replayAnalyzer.GetTalentTimes(replay);

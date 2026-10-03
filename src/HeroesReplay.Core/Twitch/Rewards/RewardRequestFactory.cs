@@ -19,7 +19,7 @@ public class RewardRequestFactory : IRewardRequestFactory
     {
         if (
             reward.RewardType == RewardType.ReplayId
-            && PlayerPriorityRequest.TryRead(args.Message, out int replayId, out int? playerIndex)
+            && PlayerPriorityRequest.TryRead(args.Message, out int replayId, out string battleTag)
         )
         {
             return new RewardRequest(
@@ -33,7 +33,7 @@ public class RewardRequestFactory : IRewardRequestFactory
             )
             {
                 RecordAndUpload = reward.RecordAndUpload,
-                PlayerIndex = playerIndex,
+                BattleTag = battleTag,
             };
         }
 

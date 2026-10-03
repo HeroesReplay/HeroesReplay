@@ -27,7 +27,7 @@ public class ObsPagesTests
             );
             File.WriteAllText(
                 Path.Combine(data, QueueBoard.FileName),
-                "<div class=\"team blue\"><i>Blue</i><b>1</b><b>2</b><b>3</b><b>4</b><b>5</b></div>"
+                "<p class=\"help\">12345678,3 follows hero 3.</p>"
             );
 
             ObsPageResult queue = Page(ObsPages.Write(Settings(data)), QueueBoard.FileName);
@@ -37,10 +37,8 @@ public class ObsPagesTests
             string html = File.ReadAllText(Path.Combine(data, QueueBoard.FileName));
             Assert.Contains("1 request waiting", html);
             Assert.Contains("kazpa", html);
-            Assert.Contains(
-                "<div class=\"team blue\"><i>Blue</i><b>5</b><b>4</b><b>3</b><b>2</b><b>1</b></div>",
-                html
-            );
+            Assert.Contains("12345678,Name#1234 follows Name#1234", html);
+            Assert.DoesNotContain("follows hero 3", html);
             // The reward names come from Maps:Catalog without loading heroes-data2.
             Assert.Contains("<span class=\"label\">Cursed Hollow (SL)</span>", html);
         }
