@@ -632,8 +632,8 @@ public class HeroesProfileProvider : IReplayProvider
         {
             logger.LogWarning(
                 "Standard replay {ReplayId} is {AgeHours:F0} h old; the newest is {Newest} ({Gap} ids ahead). The cursor stays.",
-                age.TotalHours,
                 found.Id,
+                age.TotalHours,
                 newest,
                 newest - found.Id
             );
@@ -642,8 +642,8 @@ public class HeroesProfileProvider : IReplayProvider
 
         logger.LogWarning(
             "Standard replay {ReplayId} is {AgeHours:F0} h old; the newest is {Newest} ({Gap} ids ahead). Jumping to {Target}.",
-            age.TotalHours,
             found.Id,
+            age.TotalHours,
             newest,
             newest - found.Id,
             target
