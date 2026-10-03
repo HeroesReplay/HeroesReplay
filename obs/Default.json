@@ -853,6 +853,32 @@
         "id_counter": 2,
         "items": [
           {
+            "name": "soundcloud",
+            "source_uuid": "b903df54-c4f6-4d2b-9154-dfaed586cfb0",
+            "visible": true,
+            "locked": true,
+            "rot": 0.0,
+            "align": 5,
+            "bounds_type": 0,
+            "bounds_align": 0,
+            "bounds_crop": false,
+            "crop_left": 0,
+            "crop_top": 0,
+            "crop_right": 0,
+            "crop_bottom": 0,
+            "id": 2,
+            "group_item_backup": false,
+            "pos": { "x": 0.0, "y": 900.0 },
+            "scale": { "x": 0.66, "y": 0.66 },
+            "bounds": { "x": 0.0, "y": 0.0 },
+            "scale_filter": "disable",
+            "blend_method": "default",
+            "blend_type": "normal",
+            "show_transition": { "duration": 0 },
+            "hide_transition": { "duration": 0 },
+            "private_settings": {}
+          },
+          {
             "name": "match-report-browser",
             "source_uuid": "a8c1e4d2-6b70-4f3a-9c55-1d2e8f0a4b61",
             "visible": true,
@@ -889,32 +915,6 @@
             "hide_transition": {
               "duration": 0
             },
-            "private_settings": {}
-          },
-          {
-            "name": "soundcloud",
-            "source_uuid": "b903df54-c4f6-4d2b-9154-dfaed586cfb0",
-            "visible": true,
-            "locked": true,
-            "rot": 0.0,
-            "align": 5,
-            "bounds_type": 0,
-            "bounds_align": 0,
-            "bounds_crop": false,
-            "crop_left": 0,
-            "crop_top": 0,
-            "crop_right": 0,
-            "crop_bottom": 0,
-            "id": 2,
-            "group_item_backup": false,
-            "pos": { "x": 0.0, "y": 900.0 },
-            "scale": { "x": 0.66, "y": 0.66 },
-            "bounds": { "x": 0.0, "y": 0.0 },
-            "scale_filter": "disable",
-            "blend_method": "default",
-            "blend_type": "normal",
-            "show_transition": { "duration": 0 },
-            "hide_transition": { "duration": 0 },
             "private_settings": {}
           }
         ]

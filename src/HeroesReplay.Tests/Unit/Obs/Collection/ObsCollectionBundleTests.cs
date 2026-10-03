@@ -160,6 +160,28 @@ public class ObsCollectionBundleTests
     }
 
     [Fact]
+    public void Collection_MatchReportSitsInFrontOfSoundcloud()
+    {
+        string json = File.ReadAllText(Path.Combine(RepoRoot(), "obs", "Default.json"));
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement scene = document
+            .RootElement.GetProperty("sources")
+            .EnumerateArray()
+            .Single(source => source.GetProperty("name").GetString() == "match-report");
+
+        // OBS lists scene items bottom first: the report page covers the soundcloud player.
+        Assert.Equal(
+            ["soundcloud", "match-report-browser"],
+            scene
+                .GetProperty("settings")
+                .GetProperty("items")
+                .EnumerateArray()
+                .Select(item => item.GetProperty("name").GetString())
+                .ToArray()
+        );
+    }
+
+    [Fact]
     public void Apply_LiveCollectionThatStillHasTheMicrophone_IsNotCustom()
     {
         string root = TempRoot();
