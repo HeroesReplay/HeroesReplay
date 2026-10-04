@@ -45,6 +45,26 @@ public class CalculatorUnitListTests
         Assert.True(Matches(chest, "IgnoreUnits", "ZergPathDummy"));
     }
 
+    [Theory]
+    [InlineData("MercDefenderSiegeGiant")]
+    [InlineData("MercSummonerDefender")]
+    [InlineData("MercSummonerDefenderMinion")]
+    [InlineData("MercDefenderMeleeIndividual")]
+    [InlineData("MercDefenderHenchman3")]
+    [InlineData("TerranRavenDefender")]
+    public void Issue234CampDefenders_AreCampUnits(string unit)
+    {
+        // A camp capture only credits camp units (#234); these camps died before a capture in the
+        // sampled replays but were missing from the list, so their clears never scored.
+        using JsonDocument document = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "appsettings.json"))
+        );
+
+        Assert.True(
+            Matches(document.RootElement.GetProperty("HeroesToolChest"), "CampContains", unit)
+        );
+    }
+
     private static bool Matches(JsonElement owner, string property, string unit) =>
         CalculatorUnitLists.Matches(Names(owner.GetProperty(property)), unit);
 
