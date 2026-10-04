@@ -43,6 +43,13 @@ public class NearCaptureBeaconCalculator : IFocusCalculator
             return;
         }
 
+        // Standing on a beacon is not a capture (#234). The seconds that lead into an owner change
+        // to a team are: the channel that takes the camp, watchtower, or point.
+        Dictionary<Unit, HashSet<int>> capturing = beacons.ToDictionary(
+            beacon => beacon,
+            beacon => CaptureSeconds(beacon, timeline.TotalSeconds)
+        );
+
         for (int second = 0; second < timeline.TotalSeconds; second++)
         {
             TimeSpan now = TimeSpan.FromSeconds(second);
@@ -56,11 +63,25 @@ public class NearCaptureBeaconCalculator : IFocusCalculator
                     continue;
                 }
 
+                if (
+                    FocusActivity.IdleRemoteBody(
+                        timeline,
+                        heroUnit,
+                        point,
+                        second,
+                        settings.Spectate
+                    )
+                )
+                {
+                    continue;
+                }
+
                 foreach (Unit beacon in beacons)
                 {
                     if (
-                        point.DistanceTo(beacon.PointBorn)
-                        >= settings.Spectate.MaxDistanceToOwnerChange
+                        !capturing[beacon].Contains(second)
+                        || point.DistanceTo(beacon.PointBorn)
+                            >= settings.Spectate.MaxDistanceToOwnerChange
                     )
                     {
                         continue;
@@ -72,10 +93,38 @@ public class NearCaptureBeaconCalculator : IFocusCalculator
                         heroUnit,
                         heroUnit.PlayerControlledBy,
                         settings.Weights.CaptureBeacon,
-                        $"{heroUnit.PlayerControlledBy.Character} near {beacon.Name} (CaptureBeacons)"
+                        $"{heroUnit.PlayerControlledBy.Character} captures {beacon.Name} (CaptureBeacons)"
                     );
                 }
             }
         }
+    }
+
+    /// <summary>How long a capture channel runs before the owner changes.</summary>
+    internal static readonly int CaptureLeadSeconds = 6;
+
+    internal static HashSet<int> CaptureSeconds(Unit beacon, int totalSeconds)
+    {
+        var seconds = new HashSet<int>();
+        foreach (
+            OwnerChangeEvent change in beacon.OwnerChangeEvents ?? new List<OwnerChangeEvent>()
+        )
+        {
+            if (change?.Team == null)
+            {
+                continue;
+            }
+
+            int at = change.TimeSpanOwnerChanged.FloorSeconds();
+            for (int second = Math.Max(0, at - CaptureLeadSeconds); second <= at; second++)
+            {
+                if (second < totalSeconds)
+                {
+                    seconds.Add(second);
+                }
+            }
+        }
+
+        return seconds;
     }
 }
