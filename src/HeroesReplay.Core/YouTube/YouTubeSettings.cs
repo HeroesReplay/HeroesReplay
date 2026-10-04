@@ -36,6 +36,12 @@ public class YouTubeSettings
     public TimeSpan LibraryInterval { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
+    /// The pause between the library pass's playlist writes. YouTube throttles playlist
+    /// inserts sent back to back even when the day's quota is far from spent.
+    /// </summary>
+    public TimeSpan LibraryWriteSpacing { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
     /// Quota units the library pass may spend in one Pacific quota day. Uploads are not
     /// limited by this number.
     /// </summary>

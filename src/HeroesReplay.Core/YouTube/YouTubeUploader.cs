@@ -555,14 +555,15 @@ public class YouTubeUploader : IYouTubeUploader
             MediaRetention.SweepAndLog(settings, logger);
         }
         else if (
-            YouTubeListQuota.IsExhausted(result.Exception)
+            YouTubeListQuota.IsRefused(result.Exception)
             && await ReturnUnsentAsync(outbox, attemptId).ConfigureAwait(false)
         )
         {
-            PauseOnQuota(result.Exception);
+            DateTimeOffset? until = PauseOnQuota(result.Exception);
             logger.LogWarning(
-                "YouTube refused the upload of {Path} for quota before anything was sent. It stays pending and is retried after the quota day turns.",
-                recording.FullName
+                "YouTube refused the upload of {Path} before anything was sent. It stays pending and is retried after {Until:u}.",
+                recording.FullName,
+                until
             );
         }
         else
@@ -731,21 +732,40 @@ public class YouTubeUploader : IYouTubeUploader
         }
     }
 
-    private void PauseOnQuota(Exception exception)
+    /// <summary>
+    /// The daily quota pauses uploads and the library pass until the quota day turns. A rate
+    /// limit only holds new uploads for one cycle. Returns when uploads may go again, or null.
+    /// </summary>
+    private DateTimeOffset? PauseOnQuota(Exception exception)
     {
-        if (!YouTubeListQuota.IsExhausted(exception))
+        YouTubeQuotaRefusal refusal = YouTubeListQuota.Classify(exception);
+        if (refusal == YouTubeQuotaRefusal.None)
         {
-            return;
+            return null;
         }
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
+        if (refusal == YouTubeQuotaRefusal.RateLimited)
+        {
+            DateTimeOffset retry = now + YouTubeListQuota.RateLimitWait;
+            Bookkeep(() => quotaUnits.PauseUploads(retry, now));
+            logger.LogWarning(
+                exception,
+                "YouTube rate-limited an upload. The day's quota is not spent. New uploads wait until {Until}.",
+                retry
+            );
+            return retry;
+        }
+
         DateTimeOffset until = YouTubeListQuota.ResumeAt(now);
         Bookkeep(() => quotaUnits.PauseLibrary(until, now));
         Bookkeep(() => quotaUnits.PauseUploads(until, now));
         logger.LogWarning(
-            "YouTube reported the quota exhausted. New uploads wait until {Until}.",
+            exception,
+            "YouTube reported the daily quota exhausted. New uploads wait until {Until}.",
             until
         );
+        return until;
     }
 
     /// <summary>

@@ -32,6 +32,8 @@ public sealed class YouTubeLibraryTests : IDisposable
         "heroesreplay-library-" + Guid.NewGuid().ToString("N")
     );
 
+    private readonly List<TimeSpan> delays = new();
+
     public YouTubeLibraryTests() => Directory.CreateDirectory(directory);
 
     public void Dispose()
@@ -706,6 +708,50 @@ public sealed class YouTubeLibraryTests : IDisposable
     }
 
     [Fact]
+    public async Task RunOnce_RateLimitEndsThePassWithoutPausingTheDay()
+    {
+        AppendRecord("video-7", "Dragon Shire", "2.57.0.98304");
+        var client = new FakeClient
+        {
+            InsertError = new InvalidOperationException(
+                "The service youtube has thrown an exception. HttpStatusCode is TooManyRequests. Quota exceeded for quota metric 'Queries' and limit 'Queries per minute' of service 'youtube.googleapis.com'. [rateLimitExceeded]"
+            ),
+        };
+        YouTubeLibrary library = Library(client);
+
+        YouTubeLibraryPass throttled = await library.RunOnceAsync(true, CancellationToken.None);
+
+        // One refused write ends the pass: no retries into the throttle.
+        Assert.Null(throttled.Skipped);
+        Assert.Equal(1, client.InsertAttempts);
+        YouTubeQuotaDay day = new YouTubeQuotaUnits(directory, Settings(false).YouTube).Read(Noon);
+        Assert.Null(day.LibraryPausedUntil);
+
+        // The next pass, an hour on, is not held until the Pacific day turns.
+        client.InsertError = null;
+        library.Clock = () => Noon.AddHours(1);
+        YouTubeLibraryPass next = await library.RunOnceAsync(false, CancellationToken.None);
+
+        Assert.Null(next.Skipped);
+        Assert.Contains(client.Inserted, insert => insert.VideoId == "video-7");
+    }
+
+    [Fact]
+    public async Task RunOnce_SpacesPlaylistWritesButNotTheFirst()
+    {
+        AppendRecord("video-7", "Dragon Shire", "2.57.0.98304");
+        var client = new FakeClient();
+        client.Existing.Add(new YouTubePlaylist("existing-map", "Dragon Shire"));
+        YouTubeLibrary library = Library(client);
+
+        await library.RunOnceAsync(true, CancellationToken.None);
+
+        int writes = client.Created.Count + client.Inserted.Count;
+        Assert.True(writes > 1);
+        Assert.Equal(Enumerable.Repeat(TimeSpan.FromSeconds(5), writes - 1), delays);
+    }
+
+    [Fact]
     public async Task RunOnce_StopsWhenTheDaysLibraryUnitsAreSpent()
     {
         AppendRecord("video-1", "Sky Temple", "2.57.0.98304");
@@ -791,6 +837,11 @@ public sealed class YouTubeLibraryTests : IDisposable
         new(NullLogger<YouTubeLibrary>.Instance, settings ?? Settings(false), client, profile)
         {
             Clock = () => Noon,
+            Delay = (wait, _) =>
+            {
+                delays.Add(wait);
+                return Task.CompletedTask;
+            },
         };
 
     private AppSettings Settings(bool dryRun) =>
@@ -953,6 +1004,10 @@ public sealed class YouTubeLibraryTests : IDisposable
             return Task.FromResult("pl-" + (Created.Count - 1));
         }
 
+        public Exception InsertError { get; set; }
+
+        public int InsertAttempts { get; private set; }
+
         public Task InsertAsync(
             string playlistId,
             string videoId,
@@ -960,6 +1015,12 @@ public sealed class YouTubeLibraryTests : IDisposable
         )
         {
             Calls++;
+            InsertAttempts++;
+            if (InsertError != null)
+            {
+                throw InsertError;
+            }
+
             Inserted.Add((playlistId, videoId));
             return Task.CompletedTask;
         }
