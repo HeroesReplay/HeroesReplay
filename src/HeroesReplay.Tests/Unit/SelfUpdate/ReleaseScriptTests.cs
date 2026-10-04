@@ -109,6 +109,41 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void ApplyRelease_RewritesTheLauncherBeforeTheStartAndRestoresItOnARollback()
+    {
+        string script = File.ReadAllText(FindScript());
+        int obs = script.IndexOf("'update', 'install-obs', '--install'", StringComparison.Ordinal);
+        int rewrite = script.IndexOf(
+            "@('update', 'launcher', '--install', $InstallDir, '--environment', $environment)",
+            StringComparison.Ordinal
+        );
+        int since = script.IndexOf(
+            "$since = (Get-Date).ToUniversalTime().ToString('o')",
+            StringComparison.Ordinal
+        );
+        int skip = script.IndexOf("Add-SkippedRelease $Version", since, StringComparison.Ordinal);
+        int stop = script.IndexOf("Stop-HeroesReplayStack", skip, StringComparison.Ordinal);
+        int restore = script.IndexOf(
+            "@('update', 'launcher', '--restore')",
+            StringComparison.Ordinal
+        );
+        int restoreInstall = script.IndexOf(
+            "Restore-PreviousInstall $previous",
+            stop,
+            StringComparison.Ordinal
+        );
+
+        Assert.True(
+            obs > 0 && rewrite > obs && since > rewrite,
+            "The new build must rewrite the launcher after its files are in and before it starts."
+        );
+        Assert.True(
+            stop > skip && restore > stop && restoreInstall > restore,
+            "A rollback must put the launcher back with the new exe, before the old install returns."
+        );
+    }
+
+    [Fact]
     public void ApplyRelease_SkipListMatchesTheGateAndRestartsSupervisedWhenItWas()
     {
         string script = File.ReadAllText(FindScript());
