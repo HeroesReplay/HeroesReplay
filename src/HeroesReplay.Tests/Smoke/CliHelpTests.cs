@@ -27,7 +27,7 @@ public class CliHelpTests
     }
 
     [Fact]
-    public void ObsHelp_HasArmDisarmStatus()
+    public void ObsHelp_HasArmDisarmStatusPages()
     {
         var root = new HeroesReplayCommand();
         ParseResult result = root.Parse("obs --help");
@@ -38,12 +38,32 @@ public class CliHelpTests
         Assert.Contains("stream-armed", arm.Description);
         Assert.Contains(obs.Subcommands, c => c.Name == "disarm");
         Assert.Contains(obs.Subcommands, c => c.Name == "status");
+        Command pages = obs.Subcommands.Single(c => c.Name == "pages");
+        Assert.Contains("queue.html", pages.Description);
+        Assert.Contains("prediction-report.html", pages.Description);
         foreach (
-            string help in new[] { "obs arm --help", "obs disarm --help", "obs status --help" }
+            string help in new[]
+            {
+                "obs arm --help",
+                "obs disarm --help",
+                "obs status --help",
+                "obs pages --help",
+                "obs inspect --help",
+                "obs validate --help",
+                "obs inspect --output json",
+                "obs validate -o json",
+                "obs validate --output text",
+            }
         )
         {
             Assert.Empty(root.Parse(help).Errors);
         }
+
+        Assert.Contains(
+            "stable codes",
+            obs.Subcommands.Single(c => c.Name == "validate").Description
+        );
+        Assert.NotEmpty(root.Parse("obs validate --output yaml").Errors);
     }
 
     [Fact]
@@ -61,6 +81,12 @@ public class CliHelpTests
         Assert.Empty(root.Parse("update migrate-stream-arm --previous C:\\app").Errors);
         Assert.NotEmpty(root.Parse("update migrate-stream-arm").Errors);
         Assert.Empty(root.Parse("update install-obs --install C:\\app --environment prod").Errors);
+        // The exact arguments apply-release.ps1 passes when it installs a release.
+        Assert.Empty(
+            root.Parse(
+                "update install-obs --install C:\\app --previous C:\\app.previous --environment prod"
+            ).Errors
+        );
         // The exact arguments apply-release.ps1 passes to the health gate.
         Assert.Empty(
             root.Parse(
@@ -134,6 +160,25 @@ public class CliHelpTests
         Assert.Contains(services.Subcommands, c => c.Name == "start");
         Assert.Contains(services.Subcommands, c => c.Name == "stop");
         Assert.Contains(services.Subcommands, c => c.Name == "status");
+    }
+
+    [Fact]
+    public void ServicesInstallTask_Parses()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("services install-task --help").Errors);
+        Assert.Empty(root.Parse("services install-task --environment prod").Errors);
+        Assert.Empty(
+            root.Parse(
+                "services install-task --environment dev --roles download,youtube --name HeroesReplay-live"
+            ).Errors
+        );
+        Assert.Empty(root.Parse("services install-task --remove").Errors);
+        Command task = root
+            .Subcommands.Single(c => c.Name == "services")
+            .Subcommands.Single(c => c.Name == "install-task");
+        Assert.Contains("HeroesReplay-live", task.Description);
+        Assert.Contains("--supervise", task.Description);
     }
 
     [Fact]

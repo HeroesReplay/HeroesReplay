@@ -91,13 +91,13 @@ public class PublicationPlanTests
         Assert.Equal(Now.AddHours(26), ordinary.PublishAtUtc);
         Assert.Equal("ready", request.Reason);
         Assert.Equal(Now, request.PublishAtUtc);
-        // Two requests already use the reserved room, so the third needs ordinary room again.
-        Assert.Equal("day", thirdRequest.Reason);
-        Assert.Equal(Now.AddHours(30), thirdRequest.PublishAtUtc);
+        // A request is never paced, even past the reserved room.
+        Assert.Equal("ready", thirdRequest.Reason);
+        Assert.Equal(Now, thirdRequest.PublishAtUtc);
     }
 
     [Fact]
-    public void Plan_WaitsForTheWeekCapToRollOverAndRefusesPastTheHorizon()
+    public void Plan_PublishesARequestPastTheWeekCapAndHorizon()
     {
         var slots = new List<PublicationSample>();
         for (int i = 0; i < PublicationSchedule.MaxPublicPerWeek; i++)
@@ -122,11 +122,11 @@ public class PublicationPlanTests
             null
         );
 
-        Assert.Equal("week", request.Reason);
-        Assert.Equal(Now.AddDays(1), request.PublishAtUtc);
-        Assert.False(beyond.Allow);
-        Assert.Equal("horizon", beyond.Reason);
-        Assert.Null(beyond.PublishAtUtc);
+        Assert.Equal("ready", request.Reason);
+        Assert.Equal(Now, request.PublishAtUtc);
+        Assert.True(beyond.Allow);
+        Assert.Equal(Now, beyond.PublishAtUtc);
+        Assert.False(Plan(Ordinary(), slots, shortHorizon).Allow);
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public class PublicationPlanTests
     /// ordinary game waits for the third day.
     /// </summary>
     [Fact]
-    public void TryReserve_SpreadsEightRecordingsOverTwoDaysAndARequestTakesTheEvening()
+    public void TryReserve_SpreadsEightRecordingsOverTwoDaysAndARequestPublishesAtOnce()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-plan-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -295,7 +295,7 @@ public class PublicationPlanTests
                 },
                 times
             );
-            Assert.Equal(Now.AddHours(8), request.PublishAtUtc);
+            Assert.Equal(Now.AddHours(4), request.PublishAtUtc);
             Assert.Equal(Now.AddHours(48), ordinary.PublishAtUtc);
         }
         finally
@@ -340,13 +340,14 @@ public class PublicationPlanTests
     private static PublicationDecision Plan(
         PublicationSendFacts facts,
         IReadOnlyList<PublicationSample> slots,
+        ReplayMediaPolicySettings settings = null,
         string map = null,
         string rank = null,
         string hero = null
     )
     {
         return PublicationSchedule.Plan(
-            PublicationSchedule.CanarySettings(),
+            settings ?? PublicationSchedule.CanarySettings(),
             facts,
             true,
             0,

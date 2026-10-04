@@ -167,21 +167,17 @@ public static class PublicationSchedule
             return gate;
         }
 
+        // A viewer's request is not paced, the same as in Plan (#216).
+        if (facts.Criteria == ReplayMediaPriority.Requested)
+        {
+            return PublicationDecision.Granted("ready");
+        }
+
         List<PublicationSample> paced = History(publicAtUtc, lastPublicUtc, requestedInDay, now);
         List<PublicationSample> shown = Seen(lastMap, lastMapUtc, lastHero, lastHeroUtc);
         AddSamples(shown, recent);
         AddSamples(shown, paced);
-        string conflict = Conflict(
-            settings,
-            facts.Criteria == ReplayMediaPriority.Requested,
-            now,
-            paced,
-            shown,
-            map,
-            rank,
-            hero,
-            heroes
-        );
+        string conflict = Conflict(settings, now, paced, shown, map, rank, hero, heroes);
         return conflict == null
             ? PublicationDecision.Granted("ready")
             : PublicationDecision.Refused(conflict);
@@ -190,9 +186,8 @@ public static class PublicationSchedule
     /// <summary>
     /// The earliest publish time from <paramref name="now"/> that every pacing rule allows.
     /// Each rule looks both ways, at videos already public and at slots already scheduled, so a
-    /// later replay can take a free time between two earlier ones. A request skips the map,
-    /// rank, and hero checks and may use the reserved request room, so it gets the earliest
-    /// time. No time inside <see cref="ReplayMediaPolicySettings.MaxPublishAhead"/> is
+    /// later replay can take a free time between two earlier ones. A request is not paced: it
+    /// publishes now. No time inside <see cref="ReplayMediaPolicySettings.MaxPublishAhead"/> is
     /// <c>horizon</c>, and the recording waits. A granted reason is <c>ready</c> when the time is
     /// now, otherwise the rule that pushed it later. A private listing has no publish time.
     /// <paramref name="seen"/> only feeds the map, rank, and hero checks.
@@ -217,7 +212,13 @@ public static class PublicationSchedule
             return gate;
         }
 
-        bool requested = facts.Criteria == ReplayMediaPriority.Requested;
+        // A viewer's request is published as soon as it is uploaded. It is not paced.
+        // Its slot is still kept, so the Standard queue paces around it.
+        if (facts.Criteria == ReplayMediaPriority.Requested)
+        {
+            return PublicationDecision.Scheduled("ready", now);
+        }
+
         DateTimeOffset horizon = now + settings.MaxPublishAhead;
         TimeSpan reach = Reach(settings);
         List<PublicationSample> paced = Within(slots, now - reach, horizon + reach);
@@ -226,17 +227,7 @@ public static class PublicationSchedule
         string waited = null;
         foreach (DateTimeOffset at in Candidates(settings, now, horizon, shown))
         {
-            string conflict = Conflict(
-                settings,
-                requested,
-                at,
-                paced,
-                shown,
-                map,
-                rank,
-                hero,
-                heroes
-            );
+            string conflict = Conflict(settings, at, paced, shown, map, rank, hero, heroes);
             if (conflict == null)
             {
                 return PublicationDecision.Scheduled(waited ?? "ready", at);
@@ -312,7 +303,6 @@ public static class PublicationSchedule
     /// <summary>The pacing rule a video at <paramref name="at"/> breaks, or null.</summary>
     private static string Conflict(
         ReplayMediaPolicySettings settings,
-        bool requested,
         DateTimeOffset at,
         IReadOnlyList<PublicationSample> paced,
         IReadOnlyList<PublicationSample> shown,
@@ -322,7 +312,7 @@ public static class PublicationSchedule
         IReadOnlyList<string> heroes
     )
     {
-        string window = Windows(settings, requested, at, paced);
+        string window = Windows(settings, at, paced);
         if (window != null)
         {
             return window;
@@ -334,11 +324,6 @@ public static class PublicationSchedule
             {
                 return "interval";
             }
-        }
-
-        if (requested)
-        {
-            return null;
         }
 
         if (MapRepeats(map, at, settings.MapCooldown, shown))
@@ -375,14 +360,13 @@ public static class PublicationSchedule
     /// </summary>
     private static string Windows(
         ReplayMediaPolicySettings settings,
-        bool requested,
         DateTimeOffset at,
         IReadOnlyList<PublicationSample> paced
     )
     {
         foreach (DateTimeOffset end in Ends(paced, at, Week))
         {
-            if (Count(paced, end, Week, out _) >= settings.MaxPublicPerWeek)
+            if (Count(paced, end, Week) >= settings.MaxPublicPerWeek)
             {
                 return "week";
             }
@@ -392,16 +376,13 @@ public static class PublicationSchedule
         bool reserved = false;
         foreach (DateTimeOffset end in Ends(paced, at, Day))
         {
-            int day = Count(paced, end, Day, out int requests);
+            int day = Count(paced, end, Day);
             if (day >= settings.MaxPublicPerDay)
             {
                 return "day";
             }
 
-            if (
-                day >= ordinaryRoom
-                && (!requested || requests >= settings.ReservedRequestSlotsPerDay)
-            )
+            if (day >= ordinaryRoom)
             {
                 reserved = true;
             }
@@ -429,21 +410,15 @@ public static class PublicationSchedule
     private static int Count(
         IReadOnlyList<PublicationSample> paced,
         DateTimeOffset end,
-        TimeSpan length,
-        out int requests
+        TimeSpan length
     )
     {
         int count = 0;
-        requests = 0;
         foreach (PublicationSample sample in paced)
         {
             if (sample.At <= end && end - sample.At < length)
             {
                 count++;
-                if (sample.Requested)
-                {
-                    requests++;
-                }
             }
         }
 

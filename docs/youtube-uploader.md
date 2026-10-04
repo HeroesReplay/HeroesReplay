@@ -16,7 +16,7 @@ Production is `HEROES_REPLAY_ENV=prod` (`DESKTOP-8SJEK72`). The environment deci
 },
 "ReplayMedia": {
   "Version": "1",
-  "RecordingMode": "All",
+  "RecordingMode": "Selected",
   "PublicationMode": "AllEligible",
   "MaxPublicPerDay": 6,
   "MaxPublicPerWeek": 30,
@@ -65,7 +65,9 @@ The uploader process keeps that catalog current. It adds a replay id when its in
 | `Selected` | A request or a notable replay, when it is on patch, dated, and inside its age. When publication is `Curated` or `AllEligible`, ordinary and high-skill replays are recorded on those same terms. |
 | `All` | Every spectated replay, including one that is too old to publish |
 
-`All` still requires OBS `RecordingEnabled` (true in production). Both ReplayId rewards, `ReplayId` and `ReplayId + YouTube`, are recorded and uploaded as requests (#165). A map, rank, or random reward with no `RecordAndUpload` is spectate-only and is not a publication.
+Production and dev use `Selected` (#204): a replay that no publication window can still reach is spectated without an mp4. The spectator writes `youtube-entry.json` when the session ends, so a recording with no entry that OBS has not written for `Retention:UnpublishedGrace` (1 hour) can never be published, and the next retention sweep deletes it with a warning.
+
+Every mode still requires OBS `RecordingEnabled` (true in production). Both ReplayId rewards, `ReplayId` and `ReplayId + YouTube`, are recorded and uploaded as requests (#165). A map, rank, or random reward with no `RecordAndUpload` is spectate-only and is not a publication.
 
 ## Why a replay is one class
 
@@ -108,17 +110,17 @@ A recording stays on disk only for the YouTube quota or for the media rules. The
 5. When `YouTube:PrivacyStatus` is public, an ordinary replay's game time is inside `OrdinaryCandidateMaxAge`. A request, a notable replay, and a high-skill replay do not use this age at send time. They already expired by their own windows above. An ordinary replay that is too old is not retried, and its recording is deleted.
 6. When `YouTube:PrivacyStatus` is public, a publish time inside `MaxPublishAhead` (14 days) keeps every rule below. With none, the reason is `horizon` and the recording waits for a later pass.
 
-The rules below no longer hold a recording back. They choose its publish time: the earliest time from now that keeps all of them. Each rule looks both ways, at videos already public and at slots already scheduled, so a later replay can take a free time between two earlier ones.
+A paid request is not paced. It publishes as soon as it is uploaded, whatever the rules below say. The rules below no longer hold an ordinary, notable, or high-skill recording back. They choose its publish time: the earliest time from now that keeps all of them. Each rule looks both ways, at videos already public and at slots already scheduled, so a later replay can take a free time between two earlier ones.
 
 - Week. No rolling 7 days holds more than `MaxPublicPerWeek` videos.
 - Day. No rolling 24 hours holds more than `MaxPublicPerDay` videos.
-- Reserved request room. With 6 and 2, a non-request may not join a rolling 24 hours that already holds 4 videos, requests included. A request may use the last 2, unless 2 requests already sit in that 24 hours and the ordinary room is full. A request does not skip the day cap, the week cap, or the interval.
+- Reserved request room. With 6 and 2, a non-request may not join a rolling 24 hours that already holds 4 videos, requests included, so the last 2 stay free for requests.
 - Interval. Every other publish time is at least `MinimumPublicInterval` away.
 - Map. No slot within `MapCooldown` has the same map. Comparison ignores case and surrounding spaces.
 - Rank. No slot within `RankCooldown` has the same tier. Division is ignored, so Diamond 3 and Diamond 1 are the same tier. An unrecognized rank is compared as written. MMR is not part of this check.
 - Heroes. No slot within `FeaturedHeroCooldown` has the same focus hero. Separately, fewer than `MaxSharedHeroes` heroes from this replay (4 unless configured otherwise, and 0 turns this roster check off) appear in slots within that window. One shared hero is fine.
 
-A paid request skips the map, rank, and hero rules and may use the reserved room, so it gets the earliest time. Its slot still records the map, the rank, the focus hero, and the roster, so later ordinary replays plan around them. Nothing sorts the queue by a score.
+A paid request publishes now. Its slot still records the map, the rank, the focus hero, and the roster, so later ordinary replays plan around them. Nothing sorts the queue by a score.
 
 The log names the rule that pushed the time later (`interval`, `day`, `reserved`, `week`, `map`, `rank`, or `hero`), or `ready` when the time is now.
 
@@ -153,7 +155,7 @@ Eight ordinary games that end at 10:00, 10:30, and every half hour to 13:30 UTC,
 | 7 | after the quota day turns (07:00 or 08:00 UTC) | next day 14:00 | quota held the upload, then reserved |
 | 8 | after the quota day turns | next day 16:00 | quota held the upload, then reserved |
 
-A paid request that ends at 14:00 that day publishes at 18:00, the first time 2 hours from every other video. A ninth ordinary game publishes on the third day at 10:00. The recordings of games 1 to 6 go on the retention sweep that follows each upload. Only games 7 and 8 wait on disk, for the quota.
+A paid request that ends at 14:00 that day publishes at 14:00, as soon as it is uploaded. A ninth ordinary game publishes on the third day at 10:00. The recordings of games 1 to 6 go on the retention sweep that follows each upload. Only games 7 and 8 wait on disk, for the quota.
 
 ## What the video contains
 
@@ -166,7 +168,7 @@ A full match title is one line of at most 100 characters. It does not name a pen
 
 There is no parsed MVP hero, so a title does not say MVP. The heroes in the title come from the parsed replay: each player's character, or the attribute id when the character is blank.
 
-A draft note is added before the replay id when the current hero-select roles are not one tank, one bruiser, one healer, and a ranged assassin. Those roles are Tank, Bruiser, Melee Assassin, Ranged Assassin, Healer, and Support. Johanna plus Chen is a tank and a bruiser, so that draft is left alone. The note is the whole match when both teams share it (`Cursed Hollow - Storm League - Diamond - No healer - 65550001`) and names the team when they differ (`Blue no tank, Red double healer`). A hero the catalog cannot match, or a hero with no current role, suppresses that team's note. A normal draft adds nothing.
+A draft note is added before the replay id when the current hero-select roles are not one tank, one bruiser, one healer, and a ranged assassin. Those roles are Tank, Bruiser, Melee Assassin, Ranged Assassin, Healer, and Support. Johanna plus Chen is a tank and a bruiser, so that draft is left alone. A tank talent overrides the catalog role: Varian is a Bruiser in hero select, but Varian with Taunt (`VarianTaunt`, level 4) counts as a tank, so Muradin plus Taunt Varian is a double tank and Taunt Varian plus Chen is left alone (issue #187). The talent comes from the replay's tracker events. The note is the whole match when both teams share it (`Cursed Hollow - Storm League - Diamond - No healer - 65550001`) and names the team when they differ (`Blue no tank, Red double healer`). A hero the catalog cannot match, or a hero with no current role, suppresses that team's note. A normal draft adds nothing.
 
 `YouTube:Titles` in `appsettings.json` and `appsettings.prod.json` turns each form on or off: `DraftNotes`, `NamedPlayerTitles`, and `FeatureNewHeroes`. Each draft note has its own switch (`NoTankOrHealer`, `NoHealer`, `DoubleHealer`, `TripleHealer`, `DoubleBruiserWithoutTank`, `NoTank`, `DoubleTank`, `TripleBruiser`, `DoubleSupport`, `NoRangedAssassin`). The six role labels are in the same section. Turning a form off leaves the map, mode, rank, and replay id.
 
@@ -242,7 +244,7 @@ After a successful upload, retention deletes the mp4 on the next sweep, which th
 
 ## The library record
 
-Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. A full match also keeps `Draft`, the description's `Draft:` note with its composition labels (`Blue no tank, Red double healer, Red dive`), and `FocusHero`, the description's `Featured:` hero. Only a viewer request that named a player (`{replayId},{slot}` on the ReplayId reward, or `spectate file --player`) writes `Featured:`. Both keys are left out of the line when the video has neither. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode, a build, a draft note, or a named player.
+Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. A full match also keeps `Draft`, the description's `Draft:` note with its composition labels (`Blue no tank, Red double healer, Red dive`), and `FocusHero`, the description's `Featured:` hero. Only a viewer request that named a player (`{replayId},{BattleTag}` on the ReplayId reward, or `spectate file --player Name#1234`) writes `Featured:`. Both keys are left out of the line when the video has neither. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode, a build, a draft note, or a named player.
 
 ## The library pass
 

@@ -1143,11 +1143,14 @@ public class ServiceSupervisorTests
 
     [Theory]
     [InlineData(ServiceStreamState.NotRunning, 0)]
-    [InlineData(ServiceStreamState.Unreachable, 0)]
+    [InlineData(ServiceStreamState.Unreachable, 1)]
     [InlineData(ServiceStreamState.Inactive, 0)]
     [InlineData(ServiceStreamState.Active, 1)]
     [InlineData(ServiceStreamState.Unknown, 1)]
-    public void Stop_ClosedOrUnreachableObsIsNotStreaming(ServiceStreamState state, int expected)
+    public void Stop_OnlyAClosedObsOrAnInactiveStreamConfirmsTheStop(
+        ServiceStreamState state,
+        int expected
+    )
     {
         string path = TempLock();
         try
@@ -1158,6 +1161,49 @@ public class ServiceSupervisorTests
             shutdown.ReadStream = () => new ServiceStreamCheck(state, "fake");
 
             Assert.Equal(expected, ServiceSupervisor.Stop(path, shutdown).ExitCode);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_UnreachableObs_HoldsTheStopOnlyWhereThisInstallStreams()
+    {
+        ServiceStreamCheck streams = ServiceStreamCheck.WhenUnreachable(true, "no answer.");
+        ServiceStreamCheck doesNot = ServiceStreamCheck.WhenUnreachable(false, "no answer.");
+
+        Assert.False(streams.ConfirmsStopped);
+        Assert.Equal(ServiceStreamState.Unreachable, streams.State);
+        Assert.True(doesNot.ConfirmsStopped);
+        Assert.Equal(ServiceStreamState.NotStreamedHere, doesNot.State);
+        Assert.Contains("OBS:StreamingEnabled is false", doesNot.Detail);
+    }
+
+    [Fact]
+    public void Stop_RunningObsWhoseWebsocketDoesNotAnswer_SaysTheStreamMayBeLive()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 60);
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = () =>
+                ServiceStreamCheck.Unreachable(
+                    "OBS websocket at ws://127.0.0.1:4455 did not identify within 5s."
+                );
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.False(result.Succeeded);
+            Assert.Contains(
+                result.Failures(),
+                failure =>
+                    failure.Contains("may still be live", StringComparison.Ordinal)
+                    || failure.Contains("not confirmed stopped", StringComparison.Ordinal)
+            );
         }
         finally
         {

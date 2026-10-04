@@ -1,8 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.CommandLine;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Pages;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Commands.Obs;
 
@@ -11,12 +16,113 @@ public class ObsCommand : Command
     public ObsCommand()
         : base(
             "obs",
-            "Machine-local OBS controls. Twitch ingest starts only when OBS:StreamingEnabled is true and this machine is armed."
+            "OBS on this machine: the Twitch ingest arm, the report-scene pages, and read-only inspection and validation. Twitch ingest starts only when OBS:StreamingEnabled is true and this machine is armed."
         )
     {
         Subcommands.Add(ArmCommand());
         Subcommands.Add(DisarmCommand());
         Subcommands.Add(StatusCommand());
+        Subcommands.Add(PagesCommand());
+        Subcommands.Add(ObsLiveCommands.InspectCommand());
+        Subcommands.Add(ObsLiveCommands.ValidateCommand());
+    }
+
+    private static Command PagesCommand()
+    {
+        var command = new Command(
+            "pages",
+            "Render the report-scene pages in Location:DataDirectory (queue.html, prediction-report.html) with this build, from the saved request queue and the last prediction report, then reload the OBS browser sources that show them. The reload is the only change made in OBS; it is skipped when OBS is not running. Exit 1 only when a page could not be written."
+        );
+        Option<bool> noReload = new("--no-reload")
+        {
+            Description =
+                "Write the pages only. OBS reloads each one when its scene is next shown.",
+        };
+        command.Options.Add(noReload);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(Pages(parseResult.GetValue(noReload)));
+            }
+        );
+        return command;
+    }
+
+    private static int Pages(bool noReload)
+    {
+        AppSettings settings;
+        IReadOnlyList<ObsPageResult> results;
+        try
+        {
+            settings = ServiceCollectionExtensions.LoadOfflineSettings();
+            results = ObsPages.Write(settings);
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"The OBS pages were not written. {e.Message}");
+            return 1;
+        }
+
+        Console.WriteLine($"Data directory: {settings.Location.DataDirectory}");
+        foreach (ObsPageResult result in results)
+        {
+            string line =
+                $"{result.FileName}: {result.Outcome.ToString().ToLowerInvariant()}. {result.Detail}";
+            if (result.Outcome == ObsPageOutcome.Failed)
+            {
+                Console.Error.WriteLine(line + " The page was left as it is.");
+            }
+            else
+            {
+                Console.WriteLine(line);
+            }
+        }
+
+        string[] written = results
+            .Where(result => result.Outcome == ObsPageOutcome.Written)
+            .Select(result => result.FileName)
+            .ToArray();
+        if (!noReload && written.Length > 0)
+        {
+            ReloadPages(settings, written);
+        }
+
+        return results.Any(result => result.Outcome == ObsPageOutcome.Failed) ? 1 : 0;
+    }
+
+    private static void ReloadPages(AppSettings settings, string[] written)
+    {
+        if (!NamedProcess.IsRunning(ObsLaunchDecision.ProcessName))
+        {
+            Console.WriteLine("OBS is not running. It loads the new pages when it starts.");
+            return;
+        }
+
+        try
+        {
+            using IObsPageSession obs = new ObsWebsocketPageSessionFactory().Open(
+                settings.OBS?.WebSocketEndpoint,
+                SecretResolver.Resolve(settings.OBS?.WebSocketPassword)
+            );
+            IReadOnlyList<string> reloaded = ObsPages.Reload(
+                obs,
+                settings.Location.DataDirectory,
+                written
+            );
+            Console.WriteLine(
+                reloaded.Count == 0
+                    ? "OBS has no browser source that shows these pages."
+                    : $"Reloaded in OBS: {string.Join(", ", reloaded)}."
+            );
+        }
+        catch (Exception e)
+        {
+            // The pages are written; OBS still reloads each one when its scene is shown.
+            Console.Error.WriteLine(
+                $"Warning: OBS did not reload the pages. {e.Message} Each page reloads when its scene is next shown."
+            );
+        }
     }
 
     private static Command ArmCommand()

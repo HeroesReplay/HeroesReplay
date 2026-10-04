@@ -77,7 +77,7 @@ public class MediaRetentionTests
     }
 
     [Fact]
-    public void Sweep_DropsARecordingThatNeverUploaded()
+    public void Sweep_DropsAnUnentriedRecordingOnTheNextSweep()
     {
         string root = Path.Combine(
             Path.GetTempPath(),
@@ -88,19 +88,25 @@ public class MediaRetentionTests
             string contexts = Path.Combine(root, "Contexts");
             Directory.CreateDirectory(Path.Combine(contexts, "20"));
             Directory.CreateDirectory(Path.Combine(contexts, "21"));
-            File.WriteAllBytes(Path.Combine(contexts, "20", "stuck.mp4"), new byte[40]);
+            string stuck = Path.Combine(contexts, "20", "stuck.mp4");
+            File.WriteAllBytes(stuck, new byte[40]);
+            File.SetLastWriteTimeUtc(stuck, DateTime.UtcNow.AddHours(-2));
             File.WriteAllBytes(Path.Combine(contexts, "21", "current.mp4"), new byte[4]);
             Directory.SetLastWriteTimeUtc(
                 Path.Combine(contexts, "20"),
-                DateTime.UtcNow.AddDays(-8)
+                DateTime.UtcNow.AddHours(-2)
             );
             Directory.SetLastWriteTimeUtc(Path.Combine(contexts, "21"), DateTime.UtcNow);
 
             RetentionSweep sweep = MediaRetention.Sweep(Settings(root), DateTimeOffset.UtcNow);
 
-            Assert.False(File.Exists(Path.Combine(contexts, "20", "stuck.mp4")));
+            Assert.False(File.Exists(stuck));
             Assert.True(File.Exists(Path.Combine(contexts, "21", "current.mp4")));
-            Assert.Contains(sweep.Warnings, warning => warning.Contains("never uploaded"));
+            Assert.Equal(40, sweep.FreedBytes);
+            Assert.Contains(
+                sweep.Warnings,
+                warning => warning.Contains("never uploaded") && warning.Contains("stuck.mp4")
+            );
         }
         finally
         {
@@ -109,6 +115,28 @@ public class MediaRetentionTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    /// <summary>
+    /// #212: the uploader touched context A after context B's recording stopped, so A is the
+    /// newest folder. B's entry is not written yet. B's recording must survive the sweep.
+    /// </summary>
+    [Fact]
+    public void Sweep_KeepsAJustStoppedRecordingWhenAnotherContextIsNewer()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string stopped = library.AddContext("stopped");
+        string uploaded = library.AddContext("uploaded");
+        TempLibrary.WriteFile(stopped, "match.mp4", 32, now.AddMinutes(-1));
+        TempLibrary.WriteText(uploaded, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.SetDirectoryTime(stopped, now.AddMinutes(-1));
+        TempLibrary.SetDirectoryTime(uploaded, now);
+
+        RetentionSweep sweep = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(stopped, "match.mp4")));
+        Assert.Empty(sweep.Warnings);
     }
 
     [Fact]
@@ -284,6 +312,35 @@ public class MediaRetentionTests
         Assert.True(File.Exists(Path.Combine(inserted, "youtube-entry.json")));
         Assert.True(File.Exists(Path.Combine(waiting, "match.mp4")));
         Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
+    }
+
+    /// <summary>#207: a recording another process still has open is retried, not warned about.</summary>
+    [Fact]
+    public void Sweep_RetriesARecordingStillOpenInAnotherProcess()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string inserted = library.AddContext("inserted");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(inserted, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.WriteFile(inserted, "match.mp4", 32, now.AddHours(-1));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(inserted, now.AddHours(-1));
+        TempLibrary.SetDirectoryTime(live, now);
+        string video = Path.Combine(inserted, "match.mp4");
+
+        RetentionSweep busy;
+        using (new FileStream(video, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            busy = MediaRetention.Sweep(Settings(library.Root), now);
+        }
+
+        RetentionSweep retried = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.Equal([video], busy.InUse);
+        Assert.Empty(busy.Warnings);
+        Assert.False(File.Exists(video));
+        Assert.Equal(32, retried.FreedBytes);
     }
 
     [Fact]

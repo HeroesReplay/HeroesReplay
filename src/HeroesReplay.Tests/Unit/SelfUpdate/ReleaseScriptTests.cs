@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;
@@ -122,6 +123,39 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void ApplyRelease_AlwaysLeavesTheStackSupervised()
+    {
+        string script = File.ReadAllText(FindScript());
+        int start = script.IndexOf("function Start-HeroesReplayStack", StringComparison.Ordinal);
+        int end = script.IndexOf("function Test-SupervisorRunning", StringComparison.Ordinal);
+        string startStack = script.Substring(start, end - start);
+
+        // The direct start is supervised whether or not the replaced stack was.
+        Assert.DoesNotContain("if ($Supervise)", startStack);
+        Assert.Contains("$arguments += '--supervise'", startStack);
+        // A task or start-live.cmd that starts it unsupervised gets a supervisor attached.
+        Assert.Equal(2, CountOf(startStack, "Confirm-Supervised"));
+        Assert.Contains($"'{ServiceSupervisorFile.MutexName}'", script);
+        Assert.Contains("@('services', 'supervise')", script);
+        Assert.Contains("services status --output json 2>nul", script);
+    }
+
+    private static int CountOf(string text, string value)
+    {
+        int count = 0;
+        for (
+            int index = text.IndexOf(value, StringComparison.Ordinal);
+            index >= 0;
+            index = text.IndexOf(value, index + value.Length, StringComparison.Ordinal)
+        )
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    [Fact]
     public void ApplyRelease_StartsTheStackWithoutTheTaskAndInItsOwnEnvironment()
     {
         // 2026-10-02 on ASA-SERVER: with no HeroesReplay-live task, Windows PowerShell turned
@@ -139,9 +173,17 @@ public class ReleaseScriptTests
     {
         string script = File.ReadAllText(FindScript());
 
-        // The build applies the OBS files: the collection while OBS is closed, the profile only
-        // when the machine has none (ReleaseInstall.CopyObsScenesIfClosed).
-        Assert.Contains("'update', 'install-obs', '--install', $InstallDir", script);
+        // The build applies the OBS files (ReleaseInstall.InstallObsFiles): a managed collection is
+        // replaced after a backup, the profile only when the machine has none. The install compares
+        // the live collection with the replaced install's template too; the rollback has none.
+        Assert.Contains(
+            "'update', 'install-obs', '--install', $InstallDir, '--previous', $previous, '--environment'",
+            script
+        );
+        Assert.Contains(
+            "'update', 'install-obs', '--install', $InstallDir, '--environment'",
+            script
+        );
         Assert.DoesNotContain("Default\\basic.ini'", script);
         Assert.DoesNotContain("profiles\\HeroesReplay", script);
         Assert.DoesNotContain("scenes\\HeroesReplay.json", script);
@@ -177,10 +219,13 @@ public class ReleaseScriptTests
     }
 
     [Fact]
-    public void Bootstrap_KeepsAnExistingProfile()
+    public void Bootstrap_KeepsAnExistingCollectionAndProfile()
     {
         string script = File.ReadAllText(FindScript("bootstrap-workstation.ps1"));
 
+        Assert.Contains("Test-Path -LiteralPath $collectionFile", script);
+        Assert.Contains("OBS collection kept", script);
+        Assert.DoesNotContain("WriteAllText($collectionFile", script);
         Assert.Contains("Test-Path -LiteralPath $profileIni", script);
         Assert.Contains("OBS profile kept", script);
         Assert.DoesNotContain(

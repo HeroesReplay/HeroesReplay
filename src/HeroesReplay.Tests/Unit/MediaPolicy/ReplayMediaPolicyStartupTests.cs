@@ -207,14 +207,30 @@ public class ReplayMediaPolicyStartupTests
 
         Assert.True(decision.Record);
         Assert.NotEqual(ReplayMediaReason.RecordingDisabled, decision.RecordingReason);
-        Assert.Equal(ReplayMediaReason.RecordedAll, decision.RecordingReason);
+        Assert.Equal(ReplayMediaReason.RecordedOrdinary, decision.RecordingReason);
         Assert.False(decision.PublicationCandidate);
         Assert.Equal(ReplayMediaReason.AwaitingCompletion, decision.PublicationReason);
         AssertModesSelected(devPath);
+
+        // A replay that can no longer be published is not recorded (#204).
+        ReplayMediaDecision expired = ReplayMediaPolicy.Evaluate(
+            new ReplayMediaPolicyInput
+            {
+                ReplayId = 65550002,
+                GameDateUtc = Now - settings.OrdinaryCandidateMaxAge - TimeSpan.FromMinutes(1),
+                GameVersion = "2.57.0.98304",
+                Map = "Volskaya Foundry",
+                GameMode = "Storm League",
+            },
+            settings,
+            Now
+        );
+        Assert.False(expired.Record);
+        Assert.Equal(ReplayMediaReason.Expired, expired.RecordingReason);
         AssertModesSelected(sourcePath);
 
         AppSettings app = ServiceCollectionExtensions.BindSettings(configuration);
-        Assert.Equal(ReplayRecordingMode.All, app.ReplayMedia.RecordingMode);
+        Assert.Equal(ReplayRecordingMode.Selected, app.ReplayMedia.RecordingMode);
         Assert.Equal(ReplayPublicationMode.AllEligible, app.ReplayMedia.PublicationMode);
         Assert.True(app.OBS.RecordingEnabled);
         Assert.True(app.YouTube.Enabled);
@@ -270,7 +286,7 @@ public class ReplayMediaPolicyStartupTests
             Path.Combine("src", "HeroesReplay.CLI", "appsettings.prod.json")
         );
         string text = File.ReadAllText(production);
-        Assert.Contains("\"RecordingMode\": \"All\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"RecordingMode\": \"Selected\"", text, StringComparison.Ordinal);
         Assert.Contains("\"PublicationMode\": \"AllEligible\"", text, StringComparison.Ordinal);
         Assert.Contains("\"RecordingEnabled\": true", text, StringComparison.Ordinal);
         Assert.Contains("\"DryRun\": false", text, StringComparison.Ordinal);
@@ -279,7 +295,7 @@ public class ReplayMediaPolicyStartupTests
     private static void AssertModesSelected(string path)
     {
         string text = File.ReadAllText(path);
-        Assert.Contains("\"RecordingMode\": \"All\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"RecordingMode\": \"Selected\"", text, StringComparison.Ordinal);
         Assert.Contains("\"PublicationMode\": \"AllEligible\"", text, StringComparison.Ordinal);
     }
 

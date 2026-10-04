@@ -7,8 +7,14 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.OpenTelemetry;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.ServiceHost.Logs;
+using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -27,6 +33,134 @@ public class ServicesCommand : Command
         Subcommands.Add(StopCommand());
         Subcommands.Add(StatusCommand());
         Subcommands.Add(SuperviseCommand());
+        Subcommands.Add(InstallTaskCommand());
+    }
+
+    private static Command InstallTaskCommand()
+    {
+        var command = new Command(
+            "install-task",
+            "Register the Windows scheduled task HeroesReplay-live: `services start --supervise` from this install when you log on, interactive and not elevated (no administrator rights needed). apply-release.ps1 restarts the stack through it after an update, so the stack comes back supervised. --remove deletes it."
+        );
+        var environment = new Option<string>("--environment")
+        {
+            Description =
+                "HEROES_REPLAY_ENV the task sets (prod on the stream PC). Default: this shell's HEROES_REPLAY_ENV; with neither, the task inherits the user's environment.",
+        };
+        var roles = new Option<string>("--roles")
+        {
+            Description =
+                "Roles the task starts, as for `services start --roles`. Default: all four.",
+        };
+        var name = new Option<string>("--name")
+        {
+            Description = "Task name. apply-release.ps1 restarts through HeroesReplay-live.",
+            DefaultValueFactory = _ => ServiceLogonTask.DefaultName,
+        };
+        var remove = new Option<bool>("--remove") { Description = "Delete the task instead." };
+        command.Options.Add(environment);
+        command.Options.Add(roles);
+        command.Options.Add(name);
+        command.Options.Add(remove);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string task = parseResult.GetValue(name);
+                if (parseResult.GetValue(remove))
+                {
+                    return Task.FromResult(Schtasks("/Delete", "/TN", task, "/F"));
+                }
+
+                string selected = null;
+                if (!string.IsNullOrWhiteSpace(parseResult.GetValue(roles)))
+                {
+                    IReadOnlyList<string> parsed = ServiceProcessPlan.ParseRoles(
+                        parseResult.GetValue(roles),
+                        out string error
+                    );
+                    if (parsed == null)
+                    {
+                        Console.Error.WriteLine(error);
+                        return Task.FromResult(1);
+                    }
+
+                    selected = string.Join(",", parsed);
+                }
+
+                return Task.FromResult(
+                    InstallTask(
+                        task,
+                        parseResult.GetValue(environment)
+                            ?? Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV"),
+                        selected
+                    )
+                );
+            }
+        );
+        return command;
+    }
+
+    private static int InstallTask(string task, string environment, string roles)
+    {
+        string exe = Environment.ProcessPath;
+        if (ReleaseInstall.LooksLikeSourceBuild(Path.GetDirectoryName(exe)))
+        {
+            Console.WriteLine(
+                $"Warning: {exe} is a source build. The task starts this file at every logon; run install-task from the release install (C:\\heroesreplay\\app) on the stream PC."
+            );
+        }
+
+        string user = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
+        string file = Path.Combine(
+            Path.GetTempPath(),
+            "heroesreplay-task-" + Guid.NewGuid() + ".xml"
+        );
+        try
+        {
+            File.WriteAllText(
+                file,
+                ServiceLogonTask.Xml(user, exe, environment, roles),
+                Encoding.Unicode
+            );
+            int code = Schtasks("/Create", "/TN", task, "/XML", file, "/F");
+            if (code == 0)
+            {
+                Console.WriteLine(
+                    $"Task {task} runs `{ServiceLogonTask.Arguments(roles)}` from {Path.GetDirectoryName(exe)} 30 s after {user} logs on"
+                        + (
+                            string.IsNullOrWhiteSpace(environment)
+                                ? "."
+                                : $", with HEROES_REPLAY_ENV={environment}."
+                        )
+                        + " apply-release.ps1 restarts the stack through it. Start it now with `schtasks /Run /TN "
+                        + task
+                        + "`; remove it with `heroesreplay services install-task --remove`."
+                );
+            }
+
+            return code;
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    private static int Schtasks(params string[] arguments)
+    {
+        var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"))
+        {
+            UseShellExecute = false,
+        };
+        foreach (string argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process process = Process.Start(start);
+        process.WaitForExit();
+        return process.ExitCode == 0 ? 0 : 1;
     }
 
     private static Command StartCommand()
@@ -192,6 +326,7 @@ public class ServicesCommand : Command
             },
             Kill = Kill,
             CloseGame = StopSpectatedGame,
+            SpectateDown = () => MakeObsSafe(settings.SpectateDownObs),
             Wait = pause => cancellationToken.WaitHandle.WaitOne(pause),
             Logger = provider.GetRequiredService<ILogger<ServiceSupervision>>(),
             ExecutablePath = exe,
@@ -199,6 +334,23 @@ public class ServicesCommand : Command
             LogPath = () => log?.CurrentPath,
         };
         return supervision.Run(cancellationToken);
+    }
+
+    /// <summary>Spectate stays down: show the waiting scene on (or stop) a live stream this install started.</summary>
+    private static string MakeObsSafe(ObsFailSafeAction action)
+    {
+        AppSettings app = ServiceCollectionExtensions.LoadAppSettings();
+        return ObsFailSafe.Apply(
+            action,
+            app.OBS,
+            new ObsStreamArm().IsArmed(),
+            NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
+            () =>
+                new ObsWebsocketFailSafeSessionFactory().Open(
+                    app.OBS?.WebSocketEndpoint,
+                    app.OBS?.WebSocketPassword
+                )
+        );
     }
 
     /// <summary>The <c>services start</c> handshake: role prerequisites, kill, probe, and wait.</summary>
@@ -529,13 +681,19 @@ public class ServicesCommand : Command
             }
 
             string installDirectory = Path.GetDirectoryName(exe);
+            (OBSSettings obs, string dataDirectory) =
+                ServiceCollectionExtensions.LoadInstallObsSettings(
+                    installDirectory,
+                    Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV")
+                );
             ObsCollectionApplyResult result = ObsCollectionPatcher.ApplyForInstall(
                 installDirectory,
-                ObsCollectionPatcher.ReadDataDirectory(installDirectory),
+                dataDirectory,
                 Process.GetProcessesByName("obs64").Length > 0,
-                ObsNames.SceneCollection(ServiceCollectionExtensions.LoadObsSettings())
+                ObsNames.SceneCollection(obs),
+                ObsManagedFiles.ForThisUser()
             );
-            if (result.Drift || result.Wrote)
+            if (result.Drift || result.Wrote || result.Deferred)
             {
                 Console.WriteLine(result.Message);
             }

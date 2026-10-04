@@ -1,6 +1,6 @@
 # Fills gitignored src/HeroesReplay.CLI/appsettings.secrets.json from the
 # 1Password service account. Requires user env OP_SERVICE_ACCOUNT (ops_...).
-# Does not print secret values. See .grok/skills/op-service-account/SKILL.md.
+# Does not print secret values. See .agents/skills/op-service-account/SKILL.md.
 $ErrorActionPreference = 'Stop'
 
 if (-not $env:OP_SERVICE_ACCOUNT_TOKEN) {

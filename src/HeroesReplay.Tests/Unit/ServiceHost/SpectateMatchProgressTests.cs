@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Connectivity;
-using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.SelfUpdate;
@@ -280,13 +279,16 @@ public class SpectateMatchProgressTests
 
         public async Task<ReplaySessionKind> LaunchAndSpectate(
             LoadedReplay loadedReplay,
+            Action<ReplaySessionKind> outcomeKnown,
             Func<Task<LoadedReplay>> whileReporting
         )
         {
             await Task.Yield();
             (LastOutcome, LastMatchClockSeen) = script.Dequeue();
             Sessions++;
-            return ReplaySession.Classify(LastOutcome);
+            ReplaySessionKind kind = ReplaySession.Classify(LastOutcome);
+            outcomeKnown(kind);
+            return kind;
         }
 
         public void ReleaseClientAfterDefer() { }

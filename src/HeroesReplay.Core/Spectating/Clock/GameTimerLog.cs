@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using HeroesReplay.Core.Spectating.Clock.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Spectating.Clock;

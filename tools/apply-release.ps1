@@ -5,7 +5,8 @@ param(
     [int]$WaitForPid = 0,
     # The release tag being installed. Empty reads the staged version.txt.
     [string]$Version = '',
-    # The stack ran under a supervisor when the update staged. Restart it supervised.
+    # The stack ran under a supervisor when the update staged. Older gates pass it; the stack
+    # now always restarts supervised (Start-HeroesReplayStack, Confirm-Supervised).
     [switch]$Supervise
 )
 
@@ -64,6 +65,7 @@ function Start-HeroesReplayStack {
         }
 
         Write-Host 'Started scheduled task HeroesReplay-live.'
+        Confirm-Supervised
         return
     }
 
@@ -71,16 +73,74 @@ function Start-HeroesReplayStack {
     if (Test-Path -LiteralPath $launcher) {
         Start-Process -FilePath $launcher -WorkingDirectory $InstallDir
         Write-Host "Started $launcher"
+        Confirm-Supervised
         return
     }
 
+    # Always supervised after an update, whether or not the replaced stack was ($Supervise).
     $arguments = @('services', 'start')
-    if ($Supervise) {
-        $arguments += '--supervise'
-    }
-
+    $arguments += '--supervise'
     Start-Process -FilePath (Join-Path $InstallDir 'heroesreplay.exe') -ArgumentList $arguments -WorkingDirectory $InstallDir
     Write-Host "Started heroesreplay $($arguments -join ' ')."
+}
+
+function Test-SupervisorRunning {
+    # The supervisor holds this mutex from `services start --supervise` or `services supervise` on.
+    $mutex = $null
+    if ([System.Threading.Mutex]::TryOpenExisting('Local\HeroesReplay.ServiceSupervisor', [ref]$mutex)) {
+        $mutex.Dispose()
+        return $true
+    }
+
+    return $false
+}
+
+function Test-StackReady {
+    # Every role services start recorded runs and heartbeats (ready or degraded).
+    # cmd owns the redirect: Windows PowerShell turns a native command's stderr into a terminating error under Stop.
+    $exe = Join-Path $InstallDir 'heroesreplay.exe'
+    $json = (& cmd.exe /d /c "`"$exe`" services status --output json 2>nul") | Out-String
+    try {
+        $report = $json | ConvertFrom-Json
+    }
+    catch {
+        return $false
+    }
+
+    $roles = @($report.roles | Where-Object { $_.expected })
+    if ($roles.Count -eq 0) {
+        return $false
+    }
+
+    return @($roles | Where-Object { $_.state -notin @('ready', 'degraded') }).Count -eq 0
+}
+
+function Confirm-Supervised {
+    # A HeroesReplay-live task or start-live.cmd made before `services install-task` may start the
+    # stack without --supervise. Once its roles are ready, attach a supervisor so a release always
+    # leaves the stack supervised. A supervised launcher holds the mutex before any role starts.
+    $deadline = (Get-Date).AddMinutes(5)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-SupervisorRunning) {
+            Write-Host 'The stack is supervised.'
+            return
+        }
+
+        if (Test-StackReady) {
+            if (Test-SupervisorRunning) {
+                Write-Host 'The stack is supervised.'
+                return
+            }
+
+            Start-Process -FilePath (Join-Path $InstallDir 'heroesreplay.exe') -ArgumentList @('services', 'supervise') -WorkingDirectory $InstallDir
+            Write-Host 'The stack started without a supervisor. Started heroesreplay services supervise.'
+            return
+        }
+
+        Start-Sleep -Seconds 5
+    }
+
+    Write-Host 'The stack was not ready within 5 minutes, so no supervisor was attached. The health gate decides the release.'
 }
 
 function Stop-HeroesReplayStack([string]$Exe) {
@@ -355,11 +415,14 @@ catch {
     exit 1
 }
 
-# The new build reads OBS:SceneCollectionName and OBS:ProfileName from this install. While OBS is
-# closed it replaces the scene collection. The profile (basic.ini) belongs to the machine: the
-# packaged one is only copied when the machine has none, and an existing profile is kept.
-# service.json (stream key) is never copied.
-Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'install-obs', '--install', $InstallDir, '--environment', $environment) 'OBS scene files'
+# The new build reads OBS:SceneCollectionName and OBS:ProfileName from this install. It replaces a
+# scene collection HeroesReplay manages (its scenes and sources match what it last wrote, or this
+# release's or the replaced install's template), after a backup under
+# %LOCALAPPDATA%\HeroesReplay\obs\backups. A custom collection is kept. While OBS is running the
+# replacement waits until HeroesReplay finds OBS closed. The profile (basic.ini) belongs to the
+# machine: the packaged one is only copied when the machine has none, and an existing profile is
+# kept. service.json (stream key) is never copied.
+Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'install-obs', '--install', $InstallDir, '--previous', $previous, '--environment', $environment) 'OBS scene files'
 
 Clear-ServiceStop
 $since = (Get-Date).ToUniversalTime().ToString('o')

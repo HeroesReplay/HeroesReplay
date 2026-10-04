@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using HeroesReplay.CLI;
+using HeroesReplay.CLI.OpenTelemetry;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Telemetry;

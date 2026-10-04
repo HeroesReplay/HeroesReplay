@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HeroesReplay.Core.Obs;
 
 namespace HeroesReplay.Core.ServiceHost;
 
@@ -42,6 +43,12 @@ public sealed class ServiceRestartSettings
 
     /// <summary>How often the supervisor reads the roles and the stop file.</summary>
     public TimeSpan PollInterval { get; set; } = DefaultPollInterval;
+
+    /// <summary>
+    /// What happens to a live stream this install started when spectate used its restart budget
+    /// and stays down: show the waiting scene (default), stop the stream, or nothing.
+    /// </summary>
+    public ObsFailSafeAction SpectateDownObs { get; set; } = ObsFailSafeAction.WaitingScene;
 
     public IReadOnlyList<TimeSpan> Delays
     {

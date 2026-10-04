@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using Microsoft.Extensions.DependencyInjection;

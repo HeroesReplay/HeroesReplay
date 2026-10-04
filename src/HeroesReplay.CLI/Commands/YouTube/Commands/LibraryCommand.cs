@@ -3,8 +3,9 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using HeroesReplay.Core;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.YouTube.Playlists;
 using Microsoft.Extensions.DependencyInjection;
 

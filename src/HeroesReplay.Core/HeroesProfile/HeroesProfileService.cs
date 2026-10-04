@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Telemetry;
 using HeroesReplay.HeroesProfile.Client;
 using HeroesReplay.HeroesProfile.Client.Replays;
 using Microsoft.Extensions.Caching.Memory;

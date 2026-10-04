@@ -56,6 +56,26 @@ public class ReplayMediaRosterTests
         Assert.Equal("Féticheur", Assert.Single(roster).Hero);
     }
 
+    [Fact]
+    public void Roster_KeepsTheNamedTalentsInPickOrder()
+    {
+        Player varian = Player("Varian", "Vari", team: 0);
+        varian.Talents = new[]
+        {
+            new Talent { TalentID = 1, TalentName = "VarianParryOverpower" },
+            new Talent { TalentID = 3 },
+            new Talent { TalentID = 3, TalentName = "VarianTaunt" },
+        };
+        LoadedReplay loaded = Loaded(varian, Player("Uther", "Uthe", team: 1));
+
+        IReadOnlyList<ReplayMediaPlayer> roster = ReplayMediaFacts
+            .From(loaded, false, false, false, Catalog)
+            .Roster;
+
+        Assert.Equal(new[] { "VarianParryOverpower", "VarianTaunt" }, roster[0].Talents);
+        Assert.Empty(roster[1].Talents);
+    }
+
     private static LoadedReplay Loaded(params Player[] players) =>
         new()
         {

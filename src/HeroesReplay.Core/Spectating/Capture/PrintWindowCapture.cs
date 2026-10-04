@@ -12,7 +12,14 @@ namespace HeroesReplay.Core.Spectating.Capture;
 /// </summary>
 public sealed class PrintWindowCapture : IGameCapture
 {
+    /// <summary>
+    /// Black captures in a row before a warning. One or two are normal while the client loads
+    /// and before the HUD draws (#207); a run this long means the window is not drawing.
+    /// </summary>
+    public const int BlackStreakWarning = 5;
+
     private readonly ILogger<PrintWindowCapture> logger;
+    private int blackStreak;
 
     public PrintWindowCapture(ILogger<PrintWindowCapture> logger)
     {
@@ -35,16 +42,29 @@ public sealed class PrintWindowCapture : IGameCapture
         }
 
         Bitmap bitmap = CaptureWindow(handle, clientRegion);
-        if (bitmap != null && IsMostlyBlack(bitmap))
+        if (bitmap == null)
         {
-            logger.LogWarning(
-                "Game window capture of client {Bounds} was empty/black.",
-                clientRegion
+            return null;
+        }
+
+        bool black = IsMostlyBlack(bitmap);
+        blackStreak = black ? blackStreak + 1 : 0;
+        if (black)
+        {
+            logger.Log(
+                BlackCaptureLevel(blackStreak),
+                "Game window capture of client {Bounds} was empty/black ({Streak} in a row).",
+                clientRegion,
+                blackStreak
             );
         }
 
         return bitmap;
     }
+
+    /// <summary>Warning once when a black run reaches <see cref="BlackStreakWarning"/>, otherwise Debug.</summary>
+    public static LogLevel BlackCaptureLevel(int streak) =>
+        streak == BlackStreakWarning ? LogLevel.Warning : LogLevel.Debug;
 
     public static bool TryMapClientToWindow(
         Rectangle windowBounds,

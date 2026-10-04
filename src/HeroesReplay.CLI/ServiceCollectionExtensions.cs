@@ -4,28 +4,33 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Update;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Calculators;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.GameClient.Firewall;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.ServiceHost.Logs;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating;
 using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Clock;
-using HeroesReplay.Core.Spectating.Clock.Memory;
 using HeroesReplay.Core.Spectating.Control;
 using HeroesReplay.Core.Spectating.Reports;
+using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
 using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.Twitch.ChatMessages;
@@ -72,7 +77,7 @@ public static class ServiceCollectionExtensions
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
                     .AddConsole()
-                    .AddEventLog(config => config.SourceName = "HeroesReplay.YouTubeService")
+                    .AddSafeEventLog("HeroesReplay.YouTubeService")
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton<IYouTubeUploader, YouTubeUploader>()
@@ -105,7 +110,7 @@ public static class ServiceCollectionExtensions
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
                     .AddConsole()
-                    .AddEventLog(config => config.SourceName = "HeroesReplay.ReportService")
+                    .AddSafeEventLog("HeroesReplay.ReportService")
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
@@ -335,7 +340,7 @@ public static class ServiceCollectionExtensions
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
                     .AddConsole()
-                    .AddEventLog(config => config.SourceName = "HeroesReplay.TwitchService")
+                    .AddSafeEventLog("HeroesReplay.TwitchService")
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
@@ -436,7 +441,7 @@ public static class ServiceCollectionExtensions
                 builder
                     .AddConfiguration(configuration.GetSection("Logging"))
                     .AddConsole()
-                    .AddEventLog(config => config.SourceName = "HeroesReplay.SpectatorService")
+                    .AddSafeEventLog("HeroesReplay.SpectatorService")
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
@@ -554,6 +559,17 @@ public static class ServiceCollectionExtensions
             .AddFocusCalculators();
     }
 
+    // A refused Event Log write must not throw out of a logger and fail a constructor that logs.
+    private static ILoggingBuilder AddSafeEventLog(this ILoggingBuilder builder, string sourceName)
+    {
+        builder.Services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<ILoggerProvider, SafeEventLogProvider>(
+                _ => new SafeEventLogProvider(sourceName)
+            )
+        );
+        return builder;
+    }
+
     private static IServiceCollection AddConnectivityServices(this IServiceCollection services)
     {
         services.AddSingleton<IHeroesProfileResume>(_ => new HeroesProfileResume(
@@ -637,6 +653,27 @@ public static class ServiceCollectionExtensions
         return BuildConfiguration(
             basePath,
             Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV")
+        );
+    }
+
+    /// <summary>
+    /// The effective <c>OBS</c> section and <c>Location:DataDirectory</c> of the install in
+    /// <paramref name="installDirectory"/>, through <see cref="BuildConfiguration"/>, so the
+    /// <paramref name="environment"/> overlay and <c>HEROES_REPLAY_</c> variables apply as they do
+    /// for that install's roles. No secret is resolved.
+    /// </summary>
+    public static (OBSSettings Obs, string DataDirectory) LoadInstallObsSettings(
+        string installDirectory,
+        string environment
+    )
+    {
+        IConfigurationRoot configuration = BuildConfiguration(
+            Path.GetFullPath(installDirectory),
+            environment
+        );
+        return (
+            configuration.GetSection("OBS").Get<OBSSettings>() ?? new OBSSettings(),
+            configuration.GetSection("Location").Get<LocationSettings>()?.DataDirectory
         );
     }
 

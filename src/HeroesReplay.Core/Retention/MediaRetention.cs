@@ -13,6 +13,12 @@ public sealed class RetentionSweep
     public int DeletedFiles { get; set; }
     public long FreedBytes { get; set; }
     public List<string> Warnings { get; } = new();
+
+    /// <summary>
+    /// Files another process still had open (OBS finishing a recording, the uploader's handle).
+    /// The same rule picks them again on the next sweep, so they are not warnings (#207).
+    /// </summary>
+    public List<string> InUse { get; } = new();
 }
 
 public static class MediaRetention
@@ -32,6 +38,14 @@ public static class MediaRetention
         foreach (string warning in sweep.Warnings)
         {
             logger?.LogWarning("{RetentionWarning}", warning);
+        }
+
+        foreach (string busy in sweep.InUse)
+        {
+            logger?.LogInformation(
+                "{Path} is still open in another process. The next sweep removes it.",
+                busy
+            );
         }
     }
 
@@ -79,7 +93,18 @@ public static class MediaRetention
                 result
             );
         }
-        DeleteOldContexts(settings.ContextsDirectory, protectedId, keepBefore, dropBefore, result);
+        TimeSpan grace =
+            settings.Retention?.UnpublishedGrace > TimeSpan.Zero
+                ? settings.Retention.UnpublishedGrace
+                : TimeSpan.FromHours(1);
+        DeleteOldContexts(
+            settings.ContextsDirectory,
+            protectedId,
+            keepBefore,
+            dropBefore,
+            utcNow - grace,
+            result
+        );
         return result;
     }
 
@@ -136,6 +161,7 @@ public static class MediaRetention
         string protectedId,
         DateTimeOffset keepBefore,
         DateTimeOffset dropBefore,
+        DateTimeOffset quietBefore,
         RetentionSweep result
     )
     {
@@ -175,15 +201,19 @@ public static class MediaRetention
                 continue;
             }
 
+            // The spectator writes the YouTube entry seconds after OBS stops. A recording with no
+            // entry that has not been written for UnpublishedGrace can never be published, so it
+            // goes now, not after VideoMaxAgeDays (#204). The newest context by time is not
+            // always the live session, so the file's own write time protects it (#212).
             if (videos.Length > 0 && !remoteUpload)
             {
-                if (written >= dropBefore.UtcDateTime)
-                {
-                    continue;
-                }
-
                 foreach (FileInfo video in videos)
                 {
+                    if (video.LastWriteTimeUtc >= quietBefore.UtcDateTime)
+                    {
+                        continue;
+                    }
+
                     DeleteFile(
                         video.FullName,
                         result,
@@ -284,11 +314,18 @@ public static class MediaRetention
                 result.Warnings.Add(warning);
             }
         }
+        catch (IOException e) when (IsInUse(e))
+        {
+            result.InUse.Add(path);
+        }
         catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
         {
             result.Warnings.Add("Could not remove " + path + ": " + e.Message);
         }
     }
+
+    /// <summary>ERROR_SHARING_VIOLATION (32) or ERROR_LOCK_VIOLATION (33).</summary>
+    public static bool IsInUse(IOException e) => (e.HResult & 0xFFFF) is 32 or 33;
 
     private static bool TryReplayId(string fileName, string separator, out int replayId)
     {

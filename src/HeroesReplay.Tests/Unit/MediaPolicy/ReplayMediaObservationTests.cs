@@ -310,6 +310,40 @@ public class ReplayMediaObservationTests
     }
 
     [Fact]
+    public async Task Restart_DoesNotRecordAStoredDecisionTheCurrentSettingsRefuse()
+    {
+        using var temp = new TempAttempts();
+        UploadOutbox outbox = new UploadOutbox(temp.Root);
+        await Require(
+            outbox.SavePolicyAsync(
+                "replay-" + ReplayId,
+                ReplayId,
+                Stamp,
+                Planted("1", ReplayMediaReason.AwaitingCompletion),
+                replaceOpen: false,
+                CancellationToken.None
+            )
+        );
+        ReplayMediaPolicySettings selected = Settings(
+            ReplayRecordingMode.Selected,
+            ReplayPublicationMode.AllEligible
+        );
+
+        MediaPolicySnapshot fresh = await Log(temp)
+            .RecordPreLaunchAsync(Loaded(), selected, Now, CancellationToken.None);
+        MediaPolicySnapshot expired = await Log(temp)
+            .RecordPreLaunchAsync(Loaded(), selected, GameDate.AddDays(4), CancellationToken.None);
+
+        Assert.True(fresh.AllowsRecording);
+        Assert.Null(fresh.RecordingWithheld);
+        Assert.True(expired.Reused);
+        Assert.True(expired.Decision.Record);
+        Assert.Equal(ReplayMediaReason.RecordedOrdinary, expired.Decision.RecordingReason);
+        Assert.False(expired.AllowsRecording);
+        Assert.Equal(ReplayMediaReason.Expired, expired.RecordingWithheld);
+    }
+
+    [Fact]
     public async Task Publication_PromotesTheStoredDecisionAndIgnoresNewerSettings()
     {
         using var temp = new TempAttempts();
@@ -948,7 +982,7 @@ public class ReplayMediaObservationTests
             Login = "viewer",
             ReplayId = ReplayId,
             RecordAndUpload = upload,
-            PlayerIndex = 0,
+            BattleTag = "Li-Ming#0",
         };
     }
 

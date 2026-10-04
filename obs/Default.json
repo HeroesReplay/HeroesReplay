@@ -73,10 +73,10 @@
       "settings": {
         "url": "https://www.heroesprofile.com/Match/Single/65268468",
         "width": 1920,
-        "height": 7200,
+        "height": 1080,
         "shutdown": false,
         "restart_when_active": true,
-        "css": "html, body { background-color: #0b0e14 !important; margin: 0 !important; } #main-menu,.main-navigation-wrapper,.alt-acct-nav,#mobile-toggle,horizontal-banner-ad,rich-media-ad,dynamic-banner-ad,takeover-ad,xalatath-scoreboard,void-glitch,void-fallen-splash,void-stage-up,void-hidden-eye,void-whispers,mobile-nav-hack{display:none!important;} div[class~=\"max-sm:text-sm\"][class~=\"max-w-[1500px]\"][class~=\"mx-auto\"][class~=\"my-5\"]{display:none!important;}"
+        "css": "html, body { background-color: #0b0e14 !important; margin: 0 !important; } #main-menu,.main-navigation-wrapper,.alt-acct-nav,#mobile-toggle,horizontal-banner-ad,rich-media-ad,dynamic-banner-ad,takeover-ad,xalatath-scoreboard,void-glitch,void-fallen-splash,void-stage-up,void-hidden-eye,void-whispers,mobile-nav-hack{display:none!important;}"
       },
       "mixers": 255,
       "sync": 0,
@@ -94,35 +94,7 @@
       "deinterlace_field_order": 0,
       "monitoring_type": 0,
       "private_settings": {},
-      "filters": [
-        {
-          "prev_ver": 537001986,
-          "name": "Scroll",
-          "uuid": "c6e3a6f4-8d92-4b15-9e77-3f4a0b2c6d83",
-          "id": "scroll_filter",
-          "versioned_id": "scroll_filter",
-          "settings": {
-            "speed_y": 51.0,
-            "loop": false
-          },
-          "mixers": 0,
-          "sync": 0,
-          "flags": 0,
-          "volume": 1.0,
-          "balance": 0.5,
-          "enabled": true,
-          "muted": false,
-          "push-to-mute": false,
-          "push-to-mute-delay": 0,
-          "push-to-talk": false,
-          "push-to-talk-delay": 0,
-          "hotkeys": {},
-          "deinterlace_mode": 0,
-          "deinterlace_field_order": 0,
-          "monitoring_type": 0,
-          "private_settings": {}
-        }
-      ]
+      "filters": []
     },
     {
       "prev_ver": 537001986,
@@ -342,43 +314,6 @@
           "private_settings": {}
         }
       ]
-    },
-    {
-      "prev_ver": 537001986,
-      "name": "social-media",
-      "uuid": "88e6dea3-50bb-4877-a9f7-43de2c3c266e",
-      "id": "browser_source",
-      "versioned_id": "browser_source",
-      "settings": {
-        "is_local_file": true,
-        "local_file": "Popups/_right-social-media-popup-v2.html",
-        "url": "file:///Popups/_right-social-media-popup-v2.html",
-        "width": 1000,
-        "shutdown": true,
-        "restart_when_active": true
-      },
-      "mixers": 255,
-      "sync": 0,
-      "flags": 0,
-      "volume": 1.0,
-      "balance": 0.5,
-      "enabled": true,
-      "muted": false,
-      "push-to-mute": false,
-      "push-to-mute-delay": 0,
-      "push-to-talk": false,
-      "push-to-talk-delay": 0,
-      "hotkeys": {
-        "libobs.mute": [],
-        "libobs.unmute": [],
-        "libobs.push-to-mute": [],
-        "libobs.push-to-talk": [],
-        "ObsBrowser.Refresh": []
-      },
-      "deinterlace_mode": 0,
-      "deinterlace_field_order": 0,
-      "monitoring_type": 0,
-      "private_settings": {}
     },
     {
       "prev_ver": 537001986,
@@ -918,6 +853,32 @@
         "id_counter": 2,
         "items": [
           {
+            "name": "soundcloud",
+            "source_uuid": "b903df54-c4f6-4d2b-9154-dfaed586cfb0",
+            "visible": true,
+            "locked": true,
+            "rot": 0.0,
+            "align": 5,
+            "bounds_type": 0,
+            "bounds_align": 0,
+            "bounds_crop": false,
+            "crop_left": 0,
+            "crop_top": 0,
+            "crop_right": 0,
+            "crop_bottom": 0,
+            "id": 2,
+            "group_item_backup": false,
+            "pos": { "x": 0.0, "y": 900.0 },
+            "scale": { "x": 0.66, "y": 0.66 },
+            "bounds": { "x": 0.0, "y": 0.0 },
+            "scale_filter": "disable",
+            "blend_method": "default",
+            "blend_type": "normal",
+            "show_transition": { "duration": 0 },
+            "hide_transition": { "duration": 0 },
+            "private_settings": {}
+          },
+          {
             "name": "match-report-browser",
             "source_uuid": "a8c1e4d2-6b70-4f3a-9c55-1d2e8f0a4b61",
             "visible": true,
@@ -954,32 +915,6 @@
             "hide_transition": {
               "duration": 0
             },
-            "private_settings": {}
-          },
-          {
-            "name": "soundcloud",
-            "source_uuid": "b903df54-c4f6-4d2b-9154-dfaed586cfb0",
-            "visible": true,
-            "locked": true,
-            "rot": 0.0,
-            "align": 5,
-            "bounds_type": 0,
-            "bounds_align": 0,
-            "bounds_crop": false,
-            "crop_left": 0,
-            "crop_top": 0,
-            "crop_right": 0,
-            "crop_bottom": 0,
-            "id": 2,
-            "group_item_backup": false,
-            "pos": { "x": 0.0, "y": 900.0 },
-            "scale": { "x": 0.66, "y": 0.66 },
-            "bounds": { "x": 0.0, "y": 0.0 },
-            "scale_filter": "disable",
-            "blend_method": "default",
-            "blend_type": "normal",
-            "show_transition": { "duration": 0 },
-            "hide_transition": { "duration": 0 },
             "private_settings": {}
           }
         ]
@@ -1711,45 +1646,6 @@
             "scale": {
               "x": 0.6575000286102295,
               "y": 0.6566265225410461
-            },
-            "bounds": {
-              "x": 0.0,
-              "y": 0.0
-            },
-            "scale_filter": "disable",
-            "blend_method": "default",
-            "blend_type": "normal",
-            "show_transition": {
-              "duration": 0
-            },
-            "hide_transition": {
-              "duration": 0
-            },
-            "private_settings": {}
-          },
-          {
-            "name": "social-media",
-            "source_uuid": "88e6dea3-50bb-4877-a9f7-43de2c3c266e",
-            "visible": true,
-            "locked": false,
-            "rot": 0.0,
-            "align": 5,
-            "bounds_type": 0,
-            "bounds_align": 0,
-            "bounds_crop": false,
-            "crop_left": 0,
-            "crop_top": 0,
-            "crop_right": 0,
-            "crop_bottom": 0,
-            "id": 21,
-            "group_item_backup": false,
-            "pos": {
-              "x": 1000.0,
-              "y": 102.0
-            },
-            "scale": {
-              "x": 0.9200000166893005,
-              "y": 0.9200000166893005
             },
             "bounds": {
               "x": 0.0,
