@@ -15,9 +15,13 @@ namespace HeroesReplay.CLI.Commands.Update;
 
 public sealed class ReleaseUpdateGate : IReleaseUpdateGate
 {
+    /// <summary>The next replay waits for this answer, so a slow GitHub cannot hold it long.</summary>
+    private static readonly TimeSpan LookupTimeout = TimeSpan.FromSeconds(30);
+
     private readonly ILogger<ReleaseUpdateGate> logger;
     private readonly AppSettings settings;
     private string loggedSkip;
+    private StagedRelease staged;
 
     public ReleaseUpdateGate(ILogger<ReleaseUpdateGate> logger, AppSettings settings)
     {
@@ -27,6 +31,7 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
 
     public async Task<bool> TryStageAsync(CancellationToken cancellationToken)
     {
+        staged = null;
         ReleaseSettings release = settings.Release;
         if (release?.Enabled != true)
         {
@@ -58,8 +63,13 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
             http.DefaultRequestHeaders.Accept.Add(
                 new MediaTypeWithQualityHeaderValue("application/vnd.github+json")
             );
-            string json = await http.GetStringAsync(latestUrl, cancellationToken)
-                .ConfigureAwait(false);
+            string json;
+            using (var lookup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                lookup.CancelAfter(LookupTimeout);
+                json = await http.GetStringAsync(latestUrl, lookup.Token).ConfigureAwait(false);
+            }
+
             ReleaseOffer? offer = Pick(
                 GitHubReleaseJson.Read(json, assetName, local),
                 ReleaseSkipList.Load(),
@@ -121,20 +131,56 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
                 Path.Combine(install, "appsettings.json"),
                 Path.Combine(prepared, "appsettings.json")
             );
-            // The stop file ends the supervisor too. Tell the helper so the restart is supervised again.
-            StartHelper(install, prepared, found.Version, ServiceSupervisorFile.IsRunning());
-            ServiceStopFile.Request();
+            staged = new StagedRelease(install, prepared, found.Version);
             logger.LogInformation(
-                "Release {Version} is staged. Services will stop and the new build will start.",
+                "Release {Version} is staged. The next replay is not launched. The report finishes on the waiting scene, then this install is replaced.",
                 found.Version
             );
             return true;
         }
-        catch (Exception e) when (e is not OperationCanceledException)
+        // A lookup timeout is a cancellation too. Only a stop request ends the check that way.
+        catch (Exception e) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(e, "Release update did not stage. This version keeps running.");
             return false;
         }
+    }
+
+    public bool HandOff()
+    {
+        StagedRelease release = staged;
+        staged = null;
+        if (release == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            // The stop file ends the supervisor too. Tell the helper so the restart is supervised again.
+            StartHelper(
+                release.Install,
+                release.Prepared,
+                release.Version,
+                ServiceSupervisorFile.IsRunning()
+            );
+            ServiceStopFile.Request();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Release {Version} was not handed to the installer. This version keeps running.",
+                release.Version
+            );
+            return false;
+        }
+
+        logger.LogInformation(
+            "Release {Version} is installing. Services will stop and the new build will start the next replay.",
+            release.Version
+        );
+        return true;
     }
 
     /// <summary>
@@ -171,6 +217,8 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
     ) =>
         $"-NoProfile -ExecutionPolicy Bypass -File \"{script}\" -InstallDir \"{install}\" -StagingDir \"{prepared}\" -WaitForPid {waitForPid} -Version \"{version}\""
         + (supervised ? " -Supervise" : string.Empty);
+
+    private sealed record StagedRelease(string Install, string Prepared, string Version);
 
     private static void StartHelper(
         string install,

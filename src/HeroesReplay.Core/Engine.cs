@@ -227,6 +227,7 @@ public class Engine : IEngine
                 loadedReplay.Replay?.ReplayVersion
             );
             Task<LoadedReplay> nextLoad = null;
+            Task<bool> releaseCheck = null;
             bool marked = false;
             ReplaySessionKind session;
             try
@@ -237,8 +238,11 @@ public class Engine : IEngine
                         outcome => marked = MarkSpectatedWhenFinal(loadedReplay, outcome),
                         () =>
                         {
-                            nextLoad = StartNextLoad(loadedReplay);
-                            return nextLoad ?? Task.FromResult<LoadedReplay>(null);
+                            // The match is over. A new release is checked before the next
+                            // replay is picked, so an update never interrupts a launched game.
+                            releaseCheck = StageReleaseAsync();
+                            nextLoad = LoadNextUnlessReleaseAsync(releaseCheck, loadedReplay);
+                            return nextLoad;
                         }
                     )
                     .ConfigureAwait(false);
@@ -357,10 +361,13 @@ public class Engine : IEngine
             }
 
             await StorePreparedNextAsync(nextLoad).ConfigureAwait(false);
-            if (await releaseUpdate.TryStageAsync(consoleTokenProvider.Token).ConfigureAwait(false))
+            // Without a report (OBS off, or an outcome that has none) nothing was checked yet,
+            // and no next replay was launched either.
+            bool releaseStaged = await (releaseCheck ?? StageReleaseAsync()).ConfigureAwait(false);
+            if (releaseStaged && HandOffRelease())
             {
                 // spectated-ids.txt now contains this replay. A new process only reads that
-                // file, so put the preloaded replay back before this one exits.
+                // file, so put a preloaded replay back before this one exits.
                 ReturnPreparedNext();
                 logger.LogInformation(
                     "Stopping after this replay so the new release can replace this install."
@@ -427,6 +434,52 @@ public class Engine : IEngine
         int attempt = previous + 1;
         frontAttempts[id] = attempt;
         return attempt;
+    }
+
+    /// <summary>False when no release is staged, including a stop during the check.</summary>
+    private async Task<bool> StageReleaseAsync()
+    {
+        try
+        {
+            return await releaseUpdate
+                .TryStageAsync(consoleTokenProvider.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (consoleTokenProvider.Token.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// A staged release launches no next replay: the report finishes on the waiting scene, this
+    /// install is replaced, and the new build plays the next replay.
+    /// </summary>
+    private async Task<LoadedReplay> LoadNextUnlessReleaseAsync(
+        Task<bool> releaseCheck,
+        LoadedReplay current
+    )
+    {
+        if (await releaseCheck.ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        Task<LoadedReplay> next = StartNextLoad(current);
+        return next == null ? null : await next.ConfigureAwait(false);
+    }
+
+    private bool HandOffRelease()
+    {
+        // Before the stop file exists: the watchdog stops the stream as soon as it sees it.
+        connectivityWatchdog.KeepStreamThroughRestart(true);
+        if (releaseUpdate.HandOff())
+        {
+            return true;
+        }
+
+        connectivityWatchdog.KeepStreamThroughRestart(false);
+        return false;
     }
 
     private Task<LoadedReplay> StartNextLoad(LoadedReplay current)

@@ -1,7 +1,11 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands.Update;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.SelfUpdate;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;
@@ -111,5 +115,18 @@ public class ReleaseSkipListTests
         Assert.Contains("-InstallDir \"C:\\heroesreplay\\app\"", supervised);
         Assert.EndsWith("-Version \"v1.4.0\"", plain);
         Assert.DoesNotContain("-Supervise", plain, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Gate_HandsOffNothingUntilAReleaseIsStaged()
+    {
+        var gate = new ReleaseUpdateGate(
+            NullLogger<ReleaseUpdateGate>.Instance,
+            new AppSettings { Release = new ReleaseSettings { Enabled = false } }
+        );
+
+        Assert.False(gate.HandOff());
+        Assert.False(await gate.TryStageAsync(CancellationToken.None));
+        Assert.False(gate.HandOff());
     }
 }

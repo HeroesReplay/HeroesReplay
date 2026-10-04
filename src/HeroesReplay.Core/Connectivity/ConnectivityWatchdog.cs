@@ -26,6 +26,7 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     private string lastWrittenDetail;
     private bool? lastWrittenOnline;
     private string lastWrittenBlocked;
+    private volatile bool keepStreamThroughRestart;
 
     public ConnectivityWatchdog(
         ILogger<ConnectivityWatchdog> logger,
@@ -378,9 +379,16 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         }
     }
 
+    public void KeepStreamThroughRestart(bool keep) => keepStreamThroughRestart = keep;
+
     private void StopStreamForShutdown()
     {
         if (obsController == null || !IngestAllowed())
+        {
+            return;
+        }
+
+        if (keepStreamThroughRestart && KeepStreamOnWaitingScene())
         {
             return;
         }
@@ -393,6 +401,41 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         {
             logger.LogWarning(e, "Could not confirm the OBS stream inactive during shutdown.");
         }
+    }
+
+    /// <summary>
+    /// A release restart leaves the stream live on the waiting scene. The new install's reconcile
+    /// finds it live and keeps it, so viewers see the waiting scene, not an offline channel.
+    /// </summary>
+    private bool KeepStreamOnWaitingScene()
+    {
+        string scene = settings.OBS?.WaitingSceneName;
+        if (string.IsNullOrWhiteSpace(scene))
+        {
+            logger.LogInformation(
+                "OBS:WaitingSceneName is not set, so the stream stops for the release restart."
+            );
+            return false;
+        }
+
+        try
+        {
+            obsController.SwapToWaitingScene();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Could not show the waiting scene, so the stream stops for the release restart."
+            );
+            return false;
+        }
+
+        logger.LogInformation(
+            "The OBS stream stays live on {Scene} while the new release installs and starts.",
+            scene
+        );
+        return true;
     }
 
     private bool IngestAllowed() => SessionMedia.ShouldStream(settings.OBS);

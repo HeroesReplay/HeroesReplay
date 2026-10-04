@@ -319,6 +319,8 @@ public class SpectateMatchProgressTests
     {
         public Task<bool> TryStageAsync(CancellationToken cancellationToken) =>
             Task.FromResult(false);
+
+        public bool HandOff() => false;
     }
 
     private sealed class StubLoader : IReplayLoader

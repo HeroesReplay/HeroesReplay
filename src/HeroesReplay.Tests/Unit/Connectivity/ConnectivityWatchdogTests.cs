@@ -218,6 +218,50 @@ public class ConnectivityWatchdogTests
     }
 
     [Fact]
+    public async Task RunAsync_ReleaseRestart_KeepsTheStreamLiveOnTheWaitingScene()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: true, waitingScene: "waiting");
+        fixture.Obs.Streaming = true;
+        fixture.Watchdog.KeepStreamThroughRestart(true);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await fixture.Watchdog.RunAsync(cts.Token);
+
+        Assert.Equal(0, fixture.Obs.StopCalls);
+        Assert.True(fixture.Obs.IsStreaming());
+        Assert.Equal(1, fixture.Obs.WaitingSceneCalls);
+    }
+
+    [Fact]
+    public async Task RunAsync_ReleaseRestartWithoutAWaitingScene_StopsTheStream()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
+        fixture.Obs.Streaming = true;
+        fixture.Watchdog.KeepStreamThroughRestart(true);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await fixture.Watchdog.RunAsync(cts.Token);
+
+        Assert.True(fixture.Obs.StopCalls >= 1);
+        Assert.False(fixture.Obs.IsStreaming());
+    }
+
+    [Fact]
+    public async Task RunAsync_ReleaseRestartCalledOff_StopsTheStreamOnAPlainStop()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: true, waitingScene: "waiting");
+        fixture.Obs.Streaming = true;
+        fixture.Watchdog.KeepStreamThroughRestart(true);
+        fixture.Watchdog.KeepStreamThroughRestart(false);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await fixture.Watchdog.RunAsync(cts.Token);
+
+        Assert.True(fixture.Obs.StopCalls >= 1);
+        Assert.Equal(0, fixture.Obs.WaitingSceneCalls);
+    }
+
+    [Fact]
     public void Apply_RestoreRequestsTheUnfinishedReplayWhenTheGameIsGone()
     {
         using Fixture fixture = CreateFixture(streamingEnabled: false, gameRunning: false);
@@ -332,7 +376,11 @@ public class ConnectivityWatchdogTests
             HeroesProfile = true,
         };
 
-    private static Fixture CreateFixture(bool streamingEnabled, bool gameRunning = true)
+    private static Fixture CreateFixture(
+        bool streamingEnabled,
+        bool gameRunning = true,
+        string waitingScene = null
+    )
     {
         string path = Path.Combine(
             Path.GetTempPath(),
@@ -351,7 +399,11 @@ public class ConnectivityWatchdogTests
             NullLogger<ConnectivityWatchdog>.Instance,
             new AppSettings
             {
-                OBS = new OBSSettings { StreamingEnabled = streamingEnabled },
+                OBS = new OBSSettings
+                {
+                    StreamingEnabled = streamingEnabled,
+                    WaitingSceneName = waitingScene,
+                },
                 Connectivity = new ConnectivitySettings
                 {
                     FailThreshold = 3,
@@ -466,7 +518,9 @@ public class ConnectivityWatchdogTests
 
         public void UpdateReplayInfoVisibility(TimeSpan matchTime) { }
 
-        public void SwapToWaitingScene() { }
+        public int WaitingSceneCalls { get; private set; }
+
+        public void SwapToWaitingScene() => WaitingSceneCalls++;
 
         public ObsRecordingResult StartRecording() =>
             ObsRecordingResult.Failed(ObsOutputFailure.NotRequested, "test");

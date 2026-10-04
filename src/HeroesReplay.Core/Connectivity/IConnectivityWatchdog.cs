@@ -16,4 +16,10 @@ public interface IConnectivityWatchdog
     Task<ConnectivitySnapshot> ProbeAsync(CancellationToken cancellationToken);
     bool Apply(ConnectivitySnapshot snapshot);
     Task RunAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// True when the coming shutdown is a release restart: a live stream stays up on the waiting
+    /// scene for the new install instead of being stopped.
+    /// </summary>
+    void KeepStreamThroughRestart(bool keep) { }
 }
