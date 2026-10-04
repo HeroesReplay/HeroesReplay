@@ -65,6 +65,7 @@ public class YouTubeLibrary : IYouTubeLibrary
     private readonly AppSettings settings;
     private readonly IYouTubePlaylistClient playlists;
     private readonly IHeroesProfileService heroesProfile;
+    private DateTimeOffset? loggedPause;
 
     public YouTubeLibrary(
         ILogger<YouTubeLibrary> logger,
@@ -83,6 +84,11 @@ public class YouTubeLibrary : IYouTubeLibrary
     /// Tests move the clock. Production reads the system clock.
     /// </summary>
     internal Func<DateTimeOffset> Clock { get; set; } = () => DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// The pause between playlist writes. Tests record it instead of waiting.
+    /// </summary>
+    internal Func<TimeSpan, CancellationToken, Task> Delay { get; set; } = Task.Delay;
 
     public async Task<YouTubeLibraryPass> RunOnceAsync(
         bool force,
@@ -119,7 +125,12 @@ public class YouTubeLibrary : IYouTubeLibrary
         YouTubeQuotaDay day = units.Read(now);
         if (YouTubeQuotaUnits.Paused(day, now))
         {
-            logger.LogInformation(
+            // The uploader asks every poll once the pass is due. Say it once per pause.
+            LogLevel level =
+                day.LibraryPausedUntil == loggedPause ? LogLevel.Debug : LogLevel.Information;
+            loggedPause = day.LibraryPausedUntil;
+            logger.Log(
+                level,
                 "YouTube library pass is paused by a quota response until {ResumeAt:o}.",
                 day.LibraryPausedUntil
             );
@@ -156,14 +167,27 @@ public class YouTubeLibrary : IYouTubeLibrary
                 )
                 .ConfigureAwait(false);
         }
-        catch (Exception exception) when (YouTubeListQuota.IsExhausted(exception))
+        catch (Exception exception) when (YouTubeListQuota.IsRefused(exception))
         {
-            DateTimeOffset resume = YouTubeListQuota.ResumeAt(Clock());
-            units.PauseLibrary(resume, Clock());
-            logger.LogWarning(
-                "YouTube quota is exhausted. The library pass waits until {ResumeAt:o}. Uploads continue.",
-                resume
-            );
+            if (YouTubeListQuota.IsExhausted(exception))
+            {
+                DateTimeOffset resume = YouTubeListQuota.ResumeAt(Clock());
+                units.PauseLibrary(resume, Clock());
+                logger.LogWarning(
+                    exception,
+                    "YouTube quota is exhausted. The library pass waits until {ResumeAt:o}. Uploads continue.",
+                    resume
+                );
+            }
+            else
+            {
+                // The day's quota is still there. The next pass, one LibraryInterval on, carries on.
+                logger.LogWarning(
+                    exception,
+                    "YouTube rate-limited the library pass. The day's quota is not spent, so nothing is paused. The next pass runs in {Interval}.",
+                    settings.YouTube.LibraryInterval
+                );
+            }
         }
         finally
         {
@@ -540,6 +564,20 @@ public class YouTubeLibrary : IYouTubeLibrary
         bool listed = false;
         int failures = 0;
         int count = 0;
+        bool wrote = false;
+
+        // YouTube throttles playlist writes sent back to back, whatever quota is left.
+        async Task SpaceWriteAsync()
+        {
+            TimeSpan spacing = settings.YouTube.LibraryWriteSpacing;
+            if (wrote && spacing > TimeSpan.Zero)
+            {
+                await Delay(spacing, cancellationToken).ConfigureAwait(false);
+            }
+
+            wrote = true;
+        }
+
         foreach (YouTubeLibraryItem item in items)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -580,6 +618,7 @@ public class YouTubeLibrary : IYouTubeLibrary
                             break;
                         }
 
+                        await SpaceWriteAsync().ConfigureAwait(false);
                         playlistId = await playlists
                             .CreateAsync(item.PlaylistTitle, cancellationToken)
                             .ConfigureAwait(false);
@@ -593,6 +632,7 @@ public class YouTubeLibrary : IYouTubeLibrary
                     break;
                 }
 
+                await SpaceWriteAsync().ConfigureAwait(false);
                 await playlists
                     .InsertAsync(playlistId, item.VideoId.Trim(), cancellationToken)
                     .ConfigureAwait(false);
@@ -611,7 +651,7 @@ public class YouTubeLibrary : IYouTubeLibrary
             {
                 throw;
             }
-            catch (Exception exception) when (!YouTubeListQuota.IsExhausted(exception))
+            catch (Exception exception) when (!YouTubeListQuota.IsRefused(exception))
             {
                 failures++;
                 logger.LogWarning(

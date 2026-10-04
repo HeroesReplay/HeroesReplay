@@ -19,7 +19,7 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 | Encoder, bitrate, output resolution, FPS, recording path | The machine | Not set by HeroesReplay. Only the [policy](#machine-profile-policy) below is validated. |
 | Global audio devices | The machine | The collection has Desktop Audio only. Mic/Aux should be Disabled (`obs.mic_enabled` is an error). |
 | Stream service and key (`service.json`) | Operator secret | Never packaged, copied, logged, or returned by a tool. The tools report only the service type, the named service (`Twitch`), and whether a key is set. |
-| Twitch ingest arm (`%LOCALAPPDATA%\HeroesReplay\stream-armed`) | The machine | Ingest needs this arm and `OBS:StreamingEnabled`. `heroesreplay obs arm` / `disarm` / `status`. Only the live box is armed. |
+| Twitch ingest arm (`%LOCALAPPDATA%\HeroesReplay\stream-armed`) | The machine | Ingest needs this arm and `OBS:StreamingEnabled`. `heroesreplay obs arm` / `disarm` / `status`. The live box is armed. ASA-SERVER is armed only for a stream proof; its OBS streams to a developer Twitch account. |
 
 ## Updating the collection
 
@@ -70,11 +70,11 @@ Each machine owns its OBS profile. Start one with the OBS Auto-Configuration Wiz
 - **Recording container: MP4 family.** MP4, Hybrid MP4 (OBS 30.2 and later, which survives a crash better) or fragmented MP4. The YouTube uploader, the pentakill clips and retention only find `*.mp4` in `Data\Contexts`. MKV would need a remux step in all three first; that is a later slice of #130 (D4/D5).
 - **Encoder.** Whatever the machine's GPU does well: QSV on Intel, NVENC on NVIDIA, x264 as the fallback. It is reported, not validated.
 - **Recording path.** The spectator sets the recording folder per replay with `SetRecordDirectory`, so the profile's own path doesn't matter.
-- **Stream (live box only).** Service Twitch with its key, set in OBS on that machine.
+- **Stream.** Service Twitch with that machine's own key, set in OBS on that machine. The live box streams to `saltysadism`; ASA-SERVER streams to a developer Twitch account, so its test streams never touch the live channel.
 
 | Machine | Profile and collection | Streams | Records |
 | --- | --- | --- | --- |
-| ASA-SERVER (dev) | Its own, named by `OBS:ProfileName` and `OBS:SceneCollectionName` | Never: `OBS:StreamingEnabled` is false and the machine is not armed | For tests: private `[TEST]` uploads or a dry run |
+| ASA-SERVER (dev) | Its own, named by `OBS:ProfileName` and `OBS:SceneCollectionName` | Only for a stream proof, to the developer Twitch account: `OBS:StreamingEnabled` is false in dev, so a run sets `HEROES_REPLAY_OBS__StreamingEnabled=true` and the machine is armed | For tests: private `[TEST]` uploads or a dry run |
 | DESKTOP-8SJEK72 (live) | Its own, named the same way | Yes: prod settings plus the arm | Yes |
 
 ## Running and stopping

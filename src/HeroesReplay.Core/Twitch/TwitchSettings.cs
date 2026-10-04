@@ -17,7 +17,11 @@ public class TwitchSettings
     public TimeSpan PredictionWindow { get; set; }
     public bool DryRunMode { get; set; }
 
-    /// <summary>Space-separated scopes already granted. Startup does not call Twitch to discover them.</summary>
+    /// <summary>
+    /// Space-separated scopes already granted. When it is not set, <c>services start</c> reads
+    /// them from Twitch's token validator; if Twitch cannot be reached they stay unknown and do
+    /// not stop startup.
+    /// </summary>
     public string GrantedScopes { get; set; }
 
     public string QueueFileName { get; set; }

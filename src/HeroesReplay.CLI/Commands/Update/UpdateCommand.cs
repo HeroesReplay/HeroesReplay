@@ -28,6 +28,75 @@ public class UpdateCommand : Command
         Subcommands.Add(ReleaseHealthCommand());
         Subcommands.Add(MigrateStreamArmCommand());
         Subcommands.Add(InstallObsCommand());
+        Subcommands.Add(LauncherCommand());
+    }
+
+    private static Command LauncherCommand()
+    {
+        var command = new Command(
+            "launcher",
+            "Called by apply-release.ps1: rewrite %LOCALAPPDATA%\\HeroesReplay\\start-live.cmd to start every role supervised (services start --supervise), keeping the replaced one as start-live.cmd.previous. With --restore, put that one back for a rollback."
+        );
+        Option<string> install = new("--install")
+        {
+            Description = "The install the launcher starts.",
+        };
+        Option<string> environment = EnvironmentOption();
+        Option<bool> restore = new("--restore")
+        {
+            Description = "Put start-live.cmd.previous back instead of rewriting.",
+        };
+        Option<string> stateDirectory = new("--state-dir")
+        {
+            Description = "Where start-live.cmd is. Default %LOCALAPPDATA%\\HeroesReplay.",
+        };
+        command.Options.Add(install);
+        command.Options.Add(environment);
+        command.Options.Add(restore);
+        command.Options.Add(stateDirectory);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string state = parseResult.GetValue(stateDirectory);
+                if (string.IsNullOrWhiteSpace(state))
+                {
+                    state = ReleaseLauncher.DefaultStateDirectory;
+                }
+
+                if (
+                    !parseResult.GetValue(restore)
+                    && string.IsNullOrWhiteSpace(parseResult.GetValue(install))
+                )
+                {
+                    Console.Error.WriteLine("--install is required unless --restore is given.");
+                    return Task.FromResult(1);
+                }
+
+                try
+                {
+                    string environmentName = parseResult.GetValue(environment);
+                    Console.WriteLine(
+                        parseResult.GetValue(restore)
+                            ? ReleaseLauncher.Restore(state)
+                            : ReleaseLauncher.Replace(
+                                state,
+                                parseResult.GetValue(install),
+                                string.IsNullOrWhiteSpace(environmentName)
+                                    ? "prod"
+                                    : environmentName
+                            )
+                    );
+                    return Task.FromResult(0);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    Console.Error.WriteLine($"The launcher was not changed. {e.Message}");
+                    return Task.FromResult(1);
+                }
+            }
+        );
+        return command;
     }
 
     private static Option<string> EnvironmentOption() =>

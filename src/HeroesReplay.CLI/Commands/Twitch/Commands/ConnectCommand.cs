@@ -88,6 +88,10 @@ public class ConnectCommand : Command
         {
             await predictions.WatchAsync(stop.Token);
         }
+        catch (OperationCanceledException) when (stop.Token.IsCancellationRequested)
+        {
+            // A stop mid-step is still a clean exit (0), so the role's window closes.
+        }
         finally
         {
             fulfilStop.Cancel();

@@ -8,6 +8,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Status;
 using HeroesReplay.Core.Telemetry;
+using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.Twitch.Predictions;
 using Microsoft.Extensions.Logging.Abstractions;
 using TwitchLib.Client.Interfaces;
@@ -18,6 +19,36 @@ namespace HeroesReplay.Tests.Unit.Twitch.Predictions;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class ReplaySessionPredictionTests
 {
+    /// <summary>A stop that escaped as an exception made twitch connect exit 1, and Windows Terminal kept its window.</summary>
+    [Fact]
+    public async Task WatchAsync_AStopEndsTheWatchWithoutAnException()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "heroesreplay-session-prediction-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var watcher = new StatusPredictionWatcher(
+                NullLogger<StatusPredictionWatcher>.Instance,
+                new AppSettings { Twitch = new TwitchSettings { EnablePredictions = false } },
+                new SpectatorStatusStore(Path.Combine(directory, "status.json")),
+                new TracePredictions(),
+                SilentTwitch.Create()
+            );
+            using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+
+            await watcher.WatchAsync(stop.Token).WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.True(stop.IsCancellationRequested);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task StepAsync_OpeningPredictionStaysOnTheReplayTrace()
     {

@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.CommandLine;
 using System.Diagnostics;
 using System.Linq;
-using System.Net.Http;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
@@ -17,6 +15,7 @@ using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Clock;
 using HeroesReplay.Core.Telemetry;
+using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.TwitchExtension;
 using Microsoft.Extensions.DependencyInjection;
 using OBSWebsocketDotNet;
@@ -417,42 +416,15 @@ public class CheckCommand : Command
         CancellationToken cancellationToken
     )
     {
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        using var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            "https://id.twitch.tv/oauth2/validate"
-        );
-        request.Headers.TryAddWithoutValidation("Authorization", "OAuth " + token);
-        using HttpResponseMessage response = await http.SendAsync(request, cancellationToken)
+        TwitchTokenValidation read = await TwitchTokenScopes
+            .ReadAsync(token, TimeSpan.FromSeconds(15), cancellationToken)
             .ConfigureAwait(false);
-        string body = await response
-            .Content.ReadAsStringAsync(cancellationToken)
-            .ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        if (read.Known)
         {
-            return "validate-failed-" + (int)response.StatusCode;
+            return read.Scopes;
         }
 
-        using JsonDocument document = JsonDocument.Parse(body);
-        if (
-            !document.RootElement.TryGetProperty("scopes", out JsonElement scopes)
-            || scopes.ValueKind != JsonValueKind.Array
-        )
-        {
-            return string.Empty;
-        }
-
-        var names = new List<string>();
-        foreach (JsonElement scope in scopes.EnumerateArray())
-        {
-            string value = scope.GetString();
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                names.Add(value);
-            }
-        }
-
-        return string.Join(' ', names);
+        return read.Status is int status ? "validate-failed-" + status : "validate-failed";
     }
 
     public static async Task<CheckResult> CheckConnectivityAsync(

@@ -95,7 +95,10 @@ public static class ServiceRoleChecks
         bool tokenOk = HasSecret(twitch?.AccessToken) && HasSecret(twitch?.ClientId);
         bool rewardsRequired = twitch != null && (twitch.EnablePubSub || twitch.EnableRequests);
         bool predictionsRequired = twitch != null && twitch.EnablePredictions;
-        bool scopesOk = tokenOk && ScopesCover(twitch?.GrantedScopes, twitch);
+        // Null scopes are unknown: Twitch could not be asked. The role starts, and a missing
+        // scope shows when it is used. A Twitch outage must not roll back spectate.
+        bool scopesOk =
+            tokenOk && (twitch.GrantedScopes == null || ScopesCover(twitch.GrantedScopes, twitch));
         return new TwitchStartupFacts
         {
             TokenOk = tokenOk,

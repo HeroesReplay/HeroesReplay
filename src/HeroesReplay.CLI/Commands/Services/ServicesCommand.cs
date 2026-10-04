@@ -216,26 +216,20 @@ public class ServicesCommand : Command
                     // No other supervisor runs here, so any state file is a dead one's.
                     ServiceSupervisorFile.Delete(ServiceSupervisorFile.DefaultPath);
                     string exe = Environment.ProcessPath;
-                    PatchObsCollection(exe);
-                    ServiceStartupHandshake handshake = CreateHandshake(exe);
-                    if (handshake == null)
+                    int code;
+                    using (var startup = new ConsoleCapture())
                     {
-                        return Task.FromResult(1);
+                        code = StartRoles(exe, selected);
+                        if (code != 0)
+                        {
+                            ServiceStartFailureLog.Write(
+                                ServiceCollectionExtensions.LoadServiceLogSettings(),
+                                code,
+                                startup.Text
+                            );
+                        }
                     }
 
-                    int code = ServiceSupervisor.Start(
-                        ServiceLockStore.DefaultPath,
-                        exe,
-                        ProcessNameOrNull,
-                        (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
-                        () => ServiceStopFile.Clear(),
-                        () =>
-                        {
-                            AspireDashboardHost.EnsureRunning();
-                        },
-                        handshake,
-                        selected
-                    );
                     if (code != 0 || !supervised)
                     {
                         return Task.FromResult(code);
@@ -246,6 +240,30 @@ public class ServicesCommand : Command
             }
         );
         return command;
+    }
+
+    private static int StartRoles(string exe, IReadOnlyList<string> selected)
+    {
+        PatchObsCollection(exe);
+        ServiceStartupHandshake handshake = CreateHandshake(exe);
+        if (handshake == null)
+        {
+            return 1;
+        }
+
+        return ServiceSupervisor.Start(
+            ServiceLockStore.DefaultPath,
+            exe,
+            ProcessNameOrNull,
+            (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
+            () => ServiceStopFile.Clear(),
+            () =>
+            {
+                AspireDashboardHost.EnsureRunning();
+            },
+            handshake,
+            selected
+        );
     }
 
     private static Command SuperviseCommand()
@@ -284,6 +302,7 @@ public class ServicesCommand : Command
     /// </summary>
     private static int Supervise(string exe, CancellationToken cancellationToken)
     {
+        ServiceConsoleTitle.Apply(ServiceRoleLog.SupervisorRole);
         ServiceRestartSettings settings = ServiceCollectionExtensions.LoadServiceRestartSettings();
         using ServiceProvider provider = new ServiceCollection()
             .AddSupervisorServices()

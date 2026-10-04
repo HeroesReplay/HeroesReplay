@@ -93,6 +93,33 @@ public class GameManagerReportTests
         Assert.Equal(1, fixture.Obs.EndSessions);
     }
 
+    /// <summary>A staged release loads no next replay. The report is not cut, then the waiting scene stays.</summary>
+    [Fact]
+    public async Task NoNextReplay_TheReportPlaysOutThenTheWaitingSceneStays()
+    {
+        using var fixture = new Fixture();
+
+        Task<ReplaySessionKind> session = fixture.Manager.FinishSessionAsync(
+            new LoadedReplay { ReplayId = 101 },
+            enteredMatch: true,
+            obsSession: true,
+            _ => { },
+            () => Task.FromResult<LoadedReplay>(null)
+        );
+        await fixture.Obs.Reporting.Task.WaitAsync(Patience);
+        await Task.Delay(TimeSpan.FromMilliseconds(100));
+
+        Assert.False(session.IsCompleted);
+        Assert.Equal(0, fixture.Obs.WaitingScenes);
+
+        fixture.Obs.ReportEnds.TrySetResult();
+
+        Assert.Equal(ReplaySessionKind.Played, await session.WaitAsync(Patience));
+        Assert.Equal(1, fixture.Obs.WaitingScenes);
+        Assert.Equal(0, fixture.Game.Launches);
+        Assert.Equal(1, fixture.Obs.EndSessions);
+    }
+
     [Fact]
     public async Task StopDuringTheHold_EndsItWithoutLaunching()
     {
@@ -203,6 +230,10 @@ public class GameManagerReportTests
 
         public int WaitingScenes { get; private set; }
 
+        /// <summary>Completing it ends the report cycle on its own.</summary>
+        public TaskCompletionSource ReportEnds { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         /// <summary>Like ObsController, a cancelled report ends without an error.</summary>
         public async Task CycleReportAsync(CancellationToken cancellationToken = default)
         {
@@ -210,7 +241,7 @@ public class GameManagerReportTests
             Reporting.TrySetResult();
             try
             {
-                await Task.Delay(Timeout.Infinite, cancellationToken);
+                await ReportEnds.Task.WaitAsync(cancellationToken);
             }
             catch (OperationCanceledException) { }
         }
