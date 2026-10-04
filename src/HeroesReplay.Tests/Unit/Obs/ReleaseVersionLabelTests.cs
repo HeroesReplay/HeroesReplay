@@ -8,7 +8,7 @@ using Xunit;
 namespace HeroesReplay.Tests.Unit.Obs;
 
 [Trait(TestCategories.Category, TestCategories.Unit)]
-public class ObsVersionLabelTests
+public class ReleaseVersionLabelTests
 {
     [Theory]
     [InlineData("v1.0.0-614", "1.0.0+e6141f861a9d20a05e93c5f97832f51e77fa33fe", "v1.0.0-614")]
@@ -23,7 +23,7 @@ public class ObsVersionLabelTests
         string expected
     )
     {
-        Assert.Equal(expected, ObsVersionLabel.Text(release, informational));
+        Assert.Equal(expected, ReleaseVersionLabel.Text(release, informational));
     }
 
     [Fact]
@@ -32,10 +32,10 @@ public class ObsVersionLabelTests
         string data = Path.Combine(Path.GetTempPath(), "hr-version-" + Path.GetRandomFileName());
         try
         {
-            string text = ObsVersionLabel.WriteForThisInstall(data);
+            string text = ReleaseVersionLabel.WriteForThisInstall(data);
 
             Assert.False(string.IsNullOrWhiteSpace(text));
-            Assert.Equal(text, File.ReadAllText(Path.Combine(data, ObsVersionLabel.FileName)));
+            Assert.Equal(text, File.ReadAllText(Path.Combine(data, ReleaseVersionLabel.FileName)));
         }
         finally
         {
@@ -60,7 +60,7 @@ public class ObsVersionLabelTests
         JsonElement settings = label.GetProperty("settings");
         Assert.True(settings.GetProperty("read_from_file").GetBoolean());
         Assert.Equal(
-            "C:/heroesreplay/Data/" + ObsVersionLabel.FileName,
+            "C:/heroesreplay/Data/" + ReleaseVersionLabel.FileName,
             settings.GetProperty("file").GetString()
         );
 
