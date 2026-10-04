@@ -407,7 +407,9 @@ public class ObsController : IObsController
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            logger.LogInformation("Report scenes stopped because the next match clock is running.");
+            logger.LogInformation(
+                "Report scenes stopped early: the next match is showing or spectate is stopping."
+            );
         }
     }
 
@@ -454,7 +456,7 @@ public class ObsController : IObsController
         catch (OperationCanceledException)
         {
             logger.LogInformation(
-                "Report scene {Scene} stopped because the next match clock is running.",
+                "Report scene {Scene} stopped early: the next match is showing or spectate is stopping.",
                 source.SceneName
             );
             return true;
@@ -722,7 +724,7 @@ public class ObsController : IObsController
             if (cancellationToken.IsCancellationRequested)
             {
                 logger.LogInformation(
-                    "Remaining report scenes stop because the next match clock is running."
+                    "Remaining report scenes are skipped: the next match is showing or spectate is stopping."
                 );
                 return true;
             }

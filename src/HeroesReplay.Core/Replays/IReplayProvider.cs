@@ -25,7 +25,8 @@ public interface IReplayProvider
     void Defer(LoadedReplay replay);
 
     /// <summary>
-    /// The match clock was seen. Record the replay as spectated for the next process.
+    /// The match was verified complete. Record the replay as spectated for the next process,
+    /// durably, before the report scenes and the next replay start.
     /// </summary>
     void MarkSpectated(LoadedReplay replay);
 
