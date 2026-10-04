@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Commands.Services;
+using HeroesReplay.Core.ServiceHost;
 
 namespace HeroesReplay.CLI;
 
@@ -15,6 +17,10 @@ static class Program
         }
         catch (IOException) { }
 
+        // services start names the role it launches. Its console takes the role's title.
+        ServiceConsoleTitle.Apply(
+            Environment.GetEnvironmentVariable(ServiceReadyFile.RoleVariable)
+        );
         return await new CommandLineService().InvokeAsync(args);
     }
 }
