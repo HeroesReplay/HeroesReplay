@@ -7,13 +7,14 @@ using HeroesReplay.Core.Shared;
 namespace HeroesReplay.Core.Obs;
 
 /// <summary>
-/// The running build, shown by the <c>release-version</c> text source in the bottom-right corner
-/// of the waiting scene. Spectate writes <c>Data\obs-version.txt</c> when it starts and OBS reads
+/// The HeroesReplay release this install runs (the GitHub release tag the update downloaded, from
+/// version.txt), shown by the <c>release-version</c> text source in the bottom-right corner
+/// of the waiting scene. Spectate writes <c>Data\heroesreplay-version.txt</c> when it starts and OBS reads
 /// the file ("Read from file"), so the waiting screen shows a new release as soon as it runs.
 /// </summary>
-public static class ObsVersionLabel
+public static class ReleaseVersionLabel
 {
-    public const string FileName = "obs-version.txt";
+    public const string FileName = "heroesreplay-version.txt";
 
     /// <summary>The release tag from version.txt, or <c>dev &lt;commit&gt;</c> for a source build.</summary>
     public static string Text(string releaseVersion, string informationalVersion)

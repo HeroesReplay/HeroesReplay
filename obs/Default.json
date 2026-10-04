@@ -221,7 +221,7 @@
       "id": "text_gdiplus",
       "versioned_id": "text_gdiplus_v2",
       "settings": {
-        "file": "C:/heroesreplay/Data/obs-version.txt",
+        "file": "C:/heroesreplay/Data/heroesreplay-version.txt",
         "read_from_file": true,
         "outline": true,
         "font": {

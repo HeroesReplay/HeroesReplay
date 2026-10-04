@@ -12,7 +12,7 @@ Do **not** commit `service.json` (Twitch stream key).
 ## What this snapshot includes
 
 - `waiting-screen` + `game-scene` on a 1920x1080 canvas at 60 FPS
-- `release-version` in the bottom-right corner of `waiting-screen` only: the running release (`v1.0.0-614`, or `dev <commit>` for a source build). Spectate writes `Data\obs-version.txt` when it starts and the text source reads it, so the label changes as soon as a release update restarts the stack
+- `release-version` in the bottom-right corner of `waiting-screen` only: the HeroesReplay release this install runs, which is the GitHub release tag the update downloaded (`v1.0.0-614`), or `dev <commit>` for a source build. Not the OBS version. Spectate writes `Data\heroesreplay-version.txt` when it starts and the text source reads it, so the label changes as soon as a release update restarts the stack
 - Local countdown: `countdown/index.html`
 - SoundCloud widget on Desktop Audio (`reroute_audio` off — Control audio via OBS cannot capture that player)
 - Report scenes `match-report` (Heroes Profile match page), `prediction-report`, and `request-queue`
