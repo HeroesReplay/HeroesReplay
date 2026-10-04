@@ -47,6 +47,7 @@ public class ObsValidatorTests : IDisposable
         File.WriteAllText(Path.Combine(data, "OBS.txt"), "replay");
         File.WriteAllText(Path.Combine(data, "prediction-report.html"), "<html></html>");
         File.WriteAllText(Path.Combine(data, "queue.html"), "<html></html>");
+        File.WriteAllText(Path.Combine(data, ObsVersionLabel.FileName), "v1.0.0-614");
 
         ObsValidation validation = Validate(FakeObs.Installed(data));
 
