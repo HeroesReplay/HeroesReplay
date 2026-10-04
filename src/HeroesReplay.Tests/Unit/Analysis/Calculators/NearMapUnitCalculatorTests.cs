@@ -125,7 +125,8 @@ public class NearMapUnitCalculatorTests
         Assert.Contains("GardenTerror", objectives);
         Assert.Contains("BossDuelBoss", objectives);
         Assert.Contains("TempleGuardianBoss", objectives);
-        Assert.Contains("SlimeBoss", objectives);
+        // A pit boss scores only while it is taken (NearBossCalculator), not for standing near.
+        Assert.DoesNotContain("SlimeBoss", objectives);
         Assert.Contains("MercPunisher", objectives);
         Assert.Contains("MercDefenderMeleeKnight", camps);
         Assert.Contains("RegenGlobe", pickups);

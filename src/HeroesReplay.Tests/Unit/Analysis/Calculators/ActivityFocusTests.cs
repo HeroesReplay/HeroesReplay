@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Calculators;
 using HeroesReplay.Core.Configuration;
@@ -180,7 +181,7 @@ public class ActivityFocusTests
             TimeSpanDied = At,
             PlayerControlledBy = abathur,
         };
-        var game = new GroupedGameData(new[] { "AbathurSymbiote", "HeroAbathur" });
+        var game = new GroupedGameData(ReplayUnit.UnitGroup.Hero, "AbathurSymbiote", "HeroAbathur");
 
         Assert.Empty(
             Analyze(Game(new[] { abathur }, symbiote), new DeathCalculator(Settings(), game))
@@ -216,6 +217,122 @@ public class ActivityFocusTests
         Assert.Equal(sylvanas, kill.Target);
     }
 
+    [Fact]
+    public void PitBoss_ScoresOnlyWhileItIsTaken_NotWhenAHeroWalksPast()
+    {
+        // Blue walks past the pit at 2-4 s, comes back at 20 s and kills the boss at 30 s.
+        var path = Enumerable
+            .Range(0, 32)
+            .Select(s => (s, s is >= 2 and <= 4 or >= 20 ? 1 : 100, 0))
+            .ToArray();
+        Player blue = Hero("Thrall", 0, path);
+        var boss = new ReplayUnit
+        {
+            Name = "JungleGraveGolemDefender",
+            TimeSpanBorn = TimeSpan.Zero,
+            TimeSpanDied = TimeSpan.FromSeconds(30),
+            PlayerKilledBy = blue,
+            PointBorn = new Point { X = 0, Y = 0 },
+        };
+        var game = new GroupedGameData(ReplayUnit.UnitGroup.MercenaryCamp, boss.Name)
+        {
+            BossUnits = new[] { boss.Name },
+        };
+
+        IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(
+            Game(new[] { blue }, 32, boss),
+            new NearBossCalculator(Settings(), game)
+        );
+
+        Assert.False(focus.ContainsKey(TimeSpan.FromSeconds(3)));
+        Focus take = focus[TimeSpan.FromSeconds(25)];
+        Assert.Equal(blue, take.Target);
+        Assert.Equal(9.0f, take.Points);
+        Assert.Contains("takes JungleGraveGolemDefender", take.Description);
+    }
+
+    [Fact]
+    public void LaningBoss_ScoresActivityWhileItWalksTheLane()
+    {
+        Player red = Hero("Leoric", 1, Still(2, 0));
+        var laner = new ReplayUnit
+        {
+            Name = "JungleGraveGolemLaner",
+            Team = 1,
+            TimeSpanBorn = TimeSpan.Zero,
+            PointBorn = new Point { X = 0, Y = 0 },
+        };
+        var game = new GroupedGameData(ReplayUnit.UnitGroup.MercenaryCamp, laner.Name)
+        {
+            BossUnits = new[] { laner.Name },
+        };
+
+        Focus push = Analyze(Game(new[] { red }, laner), new NearBossCalculator(Settings(), game))[
+            At
+        ];
+
+        Assert.Equal(6.0f, push.Points);
+        Assert.Contains("near JungleGraveGolemLaner", push.Description);
+    }
+
+    [Fact]
+    public void CampCapture_CountsTheCampsUnits_NotALaneMinion()
+    {
+        Player blue = Hero("Sgt. Hammer", 0, Still(0, 0));
+        var game = new GroupedGameData(
+            ReplayUnit.UnitGroup.MercenaryCamp,
+            "MercDefenderMeleeKnight"
+        );
+        ReplayUnit Killed(string name) =>
+            new()
+            {
+                Name = name,
+                TimeSpanBorn = TimeSpan.Zero,
+                TimeSpanDied = TimeSpan.FromSeconds(4),
+                PlayerKilledBy = blue,
+                PointBorn = new Point { X = 1, Y = 0 },
+            };
+
+        Replay minionOnly = Game(new[] { blue }, Killed("RangedMinion"));
+        minionOnly.TrackerEvents = new List<TrackerEvent> { CampCaptured(At, team: 0) };
+        Assert.Empty(Analyze(minionOnly, new CampCaptureCalculator(Settings(), game)));
+
+        Replay camp = Game(new[] { blue }, Killed("MercDefenderMeleeKnight"));
+        camp.TrackerEvents = new List<TrackerEvent> { CampCaptured(At, team: 0) };
+        Focus capture = Analyze(camp, new CampCaptureCalculator(Settings(), game))[At];
+        Assert.Contains("captured MercDefenderMeleeKnight", capture.Description);
+    }
+
+    private static TrackerEvent CampCaptured(TimeSpan at, int team) =>
+        new()
+        {
+            TrackerEventType = ReplayTrackerEvents.TrackerEventType.StatGameEvent,
+            TimeSpan = at,
+            Data = new TrackerEventStructure
+            {
+                dictionary = new Dictionary<int, TrackerEventStructure>
+                {
+                    [0] = new() { blob = System.Text.Encoding.UTF8.GetBytes("JungleCampCapture") },
+                    [3] = new()
+                    {
+                        optionalData = new()
+                        {
+                            array = new[]
+                            {
+                                new TrackerEventStructure
+                                {
+                                    dictionary = new Dictionary<int, TrackerEventStructure>
+                                    {
+                                        [1] = new() { vInt = team + 1 },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+
     private static IReadOnlyDictionary<TimeSpan, Focus> Analyze(
         Replay replay,
         IFocusCalculator calculator
@@ -248,6 +365,8 @@ public class ActivityFocusTests
                 TeamfightMax = 9.4f,
                 PlayerDeath = 9.5f,
                 PlayerKill = 9.0f,
+                BossCapture = 9.0f,
+                CampCapture = 5.5f,
             },
             Spectate = new SpectateSettings
             {
@@ -255,6 +374,7 @@ public class ActivityFocusTests
                 MaxDistanceToEnemy = 20,
                 MaxDistanceToOwnerChange = 5,
                 MaxDistanceToEnemyKill = 20,
+                MaxDistanceToBoss = 9,
                 RemoteBodyHeroes = new[] { "Abathur" },
             },
             FocusUnits = new FocusUnitSettings
@@ -265,6 +385,7 @@ public class ActivityFocusTests
                 CampContains = new[] { "MercDefenderMeleeKnight" },
                 PickupContains = new[] { "RegenGlobe" },
             },
+            TrackerEvents = new TrackerEventSettings { JungleCampCapture = "JungleCampCapture" },
             HeroesToolChest = new HeroesToolChestSettings
             {
                 CaptureContains = new[] { "CaptureBeacon" },
@@ -320,8 +441,12 @@ public class ActivityFocusTests
             PointBorn = new Point { X = x, Y = y },
         };
 
-    /// <summary>Every listed unit is in the Hero group, as heroes-data puts Abathur's Symbiote.</summary>
-    private sealed class GroupedGameData(string[] heroGroup) : IGameData
+    /// <summary>
+    /// Every listed unit is in one group: the Hero group, as heroes-data puts Abathur's Symbiote, or
+    /// the camp group.
+    /// </summary>
+    private sealed class GroupedGameData(ReplayUnit.UnitGroup group, params string[] names)
+        : IGameData
     {
         public IReadOnlyDictionary<string, ReplayUnit.UnitGroup> UnitGroups { get; } =
             new Dictionary<string, ReplayUnit.UnitGroup>();
@@ -330,14 +455,14 @@ public class ActivityFocusTests
 
         public IReadOnlyCollection<string> CoreUnits { get; } = Array.Empty<string>();
 
-        public IReadOnlyCollection<string> BossUnits { get; } = Array.Empty<string>();
+        public IReadOnlyCollection<string> BossUnits { get; init; } = Array.Empty<string>();
 
         public IReadOnlyCollection<string> VehicleUnits { get; } = Array.Empty<string>();
 
         public IReadOnlyList<Map> Maps { get; } = Array.Empty<Map>();
 
         public ReplayUnit.UnitGroup GetUnitGroup(string unitName) =>
-            heroGroup.Contains(unitName) ? ReplayUnit.UnitGroup.Hero : ReplayUnit.UnitGroup.Unknown;
+            names.Contains(unitName) ? group : ReplayUnit.UnitGroup.Unknown;
 
         public Task LoadDataAsync() => Task.CompletedTask;
     }
