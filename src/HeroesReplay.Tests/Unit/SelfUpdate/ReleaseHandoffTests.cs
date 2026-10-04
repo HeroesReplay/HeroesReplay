@@ -24,7 +24,133 @@ namespace HeroesReplay.Tests.Unit.SelfUpdate;
 public class ReleaseHandoffTests
 {
     [Fact]
-    public async Task Update_PutsThePreloadedReplayBackSoTheNextProcessPlaysIt()
+    public async Task Update_IsStagedWhenTheReportStartsAndHandedOffAfterIt()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        var steps = new List<string>();
+        var provider = new ScriptedReplays(continuesWhenEmpty: false);
+        provider.Enqueue(101);
+        provider.Enqueue(202);
+        var game = new RecordingGame { Steps = steps };
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new IdleWatchdog { Steps = steps },
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: true) { Steps = steps }
+        );
+
+        try
+        {
+            Assert.True(await engine.RunAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        Assert.Equal(
+            new[] { "report", "stage", "session end", "keep stream True", "hand off" },
+            steps.ToArray()
+        );
+        Assert.Equal(new int?[] { 101 }, game.Spectated.ToArray());
+        Assert.Equal(new int?[] { null }, game.LaunchedDuringReport.ToArray());
+        // The next replay was never picked, so the new process finds it first in the queue.
+        Assert.Empty(provider.Held);
+        Assert.Empty(provider.Requeued);
+        Assert.Equal(202, (await provider.TryLoadNextReplayAsync()).ReplayId);
+    }
+
+    [Fact]
+    public async Task UpdateWithoutAReport_IsCheckedOnceTheSessionEnds()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        var steps = new List<string>();
+        var provider = new ScriptedReplays(continuesWhenEmpty: false);
+        provider.Enqueue(101);
+        provider.Enqueue(202);
+        var game = new RecordingGame { Steps = steps, Reports = false };
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new IdleWatchdog { Steps = steps },
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: true) { Steps = steps }
+        );
+
+        try
+        {
+            Assert.True(await engine.RunAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        Assert.Equal(
+            new[] { "session end", "stage", "keep stream True", "hand off" },
+            steps.ToArray()
+        );
+        Assert.Equal(new int?[] { 101 }, game.Spectated.ToArray());
+    }
+
+    [Fact]
+    public async Task UpdateThatIsNotHandedOff_KeepsSpectatingAndStopsTheStreamAsUsual()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        var steps = new List<string>();
+        var provider = new ScriptedReplays(continuesWhenEmpty: false);
+        provider.Enqueue(101);
+        provider.Enqueue(202);
+        var game = new RecordingGame();
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new IdleWatchdog { Steps = steps },
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: true, handOff: false) { Steps = steps }
+        );
+
+        try
+        {
+            Assert.True(await engine.RunAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        Assert.Equal(new int?[] { 101, 202 }, game.Spectated.ToArray());
+        Assert.Equal("keep stream False", steps[^1]);
+        Assert.Equal(new[] { 101, 202 }, provider.SpectatedIds.ToArray());
+    }
+
+    [Fact]
+    public async Task Update_LeavesTheNextReplayForTheNewProcess()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
         string data = Path.Combine(root, "Data");
@@ -629,19 +755,41 @@ public class ReleaseHandoffTests
     private sealed class FlagGate : IReleaseUpdateGate
     {
         private readonly bool stage;
+        private readonly bool handOff;
 
-        public FlagGate(bool stage)
+        public FlagGate(bool stage, bool handOff = true)
         {
             this.stage = stage;
+            this.handOff = handOff;
         }
 
-        public Task<bool> TryStageAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(stage);
+        public List<string> Steps { get; init; } = new();
+
+        public async Task<bool> TryStageAsync(CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            Steps.Add("stage");
+            return stage;
+        }
+
+        public bool HandOff()
+        {
+            Steps.Add("hand off");
+            return handOff;
+        }
     }
 
     private sealed class RecordingGame : IGameManager
     {
         public List<int?> Spectated { get; } = new();
+
+        /// <summary>The replay each report would launch next; null launches nothing.</summary>
+        public List<int?> LaunchedDuringReport { get; } = new();
+
+        public List<string> Steps { get; init; } = new();
+
+        /// <summary>False is a session without report scenes, such as OBS off.</summary>
+        public bool Reports { get; init; } = true;
 
         public int ThrowTimes { get; set; }
 
@@ -681,11 +829,14 @@ public class ReleaseHandoffTests
             });
             ReplaySessionKind kind = ReplaySession.Classify(Outcome);
             outcomeKnown(kind);
-            if (kind == ReplaySessionKind.Played)
+            if (kind == ReplaySessionKind.Played && Reports)
             {
-                await whileReporting().ConfigureAwait(false);
+                Steps.Add("report");
+                LoadedReplay next = await whileReporting().ConfigureAwait(false);
+                LaunchedDuringReport.Add(next?.ReplayId);
             }
 
+            Steps.Add("session end");
             return kind;
         }
 
@@ -849,6 +1000,10 @@ public class ReleaseHandoffTests
 
     private sealed class IdleWatchdog : IConnectivityWatchdog
     {
+        public List<string> Steps { get; init; } = new();
+
+        public void KeepStreamThroughRestart(bool keep) => Steps.Add("keep stream " + keep);
+
         public bool IsOnline => true;
 
         public ConnectivitySnapshot Last { get; } = new();
