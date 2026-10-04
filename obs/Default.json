@@ -216,6 +216,46 @@
     },
     {
       "prev_ver": 537001986,
+      "name": "release-version",
+      "uuid": "fc9aa19a-5b91-4ce9-9684-fb6c282df935",
+      "id": "text_gdiplus",
+      "versioned_id": "text_gdiplus_v2",
+      "settings": {
+        "file": "C:/heroesreplay/Data/obs-version.txt",
+        "read_from_file": true,
+        "outline": true,
+        "font": {
+          "face": "Arial",
+          "flags": 0,
+          "size": 22,
+          "style": "Regular"
+        },
+        "align": "right",
+        "valign": "bottom",
+        "opacity": 80,
+        "outline_size": 3,
+        "outline_color": 4278190080,
+        "outline_opacity": 100
+      },
+      "mixers": 0,
+      "sync": 0,
+      "flags": 0,
+      "volume": 1.0,
+      "balance": 0.5,
+      "enabled": true,
+      "muted": false,
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "hotkeys": {},
+      "deinterlace_mode": 0,
+      "deinterlace_field_order": 0,
+      "monitoring_type": 0,
+      "private_settings": {}
+    },
+    {
+      "prev_ver": 537001986,
       "name": "Affiliation",
       "uuid": "531e4368-e001-428a-863f-60ea7c8427a2",
       "id": "text_gdiplus",
@@ -1543,7 +1583,7 @@
       "versioned_id": "scene",
       "settings": {
         "custom_size": false,
-        "id_counter": 44,
+        "id_counter": 45,
         "items": [
           {
             "name": "sc2-main-menu-alarak",
@@ -1611,6 +1651,45 @@
             "bounds": {
               "x": 698.0,
               "y": 24.0
+            },
+            "scale_filter": "disable",
+            "blend_method": "default",
+            "blend_type": "normal",
+            "show_transition": {
+              "duration": 0
+            },
+            "hide_transition": {
+              "duration": 0
+            },
+            "private_settings": {}
+          },
+          {
+            "name": "release-version",
+            "source_uuid": "fc9aa19a-5b91-4ce9-9684-fb6c282df935",
+            "visible": true,
+            "locked": true,
+            "rot": 0.0,
+            "align": 10,
+            "bounds_type": 0,
+            "bounds_align": 0,
+            "bounds_crop": false,
+            "crop_left": 0,
+            "crop_top": 0,
+            "crop_right": 0,
+            "crop_bottom": 0,
+            "id": 45,
+            "group_item_backup": false,
+            "pos": {
+              "x": 1904.0,
+              "y": 1068.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "bounds": {
+              "x": 0.0,
+              "y": 0.0
             },
             "scale_filter": "disable",
             "blend_method": "default",
