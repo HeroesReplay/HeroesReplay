@@ -77,7 +77,7 @@ else {
     }
 }
 Write-Host 'Do not copy service.json (stream key). Enable Tools > WebSocket Server Settings on port 4455.'
-Write-Host 'Twitch ingest also needs this machine armed: heroesreplay obs arm (stream PC only).'
+Write-Host 'Twitch ingest also needs this machine armed: heroesreplay obs arm (the stream PC; a dev box only for a stream proof to its own Twitch account).'
 
 $fill = Join-Path $root 'tools\fill-secrets-from-op.ps1'
 if (Test-Path $fill) {
