@@ -138,7 +138,16 @@ public sealed class StatusPredictionWatcher
                 ServiceHeartbeat.RecordWork();
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // A stop is a clean exit. Thrown out of twitch connect, it exits 1, and Windows
+                // Terminal keeps that role's window open after every release update.
+                return;
+            }
         }
     }
 
