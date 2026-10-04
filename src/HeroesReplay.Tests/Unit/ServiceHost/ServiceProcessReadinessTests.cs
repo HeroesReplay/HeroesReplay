@@ -150,10 +150,15 @@ public class ServiceProcessReadinessTests
         };
 
         Assert.False(ServiceRoleChecks.ScopesCover(null, twitch));
+        twitch.GrantedScopes = "chat:edit";
         TwitchStartupFacts missing = ServiceRoleChecks.TwitchFrom(twitch);
         Assert.True(missing.TokenOk);
         Assert.False(missing.ScopesOk);
         Assert.Contains("scopes", ServiceRoleChecks.TwitchFailure(missing));
+
+        // Twitch could not be asked: unknown scopes start the role instead of rolling back the stack.
+        twitch.GrantedScopes = null;
+        Assert.True(ServiceRoleChecks.TwitchFrom(twitch).ScopesOk);
 
         twitch.GrantedScopes = "chat:edit channel:read:redemptions channel:manage:predictions";
         Assert.True(ServiceRoleChecks.ScopesCover(twitch.GrantedScopes, twitch));

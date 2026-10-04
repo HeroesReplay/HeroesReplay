@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Threading;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Twitch;
 using Windows.Media.Ocr;
 
 namespace HeroesReplay.CLI.Commands.Services;
@@ -11,6 +13,7 @@ internal static class ServiceRoleStartup
     public static ServiceStartupHandshake ForCurrentProcess(string exe)
     {
         AppSettings settings = ServiceCollectionExtensions.LoadAppSettings();
+        ReadGrantedScopes(settings.Twitch);
         object engine = TryCreateOcr();
         try
         {
@@ -68,6 +71,43 @@ internal static class ServiceRoleStartup
                 disposable.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Nothing configures Twitch:GrantedScopes, so the scopes come from the token itself. Only a
+    /// role that uses chat, redemptions, or predictions needs them.
+    /// </summary>
+    private static void ReadGrantedScopes(TwitchSettings twitch)
+    {
+        if (
+            twitch == null
+            || twitch.GrantedScopes != null
+            || !(
+                twitch.EnableChatBot
+                || twitch.EnablePubSub
+                || twitch.EnableRequests
+                || twitch.EnablePredictions
+            )
+        )
+        {
+            return;
+        }
+
+        TwitchTokenValidation read = TwitchTokenScopes
+            .ReadAsync(twitch.AccessToken, TimeSpan.FromSeconds(10), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+        if (read.Known)
+        {
+            twitch.GrantedScopes = read.Scopes;
+            return;
+        }
+
+        Console.WriteLine(
+            read.Status is int status
+                ? $"Twitch did not validate the token (HTTP {status}). The twitch role starts anyway; a missing scope shows when it is used."
+                : "Twitch scopes could not be read. The twitch role starts anyway; a missing scope shows when it is used."
+        );
     }
 
     private static string DefaultObsPath(string configured)
