@@ -1,0 +1,62 @@
+using System;
+using HeroesReplay.Core.YouTube.Quota;
+using Xunit;
+
+namespace HeroesReplay.Tests.Unit.YouTube.Quota;
+
+[Trait(TestCategories.Category, TestCategories.Unit)]
+public class YouTubeListQuotaTests
+{
+    [Theory]
+    [InlineData(
+        "The service youtube has thrown an exception. HttpStatusCode is Forbidden. The request cannot be completed because you have exceeded your quota. [quotaExceeded]"
+    )]
+    [InlineData(
+        "HttpStatusCode is TooManyRequests. Quota exceeded for quota metric 'Video Uploads' and limit 'Video Uploads per day' of service 'youtube.googleapis.com'. [rateLimitExceeded]"
+    )]
+    [InlineData("Daily Limit Exceeded. [dailyLimitExceeded]")]
+    public void DailyQuota_PausesUntilTheQuotaDayTurns(string message)
+    {
+        var refused = new InvalidOperationException(message);
+
+        Assert.Equal(YouTubeQuotaRefusal.DailyQuota, YouTubeListQuota.Classify(refused));
+        Assert.True(YouTubeListQuota.IsExhausted(refused));
+        Assert.True(YouTubeListQuota.IsRefused(refused));
+    }
+
+    [Theory]
+    [InlineData(
+        "HttpStatusCode is TooManyRequests. Quota exceeded for quota metric 'Queries' and limit 'Queries per minute' of service 'youtube.googleapis.com'. [rateLimitExceeded]"
+    )]
+    [InlineData("HttpStatusCode is Forbidden. Rate Limit Exceeded [rateLimitExceeded]")]
+    [InlineData("Response status code does not indicate success: 429 (TooManyRequests).")]
+    public void RateLimit_IsNotTheDailyQuota(string message)
+    {
+        var refused = new InvalidOperationException(message);
+
+        Assert.Equal(YouTubeQuotaRefusal.RateLimited, YouTubeListQuota.Classify(refused));
+        Assert.False(YouTubeListQuota.IsExhausted(refused));
+        Assert.True(YouTubeListQuota.IsRefused(refused));
+    }
+
+    [Fact]
+    public void InnerDailyQuota_WinsOverAnOuterRateLimit()
+    {
+        var refused = new InvalidOperationException(
+            "TooManyRequests",
+            new InvalidOperationException("[quotaExceeded]")
+        );
+
+        Assert.Equal(YouTubeQuotaRefusal.DailyQuota, YouTubeListQuota.Classify(refused));
+    }
+
+    [Fact]
+    public void OtherErrors_AreNotQuota()
+    {
+        Assert.Equal(
+            YouTubeQuotaRefusal.None,
+            YouTubeListQuota.Classify(new InvalidOperationException("playlistNotFound"))
+        );
+        Assert.Equal(YouTubeQuotaRefusal.None, YouTubeListQuota.Classify(null));
+    }
+}
