@@ -1,5 +1,7 @@
 using System;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Obs.Recording;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Obs;
@@ -20,8 +22,11 @@ internal sealed class ObsCoordinator
     private readonly TimeSpan identifyTimeout;
     private readonly Action beforeLaunch;
     private readonly Func<bool> streamArmed;
+    private readonly Func<ObsValidation> preflight;
     private bool recordingDesired;
     private bool notArmedLogged;
+    private bool preflightPassed;
+    private string preflightBlockLogged;
     private ObsSelectionResult lastSelection;
     private ObsLaunchDecision lastLaunch = new()
     {
@@ -39,7 +44,8 @@ internal sealed class ObsCoordinator
         Action<TimeSpan> wait,
         TimeSpan identifyTimeout,
         Action beforeLaunch = null,
-        Func<bool> streamArmed = null
+        Func<bool> streamArmed = null,
+        Func<ObsValidation> preflight = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -54,6 +60,7 @@ internal sealed class ObsCoordinator
         this.beforeLaunch = beforeLaunch;
         // No arm reader means not armed: ingest fails closed.
         this.streamArmed = streamArmed ?? (() => false);
+        this.preflight = preflight;
     }
 
     public ObsRuntimeSnapshot State { get; private set; }
@@ -197,6 +204,12 @@ internal sealed class ObsCoordinator
                 ),
                 ReadScene()
             );
+        }
+
+        ObsStreamResult blocked = Preflight();
+        if (blocked != null)
+        {
+            return Remember(blocked, ReadScene());
         }
 
         try
@@ -459,6 +472,68 @@ internal sealed class ObsCoordinator
             logger.LogWarning(e, "Could not read the stream arm. Twitch ingest stays off.");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Validates the loaded collection once per process, before the first StartStream. A
+    /// <see cref="ObsValidator.StreamBlockers"/> error stops the stream (retried on the next
+    /// reconcile); every other finding is logged and the stream starts. A preflight that cannot
+    /// run does not stop the stream: the selection check above already guards the collection.
+    /// </summary>
+    private ObsStreamResult Preflight()
+    {
+        if (preflightPassed || preflight == null)
+        {
+            return null;
+        }
+
+        ObsValidation validation;
+        try
+        {
+            validation = preflight();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "OBS preflight could not run. The stream starts without it.");
+            return null;
+        }
+
+        ObsFinding blocker = ObsValidator.BlocksStream(validation);
+        if (blocker != null)
+        {
+            if (!string.Equals(preflightBlockLogged, blocker.Code, StringComparison.Ordinal))
+            {
+                preflightBlockLogged = blocker.Code;
+                logger.LogError(
+                    "OBS stream was not started. Preflight {Code} {Subject}: {Message}",
+                    blocker.Code,
+                    blocker.Subject,
+                    blocker.Message
+                );
+            }
+
+            return ObsStreamResult.Failed(
+                ObsOutputFailure.PreflightFailed,
+                blocker.Message,
+                blocker.Code
+            );
+        }
+
+        preflightPassed = true;
+        preflightBlockLogged = null;
+        foreach (ObsFinding finding in validation?.Findings ?? [])
+        {
+            logger.Log(
+                finding.Severity == ObsValidator.Error ? LogLevel.Warning : LogLevel.Information,
+                "OBS preflight {Severity} {Code} {Subject}: {Message}",
+                finding.Severity,
+                finding.Code,
+                finding.Subject,
+                finding.Message
+            );
+        }
+
+        return null;
     }
 
     /// <summary>

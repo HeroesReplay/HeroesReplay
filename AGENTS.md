@@ -10,23 +10,24 @@ Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `Her
 
 ### Source layout: feature slices
 
-`HeroesReplay.Core` is grouped by feature, not by kind. There are no `Models/`, `Services/`, or `Extensions/` folders. A feature's types, settings class, interfaces, and extension methods sit together. The namespace is the folder (`Core/YouTube/Metadata` is `HeroesReplay.Core.YouTube.Metadata`). `Engine`, `IEngine`, and `HeroesReplayTelemetry` sit at the Core root. `HeroesReplay.Tests/Unit/<Slice>[/<Sub>]` mirrors the slices: a test sits in the folder of the slice that owns the type it tests, and its namespace is that folder (`Unit/YouTube/Metadata` is `HeroesReplay.Tests.Unit.YouTube.Metadata`). The clock tests share one `Unit/Spectating/Clock` folder. `Unit/Check`, `Unit/Support`, and `Unit/Telemetry` are the extra test folders. `Integration/<Slice>` follows the same names.
+`HeroesReplay.Core` is grouped by feature, not by kind. There are no `Models/`, `Services/`, or `Extensions/` folders. A feature's types, settings class, interfaces, and extension methods sit together. The namespace is the folder (`Core/YouTube/Metadata` is `HeroesReplay.Core.YouTube.Metadata`). `Engine` and `IEngine` sit at the Core root. In `HeroesReplay.CLI`, `Commands/<Command>` holds a command and the types only it uses (`Commands/Mcp` is `heroesreplay mcp` and its tools), and `OpenTelemetry` is the logging and tracing every command shares. `HeroesReplay.Tests/Unit/<Slice>[/<Sub>]` mirrors the slices: a test sits in the folder of the slice that owns the type it tests, and its namespace is that folder (`Unit/YouTube/Metadata` is `HeroesReplay.Tests.Unit.YouTube.Metadata`). `Unit/Check` and `Unit/Support` are the extra test folders. `Integration/<Slice>` follows the same names.
 
 | Slice | Owns |
 | --- | --- |
 | `Analysis` (`Calculators`, `Reports`) | Replay timeline, focus calculators, `Focus`, `Panel`, kill streaks, calculator and weight settings |
-| `Spectating` (`Session`, `Control`, `Capture`, `Clock/Memory`, `Reports`) | The live spectator loop (`Spectator`). `Session`: match outcome, session holds, report handoff, retry and shutdown. `Control`: `GameController`, window input, observer panels. Also the memory match clock and frame capture |
-| `GameClient` | Launching the right Heroes build, Battle.net, HeroesSwitcher, firewall, `Variables.txt`, client and process settings |
+| `Spectating` (`Session`, `Control`, `Clock`, `Screens`, `Capture`, `Reports`) | The live spectator loop (`Spectator`). `Session`: `GameManager` runs one replay from launch to the next replay's handoff; match outcome, session holds, report handoff, retry and shutdown. `Control`: `GameController`, window input, observer panels. `Clock`: the memory match clock. `Screens`: which screen the client shows (map loading, home, end), memory first and OCR when memory cannot tell. `Capture`: frame capture |
+| `GameClient` (`Firewall`) | Launching the right Heroes build, Battle.net, HeroesSwitcher, the client's own dialogs, `Variables.txt`, client and process settings. `Firewall`: the inbound rule for each client exe |
 | `Replays` (`Context`) | Replay providers and loaders, `LoadedReplay`, the spectate queue and queue pick, the per-replay context folder |
 | `Requests` | Twitch request queue, leases, played ids, reward request models |
 | `HeroesProfile` | Heroes Profile API, replay listing, patch index, rank enrichment |
 | `HeroesData` | heroes-data2 hero and unit catalog |
 | `Twitch` (`Predictions`, `Rewards`, `RedeemedRewards`, `ChatMessages`) | Chat bot, predictions and their ledger, channel-point rewards |
 | `TwitchExtension` | Heroes Profile Twitch extension payloads |
-| `Obs` | OBS websocket control, recording, report scenes |
-| `YouTube` (`Metadata`, `Publication`, `Playlists`, `Search`, `Outbox`) | Upload, titles and descriptions, publication budget, playlists, duplicate lookup |
-| `MediaPolicy`, `Clips`, `Retention` | What gets recorded and uploaded, pentakill clips, disk cleanup |
-| `Connectivity`, `ServiceHost`, `SelfUpdate`, `Status` | Outage handling, the four service processes, release updates, `status.json` |
+| `Obs` (`Collection`, `Inspection`, `Recording`, `Pages`) | OBS websocket control, the stream arm, report scenes. `Collection`: the scene collection and profile files OBS reads. `Inspection`: the read-only reads behind `obs inspect`, `obs validate`, and the MCP tools. `Recording`: the match recording and its HUD clock. `Pages`: `obs pages` |
+| `YouTube` (`Metadata`, `Publication`, `Playlists`, `Search`, `Outbox`, `Quota`) | Upload, titles and descriptions, publication budget, playlists, duplicate lookup, quota units |
+| `MediaPolicy`, `Clips`, `Retention` | What gets recorded and uploaded, pentakill detection and clips, disk cleanup |
+| `Connectivity`, `ServiceHost` (`Logs`), `SelfUpdate`, `Status` | Outage handling, the four service processes and their role logs, release updates, `status.json` |
+| `Telemetry` | `HeroesReplayTelemetry` (traces and metrics) and `ReplaySessionFile`, which joins one replay's traces across processes |
 | `Shared` | Types used across slices: `Map`, `Hero`, `GameType`, `GameRank`, `EnglishMapNames`, `DurableFile`, `NamedProcess`, resilience and secrets helpers |
 | `Configuration` | `AppSettings` (the root that binds every slice's settings) and `LocationSettings` |
 
@@ -34,7 +35,7 @@ Put a new type in the slice that uses it. Move it to `Shared` only when two or m
 
 ## Before editing
 
-1. Load the matching skill under `.grok/skills/` (HeroesReplay skills and the vendored official .NET skills).
+1. Load the matching skill under `.agents/skills/` (HeroesReplay skills and the vendored official .NET skills).
 2. For generic .NET work, use the vendored `dotnet/skills` set in that folder (`csharp-refactoring`, MSBuild, NuGet, test, diagnostics, upgrade).
 3. Format with CSharpier. Do not hand-format.
 
@@ -59,6 +60,8 @@ pwsh -File tools/verify.ps1
 Secrets: skill `op-service-account`. On a new clone, set user env `OP_SERVICE_ACCOUNT` then `pwsh -File tools/fill-secrets-from-op.ps1`. Never commit or print resolved tokens.
 
 CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
+
+OBS ownership, updates, validation, and the machine profile policy: `docs/obs-operations.md`. MCP discovery: `.mcp.json` at the repo root (source, `dotnet run`) and in the release zip (`heroesreplay.exe mcp`).
 
 Production MCP is read-only. `heroesreplay mcp` reads OBS with `obs_inspect`, `obs_validate`, and `obs_screenshot`, which send only Get requests (`ObsReadOnly`) and never return the stream key. Nothing in it starts or stops a stream or recording, changes a scene, or arms a machine; that stays with guarded CLI commands. obs-mcp (royshil, about 120 unrestricted tools, returns the stream key) is **dev-only**: register it per machine on ASA-SERVER (`claude mcp add obs --scope user …`) if wanted. Never add it to the repo, the release zip, or DESKTOP-8SJEK72.
 
@@ -109,7 +112,8 @@ Role logs do not need Aspire. Each role that `services start` launches writes `%
 
 `services start --supervise` keeps its console as the supervisor once the roles are ready (`services supervise` attaches to a stack that is already running). It restarts a failed role after 10 s, 30 s, 2 min, then 5 min, kills and restarts a role whose heartbeat is 2 min old, and after 5 restarts in 30 min leaves the role down with one error and `service.restart_budget_exhausted` in `services status`. Degraded roles are not restarted. Spectate work is match progress only: the clock advanced, or a session reached the clock or the award screen. A deferred, held, or timed-out replay is not work, and 3 such sessions in a row (`ServiceHealth:SpectateNoProgressSessions`) make spectate degraded with `causeCode` `spectate.no_match_progress` and the last outcome. `services stop` stops the supervisor before the roles, so nothing restarts during a stop. One supervisor per session. Rules: `ServiceRestart`; details: `docs/service-split.md`.
 
-- **DESKTOP-8SJEK72:** run the stack supervised. In a scheduled downtime, `services stop`, then `heroesreplay services start --supervise` in its own console window, and leave that console open. Closing it ends supervision only; `heroesreplay services supervise` attaches again. Do not kill the supervisor to stop the stack; use `services stop`.
+- **DESKTOP-8SJEK72:** run the stack supervised. In a scheduled downtime, `services stop`, then `heroesreplay services install-task --environment prod` once from `C:\heroesreplay\app` (no administrator rights) and `schtasks /Run /TN HeroesReplay-live`. The task starts `services start --supervise` in its own console window at every logon; leave that console open. Release updates restart through the task and always leave the stack supervised. Closing the console ends supervision only; `heroesreplay services supervise` attaches again. Do not kill the supervisor to stop the stack; use `services stop`, which fails while OBS runs with a websocket that does not answer, because the stream may still be live.
+- **Spectate down for good.** When spectate uses its restart budget, the supervisor makes a live stream safe (`ServiceRestart:SpectateDownObs`: `WaitingScene` by default, `StopStream`, or `None`).
 - **ASA-SERVER:** prove supervision with `HEROES_REPLAY_ENV=dev` and `services start --supervise --roles download,youtube` only. Not spectate, not `twitch connect`. Kill a role with `Stop-Process -Force` to see a restart. End with `services stop`, then confirm `tasklist` shows no `heroesreplay.exe` and no `services.json`, `services.stop`, or `supervisor.json` is left in `%LOCALAPPDATA%\HeroesReplay`.
 
 On ASA-SERVER, after a spectator, OCR, OBS, or Twitch change: `services stop` (this closes HotS), `dotnet build heroes-replay.slnx -c Release` (the build copies `src/HeroesReplay.CLI/appsettings.secrets.json` into the Release bin), and start a proof only if phase 3 or 4 applies. Never start Twitch ingest here.
@@ -174,6 +178,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` (`OBS:SceneCollectionName`) |
 | `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile (`OBS:ProfileName`). Machine-owned: `obs/Default/basic.ini` is copied only when it does not exist, and updates keep it |
 | `%LOCALAPPDATA%\HeroesReplay\stream-armed` | Machine-local Twitch ingest arm. Live box only |
+| `%LOCALAPPDATA%\HeroesReplay\obs` | `backups\` (the live collection or profile before each write, newest 10) and `managed-collections.json` (the template each live collection was written from). A custom collection is never overwritten. See `docs/obs-operations.md` |
 
 `Location:DataDirectory` is `C:\heroesreplay\Data`. Contexts are `Data\Contexts` (not a sibling of Data). Do not copy OBS `service.json` (stream key). The OBS profile and scene collection names are `OBS:ProfileName` and `OBS:SceneCollectionName` (default `HeroesReplay`); a stream or recording does not start while OBS has another one active.
 
@@ -206,28 +211,30 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 
 | Skill | Use when |
 | --- | --- |
-| `.grok/skills/heroes-replay-cli` | spectate, check, calculators, secrets, `op://` |
-| `.grok/skills/op-service-account` | `OP_SERVICE_ACCOUNT`, fill secrets on a new clone |
-| `.grok/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, test categories |
-| `.grok/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
-| `.grok/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
-| `.grok/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. Binary is ffmpeg 9.0.2 at `C:\ffmpeg\bin`. |
-| `.grok/skills/release-install` | Install production from the GitHub Release zip instead of cloning and building. |
+| `.agents/skills/heroes-replay-cli` | spectate, check, calculators, secrets, `op://` |
+| `.agents/skills/op-service-account` | `OP_SERVICE_ACCOUNT`, fill secrets on a new clone |
+| `.agents/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, test categories |
+| `.agents/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
+| `.agents/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
+| `.agents/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. Binary is ffmpeg 9.0.2 at `C:\ffmpeg\bin`. |
+| `.agents/skills/release-install` | Install production from the GitHub Release zip instead of cloning and building. |
 
 Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`, `/ffmpeg`, `/release-install`. `csharp-solid` is also in this folder.
 
 ## Official .NET skills
 
-These are installed under `.grok/skills/<name>/` from [dotnet/skills](https://github.com/dotnet/skills) commit `e115891bd2ac` (MIT, `.grok/skills/dotnet-skills.LICENSE.txt`). Load the skill whose name matches the task. Each `SKILL.md` is the source of truth for when to use it.
+These are installed under `.agents/skills/<name>/` from [dotnet/skills](https://github.com/dotnet/skills) commit `e115891bd2ac` (MIT, `.agents/skills/dotnet-skills.LICENSE.txt`). Load the skill whose name matches the task. Each `SKILL.md` is the source of truth for when to use it. `.agents/skills/vendored.json` pins the source commit, the license file, and the list; `AgentDocsTests` fails when a folder under `.agents/skills` is neither in it nor a first-party skill in the table above, or when the CLI skill misses a command.
 
 | Plugin | Skills |
 | --- | --- |
 | `dotnet` | `csharp-refactoring`, `setup-local-sdk` |
-| `dotnet-upgrade` | `dotnet-aot-compat`, `migrate-dotnet8-to-dotnet9`, `migrate-dotnet9-to-dotnet10`, `migrate-dotnet10-to-dotnet11`, `migrate-nullable-references`, `thread-abort-migration` |
+| `dotnet-upgrade` | `dotnet-aot-compat`, `migrate-dotnet10-to-dotnet11`, `migrate-nullable-references` |
 | `dotnet-msbuild` | `binlog-failure-analysis`, `binlog-generation`, `build-parallelism`, `build-perf-baseline`, `build-perf-diagnostics`, `check-bin-obj-clash`, `copy-to-output-directory`, `directory-build-organization`, `eval-performance`, `extension-points`, `including-generated-files`, `incremental-build`, `item-management`, `msbuild-antipatterns`, `msbuild-modernization`, `property-patterns`, `resolve-project-references`, `target-authoring` |
 | `dotnet-nuget` | `convert-to-cpm` |
-| `dotnet-test` | `assertion-quality`, `code-testing-agent`, `code-testing-extensions`, `coverage-analysis`, `crap-score`, `detect-static-dependencies`, `filter-syntax`, `find-untested-sources`, `generate-testability-wrappers`, `grade-tests`, `migrate-static-to-wrapper`, `mtp-hot-reload`, `platform-detection`, `run-tests`, `scaffold-dotnet-test-project`, `test-analysis-extensions`, `test-anti-patterns`, `test-gap-analysis`, `test-smell-detection`, `test-tagging`, `testability-obstacle`, `writing-mstest-tests` |
-| `dotnet-diag` | `analyzing-dotnet-performance`, `android-tombstone-symbolication`, `apple-crash-symbolication`, `clr-activation-debugging`, `dotnet-trace-collect`, `dump-collect`, `microbenchmarking` |
+| `dotnet-test` | `assertion-quality`, `code-testing-agent`, `code-testing-extensions`, `coverage-analysis`, `crap-score`, `detect-static-dependencies`, `filter-syntax`, `find-untested-sources`, `generate-testability-wrappers`, `grade-tests`, `migrate-static-to-wrapper`, `mtp-hot-reload`, `platform-detection`, `run-tests`, `scaffold-dotnet-test-project`, `test-analysis-extensions`, `test-anti-patterns`, `test-gap-analysis`, `test-smell-detection`, `test-tagging`, `testability-obstacle` |
+| `dotnet-diag` | `analyzing-dotnet-performance`, `clr-activation-debugging`, `dotnet-trace-collect`, `dump-collect`, `microbenchmarking` |
+
+Not vendored because they do not apply to this repo: `migrate-dotnet8-to-dotnet9` and `migrate-dotnet9-to-dotnet10` (already on .NET 10), `thread-abort-migration` (no .NET Framework code), `writing-mstest-tests` (tests use xUnit), and `android-tombstone-symbolication` and `apple-crash-symbolication` (Windows only). Some vendored skills still point to `writing-mstest-tests` for MSTest work. Ignore those pointers.
 
 Grok already provides `review`, `create-skill`, and `long-running-background-tasks`. They stay with the tool and are not copied into this repo.
 

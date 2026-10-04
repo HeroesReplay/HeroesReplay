@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.GameClient.Firewall;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.GameClient;

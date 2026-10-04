@@ -12,7 +12,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Replays;
@@ -577,6 +577,11 @@ public class HeroesProfileProvider : IReplayProvider
                 )
                 .OrderBy(replay => replay.Id)
                 .FirstOrDefault();
+            if (found != null && await CatchUpAsync(currentMin, found).ConfigureAwait(false))
+            {
+                continue;
+            }
+
             if (found != null)
             {
                 logger.LogInformation("Replay found. MinReplayId = {MinReplayId}", currentMin);
@@ -599,6 +604,58 @@ public class HeroesProfileProvider : IReplayProvider
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Moves the cursor near the newest replays when <paramref name="found"/> is too old (#205).
+    /// True when the cursor moved and the listing should start again from there.
+    /// </summary>
+    private async Task<bool> CatchUpAsync(int currentMin, HeroesProfileReplay found)
+    {
+        HeroesProfileApiSettings api = settings.HeroesProfileApi;
+        if (api.StandardMaxReplayAge <= TimeSpan.Zero)
+        {
+            // Zero turns catch-up off: no newest-id lookup and no log line per listing (#217).
+            return false;
+        }
+
+        DateTime now = DateTime.UtcNow;
+        if (StandardCatchUp.Age(found, now) is not TimeSpan age || age <= api.StandardMaxReplayAge)
+        {
+            return false;
+        }
+
+        int newest = await heroesProfileService.GetMaxReplayIdAsync().ConfigureAwait(false);
+        int? jump = StandardCatchUp.JumpTo(
+            currentMin,
+            found,
+            newest,
+            now,
+            api.StandardMaxReplayAge,
+            api.StandardCatchUpWindow
+        );
+        if (jump is not int target)
+        {
+            logger.LogWarning(
+                "Standard replay {ReplayId} is {AgeHours:F0} h old; the newest is {Newest} ({Gap} ids ahead). The cursor stays.",
+                found.Id,
+                age.TotalHours,
+                newest,
+                newest - found.Id
+            );
+            return false;
+        }
+
+        logger.LogWarning(
+            "Standard replay {ReplayId} is {AgeHours:F0} h old; the newest is {Newest} ({Gap} ids ahead). Jumping to {Target}.",
+            found.Id,
+            age.TotalHours,
+            newest,
+            newest - found.Id,
+            target
+        );
+        MinReplayId = target;
+        return true;
     }
 
     private int UnspectatedOnDisk()

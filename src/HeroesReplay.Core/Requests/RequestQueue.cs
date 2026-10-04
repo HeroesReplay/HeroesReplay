@@ -22,7 +22,11 @@ public class RequestQueue : IRequestQueue, IDisposable
     private readonly IHeroesProfileService heroesProfileService;
     private readonly AppSettings settings;
     private readonly ICustomRewardsHolder rewardsHolder;
-    private readonly JsonSerializerOptions options;
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: true) },
+    };
     private readonly Mutex queueMutex;
     private readonly Mutex failedMutex;
     private readonly TimeSpan mutexWait;
@@ -68,11 +72,6 @@ public class RequestQueue : IRequestQueue, IDisposable
             Path.Combine(settings.Location.DataDirectory, settings.Twitch.FailedFileName)
         );
         boardPath = Path.Combine(settings.Location.DataDirectory, QueueBoard.FileName);
-        options = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            Converters = { new JsonStringEnumConverter(allowIntegerValues: true) },
-        };
         try
         {
             QueueBoard.Write(boardPath, ReadItems(queueFile), Rewards());
@@ -80,6 +79,31 @@ public class RequestQueue : IRequestQueue, IDisposable
         catch (Exception e)
         {
             logger.LogDebug(e, "Could not write the request queue page.");
+        }
+    }
+
+    /// <summary>
+    /// The items in the queue file at <paramref name="path"/>, read without the queue lock and
+    /// without moving an unreadable file aside. Empty when there is no file; null when it
+    /// cannot be read or parsed.
+    /// </summary>
+    public static IReadOnlyList<RewardQueueItem> Snapshot(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return new List<RewardQueueItem>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<RewardQueueItem>>(
+                    File.ReadAllText(path),
+                    Options
+                ) ?? new List<RewardQueueItem>();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
         }
     }
 
@@ -272,10 +296,9 @@ public class RequestQueue : IRequestQueue, IDisposable
         int position
     )
     {
-        string focus =
-            request?.PlayerIndex is int index && PlayerPriorityRequest.Digit(index) is string digit
-                ? $" Focus follows player {digit} while they are alive."
-                : string.Empty;
+        string focus = string.IsNullOrWhiteSpace(request?.BattleTag)
+            ? string.Empty
+            : $" Focus follows {request.BattleTag} while they are alive.";
         return $"{replay.Id} - {ReplayLabel.MapAndRank(replay.Map, replay.Rank)} has been queued. ({position}){focus}";
     }
 
@@ -443,7 +466,7 @@ public class RequestQueue : IRequestQueue, IDisposable
 
             List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
                 json,
-                options
+                Options
             );
             return items ?? new List<RewardQueueItem>();
         }
@@ -462,7 +485,7 @@ public class RequestQueue : IRequestQueue, IDisposable
 
     private void WriteItems(FileInfo file, List<RewardQueueItem> items)
     {
-        DurableFile.Replace(file.FullName, JsonSerializer.Serialize(items, options));
+        DurableFile.Replace(file.FullName, JsonSerializer.Serialize(items, Options));
         file.Refresh();
     }
 

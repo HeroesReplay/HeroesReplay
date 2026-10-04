@@ -30,6 +30,8 @@ try {
     Remove-Item -LiteralPath (Join-Path $out 'appsettings.secrets.json') -Force -ErrorAction SilentlyContinue
     Get-ChildItem -LiteralPath $out -Recurse -Force -Filter service.json | Remove-Item -Force
     Set-Content -LiteralPath (Join-Path $out 'version.txt') -Value $Version -NoNewline
+    # MCP discovery for an agent started in the install folder: the read-only `heroesreplay mcp`.
+    Copy-Item -LiteralPath (Join-Path $root 'tools\release.mcp.json') -Destination (Join-Path $out '.mcp.json') -Force
 
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $zip) | Out-Null
     if (Test-Path -LiteralPath $zip) {

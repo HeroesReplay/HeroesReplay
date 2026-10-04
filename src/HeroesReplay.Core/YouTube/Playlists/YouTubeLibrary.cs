@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.YouTube.Publication;
+using HeroesReplay.Core.YouTube.Quota;
 using HeroesReplay.Core.YouTube.Search;
 using Microsoft.Extensions.Logging;
 

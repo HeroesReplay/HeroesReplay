@@ -233,6 +233,7 @@ public class CompositionsCommand : Command
                     Team = player.Team,
                     Hero = hero?.Name ?? player.Character ?? player.HeroAttributeId,
                     IsAi = player.PlayerType == PlayerType.Computer,
+                    Talents = ReplayMediaFacts.Talents(player),
                 }
             );
         }
@@ -277,17 +278,21 @@ public class CompositionsCommand : Command
         return digits > 0 ? name.Substring(0, digits) : name;
     }
 
+    /// <summary>
+    /// Game events and statistics are parsed only for the talent names, so a tank talent such as
+    /// Varian's Taunt counts the same way the title does. That is about 0.5 s a replay.
+    /// </summary>
     private static ParseOptions SummaryOptions() =>
         new()
         {
             IgnoreErrors = true,
             AllowPTR = true,
-            ShouldParseEvents = false,
+            ShouldParseEvents = true,
             ShouldParseUnits = false,
             ShouldParseMouseEvents = false,
             ShouldParseDetailedBattleLobby = false,
             ShouldParseMessageEvents = false,
-            ShouldParseStatistics = false,
+            ShouldParseStatistics = true,
         };
 
     private sealed class ReplayRow

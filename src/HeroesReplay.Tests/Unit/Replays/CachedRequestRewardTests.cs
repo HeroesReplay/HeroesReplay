@@ -29,7 +29,7 @@ public class CachedRequestRewardTests
                     Request = new RewardRequest
                     {
                         Login = "salty",
-                        PlayerIndex = 3,
+                        BattleTag = "Kazpa#2345",
                         RedemptionId = redemption,
                     },
                 }
@@ -38,7 +38,7 @@ public class CachedRequestRewardTests
             RewardQueueItem read = CachedRequestReward.Read(replay);
 
             Assert.Equal("salty", read.Request.Login);
-            Assert.Equal(3, read.Request.PlayerIndex);
+            Assert.Equal("Kazpa#2345", read.Request.BattleTag);
             Assert.Equal(redemption, read.Request.RedemptionId);
             Assert.True(File.Exists(Path.Combine(directory, "65389756.request.json")));
         }

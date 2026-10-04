@@ -15,6 +15,7 @@ using Heroes.Element;
 using Heroes.LocaleText;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
 using static Heroes.ReplayParser.Unit;
 using ElementHero = Heroes.Element.Models.Hero;
@@ -56,6 +57,9 @@ public class GameData : IGameData
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        // The map catalog is settings only, so it is there before LoadDataAsync. The request
+        // queue page names the map rewards from it when the queue is first opened.
+        Maps = CatalogMaps(settings);
     }
 
     private async Task LoadHeroesAsync()
@@ -415,9 +419,15 @@ public class GameData : IGameData
 
     private Task LoadMapsAsync()
     {
+        Maps = CatalogMaps(settings);
+        return Task.CompletedTask;
+    }
+
+    private static ReadOnlyCollection<Map> CatalogMaps(AppSettings settings)
+    {
         IEnumerable<MapDefinition> catalog = settings.Maps?.Catalog ?? Array.Empty<MapDefinition>();
 
-        Maps = new ReadOnlyCollection<Map>(
+        return new ReadOnlyCollection<Map>(
             catalog
                 .Select(item => new Map(
                     item.Name,
@@ -428,8 +438,6 @@ public class GameData : IGameData
                 ))
                 .ToList()
         );
-
-        return Task.CompletedTask;
     }
 
     private async Task DownloadIfEmptyAsync()

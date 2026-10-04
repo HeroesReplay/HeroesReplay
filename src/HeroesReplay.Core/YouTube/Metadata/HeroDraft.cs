@@ -8,7 +8,8 @@ namespace HeroesReplay.Core.YouTube.Metadata;
 /// <summary>
 /// A short title note when the current hero-select roles are not the usual
 /// one tank, one bruiser, one healer, and a ranged assassin. The role is the
-/// single current role, so Johanna plus Chen is a tank and a bruiser.
+/// single current role, so Johanna plus Chen is a tank and a bruiser. A tank
+/// talent overrides it, so Varian with Taunt is a tank.
 /// </summary>
 public static class HeroDraft
 {
@@ -18,6 +19,15 @@ public static class HeroDraft
     public const string Support = "Support";
     public const string MeleeAssassin = "Melee Assassin";
     public const string RangedAssassin = "Ranged Assassin";
+
+    /// <summary>
+    /// Talents that make the hero the team's tank whatever the catalog role (issue #187).
+    /// Varian is a Bruiser in hero select; Taunt at level 4 trades his damage for health.
+    /// </summary>
+    private static readonly HashSet<string> TankTalents = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "VarianTaunt",
+    };
 
     public static string Phrase(
         IReadOnlyList<Hero> catalog,
@@ -101,27 +111,28 @@ public static class HeroDraft
             }
 
             matched++;
-            if (Is(hero, healer))
+            string role = PicksTankTalent(player) ? tank : hero.Role;
+            if (Is(role, healer))
             {
                 healers++;
             }
-            else if (Is(hero, tank))
+            else if (Is(role, tank))
             {
                 tanks++;
             }
-            else if (Is(hero, bruiser))
+            else if (Is(role, bruiser))
             {
                 bruisers++;
             }
-            else if (Is(hero, support))
+            else if (Is(role, support))
             {
                 supports++;
             }
-            else if (Is(hero, rangedRole))
+            else if (Is(role, rangedRole))
             {
                 ranged++;
             }
-            else if (!Is(hero, melee))
+            else if (!Is(role, melee))
             {
                 return null;
             }
@@ -298,6 +309,29 @@ public static class HeroDraft
 
     internal static bool Is(Hero hero, string role)
     {
-        return string.Equals(hero.Role, role, StringComparison.OrdinalIgnoreCase);
+        return Is(hero.Role, role);
+    }
+
+    private static bool Is(string played, string role)
+    {
+        return string.Equals(played, role, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool PicksTankTalent(ReplayMediaPlayer player)
+    {
+        if (player.Talents == null)
+        {
+            return false;
+        }
+
+        foreach (string talent in player.Talents)
+        {
+            if (talent != null && TankTalents.Contains(talent))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

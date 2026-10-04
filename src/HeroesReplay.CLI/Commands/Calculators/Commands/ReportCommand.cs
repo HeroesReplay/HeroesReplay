@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Spectating.Reports;
 using Microsoft.Extensions.DependencyInjection;

@@ -7,7 +7,6 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
-using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
@@ -420,6 +419,112 @@ public class ReleaseHandoffTests
     }
 
     [Fact]
+    public async Task StopDuringTheReport_TheNextProcessDoesNotPlayTheFinishedReplayAgain()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        string data = Path.Combine(root, "Data");
+        string standard = Path.Combine(data, "Standard");
+        string spectated = Path.Combine(data, "spectated-ids.txt");
+        using var stop = new CancellationTokenSource();
+        try
+        {
+            Directory.CreateDirectory(standard);
+            File.WriteAllText(Path.Combine(standard, "101.StormReplay"), "a");
+            File.WriteAllText(Path.Combine(standard, "202.StormReplay"), "b");
+            File.WriteAllText(spectated, string.Empty);
+
+            AppSettings settings = CacheSettings(data);
+            var game = new ReportingGame(MatchOutcome.VerifiedCompleted, stop.Token);
+            var engine = new Engine(
+                NullLogger<Engine>.Instance,
+                game,
+                new IdleGameData(),
+                Cache(settings),
+                new CancellationTokenProvider(stop.Token),
+                new SpectatorStatusStore(Path.Combine(root, "status.json")),
+                new BlockingWatchdog(),
+                new IdleResume(),
+                new StubLoader(),
+                new FlagGate(stage: false)
+            );
+
+            Task run = engine.RunAsync();
+            await game.Reporting.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            // The report scenes are up and the next replay is loaded. A kill here must not lose 101.
+            Assert.Equal(new[] { "101" }, File.ReadAllLines(spectated));
+
+            stop.Cancel();
+            await run.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(new[] { "101" }, File.ReadAllLines(spectated));
+            LoadedReplay next = await Cache(settings).TryLoadNextReplayAsync();
+            Assert.Equal(202, next.ReplayId);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(MatchOutcome.AwardScreen)]
+    [InlineData(MatchOutcome.VersionMismatch)]
+    [InlineData(MatchOutcome.BuildNotInstalled)]
+    [InlineData(MatchOutcome.LoadTimedOut)]
+    [InlineData(MatchOutcome.ClientCrashed)]
+    [InlineData(MatchOutcome.Stopped)]
+    public async Task OutcomeThatIsNotFinal_IsNeverMarkedSpectated(MatchOutcome outcome)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        string data = Path.Combine(root, "Data");
+        string standard = Path.Combine(data, "Standard");
+        string spectated = Path.Combine(data, "spectated-ids.txt");
+        using var stop = new CancellationTokenSource();
+        try
+        {
+            Directory.CreateDirectory(standard);
+            File.WriteAllText(Path.Combine(standard, "101.StormReplay"), "a");
+            File.WriteAllText(spectated, string.Empty);
+
+            AppSettings settings = CacheSettings(data);
+            var game = new ReportingGame(outcome, stop.Token);
+            var engine = new Engine(
+                NullLogger<Engine>.Instance,
+                game,
+                new IdleGameData(),
+                Cache(settings),
+                new CancellationTokenProvider(stop.Token),
+                new SpectatorStatusStore(Path.Combine(root, "status.json")),
+                new BlockingWatchdog(),
+                new IdleResume(),
+                new StubLoader(),
+                new FlagGate(stage: false)
+            );
+
+            Task run = engine.RunAsync();
+            await game.Reporting.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Empty(File.ReadAllLines(spectated));
+
+            stop.Cancel();
+            await run.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(new int?[] { 101 }, game.Spectated.ToArray());
+            Assert.Empty(File.ReadAllLines(spectated));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task HoldBack_SkipsTheReplayStillInSession()
     {
         string root = Path.Combine(Path.GetTempPath(), "hr-hold-" + Path.GetRandomFileName());
@@ -548,6 +653,7 @@ public class ReleaseHandoffTests
 
         public async Task<ReplaySessionKind> LaunchAndSpectate(
             LoadedReplay loadedReplay,
+            Action<ReplaySessionKind> outcomeKnown,
             Func<Task<LoadedReplay>> whileReporting
         )
         {
@@ -574,10 +680,64 @@ public class ReleaseHandoffTests
                 );
             });
             ReplaySessionKind kind = ReplaySession.Classify(Outcome);
+            outcomeKnown(kind);
             if (kind == ReplaySessionKind.Played)
             {
                 await whileReporting().ConfigureAwait(false);
             }
+
+            return kind;
+        }
+
+        public void ReleaseClientAfterDefer() { }
+
+        public MatchOutcome LastOutcome => Outcome;
+
+        public bool LastMatchClockSeen => Outcome == MatchOutcome.VerifiedCompleted;
+    }
+
+    /// <summary>
+    /// Hears its outcome the way GameManager does, loads the next replay, then stays in the
+    /// report scenes until spectate is stopped.
+    /// </summary>
+    private sealed class ReportingGame : IGameManager
+    {
+        private readonly CancellationToken stop;
+
+        public ReportingGame(MatchOutcome outcome, CancellationToken stop)
+        {
+            Outcome = outcome;
+            this.stop = stop;
+        }
+
+        public MatchOutcome Outcome { get; }
+
+        public List<int?> Spectated { get; } = new();
+
+        public TaskCompletionSource Reporting { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<ReplaySessionKind> LaunchAndSpectate(
+            LoadedReplay loadedReplay,
+            Action<ReplaySessionKind> outcomeKnown,
+            Func<Task<LoadedReplay>> whileReporting
+        )
+        {
+            await Task.Yield();
+            Spectated.Add(loadedReplay.ReplayId);
+            ReplaySessionKind kind = ReplaySession.Classify(Outcome);
+            outcomeKnown(kind);
+            if (!ReplaySession.StaysQueued(kind))
+            {
+                await whileReporting().ConfigureAwait(false);
+            }
+
+            Reporting.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, stop).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
 
             return kind;
         }

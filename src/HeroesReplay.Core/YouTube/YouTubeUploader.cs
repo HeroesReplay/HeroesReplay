@@ -15,11 +15,12 @@ using Google.Apis.YouTube.v3.Data;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Retention;
-using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.YouTube.Metadata;
 using HeroesReplay.Core.YouTube.Outbox;
 using HeroesReplay.Core.YouTube.Playlists;
 using HeroesReplay.Core.YouTube.Publication;
+using HeroesReplay.Core.YouTube.Quota;
 using HeroesReplay.Core.YouTube.Search;
 using Microsoft.Extensions.Logging;
 

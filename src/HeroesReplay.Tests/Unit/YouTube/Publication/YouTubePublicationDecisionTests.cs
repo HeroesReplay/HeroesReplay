@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube.Publication;
 using Microsoft.Extensions.Configuration;
@@ -188,7 +188,7 @@ public class YouTubePublicationDecisionTests
                 "All",
                 "AllEligible",
                 """
-                , "MaxPublicPerDay": 1
+                , "MaxPublicPerDay": 1, "ReservedRequestSlotsPerDay": 0
                 """
             )
         );
@@ -247,7 +247,7 @@ public class YouTubePublicationDecisionTests
     }
 
     [Fact]
-    public void RequestDoesNotBypassMediaGatesOrAlgorithmCaps()
+    public void RequestDoesNotBypassMediaGatesOrQuota_ButIsNotPaced()
     {
         ReplayMediaPolicySettings settings = Require(Policy("All", "AllEligible"));
         var published = new PublicationSendFacts
@@ -282,21 +282,22 @@ public class YouTubePublicationDecisionTests
                 inserts: settings.MaxInsertsPerQuotaDay
             ).Allow
         );
-        Assert.False(
+        // A request is not paced (#216): the day, week, and interval caps do not hold it.
+        Assert.True(
             Send(
                 settings,
                 ReplayMediaPriority.Requested,
                 publicAt: Recent(settings.MaxPublicPerDay)
             ).Allow
         );
-        Assert.False(
+        Assert.True(
             Send(
                 settings,
                 ReplayMediaPriority.Requested,
                 publicAt: Week(settings.MaxPublicPerWeek)
             ).Allow
         );
-        Assert.False(
+        Assert.True(
             Send(
                 settings,
                 ReplayMediaPriority.Requested,
@@ -354,7 +355,7 @@ public class YouTubePublicationDecisionTests
             ReplayMediaPolicySettings settings = ReplayMediaPolicyStartup.Require(configuration);
             PublicationDecision second = Send(
                 settings,
-                ReplayMediaPriority.Requested,
+                ReplayMediaPriority.Ordinary,
                 publicAt: Recent(1)
             );
 
@@ -549,7 +550,7 @@ public class YouTubePublicationDecisionTests
             settings,
             new PublicationSendFacts
             {
-                Criteria = ReplayMediaPriority.Requested,
+                Criteria = ReplayMediaPriority.Ordinary,
                 RecordedAtUtc = Now,
             }
         );

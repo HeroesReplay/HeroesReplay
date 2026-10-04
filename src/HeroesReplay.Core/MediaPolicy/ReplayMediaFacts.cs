@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Heroes.ReplayParser;
-using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
@@ -49,7 +49,10 @@ public static class ReplayMediaFacts
             Rank = FirstText(profile?.Rank),
             AverageMmr = profile?.AverageMmr,
             Roster = Roster(replay, heroes),
-            FocusHero = PlayerPriorityRequest.HeroName(replay, request?.PlayerIndex),
+            FocusHero = PlayerPriorityRequest.HeroName(
+                replay,
+                PlayerPriorityRequest.PlayerIndex(replay, request)
+            ),
             ViewerRequested = request != null,
             RecordAndUpload = ReplayRequestKind.RecordsAndUploads(request),
             RequestedBy = FirstText(request?.Login),
@@ -140,11 +143,35 @@ public static class ReplayMediaFacts
                     Name = FirstText(player.Name),
                     BattleTag = player.BattleTag,
                     IsAi = player.PlayerType == PlayerType.Computer,
+                    Talents = Talents(player),
                 }
             );
         }
 
         return roster;
+    }
+
+    /// <summary>
+    /// The talent ids the player picked, in pick order. The parser names a talent only when game
+    /// events and statistics were both parsed; an unnamed pick is skipped.
+    /// </summary>
+    public static IReadOnlyList<string> Talents(Player player)
+    {
+        if (player?.Talents == null || player.Talents.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var talents = new List<string>(player.Talents.Length);
+        foreach (Talent talent in player.Talents)
+        {
+            if (!string.IsNullOrWhiteSpace(talent?.TalentName))
+            {
+                talents.Add(talent.TalentName.Trim());
+            }
+        }
+
+        return talents;
     }
 
     /// <summary>

@@ -236,7 +236,12 @@ public class YouTubeEntryBuilderTests
                 Map = "Dragon Shire",
                 Players = new[]
                 {
-                    new Player { Character = "Illidan" },
+                    new Player
+                    {
+                        Character = "Illidan",
+                        Name = "Kazpa",
+                        BattleTag = 2345,
+                    },
                     new Player { Character = "Johanna" },
                 },
             },
@@ -249,7 +254,7 @@ public class YouTubeEntryBuilderTests
             },
             RewardQueueItem = new RewardQueueItem
             {
-                Request = new RewardRequest { ReplayId = 1, PlayerIndex = 0 },
+                Request = new RewardRequest { ReplayId = 1, BattleTag = "Kazpa#2345" },
             },
         };
 
@@ -269,7 +274,21 @@ public class YouTubeEntryBuilderTests
             Replay = new Replay
             {
                 Map = "Dragon Shire",
-                Players = new[] { new Player { Character = "Illidan" } },
+                Players = new[]
+                {
+                    new Player
+                    {
+                        Character = "Johanna",
+                        Name = "Other",
+                        BattleTag = 1,
+                    },
+                    new Player
+                    {
+                        Character = "Illidan",
+                        Name = "Kazpa",
+                        BattleTag = 2345,
+                    },
+                },
             },
             HeroesProfileReplay = new HeroesProfileReplay
             {
@@ -284,7 +303,7 @@ public class YouTubeEntryBuilderTests
                 Request = new RewardRequest
                 {
                     ReplayId = 1,
-                    PlayerIndex = 0,
+                    BattleTag = "Kazpa#2345",
                     Login = "ViewerZZ",
                     RecordAndUpload = true,
                 },

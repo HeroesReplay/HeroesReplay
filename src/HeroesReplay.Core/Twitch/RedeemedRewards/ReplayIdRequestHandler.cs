@@ -43,14 +43,14 @@ public class ReplayIdRequestHandler : IRewardHandler
 
     public void Execute(SupportedReward reward, OnRewardRedeemedArgs args)
     {
-        if (PlayerPriorityRequest.TryRead(args.Message, out int replayId, out int? playerIndex))
+        if (PlayerPriorityRequest.TryRead(args.Message, out int replayId, out string battleTag))
         {
             Task.Factory.StartNew(
                 async () =>
                 {
                     SpectatorStatus status = statusStore.Read();
                     if (
-                        playerIndex.HasValue
+                        battleTag != null
                         && PlayerPriorityRequest.BlocksBecauseMatchStarted(
                             status?.ReplayId,
                             status?.Phase,

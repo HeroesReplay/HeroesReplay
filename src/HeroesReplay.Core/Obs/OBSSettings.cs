@@ -31,6 +31,14 @@ public class OBSSettings
     public string SceneCollectionName { get; set; } = ObsNames.Default;
 
     /// <summary>
+    /// When true (the default), a new collection template reaches OBS while it runs, without
+    /// stopping the stream: between replays OBS switches to the spare collection
+    /// (<c>{SceneCollectionName}-next</c>) holding the new layout, the main file is rewritten, and
+    /// OBS switches back. When false, the collection is replaced only while OBS is closed.
+    /// </summary>
+    public bool LiveCollectionSwap { get; set; } = true;
+
+    /// <summary>
     /// When true, shutdown may close an OBS process this coordinator launched.
     /// A process that was already running is never closed. Default false.
     /// </summary>

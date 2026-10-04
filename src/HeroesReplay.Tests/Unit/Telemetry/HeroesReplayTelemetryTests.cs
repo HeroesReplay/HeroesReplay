@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using HeroesReplay.Core;
+using HeroesReplay.Core.Telemetry;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Telemetry;

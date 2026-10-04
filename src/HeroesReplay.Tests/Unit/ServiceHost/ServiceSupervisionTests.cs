@@ -72,6 +72,73 @@ public class ServiceSupervisionTests
     }
 
     [Fact]
+    public void SpectateThatUsesItsBudget_MakesObsSafeOnce_AndOtherRolesDoNot()
+    {
+        using var stack = new FakeStack(("spectate", 100), ("download", 101));
+        int calls = 0;
+        ServiceSupervision supervision = stack.Supervision(
+            closeGame: () => true,
+            spectateDown: () =>
+            {
+                calls++;
+                return "Switched OBS to the waiting scene 'waiting-screen'.";
+            }
+        );
+        Assert.True(supervision.Begin());
+
+        Exhaust(stack, supervision, "download");
+        Assert.Equal(0, calls);
+
+        Exhaust(stack, supervision, "spectate");
+        stack.Ticks(supervision, 600);
+
+        Assert.Equal(1, calls);
+        Assert.True(supervision.Ledger("spectate").Exhausted);
+        Assert.Contains(
+            stack.Log.Entries,
+            entry =>
+                entry.Level == LogLevel.Warning
+                && entry.Message.Contains("Spectate is down for good")
+                && entry.Message.Contains("waiting scene")
+        );
+    }
+
+    [Fact]
+    public void AFailSafeThatThrows_IsLoggedAndTheSupervisorKeepsRunning()
+    {
+        using var stack = new FakeStack(("spectate", 100));
+        ServiceSupervision supervision = stack.Supervision(
+            closeGame: () => true,
+            spectateDown: () => throw new InvalidOperationException("OBS is gone.")
+        );
+        Assert.True(supervision.Begin());
+
+        Exhaust(stack, supervision, "spectate");
+
+        Assert.True(supervision.Tick());
+        Assert.Contains(
+            stack.Log.Entries,
+            entry => entry.Level == LogLevel.Warning && entry.Message.Contains("not made safe")
+        );
+    }
+
+    /// <summary>Crashes <paramref name="role"/> until its restart budget is used up.</summary>
+    private static void Exhaust(FakeStack stack, ServiceSupervision supervision, string role)
+    {
+        int launches = stack.Launches.Count;
+        for (int crash = 0; crash < 5; crash++)
+        {
+            stack.Crash(stack.PidOf(role));
+            stack.RunUntil(supervision, () => stack.Launches.Count == launches + crash + 1);
+            stack.Ticks(supervision, 5);
+        }
+
+        stack.Crash(stack.PidOf(role));
+        stack.Ticks(supervision, 3);
+        Assert.True(supervision.Ledger(role).Exhausted);
+    }
+
+    [Fact]
     public void StaleRole_IsKilledThenRestartedAfterTheBackoff()
     {
         using var stack = new FakeStack(("download", 100));
@@ -433,7 +500,8 @@ public class ServiceSupervisionTests
 
         public ServiceSupervision Supervision(
             Action<TimeSpan> wait = null,
-            Func<bool> closeGame = null
+            Func<bool> closeGame = null,
+            Func<string> spectateDown = null
         ) =>
             new()
             {
@@ -453,6 +521,7 @@ public class ServiceSupervisionTests
                     alive.Remove(pid);
                 },
                 CloseGame = closeGame,
+                SpectateDown = spectateDown,
                 Wait = wait ?? (pause => Clock.Now += pause),
                 Logger = Log,
                 Pid = 9999,

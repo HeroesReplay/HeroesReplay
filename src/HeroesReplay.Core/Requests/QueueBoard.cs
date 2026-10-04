@@ -12,6 +12,7 @@ public static class QueueBoard
 {
     public const string FileName = "queue.html";
     public const string ReplayIdExample = "12345678";
+    public const string BattleTagExample = "Name#1234";
 
     public static void Write(
         string path,
@@ -45,15 +46,6 @@ public static class QueueBoard
         html.Append(
             ".who{color:#f2d38a;} .map{color:#e8eef7;} .meta{color:#9aabc0;font-size:26px;}"
         );
-        html.Append("div.slots{display:flex;gap:24px;margin:4px 56px 10px;}");
-        html.Append(
-            "div.team{display:flex;gap:8px;align-items:center;padding:8px 14px;border-radius:10px;}"
-        );
-        html.Append("div.blue{background:#16407a;} div.red{background:#7a1c1c;}");
-        html.Append(
-            "div.team b{width:44px;height:44px;line-height:44px;text-align:center;font-size:30px;background:#0b0e14;border-radius:6px;}"
-        );
-        html.Append("div.team i{font-style:normal;font-size:24px;margin:0 6px;}");
         html.Append("</style></head><body><h1>Replay queue</h1>");
         int count = items?.Count ?? 0;
         html.Append("<p class=\"lead\">")
@@ -175,33 +167,16 @@ public static class QueueBoard
 
         html.Append("</p>");
         html.Append(
-                "<p class=\"help\"><span class=\"label\">Follow one hero.</span> Add a comma and the hero number: "
+                "<p class=\"help\"><span class=\"label\">Follow one player.</span> Add a comma and their BattleTag: "
             )
             .Append(ReplayIdExample)
+            .Append(',')
+            .Append(BattleTagExample)
+            .Append(" follows ")
+            .Append(BattleTagExample)
             .Append(
-                ",3 follows hero 3. Send it before that match starts. The camera stays on that hero while they are alive and uses the normal view while they are dead.</p>"
+                ". Send it before that match starts. The camera stays on that player's hero while they are alive and uses the normal view while they are dead.</p>"
             );
-        AppendHeroNumbers(html);
-    }
-
-    private static void AppendHeroNumbers(StringBuilder html)
-    {
-        html.Append("<div class=\"slots\"><div class=\"team blue\"><i>Blue</i>");
-        for (int index = 0; index < 5; index++)
-        {
-            html.Append("<b>").Append(PlayerPriorityRequest.Digit(index)).Append("</b>");
-        }
-
-        html.Append("</div><div class=\"team red\">");
-        for (int index = 5; index < 10; index++)
-        {
-            html.Append("<b>").Append(PlayerPriorityRequest.Digit(index)).Append("</b>");
-        }
-
-        html.Append("<i>Red</i></div></div>");
-        html.Append(
-            "<p class=\"help\"><span class=\"label\">Hero numbers.</span> The numbers 1 to 0 sit above each hero portrait at the top of the game screen. 1 to 5 are the Blue team on the left. 6 to 9 and 0 are the Red team on the right, so 0 is the tenth hero.</p>"
-        );
     }
 
     private static bool IsRankReward(SupportedReward reward)

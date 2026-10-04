@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -75,6 +78,101 @@ public class ObsDesiredStateTests
         Assert.False(snapshot.StreamActive);
         Assert.Equal(WaitingScene, snapshot.SceneDesired);
     }
+
+    [Fact]
+    public void Reconcile_PreflightStreamBlocker_DoesNotStartTheStreamUntilItIsFixed()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        ObsValidation result = Preflight(
+            new ObsFinding(ObsValidator.StreamKeyMissing, ObsValidator.Error, "Twitch", "No key.")
+        );
+        int runs = 0;
+        Harness harness = Open(
+            Settings(),
+            socket,
+            preflight: () =>
+            {
+                runs++;
+                return result;
+            }
+        );
+
+        ObsRuntimeSnapshot blocked = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal(0, socket.SelectCalls);
+        Assert.Equal(ObsOutputFailure.PreflightFailed, blocked.Stream.Failure);
+        Assert.Equal(ObsValidator.StreamKeyMissing, blocked.StreamBlockedBy);
+
+        result = Preflight();
+        ObsRuntimeSnapshot started = harness.Coordinator.ReconcileStream();
+
+        Assert.True(started.Stream.Succeeded);
+        Assert.Equal(1, socket.StartStreamCalls);
+        Assert.Equal(2, runs);
+    }
+
+    [Fact]
+    public void Reconcile_PreflightRunsOnceBeforeTheFirstStartStream()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        int runs = 0;
+        Harness harness = Open(
+            Settings(),
+            socket,
+            preflight: () =>
+            {
+                runs++;
+                // An unmuted microphone is an error, but it does not stop the stream.
+                return Preflight(
+                    new ObsFinding(ObsValidator.MicEnabled, ObsValidator.Error, "Mic/Aux", "Mic.")
+                );
+            }
+        );
+
+        Assert.True(harness.Coordinator.ReconcileStream().Stream.Succeeded);
+        socket.Streaming = false;
+        Assert.True(harness.Coordinator.ReconcileStream().Stream.Succeeded);
+
+        Assert.Equal(2, socket.StartStreamCalls);
+        Assert.Equal(1, runs);
+    }
+
+    [Fact]
+    public void Reconcile_PreflightThatCannotRun_DoesNotStopTheStream()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        Harness harness = Open(
+            Settings(),
+            socket,
+            preflight: () => throw new TimeoutException("OBS did not answer.")
+        );
+
+        Assert.True(harness.Coordinator.ReconcileStream().Stream.Succeeded);
+        Assert.Equal(1, socket.StartStreamCalls);
+    }
+
+    private static ObsValidation Preflight(params ObsFinding[] findings) =>
+        new()
+        {
+            Ok = findings.All(finding => finding.Severity != ObsValidator.Error),
+            Findings = findings,
+        };
 
     [Fact]
     public void Reconcile_RepairsStoppedStreamWithoutAnInternetTransition()
@@ -936,7 +1034,8 @@ public class ObsDesiredStateTests
         ObsBackoff backoff = null,
         ObsRecordingBudget budget = null,
         Action beforeLaunch = null,
-        Func<bool> armed = null
+        Func<bool> armed = null,
+        Func<ObsValidation> preflight = null
     )
     {
         socket ??= new FakeSession();
@@ -952,7 +1051,8 @@ public class ObsDesiredStateTests
             waits.Add,
             TimeSpan.FromMilliseconds(20),
             beforeLaunch,
-            armed ?? (() => true)
+            armed ?? (() => true),
+            preflight
         );
         return new Harness
         {

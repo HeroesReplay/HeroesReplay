@@ -1,6 +1,7 @@
 using System;
-using HeroesReplay.Core;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.ServiceHost.Logs;
+using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -11,7 +12,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
-namespace HeroesReplay.CLI;
+namespace HeroesReplay.CLI.OpenTelemetry;
 
 public static class HeroesReplayOpenTelemetry
 {

@@ -1,16 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
 
 namespace HeroesReplay.Core.SelfUpdate;
 
 public static class ReleaseInstall
 {
-    private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
-
     public static string ReadVersion(string installDirectory)
     {
         if (string.IsNullOrWhiteSpace(installDirectory))
@@ -160,53 +158,55 @@ public static class ReleaseInstall
     }
 
     /// <summary>
-    /// What <c>apply-release.ps1</c> does with the release's OBS files. While OBS is closed the
-    /// scene collection is replaced, as before, and <c>services start</c> then points its paths at
-    /// this install. The profile (<c>basic.ini</c>) is machine-owned: the packaged one is only a
-    /// template, copied when this machine has no profile of that name. <c>service.json</c> (the
-    /// stream key) is never copied. Returns one line per decision for the update log.
+    /// What <c>apply-release.ps1</c> does with the release's OBS files. The scene collection goes
+    /// through <see cref="ObsCollectionPatcher"/> as a release: a collection HeroesReplay manages is
+    /// replaced with this install's template (backed up first), a custom one is kept and reported,
+    /// and while OBS is running the replacement waits until HeroesReplay finds OBS closed. The
+    /// profile (<c>basic.ini</c>) is machine-owned: the packaged one is only a template, written when
+    /// this machine has no profile of that name and OBS is closed. <c>service.json</c> (the stream
+    /// key) is never copied. Returns one line per decision for the update log.
     /// </summary>
-    public static IReadOnlyList<string> CopyObsScenesIfClosed(
-        string installDirectory,
-        string appData,
-        bool obsIsRunning,
-        string profileName = null,
-        string collectionName = null
-    )
+    public static IReadOnlyList<string> InstallObsFiles(ReleaseObsInstall request)
     {
+        ArgumentNullException.ThrowIfNull(request);
         var notes = new List<string>();
-        if (string.IsNullOrWhiteSpace(installDirectory) || string.IsNullOrWhiteSpace(appData))
+        if (
+            string.IsNullOrWhiteSpace(request.InstallDirectory)
+            || string.IsNullOrWhiteSpace(request.AppData)
+        )
         {
             return notes;
         }
 
-        if (obsIsRunning)
-        {
-            notes.Add(
-                "OBS is open. Scene files in the release were left under obs\\ and were not copied."
-            );
-            return notes;
-        }
-
-        string scene = Path.Combine(installDirectory, "obs", "Default.json");
+        string scene = Path.Combine(request.InstallDirectory, "obs", "Default.json");
         if (File.Exists(scene))
         {
-            string destination = ObsNames.CollectionFile(appData, collectionName);
-            string json = File.ReadAllText(scene);
-            if (!string.IsNullOrWhiteSpace(collectionName))
-            {
-                json = ObsNames.WithCollectionName(json, collectionName);
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.WriteAllText(destination, json, Utf8);
-            notes.Add("OBS collection -> " + destination);
+            ObsCollectionApplyResult collection = ObsCollectionPatcher.Apply(
+                new ObsCollectionUpdate
+                {
+                    TemplatePath = scene,
+                    DestinationPath = ObsNames.CollectionFile(
+                        request.AppData,
+                        request.CollectionName
+                    ),
+                    DataDirectory = request.DataDirectory,
+                    ObsIsRunning = request.ObsIsRunning,
+                    CollectionName = request.CollectionName,
+                    Managed = request.Managed,
+                    Release = true,
+                    PreviousTemplatePath = string.IsNullOrWhiteSpace(request.PreviousInstall)
+                        ? null
+                        : Path.Combine(request.PreviousInstall, "obs", "Default.json"),
+                    UtcNow = request.UtcNow,
+                }
+            );
+            notes.Add("OBS collection: " + collection.Message);
         }
 
-        string ini = Path.Combine(installDirectory, "obs", "Default", "basic.ini");
+        string ini = Path.Combine(request.InstallDirectory, "obs", "Default", "basic.ini");
         if (File.Exists(ini))
         {
-            string profile = ObsNames.ProfileIni(appData, profileName);
+            string profile = ObsNames.ProfileIni(request.AppData, request.ProfileName);
             if (File.Exists(profile))
             {
                 notes.Add(
@@ -215,13 +215,19 @@ public static class ReleaseInstall
                         + ". The profile belongs to this machine; a release does not replace it."
                 );
             }
+            else if (request.ObsIsRunning)
+            {
+                notes.Add(
+                    "OBS is running, so the profile template was not written to " + profile + "."
+                );
+            }
             else
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(profile)!);
-                File.WriteAllText(
+                ObsFileTransaction.Write(
                     profile,
-                    ObsNames.WithProfileName(File.ReadAllText(ini), profileName),
-                    Utf8
+                    ObsNames.WithProfileName(File.ReadAllText(ini), request.ProfileName),
+                    request.Managed.BackupDirectory,
+                    request.UtcNow
                 );
                 notes.Add(
                     "OBS profile -> "
@@ -244,4 +250,30 @@ public static class ReleaseInstall
             StringComparison.OrdinalIgnoreCase
         );
     }
+}
+
+/// <summary>The OBS part of a release install (<see cref="ReleaseInstall.InstallObsFiles"/>).</summary>
+public sealed record ReleaseObsInstall
+{
+    /// <summary>The new install, with <c>obs\Default.json</c> and <c>obs\Default\basic.ini</c>.</summary>
+    public string InstallDirectory { get; init; }
+
+    /// <summary><c>%APPDATA%</c>, which holds <c>obs-studio</c>.</summary>
+    public string AppData { get; init; }
+
+    public bool ObsIsRunning { get; init; }
+
+    public ObsManagedFiles Managed { get; init; }
+
+    /// <summary>The effective <c>Location:DataDirectory</c> of the new install.</summary>
+    public string DataDirectory { get; init; }
+
+    public string ProfileName { get; init; }
+
+    public string CollectionName { get; init; }
+
+    /// <summary>The install being replaced (<c>app.previous</c>), when there is one.</summary>
+    public string PreviousInstall { get; init; }
+
+    public DateTime UtcNow { get; init; } = DateTime.UtcNow;
 }

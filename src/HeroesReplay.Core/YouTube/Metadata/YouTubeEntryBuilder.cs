@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.YouTube.Metadata;
@@ -41,7 +42,9 @@ public static class YouTubeEntryBuilder
             HeroCatalog = heroCatalog,
             RecordAndUpload = facts.RecordAndUpload,
             RequestedBy = facts.RequestedBy,
-            NamedPlayer = loaded?.RewardQueueItem?.Request?.PlayerIndex != null,
+            NamedPlayer =
+                PlayerPriorityRequest.PlayerIndex(loaded?.Replay, loaded?.RewardQueueItem?.Request)
+                != null,
             NotableEvents = facts.NotableEvents,
             IsCompleteRecording = isCompleteRecording,
         };

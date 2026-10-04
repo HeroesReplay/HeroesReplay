@@ -7,6 +7,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
@@ -52,18 +55,30 @@ public class ObsController : IObsController
             ObsBackoff.Default,
             Thread.Sleep,
             TimeSpan.FromSeconds(10),
-            PatchInstalledCollection,
-            arm.IsArmed
+            () => PatchInstalledCollection(),
+            arm.IsArmed,
+            () =>
+                ObsValidator.Validate(
+                    new ObsBorrowedReadSession(this.obs),
+                    new ObsInspectionSettings(
+                        settings.OBS,
+                        AppContext.BaseDirectory,
+                        settings.Location?.DataDirectory,
+                        arm.IsArmed(),
+                        arm.FilePath
+                    )
+                )
         );
     }
 
     public void BeginSession()
     {
-        PatchInstalledCollection();
+        ObsCollectionApplyResult patch = PatchInstalledCollection();
         coordinator.EnsureIdentified();
+        SwapLiveCollection(patch);
     }
 
-    private void PatchInstalledCollection()
+    private ObsCollectionApplyResult PatchInstalledCollection()
     {
         try
         {
@@ -72,20 +87,100 @@ public class ObsController : IObsController
                 AppContext.BaseDirectory,
                 settings.Location?.DataDirectory,
                 obsRunning,
-                ObsNames.SceneCollection(settings.OBS)
+                ObsNames.SceneCollection(settings.OBS),
+                ObsManagedFiles.ForThisUser()
             );
             if (result.Drift)
             {
                 logger.LogWarning("OBS collection was not updated. {Reason}", result.Message);
             }
-            else if (result.Wrote)
+            else if (result.Wrote || result.Deferred && result.Replacement == null)
             {
                 logger.LogInformation("{Reason}", result.Message);
             }
+
+            return result;
         }
         catch (Exception e)
         {
             logger.LogWarning(e, "OBS collection paths were not updated.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Between replays: a newer collection template that waits only because OBS runs goes in
+    /// now, through the spare collection, so a release with OBS changes needs no stream stop.
+    /// </summary>
+    private void SwapLiveCollection(ObsCollectionApplyResult patch)
+    {
+        RecoverFromSpareCollection();
+        if (patch?.Replacement == null)
+        {
+            return;
+        }
+
+        if (settings.OBS?.LiveCollectionSwap != true)
+        {
+            logger.LogInformation("{Reason}", patch.Message);
+            return;
+        }
+
+        try
+        {
+            ObsLiveSwapResult swap = ObsLiveCollectionSwap.Run(
+                new ObsWebsocketCollectionSwitch(obs),
+                patch.Replacement,
+                ObsNames.SceneCollection(settings.OBS),
+                ObsManagedFiles.ForThisUser(),
+                DateTime.UtcNow
+            );
+            if (swap.Stranded)
+            {
+                logger.LogError("OBS collection swap. {Reason}", swap.Message);
+            }
+            else if (swap.Swapped)
+            {
+                logger.LogInformation("{Reason}", swap.Message);
+            }
+            else
+            {
+                logger.LogWarning("OBS collection was not swapped. {Reason}", swap.Message);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "OBS collection was not swapped while OBS runs. It is replaced the next time HeroesReplay finds OBS closed."
+            );
+        }
+    }
+
+    /// <summary>
+    /// An earlier swap that could not switch back left OBS on the spare collection. The template
+    /// record may already match, so this runs before every replay, not only on a new template (#214).
+    /// </summary>
+    private void RecoverFromSpareCollection()
+    {
+        try
+        {
+            ObsLiveSwapResult recovered = ObsLiveCollectionSwap.Recover(
+                new ObsWebsocketCollectionSwitch(obs),
+                ObsNames.SceneCollection(settings.OBS)
+            );
+            if (recovered?.Stranded == true)
+            {
+                logger.LogError("OBS collection swap. {Reason}", recovered.Message);
+            }
+            else if (recovered != null)
+            {
+                logger.LogWarning("OBS collection swap. {Reason}", recovered.Message);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Could not check whether OBS was left on the spare collection.");
         }
     }
 
@@ -312,7 +407,9 @@ public class ObsController : IObsController
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            logger.LogInformation("Report scenes stopped because the next match clock is running.");
+            logger.LogInformation(
+                "Report scenes stopped early: the next match is showing or spectate is stopping."
+            );
         }
     }
 
@@ -359,7 +456,7 @@ public class ObsController : IObsController
         catch (OperationCanceledException)
         {
             logger.LogInformation(
-                "Report scene {Scene} stopped because the next match clock is running.",
+                "Report scene {Scene} stopped early: the next match is showing or spectate is stopping.",
                 source.SceneName
             );
             return true;
@@ -389,8 +486,21 @@ public class ObsController : IObsController
                 JObject browserSettings = sourceSettings.Settings;
                 browserSettings["url"] = url;
                 ApplyReportBrowserCss(browserSettings);
+                if (IsMatchReport(segment))
+                {
+                    browserSettings["css"] = MatchReportBrowserCss.WithScroll(
+                        browserSettings["css"]?.ToString(),
+                        segment.DisplayTime
+                    );
+                    browserSettings["height"] = MatchReportBrowserCss.SourceHeight;
+                }
+
                 obs.SetInputSettings(source.InputName, browserSettings);
-                SetMatchReportScroll(segment);
+                if (IsMatchReport(segment))
+                {
+                    StopObsScroll(segment);
+                }
+
                 return true;
             }
             catch (Exception e)
@@ -402,38 +512,33 @@ public class ObsController : IObsController
         return false;
     }
 
-    private void SetMatchReportScroll(ReportScene segment)
-    {
-        if (!string.Equals(segment.SceneName, "match-report", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
+    private static bool IsMatchReport(ReportScene segment) =>
+        string.Equals(segment.SceneName, "match-report", StringComparison.OrdinalIgnoreCase);
 
-        double speed = MatchReportPace.ScrollSpeedY(segment.DisplayTime);
+    /// <summary>
+    /// The page scrolls itself now. A collection from an earlier build still has the OBS
+    /// Scroll filter on this source, and it would move the page a second time.
+    /// </summary>
+    private void StopObsScroll(ReportScene segment)
+    {
         try
         {
-            obs.SetSourceFilterSettings(
-                segment.SourceName,
-                "Scroll",
-                new JObject { ["speed_y"] = speed },
-                overlay: true
-            );
+            obs.SetSourceFilterEnabled(segment.SourceName, "Scroll", false);
             logger.LogInformation(
-                "Match report scroll speed {Speed} for {Duration}.",
-                speed,
+                "Match report scrolls itself for {Duration}. The OBS Scroll filter is off.",
                 segment.DisplayTime
             );
         }
         catch (Exception e)
         {
-            logger.LogWarning(e, "Could not set the match report scroll speed.");
+            // A collection from this build has no Scroll filter on the source.
+            logger.LogDebug(e, "No OBS Scroll filter to turn off on {Source}.", segment.SourceName);
         }
     }
 
     private void ApplyReportBrowserCss(JObject browserSettings)
     {
-        browserSettings["css"] = MatchReportBrowserCss.Apply(
-            browserSettings["css"]?.ToString(),
+        browserSettings["css"] = MatchReportBrowserCss.Build(
             settings.OBS.ReportBrowserCss,
             settings.OBS.HideReportHeader
         );
@@ -619,7 +724,7 @@ public class ObsController : IObsController
             if (cancellationToken.IsCancellationRequested)
             {
                 logger.LogInformation(
-                    "Remaining report scenes stop because the next match clock is running."
+                    "Remaining report scenes are skipped: the next match is showing or spectate is stopping."
                 );
                 return true;
             }

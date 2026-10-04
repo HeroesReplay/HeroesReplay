@@ -51,26 +51,41 @@ public enum ServiceStreamState
     Inactive,
     Active,
     Unknown,
+
+    /// <summary>OBS is running without an answering websocket, and this install does not stream.</summary>
+    NotStreamedHere,
 }
 
 /// <summary>
-/// Read-only OBS stream state after every role exited. OBS that is closed or has no reachable
-/// websocket is not streaming for this check. An active stream, or OBS that did not report its
-/// stream state, fails the stop.
+/// Read-only OBS stream state after every role exited. Only a closed OBS or one that reports the
+/// stream inactive confirms the stop. An active stream, an OBS that is running but whose websocket
+/// does not answer (it may still be live), or one that did not report its stream state fails it.
 /// </summary>
 public sealed record ServiceStreamCheck(ServiceStreamState State, string Detail)
 {
     public bool ConfirmsStopped =>
         State
             is ServiceStreamState.NotRunning
-                or ServiceStreamState.Unreachable
-                or ServiceStreamState.Inactive;
+                or ServiceStreamState.Inactive
+                or ServiceStreamState.NotStreamedHere;
 
     public static ServiceStreamCheck NotRunning() =>
         new(ServiceStreamState.NotRunning, "OBS is not running.");
 
     public static ServiceStreamCheck Unreachable(string detail) =>
         new(ServiceStreamState.Unreachable, detail);
+
+    /// <summary>
+    /// OBS is running but its websocket did not answer. That holds the stop only when this install
+    /// streams (<c>OBS:StreamingEnabled</c>): otherwise HeroesReplay never started a stream there.
+    /// </summary>
+    public static ServiceStreamCheck WhenUnreachable(bool streamedHere, string detail) =>
+        streamedHere
+            ? Unreachable(detail)
+            : new(
+                ServiceStreamState.NotStreamedHere,
+                detail + " OBS:StreamingEnabled is false, so this install did not stream."
+            );
 
     public static ServiceStreamCheck Inactive() =>
         new(ServiceStreamState.Inactive, "OBS reported the stream inactive.");
@@ -86,9 +101,11 @@ public sealed record ServiceStreamCheck(ServiceStreamState State, string Detail)
         string state = State switch
         {
             ServiceStreamState.NotRunning => "not running",
-            ServiceStreamState.Unreachable => "websocket unreachable, treated as not streaming",
+            ServiceStreamState.Unreachable =>
+                "running, but its websocket did not answer, so the stream may still be live",
             ServiceStreamState.Inactive => "not streaming",
             ServiceStreamState.Active => "STREAMING",
+            ServiceStreamState.NotStreamedHere => "running, not checked",
             _ => "not confirmed",
         };
         return string.IsNullOrWhiteSpace(Detail) ? state + "." : $"{state}. {Detail}";
@@ -147,7 +164,11 @@ public sealed class ServiceStopResult
             failures.Add(
                 Stream.State == ServiceStreamState.Active
                     ? "OBS is still streaming. Stop the stream in OBS."
-                    : "OBS stream state was not confirmed. " + Stream.Detail
+                : Stream.State == ServiceStreamState.Unreachable
+                    ? "OBS is running, but its websocket did not answer, so the stream was not confirmed stopped. "
+                        + Stream.Detail
+                        + " Stop the stream in OBS, or enable Tools > WebSocket Server Settings and run `heroesreplay services stop` again."
+                : "OBS stream state was not confirmed. " + Stream.Detail
             );
         }
 

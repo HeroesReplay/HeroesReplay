@@ -7,6 +7,8 @@ using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Recording;
+using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.ServiceHost;
@@ -15,6 +17,7 @@ using HeroesReplay.Core.Spectating.Clock;
 using HeroesReplay.Core.Spectating.Control;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
+using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch.Predictions;
 using HeroesReplay.Core.TwitchExtension;
 using Microsoft.Extensions.Logging;
@@ -340,9 +343,12 @@ public class Spectator : ISpectator
                         BeginMatchRecording();
                         recordingClock.Observe(Timer);
 
+                        LoadedReplay focused = context.Current?.LoadedReplay;
                         if (
-                            context.Current?.LoadedReplay?.RewardQueueItem?.Request?.PlayerIndex
-                            is int
+                            PlayerPriorityRequest.PlayerIndex(
+                                focused?.Replay,
+                                focused?.RewardQueueItem?.Request
+                            ) is int
                         )
                         {
                             controller.ShowSelectedUnit();

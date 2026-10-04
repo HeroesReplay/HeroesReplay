@@ -4,6 +4,7 @@ using System.CommandLine.Parsing;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
@@ -26,10 +27,10 @@ public class SpectateFileCommand : Command
         fileOption.Validators.Add(ValidateReplayPath);
         Options.Add(fileOption);
 
-        var playerOption = new Option<int?>("--player")
+        var playerOption = new Option<string>("--player")
         {
             Description =
-                "Hero to follow while they are alive: 1-10, or 0 for the tenth hero. The normal camera is used while that hero is dead.",
+                "BattleTag of the player to follow while they are alive, for example Name#1234. The normal camera is used while they are dead.",
             CustomParser = ParsePlayer,
         };
         Options.Add(playerOption);
@@ -46,31 +47,16 @@ public class SpectateFileCommand : Command
         );
     }
 
-    /// <summary>
-    /// Maps <c>--player</c> to a zero-based hero index. 1-9 and 10 are the heroes in order;
-    /// 0 is also the tenth hero, like the spectator key.
-    /// </summary>
-    public static bool TryPlayerIndex(string text, out int playerIndex)
-    {
-        if (string.Equals(text?.Trim(), "10", StringComparison.Ordinal))
-        {
-            playerIndex = 9;
-            return true;
-        }
-
-        return PlayerPriorityRequest.TrySlot(text, out playerIndex);
-    }
-
-    private static int? ParsePlayer(ArgumentResult result)
+    private static string ParsePlayer(ArgumentResult result)
     {
         string text = result.Tokens.Count > 0 ? result.Tokens[0].Value : null;
-        if (TryPlayerIndex(text, out int playerIndex))
+        if (PlayerPriorityRequest.TryBattleTag(text, out string battleTag))
         {
-            return playerIndex;
+            return battleTag;
         }
 
         result.AddError(
-            $"--player must be 1-10, or 0 for the tenth hero. '{text}' is not a hero. Example: --player 1"
+            $"--player must be a BattleTag. '{text}' is not a BattleTag. Example: --player Name#1234"
         );
         return null;
     }
@@ -86,7 +72,7 @@ public class SpectateFileCommand : Command
 
     protected async Task<int> CommandAsync(
         string path,
-        int? playerIndex,
+        string battleTag,
         CancellationToken cancellationToken
     )
     {
@@ -95,7 +81,7 @@ public class SpectateFileCommand : Command
         {
             Path = path,
             PlayOnce = true,
-            PlayerIndex = playerIndex,
+            BattleTag = battleTag,
         };
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()
