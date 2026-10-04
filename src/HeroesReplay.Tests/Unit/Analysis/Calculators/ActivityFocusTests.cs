@@ -192,6 +192,30 @@ public class ActivityFocusTests
         Assert.Equal(abathur, death.Target);
     }
 
+    [Fact]
+    public void UltimateEvolutionCloneEnding_IsNotAKill()
+    {
+        Player abathur = Hero("Abathur", 0, Still(0, 0));
+        Player sylvanas = Hero("Sylvanas", 1, Still(3, 0));
+        var clone = new ReplayUnit
+        {
+            Name = "HeroDemonHunter",
+            Team = 0,
+            TimeSpanBorn = TimeSpan.FromSeconds(1),
+            TimeSpanDied = At,
+            PlayerControlledBy = abathur,
+            PlayerKilledBy = abathur,
+            PointDied = new Point { X = 1, Y = 0 },
+        };
+        abathur.HeroUnits.Add(clone);
+
+        Assert.Empty(Analyze(Game(new[] { abathur, sylvanas }), new KillCalculator(Settings())));
+
+        clone.PlayerKilledBy = sylvanas;
+        Focus kill = Analyze(Game(new[] { abathur, sylvanas }), new KillCalculator(Settings()))[At];
+        Assert.Equal(sylvanas, kill.Target);
+    }
+
     private static IReadOnlyDictionary<TimeSpan, Focus> Analyze(
         Replay replay,
         IFocusCalculator calculator
@@ -223,12 +247,14 @@ public class ActivityFocusTests
                 TeamfightPerHero = 0.17f,
                 TeamfightMax = 9.4f,
                 PlayerDeath = 9.5f,
+                PlayerKill = 9.0f,
             },
             Spectate = new SpectateSettings
             {
                 MaxDistanceToObjective = 10,
                 MaxDistanceToEnemy = 20,
                 MaxDistanceToOwnerChange = 5,
+                MaxDistanceToEnemyKill = 20,
                 RemoteBodyHeroes = new[] { "Abathur" },
             },
             FocusUnits = new FocusUnitSettings

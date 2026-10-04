@@ -30,6 +30,15 @@ public class KillCalculator : IFocusCalculator
                 continue;
             }
 
+            // A unit "killed" by its own player is not a kill. Abathur's Ultimate Evolution clone
+            // ends that way ("Abathur kills Abathur", #234), so does D.Va's mech, and the parser
+            // credits some deaths to the victim: 97 in 15 of 35 sampled replays, each also counted
+            // in that player's kill streak. DeathCalculator already shows them as deaths.
+            if (unit.PlayerKilledBy == unit.PlayerControlledBy)
+            {
+                continue;
+            }
+
             if (!killsByKiller.TryGetValue(unit.PlayerKilledBy, out List<Unit> list))
             {
                 list = new List<Unit>();
