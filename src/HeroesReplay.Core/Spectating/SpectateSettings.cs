@@ -20,6 +20,12 @@ public class SpectateSettings
     public int MaxDistanceToClear { get; set; }
     public int MaxDistanceToBoss { get; set; }
 
+    /// <summary>
+    /// Heroes whose body stays out of the action (Abathur plays through his Symbiote). Their body
+    /// gets no roaming or proximity focus unless an enemy hero is within MaxDistanceToEnemy.
+    /// </summary>
+    public IEnumerable<string> RemoteBodyHeroes { get; set; } = Array.Empty<string>();
+
     public int RetryTimerCountBeforeForceEnd { get; set; }
     public TimeSpan RetryTimerSleepDuration { get; set; }
 

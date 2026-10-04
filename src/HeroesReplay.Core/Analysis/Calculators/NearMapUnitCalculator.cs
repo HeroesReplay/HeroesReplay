@@ -1,13 +1,22 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 
 namespace HeroesReplay.Core.Analysis.Calculators;
 
+/// <summary>
+/// A hero at a live map objective (#234). An objective unit that exists only while its objective
+/// is live (payload, tribute, seed, zerg wave, immortal, warhead) is activity, and the hero near
+/// it scores <see cref="WeightSettings.ObjectiveActivity"/>. A structure that stands all game
+/// (<see cref="FocusUnitSettings.StructureContains"/>: watchtower, shrine, altar, cage, turn-in)
+/// scores only while an enemy hero is there too. Standing near a camp scores nothing here: its
+/// clear and its capture are their own calculators. Pickups keep their small weight.
+/// </summary>
 public class NearMapUnitCalculator : IFocusCalculator
 {
-    // Closeness stays inside the gap from MapObjective (9.25) to PlayerDeath (9.50).
+    // Closeness and ownership stay small next to the step to the next weight.
     private const float ClosenessSpan = 0.15f;
     private const float ControllerBias = 0.05f;
 
@@ -16,6 +25,13 @@ public class NearMapUnitCalculator : IFocusCalculator
     public NearMapUnitCalculator(AppSettings settings)
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    }
+
+    private enum Kind
+    {
+        Objective,
+        Structure,
+        Pickup,
     }
 
     public void Contribute(ReplayTimeline timeline)
@@ -39,12 +55,14 @@ public class NearMapUnitCalculator : IFocusCalculator
 
         foreach (Unit unit in timeline.Replay.Units ?? new List<Unit>())
         {
-            if (unit == null || !TryWeight(unit.Name, out float baseWeight))
+            if (unit == null || !TryClassify(unit.Name, out Kind kind, out float baseWeight))
             {
                 continue;
             }
 
-            Dictionary<int, Point> points = PointsFor(unit, timeline.TotalSeconds);
+            Dictionary<int, Point> points = Matches(focusUnits.EscortContains, unit.Name)
+                ? EscortedPath.Track(unit, timeline)
+                : PointsFor(unit, timeline.TotalSeconds);
             if (points.Count == 0)
             {
                 continue;
@@ -74,23 +92,52 @@ public class NearMapUnitCalculator : IFocusCalculator
                         continue;
                     }
 
+                    if (
+                        FocusActivity.IdleRemoteBody(
+                            timeline,
+                            heroUnit,
+                            heroPoint,
+                            second,
+                            settings.Spectate
+                        )
+                    )
+                    {
+                        continue;
+                    }
+
+                    if (
+                        kind == Kind.Structure
+                        && !FocusActivity.EnemyNear(
+                            timeline,
+                            heroUnit,
+                            heroPoint,
+                            second,
+                            settings.Spectate.MaxDistanceToEnemy
+                        )
+                    )
+                    {
+                        continue;
+                    }
+
                     float closeness = (float)(1d - distance / maxDistance) * ClosenessSpan;
                     bool controller = unit.PlayerControlledBy == heroUnit.PlayerControlledBy;
+                    string why = kind == Kind.Structure ? "contested" : "near";
                     timeline.Offer(
                         now,
                         GetType(),
                         heroUnit,
                         heroUnit.PlayerControlledBy,
                         baseWeight + closeness + (controller ? ControllerBias : 0f),
-                        $"{heroUnit.PlayerControlledBy.Character} near {unit.Name} ({distance:0.0})."
+                        $"{heroUnit.PlayerControlledBy.Character} {why} {unit.Name} ({distance:0.0})."
                     );
                 }
             }
         }
     }
 
-    private bool TryWeight(string name, out float weight)
+    private bool TryClassify(string name, out Kind kind, out float weight)
     {
+        kind = Kind.Objective;
         weight = 0f;
         if (string.IsNullOrWhiteSpace(name) || Skip(name))
         {
@@ -100,18 +147,14 @@ public class NearMapUnitCalculator : IFocusCalculator
         FocusUnitSettings focusUnits = settings.FocusUnits;
         if (Matches(focusUnits.ObjectiveContains, name))
         {
-            weight = settings.Weights.MapObjective;
-            return weight > 0f;
-        }
-
-        if (Matches(focusUnits.CampContains, name))
-        {
-            weight = settings.Weights.CampClear;
+            kind = Matches(focusUnits.StructureContains, name) ? Kind.Structure : Kind.Objective;
+            weight = settings.Weights.ObjectiveActivity;
             return weight > 0f;
         }
 
         if (Matches(focusUnits.PickupContains, name))
         {
+            kind = Kind.Pickup;
             weight = settings.Weights.Pickup;
             return weight > 0f;
         }
@@ -154,40 +197,68 @@ public class NearMapUnitCalculator : IFocusCalculator
         return false;
     }
 
-    private static Dictionary<int, Point> PointsFor(Unit unit, int totalSeconds)
+    /// <summary>
+    /// Where the unit is each second. The replay samples a moving unit sparsely: Hanamura's payload
+    /// has one position, where it was delivered. Between known points (its spawn point first) the
+    /// path is interpolated, so a hero escorting it is near it the whole way.
+    /// </summary>
+    internal static Dictionary<int, Point> PointsFor(Unit unit, int totalSeconds)
     {
         var points = new Dictionary<int, Point>();
-        if (unit.Positions != null && unit.Positions.Count > 0)
+        int born = Math.Max(0, unit.TimeSpanBorn.FloorSeconds());
+        int last = unit.TimeSpanDied.HasValue
+            ? Math.Min(unit.TimeSpanDied.Value.FloorSeconds(), totalSeconds - 1)
+            : totalSeconds - 1;
+        var known = new SortedDictionary<int, Point>();
+        if (unit.PointBorn != null)
         {
-            foreach (Position position in unit.Positions)
-            {
-                if (position?.Point == null)
-                {
-                    continue;
-                }
+            known[born] = unit.PointBorn;
+        }
 
-                int second = position.TimeSpan.FloorSeconds();
-                if ((uint)second < (uint)totalSeconds)
-                {
-                    points[second] = position.Point;
-                }
+        foreach (Position position in unit.Positions ?? new List<Position>())
+        {
+            if (position?.Point == null)
+            {
+                continue;
             }
 
-            return points;
+            int second = position.TimeSpan.FloorSeconds();
+            if ((uint)second < (uint)totalSeconds)
+            {
+                known[second] = position.Point;
+            }
         }
 
-        if (unit.PointBorn == null)
+        if (known.Count == 0)
         {
             return points;
         }
 
-        int born = unit.TimeSpanBorn.FloorSeconds();
-        int died = unit.TimeSpanDied.HasValue
-            ? unit.TimeSpanDied.Value.FloorSeconds()
-            : totalSeconds - 1;
-        for (int second = born; second <= died && second < totalSeconds; second++)
+        KeyValuePair<int, Point>[] samples = known.ToArray();
+        for (int i = 0; i < samples.Length; i++)
         {
-            points[second] = unit.PointBorn;
+            (int from, Point start) = (samples[i].Key, samples[i].Value);
+            if (i + 1 < samples.Length)
+            {
+                (int to, Point end) = (samples[i + 1].Key, samples[i + 1].Value);
+                for (int second = from; second < to; second++)
+                {
+                    double t = (double)(second - from) / (to - from);
+                    points[second] = new Point
+                    {
+                        X = (int)Math.Round(start.X + (end.X - start.X) * t),
+                        Y = (int)Math.Round(start.Y + (end.Y - start.Y) * t),
+                    };
+                }
+            }
+            else
+            {
+                // After the last sample the unit holds still until it dies or the game ends.
+                for (int second = from; second <= last; second++)
+                {
+                    points[second] = start;
+                }
+            }
         }
 
         return points;

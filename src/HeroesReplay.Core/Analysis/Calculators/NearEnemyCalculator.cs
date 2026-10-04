@@ -1,10 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 
 namespace HeroesReplay.Core.Analysis.Calculators;
 
+/// <summary>
+/// Fights between heroes (#234). Each second the alive heroes are grouped: two heroes within
+/// <c>Spectate:MaxDistanceToEnemy</c> of each other are in the same group, and a group with
+/// heroes of both teams is a fight. A bigger fight scores higher (<see
+/// cref="WeightSettings.TeamfightPerHero"/> for each hero beyond the first two, up to <see
+/// cref="WeightSettings.TeamfightMax"/>, below a death or a kill), so a 5v5 wins over a 1v1
+/// elsewhere. The camera takes the hero nearest the middle of the fight, and stays on the hero it
+/// had while that hero is still in it.
+/// </summary>
 public class NearEnemyCalculator : IFocusCalculator
 {
     private readonly AppSettings settings;
@@ -22,91 +32,172 @@ public class NearEnemyCalculator : IFocusCalculator
         }
 
         Player[] players = timeline.Replay.Players ?? Array.Empty<Player>();
-        var teamZero = new List<Unit>(5);
-        var teamOne = new List<Unit>(5);
+        int maxDistance = settings.Spectate.MaxDistanceToEnemy;
+        WeightSettings weights = settings.Weights;
+        Unit previous = null;
+        var heroes = new List<(Unit Unit, Point Point)>(10);
 
         for (int second = 0; second < timeline.TotalSeconds; second++)
         {
-            teamZero.Clear();
-            teamOne.Clear();
-
+            heroes.Clear();
             foreach (Unit unit in timeline.AliveHeroesAt(second))
             {
-                if (unit.Team == 0)
+                if (
+                    (unit.Team == 0 || unit.Team == 1)
+                    && unit.PlayerControlledBy != null
+                    && timeline.TryGetPoint(unit, second, out Point point)
+                )
                 {
-                    teamZero.Add(unit);
-                }
-                else if (unit.Team == 1)
-                {
-                    teamOne.Add(unit);
+                    heroes.Add((unit, point));
                 }
             }
 
-            if (teamZero.Count == 0 || teamOne.Count == 0)
+            Unit kept = null;
+            int keptSize = 0;
+            foreach (List<int> group in Groups(heroes, maxDistance))
             {
-                continue;
-            }
-
-            TimeSpan now = TimeSpan.FromSeconds(second);
-
-            foreach (Unit teamOneUnit in teamZero)
-            {
-                if (!timeline.TryGetPoint(teamOneUnit, second, out Point teamOnePoint))
+                int blue = group.Count(i => heroes[i].Unit.Team == 0);
+                int red = group.Count - blue;
+                if (blue == 0 || red == 0)
                 {
                     continue;
                 }
 
-                foreach (Unit teamTwoUnit in teamOne)
+                double closest = double.MaxValue;
+                foreach (int i in group)
                 {
-                    if (!timeline.TryGetPoint(teamTwoUnit, second, out Point teamTwoPoint))
+                    foreach (int j in group)
                     {
-                        continue;
+                        if (heroes[i].Unit.Team != heroes[j].Unit.Team)
+                        {
+                            closest = Math.Min(
+                                closest,
+                                heroes[i].Point.DistanceTo(heroes[j].Point)
+                            );
+                        }
                     }
+                }
 
-                    double distance = teamTwoPoint.DistanceTo(teamOnePoint);
-                    if (distance > settings.Spectate.MaxDistanceToEnemy)
-                    {
-                        continue;
-                    }
+                int target = Target(group, heroes, previous, players, maxDistance);
+                Unit hero = heroes[target].Unit;
+                float size = weights.TeamfightPerHero * (group.Count - 2);
+                float points =
+                    weights.NearEnemyHero
+                    + weights.NearEnemyHeroOffset
+                    + size
+                    - Convert.ToSingle(closest) / weights.NearEnemyHeroDistanceDivisor;
+                if (weights.TeamfightMax > 0f)
+                {
+                    points = Math.Min(points, weights.TeamfightMax);
+                }
 
-                    Unit target = PreferStableHero(teamOneUnit, teamTwoUnit, players);
-                    Unit enemy = target == teamOneUnit ? teamTwoUnit : teamOneUnit;
-                    if (target.PlayerControlledBy == null || enemy.PlayerControlledBy == null)
-                    {
-                        continue;
-                    }
+                string fight =
+                    group.Count == 2
+                        ? $"is in proximity of {heroes[group.First(i => i != target)].Unit.PlayerControlledBy.Character}"
+                        : $"is in a {(hero.Team == 0 ? blue : red)}v{(hero.Team == 0 ? red : blue)} fight";
+                timeline.Offer(
+                    TimeSpan.FromSeconds(second),
+                    GetType(),
+                    hero,
+                    hero.PlayerControlledBy,
+                    points,
+                    $"{hero.PlayerControlledBy.Character} {fight} ({closest:0.0})"
+                );
 
-                    float closer =
-                        Convert.ToSingle(distance) / settings.Weights.NearEnemyHeroDistanceDivisor;
-                    timeline.Offer(
-                        now,
-                        GetType(),
-                        target,
-                        target.PlayerControlledBy,
-                        settings.Weights.NearEnemyHero
-                            + settings.Weights.NearEnemyHeroOffset
-                            - closer,
-                        $"{target.PlayerControlledBy.Character} is in proximity of {enemy.PlayerControlledBy.Character} ({distance})"
-                    );
+                if (group.Count > keptSize)
+                {
+                    kept = hero;
+                    keptSize = group.Count;
                 }
             }
+
+            previous = kept;
         }
     }
 
-    private static Unit PreferStableHero(Unit left, Unit right, Player[] players)
+    /// <summary>Heroes linked by a chain of pairs within <paramref name="maxDistance"/>.</summary>
+    internal static List<List<int>> Groups(List<(Unit Unit, Point Point)> heroes, int maxDistance)
     {
-        int leftIndex = Array.IndexOf(players, left.PlayerControlledBy);
-        int rightIndex = Array.IndexOf(players, right.PlayerControlledBy);
-        if (leftIndex < 0)
+        int[] parent = Enumerable.Range(0, heroes.Count).ToArray();
+        int Find(int i)
         {
-            leftIndex = int.MaxValue;
+            while (parent[i] != i)
+            {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
+            }
+
+            return i;
         }
 
-        if (rightIndex < 0)
+        for (int i = 0; i < heroes.Count; i++)
         {
-            rightIndex = int.MaxValue;
+            for (int j = i + 1; j < heroes.Count; j++)
+            {
+                if (heroes[i].Point.DistanceTo(heroes[j].Point) <= maxDistance)
+                {
+                    parent[Find(i)] = Find(j);
+                }
+            }
         }
 
-        return leftIndex <= rightIndex ? left : right;
+        return Enumerable
+            .Range(0, heroes.Count)
+            .GroupBy(Find)
+            .Select(group => group.ToList())
+            .Where(group => group.Count > 1)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Only a hero with an enemy hero in range is engaged: a group links allies standing near each
+    /// other, so its middle can be a backliner out of the fight. The camera keeps the engaged hero
+    /// it had, else takes the engaged hero nearest the middle of the engaged heroes. Equal
+    /// distances go to the lower player slot, so the choice does not flicker.
+    /// </summary>
+    private static int Target(
+        List<int> group,
+        List<(Unit Unit, Point Point)> heroes,
+        Unit previous,
+        Player[] players,
+        int maxDistance
+    )
+    {
+        List<int> engaged = group
+            .Where(i =>
+                group.Any(j =>
+                    heroes[j].Unit.Team != heroes[i].Unit.Team
+                    && heroes[j].Point.DistanceTo(heroes[i].Point) <= maxDistance
+                )
+            )
+            .ToList();
+        if (engaged.Count == 0)
+        {
+            engaged = group;
+        }
+
+        foreach (int i in engaged)
+        {
+            if (previous != null && heroes[i].Unit == previous)
+            {
+                return i;
+            }
+        }
+
+        double x = engaged.Average(i => heroes[i].Point.X);
+        double y = engaged.Average(i => heroes[i].Point.Y);
+        return engaged
+            .OrderBy(i => Math.Round(Distance(heroes[i].Point, x, y), 3))
+            .ThenBy(i => Slot(heroes[i].Unit, players))
+            .First();
+    }
+
+    private static double Distance(Point point, double x, double y) =>
+        Math.Sqrt((point.X - x) * (point.X - x) + (point.Y - y) * (point.Y - y));
+
+    private static int Slot(Unit unit, Player[] players)
+    {
+        int index = Array.IndexOf(players, unit.PlayerControlledBy);
+        return index < 0 ? int.MaxValue : index;
     }
 }

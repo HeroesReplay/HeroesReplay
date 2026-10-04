@@ -27,8 +27,8 @@ public class NearMapUnitCalculatorTests
         Assert.True(focus.TryGetValue(TimeSpan.FromSeconds(5), out Focus atTribute));
         Assert.Equal(typeof(NearMapUnitCalculator), atTribute.Calculator);
         Assert.Equal(hero, atTribute.Target);
-        Assert.True(atTribute.Points > 9.25f);
-        Assert.True(atTribute.Points < 9.50f);
+        Assert.True(atTribute.Points > 6.0f);
+        Assert.True(atTribute.Points < 6.5f);
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class NearMapUnitCalculatorTests
         );
 
         Assert.Equal(close, focus[TimeSpan.FromSeconds(5)].Target);
-        Assert.True(focus[TimeSpan.FromSeconds(5)].Points > 9.25f);
+        Assert.True(focus[TimeSpan.FromSeconds(5)].Points > 6.0f);
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class NearMapUnitCalculatorTests
 
         Focus chosen = focus[TimeSpan.FromSeconds(5)];
         Assert.Contains("RavenLordTribute", chosen.Description);
-        Assert.True(chosen.Points > 9f);
+        Assert.True(chosen.Points > 6f);
     }
 
     [Fact]

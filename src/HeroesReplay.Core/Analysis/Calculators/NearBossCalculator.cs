@@ -36,16 +36,8 @@ public class NearBossCalculator : IFocusCalculator
                 continue;
             }
 
-            var points = new Dictionary<int, Point>();
-            if (unit.Positions != null)
-            {
-                foreach (Position position in unit.Positions)
-                {
-                    points[position.TimeSpan.FloorSeconds()] = position.Point;
-                }
-            }
-
-            bosses.Add((unit, points));
+            // A laning boss is sampled every few seconds; between samples its path is interpolated.
+            bosses.Add((unit, NearMapUnitCalculator.PointsFor(unit, timeline.TotalSeconds)));
         }
 
         if (bosses.Count == 0)
@@ -75,7 +67,16 @@ public class NearBossCalculator : IFocusCalculator
                         continue;
                     }
 
-                    if (heroPoint.DistanceTo(bossPoint) >= settings.Spectate.MaxDistanceToBoss)
+                    if (
+                        heroPoint.DistanceTo(bossPoint) >= settings.Spectate.MaxDistanceToBoss
+                        || FocusActivity.IdleRemoteBody(
+                            timeline,
+                            heroUnit,
+                            heroPoint,
+                            second,
+                            settings.Spectate
+                        )
+                    )
                     {
                         continue;
                     }
@@ -85,7 +86,9 @@ public class NearBossCalculator : IFocusCalculator
                         GetType(),
                         heroUnit,
                         heroUnit.PlayerControlledBy,
-                        settings.Weights.BossCapture,
+                        // A live boss is an objective, not the capture itself (#234): the capture
+                        // keeps BossCapture, and a fight at the boss scores as a fight.
+                        settings.Weights.ObjectiveActivity,
                         $"{heroUnit.PlayerControlledBy.Character} near {boss.Name} (Boss)"
                     );
                 }
