@@ -424,6 +424,11 @@ catch {
 # kept. service.json (stream key) is never copied.
 Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'install-obs', '--install', $InstallDir, '--previous', $previous, '--environment', $environment) 'OBS scene files'
 
+# A hand-made start-live.cmd may start the roles in cmd /k windows, or only some of them, and the
+# health gate then sees no stack. The new build rewrites it to `services start --supervise` with
+# every role and keeps the old one as start-live.cmd.previous for a rollback.
+Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'launcher', '--install', $InstallDir, '--environment', $environment) 'Launcher'
+
 Clear-ServiceStop
 $since = (Get-Date).ToUniversalTime().ToString('o')
 try {
@@ -469,6 +474,9 @@ if ($health -eq 3) {
 Write-Host "Release $Version is unhealthy (release-health exit $health): $($script:healthDetail) Rolling back to $previous."
 Add-SkippedRelease $Version "release-health exit $health. $($script:healthDetail)"
 Stop-HeroesReplayStack (Join-Path $InstallDir 'heroesreplay.exe')
+
+# While the new build is still installed: put back the launcher the restored install was started by.
+Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'launcher', '--restore') 'Launcher'
 
 # The failed install may have moved MinReplayId forward. Keep the higher one after the restore.
 $failedSettings = Join-Path ([System.IO.Path]::GetTempPath()) ('heroesreplay-failed-' + [System.IO.Path]::GetRandomFileName() + '.json')
