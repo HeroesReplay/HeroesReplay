@@ -101,6 +101,53 @@ public class ReplayDownloadPickTests
         Assert.Null(kept.NextAfter);
     }
 
+    [Fact]
+    public void FirstOnCurrentPatch_TakesTheNewestInstalledBuildOverALowerId()
+    {
+        string[] installed = { "2.57.0.98304", "2.57.0.98348" };
+        HeroesProfileReplay[] candidates =
+        {
+            new() { Id = 21, GameVersion = "2.57.0.98304" },
+            new() { Id = 23, GameVersion = "2.57.0.98348" },
+            new() { Id = 22, GameVersion = "2.57.0.98348" },
+        };
+
+        HeroesProfileReplay first = ReplayDownloadPick.FirstOnCurrentPatch(candidates, installed);
+
+        Assert.Equal(22, first.Id);
+    }
+
+    [Fact]
+    public void FirstOnCurrentPatch_NullWhenOnlyAnOlderBuildIsListed()
+    {
+        HeroesProfileReplay[] candidates =
+        {
+            new() { Id = 21, GameVersion = "2.57.0.98304" },
+        };
+
+        Assert.Null(
+            ReplayDownloadPick.FirstOnCurrentPatch(
+                candidates,
+                new[] { "2.57.0.98304", "2.57.0.98348" }
+            )
+        );
+    }
+
+    [Fact]
+    public void FirstOnCurrentPatch_TakesTheLowestIdWhenNoClientWasRead()
+    {
+        HeroesProfileReplay[] candidates =
+        {
+            new() { Id = 22, GameVersion = "2.57.0.98348" },
+            new() { Id = 21, GameVersion = "2.57.0.98304" },
+        };
+
+        Assert.Equal(
+            21,
+            ReplayDownloadPick.FirstOnCurrentPatch(candidates, Array.Empty<string>()).Id
+        );
+    }
+
     private static ReplayListing Page(params HeroesProfileReplay[] replays)
     {
         int highest = replays.Max(replay => replay.Id);
