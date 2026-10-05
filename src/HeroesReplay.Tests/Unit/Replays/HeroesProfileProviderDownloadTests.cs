@@ -158,6 +158,128 @@ public class HeroesProfileProviderDownloadTests
         }
     }
 
+    private const string Previous = "2.57.0.98304";
+    private const string Current = "2.57.0.98348";
+
+    [Fact]
+    public async Task DownloadNextAsync_TakesTheCurrentPatchOverALowerIdOnAnOlderBuild()
+    {
+        string root = NewRoot();
+        var service = new ListedDownloads(
+            newest: 65580010,
+            listPage: minId =>
+                minId < 65580002
+                    ? Builds((65580001, Previous), (65580002, Current))
+                    : ReplayListing.Empty
+        );
+
+        try
+        {
+            HeroesProfileProvider provider = Standard(root, service);
+
+            Assert.True(await provider.DownloadNextAsync());
+
+            Assert.Equal(65580002, Assert.Single(service.Downloaded));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadNextAsync_ReadsAheadForTheCurrentPatch()
+    {
+        string root = NewRoot();
+        var service = new ListedDownloads(
+            newest: 65581010,
+            listPage: minId =>
+                minId switch
+                {
+                    < 65580001 => Builds((65580001, Previous)),
+                    < 65581001 => Builds((65581001, Current)),
+                    _ => ReplayListing.Empty,
+                }
+        );
+
+        try
+        {
+            HeroesProfileProvider provider = Standard(root, service);
+
+            Assert.True(await provider.DownloadNextAsync());
+
+            Assert.Equal(65581001, Assert.Single(service.Downloaded));
+            Assert.Equal(new[] { 65580000, 65580001 }, service.Listed);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadNextAsync_FallsBackToThePreviousBuildWhenTheCurrentPatchIsNotListed()
+    {
+        string root = NewRoot();
+        var service = new ListedDownloads(
+            newest: 65580010,
+            listPage: minId =>
+                minId < 65580002
+                    ? Builds((65580001, Previous), (65580002, Previous))
+                    : ReplayListing.Empty
+        );
+
+        try
+        {
+            HeroesProfileProvider provider = Standard(root, service);
+
+            Assert.True(await provider.DownloadNextAsync());
+
+            Assert.Equal(65580001, Assert.Single(service.Downloaded));
+            Assert.Equal(new[] { 65580000, 65580002 }, service.Listed);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static HeroesProfileProvider Standard(string root, IHeroesProfileService service)
+    {
+        HeroesProfileProvider provider = Provider(
+            root,
+            service,
+            resume: null,
+            CancellationToken.None,
+            enableRequests: false
+        );
+        provider.UseInstalledVersions(() => new[] { Previous, Current });
+        return provider;
+    }
+
+    private static ReplayListing Builds(params (int Id, string Version)[] rows)
+    {
+        string played = (DateTime.UtcNow - TimeSpan.FromHours(1)).ToString("yyyy-MM-dd HH:mm:ss");
+        var replays = new List<HeroesProfileReplay>();
+        foreach ((int id, string version) in rows)
+        {
+            replays.Add(
+                new HeroesProfileReplay
+                {
+                    Id = id,
+                    GameType = "Storm League",
+                    GameVersion = version,
+                    Map = "Cursed Hollow",
+                    Fingerprint = "abc",
+                    GameDate = played,
+                }
+            );
+        }
+
+        int highest = rows[rows.Length - 1].Id;
+        return new ReplayListing(replays, hadRows: true, highestId: highest, nextAfter: highest);
+    }
+
     private static ReplayListing Replay(int id, DateTime played) =>
         new(
             new[]
@@ -309,7 +431,13 @@ public class HeroesProfileProviderDownloadTests
         public Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId) =>
             throw new NotSupportedException();
 
-        public Task<ReplayListing> ListPageAsync(int minId) => Task.FromResult(listPage(minId));
+        public List<int> Listed { get; } = new();
+
+        public Task<ReplayListing> ListPageAsync(int minId)
+        {
+            Listed.Add(minId);
+            return Task.FromResult(listPage(minId));
+        }
 
         public Task<IReadOnlyList<HeroesProfileReplay>> ListAfterAsync(
             int after,

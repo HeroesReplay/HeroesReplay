@@ -30,6 +30,7 @@ public class HeroesProfileProvider : IReplayProvider
     private LoadedReplay staged;
     private int? heldBackId;
     private int minReplayId;
+    private Func<IReadOnlyList<string>> installedVersionSource;
 
     public bool ContinuesWhenEmpty => true;
 
@@ -108,6 +109,11 @@ public class HeroesProfileProvider : IReplayProvider
         this.heroesProfileService =
             heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
         this.heroesProfileResume = heroesProfileResume;
+    }
+
+    internal void UseInstalledVersions(Func<IReadOnlyList<string>> source)
+    {
+        installedVersionSource = source;
     }
 
     /// <summary>
@@ -556,11 +562,18 @@ public class HeroesProfileProvider : IReplayProvider
         return null;
     }
 
+    /// <summary>
+    /// The next Standard replay on the newest installed client (the current patch). Upload order
+    /// does not follow the client build, so the listing reads ahead to the end of the list for one.
+    /// With none on that build, it falls back to the first replay on an older installed build.
+    /// </summary>
     private async Task<HeroesProfileReplay> ListOnceAsync()
     {
-        IReadOnlyList<string> installed = InstalledClientCatalog.FileVersions(
-            settings.Location?.GameInstallDirectory
-        );
+        IReadOnlyList<string> installed =
+            installedVersionSource != null
+                ? installedVersionSource()
+                : InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory);
+        HeroesProfileReplay fallback = null;
         for (int pageIndex = 0; pageIndex < 40; pageIndex++)
         {
             provider.Token.ThrowIfCancellationRequested();
@@ -569,41 +582,66 @@ public class HeroesProfileProvider : IReplayProvider
                 .ListPageAsync(currentMin)
                 .ConfigureAwait(false);
             ReplayListing launchable = ReplayDownloadPick.Launchable(page, installed);
-            HeroesProfileReplay found = launchable
-                ?.Playable?.Where(replay =>
+            List<HeroesProfileReplay> candidates = launchable
+                .Playable.Where(replay =>
                     replay != null
                     && replay.Id > currentMin
                     && settings.HeroesProfileApi.IsAllowedGameType(replay.GameType)
                 )
                 .OrderBy(replay => replay.Id)
-                .FirstOrDefault();
-            if (found != null && await CatchUpAsync(currentMin, found).ConfigureAwait(false))
+                .ToList();
+            HeroesProfileReplay first = candidates.FirstOrDefault();
+            if (first != null && await CatchUpAsync(currentMin, first).ConfigureAwait(false))
             {
+                fallback = null;
                 continue;
             }
 
+            HeroesProfileReplay found = ReplayDownloadPick.FirstOnCurrentPatch(
+                candidates,
+                installed
+            );
             if (found != null)
             {
-                logger.LogInformation("Replay found. MinReplayId = {MinReplayId}", currentMin);
+                logger.LogInformation(
+                    "Replay {ReplayId} on {GameVersion} found. MinReplayId = {MinReplayId}",
+                    found.Id,
+                    found.GameVersion,
+                    currentMin
+                );
                 MinReplayId = found.Id;
                 return found;
             }
 
-            int? next = ReplayListCursor.AfterRejectedPage(currentMin, launchable);
+            fallback ??= first;
+            int? next = ReplayListCursor.AfterPage(currentMin, launchable);
             if (next is not int advanced)
             {
-                return null;
+                break;
             }
 
             logger.LogInformation(
-                "No playable replay after {MinReplayId}. Continuing after {Next}.",
+                first == null
+                    ? "No playable replay after {MinReplayId}. Continuing after {Next}."
+                    : "No current-patch replay after {MinReplayId}. Continuing after {Next}.",
                 currentMin,
                 advanced
             );
             MinReplayId = advanced;
         }
 
-        return null;
+        if (fallback == null)
+        {
+            return null;
+        }
+
+        logger.LogInformation(
+            "No replay on the current patch is listed. Taking replay {ReplayId} on previous build {GameVersion}.",
+            fallback.Id,
+            fallback.GameVersion
+        );
+        MinReplayId = fallback.Id;
+        return fallback;
     }
 
     /// <summary>
