@@ -98,6 +98,13 @@ internal static class CampCapture
                         continue;
                     }
 
+                    // Only the camp's own units: a lane minion the team killed in the same seconds
+                    // made "Sgt. Hammer captured RangedMinion" (#234).
+                    if (gameData.GetUnitGroup(unit.Name) != Unit.UnitGroup.MercenaryCamp)
+                    {
+                        continue;
+                    }
+
                     bool isBoss = gameData.BossUnits.Contains(unit.Name);
                     if (isBoss != bossesOnly)
                     {

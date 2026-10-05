@@ -88,6 +88,7 @@ public class SpectateFileCommand : Command
             .AddSpectateServices(stop.Token, typeof(ReplayFileProvider), replayPath)
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
+        SpectateReleaseVersion.Write(scope.ServiceProvider);
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
         return await engine.RunAsync() ? 0 : 1;
     }

@@ -44,6 +44,19 @@ public class RoamingCalculator : IFocusCalculator
                     continue;
                 }
 
+                if (
+                    FocusActivity.IdleRemoteBody(
+                        timeline,
+                        heroUnit,
+                        point,
+                        second,
+                        settings.Spectate
+                    )
+                )
+                {
+                    continue;
+                }
+
                 timeline.Offer(
                     now,
                     GetType(),

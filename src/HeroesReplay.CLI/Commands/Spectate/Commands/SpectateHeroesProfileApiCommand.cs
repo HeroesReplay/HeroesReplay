@@ -34,6 +34,7 @@ public class SpectateHeroesProfileApiCommand : Command
             .AddSpectateServices(stop.Token, typeof(ReplayCacheProvider))
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
+        SpectateReleaseVersion.Write(scope.ServiceProvider);
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
         using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
             "spectate",

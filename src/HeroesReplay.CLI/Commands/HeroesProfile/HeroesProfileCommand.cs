@@ -10,5 +10,6 @@ public class HeroesProfileCommand : Command
     {
         Subcommands.Add(new DownloadCommand());
         Subcommands.Add(new PatchIndexCommand());
+        Subcommands.Add(new SampleCommand());
     }
 }

@@ -35,6 +35,18 @@ public class DeathCalculator : IFocusCalculator
                 continue;
             }
 
+            // The game data puts Abathur's Symbiote in the Hero group, and it "dies" with no
+            // killer every time it ends: 61 times in one game, each a 9.5 death on Abathur's body
+            // (#234). Only a hero body (Hero*) dies, and not Ultimate Evolution's copy of another
+            // player's hero.
+            if (
+                !unit.Name.StartsWith("Hero", StringComparison.OrdinalIgnoreCase)
+                || IsCopyOfAnotherPlayersHero(unit, timeline.Replay.Players)
+            )
+            {
+                continue;
+            }
+
             if (unit.PlayerKilledBy != null && unit.PlayerKilledBy != unit.PlayerControlledBy)
             {
                 continue;
@@ -49,5 +61,22 @@ public class DeathCalculator : IFocusCalculator
                 $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name}"
             );
         }
+    }
+
+    private static bool IsCopyOfAnotherPlayersHero(Unit unit, Player[] players)
+    {
+        foreach (Player player in players ?? Array.Empty<Player>())
+        {
+            if (
+                player != unit.PlayerControlledBy
+                && player.HeroUnits?.Count > 0
+                && string.Equals(player.HeroUnits[0].Name, unit.Name, StringComparison.Ordinal)
+            )
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

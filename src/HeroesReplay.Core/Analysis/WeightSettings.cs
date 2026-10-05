@@ -24,6 +24,12 @@ public class WeightSettings
 
     public float MapObjective { get; set; }
 
+    /// <summary>
+    /// A live objective with no fight on it: a hero at a payload, tribute, seed, wave, or boss, or at a
+    /// structure an enemy hero is contesting. Below any fight, above roaming.
+    /// </summary>
+    public float ObjectiveActivity { get; set; } = 6.0f;
+
     public float NearEnemyCore { get; set; }
 
     public float EndingCore { get; set; }
@@ -31,6 +37,12 @@ public class WeightSettings
     public float NearEnemyHero { get; set; }
     public float NearEnemyHeroOffset { get; set; }
     public float NearEnemyHeroDistanceDivisor { get; set; }
+
+    /// <summary>Added to a fight for each hero in it beyond the first two.</summary>
+    public float TeamfightPerHero { get; set; } = 0.17f;
+
+    /// <summary>The most a fight scores, so a death (9.5) or a kill (10) still wins.</summary>
+    public float TeamfightMax { get; set; } = 9.4f;
 
     public float PlayerDeath { get; set; }
     public float PlayerKill { get; set; }
