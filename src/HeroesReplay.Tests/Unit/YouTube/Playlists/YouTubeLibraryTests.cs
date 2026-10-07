@@ -28,6 +28,24 @@ public sealed class YouTubeLibraryTests : IDisposable
 
     private static readonly DateTimeOffset Noon = new(2026, 10, 2, 19, 0, 0, TimeSpan.Zero);
 
+    [Fact]
+    public void LibraryUser_IsAFileNameWithoutAColon()
+    {
+        // The Google token store names a file after this key. "{ChannelId}:library" became an
+        // NTFS stream of the upload token's file, which each upload token refresh deleted.
+        string key = YouTubeLibrary.LibraryUser(
+            new AppSettings
+            {
+                YouTube = new YouTubeSettings { ChannelId = "UCpf5rn5UlJTUZF9n98HXS5A" },
+            }
+        );
+
+        Assert.Equal("UCpf5rn5UlJTUZF9n98HXS5A-library", key);
+        Assert.DoesNotContain(':', key);
+        Assert.Equal(-1, key.IndexOfAny(Path.GetInvalidFileNameChars()));
+        Assert.Equal("heroesreplay-library", YouTubeLibrary.LibraryUser(new AppSettings()));
+    }
+
     private readonly string directory = Path.Combine(
         Path.GetTempPath(),
         "heroesreplay-library-" + Guid.NewGuid().ToString("N")

@@ -271,7 +271,7 @@ public sealed class UploaderPassTests : IDisposable
                 PublicListing = true,
                 Now = DateTimeOffset.UtcNow,
                 Tally = new PublicationTallyReport { Due = 14, StuckPrivate = 14 },
-                LibraryProblem = "no stored consent for UC:library",
+                LibraryProblem = "no stored consent for UC-library",
             }
         );
 

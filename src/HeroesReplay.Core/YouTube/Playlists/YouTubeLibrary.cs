@@ -56,7 +56,7 @@ public interface IYouTubeLibrary
 
     /// <summary>
     /// The uploader's own pass. <paramref name="startup"/> runs it whatever the last pass time
-    /// was. It never asks for consent: with no stored <c>{ChannelId}:library</c> consent it is
+    /// was. It never asks for consent: with no stored <c>{ChannelId}-library</c> consent it is
     /// skipped, because a background process must not open a browser on the stream PC.
     /// </summary>
     Task<YouTubeLibraryPass> RunInBackgroundAsync(
@@ -272,11 +272,16 @@ public class YouTubeLibrary : IYouTubeLibrary
         return pass;
     }
 
-    /// <summary>The token store key of the library consent: <c>{ChannelId}:library</c>.</summary>
+    /// <summary>
+    /// The token store key of the library consent: <c>{ChannelId}-library</c>. The key is part of
+    /// a file name, so it must not hold a colon: the earlier <c>{ChannelId}:library</c> became an NTFS
+    /// alternate data stream of the upload token's file, and every upload token refresh rewrote
+    /// that file and deleted the consent (production, 2026-10-07).
+    /// </summary>
     public static string LibraryUser(AppSettings settings) =>
         string.IsNullOrWhiteSpace(settings?.YouTube?.ChannelId)
             ? "heroesreplay-library"
-            : settings.YouTube.ChannelId + ":library";
+            : settings.YouTube.ChannelId + "-library";
 
     private YouTubeLibraryPass Skip(
         string code,
