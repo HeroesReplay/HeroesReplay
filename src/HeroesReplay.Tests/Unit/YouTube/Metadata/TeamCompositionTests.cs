@@ -32,6 +32,17 @@ public class TeamCompositionTests
             "SoloLaner"
         ),
         Hero("Hogger", HeroDraft.Bruiser, true, 7, 7),
+        Hero("Varian", HeroDraft.Bruiser, true, 6, 6, "Ganker", "RoleAutoAttacker", "RoleTank"),
+        Hero(
+            "Zarya",
+            HeroDraft.Support,
+            false,
+            5,
+            8,
+            "ChanneledAutoAttacker",
+            "Helper",
+            "RoleTank"
+        ),
         Hero("Rehgar", HeroDraft.Healer, true, 5, 7, "AllyHealer", "Escaper", "SelfHealer"),
         Hero("Anduin", HeroDraft.Healer, false, 2, 4, "AllyHealer", "Helper", "SelfHealer"),
         Hero("Lt. Morales", HeroDraft.Healer, false, 3, 4, "AllyHealer", "Helper"),
@@ -229,11 +240,56 @@ public class TeamCompositionTests
     }
 
     [Fact]
-    public void Sustain_CountsTheHealerAndSelfHealers()
+    public void Sustain_DoesNotCountSelfHealingTanksAndBruisers()
     {
-        Assert.Equal(
-            new[] { "Triple sustain" },
+        // Issue #247: Battlefield of Eternity 65719290 titled "Blue triple sustain". E.T.C. and
+        // Yrel are SelfHealer, Lt. Morales is the only hero who heals allies.
+        string[] blue = { "E.T.C.", "Yrel", "Jaina", "Valla", "Lt. Morales" };
+        Assert.DoesNotContain("Triple sustain", Labels(blue));
+        Assert.DoesNotContain(
+            "Triple sustain",
             Labels("E.T.C.", "Yrel", "Rehgar", "Valla", "Raynor")
+        );
+        Assert.DoesNotContain(
+            "Triple sustain",
+            Labels("Varian", "Sonya", "Li-Ming", "Nazeebo", "Anduin")
+        );
+    }
+
+    [Fact]
+    public void Sustain_CountsHeroesThatHealOrShieldAllies()
+    {
+        Assert.Contains("Triple sustain", Labels("Johanna", "Zarya", "Rehgar", "Anduin", "Valla"));
+        Assert.Contains(
+            "Triple sustain",
+            Labels("Johanna", "Rehgar", "Anduin", "Lt. Morales", "Valla")
+        );
+        Assert.DoesNotContain(
+            "Triple sustain",
+            Labels("Johanna", "Zarya", "Rehgar", "Valla", "Raynor")
+        );
+        Assert.DoesNotContain(
+            "Triple sustain",
+            Labels(NoOverrides(), "Johanna", "Zarya", "Rehgar", "Anduin", "Valla")
+        );
+    }
+
+    [Fact]
+    public void Sustain_CountsTheHealerRoleWithoutTheAllyHealerTag()
+    {
+        IReadOnlyList<Hero> catalog = Catalog
+            .Select(hero =>
+                hero.Name == "Anduin"
+                    ? Hero("Anduin", HeroDraft.Healer, false, 2, 4, "Helper", "SelfHealer")
+                    : hero
+            )
+            .ToArray();
+
+        Assert.Contains(
+            "Triple sustain",
+            TeamComposition
+                .Labels(catalog, Team(0, "Johanna", "Zarya", "Rehgar", "Anduin", "Valla"), 0)
+                .Select(label => label.Text)
         );
     }
 

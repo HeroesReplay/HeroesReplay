@@ -185,7 +185,7 @@ A team can also get a composition label (issue #140). The rules read the heroes-
 | Double melee assassin | `MeleeAssassins` | 2 or more Melee Assassins. Three is `Triple melee assassin` | 2.7% |
 | All melee | `AllMelee` | 5 melee heroes | 0% |
 | One ranged | `OneRanged` | 4 melee heroes | 6.4% |
-| Triple sustain | `Sustain` | 3 or more heroes that are `AllyHealer` or `SelfHealer`, the healer included | 2.4% |
+| Triple sustain | `Sustain` | 3 or more heroes that heal or shield allies: the Healer role, `AllyHealer`, or `AllySustain` (Zarya). A `SelfHealer` tank or bruiser (E.T.C., Yrel) does not count (issue #247) | 2.4% |
 | Triple specialist | `Specialists` | 3 or more `RoleSpecialist` heroes | 1.0% |
 | Merc control | `MercControl` | 2 or more `MercKiller` heroes | 7.1% |
 | Glass cannon | `GlassCannon` | Average survivability 4.4 or less and average damage 7 or more | 1.0% |
@@ -202,6 +202,7 @@ The corpus is 295 Storm League games on build 2.57.0.98304, replay ids 65635951 
 | The Lost Vikings | Add `RoleSpecialist`, `SoloLaner`, `WaveClearer` | No playstyles in the catalog. The three Vikings soak lanes apart. |
 | Maiev | Add `Escaper`, `Ganker` | No playstyles in the catalog. Tagged like Illidan and Zeratul. |
 | Abathur | `IsMelee` false | His 1-range attack makes him melee in the catalog, but he plays from behind the wall. He was in 13 of the 31 corpus teams with four melee heroes. |
+| Zarya | Add `AllySustain` | A support with no `AllyHealer` tag. Shield Ally keeps allies alive, so she counts toward Triple sustain. |
 
 `YouTube:Titles:Compositions` holds `Enabled` (true), `MaxFrequency`, one rule per label (`Enabled`, `Label`, `MinHeroes`, and `MinEscapers` for Dive, or `MaxSurvivability` and `MinDamage` for Glass cannon), `Frequencies`, and `HeroTagOverrides` (`Add`, `Remove`, `IsMelee`, and an unused `Reason`). A configured key replaces that one default. A key missing from `Frequencies` counts as rare.
 
