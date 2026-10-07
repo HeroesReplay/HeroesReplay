@@ -117,6 +117,69 @@ public class ReplayLoadCueTests
     }
 
     [Fact]
+    public void PresentedInMemory_MatchWithNoClock_IsTheReplayOnScreen()
+    {
+        // #249: memory said Match (menu seen True), the clock did not read, and the launch
+        // waited for a menu. A match in memory is the replay, with or without a clock read.
+        var match = new LoadingScreenSample(ClientScreen.Match, MenuSeen: true, "match");
+
+        Assert.True(ReplayLoadCue.PresentedInMemory(clockRunning: false, match));
+    }
+
+    [Fact]
+    public void PresentedInMemory_RunningClockDecidesWithoutTheScreen()
+    {
+        Assert.True(ReplayLoadCue.PresentedInMemory(clockRunning: true, screen: null));
+        Assert.True(
+            ReplayLoadCue.PresentedInMemory(
+                clockRunning: true,
+                new LoadingScreenSample(ClientScreen.Menu, MenuSeen: true, "menu")
+            )
+        );
+    }
+
+    [Fact]
+    public void PresentedInMemory_MenuIsNotPresented_AndUnknownReadsTheScreen()
+    {
+        Assert.False(
+            ReplayLoadCue.PresentedInMemory(
+                clockRunning: false,
+                new LoadingScreenSample(ClientScreen.Menu, MenuSeen: true, "menu")
+            )
+        );
+        Assert.True(
+            ReplayLoadCue.PresentedInMemory(
+                clockRunning: false,
+                new LoadingScreenSample(ClientScreen.Loading, MenuSeen: true, "loading")
+            )
+        );
+        Assert.Null(ReplayLoadCue.PresentedInMemory(clockRunning: false, screen: null));
+        Assert.Null(
+            ReplayLoadCue.PresentedInMemory(
+                clockRunning: false,
+                new LoadingScreenSample(ClientScreen.Loading, MenuSeen: false, "loading")
+            )
+        );
+        Assert.Null(
+            ReplayLoadCue.PresentedInMemory(
+                clockRunning: false,
+                new LoadingScreenSample(ClientScreen.Unknown, MenuSeen: true, "no-state")
+            )
+        );
+    }
+
+    [Fact]
+    public void PresentedInMemory_MatchBeforeAnyMenu_LeavesItToTheClockAndOcr()
+    {
+        Assert.Null(
+            ReplayLoadCue.PresentedInMemory(
+                clockRunning: false,
+                new LoadingScreenSample(ClientScreen.Match, MenuSeen: false, "match")
+            )
+        );
+    }
+
+    [Fact]
     public void SeesLoadingScreen_MatchesAHeroOrPlayerOnTheLoadingScreen()
     {
         Assert.True(

@@ -43,7 +43,7 @@ public sealed class ServiceRoleRestarts
     public List<DateTimeOffset> Recent { get; set; } = new();
     public DateTimeOffset? LastRestartAt { get; set; }
 
-    /// <summary><c>failed</c> or <c>stale</c>: why the last restart happened.</summary>
+    /// <summary><c>failed</c>, <c>stale</c>, or <c>launch_stalled</c>: why the last restart happened.</summary>
     public string LastReason { get; set; }
 
     /// <summary>Why the last attempt did not get ready. Null when it did.</summary>
@@ -64,12 +64,16 @@ public sealed class ServiceRoleRestarts
 /// backoff for the restarts already in the window (10 s, 30 s, 2 min, 5 min by default). A role
 /// stale past <see cref="ServiceRestartSettings.StaleRestartAfter"/> is killed first. When the
 /// window already holds the whole budget, the role stays down. Ready, degraded, and stopped roles
-/// are left alone; a stop request is the caller's to check before any restart.
+/// are left alone, except a spectate launch that stalled, which is killed like a stale role
+/// while the budget has room. A stop request is the caller's to check before any restart.
 /// </summary>
 public static class ServiceRestartPolicy
 {
     public const string FailedReason = "failed";
     public const string StaleReason = "stale";
+
+    /// <summary>A spectate launch with no match progress past its threshold.</summary>
+    public const string StalledReason = "launch_stalled";
 
     public static ServiceRestartAction Decide(
         ServiceRoleHealth health,
@@ -125,6 +129,23 @@ public static class ServiceRestartPolicy
                 }
 
                 ledger.DownReason = StaleReason;
+                ledger.DownCause = health.Cause;
+                return ServiceRestartAction.Kill;
+
+            // Degraded is left alone, except a spectate launch that stalled: it heartbeats, so
+            // only this restarts it (#249). The kill makes it failed, and the failed role
+            // restarts after its backoff against the same budget.
+            case ServiceRoleState.Degraded
+                when health.CauseCode == ServiceHealthCodes.SpectateLaunchStalled:
+                ledger.StaleSince = null;
+                if (ledger.Recent.Count >= settings.Limit)
+                {
+                    // No budget left to start it again. A stalled spectate that stays up is
+                    // better than one killed for good, so it is left degraded.
+                    return ServiceRestartAction.None;
+                }
+
+                ledger.DownReason = StalledReason;
                 ledger.DownCause = health.Cause;
                 return ServiceRestartAction.Kill;
 

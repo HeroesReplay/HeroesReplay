@@ -221,6 +221,50 @@ public class ServiceHeartbeatTests
     }
 
     [Fact]
+    public void LaunchPhase_IsWrittenAndEndsOnMatchProgressTheReportOrTheSessionEnd()
+    {
+        string root = TempDir();
+        var clock = new FakeClock(Start);
+        try
+        {
+            using var heartbeat = new ServiceHeartbeat(
+                Identity("spectate", "beat7"),
+                TimeSpan.FromHours(1),
+                clock,
+                root
+            );
+            heartbeat.Start(CancellationToken.None);
+            Assert.Null(heartbeat.Snapshot().LaunchingSince);
+
+            clock.Now = Start.AddMinutes(1);
+            heartbeat.Launching();
+            heartbeat.Beat();
+            Assert.Equal(Start.AddMinutes(1), Read("spectate", "beat7", root).LaunchingSince);
+
+            // Game data still downloading starts the phase over.
+            clock.Now = Start.AddMinutes(5);
+            heartbeat.Launching();
+            Assert.Equal(Start.AddMinutes(5), heartbeat.Snapshot().LaunchingSince);
+
+            heartbeat.Work();
+            Assert.Null(heartbeat.Snapshot().LaunchingSince);
+
+            heartbeat.Launching();
+            heartbeat.LaunchEnded();
+            Assert.Null(heartbeat.Snapshot().LaunchingSince);
+
+            heartbeat.Launching();
+            heartbeat.Session(matchProgress: false, "BuildNotInstalled");
+            Assert.Null(heartbeat.Snapshot().LaunchingSince);
+            Assert.Equal(1, heartbeat.Snapshot().SessionsWithoutProgress);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void LoggerProvider_PassesErrorsAndCriticalsOnly()
     {
         string recorded = null;

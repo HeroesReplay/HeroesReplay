@@ -135,6 +135,45 @@ public class LoadingScreenMemoryTests
         Assert.Null(sample.MapLoading);
     }
 
+    [Fact]
+    public void InMatch_OnlyAfterThisProcessShowedAMenu()
+    {
+        // #249: memory said Match (menu seen) while the launch waited for a menu. A match after
+        // the menu is the replay on screen. Before any menu, memory does not call it a match.
+        FakeClient client = FakeClient.WithSites(3);
+        using var memory = new LoadingScreenMemory();
+        StableClockModule module = Module(47);
+
+        client.EnterMatch();
+        LoadingScreenSample beforeMenu = memory.Read(module, client.Read);
+        client.ShowScreen(loading: false);
+        LoadingScreenSample home = memory.Read(module, client.Read);
+        client.EnterMatch();
+        LoadingScreenSample match = memory.Read(module, client.Read);
+
+        Assert.Equal(ClientScreen.Match, beforeMenu.Screen);
+        Assert.False(beforeMenu.InMatch);
+        Assert.False(home.InMatch);
+        Assert.True(match.InMatch);
+        Assert.False(match.OnMenu);
+    }
+
+    [Fact]
+    public void Read_RelaunchWithTheSamePid_MustShowAMenuAgain()
+    {
+        FakeClient client = FakeClient.WithSites(3);
+        using var memory = new LoadingScreenMemory();
+        StableClockModule first = Module(48) with { StartedAt = 1000 };
+        client.ShowScreen(loading: false);
+        Assert.True(memory.Read(first, client.Read).MenuSeen);
+
+        client.EnterMatch();
+        LoadingScreenSample relaunched = memory.Read(first with { StartedAt = 2000 }, client.Read);
+
+        Assert.False(relaunched.MenuSeen);
+        Assert.False(relaunched.InMatch);
+    }
+
     private static StableClockModule Module(int pid) =>
         new(pid, ModuleBase, ModuleSize, "2.57.0.98304");
 

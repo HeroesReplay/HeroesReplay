@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using HeroesReplay.Core.GameClient;
 using Xunit;
@@ -133,6 +134,123 @@ public class ReplayClientRouteTests
                 RunningClientBuild.Matches,
                 homeScreen: true,
                 replayPresented: false
+            )
+        );
+    }
+
+    [Theory]
+    [InlineData(ReplayClientPatch.Current)]
+    [InlineData(ReplayClientPatch.Previous)]
+    public void Decide_PreloadedReplayAlreadyPlaying_IsANormalStart(ReplayClientPatch patch)
+    {
+        // #249 points 4 and 5: the report opened the next replay and its loading screen was
+        // missed. A match on screen (memory or clock) starts the session on either patch.
+        Assert.Equal(
+            ReplayLaunchAuth.AlreadyInMatch,
+            ReplayClientRoute.Decide(
+                patch,
+                RunningClientBuild.Matches,
+                homeScreen: false,
+                replayPresented: true
+            )
+        );
+    }
+
+    [Fact]
+    public void Decide_MatchingClientWithNothingOnScreen_StillWaits()
+    {
+        Assert.Equal(
+            ReplayLaunchAuth.Wait,
+            ReplayClientRoute.Decide(
+                ReplayClientPatch.Current,
+                RunningClientBuild.Matches,
+                homeScreen: false,
+                replayPresented: false
+            )
+        );
+    }
+
+    [Fact]
+    public void Decide_AnotherReplayPlaying_IsNotThisReplaysMatch()
+    {
+        Assert.Equal(
+            ReplayLaunchAuth.RelaunchCurrent,
+            ReplayClientRoute.Decide(
+                ReplayClientPatch.Current,
+                RunningClientBuild.Matches,
+                homeScreen: false,
+                replayPresented: true,
+                otherReplayOnClient: true
+            )
+        );
+        Assert.Equal(
+            ReplayLaunchAuth.OpenMatchingBuild,
+            ReplayClientRoute.Decide(
+                ReplayClientPatch.Previous,
+                RunningClientBuild.Matches,
+                homeScreen: false,
+                replayPresented: true,
+                otherReplayOnClient: true
+            )
+        );
+    }
+
+    [Fact]
+    public void OtherReplayOnClient_OnlyWhenThisSpectatorOpenedADifferentFile()
+    {
+        const string replay = @"C:\heroesreplay\Data\Standard\65785422.StormReplay";
+        const string other = @"C:\heroesreplay\Data\Standard\65783604.StormReplay";
+
+        Assert.False(ReplayClientRoute.OtherReplayOnClient(null, replay));
+        Assert.False(ReplayClientRoute.OtherReplayOnClient(replay, replay));
+        Assert.False(ReplayClientRoute.OtherReplayOnClient(replay.ToUpperInvariant(), replay));
+        Assert.True(ReplayClientRoute.OtherReplayOnClient(other, replay));
+    }
+
+    [Theory]
+    [InlineData(ReplayClientPatch.Current, LaunchWaitAction.RelaunchCurrent)]
+    [InlineData(ReplayClientPatch.Previous, LaunchWaitAction.ReopenThroughSwitcher)]
+    public void DecideStuckWait_TimesOutIntoOneRecoveryByPatch(
+        ReplayClientPatch patch,
+        LaunchWaitAction recovery
+    )
+    {
+        TimeSpan limit = TimeSpan.FromMinutes(3);
+
+        Assert.Equal(
+            LaunchWaitAction.KeepWaiting,
+            ReplayClientRoute.DecideStuckWait(patch, TimeSpan.FromSeconds(179), limit, 0)
+        );
+        Assert.Equal(
+            recovery,
+            ReplayClientRoute.DecideStuckWait(patch, TimeSpan.FromMinutes(3), limit, 0)
+        );
+        Assert.Equal(
+            LaunchWaitAction.GiveUp,
+            ReplayClientRoute.DecideStuckWait(patch, TimeSpan.FromMinutes(3), limit, 1)
+        );
+    }
+
+    [Fact]
+    public void DecideStuckWait_NeverWaitsForever()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(3), ReplayClientRoute.DefaultLaunchWaitLimit);
+        Assert.Equal(
+            LaunchWaitAction.RelaunchCurrent,
+            ReplayClientRoute.DecideStuckWait(
+                ReplayClientPatch.Current,
+                TimeSpan.FromMinutes(3),
+                TimeSpan.Zero,
+                0
+            )
+        );
+        Assert.Equal(
+            LaunchWaitAction.GiveUp,
+            ReplayClientRoute.DecideStuckWait(
+                ReplayClientPatch.NotInstalled,
+                TimeSpan.FromHours(1),
+                TimeSpan.FromMinutes(3),
+                0
             )
         );
     }

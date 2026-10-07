@@ -335,12 +335,26 @@ public sealed class ServiceSupervision
 
     private void KillStale(string role, ServiceProcessRecord record, ServiceRoleHealth health)
     {
-        Logger.LogWarning(
-            "{Role} is stale: {Cause} Killing pid {Pid}; it restarts after its backoff.",
-            role,
-            health.Cause,
-            record.Pid
-        );
+        if (health.CauseCode == ServiceHealthCodes.SpectateLaunchStalled)
+        {
+            Logger.LogWarning(
+                "{Role} made no match progress while launching [{Code}]: {Cause} Killing pid {Pid}; it restarts after its backoff.",
+                role,
+                health.CauseCode,
+                health.Cause,
+                record.Pid
+            );
+        }
+        else
+        {
+            Logger.LogWarning(
+                "{Role} is stale: {Cause} Killing pid {Pid}; it restarts after its backoff.",
+                role,
+                health.Cause,
+                record.Pid
+            );
+        }
+
         try
         {
             if (Kill == null)

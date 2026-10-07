@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace HeroesReplay.Core.Spectating.Clock;
 
@@ -13,12 +14,32 @@ public readonly record struct StableClockSample(
     double Seconds
 );
 
+/// <summary>
+/// One client process as the memory readers see it. <paramref name="StartedAt"/> (UTC ticks, 0
+/// when it cannot be read) tells a relaunch apart from the same process even if Windows hands
+/// the new client the old pid and the same image base, so every per-process cache resets.
+/// </summary>
 internal readonly record struct StableClockModule(
     int ProcessId,
     long BaseAddress,
     long Size,
-    string FileVersion
-);
+    string FileVersion,
+    long StartedAt = 0
+)
+{
+    /// <summary>The process start time in UTC ticks, or 0 when Windows does not give it.</summary>
+    public static long StartTicks(Process process)
+    {
+        try
+        {
+            return process?.StartTime.ToUniversalTime().Ticks ?? 0;
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+}
 
 /// <summary>
 /// Read-only match clock. Pattern discovery runs once per process module on every client build.
@@ -34,6 +55,7 @@ public sealed class StableMatchClock : IDisposable
     private int attachedPid;
     private bool fingerprintSet;
     private int pid;
+    private long startedAt;
     private long moduleBase;
     private long moduleSize;
     private string version = "";
@@ -44,6 +66,7 @@ public sealed class StableMatchClock : IDisposable
     private bool hasSample;
     private int lastTicks;
     private float lastScale;
+    private DateTimeOffset lastSampleAt;
     private double lastOkSeconds = double.NaN;
     private DateTimeOffset lastOkChange;
     private DateTimeOffset rediscoverAt;
@@ -210,6 +233,43 @@ public sealed class StableMatchClock : IDisposable
         return first.HasValue && second.HasValue && second.Value > first.Value;
     }
 
+    /// <summary>
+    /// The reasons a read gives while a found cell is not confirmed yet. One more read
+    /// <see cref="RunningProbe"/> later confirms a cell that is really the clock.
+    /// </summary>
+    public static bool StillConfirming(string reason) => reason is "confirming" or "incoherent";
+
+    /// <summary>
+    /// The running match clock from one probe: two reads <see cref="RunningProbe"/> apart that
+    /// move forward. A read that is still confirming a fresh cell (a relaunched client) gets one
+    /// more read first, so a caller that probes only every 30 s still locks the clock. Any other
+    /// miss (the menu's zero, a stalled or unsupported clock) answers at once.
+    /// </summary>
+    public static async Task<TimeSpan?> ReadRunningAsync(
+        Func<StableClockSample> read,
+        Func<Task> pause
+    )
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(pause);
+        StableClockSample first = read();
+        if (!first.Ok && StillConfirming(first.Reason))
+        {
+            await pause().ConfigureAwait(false);
+            first = read();
+        }
+
+        if (!first.Ok)
+        {
+            return null;
+        }
+
+        await pause().ConfigureAwait(false);
+        StableClockSample second = read();
+        TimeSpan? running = second.Ok ? TimeSpan.FromSeconds(second.Seconds) : null;
+        return IsRunning(TimeSpan.FromSeconds(first.Seconds), running) ? running : null;
+    }
+
     public static bool StartedOver(double previousSeconds, double seconds)
     {
         return !double.IsNaN(previousSeconds) && seconds < previousSeconds - 5;
@@ -250,6 +310,7 @@ public sealed class StableMatchClock : IDisposable
         if (
             fingerprintSet
             && pid == module.ProcessId
+            && startedAt == module.StartedAt
             && moduleBase == module.BaseAddress
             && moduleSize == module.Size
             && string.Equals(version, fileVersion, StringComparison.Ordinal)
@@ -258,8 +319,11 @@ public sealed class StableMatchClock : IDisposable
             return;
         }
 
+        // A new client process: the located cell, the confirmation sample, and the stall
+        // baseline all belong to the old one (#249: the last match's frozen clock).
         fingerprintSet = true;
         pid = module.ProcessId;
+        startedAt = module.StartedAt;
         moduleBase = module.BaseAddress;
         moduleSize = module.Size;
         version = fileVersion;
@@ -273,6 +337,7 @@ public sealed class StableMatchClock : IDisposable
         hasSample = false;
         lastTicks = 0;
         lastScale = 0;
+        lastSampleAt = default;
         BeginMatch();
     }
 
@@ -287,6 +352,7 @@ public sealed class StableMatchClock : IDisposable
         hasSample = false;
         lastTicks = 0;
         lastScale = 0;
+        lastSampleAt = default;
 
         bool agreed = TryLocateByPattern(
             read,
@@ -330,20 +396,24 @@ public sealed class StableMatchClock : IDisposable
 
     private bool TryConfirm(int ticks, float scale, double seconds, out string reason)
     {
+        DateTimeOffset now = UtcNow();
         if (!hasSample)
         {
             hasSample = true;
             lastTicks = ticks;
             lastScale = scale;
+            lastSampleAt = now;
             reason = "confirming";
             return false;
         }
 
         double delta = seconds - (lastTicks * (double)lastScale);
         bool sameScale = SameScale(scale, lastScale);
+        TimeSpan sinceSample = now - lastSampleAt;
         lastTicks = ticks;
         lastScale = scale;
-        if (!sameScale || delta < 0 || delta > MaxCoherentStepSeconds)
+        lastSampleAt = now;
+        if (!sameScale || !CoherentStep(delta, sinceSample))
         {
             reason = "incoherent";
             return false;
@@ -358,6 +428,24 @@ public sealed class StableMatchClock : IDisposable
         located = true;
         reason = "ok";
         return true;
+    }
+
+    /// <summary>
+    /// A real match clock moves forward by about the wall time between two reads, never more.
+    /// The step allowed is <see cref="MaxCoherentStepSeconds"/> on top of that wall time. A fixed
+    /// eight seconds broke when the caller read slowly: the launch wait reads once per pass, and
+    /// a pass with OCR on a hung window took 30 s or more, so every pass was "incoherent" and the
+    /// clock never locked on a relaunched client (#249).
+    /// </summary>
+    public static bool CoherentStep(double deltaSeconds, TimeSpan sinceLastSample)
+    {
+        if (double.IsNaN(deltaSeconds) || deltaSeconds < 0)
+        {
+            return false;
+        }
+
+        double wall = Math.Max(0, sinceLastSample.TotalSeconds);
+        return deltaSeconds <= MaxCoherentStepSeconds + wall;
     }
 
     private static bool SameScale(float left, float right)
@@ -420,7 +508,13 @@ public sealed class StableMatchClock : IDisposable
                 return false;
             }
 
-            module = new StableClockModule(nextPid, baseAddress, size, fileVersion);
+            module = new StableClockModule(
+                nextPid,
+                baseAddress,
+                size,
+                fileVersion,
+                StableClockModule.StartTicks(process)
+            );
             return true;
         }
         catch
@@ -569,6 +663,7 @@ public sealed class StableMatchClock : IDisposable
     {
         fingerprintSet = false;
         pid = 0;
+        startedAt = 0;
         moduleBase = 0;
         moduleSize = 0;
         version = "";
@@ -580,6 +675,7 @@ public sealed class StableMatchClock : IDisposable
         hasSample = false;
         lastTicks = 0;
         lastScale = 0;
+        lastSampleAt = default;
         lastOkSeconds = double.NaN;
         lastOkChange = default;
         attachReason = "no-process";

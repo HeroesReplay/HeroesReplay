@@ -47,6 +47,13 @@ public static class ServiceHealthCodes
     /// </summary>
     public const string SpectateNoMatchProgress = "spectate.no_match_progress";
 
+    /// <summary>
+    /// The cause of a degraded spectate role that the supervisor restarts: one replay's launch
+    /// and loading phase went past <c>ServiceHealth:SpectateLaunchStallThreshold</c> without
+    /// match progress (#249).
+    /// </summary>
+    public const string SpectateLaunchStalled = "spectate.launch_stalled";
+
     public static string For(ServiceRoleState state) =>
         state switch
         {
@@ -100,6 +107,9 @@ public sealed record ServiceRoleHealth
 
     /// <summary>Spectate: how the last replay session ended.</summary>
     public string LastOutcome { get; init; }
+
+    /// <summary>Spectate: when the current launch and loading phase began. Null outside it.</summary>
+    public DateTimeOffset? LaunchingSince { get; init; }
 
     /// <summary>Spectate: replay sessions this process ended, by outcome.</summary>
     public IReadOnlyDictionary<string, int> SessionOutcomes { get; init; }

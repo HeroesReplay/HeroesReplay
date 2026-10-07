@@ -106,6 +106,36 @@ public sealed class ServiceHeartbeat : IDisposable
     /// <summary>The running role hit an error. No-op outside a service role.</summary>
     public static void RecordError(string message) => Volatile.Read(ref current)?.Error(message);
 
+    /// <summary>
+    /// Spectate is launching or loading a replay, or its client is still busy with game data.
+    /// No-op outside a service role. See <see cref="Launching"/>.
+    /// </summary>
+    public static void RecordLaunching() => Volatile.Read(ref current)?.Launching();
+
+    /// <summary>Spectate left its launch phase (the report). No-op outside a service role.</summary>
+    public static void RecordLaunchEnded() => Volatile.Read(ref current)?.LaunchEnded();
+
+    /// <summary>
+    /// The launch phase starts now, or starts over: a client that is still downloading or
+    /// preparing game data is at work, so its wait does not count toward a stalled launch.
+    /// </summary>
+    public void Launching()
+    {
+        lock (gate)
+        {
+            report.LaunchingSince = time.GetUtcNow();
+        }
+    }
+
+    /// <summary>The launch phase is over: the match clock moved, the report began, or the session ended.</summary>
+    public void LaunchEnded()
+    {
+        lock (gate)
+        {
+            report.LaunchingSince = null;
+        }
+    }
+
     /// <summary>Writes the ready file, the first heartbeat, then one every interval.</summary>
     public void Start(CancellationToken stop)
     {
@@ -121,12 +151,13 @@ public sealed class ServiceHeartbeat : IDisposable
         stopRegistration = stop.Register(MarkStopping);
     }
 
-    /// <summary>Work also ends a run of spectate sessions without match progress.</summary>
+    /// <summary>Work also ends a run of spectate sessions without match progress, and the launch phase.</summary>
     public void Work()
     {
         lock (gate)
         {
             report.LastSuccessfulWorkAt = time.GetUtcNow();
+            report.LaunchingSince = null;
             if (report.SessionsWithoutProgress != null)
             {
                 report.SessionsWithoutProgress = 0;
@@ -145,6 +176,7 @@ public sealed class ServiceHeartbeat : IDisposable
         lock (gate)
         {
             report.LastOutcome = string.IsNullOrWhiteSpace(outcome) ? null : outcome;
+            report.LaunchingSince = null;
             report.SessionOutcomes ??= new Dictionary<string, int>(StringComparer.Ordinal);
             string key = report.LastOutcome ?? "None";
             report.SessionOutcomes[key] = report.SessionOutcomes.GetValueOrDefault(key) + 1;
@@ -231,6 +263,7 @@ public sealed class ServiceHeartbeat : IDisposable
                     report.SessionOutcomes == null
                         ? null
                         : new Dictionary<string, int>(report.SessionOutcomes),
+                LaunchingSince = report.LaunchingSince,
             };
         }
     }
