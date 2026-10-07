@@ -20,7 +20,7 @@ The operating model (who owns what, collection updates, validation codes and fix
 
 One TCP session per replay:
 
-1. `BeginSession()` → update the installed collection paths, then `ConnectAsync` and wait until `IsIdentified` (timeout 10s).
+1. `BeginSession()` → update the installed collection paths, then `ConnectAsync` and wait until `IsIdentified` (timeout 10s). When HeroesReplay just started OBS itself (launched with `--disable-shutdown-check`, so no Safe Mode prompt), the identify is retried until `OBS:StartupIdentifyTimeout` (60 s). A `BeginSession` that still fails is a warning in `GameManager`: the replay is spectated without OBS, and `ObsController` skips scene, info, and recording calls until `EndSession` (`docs/obs-operations.md`, Launching OBS).
 2. Configure sources, set program scene, start/stop record, cycle report scenes.
 3. `EndSession()` → `Disconnect` in `finally`.
 
@@ -28,7 +28,7 @@ Do not connect, send one request, disconnect. (The read-only MCP tools below are
 
 ## Profile and scene collection
 
-Names come from `OBS:ProfileName` and `OBS:SceneCollectionName` (default `HeroesReplay`): the launch arguments (`--profile`, `--collection`), the live collection file `scenes\{name}.json`, and the profile folder `profiles\{name}`. Before every `StartStream` (before the waiting scene is selected) and every `StartRecord` (before a foreign recording is stopped), the coordinator calls `GetProfileList` → `currentProfileName` and `GetSceneCollectionList` → `currentSceneCollectionName` (obs-websocket-dotnet `GetProfileList()` and `GetCurrentSceneCollection()`). `ObsSelection.Check` compares them exactly. A mismatch or an unreadable answer fails closed with `ObsOutputFailure.SelectionMismatch` and a stable reason: `obs.profile_mismatch`, `obs.collection_mismatch`, or `obs.selection_unreadable`. The error is logged once per change, and `status.json` has `obsStreamBlockedBy` / `obsRecordBlockedBy`. `check obs` runs the same check.
+Names come from `OBS:ProfileName` and `OBS:SceneCollectionName` (default `HeroesReplay`): the launch arguments (`--profile`, `--collection`, plus `--disable-shutdown-check`), the live collection file `scenes\{name}.json`, and the profile folder `profiles\{name}`. Before every `StartStream` (before the waiting scene is selected) and every `StartRecord` (before a foreign recording is stopped), the coordinator calls `GetProfileList` → `currentProfileName` and `GetSceneCollectionList` → `currentSceneCollectionName` (obs-websocket-dotnet `GetProfileList()` and `GetCurrentSceneCollection()`). `ObsSelection.Check` compares them exactly. A mismatch or an unreadable answer fails closed with `ObsOutputFailure.SelectionMismatch` and a stable reason: `obs.profile_mismatch`, `obs.collection_mismatch`, or `obs.selection_unreadable`. The error is logged once per change, and `status.json` has `obsStreamBlockedBy` / `obsRecordBlockedBy`. `check obs` runs the same check.
 
 ## Agent inspection (read-only MCP)
 

@@ -118,6 +118,7 @@ public class GameManager : IGameManager
         CapRecordingToPublication(loadedReplay, preLaunch);
         await contextSetter.SetContextAsync(loadedReplay);
         bool obsSession = false;
+        bool obsBegun = false;
         bool enteredMatch = false;
         statusStore.Patch(status => ShowLoading(status, loadedReplay, context.Current));
         // The launch and loading phase starts. Match progress, the report, or the end of the
@@ -148,10 +149,12 @@ public class GameManager : IGameManager
                 spectator.RecordHold(hold);
                 if (settings.OBS.Enabled)
                 {
-                    obsController.BeginSession();
-                    obsSession = true;
-                    statusStore.Patch(status => status.ObsSession = true);
-                    obsController.ConfigureFromContext();
+                    obsBegun = true;
+                    obsSession = BeginObsSession(loadedReplay);
+                    if (obsSession)
+                    {
+                        obsController.ConfigureFromContext();
+                    }
                 }
 
                 enteredMatch = true;
@@ -161,11 +164,13 @@ public class GameManager : IGameManager
                 RememberInterfaceBuild();
                 if (settings.OBS.Enabled)
                 {
-                    obsController.BeginSession();
-                    obsSession = true;
-                    statusStore.Patch(status => status.ObsSession = true);
-                    obsController.ConfigureFromContext();
-                    await StartRecordingWhenMatchIsVisible(loadedReplay).ConfigureAwait(false);
+                    obsBegun = true;
+                    obsSession = BeginObsSession(loadedReplay);
+                    if (obsSession)
+                    {
+                        obsController.ConfigureFromContext();
+                        await StartRecordingWhenMatchIsVisible(loadedReplay).ConfigureAwait(false);
+                    }
                 }
 
                 enteredMatch = true;
@@ -273,6 +278,12 @@ public class GameManager : IGameManager
             {
                 await RecordPublicationAsync(loadedReplay, stopped).ConfigureAwait(false);
                 ReplayShutdown.CaptureEndThenKill(gameController, logger);
+            }
+
+            if (obsBegun && !obsSession)
+            {
+                // The session that never identified OBS ends here, so the next replay tries again.
+                EndObsSession();
             }
         }
 
@@ -599,6 +610,45 @@ public class GameManager : IGameManager
             loaded.ReplayId,
             RewardRedemptionStatus.Decide(RewardRedemptionStatus.FromOutcome(outcome))
         );
+    }
+
+    /// <summary>
+    /// True when OBS identified for this replay. An OBS that does not identify (still starting,
+    /// stuck on a dialog, or closed) is a warning, not the end of the replay: the client is
+    /// already up, so the replay is spectated without OBS. Scene changes, the recording, and the
+    /// report scenes are skipped, and the next replay tries OBS again.
+    /// </summary>
+    internal bool BeginObsSession(LoadedReplay loadedReplay)
+    {
+        try
+        {
+            obsController.BeginSession();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "OBS was not identified for replay {ReplayId}. The replay is spectated without OBS: no scene change, recording, or report scenes this session.",
+                loadedReplay?.ReplayId
+            );
+            statusStore.Patch(status => status.ObsSession = false);
+            return false;
+        }
+
+        statusStore.Patch(status => status.ObsSession = true);
+        return true;
+    }
+
+    private void EndObsSession()
+    {
+        try
+        {
+            obsController.EndSession();
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not end the OBS session.");
+        }
     }
 
     private void ParkWaitingScene()

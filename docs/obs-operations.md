@@ -21,6 +21,14 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 | Stream service and key (`service.json`) | Operator secret | Never packaged, copied, logged, or returned by a tool. The tools report only the service type, the named service (`Twitch`), and whether a key is set. |
 | Twitch ingest arm (`%LOCALAPPDATA%\HeroesReplay\stream-armed`) | The machine | Ingest needs this arm and `OBS:StreamingEnabled`. `heroesreplay obs arm` / `disarm` / `status`. The live box is armed. ASA-SERVER is armed only for a stream proof; its OBS streams to a developer Twitch account. |
 
+## Launching OBS
+
+HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` is not running (`ObsCoordinator`, `ObsLaunchDecision`). Nothing else launches it: `services start`, `update install-obs`, `apply-release.ps1`, and the logon task only check for it.
+
+- **Arguments:** `--profile "<OBS:ProfileName>" --collection "<OBS:SceneCollectionName>" --disable-shutdown-check`. The last flag (OBS 30+) skips the "unclean shutdown / Safe Mode" prompt. Without it, an OBS that crashed, lost power, or was killed waits on that prompt for a person, and its websocket does not start (seen on ASA-SERVER with OBS 32.2.2: 98 s on the prompt). An OBS the operator starts some other way (a startup shortcut) should carry the same flag.
+- **Startup grace:** after HeroesReplay starts OBS, the identify is retried (10 s attempts, 2 s apart) until `OBS:StartupIdentifyTimeout` (default 60 s) or until that OBS exits. An OBS that was already running gets one attempt.
+- **No OBS is not a lost replay:** when `BeginSession` still cannot identify OBS, spectate logs a warning and plays the replay without OBS (clock and hero selection go on). That session has no scene change, recording, or report scenes, and the next replay tries OBS again.
+
 ## Updating the collection
 
 `services start`, `heroesreplay update install-obs` (run by `apply-release.ps1`), and an OBS launch by the spectator all go through `ObsCollectionPatcher`.
