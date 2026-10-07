@@ -30,6 +30,17 @@ public class ClientHoldTests
     }
 
     [Fact]
+    public void Classify_NamesTheBuildNotAvailableDialogAVersionMismatch()
+    {
+        Assert.Equal(
+            ClientHoldReason.VersionMismatch,
+            ClientHold.Classify(
+                "The version of Heroes of the Storm required to ploy this game is not available. 0K"
+            )
+        );
+    }
+
+    [Fact]
     public void Classify_LeavesAMatchAndTheHomeScreenAlone()
     {
         Assert.Equal(ClientHoldReason.None, ClientHold.Classify("WELCOME TO CURSED HOLLOW"));
