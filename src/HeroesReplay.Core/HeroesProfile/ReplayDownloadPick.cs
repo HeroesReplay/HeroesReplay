@@ -1,18 +1,22 @@
 using System.Collections.Generic;
 using HeroesReplay.Core.GameClient;
-using HeroesReplay.Core.Replays;
 
 namespace HeroesReplay.Core.HeroesProfile;
 
 /// <summary>
-/// A replay whose client is not installed does not take a download slot.
-/// The list cursor then moves past that page to a build that can launch.
+/// A replay takes a download slot when spectate can launch it: an installed build, or an older
+/// build on the supported patch line (<c>Spectate:MinimumGameVersion</c> and newer) that is not
+/// installed, because HeroesSwitcher opens it and Blizzard downloads that client. A build newer
+/// than the current patch, or one held after a failed download (<see cref="ClientDownloadHold"/>),
+/// does not take a slot. The list cursor then moves past that page to a build that can launch.
 /// </summary>
 public static class ReplayDownloadPick
 {
     public static ReplayListing Launchable(
         ReplayListing page,
-        IEnumerable<string> installedFileVersions
+        IEnumerable<string> installedFileVersions,
+        IEnumerable<string> heldBuilds = null,
+        string minimumVersion = null
     )
     {
         if (page == null)
@@ -30,7 +34,20 @@ public static class ReplayDownloadPick
                     continue;
                 }
 
-                if (!ReplayQueuePick.CanLaunch(replay.GameVersion, installedFileVersions))
+                ReplayClientPatch patch = ReplayClientRoute.Classify(
+                    replay.GameVersion,
+                    installedFileVersions,
+                    heldBuilds
+                );
+                if (patch == ReplayClientPatch.NotInstalled)
+                {
+                    continue;
+                }
+
+                if (
+                    patch == ReplayClientPatch.Download
+                    && !ClientBuildArchive.ShouldKeep(replay.GameVersion, minimumVersion)
+                )
                 {
                     continue;
                 }

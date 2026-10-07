@@ -32,6 +32,9 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private readonly AppSettings settings;
     private readonly HashSet<int> played = new();
     private Func<IReadOnlyList<string>> installedVersionSource;
+
+    // Builds whose HeroesSwitcher download failed recently, read once per pick.
+    private IReadOnlyList<string> heldBuilds = Array.Empty<string>();
     private readonly Dictionary<int, DateTimeOffset> deferredUntil = new();
     private readonly Dictionary<int, string> knownVersion = new();
     private readonly HashSet<int> announcedMissing = new();
@@ -100,6 +103,11 @@ public sealed class ReplayCacheProvider : IReplayProvider
             installedVersionSource != null
                 ? installedVersionSource()
                 : InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory);
+        heldBuilds = ClientDownloadHold.ActiveIn(
+            settings.Location?.DataDirectory,
+            clock(),
+            settings.Spectate?.BuildDownloadHold ?? TimeSpan.Zero
+        );
         scanSkipped = 0;
         deferredDirty = false;
 
@@ -188,7 +196,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
             replayHelper.TryGetReplayId(next.Name, out int replayId);
             if (
                 knownVersion.TryGetValue(replayId, out string cachedVersion)
-                && !ReplayQueuePick.CanLaunch(cachedVersion, installed)
+                && !ReplayQueuePick.CanLaunch(cachedVersion, installed, heldBuilds)
             )
             {
                 if (deferWhenMissing)
@@ -220,7 +228,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
             }
 
             knownVersion[replayId] = replay.ReplayVersion ?? string.Empty;
-            if (!ReplayQueuePick.CanLaunch(replay.ReplayVersion, installed))
+            if (!ReplayQueuePick.CanLaunch(replay.ReplayVersion, installed, heldBuilds))
             {
                 if (deferWhenMissing)
                 {
@@ -326,7 +334,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
         }
 
         logger.LogInformation(
-            "Skipped {Count} replay(s) whose Heroes build is not installed. They stay queued. The waiting scene was not used.",
+            "Skipped {Count} replay(s) whose Heroes build is not installed and cannot be downloaded now (newer than the current patch, or held after a failed download). They stay queued. The waiting scene was not used.",
             newlySkipped
         );
     }

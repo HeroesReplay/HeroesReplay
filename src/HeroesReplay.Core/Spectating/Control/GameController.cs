@@ -54,6 +54,11 @@ public class GameController : IGameController
     // told apart from another replay's. Null when unknown (no client, or a spectate restart).
     private string replayOnClient;
     private ReplayClientPatch launchPatch = ReplayClientPatch.Current;
+
+    // A replay on an older build that is not installed: where its exe will appear, and when the
+    // replay was handed to HeroesSwitcher so Blizzard downloads it. Null when not downloading.
+    private string downloadExePath;
+    private DateTimeOffset? downloadOpenedAt;
     private int? launcherRecoveryReplayId;
     private int launcherRecoveryAttempt;
 
@@ -63,6 +68,12 @@ public class GameController : IGameController
         settings.Spectate?.LaunchWaitLimit > TimeSpan.Zero
             ? settings.Spectate.LaunchWaitLimit
             : ReplayClientRoute.DefaultLaunchWaitLimit;
+
+    private TimeSpan BuildDownloadLimit =>
+        ClientDownloadHold.DownloadLimit(settings.Spectate?.BuildDownloadLimit ?? TimeSpan.Zero);
+
+    private TimeSpan BuildDownloadHold =>
+        ClientDownloadHold.Hold(settings.Spectate?.BuildDownloadHold ?? TimeSpan.Zero);
 
     public static readonly VirtualKey[] Keys =
     {
@@ -117,7 +128,16 @@ public class GameController : IGameController
         );
 
         replayFileOpened = false;
-        return await LaunchAndWait().ConfigureAwait(false);
+        try
+        {
+            return await LaunchAndWait().ConfigureAwait(false);
+        }
+        finally
+        {
+            // A download clock belongs to one launch (with the report's preload before it).
+            // The same replay retried later starts a new one.
+            downloadOpenedAt = null;
+        }
     }
 
     private async Task<ClientHoldReason> LaunchAndWait()
@@ -185,6 +205,13 @@ public class GameController : IGameController
 
     public async Task<bool> OpenReplayFromHomeScreenAsync(string replayPath)
     {
+        // While Blizzard fetches the replay's build, the menu on screen is the newest exe's
+        // handoff. Opening the file again there would start the switch over.
+        if (AwaitingBuildDownload())
+        {
+            return false;
+        }
+
         if (!IsLaunched() || !await IsHomeScreen().ConfigureAwait(false))
         {
             return false;
@@ -192,6 +219,33 @@ public class GameController : IGameController
 
         OpenReplayFromHome(replayPath);
         return true;
+    }
+
+    private bool AwaitingBuildDownload() => BuildDownloadNow() == BuildDownloadState.Waiting;
+
+    private BuildDownloadState BuildDownloadNow()
+    {
+        bool exeExists =
+            !string.IsNullOrWhiteSpace(downloadExePath) && File.Exists(downloadExePath);
+        TimeSpan waited = downloadOpenedAt is DateTimeOffset openedAt
+            ? DateTimeOffset.UtcNow - openedAt
+            : TimeSpan.Zero;
+        return ClientDownloadHold.Check(
+            launchPatch,
+            downloadOpenedAt != null,
+            exeExists,
+            waited,
+            BuildDownloadLimit
+        );
+    }
+
+    /// <summary>The replay went to HeroesSwitcher. On a missing build, the download clock starts.</summary>
+    private void NoteSwitcherOpen()
+    {
+        if (launchPatch == ReplayClientPatch.Download)
+        {
+            downloadOpenedAt ??= DateTimeOffset.UtcNow;
+        }
     }
 
     private bool SameReplayAlreadyOpening(string replayPath)
@@ -249,7 +303,28 @@ public class GameController : IGameController
         }
 
         IReadOnlyList<string> installed = InstalledClientCatalog.FileVersions(gameDirectory);
-        launchPatch = ReplayClientRoute.Classify(replayVersion, installed);
+        IReadOnlyList<string> heldBuilds = ClientDownloadHold.ActiveIn(
+            settings.Location?.DataDirectory,
+            DateTimeOffset.UtcNow,
+            BuildDownloadHold
+        );
+        launchPatch = ReplayClientRoute.Classify(replayVersion, installed, heldBuilds);
+        if (launchPatch == ReplayClientPatch.Download)
+        {
+            // The report may already have handed this replay to HeroesSwitcher. That download
+            // keeps its start time; any other replay starts a new one.
+            if (!SameReplayAlreadyOpening(replayPath))
+            {
+                downloadOpenedAt = null;
+            }
+
+            downloadExePath = InstalledClientCatalog.ExePathFor(gameDirectory, replayVersion);
+        }
+        else
+        {
+            downloadOpenedAt = null;
+            downloadExePath = null;
+        }
         if (installed.Count == 0)
         {
             logger.LogWarning(
@@ -311,10 +386,22 @@ public class GameController : IGameController
 
         if (auth == ReplayLaunchAuth.Unavailable)
         {
-            logger.LogWarning(
-                "Replay {Version} needs a Heroes client that is not installed. The current patch was not launched.",
-                replayVersion
-            );
+            if (ReplayClientRoute.Classify(replayVersion, installed) == ReplayClientPatch.Download)
+            {
+                logger.LogWarning(
+                    "Replay {Version} needs a Heroes client that is not installed, and Blizzard did not download that build within the last {Hold}. Nothing was launched. The replay stays queued.",
+                    replayVersion,
+                    BuildDownloadHold
+                );
+            }
+            else
+            {
+                logger.LogWarning(
+                    "Replay {Version} needs a Heroes client newer than every installed build. Battle.net has not updated Heroes. The current patch was not launched.",
+                    replayVersion
+                );
+            }
+
             return new ReplayBoot(auth, false);
         }
 
@@ -348,6 +435,7 @@ public class GameController : IGameController
                 "Matching Heroes client is already running. Opening the replay through HeroesSwitcher. The client was not closed."
             );
             replayOpener.Open(replayPath);
+            NoteSwitcherOpen();
             replayOnClient = replayPath;
             return new ReplayBoot(ReplayLaunchAuth.Wait, false);
         }
@@ -390,14 +478,35 @@ public class GameController : IGameController
 
         if (auth == ReplayLaunchAuth.OpenInstalledBuild)
         {
+            if (
+                launchPatch == ReplayClientPatch.Download
+                && downloadOpenedAt != null
+                && SameReplayAlreadyOpening(replayPath)
+                && IsGameProcessRunning()
+            )
+            {
+                // The report handed this replay to HeroesSwitcher and Blizzard is still fetching
+                // the build. A second open would restart the switch.
+                logger.LogInformation(
+                    "HeroesSwitcher already has replay {Version} and Blizzard is still downloading that build. The file is not opened again. The client was not closed.",
+                    replayVersion
+                );
+                replayFileOpened = true;
+                replayOnClient = replayPath;
+                return new ReplayBoot(auth, false);
+            }
+
             logger.LogInformation(
-                "Opening previous-patch replay {Version} through HeroesSwitcher. The running client was not closed. Battle.net Play was not used.",
+                launchPatch == ReplayClientPatch.Download
+                    ? "Replay {Version} needs a Heroes build that is not installed. Opening it through HeroesSwitcher so Blizzard downloads that client. The running client was not closed. Battle.net Play was not used."
+                    : "Opening previous-patch replay {Version} through HeroesSwitcher. The running client was not closed. Battle.net Play was not used.",
                 replayVersion
             );
             CloseIdleSwitcher();
             replayFileOpened = true;
             replayOpener.Open(replayPath);
             replayOnClient = replayPath;
+            NoteSwitcherOpen();
             return new ReplayBoot(auth, false);
         }
 
@@ -576,8 +685,94 @@ public class GameController : IGameController
             return true;
         }
 
+        // A replay on an older build that is not installed: Blizzard downloads that client while
+        // the newest exe the switcher started hands off. Until the build's exe is in Versions,
+        // the launch waits for it (bounded by Spectate:BuildDownloadLimit), and nothing on
+        // screen is closed or reopened. After that the previous-patch rules below take over.
+        bool loggedBuildWait = false;
+        bool loggedBuildArrived = false;
+
+        ColdBoot FailBuildDownload(string reason)
+        {
+            DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+            logger.LogWarning(
+                "Blizzard did not download Heroes build {Version} ({Reason}). Closing Heroes so the next replay can start. The build counts as not installed until {Until:o} and the replay stays queued. Battle.net was not clicked. Update was not clicked.",
+                replayVersion,
+                reason,
+                failedAt.Add(BuildDownloadHold)
+            );
+            Kill();
+            replayFileOpened = false;
+            downloadOpenedAt = null;
+            CloseIdleSwitcher();
+            try
+            {
+                ClientDownloadHold.Record(
+                    ClientDownloadHold.FilePath(settings.Location?.DataDirectory),
+                    replayVersion,
+                    failedAt,
+                    BuildDownloadHold
+                );
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(
+                    e,
+                    "Could not record the failed download of Heroes build {Version}.",
+                    replayVersion
+                );
+            }
+
+            return new ColdBoot(RetryDisconnect: false, ClientHoldReason.BuildNotInstalled);
+        }
+
         while (DateTimeOffset.UtcNow < deadline)
         {
+            BuildDownloadState buildDownload = BuildDownloadNow();
+            if (buildDownload == BuildDownloadState.Failed)
+            {
+                return FailBuildDownload(
+                    $"its exe did not appear in Versions within {BuildDownloadLimit}"
+                );
+            }
+
+            if (buildDownload == BuildDownloadState.Waiting)
+            {
+                // The download is the client at work: not a stuck wait, not a stalled launch,
+                // and the cold-boot deadline starts when the build's exe arrives.
+                ServiceHeartbeat.RecordLaunching();
+                stuckSince = DateTimeOffset.UtcNow;
+                DateTimeOffset afterArrival = ClientRelaunch.DeadlineAfterInterfaceRestart(
+                    DateTimeOffset.UtcNow
+                );
+                if (afterArrival > deadline)
+                {
+                    deadline = afterArrival;
+                }
+
+                if (!loggedBuildWait)
+                {
+                    loggedBuildWait = true;
+                    logger.LogInformation(
+                        "Waiting for Blizzard to download Heroes build {Version} into {Exe} (limit {Limit}). The newest exe's handoff stays up. Battle.net was not clicked.",
+                        replayVersion,
+                        downloadExePath ?? "(unknown folder)",
+                        BuildDownloadLimit
+                    );
+                }
+            }
+            else if (buildDownload == BuildDownloadState.Arrived && !loggedBuildArrived)
+            {
+                loggedBuildArrived = true;
+                logger.LogInformation(
+                    "Heroes build {Version} arrived in Versions {Waited} after the replay went to HeroesSwitcher. The previous-patch launch continues.",
+                    replayVersion,
+                    downloadOpenedAt is DateTimeOffset openedAt
+                        ? DateTimeOffset.UtcNow - openedAt
+                        : TimeSpan.Zero
+                );
+            }
+
             if (
                 ClientRelaunch.MatchingOpenLeftNoProcess(
                     openedOnMatchingExe,
@@ -601,6 +796,11 @@ public class GameController : IGameController
             }
 
             ClientHoldReason hold = ClientHold.Classify(text);
+            if (ClientDownloadHold.DialogFailsDownload(buildDownload, hold))
+            {
+                return FailBuildDownload("the version mismatch dialog");
+            }
+
             if (hold != ClientHoldReason.None)
             {
                 LauncherRecoveryAction recovery = NextLauncherRecovery(hold);
@@ -651,8 +851,11 @@ public class GameController : IGameController
                     && text.Contains(word, StringComparison.OrdinalIgnoreCase)
                 );
             bool timer = await IsMatchClockRunning().ConfigureAwait(false);
+            // A login form while the build downloads is the newest exe's handoff. Closing it
+            // would stop the download.
             if (
                 !recoveredLogin
+                && buildDownload != BuildDownloadState.Waiting
                 && !loading
                 && !timer
                 && !inMatch
@@ -872,6 +1075,7 @@ public class GameController : IGameController
             if (
                 home
                 && !oweAhliObs
+                && buildDownload != BuildDownloadState.Waiting
                 && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, true)
             )
             {
@@ -1014,6 +1218,7 @@ public class GameController : IGameController
                     CloseIdleSwitcher();
                     replayFileOpened = true;
                     replayOpener.Open(replayPath);
+                    NoteSwitcherOpen();
                     replayOnClient = replayPath;
                     openedOnMatchingExe = true;
                     stuckSince = DateTimeOffset.UtcNow;
@@ -1218,13 +1423,14 @@ public class GameController : IGameController
             logger.LogWarning(e, "Could not write AhliObs after the game-data download.");
         }
 
-        if (launchPatch == ReplayClientPatch.Previous)
+        if (ReplayClientRoute.OpensThroughSwitcher(launchPatch))
         {
             logger.LogInformation(
                 "Opening the previous-patch replay again through HeroesSwitcher. Battle.net Play was not used."
             );
             replayFileOpened = true;
             replayOpener.Open(replayPath);
+            NoteSwitcherOpen();
             replayOnClient = replayPath;
             return;
         }
@@ -1253,6 +1459,7 @@ public class GameController : IGameController
         CloseIdleSwitcher();
         replayFileOpened = true;
         replayOpener.Open(replayPath);
+        NoteSwitcherOpen();
         replayOnClient = replayPath;
     }
 

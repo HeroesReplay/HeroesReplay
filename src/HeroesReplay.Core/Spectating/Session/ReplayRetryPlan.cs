@@ -64,7 +64,8 @@ public static class ReplayRetryPlan
     }
 
     /// <summary>
-    /// A missing build did not start a client. A launch that is still downloading
+    /// A missing build did not start a client, or its failed download already closed the one
+    /// HeroesSwitcher started. A launch that is still downloading
     /// is that client doing its job. A region-unavailable dialog stays up so the
     /// same client can be tried again. A version-mismatch dialog is closed.
     /// </summary>

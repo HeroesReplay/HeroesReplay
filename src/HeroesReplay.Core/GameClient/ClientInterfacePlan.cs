@@ -23,7 +23,8 @@ public static class ClientInterfacePlan
     public static readonly TimeSpan GameDataDownloadCap = TimeSpan.FromMinutes(30);
 
     /// <summary>
-    /// A previous-patch client does not log in, so it reads the root Variables.txt.
+    /// A previous-patch client (or an older build Blizzard downloads) does not log in, so it
+    /// reads the root Variables.txt.
     /// A signed-in current-patch client reads the account file when that file exists.
     /// </summary>
     public static string ReplayInterfaceForLaunch(
@@ -32,7 +33,7 @@ public static class ClientInterfacePlan
         string accountReplayInterface
     )
     {
-        if (patch == ReplayClientPatch.Previous)
+        if (ReplayClientRoute.OpensThroughSwitcher(patch))
         {
             return rootReplayInterface;
         }

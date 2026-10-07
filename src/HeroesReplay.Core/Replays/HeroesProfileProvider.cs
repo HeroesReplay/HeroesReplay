@@ -565,7 +565,9 @@ public class HeroesProfileProvider : IReplayProvider
     /// <summary>
     /// The next Standard replay on the newest installed client (the current patch). Upload order
     /// does not follow the client build, so the listing reads ahead to the end of the list for one.
-    /// With none on that build, it falls back to the first replay on an older installed build.
+    /// With none on that build, it falls back to the first replay on an older build: installed,
+    /// or on the supported patch line and not installed (HeroesSwitcher has Blizzard download
+    /// it), unless that build is held after a failed download.
     /// </summary>
     private async Task<HeroesProfileReplay> ListOnceAsync()
     {
@@ -573,6 +575,12 @@ public class HeroesProfileProvider : IReplayProvider
             installedVersionSource != null
                 ? installedVersionSource()
                 : InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory);
+        IReadOnlyList<string> held = ClientDownloadHold.ActiveIn(
+            settings.Location?.DataDirectory,
+            DateTimeOffset.UtcNow,
+            settings.Spectate?.BuildDownloadHold ?? TimeSpan.Zero
+        );
+        string minimumVersion = settings.Spectate?.MinimumGameVersion;
         HeroesProfileReplay fallback = null;
         for (int pageIndex = 0; pageIndex < 40; pageIndex++)
         {
@@ -581,7 +589,12 @@ public class HeroesProfileProvider : IReplayProvider
             ReplayListing page = await heroesProfileService
                 .ListPageAsync(currentMin)
                 .ConfigureAwait(false);
-            ReplayListing launchable = ReplayDownloadPick.Launchable(page, installed);
+            ReplayListing launchable = ReplayDownloadPick.Launchable(
+                page,
+                installed,
+                held,
+                minimumVersion
+            );
             List<HeroesProfileReplay> candidates = launchable
                 .Playable.Where(replay =>
                     replay != null

@@ -77,6 +77,21 @@ public static class InstalledClientCatalog
         return clients;
     }
 
+    /// <summary>
+    /// Where the exe for <paramref name="version"/> lives: <c>Versions\Base&lt;build&gt;</c>.
+    /// Null when the build number cannot be read. The file may not exist.
+    /// </summary>
+    public static string ExePathFor(string gameInstallDirectory, string version)
+    {
+        string folder = ClientBuildArchive.BaseDirectoryName(version);
+        if (folder == null || string.IsNullOrWhiteSpace(gameInstallDirectory))
+        {
+            return null;
+        }
+
+        return Path.Combine(gameInstallDirectory, "Versions", folder, ExeFileName);
+    }
+
     public static string FindExe(IEnumerable<InstalledClient> clients, string version)
     {
         if (clients == null || string.IsNullOrWhiteSpace(version))

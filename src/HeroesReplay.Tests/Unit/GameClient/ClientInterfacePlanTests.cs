@@ -22,6 +22,12 @@ public class ClientInterfacePlanTests
         "AhliObs 0.75"
     )]
     [InlineData(ReplayClientPatch.Current, "AhliObs 0.75", null, "AhliObs 0.75")]
+    [InlineData(
+        ReplayClientPatch.Download,
+        "AhliObs 0.75.StormInterface",
+        "AhliObs 0.75",
+        "AhliObs 0.75.StormInterface"
+    )]
     public void ReplayInterfaceForLaunch_PreviousPatchReadsTheRootFile(
         ReplayClientPatch patch,
         string root,

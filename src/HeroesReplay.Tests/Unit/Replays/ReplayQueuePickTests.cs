@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
@@ -21,12 +22,85 @@ public class ReplayQueuePickTests
     private static readonly string[] Installed = { "2.55.17.98025", "2.57.0.98304" };
 
     [Fact]
-    public void CanLaunch_SkipsAMissingBuildAndKeepsAnInstalledOne()
+    public void CanLaunch_SkipsANewerOrHeldBuildAndKeepsAnInstalledOrDownloadableOne()
     {
-        Assert.False(ReplayQueuePick.CanLaunch("2.57.0.98285", Installed));
-        Assert.False(ReplayQueuePick.CanLaunch("2.57.0.98297", Installed));
+        Assert.False(ReplayQueuePick.CanLaunch("2.57.0.98400", Installed));
+        Assert.False(
+            ReplayQueuePick.CanLaunch("2.57.0.98285", Installed, new[] { "2.57.0.98285" })
+        );
+        Assert.True(ReplayQueuePick.CanLaunch("2.57.0.98285", Installed));
+        Assert.True(ReplayQueuePick.CanLaunch("2.57.0.98297", Installed));
         Assert.True(ReplayQueuePick.CanLaunch("2.57.0.98304", Installed));
         Assert.True(ReplayQueuePick.CanLaunch("2.55.17.98025", Installed));
+    }
+
+    [Theory]
+    [InlineData(false, 10)]
+    [InlineData(true, 30)]
+    public async Task TryLoadNext_TakesAMissingOlderBuildUnlessItsDownloadFailed(
+        bool held,
+        int expected
+    )
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-queue-dl-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(Path.Combine(root, "Standard"));
+        Directory.CreateDirectory(Path.Combine(root, "Requests"));
+        File.WriteAllText(Path.Combine(root, SpectateQueue.SpectatedFileName), string.Empty);
+        foreach (int id in new[] { 10, 30 })
+        {
+            File.WriteAllBytes(
+                Path.Combine(root, "Standard", id + "_Storm League_Map_.StormReplay"),
+                new byte[] { 1 }
+            );
+        }
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        if (held)
+        {
+            ClientDownloadHold.Record(
+                ClientDownloadHold.FilePath(root),
+                "2.57.0.98285",
+                now.AddMinutes(-5),
+                TimeSpan.FromHours(4)
+            );
+        }
+
+        var settings = new AppSettings
+        {
+            Location = new LocationSettings { DataDirectory = root },
+            HeroesProfileApi = new HeroesProfileApiSettings
+            {
+                StandardCacheDirectoryName = "Standard",
+                RequestsCacheDirectoryName = "Requests",
+            },
+            StormReplay = new StormReplaySettings { Seperator = "_" },
+            Spectate = new SpectateSettings { MinimumGameVersion = "2.57.0.98285" },
+        };
+        var provider = new ReplayCacheProvider(
+            NullLogger<ReplayCacheProvider>.Instance,
+            new VersionLoader(
+                new Dictionary<int, string> { [10] = "2.57.0.98285", [30] = "2.57.0.98304" }
+            ),
+            new ReplayHelper(NullLogger<ReplayHelper>.Instance, settings),
+            new IdleProfile(),
+            new CancellationTokenProvider(),
+            settings
+        );
+        provider.UseInstalledVersions(() => new[] { "2.57.0.98304", "2.57.0.98348" });
+        provider.UseClock(() => now);
+
+        try
+        {
+            LoadedReplay first = await provider.TryLoadNextReplayAsync();
+            Assert.Equal(expected, first.ReplayId);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -66,7 +140,7 @@ public class ReplayQueuePickTests
         var loader = new VersionLoader(
             new Dictionary<int, string>
             {
-                [10] = "2.57.0.98285",
+                [10] = "2.57.0.98400",
                 [20] = "2.55.17.98025",
                 [30] = "2.57.0.98304",
             }
