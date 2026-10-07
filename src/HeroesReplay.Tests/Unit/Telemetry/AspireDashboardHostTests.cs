@@ -227,7 +227,7 @@ public class AspireDashboardHostTests
     }
 
     [Fact]
-    public void PowerShellStartCommand_HidesTheDashboardAndDoesNotUseDocker()
+    public void PowerShellStartCommand_MinimizesTheDashboardAndDoesNotUseDocker()
     {
         string script = AspireDashboardHost.PowerShellStartCommand(
             "dotnet",
@@ -238,7 +238,8 @@ public class AspireDashboardHostTests
             @"C:\logs\aspire-dashboard.pid"
         );
 
-        Assert.Contains("-WindowStyle Hidden", script);
+        Assert.Contains("-WindowStyle Minimized", script);
+        Assert.DoesNotContain("-WindowStyle Hidden", script);
         Assert.Contains("-FilePath 'dotnet'", script);
         Assert.Contains("'aspire'", script);
         Assert.Contains("'dashboard'", script);
