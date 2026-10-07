@@ -180,9 +180,9 @@ public class ReleaseHandoffTests
 
             await engine.RunAsync();
 
-            Assert.Equal(new int?[] { 101 }, game.Spectated.ToArray());
+            Assert.Equal(new int?[] { 303 }, game.Spectated.ToArray());
             Assert.Equal(
-                new[] { "101" },
+                new[] { "303" },
                 File.ReadAllLines(Path.Combine(data, "spectated-ids.txt"))
             );
 
@@ -577,15 +577,15 @@ public class ReleaseHandoffTests
             Task run = engine.RunAsync();
             await game.Reporting.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-            // The report scenes are up and the next replay is loaded. A kill here must not lose 101.
-            Assert.Equal(new[] { "101" }, File.ReadAllLines(spectated));
+            // The report scenes are up and the next replay is loaded. A kill here must not lose 202.
+            Assert.Equal(new[] { "202" }, File.ReadAllLines(spectated));
 
             stop.Cancel();
             await run.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.Equal(new[] { "101" }, File.ReadAllLines(spectated));
+            Assert.Equal(new[] { "202" }, File.ReadAllLines(spectated));
             LoadedReplay next = await Cache(settings).TryLoadNextReplayAsync();
-            Assert.Equal(202, next.ReplayId);
+            Assert.Equal(101, next.ReplayId);
         }
         finally
         {
