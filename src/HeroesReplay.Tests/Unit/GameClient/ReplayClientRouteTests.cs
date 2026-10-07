@@ -41,7 +41,7 @@ public class ReplayClientRouteTests
     public void Classify_AnotherIterationOfTheSamePatchIsNotTheCurrentClient()
     {
         Assert.Equal(
-            ReplayClientPatch.NotInstalled,
+            ReplayClientPatch.Download,
             ReplayClientRoute.Classify("2.57.0.98285", new[] { "2.57.0.98304" })
         );
         Assert.Equal(
@@ -51,11 +51,126 @@ public class ReplayClientRouteTests
     }
 
     [Fact]
-    public void Classify_MissingBuildDoesNotUseTheCurrentClient()
+    public void Classify_NewerMissingBuildDoesNotUseTheCurrentClient()
     {
+        // Newer than every installed exe: Battle.net has not updated Heroes yet.
         Assert.Equal(
             ReplayClientPatch.NotInstalled,
             ReplayClientRoute.Classify("2.57.0.98297", Installed)
+        );
+    }
+
+    [Theory]
+    [InlineData("2.57.0.98285")]
+    [InlineData("2.57.0.98304")]
+    [InlineData("2.55.17.97000")]
+    public void Classify_OlderMissingBuildIsDownloadedThroughTheSwitcher(string replayVersion)
+    {
+        // 2026-10-07 on ASA-SERVER: Base98285 was an empty folder with no retained copy, and
+        // opening replay 65550003 through HeroesSwitcher had Blizzard download that client.
+        string[] installed = { "2.55.17.98025", "2.57.0.98348" };
+
+        Assert.Equal(
+            ReplayClientPatch.Download,
+            ReplayClientRoute.Classify(replayVersion, installed)
+        );
+    }
+
+    [Fact]
+    public void Classify_HeldBuildIsNotInstalledUntilItIsInstalled()
+    {
+        string[] installed = { "2.57.0.98304", "2.57.0.98348" };
+        string[] held = { "2, 57, 0, 98285" };
+
+        Assert.Equal(
+            ReplayClientPatch.NotInstalled,
+            ReplayClientRoute.Classify("2.57.0.98285", installed, held)
+        );
+        Assert.Equal(
+            ReplayClientPatch.Download,
+            ReplayClientRoute.Classify("2.57.0.98290", installed, held)
+        );
+        // A hold never touches a build whose exe is there.
+        Assert.Equal(
+            ReplayClientPatch.Previous,
+            ReplayClientRoute.Classify("2.57.0.98304", installed, new[] { "2.57.0.98304" })
+        );
+    }
+
+    [Fact]
+    public void Classify_CurrentPatchIsUnaffectedByMissingAndHeldBuilds()
+    {
+        string[] installed = { "2.57.0.98304", "2.57.0.98348" };
+
+        Assert.Equal(
+            ReplayClientPatch.Current,
+            ReplayClientRoute.Classify("2.57.0.98348", installed, new[] { "2.57.0.98348" })
+        );
+        Assert.Equal(
+            ReplayLaunchAuth.AuthenticateCurrent,
+            ReplayClientRoute.Decide(
+                ReplayClientRoute.Classify("2.57.0.98348", installed, new[] { "2.57.0.98285" }),
+                RunningClientBuild.None,
+                homeScreen: false,
+                replayPresented: false
+            )
+        );
+        Assert.False(ReplayClientRoute.OpensThroughSwitcher(ReplayClientPatch.Current));
+        Assert.False(ReplayClientRoute.OpensThroughSwitcher(ReplayClientPatch.NotInstalled));
+    }
+
+    [Theory]
+    [InlineData(RunningClientBuild.None)]
+    [InlineData(RunningClientBuild.Differs)]
+    public void Decide_MissingOlderBuildOpensThroughTheSwitcherLikeAPreviousPatch(
+        RunningClientBuild running
+    )
+    {
+        Assert.Equal(
+            ReplayLaunchAuth.OpenInstalledBuild,
+            ReplayClientRoute.Decide(
+                ReplayClientPatch.Download,
+                running,
+                homeScreen: running == RunningClientBuild.Differs,
+                replayPresented: false
+            )
+        );
+        Assert.True(ReplayClientRoute.OpensThroughSwitcher(ReplayClientPatch.Download));
+    }
+
+    [Fact]
+    public void Decide_MissingOlderBuildKeepsThePreviousPatchRecoveries()
+    {
+        Assert.Equal(
+            ReplayLaunchAuth.Wait,
+            ReplayClientRoute.Decide(
+                ReplayClientPatch.Download,
+                RunningClientBuild.Unreadable,
+                homeScreen: false,
+                replayPresented: false
+            )
+        );
+        Assert.Equal(
+            ReplaySignInRecovery.OpenPreviousBuild,
+            ReplayClientRoute.Recover(ReplayClientPatch.Download, attemptsAlready: 0)
+        );
+        Assert.Equal(
+            LaunchWaitAction.ReopenThroughSwitcher,
+            ReplayClientRoute.DecideStuckWait(
+                ReplayClientPatch.Download,
+                TimeSpan.FromMinutes(3),
+                TimeSpan.FromMinutes(3),
+                0
+            )
+        );
+        Assert.Equal(
+            ReplayLaunchAuth.OpenMatchingBuild,
+            ReplayClientRoute.Decide(
+                ReplayClientPatch.Download,
+                RunningClientBuild.Matches,
+                homeScreen: false,
+                replayPresented: false
+            )
         );
     }
 

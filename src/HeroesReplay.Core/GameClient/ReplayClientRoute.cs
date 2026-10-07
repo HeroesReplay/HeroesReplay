@@ -8,7 +8,20 @@ public enum ReplayClientPatch
 {
     Current,
     Previous,
+
+    /// <summary>
+    /// Not installed and newer than the current patch (Battle.net has not updated the client
+    /// yet), or a build held after a failed download (<see cref="ClientDownloadHold"/>).
+    /// Nothing is launched and the replay stays queued.
+    /// </summary>
     NotInstalled,
+
+    /// <summary>
+    /// Not installed, older than the current patch, and not held. It opens through
+    /// HeroesSwitcher like a previous patch, and Blizzard downloads that client in the
+    /// background while the newest exe hands off.
+    /// </summary>
+    Download,
 }
 
 public enum RunningClientBuild
@@ -64,7 +77,8 @@ public enum ReplaySignInRecovery
 /// An older installed build, including an older iteration of the same patch line, is opened by
 /// HeroesSwitcher with the .StormReplay path. That is the same open Explorer uses. The process
 /// HeroesSwitcher starts is left running while it downloads game data. Battle.net Play always
-/// starts the newest client. A different build number is not that client.
+/// starts the newest client. A different build number is not that client. An older build that
+/// is not installed opens the same way: Blizzard downloads that client in the background.
 /// </summary>
 public static class ReplayClientRoute
 {
@@ -85,9 +99,14 @@ public static class ReplayClientRoute
         return a.Length > 0 && string.Equals(a, b, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <paramref name="heldBuilds"/> are builds whose download failed recently
+    /// (<see cref="ClientDownloadHold"/>). They count only while that build is not installed.
+    /// </summary>
     public static ReplayClientPatch Classify(
         string replayVersion,
-        IEnumerable<string> installedFileVersions
+        IEnumerable<string> installedFileVersions,
+        IEnumerable<string> heldBuilds = null
     )
     {
         string replay = Normalize(replayVersion);
@@ -134,8 +153,33 @@ public static class ReplayClientRoute
             }
         }
 
-        return ReplayClientPatch.NotInstalled;
+        // A newer build is a client update Battle.net has not installed yet. It is not
+        // fetched through HeroesSwitcher, and Update is never clicked.
+        if (GameVersionOrder.IsAtLeast(replay, newest))
+        {
+            return ReplayClientPatch.NotInstalled;
+        }
+
+        if (heldBuilds != null)
+        {
+            foreach (string held in heldBuilds)
+            {
+                if (SameBuild(held, replay))
+                {
+                    return ReplayClientPatch.NotInstalled;
+                }
+            }
+        }
+
+        return ReplayClientPatch.Download;
     }
+
+    /// <summary>
+    /// A previous patch, or an older build Blizzard downloads, opens through HeroesSwitcher
+    /// and does not sign in.
+    /// </summary>
+    public static bool OpensThroughSwitcher(ReplayClientPatch patch) =>
+        patch == ReplayClientPatch.Previous || patch == ReplayClientPatch.Download;
 
     /// <summary>
     /// The launch step. <paramref name="replayPresented"/> is the replay on screen on the
@@ -171,7 +215,7 @@ public static class ReplayClientRoute
 
             // Another replay is playing. A previous-patch client takes this file through
             // HeroesSwitcher and stays open; the current patch is closed and signed in again.
-            return patch == ReplayClientPatch.Previous
+            return OpensThroughSwitcher(patch)
                 ? ReplayLaunchAuth.OpenMatchingBuild
                 : ReplayLaunchAuth.RelaunchCurrent;
         }
@@ -183,7 +227,7 @@ public static class ReplayClientRoute
 
         // The matching older exe is already up. Open the .StormReplay through HeroesSwitcher
         // and leave that process running. A direct exe launch is not used.
-        if (running == RunningClientBuild.Matches && patch == ReplayClientPatch.Previous)
+        if (running == RunningClientBuild.Matches && OpensThroughSwitcher(patch))
         {
             return ReplayLaunchAuth.OpenMatchingBuild;
         }
@@ -193,7 +237,7 @@ public static class ReplayClientRoute
             return ReplayLaunchAuth.Wait;
         }
 
-        if (patch == ReplayClientPatch.Previous)
+        if (OpensThroughSwitcher(patch))
         {
             return ReplayLaunchAuth.OpenInstalledBuild;
         }
@@ -239,7 +283,7 @@ public static class ReplayClientRoute
             return LaunchWaitAction.GiveUp;
         }
 
-        return patch == ReplayClientPatch.Previous
+        return OpensThroughSwitcher(patch)
             ? LaunchWaitAction.ReopenThroughSwitcher
             : LaunchWaitAction.RelaunchCurrent;
     }
@@ -251,7 +295,7 @@ public static class ReplayClientRoute
             return ReplaySignInRecovery.Leave;
         }
 
-        if (patch == ReplayClientPatch.Previous)
+        if (OpensThroughSwitcher(patch))
         {
             return ReplaySignInRecovery.OpenPreviousBuild;
         }

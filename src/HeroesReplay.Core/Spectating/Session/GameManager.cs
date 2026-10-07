@@ -185,7 +185,7 @@ public class GameManager : IGameManager
                 if (hold == ClientHoldReason.BuildNotInstalled)
                 {
                     logger.LogWarning(
-                        "Replay {ReplayId} needs a Heroes build that is not installed. It stays queued. The current patch was not launched.",
+                        "Replay {ReplayId} needs a Heroes build that is not installed and cannot be downloaded now (newer than the current patch, or Blizzard did not serve it). It stays queued. The current patch was not launched.",
                         loadedReplay?.ReplayId
                     );
                 }

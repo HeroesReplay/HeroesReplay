@@ -10,7 +10,7 @@ Originally built for [twitch.tv/saltysadism](https://twitch.tv/saltysadism). Mod
 
 1. Load a local `.StormReplay`, a directory of them, or download Storm League games from Heroes Profile.
 2. Build a **focus timeline**: kills, proximity, camps, objectives, structures, emotes. Weights live in `appsettings.json`.
-3. Launch Heroes of the Storm (Battle.net when the replay is the latest client build, HeroesSwitcher for an older installed build), wait for the match clock (read from game memory, with WinRT OCR of a **PrintWindow** capture of the windowed client as the fallback).
+3. Launch Heroes of the Storm (Battle.net when the replay is the latest client build, HeroesSwitcher for an older build, which Blizzard downloads in the background when it is not installed), wait for the match clock (read from game memory, with WinRT OCR of a **PrintWindow** capture of the windowed client as the fallback).
 4. Send spectator hotkeys (`1`–`0`, Ctrl+panels) as the match clock advances. Player focus uses Observe Player 1–10, not Follow Player Camera (`C`) and not Shift+Z ultra zoom (that jittered on hero swaps). AhliObs already hides the replay control panel; do not send Ctrl+Shift+O (that chord toggles it back on).
 5. Optionally control **OBS Studio 30.0+** (obs-websocket **5.3+**, default `ws://127.0.0.1:4455`): game scene, recording folder, rank images, post-game report scenes (`match-report` for the Heroes Profile match page, `prediction-report`, `request-queue`).
 6. Chat **`!talents`** (Ctrl+1) and **`!stats`** (Ctrl+2) show those Ahli panels for 10 seconds (2 minute cooldown each). Talents still open automatically at talent times.
