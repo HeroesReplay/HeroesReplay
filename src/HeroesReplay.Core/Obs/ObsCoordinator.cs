@@ -31,6 +31,7 @@ internal sealed class ObsCoordinator
     private readonly Func<ObsValidation> preflight;
     private readonly TimeSpan startupIdentifyTimeout;
     private readonly Func<DateTimeOffset> now;
+    private readonly ObsCrashSentinel sentinel;
     private DateTimeOffset? startupDeadline;
     private DateTimeOffset launchedAt;
     private bool recordingDesired;
@@ -57,7 +58,8 @@ internal sealed class ObsCoordinator
         Func<bool> streamArmed = null,
         Func<ObsValidation> preflight = null,
         TimeSpan? startupIdentifyTimeout = null,
-        Func<DateTimeOffset> now = null
+        Func<DateTimeOffset> now = null,
+        ObsCrashSentinel sentinel = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -78,6 +80,7 @@ internal sealed class ObsCoordinator
                 ? startup
                 : TimeSpan.FromSeconds(60);
         this.now = now ?? (() => DateTimeOffset.UtcNow);
+        this.sentinel = sentinel;
     }
 
     public ObsRuntimeSnapshot State { get; private set; }
@@ -382,6 +385,7 @@ internal sealed class ObsCoordinator
             return;
         }
 
+        RemoveStaleSentinels();
         try
         {
             ObsLaunchDecision started = process.Start(decision);
@@ -489,6 +493,22 @@ internal sealed class ObsCoordinator
                 + " attempts).",
             last
         );
+    }
+
+    /// <summary>
+    /// A run sentinel left by an OBS that did not exit cleanly stops the launch on the Crash
+    /// Detected dialog. The sentinel itself checks again that no OBS runs before it deletes.
+    /// </summary>
+    private void RemoveStaleSentinels()
+    {
+        try
+        {
+            sentinel?.RemoveStale();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not clear stale OBS crash sentinels before the launch.");
+        }
     }
 
     private bool InStartupWindow() => startupDeadline is DateTimeOffset end && now() < end;

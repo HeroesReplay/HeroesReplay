@@ -76,7 +76,12 @@ public class ObsController : IObsController
                         arm.FilePath
                     )
                 ),
-            settings.OBS?.StartupIdentifyTimeout
+            settings.OBS?.StartupIdentifyTimeout,
+            sentinel: new ObsCrashSentinel(
+                ObsCrashSentinel.DefaultDirectory(),
+                () => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
+                logger
+            )
         );
     }
 
