@@ -26,12 +26,20 @@ public sealed record ObsLaunchDecision
     public bool Started { get; init; }
     public string Detail { get; init; }
 
+    /// <summary>
+    /// OBS 30+ skips its "unclean shutdown / Safe Mode" prompt with this flag. Without it, an
+    /// OBS that crashed, lost power, or was killed waits on that prompt for a person, and the
+    /// websocket does not start until someone answers.
+    /// </summary>
+    public const string DisableShutdownCheck = "--disable-shutdown-check";
+
     public static string ArgumentsFor(string profileName, string collectionName) =>
         "--profile \""
         + ObsNames.Pick(profileName)
         + "\" --collection \""
         + ObsNames.Pick(collectionName)
-        + "\"";
+        + "\" "
+        + DisableShutdownCheck;
 
     public static string ResolveExecutable(string configured)
     {
