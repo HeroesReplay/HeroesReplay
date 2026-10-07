@@ -14,6 +14,7 @@ public sealed class PublicationHealthReport
     public int PublishedDay { get; init; }
     public int PublishedWeek { get; init; }
     public int StuckPrivate { get; init; }
+    public int Scheduled { get; init; }
     public string Limit { get; init; }
     public string PolicyVersion { get; init; }
 }
@@ -32,7 +33,8 @@ public static class PublicationHealth
         string policyVersion,
         int publishedDay = 0,
         int publishedWeek = 0,
-        int stuckPrivate = 0
+        int stuckPrivate = 0,
+        int scheduled = 0
     )
     {
         if (pending < 0)
@@ -70,6 +72,7 @@ public static class PublicationHealth
             PublishedDay = publishedDay < 0 ? 0 : publishedDay,
             PublishedWeek = publishedWeek < 0 ? 0 : publishedWeek,
             StuckPrivate = stuckPrivate < 0 ? 0 : stuckPrivate,
+            Scheduled = scheduled < 0 ? 0 : scheduled,
         };
     }
 
@@ -92,6 +95,7 @@ public static class PublicationHealth
         builder.Append("deferred=").Append(report?.Deferred ?? 0).AppendLine();
         builder.Append("published-day=").Append(report?.PublishedDay ?? 0).AppendLine();
         builder.Append("published-week=").Append(report?.PublishedWeek ?? 0).AppendLine();
+        builder.Append("scheduled=").Append(report?.Scheduled ?? 0).AppendLine();
         builder.Append("stuck-private=").Append(report?.StuckPrivate ?? 0).AppendLine();
         builder.Append("limit=").Append(report?.Limit ?? "none").AppendLine();
         builder.Append("policy=").Append(report?.PolicyVersion ?? "1").AppendLine();

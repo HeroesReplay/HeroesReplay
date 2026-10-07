@@ -236,6 +236,22 @@ public static class ServiceHealthClassifier
             };
         }
 
+        if (!string.IsNullOrWhiteSpace(heartbeat.Concern?.Code))
+        {
+            TimeSpan? concernAge = Age(now, heartbeat.Concern.Since);
+            string since =
+                concernAge == null ? string.Empty : $" For {Describe(concernAge.Value)}.";
+            return With(
+                health,
+                ServiceRoleState.Degraded,
+                heartbeat.Concern.Cause + since + LastError(heartbeat, now) + stopping,
+                $"Read the {role} log. The role keeps running and clears this itself once the cause is gone."
+            ) with
+            {
+                CauseCode = heartbeat.Concern.Code,
+            };
+        }
+
         if (sinceWork != null && sinceWork.Value > workThreshold)
         {
             string late =

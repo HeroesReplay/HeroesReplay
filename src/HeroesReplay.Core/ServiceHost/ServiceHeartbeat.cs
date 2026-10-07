@@ -136,6 +136,38 @@ public sealed class ServiceHeartbeat : IDisposable
         }
     }
 
+    /// <summary>
+    /// The role reports a concern about its own work (degraded), or clears it with null.
+    /// No-op outside a service role.
+    /// </summary>
+    public static void RecordConcern(string code, string cause) =>
+        Volatile.Read(ref current)?.Concern(code, cause);
+
+    /// <summary>Sets the concern, or clears it when <paramref name="code"/> is blank.</summary>
+    public void Concern(string code, string cause)
+    {
+        lock (gate)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                report.Concern = null;
+                return;
+            }
+
+            DateTimeOffset since =
+                string.Equals(report.Concern?.Code, code, StringComparison.Ordinal)
+                && report.Concern.Since is DateTimeOffset earlier
+                    ? earlier
+                    : time.GetUtcNow();
+            report.Concern = new ServiceRoleConcern
+            {
+                Code = code,
+                Cause = Redact(cause),
+                Since = since,
+            };
+        }
+    }
+
     /// <summary>Writes the ready file, the first heartbeat, then one every interval.</summary>
     public void Start(CancellationToken stop)
     {
@@ -264,6 +296,15 @@ public sealed class ServiceHeartbeat : IDisposable
                         ? null
                         : new Dictionary<string, int>(report.SessionOutcomes),
                 LaunchingSince = report.LaunchingSince,
+                Concern =
+                    report.Concern == null
+                        ? null
+                        : new ServiceRoleConcern
+                        {
+                            Code = report.Concern.Code,
+                            Cause = report.Concern.Cause,
+                            Since = report.Concern.Since,
+                        },
             };
         }
     }

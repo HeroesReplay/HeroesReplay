@@ -14,7 +14,10 @@ public enum YouTubeQuotaRefusal
     /// </summary>
     RateLimited,
 
-    /// <summary><c>quotaExceeded</c> or a per-day limit. Nothing more fits until the quota day turns.</summary>
+    /// <summary>
+    /// <c>quotaExceeded</c>, <c>uploadLimitExceeded</c>, or a per-day limit. Nothing more fits in
+    /// that bucket until the quota day turns.
+    /// </summary>
     DailyQuota,
 }
 
@@ -42,6 +45,7 @@ public static class YouTubeListQuota
             if (
                 text.Contains("quotaExceeded", StringComparison.OrdinalIgnoreCase)
                 || text.Contains("dailyLimitExceeded", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("uploadLimitExceeded", StringComparison.OrdinalIgnoreCase)
                 || (limitText && text.Contains("per day", StringComparison.OrdinalIgnoreCase))
             )
             {

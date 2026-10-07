@@ -15,6 +15,9 @@ public class YouTubeListQuotaTests
         "HttpStatusCode is TooManyRequests. Quota exceeded for quota metric 'Video Uploads' and limit 'Video Uploads per day' of service 'youtube.googleapis.com'. [rateLimitExceeded]"
     )]
     [InlineData("Daily Limit Exceeded. [dailyLimitExceeded]")]
+    [InlineData(
+        "HttpStatusCode is Forbidden. The user has exceeded the number of videos they may upload. [uploadLimitExceeded]"
+    )]
     public void DailyQuota_PausesUntilTheQuotaDayTurns(string message)
     {
         var refused = new InvalidOperationException(message);

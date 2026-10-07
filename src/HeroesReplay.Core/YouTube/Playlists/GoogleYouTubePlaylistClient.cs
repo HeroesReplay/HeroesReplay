@@ -79,12 +79,12 @@ public sealed class GoogleYouTubePlaylistClient : IYouTubePlaylistClient
         };
     }
 
-    public async Task<IReadOnlyDictionary<string, string>> PrivacyAsync(
+    public async Task<IReadOnlyDictionary<string, YouTubeVideoStatus>> StatusAsync(
         IReadOnlyList<string> videoIds,
         CancellationToken cancellationToken
     )
     {
-        var privacy = new Dictionary<string, string>(StringComparer.Ordinal);
+        var privacy = new Dictionary<string, YouTubeVideoStatus>(StringComparer.Ordinal);
         if (videoIds == null || videoIds.Count == 0)
         {
             return privacy;
@@ -101,7 +101,13 @@ public sealed class GoogleYouTubePlaylistClient : IYouTubePlaylistClient
         {
             if (!string.IsNullOrWhiteSpace(video?.Id))
             {
-                privacy[video.Id] = video.Status?.PrivacyStatus;
+                privacy[video.Id] = new YouTubeVideoStatus(
+                    video.Status?.PrivacyStatus,
+                    video.Status?.UploadStatus,
+                    video.Status?.RejectionReason,
+                    video.Status?.FailureReason,
+                    video.Status?.PublishAtDateTimeOffset
+                );
             }
         }
 

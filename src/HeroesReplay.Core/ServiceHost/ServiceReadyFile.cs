@@ -52,12 +52,27 @@ public sealed class ServiceReadyReport
     /// that stays here too long is <c>spectate.launch_stalled</c>.
     /// </summary>
     public DateTimeOffset? LaunchingSince { get; set; }
+
+    /// <summary>
+    /// A problem the role found in its own work while it still runs (the uploader blocked by
+    /// quota with a backlog, nothing published for a day). <c>services status</c> reports the
+    /// role degraded with this code and cause. Null when the role has no concern.
+    /// </summary>
+    public ServiceRoleConcern Concern { get; set; }
 }
 
 public sealed class ServiceRoleError
 {
     public string Message { get; set; }
     public DateTimeOffset? At { get; set; }
+}
+
+public sealed class ServiceRoleConcern
+{
+    /// <summary>Stable cause code, such as <c>youtube.quota_blocked</c>.</summary>
+    public string Code { get; set; }
+    public string Cause { get; set; }
+    public DateTimeOffset? Since { get; set; }
 }
 
 /// <summary>What a role says about itself in <see cref="ServiceReadyReport.Readiness"/>.</summary>

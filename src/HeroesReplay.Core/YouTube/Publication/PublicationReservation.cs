@@ -31,7 +31,16 @@ public static class PublicationReservation
     public const string Refused = "refused";
     public const string Terminal = "terminal";
 
+    public const string FileName = "publication-reservations.txt";
+    public const string DryRunFileName = "publication-reservations-dry-run.txt";
+
     private static readonly object Sync = new();
+
+    /// <summary>The live ledger in <paramref name="dataDirectory"/>, or the dry run's own one.</summary>
+    public static string PathFor(string dataDirectory, bool dryRun = false) =>
+        string.IsNullOrWhiteSpace(dataDirectory)
+            ? null
+            : System.IO.Path.Combine(dataDirectory, dryRun ? DryRunFileName : FileName);
 
     public static PublicationReservationResult TryReserve(
         string path,
@@ -189,6 +198,58 @@ public static class PublicationReservation
         }
 
         return latest;
+    }
+
+    /// <summary>
+    /// Slots whose publish time is after <paramref name="now"/>: videos uploaded, or about to
+    /// be, that are not public yet. Zero when the ledger is empty or missing.
+    /// </summary>
+    public static int CountAfter(string path, DateTimeOffset now)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return 0;
+        }
+
+        lock (Sync)
+        {
+            int count = 0;
+            foreach (Slot slot in Read(path).Reserved)
+            {
+                if (slot.At > now)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// Slots whose publish time falls in the <paramref name="window"/> that ends at
+    /// <paramref name="now"/>. Every video this uploader published has one, at its publish time.
+    /// </summary>
+    public static int CountIn(string path, DateTimeOffset now, TimeSpan window)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return 0;
+        }
+
+        lock (Sync)
+        {
+            int count = 0;
+            foreach (Slot slot in Read(path).Reserved)
+            {
+                if (slot.At <= now && now - slot.At < window)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
     }
 
     public static bool IsWorkKey(string workKey)
