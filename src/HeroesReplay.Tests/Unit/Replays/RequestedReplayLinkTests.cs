@@ -197,7 +197,7 @@ public sealed class RequestedReplayLinkTests : IDisposable
         );
         cache.Defer(first);
         LoadedReplay next = await cache.TryLoadNextReplayAsync();
-        Assert.Equal(65600001, next.ReplayId);
+        Assert.Equal(65600003, next.ReplayId);
         cache.MarkSpectated(next);
 
         now = now.Add(ReplayRetryPlan.RequestDeferFor).AddSeconds(1);

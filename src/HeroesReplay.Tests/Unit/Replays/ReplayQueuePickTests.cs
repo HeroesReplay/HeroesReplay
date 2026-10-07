@@ -34,9 +34,69 @@ public class ReplayQueuePickTests
         Assert.True(ReplayQueuePick.CanLaunch("2.55.17.98025", Installed));
     }
 
+    [Fact]
+    public async Task TryLoadNext_PlaysTheNewestOrdinaryReplayFirst()
+    {
+        // Production on 2026-10-07 held 768 cached replays from before 2.57.0.98348. Oldest first
+        // played that backlog for days before any current-patch replay.
+        string root = Path.Combine(Path.GetTempPath(), "hr-queue-new-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(Path.Combine(root, "Standard"));
+        Directory.CreateDirectory(Path.Combine(root, "Requests"));
+        File.WriteAllText(Path.Combine(root, SpectateQueue.SpectatedFileName), string.Empty);
+        foreach (int id in new[] { 10, 20, 30 })
+        {
+            File.WriteAllBytes(
+                Path.Combine(root, "Standard", id + "_Storm League_Map_.StormReplay"),
+                new byte[] { 1 }
+            );
+        }
+
+        var settings = new AppSettings
+        {
+            Location = new LocationSettings { DataDirectory = root },
+            HeroesProfileApi = new HeroesProfileApiSettings
+            {
+                StandardCacheDirectoryName = "Standard",
+                RequestsCacheDirectoryName = "Requests",
+            },
+            StormReplay = new StormReplaySettings { Seperator = "_" },
+            Spectate = new SpectateSettings { MinimumGameVersion = "2.57.0.98285" },
+        };
+        var provider = new ReplayCacheProvider(
+            NullLogger<ReplayCacheProvider>.Instance,
+            new VersionLoader(
+                new Dictionary<int, string>
+                {
+                    [10] = "2.57.0.98285",
+                    [20] = "2.57.0.98304",
+                    [30] = "2.57.0.98348",
+                }
+            ),
+            new ReplayHelper(NullLogger<ReplayHelper>.Instance, settings),
+            new IdleProfile(),
+            new CancellationTokenProvider(),
+            settings
+        );
+        provider.UseInstalledVersions(() => new[] { "2.57.0.98304", "2.57.0.98348" });
+
+        try
+        {
+            LoadedReplay first = await provider.TryLoadNextReplayAsync();
+            Assert.Equal(30, first.ReplayId);
+            Assert.Equal("2.57.0.98348", first.Replay.ReplayVersion);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     [Theory]
-    [InlineData(false, 10)]
-    [InlineData(true, 30)]
+    [InlineData(false, 30)]
+    [InlineData(true, 10)]
     public async Task TryLoadNext_TakesAMissingOlderBuildUnlessItsDownloadFailed(
         bool held,
         int expected
@@ -79,7 +139,7 @@ public class ReplayQueuePickTests
         var provider = new ReplayCacheProvider(
             NullLogger<ReplayCacheProvider>.Instance,
             new VersionLoader(
-                new Dictionary<int, string> { [10] = "2.57.0.98285", [30] = "2.57.0.98304" }
+                new Dictionary<int, string> { [10] = "2.57.0.98304", [30] = "2.57.0.98285" }
             ),
             new ReplayHelper(NullLogger<ReplayHelper>.Instance, settings),
             new IdleProfile(),
@@ -115,7 +175,7 @@ public class ReplayQueuePickTests
             "20" + Environment.NewLine
         );
         File.WriteAllBytes(
-            Path.Combine(root, "Standard", "10_Storm League_Map_.StormReplay"),
+            Path.Combine(root, "Standard", "40_Storm League_Map_.StormReplay"),
             new byte[] { 1 }
         );
         File.WriteAllBytes(
@@ -140,7 +200,7 @@ public class ReplayQueuePickTests
         var loader = new VersionLoader(
             new Dictionary<int, string>
             {
-                [10] = "2.57.0.98400",
+                [40] = "2.57.0.98400",
                 [20] = "2.55.17.98025",
                 [30] = "2.57.0.98304",
             }
@@ -169,18 +229,18 @@ public class ReplayQueuePickTests
             string reread = File.ReadAllText(lease30);
             Assert.Contains("state=Leased", reread);
             Assert.Contains("replay=30", reread);
-            Assert.False(File.Exists(Path.Combine(root, "leases", "10.txt")));
+            Assert.False(File.Exists(Path.Combine(root, "leases", "40.txt")));
 
             LoadedReplay second = await provider.TryLoadNextReplayAsync();
             Assert.Equal(20, second.ReplayId);
             Assert.Equal("2.55.17.98025", second.Replay.ReplayVersion);
             Assert.Equal(3, loader.Loads);
             string deferred = File.ReadAllText(Path.Combine(root, SpectateQueue.DeferredFileName));
-            Assert.Contains("10 ", deferred);
+            Assert.Contains("40 ", deferred);
             string spectated = File.ReadAllText(
                 Path.Combine(root, SpectateQueue.SpectatedFileName)
             );
-            Assert.DoesNotContain("10", spectated);
+            Assert.DoesNotContain("40", spectated);
             Assert.DoesNotContain("20", spectated);
         }
         finally
