@@ -28,6 +28,18 @@ public static class PublicationSchedule
 {
     public const int MaxInsertsPerQuotaDay = 80;
 
+    /// <summary>
+    /// The refusal when <c>ReplayMedia:MaxInsertsPerQuotaDay</c> inserts were already sent this
+    /// Pacific quota day. It is this app's own cap, not YouTube's upload bucket.
+    /// </summary>
+    public const string InsertCap = "insert-cap";
+
+    /// <summary>
+    /// The refusal when no time inside <c>ReplayMedia:MaxPublishAhead</c> keeps every pacing
+    /// rule: the publication schedule is full for this replay.
+    /// </summary>
+    public const string PublicationFull = "publication-full";
+
     public static readonly TimeSpan MinimumInterval = TimeSpan.FromHours(2);
 
     private static readonly TimeSpan Day = TimeSpan.FromHours(24);
@@ -188,7 +200,7 @@ public static class PublicationSchedule
     /// Each rule looks both ways, at videos already public and at slots already scheduled, so a
     /// later replay can take a free time between two earlier ones. A request is not paced: it
     /// publishes now. No time inside <see cref="ReplayMediaPolicySettings.MaxPublishAhead"/> is
-    /// <c>horizon</c>, and the recording waits. A granted reason is <c>ready</c> when the time is
+    /// <c>publication-full</c>, and the recording waits. A granted reason is <c>ready</c> when the time is
     /// now, otherwise the rule that pushed it later. A private listing has no publish time.
     /// <paramref name="seen"/> only feeds the map, rank, and hero checks.
     /// </summary>
@@ -236,7 +248,7 @@ public static class PublicationSchedule
             waited ??= conflict;
         }
 
-        return PublicationDecision.Refused("horizon");
+        return PublicationDecision.Refused(PublicationFull);
     }
 
     /// <summary>
@@ -280,7 +292,7 @@ public static class PublicationSchedule
 
         if (insertsThisQuotaDay >= settings.MaxInsertsPerQuotaDay)
         {
-            return PublicationDecision.Refused("quota");
+            return PublicationDecision.Refused(InsertCap);
         }
 
         if (!publicListing)

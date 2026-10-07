@@ -27,6 +27,15 @@ public sealed class YouTubePlaylistCache
 public sealed class YouTubeLibraryPass
 {
     public string Skipped { get; set; }
+
+    /// <summary>
+    /// A short code for <see cref="Skipped"/>: <c>not-due</c>, <c>locked</c>, <c>paused</c>,
+    /// <c>units-spent</c>, <c>no-consent</c>, or <c>no-data-directory</c>. Null when the pass ran.
+    /// </summary>
+    public string SkipCode { get; set; }
+
+    /// <summary>When a skipped pass may run again, when the pass knows it. Null means one interval on.</summary>
+    public DateTimeOffset? RetryAt { get; set; }
     public bool DryRun { get; set; }
     public int NewVideos { get; set; }
     public int Recorded { get; set; }
@@ -44,6 +53,16 @@ public interface IYouTubeLibrary
     /// last pass was inside <c>YouTube:LibraryInterval</c>.
     /// </summary>
     Task<YouTubeLibraryPass> RunOnceAsync(bool force, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The uploader's own pass. <paramref name="startup"/> runs it whatever the last pass time
+    /// was. It never asks for consent: with no stored <c>{ChannelId}:library</c> consent it is
+    /// skipped, because a background process must not open a browser on the stream PC.
+    /// </summary>
+    Task<YouTubeLibraryPass> RunInBackgroundAsync(
+        bool startup,
+        CancellationToken cancellationToken
+    );
 }
 
 /// <summary>
@@ -66,7 +85,6 @@ public class YouTubeLibrary : IYouTubeLibrary
     private readonly AppSettings settings;
     private readonly IYouTubePlaylistClient playlists;
     private readonly IHeroesProfileService heroesProfile;
-    private DateTimeOffset? loggedPause;
 
     public YouTubeLibrary(
         ILogger<YouTubeLibrary> logger,
@@ -91,15 +109,44 @@ public class YouTubeLibrary : IYouTubeLibrary
     /// </summary>
     internal Func<TimeSpan, CancellationToken, Task> Delay { get; set; } = Task.Delay;
 
-    public async Task<YouTubeLibraryPass> RunOnceAsync(
+    public Task<YouTubeLibraryPass> RunOnceAsync(bool force, CancellationToken cancellationToken) =>
+        RunAsync(force, background: false, cancellationToken);
+
+    public Task<YouTubeLibraryPass> RunInBackgroundAsync(
+        bool startup,
+        CancellationToken cancellationToken
+    ) => RunAsync(force: startup, background: true, cancellationToken);
+
+    /// <summary>
+    /// How long the uploader's library loop waits after <paramref name="pass"/>: until the time a
+    /// skipped pass named, otherwise one <c>LibraryInterval</c>. Never less than a minute.
+    /// </summary>
+    public static TimeSpan NextPassIn(
+        YouTubeLibraryPass pass,
+        TimeSpan interval,
+        DateTimeOffset now
+    )
+    {
+        TimeSpan minimum = TimeSpan.FromMinutes(1);
+        TimeSpan wait =
+            pass?.RetryAt is DateTimeOffset at && at > now
+                ? at - now
+                : (interval > TimeSpan.Zero ? interval : TimeSpan.FromHours(1));
+        return wait < minimum ? minimum : wait;
+    }
+
+    private async Task<YouTubeLibraryPass> RunAsync(
         bool force,
+        bool background,
         CancellationToken cancellationToken
     )
     {
+        // A stop that already arrived must not stamp the pass time without a pass.
+        cancellationToken.ThrowIfCancellationRequested();
         string data = settings.Location?.DataDirectory;
         if (string.IsNullOrWhiteSpace(data))
         {
-            return new YouTubeLibraryPass { Skipped = "Location:DataDirectory is not set" };
+            return Skip("no-data-directory", "Location:DataDirectory is not set", null);
         }
 
         DateTimeOffset now = Clock();
@@ -112,33 +159,51 @@ public class YouTubeLibrary : IYouTubeLibrary
         using FileStream held = DurableFile.TryLock(Path.Combine(data, LockFileName));
         if (held == null)
         {
-            logger.LogInformation("YouTube library pass skipped. Another process is running it.");
-            return new YouTubeLibraryPass { Skipped = "another process is running the pass" };
+            return Skip("locked", "another process is running the pass", null);
         }
 
         string indexPath = YouTubeUploadsIndex.PathFor(data);
         YouTubeUploadsIndex index = YouTubeUploadsIndex.Load(indexPath);
         if (!force && !index.IsDue(now, settings.YouTube.LibraryInterval))
         {
-            return new YouTubeLibraryPass { Skipped = "the last pass is inside LibraryInterval" };
+            DateTimeOffset due = index.LastRunAt.Value + settings.YouTube.LibraryInterval;
+            return Skip(
+                "not-due",
+                $"the last pass ran at {index.LastRunAt:u}, inside YouTube:LibraryInterval {settings.YouTube.LibraryInterval}; the next is due at {due:u}",
+                due,
+                // `youtube library` without --once asks every minute; only the uploader's hourly loop says it.
+                background ? LogLevel.Information : LogLevel.Debug
+            );
         }
 
         YouTubeQuotaDay day = units.Read(now);
         if (YouTubeQuotaUnits.Paused(day, now))
         {
-            // The uploader asks every poll once the pass is due. Say it once per pause.
-            LogLevel level =
-                day.LibraryPausedUntil == loggedPause ? LogLevel.Debug : LogLevel.Information;
-            loggedPause = day.LibraryPausedUntil;
-            logger.Log(
-                level,
-                "YouTube library pass is paused by a quota response until {ResumeAt:o}.",
+            return Skip(
+                "paused",
+                $"a quota response paused it until {day.LibraryPausedUntil:u}",
                 day.LibraryPausedUntil
             );
-            return new YouTubeLibraryPass
-            {
-                Skipped = $"paused by a quota response until {day.LibraryPausedUntil:o}",
-            };
+        }
+
+        if (units.LibraryRoom(day) < YouTubeQuotaUnits.List)
+        {
+            DateTimeOffset next = YouTubeQuotaUnits.NextQuotaDay(now);
+            return Skip(
+                "units-spent",
+                $"today's library units are spent ({day.LibraryUnits} of YouTube:LibraryUnitsPerDay {settings.YouTube.LibraryUnitsPerDay}, pool {day.Total} of {settings.YouTube.DailyQuotaUnits} less {settings.YouTube.QuotaReserveUnits} held back); the room returns at {next:u}",
+                next
+            );
+        }
+
+        if (background && !await playlists.HasConsentAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return Skip(
+                "no-consent",
+                $"no stored consent for {LibraryUser(settings)} (the full youtube scope). A background pass never opens a browser. Run `heroesreplay youtube library --once` once at this machine to grant it. Until then no scheduled upload is confirmed public and nothing is filed into playlists",
+                null,
+                LogLevel.Warning
+            );
         }
 
         index.LastRunAt = now;
@@ -205,6 +270,28 @@ public class YouTubeLibrary : IYouTubeLibrary
             pass.UnitsSpent
         );
         return pass;
+    }
+
+    /// <summary>The token store key of the library consent: <c>{ChannelId}:library</c>.</summary>
+    public static string LibraryUser(AppSettings settings) =>
+        string.IsNullOrWhiteSpace(settings?.YouTube?.ChannelId)
+            ? "heroesreplay-library"
+            : settings.YouTube.ChannelId + ":library";
+
+    private YouTubeLibraryPass Skip(
+        string code,
+        string reason,
+        DateTimeOffset? retryAt,
+        LogLevel level = LogLevel.Information
+    )
+    {
+        logger.Log(level, "YouTube library pass skipped: {Reason}.", reason);
+        return new YouTubeLibraryPass
+        {
+            Skipped = reason,
+            SkipCode = code,
+            RetryAt = retryAt,
+        };
     }
 
     /// <summary>

@@ -211,7 +211,7 @@ public class PublicationPlanTests
         );
 
         Assert.False(quota.Allow);
-        Assert.Equal("quota", quota.Reason);
+        Assert.Equal(PublicationSchedule.InsertCap, quota.Reason);
         Assert.Null(quota.PublishAtUtc);
         Assert.False(stale.Allow);
         Assert.Equal("stale", stale.Reason);

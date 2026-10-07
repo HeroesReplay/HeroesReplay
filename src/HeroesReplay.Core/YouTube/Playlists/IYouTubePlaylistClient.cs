@@ -47,6 +47,12 @@ public sealed class YouTubePlaylistsPage
 /// </summary>
 public interface IYouTubePlaylistClient
 {
+    /// <summary>
+    /// True when the library consent (<c>{ChannelId}:library</c>, the full youtube scope) is
+    /// stored with a refresh token, so a call can run without asking anyone to sign in.
+    /// </summary>
+    Task<bool> HasConsentAsync(CancellationToken cancellationToken);
+
     Task<string> UploadsPlaylistIdAsync(CancellationToken cancellationToken);
 
     Task<YouTubeUploadsPage> UploadsAsync(

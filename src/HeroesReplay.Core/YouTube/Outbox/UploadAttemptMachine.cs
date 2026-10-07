@@ -239,6 +239,44 @@ public static class UploadAttemptMachine
         return CopyForward(current, UploadAttemptState.UploadPending, at, null);
     }
 
+    /// <summary>
+    /// An interrupted send whose resumable session YouTube reported incomplete: no video exists
+    /// for it, so the session is dropped and the attempt goes back to pending for a new insert
+    /// (with a new publish time). Only an attempt with no video id can be abandoned.
+    /// </summary>
+    public static UploadAttemptResult AbandonSession(
+        UploadAttemptManifest current,
+        DateTimeOffset at
+    )
+    {
+        UploadAttemptResult rejected = RejectClockOrMissing(current, at);
+        if (rejected != null)
+        {
+            return rejected;
+        }
+
+        if (
+            current.State != UploadAttemptState.AmbiguousUpload
+            || !UploadAttemptReceipt.IsBound(current)
+            || UploadAttemptReceipt.HasExactText(current.VideoId)
+        )
+        {
+            return UploadAttemptResult.Failure(UploadAttemptReasons.IllegalTransition, current);
+        }
+
+        return Advance(
+            current,
+            UploadAttemptState.UploadPending,
+            at,
+            current.MediaPath,
+            current.MediaSize,
+            current.MediaHash,
+            null,
+            null,
+            null
+        );
+    }
+
     public static UploadAttemptResult NoteSession(
         UploadAttemptManifest current,
         string sessionUri,
@@ -484,6 +522,15 @@ public static class UploadAttemptMachine
                 || string.Equals(current.SessionUri, proposed.SessionUri, StringComparison.Ordinal);
         }
 
+        // An abandoned session leaves the attempt pending with no session.
+        if (
+            current.State == UploadAttemptState.AmbiguousUpload
+            && proposed.State == UploadAttemptState.UploadPending
+        )
+        {
+            return string.IsNullOrEmpty(proposed.SessionUri);
+        }
+
         return string.Equals(current.SessionUri, proposed.SessionUri, StringComparison.Ordinal);
     }
 
@@ -588,7 +635,9 @@ public static class UploadAttemptMachine
                     || to == UploadAttemptState.Uploading
                     || to == UploadAttemptState.UploadPending;
             case UploadAttemptState.AmbiguousUpload:
-                return to == UploadAttemptState.Uploading || to == UploadAttemptState.Uploaded;
+                return to == UploadAttemptState.Uploading
+                    || to == UploadAttemptState.Uploaded
+                    || to == UploadAttemptState.UploadPending;
             default:
                 return false;
         }
