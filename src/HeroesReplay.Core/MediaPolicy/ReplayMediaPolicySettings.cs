@@ -48,6 +48,14 @@ public class ReplayMediaPolicySettings
 
     public int MaxInsertsPerQuotaDay { get; set; } = PublicationSchedule.MaxInsertsPerQuotaDay;
 
+    /// <summary>
+    /// A replay that is not a viewer request is recorded only while the recordings waiting for
+    /// upload plus the uploads waiting for their publish time fit what the pacing rules can
+    /// publish within <see cref="MaxPublishAhead"/>, and the waiting recordings fit one day of
+    /// upload calls (<see cref="RecordingCap"/>, #250). False records whatever the mode selects.
+    /// </summary>
+    public bool CapRecordingToPublication { get; set; } = true;
+
     /// <summary>When true, <see cref="MinimumGameVersion"/> is required and off-patch replays are rejected.</summary>
     public bool RequireCurrentPatch { get; set; }
 

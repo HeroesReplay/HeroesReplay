@@ -21,6 +21,15 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 | Stream service and key (`service.json`) | Operator secret | Never packaged, copied, logged, or returned by a tool. The tools report only the service type, the named service (`Twitch`), and whether a key is set. |
 | Twitch ingest arm (`%LOCALAPPDATA%\HeroesReplay\stream-armed`) | The machine | Ingest needs this arm and `OBS:StreamingEnabled`. `heroesreplay obs arm` / `disarm` / `status`. The live box is armed. ASA-SERVER is armed only for a stream proof; its OBS streams to a developer Twitch account. |
 
+## Launching OBS
+
+HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` is not running (`ObsCoordinator`, `ObsLaunchDecision`). Nothing else launches it: `services start`, `update install-obs`, `apply-release.ps1`, and the logon task only check for it.
+
+- **Arguments:** `--profile "<OBS:ProfileName>" --collection "<OBS:SceneCollectionName>"`, nothing else. OBS 32 has no flag that skips its crash dialog (`--disable-shutdown-check` does not exist in 32.2.2). `--disable-updater` and `--disable-missing-files-check` are not passed: neither dialog stops the websocket, and `obs validate` reports missing assets.
+- **Crash sentinel:** OBS 32 writes `%APPDATA%\obs-studio\.sentinel\run_<uuid>` when it starts and deletes it on a clean exit. A `run_*` file left by a crash, a power loss, or a kill makes the next start wait on the "OBS Studio Crash Detected" dialog for a person, and the websocket does not start (seen on ASA-SERVER with OBS 32.2.2). Right before HeroesReplay launches OBS, and only when no `obs64` process runs, `ObsCrashSentinel` deletes every `run_*` file there and logs each one (Information, file name and when it was written). A running OBS's sentinel is never touched. Portable OBS installs are not handled. An OBS the operator starts some other way (a startup shortcut) still shows the dialog after an unclean exit.
+- **Startup grace:** after HeroesReplay starts OBS, the identify is retried (10 s attempts, 2 s apart) until `OBS:StartupIdentifyTimeout` (default 60 s) or until that OBS exits. An OBS that was already running gets one attempt.
+- **No OBS is not a lost replay:** when `BeginSession` still cannot identify OBS, spectate logs a warning and plays the replay without OBS (clock and hero selection go on). That session has no scene change, recording, or report scenes, and the next replay tries OBS again.
+
 ## Updating the collection
 
 `services start`, `heroesreplay update install-obs` (run by `apply-release.ps1`), and an OBS launch by the spectator all go through `ObsCollectionPatcher`.

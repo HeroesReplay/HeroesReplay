@@ -30,6 +30,14 @@ public class ObsController : IObsController
     private readonly ObsCoordinator coordinator;
     private bool replayInfoHidden;
 
+    /// <summary>
+    /// When <see cref="BeginSession"/> could not identify OBS, the replay is spectated without it.
+    /// Until the session ends, scene, info, and recording calls return at once instead of waiting
+    /// out another identify on the spectator's clock loop. Something else that identifies the
+    /// socket (the stream reconcile) brings them back.
+    /// </summary>
+    private volatile bool unavailableThisSession;
+
     public ObsController(
         ILogger<ObsController> logger,
         IReplayContext context,
@@ -67,15 +75,42 @@ public class ObsController : IObsController
                         arm.IsArmed(),
                         arm.FilePath
                     )
-                )
+                ),
+            settings.OBS?.StartupIdentifyTimeout,
+            sentinel: new ObsCrashSentinel(
+                ObsCrashSentinel.DefaultDirectory(),
+                () => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
+                logger
+            )
         );
     }
 
     public void BeginSession()
     {
         ObsCollectionApplyResult patch = PatchInstalledCollection();
-        coordinator.EnsureIdentified();
+        try
+        {
+            coordinator.EnsureIdentified();
+        }
+        catch (Exception)
+        {
+            unavailableThisSession = true;
+            throw;
+        }
+
+        unavailableThisSession = false;
         SwapLiveCollection(patch);
+    }
+
+    private bool SkipWhileUnavailable(string action)
+    {
+        if (!unavailableThisSession || coordinator.IsIdentified)
+        {
+            return false;
+        }
+
+        logger.LogDebug("OBS was not identified for this replay. {Action} is skipped.", action);
+        return true;
     }
 
     private ObsCollectionApplyResult PatchInstalledCollection()
@@ -186,11 +221,17 @@ public class ObsController : IObsController
 
     public void EndSession()
     {
+        unavailableThisSession = false;
         coordinator.Disconnect();
     }
 
     public void ConfigureFromContext()
     {
+        if (SkipWhileUnavailable("Configuring the replay sources"))
+        {
+            return;
+        }
+
         try
         {
             EnsureConnected();
@@ -243,6 +284,14 @@ public class ObsController : IObsController
 
     public ObsRecordingResult StartRecording()
     {
+        if (SkipWhileUnavailable("The recording"))
+        {
+            return ObsRecordingResult.Failed(
+                ObsOutputFailure.Disconnected,
+                "OBS was not identified for this replay. Nothing was recorded."
+            );
+        }
+
         string reason = SessionMedia.HasRequestor(context.Current?.LoadedReplay)
             ? "viewer request"
             : "every replay";
@@ -295,7 +344,11 @@ public class ObsController : IObsController
 
     public void UpdateReplayInfoVisibility(TimeSpan matchTime)
     {
-        if (replayInfoHidden || !settings.OBS.Enabled)
+        if (
+            replayInfoHidden
+            || !settings.OBS.Enabled
+            || SkipWhileUnavailable("Hiding the replay info")
+        )
         {
             return;
         }
@@ -331,6 +384,11 @@ public class ObsController : IObsController
 
     public void SwapToGameScene()
     {
+        if (SkipWhileUnavailable("The game scene"))
+        {
+            return;
+        }
+
         SceneRetry()
             .Execute(() =>
             {
@@ -366,6 +424,11 @@ public class ObsController : IObsController
 
     public void SwapToWaitingScene()
     {
+        if (SkipWhileUnavailable("The waiting scene"))
+        {
+            return;
+        }
+
         SceneRetry()
             .Execute(() =>
             {

@@ -15,9 +15,23 @@ public static class PendingUploadSize
         string contextsDirectory,
         string entryFileName,
         string uploadedFileName
+    ) => Measure(contextsDirectory, entryFileName, uploadedFileName).Bytes;
+
+    /// <summary>Recordings still waiting for a videos.insert.</summary>
+    public static int Count(
+        string contextsDirectory,
+        string entryFileName,
+        string uploadedFileName
+    ) => Measure(contextsDirectory, entryFileName, uploadedFileName).Count;
+
+    private static (long Bytes, int Count) Measure(
+        string contextsDirectory,
+        string entryFileName,
+        string uploadedFileName
     )
     {
         long total = 0;
+        int count = 0;
         foreach (
             string path in PendingYouTubeUpload.Find(
                 contextsDirectory,
@@ -36,13 +50,14 @@ public static class PendingUploadSize
                 )
                 {
                     total += info.Length;
+                    count++;
                 }
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
 
-        return total;
+        return (total, count);
     }
 
     public static bool IsInserted(string directory, string entryFileName)

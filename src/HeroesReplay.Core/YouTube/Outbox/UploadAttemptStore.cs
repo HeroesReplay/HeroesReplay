@@ -98,7 +98,8 @@ public sealed class UploadAttemptStore
         DateTimeOffset at,
         UploadAttemptPolicy policy,
         bool replaceOpen,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        bool replaceEvaluated = false
     )
     {
         if (policy == null)
@@ -156,7 +157,11 @@ public sealed class UploadAttemptStore
                     }
 
                     UploadAttemptPolicy current = existing.Manifest.Policy;
-                    if (current != null && (!replaceOpen || current.PublicationEvaluated))
+                    // An evaluated publication is final, except a session miss the caller re-decides.
+                    if (
+                        current != null
+                        && (!replaceOpen || (current.PublicationEvaluated && !replaceEvaluated))
+                    )
                     {
                         return existing;
                     }

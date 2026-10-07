@@ -42,21 +42,36 @@ public class YouTubeSettings
     public TimeSpan LibraryWriteSpacing { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// Quota units the library pass may spend in one Pacific quota day. Uploads are not
-    /// limited by this number.
+    /// Pool units the library pass may spend in one Pacific quota day. Uploads have their own
+    /// bucket (<see cref="DailyUploadCalls"/>) and are not limited by this number.
     /// </summary>
     public int LibraryUnitsPerDay { get; set; } = 3000;
 
     /// <summary>
-    /// The project's daily YouTube quota. The library pass stops before the day's spend
-    /// would pass this minus <see cref="QuotaReserveUnits"/>.
+    /// The project's shared YouTube Data API pool (Queries per day): list calls, playlist
+    /// writes, and every call other than <c>videos.insert</c> and <c>search.list</c>. The
+    /// library pass stops before the day's spend would pass this minus
+    /// <see cref="QuotaReserveUnits"/>. Uploads are not charged here (#250).
     /// </summary>
     public int DailyQuotaUnits { get; set; } = 10000;
 
     /// <summary>
-    /// Units the library pass always leaves unspent for uploads.
+    /// Pool units the library pass always leaves unspent, a margin for other callers such as
+    /// the tools scripts.
     /// </summary>
-    public int QuotaReserveUnits { get; set; } = 1600;
+    public int QuotaReserveUnits { get; set; } = 500;
+
+    /// <summary>
+    /// The project's <c>videos.insert</c> bucket (Video Uploads per day). Each upload is one
+    /// call here and spends nothing from <see cref="DailyQuotaUnits"/>.
+    /// </summary>
+    public int DailyUploadCalls { get; set; } = 100;
+
+    /// <summary>
+    /// Upload calls a day always leaves unused, so a retry, a dev upload on the same project,
+    /// or a call the ledger missed does not run into YouTube's hard limit.
+    /// </summary>
+    public int UploadCallReserve { get; set; } = 5;
 
     /// <summary>
     /// Heroes Profile lookups one library pass may make for videos whose map, mode, rank,

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.YouTube.Publication;
 using HeroesReplay.Core.YouTube.Quota;
 using HeroesReplay.Core.YouTube.Search;
 using Microsoft.Extensions.Logging;
@@ -230,6 +231,8 @@ public class YouTubeLibrary : IYouTubeLibrary
             )
             .OrderBy(video => video.PublishAt)
             .ToList();
+        TimeSpan grace = PublicationTally.ConfirmGrace(settings.YouTube.LibraryInterval);
+        var late = new List<string>();
         foreach (YouTubeLibraryVideo[] batch in due.Chunk(50))
         {
             if (!budget.TrySpend(YouTubeQuotaUnits.List))
@@ -237,22 +240,69 @@ public class YouTubeLibrary : IYouTubeLibrary
                 return;
             }
 
-            IReadOnlyDictionary<string, string> privacy = await playlists
-                .PrivacyAsync(batch.Select(video => video.VideoId).ToList(), cancellationToken)
+            IReadOnlyDictionary<string, YouTubeVideoStatus> statuses = await playlists
+                .StatusAsync(batch.Select(video => video.VideoId).ToList(), cancellationToken)
                 .ConfigureAwait(false);
             foreach (YouTubeLibraryVideo video in batch)
             {
+                statuses.TryGetValue(video.VideoId, out YouTubeVideoStatus status);
+                string privacy = status?.PrivacyStatus;
                 if (
-                    privacy.TryGetValue(video.VideoId, out string status)
-                    && !string.IsNullOrWhiteSpace(status)
-                    && !string.Equals(video.PrivacyStatus, status, StringComparison.Ordinal)
+                    !string.IsNullOrWhiteSpace(privacy)
+                    && !string.Equals(video.PrivacyStatus, privacy, StringComparison.Ordinal)
                 )
                 {
-                    video.PrivacyStatus = status;
+                    video.PrivacyStatus = privacy;
                     YouTubeLibraryRecord.Append(recordPath, video);
+                }
+
+                if (
+                    !string.Equals(privacy, "public", StringComparison.Ordinal)
+                    && now - video.PublishAt.Value > grace
+                )
+                {
+                    late.Add(DescribeLate(video, status));
                 }
             }
         }
+
+        if (late.Count > 0)
+        {
+            logger.LogWarning(
+                "YouTube still reports {Count} scheduled video(s) not public more than {Grace} after their publish time: {Videos}. YouTube keeps every videos.insert from an unaudited API project private; if these show locked private in Studio, the Google project needs the YouTube API audit. A rejected or failed upload status means YouTube did not keep the video.",
+                late.Count,
+                grace,
+                string.Join("; ", late.Take(10))
+            );
+        }
+    }
+
+    private static string DescribeLate(YouTubeLibraryVideo video, YouTubeVideoStatus status)
+    {
+        if (status == null)
+        {
+            return video.VideoId + " (not returned: deleted, or not visible to this consent)";
+        }
+
+        var parts = new List<string>
+        {
+            status.PrivacyStatus ?? "no privacy",
+            "upload " + (status.UploadStatus ?? "unknown"),
+            status.PublishAt is DateTimeOffset at
+                ? "publishAt " + at.ToString("u", System.Globalization.CultureInfo.InvariantCulture)
+                : "no publishAt",
+        };
+        if (!string.IsNullOrWhiteSpace(status.RejectionReason))
+        {
+            parts.Add("rejected " + status.RejectionReason);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status.FailureReason))
+        {
+            parts.Add("failed " + status.FailureReason);
+        }
+
+        return video.VideoId + " (" + string.Join(", ", parts) + ")";
     }
 
     private async Task ListUploadsAsync(
@@ -761,7 +811,7 @@ public class YouTubeLibrary : IYouTubeLibrary
                 Units = new
                 {
                     day.QuotaDay,
-                    day.UploadUnits,
+                    day.UploadCalls,
                     day.LibraryUnits,
                     LibraryRoom = units.LibraryRoom(day),
                 },

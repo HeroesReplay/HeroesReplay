@@ -14,6 +14,8 @@ countdown/index.html?m=2&s=0&autostart=1&title=NEXT%20MATCH&end=STARTING
 
 Suggested source size: **720×240** (title + clock). At the old **225×100** size only the digits show.
 
+The end text stays up from zero until the next replay is on screen, which can be minutes when the replay loads slowly. It is set near the title's size (`clamp(24px, 10vw, 96px)`, 72px in a 720px source), not the clock's 22vw, and the page shrinks any title or end text that is still wider than the source so it is never cut off (issue #248).
+
 | Query | Default | Meaning |
 | --- | --- | --- |
 | `m` | 2 | Minutes |

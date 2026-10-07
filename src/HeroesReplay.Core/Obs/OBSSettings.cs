@@ -44,6 +44,12 @@ public class OBSSettings
     /// </summary>
     public bool CloseOwnedOnStop { get; set; }
 
+    /// <summary>
+    /// After HeroesReplay starts OBS itself, how long the websocket identify is retried before
+    /// it fails. An OBS that was already running gets one attempt. Default 60 seconds.
+    /// </summary>
+    public TimeSpan StartupIdentifyTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
     public bool RecordRequestedReplays { get; set; }
     public string InfoFileName { get; set; }
     public string WebSocketEndpoint { get; set; }

@@ -52,7 +52,11 @@ public class TeamCompositionSettings
     /// <summary>At least <c>MinHeroes</c> melee heroes, when <see cref="AllMelee"/> did not match.</summary>
     public CompositionRule OneRanged { get; set; } = new() { Label = "One ranged", MinHeroes = 4 };
 
-    /// <summary>At least <c>MinHeroes</c> heroes that heal allies or themselves, the healer included.</summary>
+    /// <summary>
+    /// At least <c>MinHeroes</c> heroes that heal or shield allies: the Healer role,
+    /// <c>AllyHealer</c>, or <c>AllySustain</c> (Zarya by default). A <c>SelfHealer</c> tank or
+    /// bruiser such as E.T.C. or Yrel does not count (issue #247).
+    /// </summary>
     public CompositionRule Sustain { get; set; } =
         new() { Label = "Triple sustain", MinHeroes = 3 };
 
@@ -177,6 +181,12 @@ public class TeamCompositionSettings
                 IsMelee = false,
                 Reason =
                     "isMelee from his 1-range attack, but he plays from behind the wall. He was in 13 of the 31 corpus teams with four melee heroes.",
+            },
+            ["Zarya"] = new HeroTagOverride
+            {
+                Add = new[] { TeamComposition.AllySustain },
+                Reason =
+                    "Support with no AllyHealer tag. Shield Ally on a basic cooldown keeps allies alive, so she counts toward sustain.",
             },
         };
 

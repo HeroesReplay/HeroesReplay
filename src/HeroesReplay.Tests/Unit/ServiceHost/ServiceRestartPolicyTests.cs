@@ -194,6 +194,66 @@ public class ServiceRestartPolicyTests
         Assert.Equal(0, ledger.Count);
     }
 
+    [Fact]
+    public void StalledSpectateLaunch_IsKilledThenRestartsLikeAFailedRole()
+    {
+        var ledger = new ServiceRoleRestarts { Role = "spectate" };
+
+        Assert.Equal(ServiceRestartAction.Kill, Decide(Stalled(), ledger, Now));
+        Assert.Equal(ServiceRestartPolicy.StalledReason, ledger.DownReason);
+
+        ServiceRoleHealth killed = Failed() with { Role = "spectate" };
+        Assert.Equal(ServiceRestartAction.Scheduled, Decide(killed, ledger, Now.AddSeconds(1)));
+        Assert.Equal(ServiceRestartAction.Restart, Decide(killed, ledger, Now.AddSeconds(11)));
+        ServiceRestartPolicy.Restarted(ledger, Now.AddSeconds(11), "n2", failure: null);
+        Assert.Equal(ServiceRestartPolicy.StalledReason, ledger.LastReason);
+        Assert.Single(ledger.Recent);
+    }
+
+    [Fact]
+    public void StalledSpectateLaunch_WithNoBudgetLeft_IsLeftUpAndDegraded()
+    {
+        var ledger = new ServiceRoleRestarts { Role = "spectate" };
+        for (int i = 0; i < Defaults.Limit; i++)
+        {
+            ledger.Recent.Add(Now.AddMinutes(-i));
+        }
+
+        Assert.Equal(ServiceRestartAction.None, Decide(Stalled(), ledger, Now));
+        Assert.False(ledger.Exhausted);
+    }
+
+    [Fact]
+    public void OtherDegradedCauses_AreStillLeftAlone()
+    {
+        var ledger = new ServiceRoleRestarts { Role = "spectate" };
+
+        Assert.Equal(
+            ServiceRestartAction.None,
+            Decide(
+                Stalled() with
+                {
+                    CauseCode = ServiceHealthCodes.SpectateNoMatchProgress,
+                },
+                ledger,
+                Now
+            )
+        );
+        Assert.Equal(
+            ServiceRestartAction.None,
+            Decide(Stalled() with { CauseCode = null }, ledger, Now)
+        );
+    }
+
+    private static ServiceRoleHealth Stalled() =>
+        new()
+        {
+            Role = "spectate",
+            State = ServiceRoleState.Degraded,
+            CauseCode = ServiceHealthCodes.SpectateLaunchStalled,
+            Cause = "One replay has been launching or loading for 21m with no match progress.",
+        };
+
     private static ServiceRestartAction Decide(
         ServiceRoleHealth health,
         ServiceRoleRestarts ledger,

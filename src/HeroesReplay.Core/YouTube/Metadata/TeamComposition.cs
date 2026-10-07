@@ -9,6 +9,7 @@ namespace HeroesReplay.Core.YouTube.Metadata;
 /// Team-composition labels for one team: double soak, siege, dive, poke, melee assassins, all
 /// melee or one ranged, sustain, specialists, merc control, and glass cannon. The rules read the
 /// heroes-data2 role, playstyles (after <c>HeroTagOverrides</c>), <c>isMelee</c>, and ratings.
+/// Sustain counts only heroes that heal or shield allies, never a self-healing tank or bruiser.
 /// A team with a hero the catalog cannot match, or fewer than five heroes, has no labels.
 /// </summary>
 public static class TeamComposition
@@ -51,6 +52,13 @@ public static class TeamComposition
     public const string RoleCaster = "RoleCaster";
     public const string AllyHealer = "AllyHealer";
     public const string SelfHealer = "SelfHealer";
+
+    /// <summary>
+    /// A support that keeps allies alive without the <c>AllyHealer</c> tag (Zarya's Shield
+    /// Ally). Not a heroes-data2 playstyle: <c>HeroTagOverrides</c> adds it.
+    /// </summary>
+    public const string AllySustain = "AllySustain";
+
     public const string RoleSpecialist = "RoleSpecialist";
     public const string MercKiller = "MercKiller";
 
@@ -149,13 +157,26 @@ public static class TeamComposition
 
         AddMelee(labels, melee, settings);
 
+        // Sustain is healing for the team: the Healer role, an AllyHealer, or a support tagged
+        // AllySustain. SelfHealer is not counted: E.T.C. and Yrel heal only themselves, and with
+        // them a one-healer team read as triple sustain (issue #247).
         rule = settings.Sustain;
-        if (
-            On(rule)
-            && Count(tags, t => t.Contains(AllyHealer) || t.Contains(SelfHealer)) >= rule.MinHeroes
-        )
+        if (On(rule))
         {
-            Add(labels, Sustain, rule.Label);
+            string healer = HeroDraft.Label(titles.Healer, HeroDraft.Healer);
+            int sustain = 0;
+            for (int i = 0; i < heroes.Count; i++)
+            {
+                if (IsSustain(heroes[i], tags[i], healer))
+                {
+                    sustain++;
+                }
+            }
+
+            if (sustain >= rule.MinHeroes)
+            {
+                Add(labels, Sustain, rule.Label);
+            }
         }
 
         rule = settings.Specialists;
@@ -377,6 +398,16 @@ public static class TeamComposition
         {
             Add(labels, GlassCannon, rule.Label);
         }
+    }
+
+    /// <summary>
+    /// True for a hero that heals or shields allies: the Healer role, an <c>AllyHealer</c>, or
+    /// an <c>AllySustain</c> support. A <c>SelfHealer</c> alone is not sustain for the team.
+    /// </summary>
+    private static bool IsSustain(Hero hero, ISet<string> tags, string healerRole)
+    {
+        return HeroDraft.Is(hero, healerRole)
+            || (tags != null && (tags.Contains(AllyHealer) || tags.Contains(AllySustain)));
     }
 
     private static bool On(CompositionRule rule) =>

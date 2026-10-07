@@ -17,6 +17,11 @@ public sealed class PublicationLedger
     public int InsertsThisQuotaDay { get; set; }
     public DateTimeOffset QuotaDay { get; set; }
     public DateTimeOffset? LastInsertUtc { get; set; }
+
+    /// <summary>
+    /// Retired (#250): it counted every scheduled upload and never went down. Older files still
+    /// carry it. Stuck videos are now counted from the library record (<see cref="PublicationTally"/>).
+    /// </summary>
     public int StuckPrivate { get; set; }
 }
 

@@ -71,6 +71,9 @@ public sealed class ServiceSupervision
     /// <summary>The supervisor's own log file, for <c>services status</c>.</summary>
     public Func<string> LogPath { get; init; }
 
+    /// <summary>The hourly machine line (#251). Null logs none.</summary>
+    public MachineHealthLog MachineHealth { get; init; }
+
     public IReadOnlyList<string> Supervised => supervised;
 
     public ServiceRoleRestarts Ledger(string role) =>
@@ -236,6 +239,7 @@ public sealed class ServiceSupervision
         }
 
         Save(changed);
+        MachineHealth?.Tick(now);
         return true;
     }
 
@@ -331,12 +335,26 @@ public sealed class ServiceSupervision
 
     private void KillStale(string role, ServiceProcessRecord record, ServiceRoleHealth health)
     {
-        Logger.LogWarning(
-            "{Role} is stale: {Cause} Killing pid {Pid}; it restarts after its backoff.",
-            role,
-            health.Cause,
-            record.Pid
-        );
+        if (health.CauseCode == ServiceHealthCodes.SpectateLaunchStalled)
+        {
+            Logger.LogWarning(
+                "{Role} made no match progress while launching [{Code}]: {Cause} Killing pid {Pid}; it restarts after its backoff.",
+                role,
+                health.CauseCode,
+                health.Cause,
+                record.Pid
+            );
+        }
+        else
+        {
+            Logger.LogWarning(
+                "{Role} is stale: {Cause} Killing pid {Pid}; it restarts after its backoff.",
+                role,
+                health.Cause,
+                record.Pid
+            );
+        }
+
         try
         {
             if (Kill == null)

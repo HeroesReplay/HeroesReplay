@@ -118,6 +118,7 @@ public static class ServiceHealthClassifier
             LastError = heartbeat?.LastError,
             SessionsWithoutProgress = heartbeat?.SessionsWithoutProgress,
             LastOutcome = heartbeat?.LastOutcome,
+            LaunchingSince = heartbeat?.LaunchingSince,
             SessionOutcomes = heartbeat?.SessionOutcomes,
         };
 
@@ -184,6 +185,32 @@ public static class ServiceHealthClassifier
         string degradedFix =
             $"Check the {role} console, its log file, or the Aspire logs. If it does not recover, "
             + RestartStack;
+        TimeSpan stallLimit = settings.LaunchStallThreshold(role);
+        if (
+            stallLimit > TimeSpan.Zero
+            && heartbeat.Readiness != ServiceReadiness.Stopping
+            && heartbeat.LaunchingSince is DateTimeOffset launching
+            && (
+                heartbeat.LastSuccessfulWorkAt == null
+                || heartbeat.LastSuccessfulWorkAt.Value < launching
+            )
+            && Age(now, launching) is TimeSpan launchAge
+            && launchAge > stallLimit
+        )
+        {
+            return With(
+                health,
+                ServiceRoleState.Degraded,
+                $"One replay has been launching or loading for {Describe(launchAge)} with no match progress (no match clock, no match on screen; limit {Describe(stallLimit)})."
+                    + LastError(heartbeat, now),
+                $"A supervisor restarts {role} within its restart budget. Read the {role} log for the launch step and what the client showed. Without a supervisor, "
+                    + RestartStack
+            ) with
+            {
+                CauseCode = ServiceHealthCodes.SpectateLaunchStalled,
+            };
+        }
+
         int noProgressLimit = settings.NoProgressSessions(role);
         if (
             noProgressLimit > 0
@@ -206,6 +233,22 @@ public static class ServiceHealthClassifier
             ) with
             {
                 CauseCode = ServiceHealthCodes.SpectateNoMatchProgress,
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(heartbeat.Concern?.Code))
+        {
+            TimeSpan? concernAge = Age(now, heartbeat.Concern.Since);
+            string since =
+                concernAge == null ? string.Empty : $" For {Describe(concernAge.Value)}.";
+            return With(
+                health,
+                ServiceRoleState.Degraded,
+                heartbeat.Concern.Cause + since + LastError(heartbeat, now) + stopping,
+                $"Read the {role} log. The role keeps running and clears this itself once the cause is gone."
+            ) with
+            {
+                CauseCode = heartbeat.Concern.Code,
             };
         }
 

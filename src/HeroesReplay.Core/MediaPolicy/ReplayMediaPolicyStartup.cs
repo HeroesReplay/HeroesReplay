@@ -113,6 +113,12 @@ public static class ReplayMediaPolicyStartup
             value => settings.RequestsBypassPatchRequirement = value,
             errors
         );
+        ApplyBool(
+            section,
+            nameof(ReplayMediaPolicySettings.CapRecordingToPublication),
+            value => settings.CapRecordingToPublication = value,
+            errors
+        );
 
         if (Present(section, nameof(ReplayMediaPolicySettings.MinimumGameVersion)))
         {

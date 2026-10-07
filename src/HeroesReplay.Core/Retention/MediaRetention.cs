@@ -214,11 +214,7 @@ public static class MediaRetention
                         continue;
                     }
 
-                    DeleteFile(
-                        video.FullName,
-                        result,
-                        "Removed recording that was never uploaded: " + video.FullName
-                    );
+                    DeleteFile(video.FullName, result, NoEntryWarning(video.FullName));
                 }
 
                 continue;
@@ -236,6 +232,16 @@ public static class MediaRetention
             }
         }
     }
+
+    /// <summary>
+    /// The reason a recording without an entry goes. Retention never deletes a recording that
+    /// has an entry and waits for its insert: that one is eligible, and only the spectator's
+    /// pending-bytes guard (it stops recording) keeps the disk in check (#250).
+    /// </summary>
+    public static string NoEntryWarning(string path) =>
+        "Removed recording that was never uploaded: "
+        + path
+        + " (reason: no-entry. It has no youtube-entry.json, so the uploader can never send it: the session ended before the publication decision, for example a crash or a stop mid-match, or the publication was withheld).";
 
     /// <summary>
     /// The newest context and a recording still waiting for its insert are kept. An entry that
@@ -270,7 +276,9 @@ public static class MediaRetention
             string warning =
                 warnNeverUploaded
                 && heavy.Extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase)
-                    ? "Removed recording that was never uploaded: " + heavy.FullName
+                    ? "Removed recording that was never uploaded: "
+                        + heavy.FullName
+                        + " (reason: dry-run. A dry run never sends it.)"
                     : null;
             DeleteFile(heavy.FullName, result, warning);
         }

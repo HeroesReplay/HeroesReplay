@@ -228,7 +228,8 @@ public sealed class UploadOutbox
         DateTimeOffset at,
         UploadAttemptPolicy policy,
         bool replaceOpen,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        bool replaceEvaluated = false
     )
     {
         return store.SavePolicyAsync(
@@ -237,7 +238,8 @@ public sealed class UploadOutbox
             at,
             policy,
             replaceOpen,
-            cancellationToken
+            cancellationToken,
+            replaceEvaluated
         );
     }
 

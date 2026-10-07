@@ -30,6 +30,17 @@ public sealed class ServiceHealthSettings
     /// </summary>
     public int SpectateNoProgressSessions { get; set; } = DefaultSpectateNoProgressSessions;
 
+    public static readonly TimeSpan DefaultSpectateLaunchStallThreshold = TimeSpan.FromMinutes(20);
+
+    /// <summary>
+    /// Spectate is degraded (<c>spectate.launch_stalled</c>) and the supervisor restarts it once
+    /// one replay's launch and loading phase has gone this long without match progress. The
+    /// report, a hold, an empty queue, and an outage are not that phase; a client downloading or
+    /// preparing game data starts it over. Zero or less means the default, 20 minutes.
+    /// </summary>
+    public TimeSpan SpectateLaunchStallThreshold { get; set; } =
+        DefaultSpectateLaunchStallThreshold;
+
     /// <summary>A Twitch reconcile: one pass of the prediction watcher, about every second.</summary>
     public TimeSpan TwitchWorkThreshold { get; set; } = TimeSpan.FromMinutes(5);
 
@@ -79,6 +90,17 @@ public sealed class ServiceHealthSettings
                 ? SpectateNoProgressSessions
                 : DefaultSpectateNoProgressSessions
             : 0;
+
+    /// <summary>
+    /// How long one launch may go without match progress before the role is stalled. Zero for a
+    /// role that has no launch phase.
+    /// </summary>
+    public TimeSpan LaunchStallThreshold(string role) =>
+        string.Equals(role, "spectate", StringComparison.OrdinalIgnoreCase)
+            ? SpectateLaunchStallThreshold > TimeSpan.Zero
+                ? SpectateLaunchStallThreshold
+                : DefaultSpectateLaunchStallThreshold
+            : TimeSpan.Zero;
 
     /// <summary>What counts as successful work for the role, for causes a person reads.</summary>
     public static string WorkName(string role) =>

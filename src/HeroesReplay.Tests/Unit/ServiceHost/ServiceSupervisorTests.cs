@@ -1557,6 +1557,63 @@ public class ServiceSupervisorTests
         };
     }
 
+    [Fact]
+    public void Status_ReportsTheMachineWithoutChangingTheExitCode()
+    {
+        string path = TempLock();
+        try
+        {
+            MachineHealthReport machine = MachineHealth.Evaluate(
+                new MachineHealthSnapshot
+                {
+                    PhysicalTotalBytes = 16L << 30,
+                    PhysicalAvailableBytes = 4L << 30,
+                    CommitBytes = 23L << 30,
+                    CommitLimitBytes = 25L << 30,
+                    AgentProcesses = 83,
+                    ConhostProcesses = 85,
+                    HeroesProcesses = 1,
+                },
+                new MachineHealthSettings()
+            );
+            var text = new StringWriter();
+            int code = ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery { Out = text, ReadMachine = () => machine }
+            );
+
+            Assert.Equal(0, code);
+            string output = text.ToString();
+            Assert.Contains("Machine: memory 75% (12288 of 16384 MB), commit 92%", output);
+            Assert.Contains("Agent.exe 83, conhost.exe 85", output);
+            Assert.Contains("WARN 83 Battle.net Agent.exe processes are running", output);
+
+            var json = new StringWriter();
+            ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery
+                {
+                    Output = ServiceStatusOutput.Json,
+                    Out = json,
+                    ReadMachine = () => throw new InvalidOperationException("denied"),
+                }
+            );
+            using var document = System.Text.Json.JsonDocument.Parse(json.ToString());
+            System.Text.Json.JsonElement read = document.RootElement.GetProperty("machine");
+            Assert.False(read.GetProperty("ok").GetBoolean());
+            Assert.Contains("denied", read.GetProperty("warnings")[0].GetString());
+            Assert.True(document.RootElement.GetProperty("ok").GetBoolean());
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
     private static string TempLock() =>
         Path.Combine(Path.GetTempPath(), $"heroesreplay-services-{Guid.NewGuid():N}.json");
 }

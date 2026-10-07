@@ -397,6 +397,64 @@ public class ReplayMediaObservationTests
         AssertNoLegacyReceipts(temp.Root);
     }
 
+    /// <summary>
+    /// #250: a replay spectated again after an incomplete session recorded a second time, but
+    /// reused the first session's "incomplete" and got no youtube-entry.json, so retention
+    /// deleted it as never uploaded. The new session now decides.
+    /// </summary>
+    [Fact]
+    public async Task Publication_ASecondSessionReDecidesASessionMiss()
+    {
+        using var temp = new TempAttempts();
+        MediaPolicyAttemptLog log = Log(temp);
+        UploadOutbox outbox = new UploadOutbox(temp.Root);
+        await log.RecordPreLaunchAsync(
+            Loaded(),
+            Settings(ReplayRecordingMode.Selected, ReplayPublicationMode.AllEligible),
+            Now,
+            CancellationToken.None
+        );
+        MediaPolicySnapshot crashed = await log.RecordPublicationAsync(
+            Loaded(),
+            Verified(
+                ObsRecordingResult.FinalizedAt(Path.Combine(temp.Root, "first.mp4")),
+                MatchOutcome.ClientCrashed
+            ),
+            CancellationToken.None
+        );
+
+        MediaPolicySnapshot again = await log.RecordPreLaunchAsync(
+            Loaded(),
+            Settings(ReplayRecordingMode.Selected, ReplayPublicationMode.AllEligible),
+            Now,
+            CancellationToken.None
+        );
+        MediaPolicySnapshot completed = await log.RecordPublicationAsync(
+            Loaded(),
+            Verified(ObsRecordingResult.FinalizedAt(Path.Combine(temp.Root, "second.mp4"))),
+            CancellationToken.None
+        );
+        MediaPolicySnapshot third = await log.RecordPublicationAsync(
+            Loaded(),
+            Verified(
+                ObsRecordingResult.FinalizedAt(Path.Combine(temp.Root, "third.mp4")),
+                MatchOutcome.Canceled
+            ),
+            CancellationToken.None
+        );
+        UploadAttemptManifest manifest = await ReloadAsync(outbox, "replay-" + ReplayId);
+
+        Assert.Equal(ReplayMediaReason.Incomplete, crashed.Decision.PublicationReason);
+        Assert.True(again.AllowsRecording);
+        Assert.True(completed.Decision.PublicationCandidate);
+        Assert.Equal(ReplayMediaReason.EligibleAll, completed.Decision.PublicationReason);
+        Assert.Equal(ReplayMediaReason.EligibleAll, manifest.Policy.PublicationReason);
+
+        // An eligible decision is final: a later miss does not take it back.
+        Assert.True(third.Reused);
+        Assert.Equal(ReplayMediaReason.EligibleAll, third.Decision.PublicationReason);
+    }
+
     [Theory]
     [InlineData(MatchOutcome.VersionMismatch)]
     [InlineData(MatchOutcome.RegionUnavailable)]

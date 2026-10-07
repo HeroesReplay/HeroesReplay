@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube.Metadata;
 using Xunit;
@@ -175,6 +177,25 @@ public class MatchDraftTests
         );
         Assert.Contains("Triple melee assassin", metadata.Tags);
         Assert.Contains("Merc control", metadata.Tags);
+    }
+
+    [Fact]
+    public void Build_Issue247DraftHasNoTripleSustain()
+    {
+        string[] blue = { "E.T.C.", "Yrel", "Jaina", "Valla", "Lt. Morales" };
+        string[] red = { "Varian", "Sonya", "Li-Ming", "Nazeebo", "Anduin" };
+        FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(
+            Input(Roster(blue, red), "Battlefield of Eternity", "Platinum 3", null),
+            null
+        );
+
+        Assert.DoesNotContain("sustain", metadata.Title, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Triple sustain", metadata.Tags);
+        Assert.DoesNotContain(
+            "sustain",
+            metadata.DescriptionLines.First(line => line.StartsWith("Draft:")),
+            StringComparison.OrdinalIgnoreCase
+        );
     }
 
     private static MatchDraft Read(string[] blue, string[] red) =>

@@ -22,6 +22,19 @@ public sealed class YouTubeUploadsPage
 
 public sealed record YouTubePlaylist(string Id, string Title);
 
+/// <summary>
+/// A video's <c>status</c> part: privacy, the scheduled publish time, and why YouTube did not
+/// process or keep it (<c>uploadStatus</c> rejected or failed, <c>rejectionReason</c>,
+/// <c>failureReason</c>).
+/// </summary>
+public sealed record YouTubeVideoStatus(
+    string PrivacyStatus,
+    string UploadStatus = null,
+    string RejectionReason = null,
+    string FailureReason = null,
+    DateTimeOffset? PublishAt = null
+);
+
 public sealed class YouTubePlaylistsPage
 {
     public IReadOnlyList<YouTubePlaylist> Playlists { get; init; }
@@ -47,8 +60,10 @@ public interface IYouTubePlaylistClient
         CancellationToken cancellationToken
     );
 
-    /// <summary>Privacy status by video id for up to 50 ids (one videos.list call). Missing ids are left out.</summary>
-    Task<IReadOnlyDictionary<string, string>> PrivacyAsync(
+    /// <summary>
+    /// <c>status</c> by video id for up to 50 ids (one videos.list call). Missing ids are left out.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, YouTubeVideoStatus>> StatusAsync(
         IReadOnlyList<string> videoIds,
         CancellationToken cancellationToken
     );

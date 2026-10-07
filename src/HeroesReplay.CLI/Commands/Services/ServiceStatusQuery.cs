@@ -34,6 +34,9 @@ public sealed class ServiceStatusQuery
     /// <summary>True while a supervisor holds its mutex.</summary>
     public Func<bool> SupervisorRunning { get; set; }
 
+    /// <summary>The machine section (#251). Null leaves it out.</summary>
+    public Func<MachineHealthReport> ReadMachine { get; set; }
+
     public static ServiceStatusOutput ParseOutput(string value) =>
         string.Equals(value, "json", StringComparison.OrdinalIgnoreCase)
             ? ServiceStatusOutput.Json

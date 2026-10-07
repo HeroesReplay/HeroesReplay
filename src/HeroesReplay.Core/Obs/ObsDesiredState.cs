@@ -26,6 +26,10 @@ public sealed record ObsLaunchDecision
     public bool Started { get; init; }
     public string Detail { get; init; }
 
+    /// <summary>
+    /// Profile and collection only. OBS 32 has no flag that skips its Crash Detected dialog; the
+    /// stale run sentinel behind it is deleted before launch instead (<see cref="ObsCrashSentinel"/>).
+    /// </summary>
     public static string ArgumentsFor(string profileName, string collectionName) =>
         "--profile \""
         + ObsNames.Pick(profileName)

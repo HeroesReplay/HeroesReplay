@@ -625,6 +625,197 @@ public class ObsDesiredStateTests
     }
 
     [Fact]
+    public void LaunchArguments_AreOnlyTheProfileAndCollection()
+    {
+        // OBS 32.2.2 has no --disable-shutdown-check; the crash dialog is avoided by clearing
+        // its stale run sentinel instead (ObsCrashSentinel).
+        string arguments = ObsLaunchDecision.ArgumentsFor("HeroesReplay", "HeroesReplay");
+
+        Assert.Equal("--profile \"HeroesReplay\" --collection \"HeroesReplay\"", arguments);
+        foreach (
+            string flag in new[]
+            {
+                "--disable-shutdown-check",
+                "--disable-missing-files-check",
+                "--disable-updater",
+                "--minimize-to-tray",
+                "--safe-mode",
+                "--startstreaming",
+            }
+        )
+        {
+            Assert.DoesNotContain(flag, arguments, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void EnsureIdentified_OwnLaunch_ClearsStaleSentinelsFirst()
+    {
+        string directory = NewSentinelDirectory();
+        try
+        {
+            string stale = Path.Combine(directory, "run_81b110f2-0000-0000-0000-000000000000");
+            File.WriteAllText(stale, "");
+            var socket = new FakeSession { IdentifyOnConnect = true };
+            var process = new FakeProcess { Exists = true, StartSucceeds = true };
+            bool sentinelAtStart = true;
+            process.OnStart = () => sentinelAtStart = File.Exists(stale);
+            StartupHarness harness = OpenStartup(
+                socket,
+                process,
+                TimeSpan.FromSeconds(60),
+                new ObsCrashSentinel(directory, () => process.Running, NullLogger.Instance)
+            );
+
+            harness.Coordinator.EnsureIdentified();
+
+            Assert.Equal(1, process.LaunchCalls);
+            Assert.False(sentinelAtStart);
+            Assert.False(File.Exists(stale));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EnsureIdentified_ObsAlreadyRunning_LeavesTheSentinel()
+    {
+        string directory = NewSentinelDirectory();
+        try
+        {
+            string live = Path.Combine(directory, "run_b0c325dc-0000-0000-0000-000000000000");
+            File.WriteAllText(live, "");
+            var socket = new FakeSession { IdentifyOnConnect = true };
+            var process = new FakeProcess { Exists = true, Running = true };
+            StartupHarness harness = OpenStartup(
+                socket,
+                process,
+                TimeSpan.FromSeconds(60),
+                new ObsCrashSentinel(directory, () => process.Running, NullLogger.Instance)
+            );
+
+            harness.Coordinator.EnsureIdentified();
+
+            Assert.Equal(0, process.LaunchCalls);
+            Assert.True(File.Exists(live));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static string NewSentinelDirectory()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "hr-obs-sentinel-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    [Fact]
+    public void EnsureIdentified_AfterOwnLaunch_RetriesUntilObsIdentifies()
+    {
+        var socket = new FakeSession { IdentifyOnConnectCall = 4 };
+        var process = new FakeProcess { Exists = true, StartSucceeds = true };
+        StartupHarness harness = OpenStartup(socket, process, TimeSpan.FromSeconds(60));
+
+        harness.Coordinator.EnsureIdentified();
+
+        Assert.True(socket.IsIdentified);
+        Assert.Equal(1, process.LaunchCalls);
+        Assert.Equal(
+            ObsLaunchDecision.ArgumentsFor("HeroesReplay", "HeroesReplay"),
+            process.LastStart.Arguments
+        );
+        Assert.Equal(4, socket.ConnectCalls);
+        Assert.Equal(
+            new[]
+            {
+                ObsCoordinator.LaunchSettle,
+                ObsCoordinator.StartupRetryPause,
+                ObsCoordinator.StartupRetryPause,
+                ObsCoordinator.StartupRetryPause,
+            },
+            harness.Waits
+        );
+        Assert.True(harness.Elapsed < TimeSpan.FromSeconds(60), harness.Elapsed.ToString());
+    }
+
+    [Fact]
+    public void EnsureIdentified_AfterOwnLaunch_GivesUpAtTheStartupDeadline()
+    {
+        var socket = new FakeSession();
+        var process = new FakeProcess { Exists = true, StartSucceeds = true };
+        StartupHarness harness = OpenStartup(socket, process, TimeSpan.FromSeconds(60));
+
+        TimeoutException failed = Assert.Throws<TimeoutException>(
+            harness.Coordinator.EnsureIdentified
+        );
+
+        Assert.False(socket.IsIdentified);
+        Assert.Equal(1, process.LaunchCalls);
+        // 5 s settle, then 10 s attempts with 2 s pauses until 60 s: more than the old one attempt.
+        Assert.True(socket.ConnectCalls > 1, socket.ConnectCalls.ToString());
+        Assert.Equal(TimeSpan.FromSeconds(60), harness.Elapsed);
+        Assert.All(socket.ConnectTimeouts, t => Assert.True(t <= TimeSpan.FromSeconds(10)));
+        Assert.Contains("did not identify within", failed.Message, StringComparison.Ordinal);
+
+        // The window is over: OBS now runs, so the next call is one attempt and no launch.
+        int before = socket.ConnectCalls;
+        Assert.Throws<TimeoutException>(harness.Coordinator.EnsureIdentified);
+        Assert.Equal(before + 1, socket.ConnectCalls);
+        Assert.Equal(1, process.LaunchCalls);
+    }
+
+    [Fact]
+    public void EnsureIdentified_ObsAlreadyRunning_MakesOneAttempt()
+    {
+        var socket = new FakeSession { IdentifyOnConnectCall = 2 };
+        var process = new FakeProcess { Exists = true, Running = true };
+        StartupHarness harness = OpenStartup(socket, process, TimeSpan.FromSeconds(60));
+
+        Assert.Throws<TimeoutException>(harness.Coordinator.EnsureIdentified);
+
+        Assert.Equal(1, socket.ConnectCalls);
+        Assert.Equal(0, process.LaunchCalls);
+        Assert.Empty(harness.Waits);
+        Assert.Equal(TimeSpan.FromSeconds(10), harness.Elapsed);
+    }
+
+    [Fact]
+    public void EnsureIdentified_LaunchThatDidNotStart_MakesOneAttempt()
+    {
+        var socket = new FakeSession();
+        var process = new FakeProcess { Exists = true, StartSucceeds = false };
+        StartupHarness harness = OpenStartup(socket, process, TimeSpan.FromSeconds(60));
+
+        Assert.Throws<TimeoutException>(harness.Coordinator.EnsureIdentified);
+
+        Assert.Equal(1, process.LaunchCalls);
+        Assert.Equal(1, socket.ConnectCalls);
+        Assert.Empty(harness.Waits);
+    }
+
+    [Fact]
+    public void EnsureIdentified_OwnedObsExitsDuringStartup_StopsRetrying()
+    {
+        var process = new FakeProcess { Exists = true, StartSucceeds = true };
+        var socket = new FakeSession();
+        socket.WhileNotIdentifying = _ => process.Owned = false;
+        StartupHarness harness = OpenStartup(socket, process, TimeSpan.FromSeconds(60));
+
+        Assert.Throws<TimeoutException>(harness.Coordinator.EnsureIdentified);
+
+        Assert.Equal(1, socket.ConnectCalls);
+        Assert.Equal(new[] { ObsCoordinator.LaunchSettle }, harness.Waits);
+    }
+
+    [Fact]
     public void Guard_RefusalNamesTheStreamingSettingAndTheArm()
     {
         Assert.Equal(TwitchIngestGuard.NotStartedMessage, TwitchIngestGuard.Refusal(true, true));
@@ -1063,6 +1254,50 @@ public class ObsDesiredStateTests
         };
     }
 
+    /// <summary>
+    /// A coordinator on a fake clock: waits and each Connect that does not identify (its 10 s
+    /// identify timeout) move it. Nothing sleeps, and no real OBS starts.
+    /// </summary>
+    private static StartupHarness OpenStartup(
+        FakeSession socket,
+        FakeProcess process,
+        TimeSpan startup,
+        ObsCrashSentinel sentinel = null
+    )
+    {
+        var harness = new StartupHarness();
+        DateTimeOffset start = new(2026, 10, 7, 14, 4, 56, TimeSpan.Zero);
+        DateTimeOffset clock = start;
+        socket.WhileNotIdentifying ??= timeout => clock += timeout;
+        harness.Coordinator = new ObsCoordinator(
+            NullLogger.Instance,
+            new AppSettings { OBS = Settings(streaming: false) },
+            socket,
+            process,
+            new RecordingSession(NullLogger.Instance, socket, Fast(0)),
+            new ObsBackoff(1, TimeSpan.Zero, TimeSpan.Zero),
+            wait =>
+            {
+                harness.Waits.Add(wait);
+                clock += wait;
+            },
+            TimeSpan.FromSeconds(10),
+            startupIdentifyTimeout: startup,
+            now: () => clock,
+            sentinel: sentinel
+        );
+        harness.Since = () => clock - start;
+        return harness;
+    }
+
+    private sealed class StartupHarness
+    {
+        public ObsCoordinator Coordinator { get; set; }
+        public List<TimeSpan> Waits { get; } = new();
+        public Func<TimeSpan> Since { get; set; }
+        public TimeSpan Elapsed => Since();
+    }
+
     private static OBSSettings Settings(
         string executable = null,
         bool enabled = true,
@@ -1123,6 +1358,14 @@ public class ObsDesiredStateTests
         public int LaunchCalls { get; private set; }
         public int CloseCalls { get; private set; }
 
+        /// <summary>A fake start that reports an owned, running OBS. No real process starts.</summary>
+        public bool StartSucceeds { get; set; }
+
+        public ObsLaunchDecision LastStart { get; private set; }
+
+        /// <summary>Runs when the fake start is called, before it reports OBS running.</summary>
+        public Action OnStart { get; set; }
+
         public bool IsOwned => Owned;
 
         public bool IsRunning() => Running;
@@ -1132,7 +1375,18 @@ public class ObsDesiredStateTests
         public ObsLaunchDecision Start(ObsLaunchDecision decision)
         {
             LaunchCalls++;
-            return decision with { Started = false };
+            LastStart = decision;
+            OnStart?.Invoke();
+            if (StartSucceeds)
+            {
+                Running = true;
+                Owned = true;
+            }
+
+            return decision with
+            {
+                Started = StartSucceeds,
+            };
         }
 
         public void CloseOwned() => CloseCalls++;
@@ -1170,16 +1424,31 @@ public class ObsDesiredStateTests
 
         public void Raise(ObsRecordSignal signal) => RecordSignal?.Invoke(this, signal);
 
+        /// <summary>When above zero, the Connect call with this number identifies.</summary>
+        public int IdentifyOnConnectCall { get; set; }
+
+        /// <summary>Runs on a Connect that does not identify, with its identify timeout (a fake clock).</summary>
+        public Action<TimeSpan> WhileNotIdentifying { get; set; }
+
+        public List<TimeSpan> ConnectTimeouts { get; } = new();
+
         public void Connect(string endpoint, string password, TimeSpan identifyTimeout)
         {
             ConnectCalls++;
+            ConnectTimeouts.Add(identifyTimeout);
             LastEndpoint = endpoint;
             LastPassword = password;
-            if (IdentifyOnConnect)
+            if (
+                IdentifyOnConnect
+                || (IdentifyOnConnectCall > 0 && ConnectCalls >= IdentifyOnConnectCall)
+            )
             {
                 IsIdentified = true;
                 IsConnected = true;
+                return;
             }
+
+            WhileNotIdentifying?.Invoke(identifyTimeout);
         }
 
         public void Disconnect()

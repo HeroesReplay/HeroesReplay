@@ -73,8 +73,20 @@ public static class MediaPolicyPublication
     private static bool CanPromote(ReplayMediaDecision recorded)
     {
         return recorded.PublicationReason == ReplayMediaReason.AwaitingCompletion
-            || recorded.PublicationReason == ReplayMediaReason.AwaitingMedia;
+            || recorded.PublicationReason == ReplayMediaReason.AwaitingMedia
+            || IsSessionMiss(recorded.PublicationReason);
     }
+
+    /// <summary>
+    /// A refusal that belongs to one session, not to the replay: the match was not verified, or
+    /// OBS did not finalize an owned file. A later spectate of the same replay records again, so
+    /// its own session decides (#250). Without this, the second recording reused the first
+    /// session's refusal, got no <c>youtube-entry.json</c>, and retention deleted it.
+    /// </summary>
+    public static bool IsSessionMiss(string publicationReason) =>
+        publicationReason == ReplayMediaReason.Incomplete
+        || publicationReason == ReplayMediaReason.MediaNotFinalized
+        || publicationReason == ReplayMediaReason.MediaNotCorrelated;
 
     private static bool IsVerified(MediaPublicationFacts facts)
     {

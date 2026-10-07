@@ -11,7 +11,7 @@ These four parts run together. Settings turn pieces on or off. The cycle stays t
 1. **Spectate.** HeroesReplay plays a `.StormReplay` in the Heroes of the Storm client. It chooses who to watch, sends the spectator keys, and follows the match clock.
 2. **Download, spectate, upload.** A downloader saves replays from Heroes Profile. The spectator plays the next one and records it. An uploader publishes the recording. Requested replays, mode filters, recording, privacy, and streaming are configuration on that same loop. The YouTube pick, cadence, and playlists are in [youtube-uploader.md](youtube-uploader.md).
 3. **Stream.** OBS shows the automated process on Twitch: the game, the report after the match, and the wait for the next one. Viewers claim channel rewards to ask for a replay or change what plays next.
-4. **Launch the client that matches the replay.** The replay version and the installed clients are both known. The latest replays open on the latest client, which signs in through Battle.net. Older supported builds start their own client. A missing build stays queued, and the loop continues.
+4. **Launch the client that matches the replay.** The replay version and the installed clients are both known. The latest replays open on the latest client, which signs in through Battle.net. Older supported builds start their own client through HeroesSwitcher; when that build is not installed, Blizzard downloads it during the launch. A build Blizzard no longer serves, or one newer than the installed client, stays queued, and the loop continues.
 
 A folder of local replays plays through the same spectate step, one pass.
 

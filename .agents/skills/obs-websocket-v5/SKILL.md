@@ -20,7 +20,7 @@ The operating model (who owns what, collection updates, validation codes and fix
 
 One TCP session per replay:
 
-1. `BeginSession()` → update the installed collection paths, then `ConnectAsync` and wait until `IsIdentified` (timeout 10s).
+1. `BeginSession()` → update the installed collection paths, then `ConnectAsync` and wait until `IsIdentified` (timeout 10s). When HeroesReplay just started OBS itself (after `ObsCrashSentinel` deleted stale `.sentinel\run_*` files, so no Crash Detected dialog), the identify is retried until `OBS:StartupIdentifyTimeout` (60 s). A `BeginSession` that still fails is a warning in `GameManager`: the replay is spectated without OBS, and `ObsController` skips scene, info, and recording calls until `EndSession` (`docs/obs-operations.md`, Launching OBS).
 2. Configure sources, set program scene, start/stop record, cycle report scenes.
 3. `EndSession()` → `Disconnect` in `finally`.
 

@@ -14,6 +14,7 @@ using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Control;
@@ -114,10 +115,15 @@ public class GameManager : IGameManager
             )
             .ConfigureAwait(false);
         ApplyPreLaunchPolicy(loadedReplay, preLaunch);
+        CapRecordingToPublication(loadedReplay, preLaunch);
         await contextSetter.SetContextAsync(loadedReplay);
         bool obsSession = false;
+        bool obsBegun = false;
         bool enteredMatch = false;
         statusStore.Patch(status => ShowLoading(status, loadedReplay, context.Current));
+        // The launch and loading phase starts. Match progress, the report, or the end of the
+        // session ends it; a launch with no progress for too long is a stalled spectate (#249).
+        ServiceHeartbeat.RecordLaunching();
 
         try
         {
@@ -143,10 +149,12 @@ public class GameManager : IGameManager
                 spectator.RecordHold(hold);
                 if (settings.OBS.Enabled)
                 {
-                    obsController.BeginSession();
-                    obsSession = true;
-                    statusStore.Patch(status => status.ObsSession = true);
-                    obsController.ConfigureFromContext();
+                    obsBegun = true;
+                    obsSession = BeginObsSession(loadedReplay);
+                    if (obsSession)
+                    {
+                        obsController.ConfigureFromContext();
+                    }
                 }
 
                 enteredMatch = true;
@@ -156,11 +164,13 @@ public class GameManager : IGameManager
                 RememberInterfaceBuild();
                 if (settings.OBS.Enabled)
                 {
-                    obsController.BeginSession();
-                    obsSession = true;
-                    statusStore.Patch(status => status.ObsSession = true);
-                    obsController.ConfigureFromContext();
-                    await StartRecordingWhenMatchIsVisible(loadedReplay).ConfigureAwait(false);
+                    obsBegun = true;
+                    obsSession = BeginObsSession(loadedReplay);
+                    if (obsSession)
+                    {
+                        obsController.ConfigureFromContext();
+                        await StartRecordingWhenMatchIsVisible(loadedReplay).ConfigureAwait(false);
+                    }
                 }
 
                 enteredMatch = true;
@@ -175,7 +185,7 @@ public class GameManager : IGameManager
                 if (hold == ClientHoldReason.BuildNotInstalled)
                 {
                     logger.LogWarning(
-                        "Replay {ReplayId} needs a Heroes build that is not installed. It stays queued. The current patch was not launched.",
+                        "Replay {ReplayId} needs a Heroes build that is not installed and cannot be downloaded now (newer than the current patch, or Blizzard did not serve it). It stays queued. The current patch was not launched.",
                         loadedReplay?.ReplayId
                     );
                 }
@@ -269,6 +279,12 @@ public class GameManager : IGameManager
                 await RecordPublicationAsync(loadedReplay, stopped).ConfigureAwait(false);
                 ReplayShutdown.CaptureEndThenKill(gameController, logger);
             }
+
+            if (obsBegun && !obsSession)
+            {
+                // The session that never identified OBS ends here, so the next replay tries again.
+                EndObsSession();
+            }
         }
 
         return await FinishSessionAsync(
@@ -294,6 +310,8 @@ public class GameManager : IGameManager
     )
     {
         ReplaySessionKind kind = DecideOutcome(loadedReplay, outcomeKnown);
+        // The report and the next replay's preload are their own bounded phase, not a launch.
+        ServiceHeartbeat.RecordLaunchEnded();
         await ReportAndHandOffAsync(enteredMatch, obsSession, whileReporting).ConfigureAwait(false);
         return kind;
     }
@@ -594,6 +612,45 @@ public class GameManager : IGameManager
         );
     }
 
+    /// <summary>
+    /// True when OBS identified for this replay. An OBS that does not identify (still starting,
+    /// stuck on a dialog, or closed) is a warning, not the end of the replay: the client is
+    /// already up, so the replay is spectated without OBS. Scene changes, the recording, and the
+    /// report scenes are skipped, and the next replay tries OBS again.
+    /// </summary>
+    internal bool BeginObsSession(LoadedReplay loadedReplay)
+    {
+        try
+        {
+            obsController.BeginSession();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "OBS was not identified for replay {ReplayId}. The replay is spectated without OBS: no scene change, recording, or report scenes this session.",
+                loadedReplay?.ReplayId
+            );
+            statusStore.Patch(status => status.ObsSession = false);
+            return false;
+        }
+
+        statusStore.Patch(status => status.ObsSession = true);
+        return true;
+    }
+
+    private void EndObsSession()
+    {
+        try
+        {
+            obsController.EndSession();
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not end the OBS session.");
+        }
+    }
+
     private void ParkWaitingScene()
     {
         if (!settings.OBS.Enabled)
@@ -801,7 +858,7 @@ public class GameManager : IGameManager
             if (ReportHandoff.ShouldCutReport(mapLoading, matchClock))
             {
                 logger.LogInformation(
-                    "Next replay {ReplayId} is on the map loading screen or its match clock is running. The report stops so OBS shows the game.",
+                    "Next replay {ReplayId} is on the map loading screen, in a match, or its match clock is running. The report stops so OBS shows the game.",
                     next.ReplayId
                 );
                 cutReport.Cancel();
@@ -825,7 +882,7 @@ public class GameManager : IGameManager
         }
 
         logger.LogWarning(
-            "Next replay {ReplayId} is open, but the loading screen and the match clock were not seen. The report scene stays.",
+            "Next replay {ReplayId} is open, but no loading screen, match, or match clock was seen. The report scene stays, and its session checks the client again: a replay that is already playing starts there.",
             next.ReplayId
         );
         return NextMatchLaunch.ProcessOnly;
@@ -949,11 +1006,63 @@ public class GameManager : IGameManager
         loaded.PolicyAllowsPublication = false;
     }
 
+    /// <summary>
+    /// The media policy chose to record. The cap skips the recording when the upload and
+    /// publication pipeline already holds what it can publish (#250). A request always records.
+    /// </summary>
+    private void CapRecordingToPublication(LoadedReplay loaded, MediaPolicySnapshot snapshot)
+    {
+        if (loaded?.PolicyAllowsRecording != true || snapshot?.Decision == null)
+        {
+            return;
+        }
+
+        RecordingCapDecision cap;
+        try
+        {
+            cap = RecordingCap.Decide(
+                RecordingCap.Measure(settings, snapshot.Decision.Priority, DateTimeOffset.UtcNow),
+                settings.ReplayMedia
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not measure the upload backlog for replay {ReplayId}. It is recorded.",
+                loaded.ReplayId
+            );
+            return;
+        }
+
+        if (cap.Allow)
+        {
+            logger.LogInformation(
+                "Replay {ReplayId} recording cap allows it ({CapReason}): {InFlight} waiting for upload or publish time, capacity {Capacity}.",
+                loaded.ReplayId,
+                cap.Reason,
+                cap.InFlight,
+                cap.Capacity
+            );
+            return;
+        }
+
+        loaded.PolicyAllowsRecording = false;
+        logger.LogInformation(
+            "Replay {ReplayId} is spectated without a recording ({CapReason}): {InFlight} recording(s) already wait for upload or publish time, capacity {Capacity}.",
+            loaded.ReplayId,
+            cap.Reason,
+            cap.InFlight,
+            cap.Capacity
+        );
+    }
+
     private async Task RecordPublicationAsync(
         LoadedReplay loadedReplay,
         ObsRecordingResult recording
     )
     {
+        string withheld = null;
         MediaPolicySnapshot snapshot = await mediaPolicy
             .RecordPublicationAsync(
                 loadedReplay,
@@ -978,6 +1087,7 @@ public class GameManager : IGameManager
                 settings?.ReplayMedia
             );
             loadedReplay.PolicyAllowsPublication = admit.Allow;
+            withheld = admit.Allow ? null : admit.Reason;
             logger.LogInformation(
                 "Replay {ReplayId} publication admit {Admit} reason {PublicationReason} published in window {PublishedInWindow}.",
                 loadedReplay.ReplayId,
@@ -1005,23 +1115,57 @@ public class GameManager : IGameManager
                 "Wrote the YouTube entry for replay {ReplayId} after the publication decision.",
                 loadedReplay?.ReplayId
             );
+            return;
         }
+
+        await DiscardUnpublishedRecordingAsync(loadedReplay, recording, withheld)
+            .ConfigureAwait(false);
     }
 
-    private static int PublishedThisDay(AppSettings settings)
+    /// <summary>
+    /// A finished recording whose publication was withheld gets no <c>youtube-entry.json</c>,
+    /// so it can never upload. It is deleted now, with the reason, instead of waiting for
+    /// retention to remove it as never uploaded (#250). Without YouTube the file is left to
+    /// retention as before.
+    /// </summary>
+    private async Task DiscardUnpublishedRecordingAsync(
+        LoadedReplay loadedReplay,
+        ObsRecordingResult recording,
+        string withheld
+    )
     {
-        PublicationLedger ledger = PublicationLedgerStore.Load(settings?.Location?.DataDirectory);
-        if (ledger?.PublicAtUtc == null)
+        if (
+            settings.YouTube?.Enabled != true
+            || !RecordingOwnership.CanPublish(recording, allowsMedia: true)
+            || !File.Exists(recording.OutputPath)
+        )
         {
-            return 0;
+            return;
         }
 
-        return PublicationSchedule.PublishedIn(
-            ledger.PublicAtUtc,
+        bool deleted = await RecordingDiscard
+            .DeleteAsync(recording.OutputPath, logger)
+            .ConfigureAwait(false);
+        logger.LogWarning(
+            "Replay {ReplayId} recording {Path} is not published ({Reason}), so no YouTube entry was written. {Action}",
+            loadedReplay?.ReplayId,
+            recording.OutputPath,
+            withheld ?? "entry-not-written",
+            deleted ? "The recording was deleted." : "Retention removes it later."
+        );
+    }
+
+    /// <summary>
+    /// Videos whose publish time falls in the last 24 hours. Every video the uploader sent has a
+    /// slot at its publish time; the uploader's older ledger only held inserts that came back
+    /// public, which a scheduled upload never does (#250).
+    /// </summary>
+    private static int PublishedThisDay(AppSettings settings) =>
+        PublicationReservation.CountIn(
+            PublicationReservation.PathFor(settings?.Location?.DataDirectory),
             DateTimeOffset.UtcNow,
             TimeSpan.FromHours(24)
         );
-    }
 
     private async Task MarkExistingYouTubeVideoAsync(LoadedReplay loadedReplay)
     {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using HeroesReplay.Core.Spectating.Clock;
 using Xunit;
 
@@ -397,6 +398,180 @@ public class StableMatchClockTests
         Assert.True(moved.Ok);
         Assert.Equal("ok", moved.Reason);
         Assert.Equal(341, moved.Seconds, precision: 2);
+    }
+
+    [Fact]
+    public void Read_SlowCaller_StillLocksTheClockOfARelaunchedClient()
+    {
+        // #249: the launch wait read once per pass, and a pass with OCR on a hung window took
+        // 30 s. A fixed 8 s step made every pass "incoherent", so the clock never locked.
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new(2026, 10, 7, 13, 13, 0, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        StableClockModule module = Module(31, SmallModule, "2.57.0.98348");
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 95);
+        Assert.Equal("confirming", clock.Read(module, memory.Read).Reason);
+
+        now = now.AddSeconds(30);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 125);
+        StableClockSample later = clock.Read(module, memory.Read);
+
+        Assert.True(later.Ok, later.Reason);
+        Assert.True(clock.IsLocked);
+        Assert.Equal(125, later.Seconds, precision: 2);
+    }
+
+    [Fact]
+    public void Read_CellThatJumpsFasterThanWallTime_IsStillIncoherent()
+    {
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new(2026, 10, 7, 13, 13, 0, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        StableClockModule module = Module(32, SmallModule, "2.57.0.98348");
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 100);
+        clock.Read(module, memory.Read);
+
+        now = now.AddSeconds(1);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 400);
+        StableClockSample jumped = clock.Read(module, memory.Read);
+
+        Assert.False(jumped.Ok);
+        Assert.Equal("incoherent", jumped.Reason);
+        Assert.False(clock.IsLocked);
+    }
+
+    [Theory]
+    [InlineData(0.25, 0.25, true)]
+    [InlineData(8, 0, true)]
+    [InlineData(8.5, 0, false)]
+    [InlineData(30, 30, true)]
+    [InlineData(38, 30, true)]
+    [InlineData(39, 30, false)]
+    [InlineData(-1, 30, false)]
+    public void CoherentStep_AllowsTheWallTimeBetweenReadsPlusEightSeconds(
+        double delta,
+        double wallSeconds,
+        bool expected
+    )
+    {
+        Assert.Equal(
+            expected,
+            StableMatchClock.CoherentStep(delta, TimeSpan.FromSeconds(wallSeconds))
+        );
+    }
+
+    [Fact]
+    public void Read_RelaunchWithTheSamePidAndImage_StartsOverFromTheFrozenClock()
+    {
+        // #249: the last value read was the previous match's frozen 18:45. A relaunched client
+        // can get the same pid and image base, so the start time is part of the process.
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new(2026, 10, 7, 13, 1, 0, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        var before = new StableClockModule(
+            33,
+            ModuleBase,
+            SmallModule,
+            "2.57.0.98348",
+            now.AddMinutes(-20).Ticks
+        );
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 1124);
+        clock.Read(before, memory.Read);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 1125);
+        Assert.True(clock.Read(before, memory.Read).Ok);
+        Assert.True(clock.IsLocked);
+        int scans = memory.WideReads;
+
+        now = now.AddMinutes(12);
+        StableClockModule relaunched = before with { StartedAt = now.AddMinutes(-8).Ticks };
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 95);
+        StableClockSample first = clock.Read(relaunched, memory.Read);
+
+        Assert.False(clock.IsLocked);
+        Assert.Equal("confirming", first.Reason);
+        Assert.True(memory.WideReads > scans);
+        now = now.AddSeconds(1);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 96);
+        StableClockSample locked = clock.Read(relaunched, memory.Read);
+        Assert.True(locked.Ok, locked.Reason);
+        Assert.Equal(96, locked.Seconds, precision: 2);
+    }
+
+    [Fact]
+    public async Task ReadRunningAsync_ConfirmsAFreshCellInOneProbe()
+    {
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new(2026, 10, 7, 13, 13, 0, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        StableClockModule module = Module(34, SmallModule, "2.57.0.98348");
+        int seconds = 95;
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, seconds);
+        int pauses = 0;
+
+        TimeSpan? running = await StableMatchClock.ReadRunningAsync(
+            () => clock.Read(module, memory.Read),
+            () =>
+            {
+                pauses++;
+                now = now.AddSeconds(1);
+                memory.SetSeconds(PatternTickRva, PatternSpeedRva, ++seconds);
+                return Task.CompletedTask;
+            }
+        );
+
+        Assert.Equal(TimeSpan.FromSeconds(97), running);
+        Assert.Equal(2, pauses);
+    }
+
+    [Fact]
+    public async Task ReadRunningAsync_MenuZeroAnswersAtOnce()
+    {
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        StableClockModule module = Module(35, SmallModule, "2.57.0.98348");
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 0);
+        int pauses = 0;
+
+        TimeSpan? running = await StableMatchClock.ReadRunningAsync(
+            () => clock.Read(module, memory.Read),
+            () =>
+            {
+                pauses++;
+                return Task.CompletedTask;
+            }
+        );
+
+        Assert.Null(running);
+        Assert.Equal(0, pauses);
+    }
+
+    [Fact]
+    public async Task ReadRunningAsync_FrozenClockIsNotRunning()
+    {
+        MappedModule memory = MappedModule.WithPattern();
+        using StableMatchClock clock = new StableMatchClock();
+        DateTimeOffset now = new(2026, 10, 7, 13, 1, 0, TimeSpan.Zero);
+        clock.UtcNow = () => now;
+        StableClockModule module = Module(36, SmallModule, "2.57.0.98348");
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 1124);
+        clock.Read(module, memory.Read);
+        memory.SetSeconds(PatternTickRva, PatternSpeedRva, 1125);
+        Assert.True(clock.Read(module, memory.Read).Ok);
+
+        TimeSpan? running = await StableMatchClock.ReadRunningAsync(
+            () => clock.Read(module, memory.Read),
+            () =>
+            {
+                now = now.AddMilliseconds(250);
+                return Task.CompletedTask;
+            }
+        );
+
+        Assert.Null(running);
     }
 
     private static StableClockModule Module(int pid, long size, string version)

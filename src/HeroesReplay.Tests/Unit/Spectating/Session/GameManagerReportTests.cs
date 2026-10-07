@@ -120,6 +120,59 @@ public class GameManagerReportTests
         Assert.Equal(1, fixture.Obs.EndSessions);
     }
 
+    /// <summary>
+    /// OBS that does not identify (still starting, or stuck on its Safe Mode prompt) is a
+    /// warning. The replay is not abandoned: the session goes on to spectate without OBS.
+    /// </summary>
+    [Fact]
+    public void ObsThatDoesNotIdentify_DoesNotEndTheSession()
+    {
+        using var fixture = new Fixture();
+        fixture.Obs.BeginError = new TimeoutException(
+            "OBS websocket at ws://127.0.0.1:4455 did not identify in time."
+        );
+
+        bool identified = fixture.Manager.BeginObsSession(new LoadedReplay { ReplayId = 101 });
+
+        Assert.False(identified);
+        Assert.Equal(1, fixture.Obs.BeginSessions);
+        Assert.False(fixture.Status.Read().ObsSession);
+    }
+
+    [Fact]
+    public void ObsThatIdentifies_StartsTheObsSession()
+    {
+        using var fixture = new Fixture();
+
+        bool identified = fixture.Manager.BeginObsSession(new LoadedReplay { ReplayId = 101 });
+
+        Assert.True(identified);
+        Assert.True(fixture.Status.Read().ObsSession);
+    }
+
+    /// <summary>Without an OBS session the outcome is still heard and no report scene is tried.</summary>
+    [Fact]
+    public async Task SessionWithoutObs_HearsTheOutcomeAndSkipsTheReport()
+    {
+        using var fixture = new Fixture();
+        var heard = new List<ReplaySessionKind>();
+
+        ReplaySessionKind kind = await fixture
+            .Manager.FinishSessionAsync(
+                new LoadedReplay { ReplayId = 101 },
+                enteredMatch: true,
+                obsSession: false,
+                heard.Add,
+                () => Task.FromResult(fixture.Next)
+            )
+            .WaitAsync(Patience);
+
+        Assert.Equal(ReplaySessionKind.Played, kind);
+        Assert.Equal(new[] { ReplaySessionKind.Played }, heard);
+        Assert.False(fixture.Obs.Reporting.Task.IsCompleted);
+        Assert.Equal(0, fixture.Obs.EndSessions);
+    }
+
     [Fact]
     public async Task StopDuringTheHold_EndsItWithoutLaunching()
     {
@@ -169,6 +222,7 @@ public class GameManagerReportTests
             string nextPath = Path.Combine(root, "202.StormReplay");
             File.WriteAllText(nextPath, "next");
             Next = new LoadedReplay { ReplayId = 202, FileInfo = new FileInfo(nextPath) };
+            Status = new SpectatorStatusStore(Path.Combine(root, "status.json"));
             var settings = new AppSettings
             {
                 Location = new LocationSettings { DataDirectory = root },
@@ -186,7 +240,7 @@ public class GameManagerReportTests
                 Game,
                 Obs,
                 new NoContext(),
-                new SpectatorStatusStore(Path.Combine(root, "status.json")),
+                Status,
                 new StormClientConfigurator(settings),
                 new NotOnYouTube(),
                 new RecordingClock(),
@@ -204,6 +258,8 @@ public class GameManagerReportTests
         public ReportObs Obs { get; } = new();
 
         public LoadedReplay Next { get; }
+
+        public SpectatorStatusStore Status { get; }
 
         public GameManager Manager { get; }
 
@@ -246,7 +302,19 @@ public class GameManagerReportTests
             catch (OperationCanceledException) { }
         }
 
-        public void BeginSession() { }
+        /// <summary>BeginSession throws this, like an OBS that does not identify.</summary>
+        public Exception BeginError { get; set; }
+
+        public int BeginSessions { get; private set; }
+
+        public void BeginSession()
+        {
+            BeginSessions++;
+            if (BeginError != null)
+            {
+                throw BeginError;
+            }
+        }
 
         public void EndSession() => EndSessions++;
 

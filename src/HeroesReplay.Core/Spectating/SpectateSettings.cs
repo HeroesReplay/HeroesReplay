@@ -45,4 +45,28 @@ public class SpectateSettings
     public TimeSpan KillStreakHoldTime { get; set; }
 
     public IEnumerable<int> TalentLevels { get; set; }
+
+    /// <summary>
+    /// How long a launch waits on a matching client that shows no menu, loading screen, match,
+    /// match clock, game data, or blank startup window before it recovers that client once:
+    /// the current patch is closed and signed in again, a previous patch gets the replay through
+    /// HeroesSwitcher again (#249). Zero or less means the default, 3 minutes.
+    /// </summary>
+    public TimeSpan LaunchWaitLimit { get; set; } = TimeSpan.FromMinutes(3);
+
+    /// <summary>
+    /// How long a replay on an older build that is not installed waits, after it was handed to
+    /// HeroesSwitcher, for Blizzard to put that build's exe in <c>Versions\Base*</c>. The launch
+    /// deadline is extended while it waits. When the exe has not appeared by then, the client is
+    /// closed, the replay is deferred as <c>BuildNotInstalled</c>, and the build is held for
+    /// <see cref="BuildDownloadHold"/>. Zero or less means the default, 10 minutes.
+    /// </summary>
+    public TimeSpan BuildDownloadLimit { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// How long a build whose download failed counts as not installed
+    /// (<c>Data\client-download-holds.json</c>), for the launch, the spectate queue, and the
+    /// download role. Zero or less means the default, 4 hours.
+    /// </summary>
+    public TimeSpan BuildDownloadHold { get; set; } = TimeSpan.FromHours(4);
 }

@@ -56,4 +56,29 @@ public class ReplayListCursorTests
 
         Assert.Null(ReplayListCursor.AfterRejectedPage(65536853, page));
     }
+
+    [Fact]
+    public void AfterPage_PassesAPageThatStillHadPlayableReplays()
+    {
+        var page = new ReplayListing(
+            new[]
+            {
+                new HeroesProfileReplay { Id = 65536854, GameVersion = "2.57.0.98304" },
+            },
+            hadRows: true,
+            highestId: 65536900,
+            nextAfter: 65536910
+        );
+
+        Assert.Equal(65536910, ReplayListCursor.AfterPage(65536853, page));
+    }
+
+    [Fact]
+    public void AfterPage_StopsAtTheEndOfTheList()
+    {
+        Assert.Null(ReplayListCursor.AfterPage(65536853, ReplayListing.Empty));
+        Assert.Null(
+            ReplayListCursor.AfterPage(65536853, new ReplayListing(null, true, 65536853, null))
+        );
+    }
 }

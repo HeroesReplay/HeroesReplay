@@ -12,6 +12,12 @@ namespace HeroesReplay.Core.Obs;
 /// </summary>
 internal sealed class ObsCoordinator
 {
+    /// <summary>The pause after HeroesReplay starts OBS, before the first identify.</summary>
+    internal static readonly TimeSpan LaunchSettle = TimeSpan.FromSeconds(5);
+
+    /// <summary>The pause between identify attempts while an OBS HeroesReplay started comes up.</summary>
+    internal static readonly TimeSpan StartupRetryPause = TimeSpan.FromSeconds(2);
+
     private readonly ILogger logger;
     private readonly AppSettings settings;
     private readonly IObsSession socket;
@@ -23,6 +29,11 @@ internal sealed class ObsCoordinator
     private readonly Action beforeLaunch;
     private readonly Func<bool> streamArmed;
     private readonly Func<ObsValidation> preflight;
+    private readonly TimeSpan startupIdentifyTimeout;
+    private readonly Func<DateTimeOffset> now;
+    private readonly ObsCrashSentinel sentinel;
+    private DateTimeOffset? startupDeadline;
+    private DateTimeOffset launchedAt;
     private bool recordingDesired;
     private bool notArmedLogged;
     private bool preflightPassed;
@@ -45,7 +56,10 @@ internal sealed class ObsCoordinator
         TimeSpan identifyTimeout,
         Action beforeLaunch = null,
         Func<bool> streamArmed = null,
-        Func<ObsValidation> preflight = null
+        Func<ObsValidation> preflight = null,
+        TimeSpan? startupIdentifyTimeout = null,
+        Func<DateTimeOffset> now = null,
+        ObsCrashSentinel sentinel = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -61,9 +75,17 @@ internal sealed class ObsCoordinator
         // No arm reader means not armed: ingest fails closed.
         this.streamArmed = streamArmed ?? (() => false);
         this.preflight = preflight;
+        this.startupIdentifyTimeout =
+            startupIdentifyTimeout is TimeSpan startup && startup > TimeSpan.Zero
+                ? startup
+                : TimeSpan.FromSeconds(60);
+        this.now = now ?? (() => DateTimeOffset.UtcNow);
+        this.sentinel = sentinel;
     }
 
     public ObsRuntimeSnapshot State { get; private set; }
+
+    public bool IsIdentified => socket.IsIdentified;
 
     public bool StreamIsDesired() => ObsDesired.StreamIsDesired(settings.OBS);
 
@@ -75,7 +97,7 @@ internal sealed class ObsCoordinator
         }
 
         PrepareProcess();
-        socket.Connect(Endpoint(), Password(), identifyTimeout);
+        Identify();
         if (!socket.IsIdentified)
         {
             throw new TimeoutException("OBS websocket at " + Endpoint() + " did not identify.");
@@ -307,7 +329,7 @@ internal sealed class ObsCoordinator
         try
         {
             PrepareProcess();
-            socket.Connect(Endpoint(), Password(), identifyTimeout);
+            Identify();
         }
         catch (Exception e)
         {
@@ -363,6 +385,7 @@ internal sealed class ObsCoordinator
             return;
         }
 
+        RemoveStaleSentinels();
         try
         {
             ObsLaunchDecision started = process.Start(decision);
@@ -383,9 +406,114 @@ internal sealed class ObsCoordinator
         );
         if (lastLaunch.Started)
         {
-            wait?.Invoke(TimeSpan.FromSeconds(5));
+            // OBS this process started gets a startup window: identify is retried until it ends.
+            launchedAt = now();
+            startupDeadline = launchedAt + startupIdentifyTimeout;
+            wait?.Invoke(LaunchSettle);
         }
     }
+
+    /// <summary>
+    /// One identify attempt when OBS was already running. While an OBS this coordinator started
+    /// is inside its startup window (<see cref="OBSSettings.StartupIdentifyTimeout"/>), attempts
+    /// repeat until OBS identifies, the window ends, or the started process exits.
+    /// </summary>
+    private void Identify()
+    {
+        if (!InStartupWindow())
+        {
+            socket.Connect(Endpoint(), Password(), identifyTimeout);
+            return;
+        }
+
+        DateTimeOffset deadline = startupDeadline.Value;
+        int attempts = 0;
+        Exception last = null;
+        while (true)
+        {
+            TimeSpan remaining = deadline - now();
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            attempts++;
+            try
+            {
+                socket.Connect(Endpoint(), Password(), Shorter(identifyTimeout, remaining));
+                last = null;
+            }
+            catch (Exception e)
+            {
+                last = e;
+                logger.LogDebug(
+                    e,
+                    "OBS websocket identify attempt {Attempt} failed while OBS starts.",
+                    attempts
+                );
+            }
+
+            if (socket.IsIdentified)
+            {
+                startupDeadline = null;
+                logger.LogInformation(
+                    "OBS websocket identified {Elapsed:0.0}s after HeroesReplay started OBS (attempt {Attempt}).",
+                    (now() - launchedAt).TotalSeconds,
+                    attempts
+                );
+                return;
+            }
+
+            if (!process.IsOwned)
+            {
+                logger.LogWarning(
+                    "OBS exited before its websocket identified (attempt {Attempt}).",
+                    attempts
+                );
+                break;
+            }
+
+            remaining = deadline - now();
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            wait?.Invoke(Shorter(StartupRetryPause, remaining));
+        }
+
+        startupDeadline = null;
+        throw new TimeoutException(
+            "OBS websocket at "
+                + Endpoint()
+                + " did not identify within "
+                + startupIdentifyTimeout
+                + " after HeroesReplay started OBS ("
+                + attempts
+                + " attempts).",
+            last
+        );
+    }
+
+    /// <summary>
+    /// A run sentinel left by an OBS that did not exit cleanly stops the launch on the Crash
+    /// Detected dialog. The sentinel itself checks again that no OBS runs before it deletes.
+    /// </summary>
+    private void RemoveStaleSentinels()
+    {
+        try
+        {
+            sentinel?.RemoveStale();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not clear stale OBS crash sentinels before the launch.");
+        }
+    }
+
+    private bool InStartupWindow() => startupDeadline is DateTimeOffset end && now() < end;
+
+    private static TimeSpan Shorter(TimeSpan a, TimeSpan b) => a < b ? a : b;
 
     private ObsRuntimeSnapshot Remember(ObsStreamResult stream, string sceneActual)
     {
