@@ -51,7 +51,21 @@ public static class ClientScreenText
     public static bool IsVersionMismatch(string text)
     {
         return !string.IsNullOrWhiteSpace(text)
-            && text.Contains("version mismatch", StringComparison.OrdinalIgnoreCase);
+            && (
+                text.Contains("version mismatch", StringComparison.OrdinalIgnoreCase)
+                || IsVersionNotAvailable(text)
+            );
+    }
+
+    /// <summary>
+    /// "The version of Heroes of the Storm required to play this game is not available." Blizzard
+    /// no longer serves the replay's build, so that client will never arrive.
+    /// </summary>
+    public static bool IsVersionNotAvailable(string text)
+    {
+        return !string.IsNullOrWhiteSpace(text)
+            && text.Contains("version of Heroes", StringComparison.OrdinalIgnoreCase)
+            && text.Contains("not available", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsRegionUnavailable(string text)

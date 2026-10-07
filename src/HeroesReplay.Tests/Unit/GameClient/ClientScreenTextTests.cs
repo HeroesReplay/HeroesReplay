@@ -94,6 +94,20 @@ public class ClientScreenTextTests
     }
 
     [Fact]
+    public void IsVersionMismatch_MatchesTheBuildNotAvailableDialog()
+    {
+        // OCR of the dialog Blizzard shows for build 2.57.0.98297 on ASA-SERVER, 2026-10-07.
+        const string Ocr =
+            "The version of Heroes of the Storm required to ploy this game is not available. 0K";
+        Assert.True(ClientScreenText.IsVersionNotAvailable(Ocr));
+        Assert.True(ClientScreenText.IsVersionMismatch(Ocr));
+        Assert.False(
+            ClientScreenText.IsVersionNotAvailable("Preparing game data Calculating... Cancel")
+        );
+        Assert.False(ClientScreenText.IsVersionNotAvailable("OCR is not available"));
+    }
+
+    [Fact]
     public void IsRegionUnavailable_MatchesTheRegionDialog()
     {
         Assert.True(
