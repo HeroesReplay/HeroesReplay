@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
+using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.ServiceHost;
@@ -89,6 +90,7 @@ public class SpectateFileCommand : Command
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         SpectateReleaseVersion.Write(scope.ServiceProvider);
+        scope.ServiceProvider.GetRequiredService<BattleNetAgentReaper>().Reap("spectate start");
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
         return await engine.RunAsync() ? 0 : 1;
     }

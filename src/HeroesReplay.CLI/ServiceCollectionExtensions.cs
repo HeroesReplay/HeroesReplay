@@ -194,6 +194,11 @@ public static class ServiceCollectionExtensions
         GetConfiguration().GetSection("ServiceLogs").Get<ServiceLogSettings>()
         ?? new ServiceLogSettings();
 
+    /// <summary>The effective <c>MachineHealth</c> section. No secret is resolved.</summary>
+    public static MachineHealthSettings LoadMachineHealthSettings() =>
+        GetConfiguration().GetSection("MachineHealth").Get<MachineHealthSettings>()
+        ?? new MachineHealthSettings();
+
     /// <summary>The effective <c>ServiceRestart</c> section. No secret is resolved.</summary>
     public static ServiceRestartSettings LoadServiceRestartSettings() =>
         GetConfiguration().GetSection("ServiceRestart").Get<ServiceRestartSettings>()
@@ -496,6 +501,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IYouTubeReplayLookup, YouTubeReplayLookup>()
             .AddSingleton<RecordingClock>()
             .AddSingleton<IGameFirewall, NetshGameFirewall>()
+            .AddSingleton<BattleNetAgentReaper>()
             .AddSingleton<IReplayOpener, MediumIntegrityReplayOpener>()
             .AddSingleton(serviceProvider => new MediaPolicyAttemptLog(
                 MediaPolicyAttemptLog.AttemptsRoot(settings),

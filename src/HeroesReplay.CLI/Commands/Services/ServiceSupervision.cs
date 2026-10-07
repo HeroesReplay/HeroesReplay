@@ -71,6 +71,9 @@ public sealed class ServiceSupervision
     /// <summary>The supervisor's own log file, for <c>services status</c>.</summary>
     public Func<string> LogPath { get; init; }
 
+    /// <summary>The hourly machine line (#251). Null logs none.</summary>
+    public MachineHealthLog MachineHealth { get; init; }
+
     public IReadOnlyList<string> Supervised => supervised;
 
     public ServiceRoleRestarts Ledger(string role) =>
@@ -236,6 +239,7 @@ public sealed class ServiceSupervision
         }
 
         Save(changed);
+        MachineHealth?.Tick(now);
         return true;
     }
 

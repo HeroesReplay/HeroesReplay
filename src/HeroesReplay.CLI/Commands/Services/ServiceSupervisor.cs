@@ -554,6 +554,7 @@ public static class ServiceSupervisor
             query.SupervisorRunning?.Invoke() == true,
             now
         );
+        report = report with { Machine = ReadMachine(query.ReadMachine) };
         TextWriter output = query.Out ?? Console.Out;
         if (query.Output == ServiceStatusOutput.Json)
         {
@@ -635,6 +636,7 @@ public static class ServiceSupervisor
             WriteLogText(output, role);
         }
 
+        WriteMachineText(output, report.Machine);
         if (spectator == null)
         {
             output.WriteLine("Spectator status: no snapshot.");
@@ -684,6 +686,41 @@ public static class ServiceSupervisor
         if (!string.IsNullOrWhiteSpace(supervisor.LogPath))
         {
             output.WriteLine($"{"", 20}Log: {supervisor.LogPath}");
+        }
+    }
+
+    private static MachineHealthReport ReadMachine(Func<MachineHealthReport> read)
+    {
+        if (read == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return read();
+        }
+        catch (Exception e)
+        {
+            return new MachineHealthReport
+            {
+                Ok = false,
+                Warnings = new[] { "The machine could not be read: " + e.Message },
+            };
+        }
+    }
+
+    private static void WriteMachineText(TextWriter output, MachineHealthReport machine)
+    {
+        if (machine == null)
+        {
+            return;
+        }
+
+        output.WriteLine($"Machine: {MachineHealth.Describe(machine)}.");
+        foreach (string warning in machine.Warnings)
+        {
+            output.WriteLine($"  WARN {warning}");
         }
     }
 
