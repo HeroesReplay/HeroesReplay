@@ -131,10 +131,13 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 && !IsHeld(id)
             )
             .OrderBy(file => IsRequest(file) ? 0 : 1)
+            // Requests play first come, first served. Ordinary replays play newest first: the
+            // current patch's replays are the highest ids, and an old cached backlog (builds that
+            // could not launch before) must not play ahead of them.
             .ThenBy(file =>
             {
                 replayHelper.TryGetReplayId(file.Name, out int id);
-                return id;
+                return IsRequest(file) ? (long)id : -(long)id;
             })
             .ToList();
 
