@@ -185,7 +185,7 @@ When a scheduled video is still not public after that grace, the library pass lo
 `services status` reports the youtube role `degraded` with a cause code (#250):
 
 - `youtube.quota_blocked`: recordings wait and the upload bucket, a quota pause, or `MaxInsertsPerQuotaDay` holds new uploads. The cause says which: the YouTube upload quota, or this app's daily insert cap.
-- `youtube.not_publishing`: uploads are past their publish time and no video was confirmed public in the last 24 hours (or ever). Either the library pass is not running (no pool room, no `{ChannelId}:library` consent; the cause names a pass that was skipped for want of consent) or YouTube keeps the uploads private.
+- `youtube.not_publishing`: uploads are past their publish time and no video was confirmed public in the last 24 hours (or ever). Either the library pass is not running (no pool room, no `{ChannelId}-library` consent; the cause names a pass that was skipped for want of consent) or YouTube keeps the uploads private.
 
 Both clear on their own once the cause is gone. A dry run and a private listing are never degraded for publishing.
 
@@ -310,7 +310,7 @@ Every successful `videos.insert`, full match or clip, appends one line to `Data\
 
 The uploader process owns every YouTube call. Besides uploads, it runs the library pass in its own loop, independent of the upload passes: `YouTube:LibraryStartupDelay` (2 minutes) after the process starts, whatever the last pass time was, then every `YouTube:LibraryInterval` (1 hour). Before 2026-10-07 the pass ran only after a whole upload pass, so a backlog of recordings (a startup pass that uploaded for an hour) kept it from running at all. The time of the last pass is kept in `Data\youtube-uploads-index.json`; a stop that arrives before a pass no longer stamps it. `heroesreplay youtube library --once` runs the same pass at once. Only one process runs it at a time (`Data\youtube-library.lock`).
 
-Every pass logs one line: `YouTube library pass: ... new channel video(s), ... units.` when it ran, or `YouTube library pass skipped: <why>.` with the reason (not due yet and when it is, another process has it, a quota pause and until when, the day's library units spent and when the room returns, or no consent). The uploader's pass never asks for consent: when no `{ChannelId}:library` token with a refresh token is stored (`%APPDATA%\Google.Apis.Auth`), it is skipped with a warning, because the sign-in broker would open a browser on the stream PC and wait forever. Grant it once by running `heroesreplay youtube library --once` at that machine. Until then no scheduled upload is confirmed public, `published-*` stay 0, and `youtube.not_publishing` names the missing consent.
+Every pass logs one line: `YouTube library pass: ... new channel video(s), ... units.` when it ran, or `YouTube library pass skipped: <why>.` with the reason (not due yet and when it is, another process has it, a quota pause and until when, the day's library units spent and when the room returns, or no consent). The uploader's pass never asks for consent: when no `{ChannelId}-library` token with a refresh token is stored (`%APPDATA%\Google.Apis.Auth`), it is skipped with a warning, because the sign-in broker would open a browser on the stream PC and wait forever. Grant it once by running `heroesreplay youtube library --once` at that machine. Until then no scheduled upload is confirmed public, `published-*` stay 0, and `youtube.not_publishing` names the missing consent.
 
 A pass does three things.
 
@@ -320,7 +320,7 @@ A pass does three things.
 
 A scheduled upload is filed once it is public, not at insert. The insert appends it to the record as private. The first pass after its `publishAt` lists it public, appends a new line, and files it, so it lands on its playlists within `LibraryInterval` (1 hour) of going public. The pass also looks up every recorded video that is not public yet and whose `publishAt` passed within the last 30 days by id (`videos.list?part=status`, 50 ids and 1 unit per call), so it is filed wherever it sits in the uploads listing (#154). Filing at insert is not possible with the current code: the upload consent is the `youtube.upload` scope, which cannot call `playlistItems.insert`, and the planner files only public videos so a playlist never lists a video viewers cannot open yet.
 
-Upload OAuth is the `youtube.upload` scope. The library pass (listing, playlist create, and insert) uses a separate consent, the full `youtube` scope, stored for `{ChannelId}:library`. That consent also lists private and scheduled uploads. Channel id in the base file is `UCpf5rn5UlJTUZF9n98HXS5A`.
+Upload OAuth is the `youtube.upload` scope. The library pass (listing, playlist create, and insert) uses a separate consent, the full `youtube` scope, stored for `{ChannelId}-library`. That consent also lists private and scheduled uploads. Channel id in the base file is `UCpf5rn5UlJTUZF9n98HXS5A`.
 
 `YouTube:DryRun` true never calls YouTube or Heroes Profile. It writes `Data\youtube-library-dry-run.json` with the playlist inserts it would make from the record and the contexts (`Items`), the video count per playlist (`Playlists`), their units (`InsertUnits`, 50 each, playlist creates not counted), the unresolved videos it would look up, and the day's units.
 
