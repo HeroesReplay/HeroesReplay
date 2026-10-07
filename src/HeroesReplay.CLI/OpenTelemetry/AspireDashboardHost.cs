@@ -534,7 +534,8 @@ public static class AspireDashboardHost
             + argList
             + " -WorkingDirectory "
             + PsQuote(workingDirectory)
-            + " -WindowStyle Hidden -RedirectStandardOutput "
+            // Minimized, never hidden: every process on the stream PC shows in the taskbar.
+            + " -WindowStyle Minimized -RedirectStandardOutput "
             + PsQuote(stdoutLog)
             + " -RedirectStandardError "
             + PsQuote(stderrLog)

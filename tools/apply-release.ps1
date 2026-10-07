@@ -20,7 +20,7 @@ if (-not $Supervise -and (Test-Path -LiteralPath (Join-Path $stateDir 'superviso
     $Supervise = $true
 }
 
-# This runs in a hidden window. Keep what it decided (OBS files, stream arm, health, rollback) for the operator.
+# This runs in a minimized window, never hidden. Keep what it decided (OBS files, stream arm, health, rollback) for the operator.
 try {
     $logDir = Join-Path $stateDir 'logs'
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null

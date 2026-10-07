@@ -250,7 +250,8 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
                 supervised
             ),
             UseShellExecute = true,
-            WindowStyle = ProcessWindowStyle.Hidden,
+            // Minimized, never hidden: the operator can open the update's window from the taskbar.
+            WindowStyle = ProcessWindowStyle.Minimized,
         };
         Process.Start(start);
     }
