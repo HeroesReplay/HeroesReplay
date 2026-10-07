@@ -23,7 +23,7 @@ public class PublicationScheduleTests
         );
 
         Assert.False(capped.Allow);
-        Assert.Equal("quota", capped.Reason);
+        Assert.Equal(PublicationSchedule.InsertCap, capped.Reason);
         Assert.True(under.Allow);
         Assert.Equal("private-listing", under.Reason);
     }
@@ -76,7 +76,7 @@ public class PublicationScheduleTests
         Assert.Equal("ready", weekFull.Reason);
         Assert.True(dayFull.Allow);
         Assert.False(quota.Allow);
-        Assert.Equal("quota", quota.Reason);
+        Assert.Equal(PublicationSchedule.InsertCap, quota.Reason);
     }
 
     [Fact]

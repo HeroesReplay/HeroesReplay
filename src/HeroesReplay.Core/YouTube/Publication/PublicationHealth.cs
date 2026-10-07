@@ -34,7 +34,8 @@ public static class PublicationHealth
         int publishedDay = 0,
         int publishedWeek = 0,
         int stuckPrivate = 0,
-        int scheduled = 0
+        int scheduled = 0,
+        string limitReason = null
     )
     {
         if (pending < 0)
@@ -52,8 +53,13 @@ public static class PublicationHealth
             deferred = 0;
         }
 
+        // The caller names the limit when it knows it: upload-bucket, insert-cap, or publication-full.
         string limit = "none";
-        if (quotaExhausted)
+        if (!string.IsNullOrWhiteSpace(limitReason))
+        {
+            limit = limitReason.Trim();
+        }
+        else if (quotaExhausted)
         {
             limit = "quota";
         }

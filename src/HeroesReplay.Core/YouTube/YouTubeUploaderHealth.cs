@@ -15,8 +15,22 @@ public sealed class YouTubeUploaderHealthInput
     /// <summary>Recordings on disk that still wait for their <c>videos.insert</c>.</summary>
     public int Pending { get; init; }
 
-    /// <summary>The upload bucket, a quota pause, or MaxInsertsPerQuotaDay holds new uploads.</summary>
+    /// <summary>The upload bucket or a quota pause holds new uploads.</summary>
     public bool QuotaBlocked { get; init; }
+
+    /// <summary>
+    /// <c>ReplayMedia:MaxInsertsPerQuotaDay</c> inserts were sent this Pacific quota day: this
+    /// app's own cap holds new uploads, not YouTube.
+    /// </summary>
+    public bool InsertCapped { get; init; }
+
+    public int InsertCap { get; init; }
+
+    /// <summary>
+    /// Why the last library pass did not run, when it was not a routine skip (for example no
+    /// library consent). The library pass is what confirms a scheduled upload public.
+    /// </summary>
+    public string LibraryProblem { get; init; }
 
     public DateTimeOffset? UploadsResumeAt { get; init; }
 
@@ -46,14 +60,17 @@ public static class YouTubeUploaderHealth
             return null;
         }
 
-        if (input.QuotaBlocked && input.Pending > 0)
+        if ((input.QuotaBlocked || input.InsertCapped) && input.Pending > 0)
         {
             string resume = input.UploadsResumeAt is DateTimeOffset at
                 ? " Uploads resume at " + at.ToString("u", CultureInfo.InvariantCulture) + "."
                 : string.Empty;
+            string holder = input.QuotaBlocked
+                ? "the YouTube upload quota holds new uploads"
+                : $"this app's daily insert cap holds new uploads (ReplayMedia:MaxInsertsPerQuotaDay {input.InsertCap} were sent this Pacific quota day)";
             return new YouTubeUploaderConcern(
                 QuotaBlockedCode,
-                $"{input.Pending} recording(s) wait for upload and the YouTube upload quota holds new uploads.{resume}"
+                $"{input.Pending} recording(s) wait for upload and {holder}.{resume}"
             );
         }
 
@@ -68,12 +85,15 @@ public static class YouTubeUploaderHealth
             return null;
         }
 
+        string library = string.IsNullOrWhiteSpace(input.LibraryProblem)
+            ? string.Empty
+            : " The last library pass was skipped: " + input.LibraryProblem + ".";
         string lastText = tally.LastPublicAt is DateTimeOffset seen
             ? "since " + seen.ToString("u", CultureInfo.InvariantCulture)
             : "ever";
         return new YouTubeUploaderConcern(
             NotPublishingCode,
-            $"No video was confirmed public {lastText}, while {tally.Due} upload(s) are past their publish time ({tally.StuckPrivate} more than the grace). The library pass confirms privacy; check that it runs, and that the API project is not locked to private uploads."
+            $"No video was confirmed public {lastText}, while {tally.Due} upload(s) are past their publish time ({tally.StuckPrivate} more than the grace). The library pass confirms privacy; check that it runs, and that the API project is not locked to private uploads.{library}"
         );
     }
 }
