@@ -29,9 +29,14 @@
         text-align: center;
         text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
       }
+      #title,
+      #clock {
+        white-space: nowrap;
+      }
       #title {
         font-size: clamp(14px, 5.2vw, 42px);
         letter-spacing: 0.28em;
+        padding-left: 0.28em;
         font-weight: 600;
         color: var(--muted);
         margin-bottom: 0.15em;
@@ -43,8 +48,14 @@
         line-height: 0.95;
         letter-spacing: 0.04em;
       }
+      /* The end text (STARTING) stays up while the next replay loads, however long that takes.
+         It is a word, not digits, so it is set near the title's size instead of the clock's
+         (issue #248), and fit() below shrinks any longer end text to the page width. */
       #clock.done {
-        letter-spacing: 0.18em;
+        font-size: clamp(24px, 10vw, 96px);
+        letter-spacing: 0.12em;
+        padding-left: 0.12em;
+        line-height: 1.1;
       }
       #hint {
         margin-top: 0.4em;
@@ -136,19 +147,46 @@
           return pad(m) + ":" + pad(s);
         }
 
+        // Shrink one line of text until it fits inside the page, so a long title or end text
+        // is never cut off at the source's edges (issue #248).
+        function fit(el) {
+          el.style.fontSize = "";
+          var limit = document.getElementById("app").clientWidth * 0.94;
+          var width = el.scrollWidth;
+          if (limit <= 0 || width <= limit) return;
+          var size = parseFloat(getComputedStyle(el).fontSize);
+          el.style.fontSize = Math.max(12, Math.floor((size * limit) / width)) + "px";
+        }
+
+        var fitted = "";
+        function refit() {
+          var key = (done ? "done:" : "clock:") + clockEl.textContent.length;
+          if (key === fitted) return;
+          fitted = key;
+          fit(clockEl);
+        }
+
         function render() {
           if (done) {
             clockEl.textContent = endText;
             clockEl.classList.add("done");
             hintEl.textContent = "";
             toggleEl.textContent = "Reset";
+            refit();
             return;
           }
           clockEl.classList.remove("done");
           clockEl.textContent = format(remaining);
           hintEl.textContent = running ? "" : "paused · space to start";
           toggleEl.textContent = running ? "Pause" : "Start";
+          refit();
         }
+
+        window.addEventListener("resize", function () {
+          fitted = "";
+          fit(titleEl);
+          refit();
+        });
 
         function tick(now) {
           if (running) {
@@ -221,6 +259,7 @@
         });
 
         if (autostart) start();
+        fit(titleEl);
         render();
         raf = requestAnimationFrame(tick);
       })();
