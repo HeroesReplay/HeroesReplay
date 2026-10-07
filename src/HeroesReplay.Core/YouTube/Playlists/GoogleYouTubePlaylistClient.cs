@@ -7,7 +7,9 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Services;
+using Google.Apis.Util.Store;
 using Google.Apis.YouTube.v3;
 using Google.Apis.YouTube.v3.Data;
 using HeroesReplay.Core.Configuration;
@@ -28,6 +30,32 @@ public sealed class GoogleYouTubePlaylistClient : IYouTubePlaylistClient
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    }
+
+    /// <summary>
+    /// Reads the token store the authorization broker uses, without the broker: the broker opens
+    /// a browser and waits for a sign-in when the consent is missing, which would hang a
+    /// background pass on the stream PC.
+    /// </summary>
+    public async Task<bool> HasConsentAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            TokenResponse token = await new FileDataStore(GoogleWebAuthorizationBroker.Folder)
+                .GetAsync<TokenResponse>(YouTubeLibrary.LibraryUser(settings))
+                .ConfigureAwait(false);
+            return !string.IsNullOrWhiteSpace(token?.RefreshToken);
+        }
+        catch (Exception exception)
+            when (exception is IOException
+                || exception is UnauthorizedAccessException
+                || exception is Newtonsoft.Json.JsonException
+            )
+        {
+            logger.LogWarning(exception, "Could not read the stored YouTube library consent.");
+            return false;
+        }
     }
 
     public async Task<string> UploadsPlaylistIdAsync(CancellationToken cancellationToken)
@@ -207,9 +235,7 @@ public sealed class GoogleYouTubePlaylistClient : IYouTubePlaylistClient
         }
 
         await using FileStream stream = new(secretsPath, FileMode.Open, FileAccess.Read);
-        string user = string.IsNullOrWhiteSpace(settings.YouTube?.ChannelId)
-            ? "heroesreplay-library"
-            : settings.YouTube.ChannelId + ":library";
+        string user = YouTubeLibrary.LibraryUser(settings);
         UserCredential credential = await GoogleWebAuthorizationBroker
             .AuthorizeAsync(
                 GoogleClientSecrets.FromStream(stream).Secrets,

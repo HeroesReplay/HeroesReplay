@@ -13,7 +13,8 @@ public sealed class SavedDispatch
 
     /// <summary>
     /// True only when this call moved the attempt to Uploading and the caller may insert once.
-    /// An interrupted send does not set this until an operator retries it.
+    /// An interrupted send sets this only for a retry (<c>operatorRetry</c>): the uploader's own
+    /// bounded automatic retry (<see cref="InterruptedUpload"/>) or an operator's.
     /// </summary>
     public bool MaySend { get; init; }
 }
@@ -182,6 +183,19 @@ public sealed class UploadOutbox
         return store.UpdateAsync(
             attemptId,
             current => UploadAttemptMachine.ReturnUnsent(current, at),
+            cancellationToken
+        );
+    }
+
+    public Task<UploadAttemptResult> AbandonSessionAsync(
+        string attemptId,
+        DateTimeOffset at,
+        CancellationToken cancellationToken
+    )
+    {
+        return store.UpdateAsync(
+            attemptId,
+            current => UploadAttemptMachine.AbandonSession(current, at),
             cancellationToken
         );
     }

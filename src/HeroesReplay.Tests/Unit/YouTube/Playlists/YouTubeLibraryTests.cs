@@ -46,6 +46,122 @@ public sealed class YouTubeLibraryTests : IDisposable
     }
 
     [Fact]
+    public async Task Background_WithoutTheLibraryConsent_IsSkippedBeforeAnyCallOrStamp()
+    {
+        var client = new FakeClient { Consent = false };
+
+        YouTubeLibraryPass pass = await Library(client)
+            .RunInBackgroundAsync(startup: true, CancellationToken.None);
+
+        Assert.Equal("no-consent", pass.SkipCode);
+        Assert.Contains("heroesreplay-library", pass.Skipped, StringComparison.Ordinal);
+        Assert.Contains("youtube library --once", pass.Skipped, StringComparison.Ordinal);
+        Assert.Equal(0, client.Calls);
+        Assert.Null(YouTubeUploadsIndex.Load(YouTubeUploadsIndex.PathFor(directory)).LastRunAt);
+    }
+
+    [Fact]
+    public async Task Operator_PassDoesNotCheckTheStoredConsent()
+    {
+        var client = new FakeClient { Consent = false };
+
+        YouTubeLibraryPass pass = await Library(client).RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Null(pass.Skipped);
+        Assert.Equal(0, client.ConsentChecks);
+    }
+
+    [Fact]
+    public async Task Background_AtStartupRunsEvenInsideTheInterval_ThenWaitsForIt()
+    {
+        var client = new FakeClient();
+        new YouTubeUploadsIndex { LastRunAt = Noon.AddMinutes(-10) }.Save(
+            YouTubeUploadsIndex.PathFor(directory)
+        );
+        YouTubeLibrary library = Library(client);
+
+        YouTubeLibraryPass startup = await library.RunInBackgroundAsync(
+            startup: true,
+            CancellationToken.None
+        );
+        YouTubeLibraryPass early = await library.RunInBackgroundAsync(
+            startup: false,
+            CancellationToken.None
+        );
+
+        Assert.Null(startup.Skipped);
+        Assert.Equal(
+            Noon,
+            YouTubeUploadsIndex.Load(YouTubeUploadsIndex.PathFor(directory)).LastRunAt
+        );
+        Assert.Equal("not-due", early.SkipCode);
+        Assert.Equal(Noon.AddHours(1), early.RetryAt);
+    }
+
+    [Fact]
+    public async Task Background_AStopBeforeThePassLeavesTheLastPassTimeAlone()
+    {
+        var client = new FakeClient();
+        new YouTubeUploadsIndex { LastRunAt = Noon.AddHours(-3) }.Save(
+            YouTubeUploadsIndex.PathFor(directory)
+        );
+        using var stopped = new CancellationTokenSource();
+        stopped.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            Library(client).RunInBackgroundAsync(startup: true, stopped.Token)
+        );
+
+        Assert.Equal(
+            Noon.AddHours(-3),
+            YouTubeUploadsIndex.Load(YouTubeUploadsIndex.PathFor(directory)).LastRunAt
+        );
+        Assert.Equal(0, client.Calls);
+    }
+
+    [Fact]
+    public async Task Background_WithTheDaysUnitsSpent_IsSkippedUntilTheNextQuotaDay()
+    {
+        var client = new FakeClient();
+        AppSettings settings = Settings(false);
+        var units = new YouTubeQuotaUnits(directory, settings.YouTube);
+        Assert.True(units.TrySpendLibrary(settings.YouTube.LibraryUnitsPerDay, Noon));
+
+        YouTubeLibraryPass pass = await Library(client, settings: settings)
+            .RunInBackgroundAsync(startup: true, CancellationToken.None);
+
+        Assert.Equal("units-spent", pass.SkipCode);
+        Assert.Equal(YouTubeQuotaUnits.NextQuotaDay(Noon), pass.RetryAt);
+        Assert.Equal(0, client.Calls);
+        Assert.Null(YouTubeUploadsIndex.Load(YouTubeUploadsIndex.PathFor(directory)).LastRunAt);
+    }
+
+    [Fact]
+    public void NextPassIn_WaitsForTheNamedTimeOrOneInterval_NeverUnderAMinute()
+    {
+        TimeSpan hour = TimeSpan.FromHours(1);
+
+        Assert.Equal(hour, YouTubeLibrary.NextPassIn(new YouTubeLibraryPass(), hour, Noon));
+        Assert.Equal(hour, YouTubeLibrary.NextPassIn(null, hour, Noon));
+        Assert.Equal(
+            TimeSpan.FromMinutes(20),
+            YouTubeLibrary.NextPassIn(
+                new YouTubeLibraryPass { RetryAt = Noon.AddMinutes(20) },
+                hour,
+                Noon
+            )
+        );
+        Assert.Equal(
+            TimeSpan.FromMinutes(1),
+            YouTubeLibrary.NextPassIn(
+                new YouTubeLibraryPass { RetryAt = Noon.AddSeconds(5) },
+                hour,
+                Noon
+            )
+        );
+    }
+
+    [Fact]
     public void Plan_SkipsEntriesWithoutAVideoIdOrKnownMode()
     {
         IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Plan(
@@ -993,6 +1109,14 @@ public sealed class YouTubeLibraryTests : IDisposable
         public int ChannelCalls { get; set; }
         public int PageCalls { get; set; }
         public int Calls { get; private set; }
+        public bool Consent { get; set; } = true;
+        public int ConsentChecks { get; private set; }
+
+        public Task<bool> HasConsentAsync(CancellationToken cancellationToken)
+        {
+            ConsentChecks++;
+            return Task.FromResult(Consent);
+        }
 
         public Task<string> UploadsPlaylistIdAsync(CancellationToken cancellationToken)
         {

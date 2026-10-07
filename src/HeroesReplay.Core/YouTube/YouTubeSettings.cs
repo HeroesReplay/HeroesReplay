@@ -36,6 +36,19 @@ public class YouTubeSettings
     public TimeSpan LibraryInterval { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
+    /// How long the uploader waits after it starts before its first library pass. That pass runs
+    /// whatever the last pass time was, then the pass repeats every <see cref="LibraryInterval"/>,
+    /// whether or not recordings wait for upload.
+    /// </summary>
+    public TimeSpan LibraryStartupDelay { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// How many times the uploader retries an interrupted upload on its own (a stop, a restart,
+    /// or a network failure mid-send) before it leaves the recording for an operator.
+    /// </summary>
+    public int InterruptedUploadRetries { get; set; } = 5;
+
+    /// <summary>
     /// The pause between the library pass's playlist writes. YouTube throttles playlist
     /// inserts sent back to back even when the day's quota is far from spent.
     /// </summary>

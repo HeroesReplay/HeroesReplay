@@ -18,6 +18,12 @@ public sealed class PublicationReservationResult
     public DateTimeOffset? PublishAtUtc { get; init; }
 
     public bool Allow => Kind == PublicationReservation.Granted;
+
+    /// <summary>
+    /// The held slot's old publish time when this call moved it (it had passed before the video
+    /// was uploaded). Null otherwise.
+    /// </summary>
+    public DateTimeOffset? RescheduledFrom { get; init; }
 }
 
 /// <summary>
@@ -62,7 +68,8 @@ public static class PublicationReservation
         ReplayMediaPolicySettings settings = null,
         PublicationSendFacts facts = null,
         string rank = null,
-        IReadOnlyList<string> heroes = null
+        IReadOnlyList<string> heroes = null,
+        DateTimeOffset? rescheduleIfBefore = null
     )
     {
         if (string.IsNullOrWhiteSpace(path) || !IsWorkKey(workKey))
@@ -81,12 +88,46 @@ public static class PublicationReservation
 
             if (Holds(ledger, workKey))
             {
-                if (Enrich(ledger, workKey, map, rank, hero, heroes))
+                bool enriched = Enrich(ledger, workKey, map, rank, hero, heroes);
+                Slot held = Find(ledger, workKey);
+                if (
+                    publicListing
+                    && rescheduleIfBefore is DateTimeOffset before
+                    && held.At < before
+                )
+                {
+                    return Reschedule(
+                        path,
+                        ledger,
+                        held,
+                        now,
+                        new PublicationHistory(
+                            lastPublicUtc,
+                            publicAtUtc,
+                            requestedInDay,
+                            lastMap,
+                            lastMapUtc,
+                            lastHero,
+                            lastHeroUtc
+                        ),
+                        settings,
+                        facts
+                            ?? new PublicationSendFacts
+                            {
+                                Criteria =
+                                    requested || held.Requested
+                                        ? ReplayMediaPriority.Requested
+                                        : ReplayMediaPriority.Ordinary,
+                            }
+                    );
+                }
+
+                if (enriched)
                 {
                     Write(path, ledger);
                 }
 
-                return Result(Granted, "reserved", publicListing ? Find(ledger, workKey).At : null);
+                return Result(Granted, "reserved", publicListing ? held.At : null);
             }
 
             List<PublicationSample> slots = PublicationSchedule.History(
@@ -171,6 +212,119 @@ public static class PublicationReservation
             }
 
             return Result(Granted, decision.Reason, decision.PublishAtUtc);
+        }
+    }
+
+    /// <summary>The videos already public, which the pacing rules read besides the slots.</summary>
+    private sealed record PublicationHistory(
+        DateTimeOffset? LastPublicUtc,
+        IReadOnlyList<DateTimeOffset> PublicAtUtc,
+        int RequestedInDay,
+        string LastMap,
+        DateTimeOffset? LastMapUtc,
+        string LastHero,
+        DateTimeOffset? LastHeroUtc
+    );
+
+    /// <summary>
+    /// A held slot whose publish time passed before its video was uploaded (an interrupted or
+    /// refused send). The slot keeps its grant: it was granted inside the publication window, so
+    /// the age rule does not apply again, and the day's insert cap does not hold a retry back.
+    /// The pacing rules pick the next valid time around every other slot. When no time is free,
+    /// the old slot stays and the refusal is returned, so the upload waits instead of going out
+    /// with a past <c>publishAt</c>.
+    /// </summary>
+    private static PublicationReservationResult Reschedule(
+        string path,
+        Ledger ledger,
+        Slot held,
+        DateTimeOffset now,
+        PublicationHistory history,
+        ReplayMediaPolicySettings settings,
+        PublicationSendFacts facts
+    )
+    {
+        List<PublicationSample> slots = PublicationSchedule.History(
+            history.PublicAtUtc,
+            history.LastPublicUtc,
+            history.RequestedInDay,
+            now
+        );
+        foreach (Slot slot in ledger.Reserved)
+        {
+            if (ReferenceEquals(slot, held))
+            {
+                continue;
+            }
+
+            slots.Add(
+                new PublicationSample
+                {
+                    At = slot.At,
+                    Requested = slot.Requested,
+                    Map = slot.Map,
+                    Rank = slot.Rank,
+                    Hero = slot.Hero,
+                    Heroes = slot.Heroes,
+                }
+            );
+        }
+
+        var granted = new PublicationSendFacts
+        {
+            Criteria = facts.Criteria,
+            AlreadyPublished = facts.AlreadyPublished,
+            Incomplete = facts.Incomplete,
+            Uncorrelated = facts.Uncorrelated,
+            RecordedAtUtc = null,
+        };
+        PublicationDecision decision = PublicationSchedule.Plan(
+            settings ?? PublicationSchedule.CanarySettings(),
+            granted,
+            publicListing: true,
+            insertsThisQuotaDay: 0,
+            now,
+            slots,
+            held.Map,
+            held.Rank,
+            held.Hero,
+            held.Heroes,
+            PublicationSchedule.Seen(
+                history.LastMap,
+                history.LastMapUtc,
+                history.LastHero,
+                history.LastHeroUtc
+            )
+        );
+        if (!decision.Allow)
+        {
+            return Result(Refused, decision.Reason);
+        }
+
+        DateTimeOffset from = held.At;
+        held.At = decision.PublishAtUtc ?? now;
+        Write(path, ledger);
+        return new PublicationReservationResult
+        {
+            Kind = Granted,
+            Reason = "rescheduled-" + decision.Reason,
+            PublishAtUtc = held.At,
+            RescheduledFrom = from,
+        };
+    }
+
+    /// <summary>The publish time held for <paramref name="workKey"/>, or null when it holds no slot.</summary>
+    public static DateTimeOffset? HeldAt(string path, string workKey)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !IsWorkKey(workKey))
+        {
+            return null;
+        }
+
+        lock (Sync)
+        {
+            Ledger ledger = Read(path);
+            return Holds(ledger, workKey) ? Find(ledger, workKey).At : null;
         }
     }
 
