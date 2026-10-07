@@ -597,10 +597,7 @@ public class ObsDesiredStateTests
         Assert.Equal(ObsLaunchKind.Launch, launch.Kind);
         Assert.False(launch.Started);
         Assert.Equal(path, launch.ExecutablePath);
-        Assert.Equal(
-            "--profile \"HeroesReplay\" --collection \"HeroesReplay\" --disable-shutdown-check",
-            launch.Arguments
-        );
+        Assert.Equal("--profile \"HeroesReplay\" --collection \"HeroesReplay\"", launch.Arguments);
         Assert.DoesNotContain(
             "startstreaming",
             launch.Arguments,
@@ -628,19 +625,96 @@ public class ObsDesiredStateTests
     }
 
     [Fact]
-    public void LaunchArguments_SkipTheUncleanShutdownPrompt()
+    public void LaunchArguments_AreOnlyTheProfileAndCollection()
     {
-        // An OBS that crashed or was killed otherwise waits on its Safe Mode prompt for a person.
+        // OBS 32.2.2 has no --disable-shutdown-check; the crash dialog is avoided by clearing
+        // its stale run sentinel instead (ObsCrashSentinel).
         string arguments = ObsLaunchDecision.ArgumentsFor("HeroesReplay", "HeroesReplay");
 
-        Assert.EndsWith(" --disable-shutdown-check", arguments, StringComparison.Ordinal);
-        Assert.Equal("--disable-shutdown-check", ObsLaunchDecision.DisableShutdownCheck);
-        Assert.DoesNotContain("--minimize-to-tray", arguments, StringComparison.Ordinal);
-        Assert.Contains(
-            ObsLaunchDecision.DisableShutdownCheck,
-            ObsLaunchDecision.Decide(true, false, "obs64.exe", true).Arguments,
-            StringComparison.Ordinal
+        Assert.Equal("--profile \"HeroesReplay\" --collection \"HeroesReplay\"", arguments);
+        foreach (
+            string flag in new[]
+            {
+                "--disable-shutdown-check",
+                "--disable-missing-files-check",
+                "--disable-updater",
+                "--minimize-to-tray",
+                "--safe-mode",
+                "--startstreaming",
+            }
+        )
+        {
+            Assert.DoesNotContain(flag, arguments, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void EnsureIdentified_OwnLaunch_ClearsStaleSentinelsFirst()
+    {
+        string directory = NewSentinelDirectory();
+        try
+        {
+            string stale = Path.Combine(directory, "run_81b110f2-0000-0000-0000-000000000000");
+            File.WriteAllText(stale, "");
+            var socket = new FakeSession { IdentifyOnConnect = true };
+            var process = new FakeProcess { Exists = true, StartSucceeds = true };
+            bool sentinelAtStart = true;
+            process.OnStart = () => sentinelAtStart = File.Exists(stale);
+            StartupHarness harness = OpenStartup(
+                socket,
+                process,
+                TimeSpan.FromSeconds(60),
+                new ObsCrashSentinel(directory, () => process.Running, NullLogger.Instance)
+            );
+
+            harness.Coordinator.EnsureIdentified();
+
+            Assert.Equal(1, process.LaunchCalls);
+            Assert.False(sentinelAtStart);
+            Assert.False(File.Exists(stale));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EnsureIdentified_ObsAlreadyRunning_LeavesTheSentinel()
+    {
+        string directory = NewSentinelDirectory();
+        try
+        {
+            string live = Path.Combine(directory, "run_b0c325dc-0000-0000-0000-000000000000");
+            File.WriteAllText(live, "");
+            var socket = new FakeSession { IdentifyOnConnect = true };
+            var process = new FakeProcess { Exists = true, Running = true };
+            StartupHarness harness = OpenStartup(
+                socket,
+                process,
+                TimeSpan.FromSeconds(60),
+                new ObsCrashSentinel(directory, () => process.Running, NullLogger.Instance)
+            );
+
+            harness.Coordinator.EnsureIdentified();
+
+            Assert.Equal(0, process.LaunchCalls);
+            Assert.True(File.Exists(live));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static string NewSentinelDirectory()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "hr-obs-sentinel-" + Guid.NewGuid().ToString("N")
         );
+        Directory.CreateDirectory(directory);
+        return directory;
     }
 
     [Fact]
@@ -654,10 +728,9 @@ public class ObsDesiredStateTests
 
         Assert.True(socket.IsIdentified);
         Assert.Equal(1, process.LaunchCalls);
-        Assert.Contains(
-            ObsLaunchDecision.DisableShutdownCheck,
-            process.LastStart.Arguments,
-            StringComparison.Ordinal
+        Assert.Equal(
+            ObsLaunchDecision.ArgumentsFor("HeroesReplay", "HeroesReplay"),
+            process.LastStart.Arguments
         );
         Assert.Equal(4, socket.ConnectCalls);
         Assert.Equal(
@@ -908,7 +981,7 @@ public class ObsDesiredStateTests
         Assert.True(snapshot.Stream.Succeeded);
         Assert.Equal(1, socket.StartStreamCalls);
         Assert.Equal(
-            "--profile \"HeroesReplay-live\" --collection \"HeroesReplay-live\" --disable-shutdown-check",
+            "--profile \"HeroesReplay-live\" --collection \"HeroesReplay-live\"",
             ObsLaunchDecision
                 .Decide(
                     true,
@@ -1188,7 +1261,8 @@ public class ObsDesiredStateTests
     private static StartupHarness OpenStartup(
         FakeSession socket,
         FakeProcess process,
-        TimeSpan startup
+        TimeSpan startup,
+        ObsCrashSentinel sentinel = null
     )
     {
         var harness = new StartupHarness();
@@ -1209,7 +1283,8 @@ public class ObsDesiredStateTests
             },
             TimeSpan.FromSeconds(10),
             startupIdentifyTimeout: startup,
-            now: () => clock
+            now: () => clock,
+            sentinel: sentinel
         );
         harness.Since = () => clock - start;
         return harness;
@@ -1288,6 +1363,9 @@ public class ObsDesiredStateTests
 
         public ObsLaunchDecision LastStart { get; private set; }
 
+        /// <summary>Runs when the fake start is called, before it reports OBS running.</summary>
+        public Action OnStart { get; set; }
+
         public bool IsOwned => Owned;
 
         public bool IsRunning() => Running;
@@ -1298,6 +1376,7 @@ public class ObsDesiredStateTests
         {
             LaunchCalls++;
             LastStart = decision;
+            OnStart?.Invoke();
             if (StartSucceeds)
             {
                 Running = true;
