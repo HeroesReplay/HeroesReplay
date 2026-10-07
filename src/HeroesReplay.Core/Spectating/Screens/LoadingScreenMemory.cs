@@ -35,6 +35,13 @@ public readonly record struct LoadingScreenSample(ClientScreen Screen, bool Menu
         Screen == ClientScreen.Menu ? true
         : MenuSeen && Screen is ClientScreen.Loading or ClientScreen.Match ? false
         : null;
+
+    /// <summary>
+    /// The client is in a match: no screen object, after this process has shown a menu. A match
+    /// is a replay already on screen, so the launch does not wait for a menu that cannot come
+    /// (#249). Before the first menu, memory does not count it; the match clock still does.
+    /// </summary>
+    public bool InMatch => MenuSeen && Screen == ClientScreen.Match;
 }
 
 /// <summary>
@@ -53,6 +60,7 @@ public sealed class LoadingScreenMemory : IDisposable
     private IntPtr handle;
     private int attachedPid;
     private int pid;
+    private long startedAt;
     private long moduleBase;
     private long moduleSize;
     private bool discovered;
@@ -140,6 +148,7 @@ public sealed class LoadingScreenMemory : IDisposable
     {
         if (
             pid == module.ProcessId
+            && startedAt == module.StartedAt
             && moduleBase == module.BaseAddress
             && moduleSize == module.Size
         )
@@ -147,7 +156,9 @@ public sealed class LoadingScreenMemory : IDisposable
             return;
         }
 
+        // A relaunched client starts over: its global and its first menu are its own.
         pid = module.ProcessId;
+        startedAt = module.StartedAt;
         moduleBase = module.BaseAddress;
         moduleSize = module.Size;
         discovered = false;
@@ -279,7 +290,8 @@ public sealed class LoadingScreenMemory : IDisposable
                 process.Id,
                 main.BaseAddress.ToInt64(),
                 main.ModuleMemorySize,
-                main.FileVersionInfo.FileVersion
+                main.FileVersionInfo.FileVersion,
+                StableClockModule.StartTicks(process)
             );
             return true;
         }

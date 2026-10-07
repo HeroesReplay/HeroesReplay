@@ -28,6 +28,28 @@ public enum ReplayLaunchAuth
     Wait,
     AlreadyInMatch,
     Unavailable,
+
+    /// <summary>
+    /// The current-patch client is playing a different replay than the one this session opens.
+    /// Close it and ask the logged-in Battle.net to start Heroes again.
+    /// </summary>
+    RelaunchCurrent,
+}
+
+/// <summary>What a launch does once a matching client has shown nothing it can use for too long.</summary>
+public enum LaunchWaitAction
+{
+    /// <summary>Inside the limit, or the client is busy (game data, a loading screen, a menu).</summary>
+    KeepWaiting,
+
+    /// <summary>Current patch: close the client and ask the logged-in Battle.net again.</summary>
+    RelaunchCurrent,
+
+    /// <summary>Previous patch: open the replay through HeroesSwitcher again. The client stays open.</summary>
+    ReopenThroughSwitcher,
+
+    /// <summary>The one recovery is spent. The launch ends now and the replay stays queued.</summary>
+    GiveUp,
 }
 
 public enum ReplaySignInRecovery
@@ -115,11 +137,18 @@ public static class ReplayClientRoute
         return ReplayClientPatch.NotInstalled;
     }
 
+    /// <summary>
+    /// The launch step. <paramref name="replayPresented"/> is the replay on screen on the
+    /// matching client: its map loading screen, a match in memory, or a running match clock.
+    /// <paramref name="otherReplayOnClient"/> is true when this spectator opened a different
+    /// replay on that client, so the match on screen is not this replay's.
+    /// </summary>
     public static ReplayLaunchAuth Decide(
         ReplayClientPatch patch,
         RunningClientBuild running,
         bool homeScreen,
-        bool replayPresented
+        bool replayPresented,
+        bool otherReplayOnClient = false
     )
     {
         if (patch == ReplayClientPatch.NotInstalled)
@@ -134,7 +163,17 @@ public static class ReplayClientRoute
 
         if (running == RunningClientBuild.Matches && replayPresented)
         {
-            return ReplayLaunchAuth.AlreadyInMatch;
+            if (!otherReplayOnClient)
+            {
+                // A replay already playing is a normal start: the report preloaded it.
+                return ReplayLaunchAuth.AlreadyInMatch;
+            }
+
+            // Another replay is playing. A previous-patch client takes this file through
+            // HeroesSwitcher and stays open; the current patch is closed and signed in again.
+            return patch == ReplayClientPatch.Previous
+                ? ReplayLaunchAuth.OpenMatchingBuild
+                : ReplayLaunchAuth.RelaunchCurrent;
         }
 
         if (running == RunningClientBuild.Matches && homeScreen)
@@ -160,6 +199,49 @@ public static class ReplayClientRoute
         }
 
         return ReplayLaunchAuth.AuthenticateCurrent;
+    }
+
+    /// <summary>
+    /// The match on the client belongs to another replay only when this spectator opened a
+    /// different file on it. Unknown (a spectate restart) is this replay, as before.
+    /// </summary>
+    public static bool OtherReplayOnClient(string openedOnClient, string replayPath) =>
+        !string.IsNullOrWhiteSpace(openedOnClient)
+        && !string.IsNullOrWhiteSpace(replayPath)
+        && !string.Equals(openedOnClient, replayPath, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The default for <c>Spectate:LaunchWaitLimit</c>.</summary>
+    public static readonly TimeSpan DefaultLaunchWaitLimit = TimeSpan.FromMinutes(3);
+
+    /// <summary>
+    /// A Wait step is bounded (#249). The launch re-checks the client every pass; once the
+    /// matching client has shown no menu, loading screen, match, match clock, game data, or
+    /// blank startup window for <paramref name="limit"/>, it is recovered once by the patch
+    /// rules: the current patch is closed and signed in again through Battle.net, a previous
+    /// patch gets the replay through HeroesSwitcher again without closing. After that one
+    /// recovery the launch gives up instead of waiting out the cold-boot limit again.
+    /// </summary>
+    public static LaunchWaitAction DecideStuckWait(
+        ReplayClientPatch patch,
+        TimeSpan stuckFor,
+        TimeSpan limit,
+        int recoveriesAlready
+    )
+    {
+        TimeSpan bound = limit > TimeSpan.Zero ? limit : DefaultLaunchWaitLimit;
+        if (stuckFor < bound)
+        {
+            return LaunchWaitAction.KeepWaiting;
+        }
+
+        if (recoveriesAlready >= 1 || patch == ReplayClientPatch.NotInstalled)
+        {
+            return LaunchWaitAction.GiveUp;
+        }
+
+        return patch == ReplayClientPatch.Previous
+            ? LaunchWaitAction.ReopenThroughSwitcher
+            : LaunchWaitAction.RelaunchCurrent;
     }
 
     public static ReplaySignInRecovery Recover(ReplayClientPatch patch, int attemptsAlready)

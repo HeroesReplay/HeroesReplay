@@ -630,6 +630,109 @@ public class ServiceHealthClassifierTests
         }
     }
 
+    [Theory]
+    [InlineData(19, ServiceRoleState.Ready)]
+    [InlineData(21, ServiceRoleState.Degraded)]
+    public void SpectateLaunchWithoutMatchProgress_IsStalledPastTheThreshold(
+        int minutes,
+        ServiceRoleState expected
+    )
+    {
+        // #249: spectate heartbeated normally while one replay sat in Wait, so status said ready.
+        ServiceReadyReport beat = Beat(
+            heartbeatAgo: TimeSpan.FromSeconds(3),
+            workAgo: TimeSpan.FromMinutes(minutes + 1)
+        );
+        beat.LaunchingSince = Now.AddMinutes(-minutes);
+        var settings = new ServiceHealthSettings { SpectateWorkThreshold = TimeSpan.FromHours(2) };
+
+        ServiceRoleHealth health = ServiceHealthClassifier.Classify(
+            "spectate",
+            Record("spectate", 70),
+            running: true,
+            beat,
+            stopRequested: false,
+            Now,
+            settings
+        );
+
+        Assert.Equal(expected, health.State);
+        Assert.Equal(beat.LaunchingSince, health.LaunchingSince);
+        if (expected == ServiceRoleState.Degraded)
+        {
+            Assert.Equal(ServiceHealthCodes.SpectateLaunchStalled, health.CauseCode);
+            Assert.Contains("launching or loading for 21m", health.Cause);
+            Assert.Contains("limit 20m", health.Cause);
+        }
+        else
+        {
+            Assert.Null(health.CauseCode);
+        }
+    }
+
+    [Fact]
+    public void EmptyQueueOutageOrHeldReplays_AreNeverAStalledLaunch()
+    {
+        // No launch phase: an idle queue, an outage pause, and the wait after a held replay all
+        // leave LaunchingSince empty. Old work only makes it degraded, which is not restarted.
+        ServiceReadyReport idle = Beat(
+            heartbeatAgo: TimeSpan.FromSeconds(3),
+            workAgo: TimeSpan.FromHours(3)
+        );
+        idle.SessionsWithoutProgress = 2;
+        idle.LastOutcome = "BuildNotInstalled";
+
+        ServiceRoleHealth health = Classify("spectate", running: true, idle);
+
+        Assert.Equal(ServiceRoleState.Degraded, health.State);
+        Assert.Null(health.CauseCode);
+        Assert.Null(health.LaunchingSince);
+        Assert.Equal(
+            ServiceRestartAction.None,
+            ServiceRestartPolicy.Decide(
+                health,
+                new ServiceRoleRestarts { Role = "spectate" },
+                Now,
+                new ServiceRestartSettings()
+            )
+        );
+    }
+
+    [Fact]
+    public void LaunchStall_IsSpectateOnly_AndNotWhileStopping_AndConfigurable()
+    {
+        ServiceReadyReport beat = Beat(
+            heartbeatAgo: TimeSpan.FromSeconds(3),
+            workAgo: TimeSpan.FromMinutes(1)
+        );
+        beat.LaunchingSince = Now.AddMinutes(-30);
+        beat.LastSuccessfulWorkAt = Now.AddMinutes(-31);
+        var settings = new ServiceHealthSettings
+        {
+            SpectateLaunchStallThreshold = TimeSpan.FromMinutes(45),
+            SpectateWorkThreshold = TimeSpan.FromHours(2),
+        };
+
+        ServiceRoleHealth longer = ServiceHealthClassifier.Classify(
+            "spectate",
+            Record("spectate", 70),
+            running: true,
+            beat,
+            stopRequested: false,
+            Now,
+            settings
+        );
+        ServiceRoleHealth download = Classify("download", running: true, beat);
+        beat.Readiness = ServiceReadiness.Stopping;
+        ServiceRoleHealth stopping = Classify("spectate", running: true, beat);
+
+        Assert.Equal(ServiceRoleState.Ready, longer.State);
+        Assert.NotEqual(ServiceHealthCodes.SpectateLaunchStalled, download.CauseCode);
+        Assert.NotEqual(ServiceHealthCodes.SpectateLaunchStalled, stopping.CauseCode);
+        Assert.Equal(TimeSpan.FromMinutes(20), Defaults.LaunchStallThreshold("spectate"));
+        Assert.Equal(TimeSpan.Zero, Defaults.LaunchStallThreshold("youtube"));
+    }
+
     private static ServiceRoleHealth Classify(
         string role,
         bool running,

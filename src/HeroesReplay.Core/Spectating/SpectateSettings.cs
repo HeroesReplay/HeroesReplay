@@ -45,4 +45,12 @@ public class SpectateSettings
     public TimeSpan KillStreakHoldTime { get; set; }
 
     public IEnumerable<int> TalentLevels { get; set; }
+
+    /// <summary>
+    /// How long a launch waits on a matching client that shows no menu, loading screen, match,
+    /// match clock, game data, or blank startup window before it recovers that client once:
+    /// the current patch is closed and signed in again, a previous patch gets the replay through
+    /// HeroesSwitcher again (#249). Zero or less means the default, 3 minutes.
+    /// </summary>
+    public TimeSpan LaunchWaitLimit { get; set; } = TimeSpan.FromMinutes(3);
 }

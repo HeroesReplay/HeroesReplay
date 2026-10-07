@@ -14,6 +14,7 @@ using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Control;
@@ -118,6 +119,9 @@ public class GameManager : IGameManager
         bool obsSession = false;
         bool enteredMatch = false;
         statusStore.Patch(status => ShowLoading(status, loadedReplay, context.Current));
+        // The launch and loading phase starts. Match progress, the report, or the end of the
+        // session ends it; a launch with no progress for too long is a stalled spectate (#249).
+        ServiceHeartbeat.RecordLaunching();
 
         try
         {
@@ -294,6 +298,8 @@ public class GameManager : IGameManager
     )
     {
         ReplaySessionKind kind = DecideOutcome(loadedReplay, outcomeKnown);
+        // The report and the next replay's preload are their own bounded phase, not a launch.
+        ServiceHeartbeat.RecordLaunchEnded();
         await ReportAndHandOffAsync(enteredMatch, obsSession, whileReporting).ConfigureAwait(false);
         return kind;
     }
@@ -801,7 +807,7 @@ public class GameManager : IGameManager
             if (ReportHandoff.ShouldCutReport(mapLoading, matchClock))
             {
                 logger.LogInformation(
-                    "Next replay {ReplayId} is on the map loading screen or its match clock is running. The report stops so OBS shows the game.",
+                    "Next replay {ReplayId} is on the map loading screen, in a match, or its match clock is running. The report stops so OBS shows the game.",
                     next.ReplayId
                 );
                 cutReport.Cancel();
@@ -825,7 +831,7 @@ public class GameManager : IGameManager
         }
 
         logger.LogWarning(
-            "Next replay {ReplayId} is open, but the loading screen and the match clock were not seen. The report scene stays.",
+            "Next replay {ReplayId} is open, but no loading screen, match, or match clock was seen. The report scene stays, and its session checks the client again: a replay that is already playing starts there.",
             next.ReplayId
         );
         return NextMatchLaunch.ProcessOnly;

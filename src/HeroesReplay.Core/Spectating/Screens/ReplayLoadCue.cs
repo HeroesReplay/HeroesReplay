@@ -17,6 +17,28 @@ public static class ReplayLoadCue
     public static bool IsPresented(bool loadingScreen, TimeSpan? hudTimer) =>
         loadingScreen || hudTimer.HasValue;
 
+    /// <summary>
+    /// Whether the replay is on screen, from memory only: the running match clock, a match
+    /// (<see cref="LoadingScreenSample.InMatch"/>), or the map loading screen. A match counts even
+    /// when the clock does not read yet, so a replay that is already playing is never mistaken
+    /// for a client stuck before its menu (#249). Null when memory cannot tell, and only then is
+    /// the screen OCR'd for the loading screen text.
+    /// </summary>
+    public static bool? PresentedInMemory(bool clockRunning, LoadingScreenSample? screen)
+    {
+        if (clockRunning)
+        {
+            return true;
+        }
+
+        if (screen is not LoadingScreenSample sample)
+        {
+            return null;
+        }
+
+        return sample.InMatch ? true : sample.MapLoading;
+    }
+
     public static NextMatchLaunch Classify(
         bool processRunning,
         bool loadingScreen,
