@@ -115,6 +115,7 @@ public class GameManager : IGameManager
             )
             .ConfigureAwait(false);
         ApplyPreLaunchPolicy(loadedReplay, preLaunch);
+        CapRecordingToPublication(loadedReplay, preLaunch);
         await contextSetter.SetContextAsync(loadedReplay);
         bool obsSession = false;
         bool enteredMatch = false;
@@ -955,11 +956,63 @@ public class GameManager : IGameManager
         loaded.PolicyAllowsPublication = false;
     }
 
+    /// <summary>
+    /// The media policy chose to record. The cap skips the recording when the upload and
+    /// publication pipeline already holds what it can publish (#250). A request always records.
+    /// </summary>
+    private void CapRecordingToPublication(LoadedReplay loaded, MediaPolicySnapshot snapshot)
+    {
+        if (loaded?.PolicyAllowsRecording != true || snapshot?.Decision == null)
+        {
+            return;
+        }
+
+        RecordingCapDecision cap;
+        try
+        {
+            cap = RecordingCap.Decide(
+                RecordingCap.Measure(settings, snapshot.Decision.Priority, DateTimeOffset.UtcNow),
+                settings.ReplayMedia
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not measure the upload backlog for replay {ReplayId}. It is recorded.",
+                loaded.ReplayId
+            );
+            return;
+        }
+
+        if (cap.Allow)
+        {
+            logger.LogInformation(
+                "Replay {ReplayId} recording cap allows it ({CapReason}): {InFlight} waiting for upload or publish time, capacity {Capacity}.",
+                loaded.ReplayId,
+                cap.Reason,
+                cap.InFlight,
+                cap.Capacity
+            );
+            return;
+        }
+
+        loaded.PolicyAllowsRecording = false;
+        logger.LogInformation(
+            "Replay {ReplayId} is spectated without a recording ({CapReason}): {InFlight} recording(s) already wait for upload or publish time, capacity {Capacity}.",
+            loaded.ReplayId,
+            cap.Reason,
+            cap.InFlight,
+            cap.Capacity
+        );
+    }
+
     private async Task RecordPublicationAsync(
         LoadedReplay loadedReplay,
         ObsRecordingResult recording
     )
     {
+        string withheld = null;
         MediaPolicySnapshot snapshot = await mediaPolicy
             .RecordPublicationAsync(
                 loadedReplay,
@@ -984,6 +1037,7 @@ public class GameManager : IGameManager
                 settings?.ReplayMedia
             );
             loadedReplay.PolicyAllowsPublication = admit.Allow;
+            withheld = admit.Allow ? null : admit.Reason;
             logger.LogInformation(
                 "Replay {ReplayId} publication admit {Admit} reason {PublicationReason} published in window {PublishedInWindow}.",
                 loadedReplay.ReplayId,
@@ -1011,23 +1065,57 @@ public class GameManager : IGameManager
                 "Wrote the YouTube entry for replay {ReplayId} after the publication decision.",
                 loadedReplay?.ReplayId
             );
+            return;
         }
+
+        await DiscardUnpublishedRecordingAsync(loadedReplay, recording, withheld)
+            .ConfigureAwait(false);
     }
 
-    private static int PublishedThisDay(AppSettings settings)
+    /// <summary>
+    /// A finished recording whose publication was withheld gets no <c>youtube-entry.json</c>,
+    /// so it can never upload. It is deleted now, with the reason, instead of waiting for
+    /// retention to remove it as never uploaded (#250). Without YouTube the file is left to
+    /// retention as before.
+    /// </summary>
+    private async Task DiscardUnpublishedRecordingAsync(
+        LoadedReplay loadedReplay,
+        ObsRecordingResult recording,
+        string withheld
+    )
     {
-        PublicationLedger ledger = PublicationLedgerStore.Load(settings?.Location?.DataDirectory);
-        if (ledger?.PublicAtUtc == null)
+        if (
+            settings.YouTube?.Enabled != true
+            || !RecordingOwnership.CanPublish(recording, allowsMedia: true)
+            || !File.Exists(recording.OutputPath)
+        )
         {
-            return 0;
+            return;
         }
 
-        return PublicationSchedule.PublishedIn(
-            ledger.PublicAtUtc,
+        bool deleted = await RecordingDiscard
+            .DeleteAsync(recording.OutputPath, logger)
+            .ConfigureAwait(false);
+        logger.LogWarning(
+            "Replay {ReplayId} recording {Path} is not published ({Reason}), so no YouTube entry was written. {Action}",
+            loadedReplay?.ReplayId,
+            recording.OutputPath,
+            withheld ?? "entry-not-written",
+            deleted ? "The recording was deleted." : "Retention removes it later."
+        );
+    }
+
+    /// <summary>
+    /// Videos whose publish time falls in the last 24 hours. Every video the uploader sent has a
+    /// slot at its publish time; the uploader's older ledger only held inserts that came back
+    /// public, which a scheduled upload never does (#250).
+    /// </summary>
+    private static int PublishedThisDay(AppSettings settings) =>
+        PublicationReservation.CountIn(
+            PublicationReservation.PathFor(settings?.Location?.DataDirectory),
             DateTimeOffset.UtcNow,
             TimeSpan.FromHours(24)
         );
-    }
 
     private async Task MarkExistingYouTubeVideoAsync(LoadedReplay loadedReplay)
     {

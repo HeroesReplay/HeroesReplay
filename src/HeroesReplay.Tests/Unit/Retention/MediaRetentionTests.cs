@@ -118,6 +118,53 @@ public class MediaRetentionTests
     }
 
     /// <summary>
+    /// #250: retention never deletes a recording that waits for its insert, however old it is
+    /// and however much is pending; the spectator's pending-bytes guard stops recording
+    /// instead. A recording with no entry goes, and the warning says why.
+    /// </summary>
+    [Fact]
+    public void Sweep_KeepsAnEligibleRecordingAndNamesTheReasonForAnUnentriedOne()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string eligible = library.AddContext("eligible");
+        string orphan = library.AddContext("orphan");
+        string current = library.AddContext("current");
+        TempLibrary.WriteFile(eligible, "match.mp4", 64, now.AddDays(-20));
+        TempLibrary.WriteText(eligible, "youtube-entry.json", "{\"ReplayId\":1}");
+        TempLibrary.WriteFile(orphan, "match.mp4", 32, now.AddHours(-3));
+        TempLibrary.WriteFile(current, "match.mp4", 8, now);
+        TempLibrary.SetDirectoryTime(eligible, now.AddDays(-20));
+        TempLibrary.SetDirectoryTime(orphan, now.AddHours(-3));
+        TempLibrary.SetDirectoryTime(current, now);
+
+        RetentionSweep sweep = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(eligible, "match.mp4")));
+        Assert.False(File.Exists(Path.Combine(orphan, "match.mp4")));
+        string warning = Assert.Single(sweep.Warnings);
+        Assert.Contains("never uploaded", warning, StringComparison.Ordinal);
+        Assert.Contains("reason: no-entry", warning, StringComparison.Ordinal);
+        Assert.Contains(Path.Combine(orphan, "match.mp4"), warning, StringComparison.Ordinal);
+        Assert.Equal(
+            64,
+            PendingUploadSize.Bytes(
+                library.Contexts,
+                "youtube-entry.json",
+                "youtube-entry-uploaded.json"
+            )
+        );
+        Assert.Equal(
+            1,
+            PendingUploadSize.Count(
+                library.Contexts,
+                "youtube-entry.json",
+                "youtube-entry-uploaded.json"
+            )
+        );
+    }
+
+    /// <summary>
     /// #212: the uploader touched context A after context B's recording stopped, so A is the
     /// newest folder. B's entry is not written yet. B's recording must survive the sweep.
     /// </summary>

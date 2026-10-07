@@ -12,6 +12,7 @@ using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Playlists;
+using HeroesReplay.Core.YouTube.Publication;
 using HeroesReplay.Core.YouTube.Quota;
 using HeroesReplay.Core.YouTube.Search;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -608,6 +609,62 @@ public sealed class YouTubeLibraryTests : IDisposable
         );
     }
 
+    /// <summary>
+    /// #250: production logged "9600 of 10000 units used today" after six uploads, so the
+    /// pass had no pool room and never confirmed a scheduled video public. Google counted
+    /// those uploads in the Video Uploads bucket (6 of 100) and 4 queries in the pool.
+    /// </summary>
+    [Fact]
+    public async Task RunOnce_ConfirmsScheduledVideosAfterADayOfSixUploadsFromAnOldLedger()
+    {
+        File.WriteAllText(
+            Path.Combine(directory, YouTubeQuotaUnits.FileName),
+            JsonSerializer.Serialize(
+                new
+                {
+                    QuotaDay = PublicationSchedule.QuotaDayStart(Noon),
+                    UploadUnits = 6 * 1600,
+                    LibraryUnits = 0,
+                }
+            )
+        );
+        YouTubeLibraryRecord.Append(
+            YouTubeLibraryRecord.PathFor(directory),
+            new YouTubeLibraryVideo
+            {
+                VideoId = "v-due",
+                ReplayId = 6,
+                Kind = YouTubeLibraryRecord.Full,
+                Map = "Sky Temple",
+                Mode = "Quick Match",
+                GameVersion = "2.57.0.98304",
+                PrivacyStatus = "private",
+                PublishAt = Noon.AddHours(-1),
+            }
+        );
+        var client = new FakeClient();
+        client.Privacy["v-due"] = "public";
+        AppSettings settings = Settings(false);
+        settings.YouTube.DailyQuotaUnits = 10000;
+        settings.YouTube.QuotaReserveUnits = 1600;
+
+        YouTubeLibraryPass pass = await Library(client, settings: settings)
+            .RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Single(client.PrivacyCalls);
+        Assert.True(pass.UnitsSpent > 0);
+        Assert.Equal(
+            "public",
+            YouTubeLibraryRecord
+                .Read(YouTubeLibraryRecord.PathFor(directory))["v-due"]
+                .PrivacyStatus
+        );
+        YouTubeQuotaDay day = new YouTubeQuotaUnits(directory, settings.YouTube).Read(Noon);
+        Assert.Equal(6, day.UploadCalls);
+        Assert.Equal(0, day.UploadUnits);
+        Assert.Equal(pass.UnitsSpent, day.Total);
+    }
+
     [Fact]
     public async Task RunOnce_ScheduledVideoNotYetDueIsNotLookedUp()
     {
@@ -984,16 +1041,16 @@ public sealed class YouTubeLibraryTests : IDisposable
         public Dictionary<string, string> Privacy { get; } = new();
         public List<IReadOnlyList<string>> PrivacyCalls { get; } = new();
 
-        public Task<IReadOnlyDictionary<string, string>> PrivacyAsync(
+        public Task<IReadOnlyDictionary<string, YouTubeVideoStatus>> StatusAsync(
             IReadOnlyList<string> videoIds,
             CancellationToken cancellationToken
         )
         {
             Calls++;
             PrivacyCalls.Add(videoIds);
-            IReadOnlyDictionary<string, string> found = videoIds
+            IReadOnlyDictionary<string, YouTubeVideoStatus> found = videoIds
                 .Where(Privacy.ContainsKey)
-                .ToDictionary(id => id, id => Privacy[id]);
+                .ToDictionary(id => id, id => new YouTubeVideoStatus(Privacy[id], "processed"));
             return Task.FromResult(found);
         }
 

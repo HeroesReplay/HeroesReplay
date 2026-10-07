@@ -44,8 +44,8 @@ public class YouTubeUploader : IYouTubeUploader
     private readonly List<bool> publicRequested = new();
     private int insertsToday;
     private int deferredBySchedule;
-    private int stuckPrivate;
     private bool quotaHeld;
+    private string reportedConcern;
     private DateTimeOffset? lastInsertUtc;
     private DateTimeOffset? lastPublicUtc;
     private DateTimeOffset currentQuotaDay;
@@ -133,6 +133,7 @@ public class YouTubeUploader : IYouTubeUploader
 
     public async Task ListenAsync()
     {
+        LogQuotaPlan();
         if (settings.YouTube.DryRun)
         {
             logger.LogInformation(
@@ -160,6 +161,7 @@ public class YouTubeUploader : IYouTubeUploader
             JoinKnownReplaySessions();
             await SendPendingAsync().ConfigureAwait(false);
             await FileLibraryAsync().ConfigureAwait(false);
+            ReportHealth();
             DateTimeOffset drained = DateTimeOffset.UtcNow;
             while (!cancellationTokenSource.IsCancellationRequested)
             {
@@ -190,6 +192,7 @@ public class YouTubeUploader : IYouTubeUploader
                 drained = now;
                 await SendPendingAsync().ConfigureAwait(false);
                 await FileLibraryAsync().ConfigureAwait(false);
+                ReportHealth();
             }
         }
         catch (OperationCanceledException)
@@ -207,15 +210,16 @@ public class YouTubeUploader : IYouTubeUploader
         CancellationToken token = cancellationTokenSource.Token;
         FileInfo recording = await WaitForRecordingReadyAsync(recordingPath, token)
             .ConfigureAwait(false);
+        if (recording == null)
+        {
+            return;
+        }
+
         FileInfo entryFile = await WaitForEntryAsync(recording.Directory, token)
             .ConfigureAwait(false);
         if (entryFile == null)
         {
-            logger.LogWarning(
-                "No {Entry} next to {Path}; skipping upload.",
-                settings.YouTube.EntryFileName,
-                recordingPath
-            );
+            LogMissingEntry(recording);
             return;
         }
 
@@ -429,9 +433,7 @@ public class YouTubeUploader : IYouTubeUploader
         bool resume = UploadAttemptIds.IsSessionUri(dispatched.Manifest?.SessionUri);
         if (!resume)
         {
-            Bookkeep(() =>
-                quotaUnits.SpendUpload(YouTubeQuotaUnits.VideoInsert, DateTimeOffset.UtcNow)
-            );
+            Bookkeep(() => quotaUnits.SpendUploadCall(DateTimeOffset.UtcNow));
         }
 
         IUploadProgress result;
@@ -524,9 +526,9 @@ public class YouTubeUploader : IYouTubeUploader
                 )
             )
             {
-                stuckPrivate++;
+                // Scheduled, not stuck: the library pass reads it public after publishAt (#250).
                 logger.LogInformation(
-                    "Replay {ReplayId} uploaded as {Privacy}. YouTube publishes it at {PublishAt}. The recording can go; the entry stays until YouTube reports public.",
+                    "Replay {ReplayId} uploaded as {Privacy}. YouTube publishes it at {PublishAt}. The recording can go; the library pass confirms it public after that time.",
                     entry.ReplayId,
                     entry.ActualPrivacyStatus ?? UploadVisibility.Staged,
                     entry.PublishAtUtc
@@ -576,6 +578,37 @@ public class YouTubeUploader : IYouTubeUploader
                 result.Status
             );
         }
+    }
+
+    /// <summary>
+    /// The watcher sees an mp4 when OBS creates it, and the spectator writes the entry only after
+    /// the recording stops, any clips are cut, and the publication decision is made. A recording
+    /// still inside <c>Retention:UnpublishedGrace</c> is not an error: the pending pass sends it
+    /// once the entry exists. An older one never got an entry, and retention removes it.
+    /// </summary>
+    private void LogMissingEntry(FileInfo recording)
+    {
+        TimeSpan grace =
+            settings.Retention?.UnpublishedGrace > TimeSpan.Zero
+                ? settings.Retention.UnpublishedGrace
+                : TimeSpan.FromHours(1);
+        recording.Refresh();
+        if (!recording.Exists || DateTime.UtcNow - recording.LastWriteTimeUtc < grace)
+        {
+            logger.LogInformation(
+                "No {Entry} next to {Path} yet. The pending pass sends it once the spectator writes the entry.",
+                settings.YouTube.EntryFileName,
+                recording.FullName
+            );
+            return;
+        }
+
+        logger.LogWarning(
+            "No {Entry} next to {Path} {Quiet} after the recording stopped. It is not uploaded, and retention removes it.",
+            settings.YouTube.EntryFileName,
+            recording.FullName,
+            grace
+        );
     }
 
     private async Task<bool> ReturnUnsentAsync(UploadOutbox outbox, string attemptId)
@@ -683,10 +716,11 @@ public class YouTubeUploader : IYouTubeUploader
         {
             quotaHeld = true;
             logger.LogInformation(
-                "Upload of {Path} waits for the YouTube quota ({Units} of {Daily} units used today). Uploads resume at {ResumeAt:u}. It stays pending.",
+                "Upload of {Path} waits for the YouTube upload quota ({Calls} of {Usable} videos.insert calls used today, {Reserve} held back). Uploads resume at {ResumeAt:u}. It stays pending.",
                 path,
-                day.Total,
-                settings.YouTube.DailyQuotaUnits,
+                day.UploadCalls,
+                YouTubeQuotaUnits.UsableUploadCalls(settings.YouTube),
+                settings.YouTube.UploadCallReserve,
                 quotaUnits.UploadsResumeAt(day, now)
             );
             return false;
@@ -733,7 +767,8 @@ public class YouTubeUploader : IYouTubeUploader
     }
 
     /// <summary>
-    /// The daily quota pauses uploads and the library pass until the quota day turns. A rate
+    /// A daily quota response to <c>videos.insert</c> is the upload bucket: it pauses uploads
+    /// until the quota day turns. The library pass spends the other bucket and goes on. A rate
     /// limit only holds new uploads for one cycle. Returns when uploads may go again, or null.
     /// </summary>
     private DateTimeOffset? PauseOnQuota(Exception exception)
@@ -758,11 +793,10 @@ public class YouTubeUploader : IYouTubeUploader
         }
 
         DateTimeOffset until = YouTubeListQuota.ResumeAt(now);
-        Bookkeep(() => quotaUnits.PauseLibrary(until, now));
         Bookkeep(() => quotaUnits.PauseUploads(until, now));
         logger.LogWarning(
             exception,
-            "YouTube reported the daily quota exhausted. New uploads wait until {Until}.",
+            "YouTube refused videos.insert for the day (the Video Uploads bucket). New uploads wait until {Until}. The library pass uses the other bucket and goes on.",
             until
         );
         return until;
@@ -825,10 +859,11 @@ public class YouTubeUploader : IYouTubeUploader
 
         if (reserved.Kind == PublicationReservation.Terminal)
         {
-            logger.LogInformation(
-                "Upload of {Path} is past the publication window ({Reason}). It is not reserved again. The recording is deleted.",
+            logger.LogWarning(
+                "Removed recording that was eligible but never uploaded: {Path}. It is past the publication window ({Reason}: the game is older than ReplayMedia:OrdinaryCandidateMaxAge {MaxAge}) and is not reserved again. Recording more than can be published causes this; see the recording cap.",
                 path,
-                reserved.Reason
+                reserved.Reason,
+                settings.ReplayMedia?.OrdinaryCandidateMaxAge
             );
             DeleteRecording(path);
             return reserved;
@@ -856,18 +891,10 @@ public class YouTubeUploader : IYouTubeUploader
         return reserved;
     }
 
-    private string ReservationsPath(bool dryRun)
-    {
-        if (settings.Location?.DataDirectory == null)
-        {
-            return null;
-        }
-
-        return Path.Combine(
-            settings.Location.DataDirectory,
-            dryRun ? "publication-reservations-dry-run.txt" : "publication-reservations.txt"
-        );
-    }
+    private string ReservationsPath(bool dryRun) =>
+        settings.Location?.DataDirectory == null
+            ? null
+            : PublicationReservation.PathFor(settings.Location.DataDirectory, dryRun);
 
     private static string WorkKey(YouTubeEntry entry, string path)
     {
@@ -930,28 +957,136 @@ public class YouTubeUploader : IYouTubeUploader
         );
     }
 
+    /// <summary>
+    /// Published and stuck counts come from the library record, which the library pass updates
+    /// when YouTube reports a scheduled video public. The uploader's own ledger only sees the
+    /// insert response, which is always private with a publish time (#250).
+    /// </summary>
+    private PublicationTallyReport Tally(DateTimeOffset now)
+    {
+        try
+        {
+            return PublicationTally.Count(
+                YouTubeLibraryRecord
+                    .Read(YouTubeLibraryRecord.PathFor(settings.Location?.DataDirectory))
+                    .Values,
+                now,
+                PublicationTally.ConfirmGrace(settings.YouTube.LibraryInterval)
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not read the YouTube library record.");
+            return new PublicationTallyReport();
+        }
+    }
+
+    private void LogQuotaPlan()
+    {
+        logger.LogInformation(
+            "{QuotaPlan}",
+            YouTubeQuotaPlan.Describe(settings.YouTube, settings.ReplayMedia)
+        );
+        foreach (
+            string warning in YouTubeQuotaPlan.Warnings(settings.YouTube, settings.ReplayMedia)
+        )
+        {
+            logger.LogWarning("{QuotaPlanWarning}", warning);
+        }
+    }
+
+    /// <summary>
+    /// Tells <c>services status</c> whether the uploader is degraded: blocked by quota with a
+    /// backlog, or nothing confirmed public for a day while uploads are past their publish time.
+    /// </summary>
+    private void ReportHealth()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        YouTubeUploaderConcern concern;
+        try
+        {
+            YouTubeQuotaDay day = quotaUnits.Read(now);
+            EnsureLedger();
+            ReplayMediaPolicySettings media =
+                settings.ReplayMedia ?? new ReplayMediaPolicySettings();
+            bool insertsCapped =
+                PublicationSchedule.QuotaDayStart(now) == currentQuotaDay
+                && insertsToday >= media.MaxInsertsPerQuotaDay;
+            concern = YouTubeUploaderHealth.Evaluate(
+                new YouTubeUploaderHealthInput
+                {
+                    Live = settings.YouTube.Enabled && !settings.YouTube.DryRun,
+                    PublicListing = YouTubeListing.IsPublic(settings.YouTube),
+                    Pending = PendingUploadSize.Count(
+                        settings.ContextsDirectory,
+                        settings.YouTube.EntryFileName,
+                        settings.YouTube.EntryFileNameUploaded
+                    ),
+                    QuotaBlocked = !quotaUnits.MayUpload(day, now) || insertsCapped,
+                    UploadsResumeAt =
+                        quotaUnits.UploadsResumeAt(day, now)
+                        ?? (insertsCapped ? YouTubeQuotaUnits.NextQuotaDay(now) : null),
+                    Tally = Tally(now),
+                    Now = now,
+                }
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not check the uploader's health.");
+            return;
+        }
+
+        ServiceHost.ServiceHeartbeat.RecordConcern(concern?.Code, concern?.Cause);
+        if (concern?.Code == reportedConcern)
+        {
+            return;
+        }
+
+        if (concern == null)
+        {
+            logger.LogInformation(
+                "YouTube uploader is healthy again ({Previous} cleared).",
+                reportedConcern
+            );
+        }
+        else
+        {
+            logger.LogWarning(
+                "YouTube uploader is degraded ({Code}): {Cause}",
+                concern.Code,
+                concern.Cause
+            );
+        }
+
+        reportedConcern = concern?.Code;
+    }
+
     private void LogPublicationHealth(int pending, IReadOnlyList<string> candidates)
     {
         EnsureLedger();
         DateTimeOffset now = DateTimeOffset.UtcNow;
         ReplayMediaPolicySettings media = settings.ReplayMedia ?? new ReplayMediaPolicySettings();
+        PublicationTallyReport tally = Tally(now);
         PublicationHealthReport health = PublicationHealth.Summarize(
             pending,
             insertsToday,
             deferredBySchedule,
             quotaHeld || insertsToday >= media.MaxInsertsPerQuotaDay,
             "1",
-            PublicationSchedule.PublishedIn(publicAtUtc, now, TimeSpan.FromHours(24)),
-            PublicationSchedule.PublishedIn(publicAtUtc, now, TimeSpan.FromDays(7)),
-            stuckPrivate
+            tally.PublishedDay,
+            tally.PublishedWeek,
+            tally.StuckPrivate,
+            tally.Scheduled
         );
         logger.LogInformation(
-            "YouTube publication health pending {Pending} uploaded {Uploaded} deferred {Deferred} published-day {PublishedDay} published-week {PublishedWeek} stuck-private {StuckPrivate} limit {Limit} policy {Policy}.",
+            "YouTube publication health pending {Pending} uploaded {Uploaded} deferred {Deferred} published-day {PublishedDay} published-week {PublishedWeek} scheduled {Scheduled} stuck-private {StuckPrivate} limit {Limit} policy {Policy}.",
             health.Pending,
             health.Uploaded,
             health.Deferred,
             health.PublishedDay,
             health.PublishedWeek,
+            health.Scheduled,
             health.StuckPrivate,
             health.Limit,
             health.PolicyVersion
@@ -1090,6 +1225,16 @@ public class YouTubeUploader : IYouTubeUploader
         {
             var recording = new FileInfo(recordingPath);
             recording.Refresh();
+            if (!recording.Exists && lastLength >= 0)
+            {
+                // The spectator discarded it (not published), or retention removed it.
+                logger.LogInformation(
+                    "Recording {Path} was removed before it was ready. Nothing to upload.",
+                    recordingPath
+                );
+                return null;
+            }
+
             if (recording.Exists && recording.Length > 0 && recording.Length == lastLength)
             {
                 if (TryOpenRead(recording.FullName))
@@ -1317,7 +1462,6 @@ public class YouTubeUploader : IYouTubeUploader
             currentQuotaDay = saved.QuotaDay;
         }
 
-        stuckPrivate = saved.StuckPrivate < 0 ? 0 : saved.StuckPrivate;
         lastPublicUtc = saved.LastPublicUtc;
         lastMap = saved.LastMap;
         lastMapUtc = saved.LastMapUtc;
@@ -1360,7 +1504,6 @@ public class YouTubeUploader : IYouTubeUploader
                 InsertsThisQuotaDay = insertsToday,
                 QuotaDay = currentQuotaDay,
                 LastInsertUtc = lastInsertUtc,
-                StuckPrivate = stuckPrivate,
             }
         );
     }

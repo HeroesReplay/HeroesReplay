@@ -770,6 +770,18 @@ public static class PublicationSchedule
         return null;
     }
 
+    /// <summary>
+    /// How many videos that are not viewer requests the pacing rules let go public in one day
+    /// on average: the day cap less the request room, and no more than a seventh of the week cap.
+    /// </summary>
+    public static double OrdinaryPublishPerDay(ReplayMediaPolicySettings settings)
+    {
+        settings ??= CanarySettings();
+        double day = Math.Max(0, settings.MaxPublicPerDay - settings.ReservedRequestSlotsPerDay);
+        double week = Math.Max(0, settings.MaxPublicPerWeek) / 7.0;
+        return Math.Min(day, week);
+    }
+
     public static int PublishedIn(
         IReadOnlyList<DateTimeOffset> times,
         DateTimeOffset now,

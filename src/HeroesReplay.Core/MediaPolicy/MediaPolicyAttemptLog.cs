@@ -233,7 +233,11 @@ public sealed class MediaPolicyAttemptLog
             return Unavailable(ReplayId(loaded), attemptId);
         }
 
-        if (existing.Manifest.Policy.PublicationEvaluated)
+        bool sessionMiss =
+            existing.Manifest.Policy.PublicationEvaluated
+            && !existing.Manifest.Policy.PublicationCandidate
+            && MediaPolicyPublication.IsSessionMiss(existing.Manifest.Policy.PublicationReason);
+        if (existing.Manifest.Policy.PublicationEvaluated && !sessionMiss)
         {
             return Reuse(attemptId, existing.Manifest);
         }
@@ -263,7 +267,8 @@ public sealed class MediaPolicyAttemptLog
                 DateTime.UtcNow,
                 publicationEvaluated: true,
                 replaceOpen: true,
-                cancellationToken
+                cancellationToken,
+                replaceEvaluated: sessionMiss
             )
             .ConfigureAwait(false);
         return FromSave(attemptId, final, saved, reusedOnMatch: true);
@@ -351,7 +356,8 @@ public sealed class MediaPolicyAttemptLog
         DateTime utcNow,
         bool publicationEvaluated,
         bool replaceOpen,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        bool replaceEvaluated = false
     )
     {
         return outbox.SavePolicyAsync(
@@ -360,7 +366,8 @@ public sealed class MediaPolicyAttemptLog
             new DateTimeOffset(DateTime.SpecifyKind(utcNow, DateTimeKind.Utc)),
             MediaPolicyManifest.FromDecision(decision, publicationEvaluated),
             replaceOpen,
-            cancellationToken
+            cancellationToken,
+            replaceEvaluated
         );
     }
 

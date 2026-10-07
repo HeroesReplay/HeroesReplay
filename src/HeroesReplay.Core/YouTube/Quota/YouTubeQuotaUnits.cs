@@ -7,28 +7,49 @@ using HeroesReplay.Core.YouTube.Publication;
 
 namespace HeroesReplay.Core.YouTube.Quota;
 
+/// <summary>
+/// One Pacific quota day in <c>Data\youtube-quota-units.json</c>. YouTube counts
+/// <c>videos.insert</c> in its own bucket of calls (Video Uploads per day) and every other
+/// call (list calls, playlist writes) in the shared pool of units (Queries per day). The two do
+/// not share room.
+/// </summary>
 public sealed class YouTubeQuotaDay
 {
     public DateTimeOffset QuotaDay { get; set; }
+
+    /// <summary><c>videos.insert</c> calls sent this quota day, from the upload bucket.</summary>
+    public int UploadCalls { get; set; }
+
+    /// <summary>
+    /// Pool units an upload used to be charged (1600 per insert) before YouTube moved
+    /// <c>videos.insert</c> into its own bucket. A file written by an older build still has it.
+    /// Reading the file turns it into <see cref="UploadCalls"/> and sets it to zero.
+    /// </summary>
     public int UploadUnits { get; set; }
+
     public int LibraryUnits { get; set; }
     public DateTimeOffset? LibraryPausedUntil { get; set; }
     public DateTimeOffset? UploadsPausedUntil { get; set; }
 
+    /// <summary>Units spent from the shared pool. Uploads are not in it.</summary>
     public int Total => UploadUnits + LibraryUnits;
 }
 
 /// <summary>
-/// Quota units spent in the current Pacific quota day by the uploader process and
-/// <c>youtube library</c>, in <c>Data\youtube-quota-units.json</c>. Every change takes a
-/// lock file, so two processes cannot both spend the same room. An upload is counted when it
-/// is sent, and a new upload starts only while the day has room for one more insert.
-/// The library pass reserves its units here before each call and stops when the room is gone.
+/// The quota the uploader process and <c>youtube library</c> spend in the current Pacific quota
+/// day, in <c>Data\youtube-quota-units.json</c>. Every change takes a lock file, so two
+/// processes cannot both spend the same room. An upload counts one call in the upload bucket
+/// (<see cref="YouTubeSettings.DailyUploadCalls"/>) when it is sent, and a new upload starts only
+/// while that bucket has a call left above <see cref="YouTubeSettings.UploadCallReserve"/>. The
+/// library pass reserves its units in the shared pool (<see cref="YouTubeSettings.DailyQuotaUnits"/>)
+/// before each call and stops when the room is gone. An upload never spends pool units.
 /// </summary>
 public sealed class YouTubeQuotaUnits
 {
     public const string FileName = "youtube-quota-units.json";
-    public const int VideoInsert = 1600;
+
+    /// <summary>What one <c>videos.insert</c> cost in the pool before 2026-06-01. Only read for old files.</summary>
+    public const int LegacyVideoInsertUnits = 1600;
     public const int PlaylistItemInsert = 50;
     public const int PlaylistInsert = 50;
     public const int List = 1;
@@ -49,12 +70,13 @@ public sealed class YouTubeQuotaUnits
 
     public YouTubeQuotaDay Read(DateTimeOffset utcNow) => Update(utcNow, _ => false);
 
-    public void SpendUpload(int units, DateTimeOffset utcNow) =>
+    /// <summary>Counts one <c>videos.insert</c> in the upload bucket. The pool is not touched.</summary>
+    public void SpendUploadCall(DateTimeOffset utcNow) =>
         Update(
             utcNow,
             day =>
             {
-                day.UploadUnits += Math.Max(0, units);
+                day.UploadCalls++;
                 return true;
             }
         );
@@ -106,30 +128,32 @@ public sealed class YouTubeQuotaUnits
     public static bool Paused(YouTubeQuotaDay day, DateTimeOffset utcNow) =>
         day?.LibraryPausedUntil is DateTimeOffset until && utcNow < until;
 
+    /// <summary>The upload calls a day may use: the bucket minus the reserve, never below zero.</summary>
+    public static int UsableUploadCalls(YouTubeSettings youtube)
+    {
+        youtube ??= new YouTubeSettings();
+        return Math.Max(0, youtube.DailyUploadCalls - Math.Max(0, youtube.UploadCallReserve));
+    }
+
     /// <summary>
-    /// True while the day has room for one more <c>videos.insert</c> under
-    /// <see cref="YouTubeSettings.DailyQuotaUnits"/>, library spend included, and no quota
-    /// response from an upload paused uploads until the next quota day.
+    /// True while the upload bucket has a call left under <see cref="UsableUploadCalls"/> and no
+    /// quota response from an upload paused uploads until the next quota day. Library spend
+    /// does not matter: it is a different bucket.
     /// </summary>
     public bool MayUpload(YouTubeQuotaDay day, DateTimeOffset utcNow)
     {
-        if (day == null)
-        {
-            return true;
-        }
-
-        if (day.UploadsPausedUntil is DateTimeOffset until && utcNow < until)
+        if (day?.UploadsPausedUntil is DateTimeOffset until && utcNow < until)
         {
             return false;
         }
 
-        return settings.DailyQuotaUnits - day.Total >= VideoInsert;
+        return InsertsLeft(day) > 0;
     }
 
     /// <summary>
     /// <see cref="MayUpload(YouTubeQuotaDay, DateTimeOffset)"/>, and an ordinary upload also
-    /// leaves one insert for each viewer request still waiting (#161). With 6 inserts a day and
-    /// one request waiting, ordinary uploads take 5 and the request gets the last one, so a
+    /// leaves one insert for each viewer request still waiting (#161). With two calls left and
+    /// one request waiting, an ordinary upload takes one and the request gets the last one, so a
     /// request never waits behind older ordinary recordings.
     /// </summary>
     public bool MayUpload(
@@ -144,7 +168,7 @@ public sealed class YouTubeQuotaUnits
             return false;
         }
 
-        if (requested || requestsWaiting <= 0 || day == null)
+        if (requested || requestsWaiting <= 0)
         {
             return true;
         }
@@ -152,16 +176,13 @@ public sealed class YouTubeQuotaUnits
         return InsertsLeft(day) > requestsWaiting;
     }
 
-    /// <summary>How many more <c>videos.insert</c> calls fit in the day's units.</summary>
-    public int InsertsLeft(YouTubeQuotaDay day)
-    {
-        int room = settings.DailyQuotaUnits - (day?.Total ?? 0);
-        return room <= 0 ? 0 : room / VideoInsert;
-    }
+    /// <summary>How many more <c>videos.insert</c> calls fit in the day's upload bucket.</summary>
+    public int InsertsLeft(YouTubeQuotaDay day) =>
+        Math.Max(0, UsableUploadCalls(settings) - (day?.UploadCalls ?? 0));
 
     /// <summary>
     /// When a held upload may start again: the pause a quota response set, or the next Pacific
-    /// quota day when the day's units are spent. Null when an upload may start now.
+    /// quota day when the day's upload calls are used. Null when an upload may start now.
     /// </summary>
     public DateTimeOffset? UploadsResumeAt(YouTubeQuotaDay day, DateTimeOffset utcNow)
     {
@@ -187,6 +208,23 @@ public sealed class YouTubeQuotaUnits
         return Math.Max(0, Math.Min(byLibrary, byCeiling));
     }
 
+    /// <summary>
+    /// An older build charged each upload 1600 pool units. Those units are calls in the upload
+    /// bucket, and YouTube never took them from the pool. True when the day changed.
+    /// </summary>
+    public static bool Migrate(YouTubeQuotaDay day)
+    {
+        if (day == null || day.UploadUnits <= 0)
+        {
+            return false;
+        }
+
+        int calls = (day.UploadUnits + LegacyVideoInsertUnits - 1) / LegacyVideoInsertUnits;
+        day.UploadCalls = Math.Max(day.UploadCalls, calls);
+        day.UploadUnits = 0;
+        return true;
+    }
+
     private YouTubeQuotaDay Update(DateTimeOffset utcNow, Func<YouTubeQuotaDay, bool> change)
     {
         DateTimeOffset quotaDay = PublicationSchedule.QuotaDayStart(utcNow);
@@ -199,14 +237,16 @@ public sealed class YouTubeQuotaUnits
 
         using FileStream held = Lock();
         YouTubeQuotaDay current = Load();
+        bool migrated = Migrate(current);
         if (current.QuotaDay != quotaDay)
         {
             current.QuotaDay = quotaDay;
+            current.UploadCalls = 0;
             current.UploadUnits = 0;
             current.LibraryUnits = 0;
         }
 
-        if (change(current))
+        if (change(current) || migrated)
         {
             DurableFile.Replace(path, JsonSerializer.Serialize(current, Options));
         }
