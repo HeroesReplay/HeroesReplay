@@ -351,6 +351,10 @@ public class ServicesCommand : Command
             ExecutablePath = exe,
             Version = ServiceReadyFile.CurrentVersion(),
             LogPath = () => log?.CurrentPath,
+            MachineHealth = new MachineHealthLog(
+                ServiceCollectionExtensions.LoadMachineHealthSettings(),
+                provider.GetRequiredService<ILogger<MachineHealthLog>>()
+            ),
         };
         return supervision.Run(cancellationToken);
     }
@@ -545,12 +549,19 @@ public class ServicesCommand : Command
                         ReadSupervisor = () =>
                             ServiceSupervisorFile.TryLoad(ServiceSupervisorFile.DefaultPath),
                         SupervisorRunning = () => ServiceSupervisorFile.IsRunning(),
+                        ReadMachine = ReadMachineHealth,
                     }
                 );
                 return Task.FromResult(code);
             }
         );
         return command;
+    }
+
+    private static MachineHealthReport ReadMachineHealth()
+    {
+        MachineHealthSettings settings = ServiceCollectionExtensions.LoadMachineHealthSettings();
+        return MachineHealth.Evaluate(MachineHealthProbe.Read(settings), settings);
     }
 
     private static string ProcessNameOrNull(int pid)

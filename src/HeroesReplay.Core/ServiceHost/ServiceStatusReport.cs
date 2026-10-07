@@ -211,6 +211,9 @@ public sealed record ServiceStatusReport
     /// <summary>Null when no supervisor runs and none left a state file.</summary>
     public ServiceSupervisorSummary Supervisor { get; init; }
 
+    /// <summary>Memory and leaking process counts (#251). Warnings here do not change <see cref="Ok"/>.</summary>
+    public MachineHealthReport Machine { get; init; }
+
     [JsonIgnore]
     public int ExitCode => Ok ? 0 : 1;
 

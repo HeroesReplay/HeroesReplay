@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,7 @@ public class SpectateHeroesProfileApiCommand : Command
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         SpectateReleaseVersion.Write(scope.ServiceProvider);
+        scope.ServiceProvider.GetRequiredService<BattleNetAgentReaper>().Reap("spectate start");
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
         using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
             "spectate",

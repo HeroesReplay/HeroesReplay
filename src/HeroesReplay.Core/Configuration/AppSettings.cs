@@ -55,6 +55,8 @@ public class AppSettings
     public ServiceHealthSettings ServiceHealth { get; set; } = new ServiceHealthSettings();
     public ServiceLogSettings ServiceLogs { get; set; } = new ServiceLogSettings();
     public ServiceRestartSettings ServiceRestart { get; set; } = new ServiceRestartSettings();
+    public BattleNetAgentSettings BattleNetAgents { get; set; } = new BattleNetAgentSettings();
+    public MachineHealthSettings MachineHealth { get; set; } = new MachineHealthSettings();
     public string CurrentDirectory { get; } = Directory.GetCurrentDirectory();
     public string AssetsPath => Path.Combine(CurrentDirectory, "Assets");
     public string ContextsDirectory => Path.Combine(Location.DataDirectory, "Contexts");
