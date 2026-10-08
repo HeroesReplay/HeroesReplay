@@ -398,7 +398,7 @@ public static class CommandReference
         ),
         new(
             "obs validate",
-            "OBS running with its WebSocket server. Safe on the live box; over SSH, `C:\\heroesreplay` paths read as missing (skill `heroes-replay-obs`).",
+            "OBS running with its WebSocket server. Safe on the live box. Over SSH a path through the `C:\\heroesreplay` junction is checked at the junction's target, and one it cannot check is `obs.file_unverifiable`, a warning (skill `heroes-replay-obs`).",
             "Nothing. Get requests only.",
             "0 when no finding is an error, 1 otherwise or when OBS cannot be read.",
             [
