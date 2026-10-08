@@ -938,8 +938,13 @@ public class GameController : IGameController
                 && !inMatch
                 && IsGameProcessRunning()
                 && SeesHome();
-            bool startup = ClientScreenText.IsGameDataStartup(text);
-            ShadowScreen(ScreenState.GameDataStartup, startup, text);
+            // "Preparing game data" is a native Win32 dialog of the client exe, read from the
+            // client's windows (#292): a visible #32770 with a msctls_progress32 child. Not OCR.
+            GameDataWindowSample preparing = GameDataProgressWindow.Read(
+                clientWindows,
+                GetGameProcess()?.Id
+            );
+            bool startup = preparing.Shown == true;
             RunningClientBuild runningBuild = ReadRunningBuild(replayVersion);
             bool differentBuild = runningBuild == RunningClientBuild.Differs;
             bool matchingBuild = runningBuild == RunningClientBuild.Matches;
@@ -1141,7 +1146,8 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
-            bool blank = ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
+            bool blank =
+                !startup && ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
             if (!blank)
             {
                 blankTiming = false;
@@ -1590,15 +1596,6 @@ public class GameController : IGameController
         }
 
         string text = await RecognizeFrameAsync(frame).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            string startup = await StartupTextFromOtherWindowsAsync(handle).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(startup))
-            {
-                text = startup;
-            }
-        }
-
         logger.LogInformation(
             "Window OCR ({Width}x{Height}): {Text}",
             frame.Width,
@@ -1614,70 +1611,6 @@ public class GameController : IGameController
             .ConfigureAwait(false);
         OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
         return result?.Text ?? string.Empty;
-    }
-
-    /// <summary>
-    /// The largest Heroes window can stay black while a smaller window still says it is
-    /// preparing game data. Return that phrase only. Do not log the other window's text.
-    /// </summary>
-    private async Task<string> StartupTextFromOtherWindowsAsync(IntPtr primary)
-    {
-        Process process = cachedProcess;
-        if (process == null)
-        {
-            return null;
-        }
-
-        int processId;
-        try
-        {
-            if (process.HasExited)
-            {
-                return null;
-            }
-
-            processId = process.Id;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-        catch (Win32Exception)
-        {
-            return null;
-        }
-
-        var windows = new List<GameWindowInput.VisibleClientWindow>();
-        GameWindowInput.CollectVisibleWindows(processId, windows);
-        GameWindowInput.CollectVisibleChildWindows(primary, windows);
-        foreach (GameWindowInput.VisibleClientWindow window in windows)
-        {
-            if (window.Handle == primary || window.Handle == IntPtr.Zero)
-            {
-                continue;
-            }
-
-            try
-            {
-                using Bitmap frame = capture.Capture(window.Handle);
-                if (frame == null)
-                {
-                    continue;
-                }
-
-                string text = await RecognizeFrameAsync(frame).ConfigureAwait(false);
-                if (ClientScreenText.IsGameDataStartup(text))
-                {
-                    return text;
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogDebug(e, "Could not read another Heroes window.");
-            }
-        }
-
-        return null;
     }
 
     private void ShowGameScene(string reason)

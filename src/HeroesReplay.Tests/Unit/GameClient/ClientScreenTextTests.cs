@@ -7,17 +7,6 @@ namespace HeroesReplay.Tests.Unit.GameClient;
 public class ClientScreenTextTests
 {
     [Fact]
-    public void IsGameDataStartup_MatchesThePreparingDialog()
-    {
-        Assert.True(ClientScreenText.IsGameDataStartup("Preparing game data"));
-        Assert.True(ClientScreenText.IsGameDataStartup("PREPARING GAME DATA Calculating"));
-        Assert.False(ClientScreenText.IsGameDataStartup("PLAY COLLECTION LOOT WATCH"));
-        Assert.False(ClientScreenText.IsGameDataStartup("Calculating"));
-        Assert.False(ClientScreenText.IsGameDataStartup(null));
-        Assert.False(ClientScreenText.IsGameDataStartup("   "));
-    }
-
-    [Fact]
     public void RestartAfterGameData_ADownloadStillOnScreenLeavesTheClientRunning()
     {
         // The DOWNLOADING dialog comes from memory (a shown CProgressBarDialog, #292): while it
