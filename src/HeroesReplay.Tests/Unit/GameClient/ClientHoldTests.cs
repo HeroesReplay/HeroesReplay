@@ -8,8 +8,10 @@ namespace HeroesReplay.Tests.Unit.GameClient;
 public class ClientHoldTests
 {
     [Fact]
-    public void Classify_NamesTheRegionDialog()
+    public void Classify_NamesBattleNetsRegionDialog()
     {
+        // A Battle.net authentication error, not a game-launch result (2.57.0.98348 string
+        // table, 2026-10-08), so its words are still read by OCR (#292).
         Assert.Equal(
             ClientHoldReason.RegionUnavailable,
             ClientHold.Classify(
@@ -19,7 +21,7 @@ public class ClientHoldTests
     }
 
     [Fact]
-    public void Classify_NamesTheVersionMismatchDialog()
+    public void Classify_NamesBattleNetsRegionVersionMismatchDialog()
     {
         Assert.Equal(
             ClientHoldReason.VersionMismatch,
@@ -30,24 +32,19 @@ public class ClientHoldTests
     }
 
     [Fact]
-    public void Classify_NamesTheBuildNotAvailableDialogAVersionMismatch()
+    public void Classify_LeavesGameLaunchMessagesToMemory()
     {
+        // "Not available" is game-launch result 23, read from memory (ClientLaunchFailure).
         Assert.Equal(
-            ClientHoldReason.VersionMismatch,
+            ClientHoldReason.None,
             ClientHold.Classify(
                 "The version of Heroes of the Storm required to ploy this game is not available. 0K"
             )
         );
-    }
-
-    [Fact]
-    public void Classify_LeavesAMatchAndTheHomeScreenAlone()
-    {
         Assert.Equal(ClientHoldReason.None, ClientHold.Classify("WELCOME TO CURSED HOLLOW"));
         Assert.Equal(ClientHoldReason.None, ClientHold.Classify("PLAY COLLECTION LOOT WATCH"));
         Assert.Equal(ClientHoldReason.None, ClientHold.Classify(null));
         Assert.Equal(ClientHoldReason.None, ClientHold.Classify(""));
-        Assert.Equal(ClientHoldReason.None, ClientHold.Classify("Preparing game data"));
     }
 
     [Fact]

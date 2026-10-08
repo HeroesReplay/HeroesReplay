@@ -27,6 +27,10 @@ public static class ClientHold
 {
     public static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(2);
 
+    /// <summary>
+    /// Battle.net's own error dialogs, from the window's OCR text: they are not game-launch
+    /// results, so memory (<see cref="ClientLaunchFailure"/>) cannot name them (#292).
+    /// </summary>
     public static ClientHoldReason Classify(string text)
     {
         if (ClientScreenText.IsRegionUnavailable(text))

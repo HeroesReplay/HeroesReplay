@@ -25,7 +25,9 @@ public static class ScreenMemoryVerdicts
             ScreenState.EndScreen => sample?.OnAwards,
             ScreenState.GameDataDownload => sample?.OnDownload,
             ScreenState.VersionMismatch => ClientLaunchFailure.ShowsVersion(sample),
-            ScreenState.RegionUnavailable => RegionVerdict(sample),
+            // OCR's region dialog is Battle.net's own error, not a game-launch result: memory
+            // cannot name it (#292).
+            ScreenState.RegionUnavailable => null,
             _ => null,
         };
 
@@ -48,16 +50,6 @@ public static class ScreenMemoryVerdicts
         state == ScreenState.GameDataStartup
             ? "windows: " + (window?.Reason ?? "not read")
             : Describe(sample);
-
-    /// <summary>
-    /// The region verdict: a game-launch failure with a region result
-    /// (<see cref="ClientLaunchFailure.RegionResults"/>). Unknown while no region result key is
-    /// known, so shadow mode does not count "false" for a dialog memory cannot name.
-    /// </summary>
-    private static bool? RegionVerdict(ClientScreenSample? sample) =>
-        ClientLaunchFailure.RegionResults.Count == 0
-            ? null
-            : ClientLaunchFailure.ShowsRegion(sample);
 
     /// <summary>The memory read behind a verdict, for the shadow log.</summary>
     public static string Describe(ClientScreenSample? sample)

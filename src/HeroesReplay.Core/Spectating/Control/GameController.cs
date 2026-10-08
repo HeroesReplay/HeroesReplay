@@ -807,19 +807,10 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: true, ClientHoldReason.None);
             }
 
-            ShadowScreen(
-                ScreenState.VersionMismatch,
-                ClientScreenText.IsVersionMismatch(text),
-                text
-            );
-            ShadowScreen(
-                ScreenState.RegionUnavailable,
-                ClientScreenText.IsRegionUnavailable(text),
-                text
-            );
-
             // Any game-launch failure the client shows (its launch result in a CStandardDialog,
-            // read from memory) is an invalid client, handled like the version dialog (#292).
+            // read from memory) is an invalid client, handled like the version dialog (#292). The
+            // window is not OCR'd for game-launch messages; its text only names Battle.net's own
+            // region and region-version errors, which are not game-launch results.
             LaunchFailure? launchFailure = ClientLaunchFailure.Read(clientScreen);
             ClientHoldReason hold =
                 launchFailure != null
@@ -840,7 +831,7 @@ public class GameController : IGameController
                 return FailBuildDownload(
                     launchFailure is LaunchFailure failed
                         ? $"game-launch result {failed}"
-                        : "the version mismatch dialog"
+                        : "Battle.net's version mismatch dialog"
                 );
             }
 
