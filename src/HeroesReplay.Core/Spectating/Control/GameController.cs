@@ -7,7 +7,6 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using HeroesClientSDK;
 using HeroesReplay.Core.Analysis;
@@ -22,16 +21,12 @@ using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Screens;
 using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
-using Windows.Graphics.Imaging;
-using Windows.Media.Ocr;
-using Windows.Storage.Streams;
 using static PInvoke.User32;
 
 namespace HeroesReplay.Core.Spectating.Control;
 
 public class GameController : IGameController
 {
-    private readonly OcrEngine ocrEngine;
     private readonly CancellationTokenProvider tokenProvider;
     private readonly ILogger<GameController> logger;
     private readonly IReplayContext context;
@@ -104,7 +99,6 @@ public class GameController : IGameController
         IGameCapture capture,
         IReplayOpener replayOpener,
         StormClientConfigurator clientConfigurator,
-        OcrEngine engine,
         CancellationTokenProvider tokenProvider,
         SharedClientProcess clientProcess
     )
@@ -120,7 +114,6 @@ public class GameController : IGameController
         this.replayOpener = replayOpener ?? throw new ArgumentNullException(nameof(replayOpener));
         this.clientConfigurator =
             clientConfigurator ?? throw new ArgumentNullException(nameof(clientConfigurator));
-        this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
     }
@@ -157,7 +150,8 @@ public class GameController : IGameController
         for (int attempt = 1; attempt <= 2; attempt++)
         {
             activity?.SetTag("launch.replay_attempt", attempt);
-            ColdBoot boot = await StartReplayAndWaitAsync().ConfigureAwait(false);
+            ColdBoot boot = await StartReplayAndWaitAsync(battleNetRetried: attempt > 1)
+                .ConfigureAwait(false);
             if (boot.Hold != ClientHoldReason.None)
             {
                 return boot.Hold;
@@ -169,7 +163,7 @@ public class GameController : IGameController
             }
 
             logger.LogWarning(
-                "Battle.net disconnected while loading the replay. Closing the client and trying once more."
+                "Battle.net error dialog while loading the replay. Closing the client and asking Battle.net once more."
             );
             Kill();
             replayFileOpened = false;
@@ -590,7 +584,11 @@ public class GameController : IGameController
 
     private readonly record struct ColdBoot(bool RetryDisconnect, ClientHoldReason Hold);
 
-    private async Task<ColdBoot> StartReplayAndWaitAsync()
+    /// <param name="battleNetRetried">
+    /// True on the launch after a Battle.net error dialog closed the client once: an unknown
+    /// Battle.net error that shows again is an invalid client.
+    /// </param>
+    private async Task<ColdBoot> StartReplayAndWaitAsync(bool battleNetRetried)
     {
         string replayPath = context.Current.LoadedReplay.FileInfo.FullName;
         string replayVersion = context.Current.LoadedReplay.Replay?.ReplayVersion;
@@ -617,6 +615,7 @@ public class GameController : IGameController
         bool interfaceRestarted = false;
         int blankRelaunches = 0;
         bool blankTiming = false;
+        bool loggedBlank = false;
         DateTimeOffset blankSince = default;
         DateTimeOffset started = DateTimeOffset.UtcNow;
         DateTimeOffset deadline = started.Add(ClientRelaunch.ColdBootLimit);
@@ -790,27 +789,48 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.ClientNotReady);
             }
 
-            WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
-            string text = window.Text;
+            // The window's pixels only say whether it is blank; nothing on screen is read as text
+            // (#292). Every screen and dialog comes from client memory.
+            WindowFrame window = ReadWindowFrame();
             ClientScreenSample? clientScreen = ReadClientScreen();
 
-            // The email and password form also says "Battle.net" and "Log in". Memory's login
-            // read, or the login-form words, keep it off the disconnect path (#385).
-            if (BattleNetDisconnect.IsShown(text, clientScreen?.OnLogin))
+            // Battle.net's own error dialogs from memory: a shown CBattlenetErrorDialog or
+            // CDisconnectedDialog and the text its labels hold (HeroesClientSDK 0.4.4). A
+            // disconnect, or an error whose text names nothing known, closes the client and asks
+            // Battle.net once more; an unknown error still there after that is an invalid client.
+            BattleNetErrorRead battleNet = BattleNetErrorDialog.Read(clientScreen);
+            if (battleNet.RetriesBattleNet)
             {
-                logger.LogWarning("Battle.net disconnect dialog: {Text}", text);
+                if (battleNetRetried && battleNet.HoldAfterRetry != ClientHoldReason.None)
+                {
+                    logger.LogWarning(
+                        "Battle.net error dialog is still up after asking Battle.net again (client memory: {BattleNetError}). This client cannot play the replay; it is held as an invalid client and the replay stays queued. Battle.net was not clicked.",
+                        battleNet
+                    );
+                    return new ColdBoot(RetryDisconnect: false, battleNet.HoldAfterRetry);
+                }
+
+                logger.LogWarning(
+                    "Battle.net error dialog (client memory: {BattleNetError}).",
+                    battleNet
+                );
                 return new ColdBoot(RetryDisconnect: true, ClientHoldReason.None);
             }
 
             // Any game-launch failure the client shows (its launch result in a CStandardDialog,
-            // read from memory) is an invalid client, handled like the version dialog (#292). The
-            // window is not OCR'd for game-launch messages; its text only names Battle.net's own
-            // region and region-version errors, which are not game-launch results.
+            // read from memory) is an invalid client, handled like the version dialog (#292).
+            // Battle.net's region and region-version errors are not game-launch results; they
+            // come from the Battle.net error dialog's text in memory.
             LaunchFailure? launchFailure = ClientLaunchFailure.Read(clientScreen);
             ClientHoldReason hold =
-                launchFailure != null
-                    ? ClientLaunchFailure.Classify(clientScreen)
-                    : ClientHold.Classify(text);
+                launchFailure != null ? ClientLaunchFailure.Classify(clientScreen) : battleNet.Hold;
+            if (launchFailure == null && hold != ClientHoldReason.None && !loggedMismatch)
+            {
+                logger.LogWarning(
+                    "Battle.net error dialog (client memory: {BattleNetError}).",
+                    battleNet
+                );
+            }
             if (launchFailure is LaunchFailure failure && !loggedMismatch)
             {
                 logger.LogWarning(
@@ -1131,16 +1151,40 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
-            bool blank =
-                !startup && ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
+            // A blank startup window from the frame's pixels and memory, never OCR (#292): a
+            // uniform full-size frame, no screen in ClientScreen yet, and a young process.
+            TimeSpan? processAge = GameProcessAge();
+            bool blank = !startup && BlankStartupWindow.IsBlank(window, clientScreen, processAge);
             if (!blank)
             {
+                if (blankTiming && loggedBlank)
+                {
+                    logger.LogInformation(
+                        "Heroes window is no longer blank after {BlankFor} (frame {Frame}, memory screen {Screen}).",
+                        DateTimeOffset.UtcNow - blankSince,
+                        window,
+                        ClientScreenDescription.Describe(clientScreen)
+                    );
+                }
+
                 blankTiming = false;
+                loggedBlank = false;
             }
             else if (!blankTiming)
             {
                 blankTiming = true;
                 blankSince = DateTimeOffset.UtcNow;
+            }
+
+            if (blank && !loggedBlank)
+            {
+                loggedBlank = true;
+                logger.LogInformation(
+                    "Heroes window is blank: frame {Frame}, memory screen {Screen}, process {ProcessAge} old. It counts as startup.",
+                    window,
+                    ClientScreenDescription.Describe(clientScreen),
+                    processAge?.ToString(@"hh\:mm\:ss") ?? "of unknown age"
+                );
             }
 
             TimeSpan blankFor = blankTiming ? DateTimeOffset.UtcNow - blankSince : TimeSpan.Zero;
@@ -1183,7 +1227,7 @@ public class GameController : IGameController
                 if (stuck != LaunchWaitAction.KeepWaiting)
                 {
                     logger.LogWarning(
-                        "Launch wait on replay {Version} saw nothing usable for {Waited} (limit {Limit}). Running client {Running}, memory screen {Screen} ({ScreenReason}, menu seen {MenuSeen}), match clock {ClockReason}, window text: {Text}. Recovery {Action}.",
+                        "Launch wait on replay {Version} saw nothing usable for {Waited} (limit {Limit}). Running client {Running}, memory screen {Screen} ({ScreenReason}, menu seen {MenuSeen}), client screen {ClientScreen}, match clock {ClockReason}, window frame {Frame}. Recovery {Action}.",
                         replayVersion,
                         DateTimeOffset.UtcNow - stuckSince,
                         LaunchWaitLimit,
@@ -1191,8 +1235,9 @@ public class GameController : IGameController
                         screen?.Screen,
                         screen?.Reason,
                         screen?.MenuSeen,
+                        ClientScreenDescription.Describe(clientScreen),
                         lastClockReason,
-                        WindowText.Excerpt(text),
+                        window,
                         stuck
                     );
                 }
@@ -1565,37 +1610,40 @@ public class GameController : IGameController
         }
     }
 
-    private readonly record struct WindowRead(string Text, int Width, int Height);
-
-    private async Task<WindowRead> ReadWindowAsync()
+    /// <summary>
+    /// The game window's frame, measured by brightness only (<see cref="BlankStartupWindow"/>).
+    /// No text is read from it.
+    /// </summary>
+    private WindowFrame ReadWindowFrame()
     {
         if (!TryGetGameHandle(out IntPtr handle))
         {
-            return new WindowRead(string.Empty, 0, 0);
+            return WindowFrame.None;
         }
 
         using Bitmap frame = capture.Capture(handle);
-        if (frame == null)
-        {
-            return new WindowRead(string.Empty, 0, 0);
-        }
-
-        string text = await RecognizeFrameAsync(frame).ConfigureAwait(false);
-        logger.LogInformation(
-            "Window OCR ({Width}x{Height}): {Text}",
-            frame.Width,
-            frame.Height,
-            string.IsNullOrWhiteSpace(text) ? "(empty)" : text
-        );
-        return new WindowRead(text, frame.Width, frame.Height);
+        WindowFrame measured = BlankStartupWindow.Measure(frame);
+        logger.LogDebug("Window frame: {Frame}", measured);
+        return measured;
     }
 
-    private async Task<string> RecognizeFrameAsync(Bitmap frame)
+    /// <summary>How long ago the game process started, or null when it is gone or unreadable.</summary>
+    private TimeSpan? GameProcessAge()
     {
-        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
-            .ConfigureAwait(false);
-        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-        return result?.Text ?? string.Empty;
+        Process process = GetGameProcess();
+        if (process == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return DateTime.Now - process.StartTime;
+        }
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception)
+        {
+            return null;
+        }
     }
 
     private void ShowGameScene(string reason)
@@ -1768,26 +1816,6 @@ public class GameController : IGameController
         }
 
         return Task.FromResult(awards);
-    }
-
-    private static async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
-    {
-        if (bitmap == null)
-            throw new ArgumentNullException(nameof(bitmap));
-
-        using (var stream = new InMemoryRandomAccessStream())
-        using (Stream netStream = stream.AsStream())
-        {
-            bitmap.Save(netStream, ImageFormat.Bmp);
-            netStream.Flush();
-            stream.Seek(0);
-
-            BitmapDecoder decoder = await BitmapDecoder.CreateAsync(
-                BitmapDecoder.BmpDecoderId,
-                stream
-            );
-            return await decoder.GetSoftwareBitmapAsync();
-        }
     }
 
     private bool IsHomeScreen() => IsGameProcessRunning() && SeesHome();

@@ -27,7 +27,7 @@ public static class ClientLaunchFailure
     /// <c>GameLaunchUnsupportedInCN</c> (20), "Replays and saved games created before version 1.3.0
     /// are not supported in this region." The generic rule handles it like every other failure.
     /// Battle.net's "The selected region is currently unavailable." is not a game-launch result
-    /// (see <see cref="ClientHold.Classify"/>).
+    /// (see <see cref="BattleNetErrorDialog"/>).
     /// </summary>
     public static readonly IReadOnlyList<string> RegionResults = new[]
     {

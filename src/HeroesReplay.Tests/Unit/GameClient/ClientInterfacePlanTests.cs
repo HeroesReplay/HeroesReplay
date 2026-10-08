@@ -408,4 +408,29 @@ public class ClientInterfacePlanTests
             }
         }
     }
+
+    [Fact]
+    public void RestartAfterGameData_ADownloadStillOnScreenLeavesTheClientRunning()
+    {
+        // The DOWNLOADING dialog comes from memory (a shown CProgressBarDialog, #292): while it
+        // shows, or while "Preparing game data" shows, the client is not restarted.
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: true,
+                downloadVisible: true,
+                gameDataStartup: false,
+                replayVisible: false,
+                restarts: 0
+            )
+        );
+        Assert.False(
+            ClientInterfacePlan.RestartAfterGameData(
+                sawDownload: true,
+                downloadVisible: false,
+                gameDataStartup: true,
+                replayVisible: false,
+                restarts: 0
+            )
+        );
+    }
 }

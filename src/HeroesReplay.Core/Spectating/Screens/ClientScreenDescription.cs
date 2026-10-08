@@ -7,7 +7,7 @@ namespace HeroesReplay.Core.Spectating.Screens;
 /// <summary>
 /// One line for the log that names what HeroesClientSDK <see cref="ClientScreen"/> read: the
 /// screen, the reason, the shown screens, whether a menu was seen, the dialogs, the game-launch
-/// result and the build (#292).
+/// result, a Battle.net error dialog with its text, and the build (#292).
 /// </summary>
 public static class ClientScreenDescription
 {
@@ -28,6 +28,14 @@ public static class ClientScreenDescription
         if (read.LaunchResultCode is int code && code != 0)
         {
             text += $", launch result {code} {read.LaunchResult}";
+        }
+
+        // Battle.net's own error dialog with the text its labels hold (HeroesClientSDK 0.4.4).
+        if (read.BattlenetError is DialogMessage error)
+        {
+            text += error.HasText
+                ? $", {error.Dialog} \"{error.Text}\""
+                : $", {error.Dialog} (text not read)";
         }
 
         // The build tells which client a read came from during a handoff, when the newest exe

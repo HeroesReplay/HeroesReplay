@@ -9,7 +9,7 @@ description: >
 
 # heroesreplay CLI
 
-Entry: `src/HeroesReplay.CLI`. Assembly name `heroesreplay`. System.CommandLine 2 (`Subcommands`, `SetAction`). No command needs administrator rights except `client firewall`. `spectate` runs unelevated (issue #133): launching Battle.net and HeroesSwitcher, PrintWindow capture, OCR, the memory clock, and hotkeys all work at normal integrity. Only adding Windows Firewall rules needs an elevated shell. Invalid input is a parse error and exits 1 before anything runs.
+Entry: `src/HeroesReplay.CLI`. Assembly name `heroesreplay`. System.CommandLine 2 (`Subcommands`, `SetAction`). No command needs administrator rights except `client firewall`. `spectate` runs unelevated (issue #133): launching Battle.net and HeroesSwitcher, PrintWindow capture, the client memory reads (clock, screens, dialogs), and hotkeys all work at normal integrity. Spectate uses no OCR (#292); only `check battlenet` OCRs, and only the Battle.net launcher window. Only adding Windows Firewall rules needs an elevated shell. Invalid input is a parse error and exits 1 before anything runs.
 
 ```powershell
 dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>

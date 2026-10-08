@@ -1280,7 +1280,7 @@ public class ServiceSupervisorTests
     }
 
     [Fact]
-    public void Start_NullOcr_FailsBeforeAnyChildStarts()
+    public void Start_NoCapture_FailsBeforeAnyChildStarts()
     {
         string path = TempLock();
         try
@@ -1289,7 +1289,7 @@ public class ServiceSupervisorTests
             int starts = 0;
             ServiceStartupHandshake handshake = ServiceStartupHandshake.ReadyNow();
             handshake.Spectate = HealthySpectate();
-            handshake.Spectate.OcrResult = null;
+            handshake.Spectate.CaptureOk = false;
             handshake.Report = messages.Add;
             int code = ServiceSupervisor.Start(
                 path,
@@ -1306,7 +1306,7 @@ public class ServiceSupervisorTests
             Assert.Equal(1, code);
             Assert.Equal(0, starts);
             Assert.Null(ServiceLockStore.TryLoad(path));
-            Assert.Contains(messages, message => message.Contains("OCR"));
+            Assert.Contains(messages, message => message.Contains("capture"));
         }
         finally
         {
@@ -2229,7 +2229,6 @@ public class ServiceSupervisorTests
         return new SpectateStartupFacts
         {
             LaunchPath = Exe,
-            OcrResult = new object(),
             CaptureOk = true,
             PathsOk = true,
             ObsOk = true,

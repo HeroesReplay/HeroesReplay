@@ -60,7 +60,6 @@ using TwitchLib.Client.Interfaces;
 using TwitchLib.Client.Models;
 using TwitchLib.PubSub;
 using TwitchLib.PubSub.Interfaces;
-using Windows.Media.Ocr;
 
 namespace HeroesReplay.CLI;
 
@@ -150,7 +149,6 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
-            .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
             .AddSingleton<StormClientConfigurator>()
             .AddSingleton(new CancellationTokenProvider(token))
             .AddHeroesProfileService()
@@ -471,7 +469,6 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
             .AddSingleton(new CancellationTokenProvider(token))
-            .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
             .AddSingleton(
                 typeof(IGameCapture),
                 settings.Capture.Method switch

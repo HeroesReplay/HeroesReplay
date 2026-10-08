@@ -15,11 +15,10 @@ namespace HeroesReplay.Tests.Unit.ServiceHost;
 public class ServiceProcessReadinessTests
 {
     [Fact]
-    public void Describe_NullOcrAndMissingSecretsFailTheirRoles()
+    public void Describe_MissingSecretsFailTheirRoles_AndSpectateNeedsNoOcr()
     {
         ServiceRoleFacts facts = ServiceRoleChecks.Describe(
             @"C:\heroesreplay\heroesreplay.exe",
-            ocrResult: null,
             captureOk: true,
             pathsOk: true,
             obsOk: true,
@@ -31,10 +30,9 @@ public class ServiceProcessReadinessTests
             oauthPresent: false
         );
 
-        Assert.Contains(
-            "OCR",
-            ServiceRoleChecks.SpectateFailure(facts.Spectate.LaunchPath, facts.Spectate)
-        );
+        // Spectate needs no OCR (#292): every client screen comes from memory or the client's
+        // windows, and the blank startup window from the frame's pixels.
+        Assert.Null(ServiceRoleChecks.SpectateFailure(facts.Spectate.LaunchPath, facts.Spectate));
         Assert.Contains("Twitch", ServiceRoleChecks.TwitchFailure(facts.Twitch));
         Assert.Contains("credential", ServiceRoleChecks.DownloadFailure(facts.Download));
         Assert.Null(ServiceRoleChecks.YouTubeFailure(facts.YouTube));
@@ -184,7 +182,6 @@ public class ServiceProcessReadinessTests
 
         ServiceRoleFacts facts = ServiceRoleChecks.Describe(
             @"C:\heroesreplay\heroesreplay.exe",
-            ocrResult: new object(),
             captureOk: true,
             pathsOk: true,
             obsOk: true,
@@ -207,7 +204,6 @@ public class ServiceProcessReadinessTests
                 new SpectateStartupFacts
                 {
                     LaunchPath = "cmd.exe",
-                    OcrResult = new object(),
                     CaptureOk = true,
                     PathsOk = true,
                     ObsOk = true,

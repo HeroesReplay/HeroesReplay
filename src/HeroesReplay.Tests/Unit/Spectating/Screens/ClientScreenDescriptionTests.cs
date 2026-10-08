@@ -51,12 +51,39 @@ public class ClientScreenDescriptionTests
     }
 
     [Fact]
-    public void Excerpt_IsOneLineOfAtMost160Characters()
+    public void Describe_NamesABattlenetErrorDialogWithItsText()
     {
-        Assert.Equal("(empty)", WindowText.Excerpt("  "));
-        Assert.Equal("(empty)", WindowText.Excerpt(null));
-        Assert.Equal("PLAY COLLECTION", WindowText.Excerpt("PLAY\nCOLLECTION "));
-        string excerpt = WindowText.Excerpt(new string('a', 400));
-        Assert.Equal(new string('a', WindowText.ExcerptLength) + "...", excerpt);
+        // HeroesClientSDK 0.4.4 reads the dialog's labels from memory; never reproduced live, so
+        // the text is the client's own table entry (Battle.net error 169, 2.57.0.98348).
+        var region = new ClientScreenSample(
+            ClientScreenKind.Dialog,
+            new[] { "ScreenLoginUnified" },
+            MenuSeen: true,
+            "screens",
+            Current,
+            false,
+            Dialogs: new[] { "CBattlenetErrorDialog" },
+            DialogMessages: new[]
+            {
+                new DialogMessage(
+                    "CBattlenetErrorDialog",
+                    "Error",
+                    "The selected region is currently unavailable. Please try again later or select another region."
+                ),
+            }
+        );
+        var unread = region with
+        {
+            DialogMessages = new[] { new DialogMessage("CBattlenetErrorDialog", null, null) },
+        };
+
+        Assert.Equal(
+            "Dialog, screens, shown [LoginUnified], menu seen True, dialogs [CBattlenetErrorDialog], CBattlenetErrorDialog \"Error The selected region is currently unavailable. Please try again later or select another region.\", build 2.57.0.98348",
+            ClientScreenDescription.Describe(region)
+        );
+        Assert.EndsWith(
+            "CBattlenetErrorDialog (text not read), build 2.57.0.98348",
+            ClientScreenDescription.Describe(unread)
+        );
     }
 }
