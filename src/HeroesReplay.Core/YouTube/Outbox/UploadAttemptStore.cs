@@ -364,7 +364,108 @@ public sealed class UploadAttemptStore
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Takes the API key out of every saved session URI that still holds it (#368), each under
+    /// its attempt's lock. Returns how many manifests were rewritten.
+    /// </summary>
+    public async Task<int> ScrubSessionKeysAsync(CancellationToken cancellationToken)
+    {
+        if (!Directory.Exists(root))
+        {
+            return 0;
+        }
+
+        int scrubbed = 0;
+        foreach (string directory in Directory.GetDirectories(root))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string attemptId = Path.GetFileName(directory);
+            if (
+                !UploadAttemptIds.IsSafe(attemptId)
+                || !File.Exists(Path.Combine(directory, ManifestFileName))
+            )
+            {
+                continue;
+            }
+
+            await LockedAsync(
+                    directory,
+                    async () =>
+                    {
+                        (UploadAttemptResult read, bool rewritten) = await ReadScrubbedAsync(
+                                directory,
+                                attemptId,
+                                cancellationToken
+                            )
+                            .ConfigureAwait(false);
+                        if (rewritten)
+                        {
+                            scrubbed++;
+                        }
+
+                        return read;
+                    },
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+
+        return scrubbed;
+    }
+
     private static async Task<UploadAttemptResult> ReadAsync(
+        string directory,
+        string attemptId,
+        CancellationToken cancellationToken
+    )
+    {
+        (UploadAttemptResult read, _) = await ReadScrubbedAsync(
+                directory,
+                attemptId,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        return read;
+    }
+
+    /// <summary>
+    /// A manifest written before #368 holds the API key in its session URI. It is rewritten
+    /// without it, atomically and best effort, and the caller gets it without the key either way.
+    /// Callers hold the attempt lock. The revision stays: the session is the same.
+    /// </summary>
+    private static async Task<(UploadAttemptResult Read, bool Rewritten)> ReadScrubbedAsync(
+        string directory,
+        string attemptId,
+        CancellationToken cancellationToken
+    )
+    {
+        UploadAttemptResult read = await ReadFileAsync(directory, attemptId, cancellationToken)
+            .ConfigureAwait(false);
+        if (!read.Succeeded || !UploadSessionUri.HasKey(read.Manifest.SessionUri))
+        {
+            return (read, false);
+        }
+
+        UploadAttemptManifest scrubbed = read.Manifest.WithoutSessionKey();
+        bool rewritten;
+        try
+        {
+            await WriteAtomicAsync(directory, scrubbed, cancellationToken).ConfigureAwait(false);
+            rewritten = true;
+        }
+        catch (IOException)
+        {
+            rewritten = false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            rewritten = false;
+        }
+
+        return (UploadAttemptResult.Success(scrubbed), rewritten);
+    }
+
+    private static async Task<UploadAttemptResult> ReadFileAsync(
         string directory,
         string attemptId,
         CancellationToken cancellationToken

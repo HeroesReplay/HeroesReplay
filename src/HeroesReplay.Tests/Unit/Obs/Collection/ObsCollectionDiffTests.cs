@@ -271,6 +271,126 @@ public sealed class ObsCollectionDiffTests
         );
     }
 
+    /// <summary>
+    /// #367: the template after OBS 32.2.2 loaded and saved it, with no edits, is pristine. Before
+    /// #367 <c>obs plan</c> called it 208 operator additions (the relative transform OBS saves on
+    /// each of the 26 items) and 4 overrides (the game capture's placement, rounded).
+    /// </summary>
+    [Fact]
+    public void TemplateRoundTrippedByObs32_HasNoDifferences()
+    {
+        string template = Obs32Template;
+        string saved = Obs32Saved;
+        Assert.Equal(26, Occurrences(saved, "\"pos_rel\""));
+        Assert.Equal(26, Occurrences(saved, "\"scale_ref\""));
+        Assert.Equal(0, Occurrences(template, "\"pos_rel\""));
+        Assert.Contains("\"x\": 139.01002502441406", template);
+
+        ObsCollectionDiffResult diff = ObsCollectionDiff.Compare(
+            template,
+            template,
+            saved,
+            PackagedRuntime()
+        );
+
+        Assert.True(diff.BaseKnown);
+        Assert.Empty(diff.Differences);
+        ObsMergeResult update = ObsCollectionMerge.Merge(
+            template,
+            template,
+            saved,
+            PackagedRuntime(),
+            ObsMergeScope.AdditionsOnly
+        );
+        Assert.Equal(ObsMergeOutcome.Merged, update.Outcome);
+        Assert.Equal(0, update.Kept);
+    }
+
+    /// <summary>
+    /// The fields OBS writes on save are listed per OBS version (#367), and none is compared:
+    /// an item that has them equals the template's item that does not.
+    /// </summary>
+    [Fact]
+    public void FieldsObsWritesOnSave_AreNotOperatorAdditions()
+    {
+        Assert.Equal(
+            ["pos_rel", "scale_rel", "bounds_rel", "scale_ref"],
+            ObsSavedFields.SceneItem.Select(field => field.Name)
+        );
+        Assert.All(ObsSavedFields.SceneItem, field => Assert.Equal("31.0", field.Since));
+        string live = Layout()
+            .Replace(
+                "\"private_settings\":{}}",
+                "\"pos_rel\":{\"x\":1.5,\"y\":-1.0},\"scale_rel\":{\"x\":1.0,\"y\":1.0},"
+                    + "\"bounds_rel\":{\"x\":0.0,\"y\":0.0},\"scale_ref\":{\"x\":1920.0,\"y\":1080.0},"
+                    + "\"private_settings\":{}}",
+                System.StringComparison.Ordinal
+            );
+        Assert.Contains("\"pos_rel\"", live);
+
+        Assert.Empty(ObsCollectionDiff.Compare(Layout(), Layout(), live).Differences);
+    }
+
+    /// <summary>
+    /// A scene item's position and bounds compare within 2 canvas pixels and its scale within
+    /// 0.01, the tolerance <c>obs validate</c> counts an item in place with (#309).
+    /// </summary>
+    [Theory]
+    [InlineData(1801.0, false)]
+    [InlineData(1797.0, false)]
+    [InlineData(1801.5, true)]
+    [InlineData(1700.0, true)]
+    public void Position_ComparesWithThePlacementTolerance(double liveX, bool differs)
+    {
+        ObsCollectionDiffResult diff = ObsCollectionDiff.Compare(
+            Layout(rankX: 1799),
+            Layout(rankX: 1799),
+            Layout(rankX: liveX)
+        );
+
+        Assert.Equal(differs, diff.Differences.Count == 1);
+        if (differs)
+        {
+            Assert.Equal(ObsDiffKind.OperatorOverride, diff.Differences.Single().Kind);
+        }
+    }
+
+    [Theory]
+    [InlineData("1.0", "1.005", false)]
+    [InlineData("0.66", "0.655", false)]
+    [InlineData("1.0", "1.02", true)]
+    public void Scale_ComparesWithThePlacementTolerance(string template, string live, bool differs)
+    {
+        static string Scaled(string x) =>
+            Layout()
+                .Replace(
+                    "\"scale\":{\"x\":1.0",
+                    "\"scale\":{\"x\":" + x,
+                    System.StringComparison.Ordinal
+                );
+
+        ObsCollectionDiffResult diff = ObsCollectionDiff.Compare(
+            Scaled(template),
+            Scaled(template),
+            Scaled(live)
+        );
+
+        Assert.Equal(differs, diff.Differences.Any(difference => difference.Property == "scale.x"));
+    }
+
+    /// <summary>The tolerance is the placement's only: a color or a crop still compares exactly.</summary>
+    [Fact]
+    public void OtherNumbers_StillCompareExactly()
+    {
+        ObsCollectionDiffResult diff = ObsCollectionDiff.Compare(
+            Layout(cropTop: "0"),
+            Layout(cropTop: "0"),
+            Layout(cropTop: "1")
+        );
+
+        Assert.Equal("settings.top", diff.Differences.Single().Property);
+    }
+
     [Fact]
     public void Describe_NamesWhereAndWhat()
     {
@@ -282,5 +402,20 @@ public sealed class ObsCollectionDiffTests
             "'rank-image' in scene 'game-scene' pos.x: template 1799, live 1700, was 1799",
             moved.Describe()
         );
+    }
+
+    private static int Occurrences(string text, string value)
+    {
+        int count = 0;
+        for (
+            int at = text.IndexOf(value, System.StringComparison.Ordinal);
+            at >= 0;
+            at = text.IndexOf(value, at + value.Length, System.StringComparison.Ordinal)
+        )
+        {
+            count++;
+        }
+
+        return count;
     }
 }

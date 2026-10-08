@@ -24,10 +24,10 @@ public class TeamKillDeathTests
 
         IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(TeamKillDeaths.FromReplay(replay));
 
-        Assert.Equal(2, clips.Count);
-        Assert.Equal("Li-Ming", clips[0].Hero);
-        Assert.Equal(TeamKillClips.PentakillKind, clips[0].Kind);
-        Assert.Equal(TeamKillClips.TeamWipeKind, clips[1].Kind);
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal("Li-Ming", clip.Hero);
+        Assert.Equal(TeamKillClips.PentakillKind, clip.Kind);
+        Assert.True(clip.WipedTeam);
     }
 
     [Fact]
@@ -47,9 +47,10 @@ public class TeamKillDeathTests
             TeamKillDeaths.FromReplay(ReplayOf(players))
         );
 
-        TeamKillClip clip = Assert.Single(clips, item => item.Kind == TeamKillClips.PentakillKind);
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.PentakillKind, clip.Kind);
         Assert.Equal("The Lost Vikings", clip.Hero);
-        Assert.Contains(clips, item => item.Kind == TeamKillClips.TeamWipeKind);
+        Assert.True(clip.WipedTeam);
     }
 
     [Fact]
@@ -169,11 +170,10 @@ public class TeamKillDeathTests
         };
 
         IReadOnlyList<TeamKillDeath> deaths = TeamKillDeaths.FromReplay(replay, heroes);
-        TeamKillClip clip = Assert.Single(
-            TeamKillClips.Select(deaths),
-            item => item.Kind == TeamKillClips.PentakillKind
-        );
+        // #369: this replay was also cut as an identical team-wipe clip. One clip only.
+        TeamKillClip clip = Assert.Single(TeamKillClips.Select(deaths));
 
+        Assert.Equal(TeamKillClips.PentakillKind, clip.Kind);
         Assert.Equal("Valla", clip.Hero);
         Assert.All(deaths, death => Assert.Equal("Valla", death.KillerHero));
         Assert.Equal(

@@ -701,10 +701,11 @@ public static class ReplayMediaPolicy
             if (clip.Kind == TeamKillClips.PentakillKind)
             {
                 notable += PentakillScore;
-            }
-            else if (clip.Kind == TeamKillClips.TeamWipeKind)
-            {
-                notable += TeamWipeScore;
+                // A pentakill that killed the whole team scores more; it is still one event (#369).
+                if (clip.WipedTeam)
+                {
+                    notable += TeamWipeScore;
+                }
             }
         }
 

@@ -15,9 +15,11 @@ using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch.Rewards;
+using HeroesReplay.HeroesProfile.Client;
 using Microsoft.Extensions.Logging;
 using Microsoft.Kiota.Abstractions;
 
@@ -33,6 +35,7 @@ public class HeroesProfileProvider : IReplayProvider
     private readonly IHeroesProfileService heroesProfileService;
     private readonly IRequestQueue requestQueue;
     private readonly IHeroesProfileResume heroesProfileResume;
+    private readonly ReplayListBackoff listBackoff;
     private LoadedReplay staged;
     private int? heldBackId;
     private int minReplayId;
@@ -118,7 +121,20 @@ public class HeroesProfileProvider : IReplayProvider
         this.heroesProfileService =
             heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
         this.heroesProfileResume = heroesProfileResume;
+        listBackoff = new ReplayListBackoff(
+            (settings.ServiceHealth ?? new ServiceHealthSettings()).NextDependencyProbe(
+                failed: true
+            ),
+            logger
+        );
     }
+
+    /// <summary>
+    /// The download role's dependency probe (#305): a rejected Heroes Profile key pauses the
+    /// replay list until a probe passes (#358).
+    /// </summary>
+    public void ObserveDependency(ServiceDependencyResult result) =>
+        listBackoff.Observe(result, clock());
 
     internal void UseInstalledVersions(Func<IReadOnlyList<string>> source)
     {
@@ -372,8 +388,9 @@ public class HeroesProfileProvider : IReplayProvider
     /// <summary>
     /// The first due request's replay, on disk before the request leaves
     /// <c>Data\requests.json</c> (#351). A download that can succeed later keeps the request
-    /// queued with a backoff. One that never can (Heroes Profile answers 404 or 410, or the
-    /// replay is below the supported patch line) fails the request and records a cancel that
+    /// queued with a backoff. One that never can (Heroes Profile answers 404 or 410, or 403
+    /// <c>replay_deleted</c>, or the replay is below the supported patch line) fails the request
+    /// and records a cancel that
     /// <c>twitch connect</c> sends. A stop leaves the request as it was.
     /// </summary>
     private async Task<RequestFetch> FetchRequestAsync()
@@ -483,17 +500,19 @@ public class HeroesProfileProvider : IReplayProvider
                     e is ApiException api && api.ResponseStatusCode > 0
                         ? api.ResponseStatusCode
                         : null;
-                if (RequestDownloadRetry.Classify(status) == RequestDownloadVerdict.Fail)
+                // The body's error.code tells a deleted replay from a key problem (#361).
+                string errorCode = (e as HeroesProfileApiException)?.ErrorCode;
+                if (RequestDownloadRetry.Classify(status, errorCode) == RequestDownloadVerdict.Fail)
                 {
                     await FailRequestAsync(
                             item,
-                            $"Heroes Profile no longer has the replay file (HTTP {status})"
+                            $"Heroes Profile no longer has the replay file ({RequestDownloadRetry.Describe(status.Value, errorCode)})"
                         )
                         .ConfigureAwait(false);
                     return RequestFetch.Skipped;
                 }
 
-                await RetryLaterAsync(item, e, status, now).ConfigureAwait(false);
+                await RetryLaterAsync(item, e, status, errorCode, now).ConfigureAwait(false);
                 // Heroes Profile answered with a status: not an outage (#346).
                 return status != null
                     ? RequestFetch.Skipped
@@ -560,11 +579,12 @@ public class HeroesProfileProvider : IReplayProvider
         RewardQueueItem item,
         Exception error,
         int? status,
+        string errorCode,
         DateTimeOffset now
     )
     {
         string reason = status is int code
-            ? $"HTTP {code}"
+            ? RequestDownloadRetry.Describe(code, errorCode)
             : $"{error.GetType().Name}: {error.Message}";
         RequestDownload download = await requestQueue
             .RetryDownloadLaterAsync(item, reason, now)
@@ -860,13 +880,23 @@ public class HeroesProfileProvider : IReplayProvider
 
     private async Task<HeroesProfileReplay> GetNextReplayAsync()
     {
+        if (listBackoff.Paused && !listBackoff.TryList(clock()))
+        {
+            // Heroes Profile refused the key: no list call until the next turn or a passing
+            // probe (#358). Not an outage, and nothing to log again.
+            return null;
+        }
+
         try
         {
+            // A refused key is not retried here: the same key gets the same answer (#358).
             HeroesProfileReplay found = await ResilienceRetry
                 .Constant<HeroesProfileReplay>(
                     retries: 60,
                     delay: settings.HeroesProfileApi.APIRetryWaitTime,
-                    retry: outcome => ResilienceRetry.Failed(outcome, replay => replay == null)
+                    retry: outcome =>
+                        !listBackoff.Paused
+                        && ResilienceRetry.Failed(outcome, replay => replay == null)
                 )
                 .ExecuteAsync(
                     _ => new ValueTask<HeroesProfileReplay>(ListOnceAsync()),
@@ -874,7 +904,12 @@ public class HeroesProfileProvider : IReplayProvider
                 )
                 .ConfigureAwait(false);
 
-            if (found == null && heroesProfileResume != null && heroesProfileResume.Consume())
+            if (
+                found == null
+                && !listBackoff.Paused
+                && heroesProfileResume != null
+                && heroesProfileResume.Consume()
+            )
             {
                 logger.LogInformation(
                     "Connectivity restored. Retrying Heroes Profile replay list once."
@@ -890,7 +925,7 @@ public class HeroesProfileProvider : IReplayProvider
         }
         catch (Exception e)
         {
-            if (heroesProfileResume != null && heroesProfileResume.Consume())
+            if (!listBackoff.Paused && heroesProfileResume != null && heroesProfileResume.Consume())
             {
                 logger.LogWarning(
                     e,
@@ -940,6 +975,12 @@ public class HeroesProfileProvider : IReplayProvider
             ReplayListing page = await heroesProfileService
                 .ListPageAsync(currentMin)
                 .ConfigureAwait(false);
+            listBackoff.Record(page, clock());
+            if (page?.RejectedStatus != null)
+            {
+                return null;
+            }
+
             ReplayListing launchable = ReplayDownloadPick.Launchable(
                 page,
                 installed,

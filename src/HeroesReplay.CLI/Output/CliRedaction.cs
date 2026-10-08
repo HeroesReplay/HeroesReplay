@@ -10,8 +10,8 @@ namespace HeroesReplay.CLI.Output;
 /// Keeps secret values out of a command's output, text and JSON alike. Every secret this
 /// process resolved (<see cref="Remember(AppSettings)"/>) is replaced wherever it appears, then
 /// the token-shaped rules the role logs use (<see cref="ServiceLogRedaction"/>: <c>token=</c>,
-/// <c>api_key=</c>, <c>password=</c>, <c>Bearer</c>, <c>oauth:</c>) run. A secret is reported as
-/// present or missing instead (<c>check config</c>).
+/// <c>api_key=</c>, <c>key=</c>, <c>password=</c>, <c>Bearer</c>, <c>oauth:</c>, a Google API
+/// key) run. A secret is reported as present or missing instead (<c>check config</c>).
 /// </summary>
 public sealed class CliRedaction
 {

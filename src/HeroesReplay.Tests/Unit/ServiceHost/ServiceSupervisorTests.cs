@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.CLI.Output;
+using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
 using Xunit;
@@ -438,6 +439,172 @@ public class ServiceSupervisorTests
             ServiceLockStore.Delete(path);
         }
     }
+
+    [Fact]
+    public void Stop_ClosesAnIdleSwitcherAfterTheGameAndNamesItOnTheGameLine()
+    {
+        // #359: Heroes pid 40020 closed, and HeroesSwitcher_x64 pid 40108 was left running.
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 80);
+            var steps = new List<string>();
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () =>
+            {
+                steps.Add("game");
+                return true;
+            };
+            shutdown.CloseIdleSwitchers = () =>
+            {
+                steps.Add("switchers");
+                return Switchers(new SwitcherStop(40108, SwitcherStopOutcome.Closed));
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(new[] { "game", "switchers" }, steps);
+            Assert.Equal(0, result.ExitCode);
+            Assert.True(result.GameClosed);
+            Assert.Empty(result.Failures());
+            Assert.Equal(
+                "Heroes of the Storm: closed. HeroesSwitcher_x64 pid 40108: closed.",
+                ServiceStopResult.DescribeGame(result.GameClosed.Value, result.Switchers)
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_FailsWhenAnIdleSwitcherIsStillRunning()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 80);
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.CloseIdleSwitchers = () =>
+                Switchers(
+                    new SwitcherStop(40108, SwitcherStopOutcome.StillRunning, "kill: AccessDenied")
+                );
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.True(result.GameClosed);
+            Assert.Contains("HeroesSwitcher_x64 pid 40108 is still running.", result.Failures());
+            Assert.Equal(
+                "Heroes of the Storm: closed. HeroesSwitcher_x64 pid 40108: still running (kill: AccessDenied).",
+                ServiceStopResult.DescribeGame(true, result.Switchers)
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_ASwitcherWhoseHeroesChildRuns_IsLeftAndTheGameCountsAsRunning()
+    {
+        // The switcher started Heroes again after the game closed: that is a game, not an idle
+        // switcher, so it is left and the stop fails on the game.
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 80);
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.CloseIdleSwitchers = () =>
+                new SwitcherStopResult { LeftAlone = new[] { new SwitcherHandoff(40108, 40500) } };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.False(result.GameClosed);
+            Assert.Contains("Heroes of the Storm is still running.", result.Failures());
+            Assert.Equal(
+                "Heroes of the Storm: still running. HeroesSwitcher_x64 pid 40108: left running, its Heroes pid 40500 is still up.",
+                ServiceStopResult.DescribeGame(false, result.Switchers)
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_WithoutSpectate_LeavesTheGameAndTheSwitchersAlone()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceLockStore.Save(
+                path,
+                new ServiceLock
+                {
+                    Processes = new List<ServiceProcessRecord>
+                    {
+                        new() { Name = "twitch", Pid = 81 },
+                    },
+                }
+            );
+            bool touched = false;
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => touched = true;
+            shutdown.CloseIdleSwitchers = () =>
+            {
+                touched = true;
+                return Switchers();
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.False(touched);
+            Assert.Null(result.GameClosed);
+            Assert.Null(result.Switchers);
+            Assert.Equal(0, result.ExitCode);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_ASwitcherStepThatThrows_DoesNotFailTheStop()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 80);
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.CloseIdleSwitchers = () =>
+                throw new InvalidOperationException("process table unreadable");
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Null(result.Switchers);
+            Assert.Equal(
+                "Heroes of the Storm: closed.",
+                ServiceStopResult.DescribeGame(true, result.Switchers)
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    private static SwitcherStopResult Switchers(params SwitcherStop[] stopped) =>
+        new() { Stopped = stopped };
 
     [Fact]
     public void Status_NotRunning_IsSuccess()

@@ -112,6 +112,40 @@ public class SpectatorStatusStoreTests
     }
 
     [Fact]
+    public void PatchIfChanged_WritesOnlyWhenTheUpdateChangedAField()
+    {
+        string path = Path.Combine(
+            Path.GetTempPath(),
+            $"heroesreplay-status-{Guid.NewGuid():N}.json"
+        );
+        try
+        {
+            var store = new SpectatorStatusStore(path);
+            Assert.True(
+                store.PatchIfChanged(status =>
+                {
+                    status.ObsSceneActual = "game-scene";
+                    return true;
+                })
+            );
+            Assert.Equal("game-scene", store.Read().ObsSceneActual);
+            File.Delete(path);
+
+            Assert.False(store.PatchIfChanged(status => status.ObsSceneActual != "game-scene"));
+
+            Assert.False(File.Exists(path));
+            Assert.False(File.Exists(path + ".tmp"));
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
     public void Read_MissingFile_IsIdle()
     {
         var store = new SpectatorStatusStore(

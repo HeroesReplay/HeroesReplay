@@ -260,7 +260,7 @@ public class GameManager : IGameManager
                     }
                     catch (Exception e)
                     {
-                        logger.LogWarning(e, "Could not cut team-kill clips.");
+                        logger.LogWarning(e, "Could not cut pentakill clips.");
                     }
                 }
                 else
@@ -1209,7 +1209,7 @@ public class GameManager : IGameManager
         try
         {
             cap = RecordingCap.Decide(
-                RecordingCap.Measure(settings, snapshot.Decision.Priority, DateTimeOffset.UtcNow),
+                RecordingCap.Measure(settings, snapshot.Decision, DateTimeOffset.UtcNow),
                 settings.ReplayMedia
             );
         }
@@ -1226,22 +1226,20 @@ public class GameManager : IGameManager
         if (cap.Allow)
         {
             logger.LogInformation(
-                "Replay {ReplayId} recording cap allows it ({CapReason}): {InFlight} waiting for upload or publish time, capacity {Capacity}.",
+                "Replay {ReplayId} recording cap allows it ({CapReason}): {CapSummary}",
                 loaded.ReplayId,
                 cap.Reason,
-                cap.InFlight,
-                cap.Capacity
+                cap.Summary
             );
             return;
         }
 
         loaded.PolicyAllowsRecording = false;
         logger.LogInformation(
-            "Replay {ReplayId} is spectated without a recording ({CapReason}): {InFlight} recording(s) already wait for upload or publish time, capacity {Capacity}.",
+            "Replay {ReplayId} is spectated without a recording ({CapReason}): {CapSummary}",
             loaded.ReplayId,
             cap.Reason,
-            cap.InFlight,
-            cap.Capacity
+            cap.Summary
         );
     }
 

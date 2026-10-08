@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.SelfUpdate;
@@ -668,7 +669,7 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "stop",
-            "Ask the recorded processes to shut down, kill any still running after 20 seconds, close Heroes of the Storm, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game closed, OBS is not streaming, and no recording spectate started is still running."
+            "Ask the recorded processes to shut down, kill any still running after 20 seconds, close Heroes of the Storm and any HeroesSwitcher left without it, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game and those switchers closed, OBS is not streaming, and no recording spectate started is still running."
         );
         command.SetAction(
             (parseResult, cancellationToken) =>
@@ -685,6 +686,7 @@ public class ServicesCommand : Command
                         Wait = Thread.Sleep,
                         ClearStopFile = () => ServiceStopFile.Clear(),
                         CloseGame = StopSpectatedGame,
+                        CloseIdleSwitchers = new HeroesSwitcherShutdown().CloseIdle,
                         ConfirmStream = ObsServiceStop.DelegateToSpectator,
                         ReadStream = ServiceStreamProbe.Read,
                         StopSpectateRecording = ServiceRecordingProbe.StopLeftRecording,

@@ -142,7 +142,7 @@ OBS password:
 | `src/HeroesReplay.Core` | Feature slices: analysis, spectating, game client, OBS, Twitch, YouTube, service host |
 | `src/HeroesReplay.HeroesProfile.Client` | Kiota client for the Heroes Profile v1 API ([docs/heroesprofile-api.md](docs/heroesprofile-api.md)) |
 | `src/HeroesReplay.Tests` | xUnit |
-| [HeroesClientSDK](https://github.com/HeroesReplay/HeroesClientSDK) (package) | The memory match clock and screen state (`StableMatchClock`, `LoadingScreenMemory`). From the SDK's GitHub Release into `.packages`; exact version and SHA-256 in `Directory.Packages.props` |
+| [HeroesClientSDK](https://github.com/HeroesReplay/HeroesClientSDK) (package) | The memory match clock and screen state (`MatchClock`, `LoadingScreen`, `ClientScreen`). From the SDK's GitHub Release into `.packages`; exact version and SHA-256 in `Directory.Packages.props` |
 
 The solution file is **`heroes-replay.slnx`** (XML). Do not add a parallel `.sln`.
 

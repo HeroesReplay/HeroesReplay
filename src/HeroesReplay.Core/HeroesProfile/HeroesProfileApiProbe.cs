@@ -22,7 +22,8 @@ public sealed class HeroesProfileApiProbe : IServiceDependencyProbe
     public const string RejectedCode = "download.heroesprofile_rejected";
     public const string UnreachableCode = "download.heroesprofile_unreachable";
 
-    private const string Name = "Heroes Profile API";
+    /// <summary>The probe's <see cref="ServiceDependencyResult.Dependency"/>.</summary>
+    public const string DependencyName = "Heroes Profile API";
 
     private const string RejectedFix =
         "Check HeroesProfileApi:ApiKey: run `pwsh -File tools/fill-secrets-from-op.ps1` (or fix appsettings.secrets.json), confirm with `heroesreplay check heroesprofile`, then restart the stack (`heroesreplay services stop`, then `heroesreplay services start --supervise`; on the stream PC in a downtime). Until then the downloader stays up, degraded; the supervisor does not restart it.";
@@ -51,19 +52,19 @@ public sealed class HeroesProfileApiProbe : IServiceDependencyProbe
             readMaxReplayId ?? throw new ArgumentNullException(nameof(readMaxReplayId));
     }
 
-    public string Dependency => Name;
+    public string Dependency => DependencyName;
 
     public string NotUsedReason => null;
 
     public ServiceDependencyResult Unreachable(string cause) =>
-        ServiceDependencyResult.Unreachable(Name, UnreachableCode, cause, UnreachableFix);
+        ServiceDependencyResult.Unreachable(DependencyName, UnreachableCode, cause, UnreachableFix);
 
     public async Task<ServiceDependencyResult> CheckAsync(CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(settings?.ApiKey))
         {
             return ServiceDependencyResult.Rejected(
-                Name,
+                DependencyName,
                 RejectedCode,
                 "HeroesProfileApi:ApiKey is empty, so Heroes Profile refuses every call.",
                 RejectedFix
@@ -74,7 +75,7 @@ public sealed class HeroesProfileApiProbe : IServiceDependencyProbe
         {
             int? max = await readMaxReplayId(cancellationToken).ConfigureAwait(false);
             return ServiceDependencyResult.Ok(
-                Name,
+                DependencyName,
                 max is int id && id > 0
                     ? $"Heroes Profile accepted the API key (newest replay id {id})."
                     : "Heroes Profile accepted the API key."
@@ -83,7 +84,7 @@ public sealed class HeroesProfileApiProbe : IServiceDependencyProbe
         catch (ApiException e) when (e.ResponseStatusCode is 401 or 403)
         {
             return ServiceDependencyResult.Rejected(
-                Name,
+                DependencyName,
                 RejectedCode,
                 $"Heroes Profile rejected HeroesProfileApi:ApiKey (HTTP {e.ResponseStatusCode}), so no replay can be listed or downloaded.",
                 RejectedFix

@@ -1,12 +1,50 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
+using Microsoft.Extensions.Configuration;
 
 namespace HeroesReplay.Tests.Unit.Obs.Collection;
 
 /// <summary>Small OBS scene collections in the shape OBS saves them, for the diff and plan tests.</summary>
 internal static class ObsCollectionFixture
 {
+    /// <summary>
+    /// <c>obs/Default.json</c> as it was at SHA-256 <c>576DBCEA…4309</c> (#367), the template
+    /// <see cref="Obs32Saved"/> was written from.
+    /// </summary>
+    public static string Obs32Template => ObsAsset("obs-32.2.2-template.json");
+
+    /// <summary>
+    /// <see cref="Obs32Template"/> after OBS 32.2.2 loaded and saved it, with no edits: ASA-SERVER's
+    /// <c>HeroesReplay.json</c> on 2026-10-08 (#367). OBS added <c>pos_rel</c>, <c>scale_rel</c>,
+    /// <c>bounds_rel</c>, and <c>scale_ref</c> to all 26 scene items, and saved the
+    /// <c>waiting-screen</c> game capture at (139, 330), 395.5x226 for the template's
+    /// (139.01, 329.99), 395.38x226. The spectator's values (the replay text, the report urls and
+    /// css, the rank images it showed) are as it left them. Two things were set back to the
+    /// template: the asset paths, which HeroesReplay had pointed at its stable copy
+    /// (<c>...\obs\assets\7BA1951F14EE134C\</c>, #330), and <c>sc2-main-menu-alarak</c>'s
+    /// <c>monitoring_type</c>, 2 on that box, the one value someone changed there.
+    /// </summary>
+    public static string Obs32Saved => ObsAsset("obs-32.2.2-saved.json");
+
+    /// <summary>The values the packaged settings let the spectator set (<c>appsettings.json</c> and the dev overlay).</summary>
+    public static ObsRuntimeValues PackagedRuntime() =>
+        ObsRuntimeValues.From(
+            new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json")
+                .AddJsonFile("appsettings.dev.json", optional: true)
+                .Build()
+                .GetSection("OBS")
+                .Get<OBSSettings>()
+        );
+
+    private static string ObsAsset(string name) =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Assets", "Obs", name));
+
     public static string Document(params string[] sources) =>
         "{\"name\":\"HeroesReplay\",\"current_scene\":\"game-scene\",\"sources\":["
         + string.Join(",", sources)

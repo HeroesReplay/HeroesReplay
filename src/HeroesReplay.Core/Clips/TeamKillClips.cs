@@ -23,15 +23,25 @@ public readonly record struct TeamKillClip(
     int HudEndSecond,
     string Description,
     IReadOnlyList<TeamKillBlow> Kills = null
-);
+)
+{
+    /// <summary>
+    /// The pentakill's blows killed five different enemy heroes: the whole team. It is a fact
+    /// about this one clip, which the media score and the full match tags use. It is never a
+    /// clip of its own (#369).
+    /// </summary>
+    public bool WipedTeam => TeamKillClips.UniqueVictims(Kills) >= 5;
+}
 
 /// <summary>
-/// Pentakill and team-wipe intervals for one player's hero-unit killing blows.
+/// Individual pentakills: one player lands five or more hero-unit killing blows, each within the
+/// window of the previous one. Only they are clips, so clips stay rare. A wipe shared across
+/// players is never a clip, and a pentakill that killed the whole team is still one clip
+/// (<see cref="TeamKillClip.WipedTeam"/>, #369).
 /// </summary>
 public static class TeamKillClips
 {
     public const string PentakillKind = "pentakill";
-    public const string TeamWipeKind = "team-wipe";
 
     public static IReadOnlyList<TeamKillClip> Select(
         IReadOnlyList<TeamKillDeath> deaths,
@@ -69,12 +79,6 @@ public static class TeamKillClips
                 if (byStart != 0)
                 {
                     return byStart;
-                }
-
-                int byKind = string.CompareOrdinal(left.Kind, right.Kind);
-                if (byKind != 0)
-                {
-                    return byKind;
                 }
 
                 return string.CompareOrdinal(left.Hero, right.Hero);
@@ -128,8 +132,8 @@ public static class TeamKillClips
             {
                 if (streak.Kills >= 5)
                 {
+                    // One clip per pentakill, also when its victims were the whole team (#369).
                     TeamKillBlow[] blows = Blows(victims, offset, streak.Kills);
-                    int unique = UniqueVictims(blows);
                     clips.Add(
                         Clip(
                             PentakillKind,
@@ -138,25 +142,12 @@ public static class TeamKillClips
                             blows[blows.Length - 1].Second,
                             leadSeconds,
                             tailSeconds,
-                            unique >= 5 ? hero + " pentakill (team wipe)" : hero + " pentakill",
+                            UniqueVictims(blows) >= 5
+                                ? hero + " pentakill (team wipe)"
+                                : hero + " pentakill",
                             blows
                         )
                     );
-                    if (unique >= 5)
-                    {
-                        clips.Add(
-                            Clip(
-                                TeamWipeKind,
-                                hero,
-                                blows[0].Second,
-                                blows[blows.Length - 1].Second,
-                                leadSeconds,
-                                tailSeconds,
-                                "team wipe",
-                                blows
-                            )
-                        );
-                    }
                 }
 
                 offset += streak.Kills;
@@ -188,12 +179,20 @@ public static class TeamKillClips
         return blows;
     }
 
-    private static int UniqueVictims(TeamKillBlow[] blows)
+    internal static int UniqueVictims(IReadOnlyList<TeamKillBlow> blows)
     {
+        if (blows == null)
+        {
+            return 0;
+        }
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (TeamKillBlow blow in blows)
         {
-            seen.Add(blow.Victim);
+            if (!string.IsNullOrWhiteSpace(blow.Victim))
+            {
+                seen.Add(blow.Victim);
+            }
         }
 
         return seen.Count;

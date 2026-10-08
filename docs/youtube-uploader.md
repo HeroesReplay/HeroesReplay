@@ -48,7 +48,7 @@ The uploader logs the effective quota settings once when it starts (`YouTube quo
 
 The base `appsettings.json` has the same eleven algorithm keys and does not select a recording mode or a publication mode, so a process with no overlay records nothing and publishes nothing. Dev (`appsettings.dev.json`) uses the same modes as production, with `YouTube:DryRun` true, `PrivacyStatus` private, and a `[TEST]` title. Dev inherits the caps from the base file.
 
-`PublicationMode` `AllEligible` is the live channel: a paced archive of the Storm League games the stream already plays. `Curated` is the other content policy. It sends a paid request, a pentakill or team wipe, or a high-skill game, and it does not send an ordinary game. High skill does nothing until `MinimumHighSkillRank` or `MinimumHighSkillMmr` is set. Production does not set either, so no replay is high-skill.
+`PublicationMode` `AllEligible` is the live channel: a paced archive of the Storm League games the stream already plays. `Curated` is the other content policy. It sends a paid request, a pentakill, or a high-skill game, and it does not send an ordinary game. High skill does nothing until `MinimumHighSkillRank` or `MinimumHighSkillMmr` is set. Production does not set either, so no replay is high-skill.
 
 A highlights-only channel would replace the two mode lines and add a floor:
 
@@ -80,18 +80,28 @@ Production and dev use `Selected` (#204): a replay that no publication window ca
 
 ### The recording cap
 
-The mode says what is worth recording. The recording cap (`ReplayMedia:CapRecordingToPublication`, on by default, #250) says whether the pipeline can still take one more, so the spectator records only roughly what can be uploaded and published. Before launch it counts the recordings waiting for their `videos.insert` and the slots in `Data\publication-reservations.txt` whose publish time is still ahead. The first matching line decides, and the spectator logs it as `recording cap ... (reason)`:
+The mode says what is worth recording. The recording cap (`ReplayMedia:CapRecordingToPublication`, on by default, #250, #370) says whether the pipeline can still take one more: whether this replay's recording would be uploaded before the replay stops being a candidate. Before launch it counts two things:
+
+- **Waiting for upload.** Recordings on disk that still wait for their `videos.insert` and need a publication slot. A recording whose send failed after it reserved a slot is counted with the slots instead, so it is not counted twice.
+- **Scheduled.** The slots in `Data\publication-reservations.txt` whose publish time is still ahead. These are mostly uploads that only wait for their `publishAt`. They need no disk and no upload. They count only because they fill the publication window.
+
+The publication window holds what the pacing rules publish within `MaxPublishAhead` (at least one day): `min(MaxPublicPerDay - ReservedRequestSlotsPerDay, MaxPublicPerWeek / 7)` a day, and no more than a day of upload calls. While the window has a free slot, a new recording is sent at once. When it is full, a recording waits on disk until the window slides far enough to reach a free time. That happens at the same pace, behind every recording already waiting. The uploader deletes an ordinary recording that is still waiting once its game is older than `OrdinaryCandidateMaxAge`. So the wait has to end, with a day to spare (`RecordingCap.SendSlack`), before the replay's candidate expiry: its game time plus `OrdinaryCandidateMaxAge` for an ordinary replay, or plus 7 days for a notable or high-skill one.
+
+The first matching line decides, and the spectator logs it as `recording cap ... (reason)`, with how many wait for upload, how many are scheduled, and the expected wait:
 
 | Reason | Records | When |
 | --- | --- | --- |
 | `cap-requested` | yes | A paid `RecordAndUpload` request. Always recorded. |
 | `cap-off` | yes | `CapRecordingToPublication` is false. |
 | `cap-not-live` | yes | YouTube is disabled or a dry run (dev): nothing piles up for YouTube. |
-| `cap-upload-backlog` | no | The waiting recordings are at least one day of upload calls: `min(DailyUploadCalls - UploadCallReserve, MaxInsertsPerQuotaDay)`. |
-| `cap-publication-full` | no | Waiting recordings plus scheduled slots are at least what the pacing rules publish within `MaxPublishAhead` (at least one day): `min(MaxPublicPerDay - ReservedRequestSlotsPerDay, MaxPublicPerWeek / 7)` a day. |
-| `cap-room` | yes | Otherwise. |
+| `cap-upload-backlog` | no | The recordings waiting for upload are at least one day of upload calls: `min(DailyUploadCalls - UploadCallReserve, MaxInsertsPerQuotaDay)`. |
+| `cap-room` | yes | A private listing, or the window has a free slot: waiting plus scheduled is under what it holds. |
+| `cap-queued` | yes | The window is full, and the slots that must open first (waiting plus scheduled plus this one, less what the window holds), at the window's daily pace, still leave a day before the replay expires. |
+| `cap-publication-full` | no | The window is full, and this replay would wait until less than a day before it expires, or its game time is unknown. |
 
-With the production settings that is 4 a day over 3 days, so about 12 videos in flight and about 4 ordinary recordings a day. Notable and high-skill replays are capped like ordinary ones; only a request goes past the cap. A capped replay is still spectated and streamed, without an mp4. Before the cap, production recorded about 25 replays a day while 4 a day could go public, and the rest waited on disk until they were too old to publish (#250).
+With the production settings the window holds 10 a day over 3 days, so 30 slots, and a full window opens about one slot every 2.4 hours. On 2026-10-08 the stream PC had 10 recordings waiting for upload and 29 uploads scheduled (#370). Before #370 the cap stopped at 30 in flight, so it recorded nothing for about a day, although a replay played 6 hours earlier would have waited one day and still had 1.75 days of its 3 left. Now that replay is recorded (`cap-queued`). One played 2 days earlier is not. In steady state about 17 fresh recordings wait (about 37 GB), and a video goes public about 4 to 5 days after its game. Without the queue only about one waited, so a slot whose map, rank, or hero cooldown ruled out that one recording went unused. The publication pace is the same either way.
+
+Notable and high-skill replays are capped like ordinary ones. Only a request goes past the cap. A capped replay is still spectated and streamed, without an mp4. Before the cap, production recorded about 25 replays a day while 4 a day could go public, and the rest waited on disk until they were too old to publish (#250).
 
 ### The disk gates
 
@@ -116,7 +126,7 @@ Every mode still requires OBS `RecordingEnabled` (true in production). Both Repl
 The first matching class wins.
 
 1. **Requested.** The viewer typed a replay id (either ReplayId reward), or the Twitch reward is `RecordAndUpload`. A spectate-only map, rank, or random reward is not requested.
-2. **Notable.** The replay has a pentakill or a team wipe. Both come from one player. A pentakill is five or more killing blows by that player, each within 12 seconds of the previous blow. A team wipe is five unique enemy heroes killed by that same player inside that streak. The blow has to be one of that player's own hero units, and the victim has to be an enemy player's hero unit. Lost Vikings and Rexxar with Misha count as that one player. A summon, a structure, a suicide, or a wipe split across several players is not a clip.
+2. **Notable.** The replay has an individual pentakill: five or more killing blows by one player, each within 12 seconds of the previous blow. The blow has to be one of that player's own hero units, and the victim has to be an enemy player's hero unit. Lost Vikings and Rexxar with Misha count as that one player. A summon, a structure, a suicide, or a wipe split across several players is not a pentakill. When the five victims are five different enemy heroes, that pentakill also wiped the team (`TeamKillClip.WipedTeam`). That is a fact about the one pentakill, not a second event or a second clip (#369).
 3. **High-skill.** Rank or MMR meets the configured floor. With no floor, this class never matches.
 4. **Ordinary.** Everything else.
 
@@ -179,6 +189,7 @@ A granted send that fails still keeps its slot. The retry is allowed through tha
 A send that stops part way (a release restart, `services stop`, a network failure) is retried by the uploader itself. Nobody has to act after a release.
 
 - The resumable session URI is saved on the attempt before the first byte is sent (`InitiateSessionAsync`, then the media), so every interrupted send can be checked. YouTube creates the video only when it has every byte, so an incomplete session has no video.
+- The saved URI never holds the API key (#368). Google.Apis starts the session with `key=<YouTube:ApiKey>`, and YouTube's session URI repeats it, so the `key` parameter is taken out before the attempt is written (`UploadSessionUri`) and the configured key is added back only for the send and the status query, which are then the same requests as before. An attempt saved before #368 is rewritten without the key the next time it is read, atomically under its lock, and the uploader reads every saved attempt once when it starts (`Removed the API key from N saved upload sessions.`). The role logs, the heartbeat `lastError`, and CLI output mask `key=` and any Google API key.
 - On a stop the send ends at the next chunk boundary (10 MB chunks), so YouTube keeps every byte sent; a chunk that has not finished after 10 seconds (`YouTubeUploader.StopGrace`) is cut off, inside the 20 seconds `services stop` waits. The log says `Upload of ... paused for the service stop after N of M bytes. YouTube keeps the upload session; the next start resumes it.`
 - The next pass asks the saved session how much YouTube holds (`PUT` with `Content-Range: bytes */size`, no quota): a finished session (the send was cut off after its last chunk, before the response) is recorded with its video id and never inserted again; an incomplete one is resumed from YouTube's offset while its publish time is still ahead. When its publish time has passed, the slot is rescheduled (above): if the new time is now the session is resumed, otherwise the old session is dropped (it has no video) and a new insert carries the new time. A session YouTube no longer knows (404 or 410) may have finished, so it is left for an operator. A failed status query is asked again next pass.
 - An attempt with no saved session never sent any media, so it is started again, unless its replay id is already in `youtube-replay-ids.txt`, in which case it is left for an operator.
@@ -238,7 +249,7 @@ Eight ordinary games that end at 10:00, 10:30, and every half hour to 13:30 UTC,
 | 7 | 13:00 | next day 14:00 | reserved |
 | 8 | 13:30 | next day 16:00 | reserved |
 
-A paid request that ends at 14:00 that day publishes at 14:00, as soon as it is uploaded. A ninth ordinary game publishes on the third day at 10:00. Every recording goes on the retention sweep that follows its upload; none waits on disk for the quota. With `MaxPublishAhead` 3 days and 4 non-request videos a day, the recording cap stops recording ordinary games once about 12 wait for upload or their publish time.
+A paid request that ends at 14:00 that day publishes at 14:00, as soon as it is uploaded. A ninth ordinary game publishes on the third day at 10:00. Every recording goes on the retention sweep that follows its upload; none waits on disk for the quota. With `MaxPublishAhead` 3 days and 4 non-request videos a day, the window holds 12. Once it is full, the recording cap records an ordinary game only while the recordings ahead of it drain, at 4 a day, at least a day before the game is 3 days old.
 
 ## What the video contains
 
@@ -329,7 +340,7 @@ The numbers go on a `Stats:` line in the description, for example `Stats: Valla 
 
 The statistics are one file per major patch and game type, `Data\HeroesProfile\hero-stats\2.57-sl.json`, keyed by `attribute_id`: each hero's wins and games on every map (and its ban rate there), against each enemy hero, and with each ally. The download role writes it, never spectate. While hooks are on it checks every `HeroesProfileApi:HeroStats:CheckInterval` (1 h) and fetches the newest major patch again when the file is older than `RefreshInterval` (24 h), for each `GameTypes` entry (Storm League). Files of patches older than the newest two are deleted. Spectate uses the file for the replay's own patch and game type only when it is younger than `MaxAge` (72 h); a missing, unreadable, or stale file leaves the title as before. `heroesreplay heroesprofile hero-stats` fetches it once by hand. The calls and their limits are in `docs/heroesprofile-api.md`.
 
-The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, the pentakill or team wipe as a highlight, and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 7 (6 had no statistics hook).
+The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 7 (6 had no statistics hook).
 
 Every `videos.insert`, full match or clip, is built by `UploadBody` with the `snippet,status` parts:
 
@@ -343,7 +354,7 @@ Every `videos.insert`, full match or clip, is built by `UploadBody` with the `sn
 
 Videos uploaded before this template can still have BattleTag numbers in the roster lines, or a viewer's name in the title. `tools/youtube-fix-descriptions.cs` is a one-off script that rewrites those videos on YouTube. It only prints the changes unless it is given `--apply`, and it changes titles only with `--titles`.
 
-Pentakill and team-wipe clips are separate full-frame cuts under the context `clips` folder, 12 seconds before the streak and 8 seconds after it on the match clock. `clips.json` in that context lists each cut with the hero and the killing blows (`second` and `victim`). The hero name is the English catalog name when the catalog has that hero. Each clip has its own `youtube-entry.json` and can be inserted as its own video. It uses the parent replay's class and the parent replay's one publication slot. Each insert still counts toward the quota. Clip titles look like `Li-Ming - pentakill - Alterac Pass - 65550001`.
+Clips are individual pentakills only (#369): one full-frame cut per pentakill under the context `clips` folder. A pentakill that wiped the whole team is still one clip, and a wipe shared across players is never cut. Each cut starts 12 seconds before the streak and ends 8 seconds after it on the match clock. `clips.json` in that context lists each cut with the hero and the killing blows (`second` and `victim`). The hero name is the English catalog name when the catalog has that hero. Each clip has its own `youtube-entry.json` and can be inserted as its own video. It uses the parent replay's class and the parent replay's one publication slot. Each insert still counts toward the quota. Clip titles look like `Li-Ming - pentakill - Alterac Pass - 65550001`.
 
 After a successful upload, retention deletes the mp4 on the next sweep, which the uploader runs right after the insert. The video may still be waiting for its `publishAt`. The context folder itself lasts `VideoKeepDays` (3 in production), and an entry that waits for `publishAt` no longer keeps it.
 
@@ -458,4 +469,4 @@ The score is stored on the attempt and written to the log. It is not configurabl
 | High-skill | 200000 |
 | Ordinary | 100000 |
 
-Added to the weight, each capped at 20000: one point per minute newer than 14 days, 100 per pentakill, 60 per team wipe, 100 per ladder step above the high-skill rank floor, and one point per MMR point above the MMR floor. The replay id and the game time are tie-breaks only.
+Added to the weight, each capped at 20000: one point per minute newer than 14 days, 100 per pentakill and 60 more when that pentakill wiped the team, 100 per ladder step above the high-skill rank floor, and one point per MMR point above the MMR floor. The replay id and the game time are tie-breaks only.

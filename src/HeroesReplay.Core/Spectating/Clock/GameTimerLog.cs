@@ -31,10 +31,8 @@ public sealed class GameTimerLog
         bool changed =
             reading.Source != lastSource
             || reading.Reason != lastReason
-            || ClockTelemetry.Changed(
-                new ClockTelemetryReport(lastTelemetry, lastReason),
-                new ClockTelemetryReport(reading.Telemetry, reading.Reason)
-            )
+            || new MatchClockTelemetry(lastTelemetry, lastReason)
+                != new MatchClockTelemetry(reading.Telemetry, reading.Reason)
             || (reading.Time.HasValue && Moved(reading.Time.Value, lastTimer));
         if (!changed)
         {

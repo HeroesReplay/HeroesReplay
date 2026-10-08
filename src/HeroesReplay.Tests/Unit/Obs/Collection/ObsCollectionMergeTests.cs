@@ -365,6 +365,40 @@ public sealed class ObsCollectionMergeTests
         Assert.Equal((string)live["current_scene"], (string)merged["current_scene"]);
     }
 
+    /// <summary>
+    /// #367: OBS 31+ loads an item's transform from the relative copies it saved, so a merge that
+    /// takes the template's new position drops them from that item, and OBS shows the new one.
+    /// Every other item keeps what OBS saved.
+    /// </summary>
+    [Fact]
+    public void TakenPosition_DropsTheRelativeCopiesObsSavedOfTheOldOne()
+    {
+        JsonObject moved = Parse(Obs32Template);
+        ItemNamed(moved, "waiting-screen", "game-capture")["pos"]!["x"] = 300.0;
+        string template = moved.ToJsonString();
+
+        ObsMergeResult update = ObsCollectionMerge.Merge(
+            Obs32Template,
+            template,
+            Obs32Saved,
+            PackagedRuntime(),
+            ObsMergeScope.AdditionsOnly
+        );
+
+        Assert.Equal(ObsMergeOutcome.Merged, update.Outcome);
+        ObsCollectionDifference taken = Assert.Single(update.Diff.Differences);
+        Assert.Equal(ObsDiffKind.ManagedChange, taken.Kind);
+        Assert.Equal("pos.x", taken.Property);
+        JsonObject merged = Parse(update.Merged);
+        JsonObject item = ItemNamed(merged, "waiting-screen", "game-capture");
+        Assert.Equal(300.0, (double)item["pos"]!["x"]);
+        foreach (ObsSavedField field in ObsSavedFields.SceneItem)
+        {
+            Assert.False(item.ContainsKey(field.Name), field.Name);
+            Assert.True(ItemNamed(merged, "game-scene", "game-capture").ContainsKey(field.Name));
+        }
+    }
+
     private static ObsMergeResult Merge(
         string based,
         string template,

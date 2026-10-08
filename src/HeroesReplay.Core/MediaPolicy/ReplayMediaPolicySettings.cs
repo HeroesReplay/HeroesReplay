@@ -49,10 +49,11 @@ public class ReplayMediaPolicySettings
     public int MaxInsertsPerQuotaDay { get; set; } = PublicationSchedule.MaxInsertsPerQuotaDay;
 
     /// <summary>
-    /// A replay that is not a viewer request is recorded only while the recordings waiting for
-    /// upload plus the uploads waiting for their publish time fit what the pacing rules can
-    /// publish within <see cref="MaxPublishAhead"/>, and the waiting recordings fit one day of
-    /// upload calls (<see cref="RecordingCap"/>, #250). False records whatever the mode selects.
+    /// A replay that is not a viewer request is recorded only while its recording would still be
+    /// uploaded before the replay expires: the publication window (<see cref="MaxPublishAhead"/>)
+    /// has a free slot, or the recordings ahead of it drain at the pacing rules' pace with a day
+    /// to spare. The waiting recordings must also fit one day of upload calls
+    /// (<see cref="RecordingCap"/>, #250, #370). False records whatever the mode selects.
     /// </summary>
     public bool CapRecordingToPublication { get; set; } = true;
 

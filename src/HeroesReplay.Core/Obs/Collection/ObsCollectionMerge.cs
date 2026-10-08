@@ -78,7 +78,9 @@ public sealed record ObsCollectionBase(string Text, string Source);
 /// <summary>
 /// A three-way merge of scene collections (#307): the live collection with the template's
 /// changes since the base (<see cref="ObsCollectionDiff"/>) put into it, and everything else, the
-/// operator's work, OBS ids, hotkeys, transitions, and global audio, kept as it is. A merge is
+/// operator's work, OBS ids, hotkeys, transitions, and global audio, kept as it is. A scene item
+/// whose position, scale, or bounding box the merge takes loses the relative copies OBS saved of
+/// the old one (<see cref="ObsSavedFields"/>), so OBS loads the template's. A merge is
 /// refused on a conflict, without a base, and when the result does not compare as the template
 /// plus the operator's work, so a merge that is written always is that.
 /// </summary>
@@ -431,6 +433,19 @@ public static class ObsCollectionMerge
             else
             {
                 Set(liveEntity, templateEntity, difference.Property);
+            }
+
+            if (
+                difference.Entity == ObsDiffEntity.SceneItem
+                && ObsSavedFields.IsTransform(difference.Property)
+            )
+            {
+                // OBS 31+ loads an item's transform from its relative copies when they are there,
+                // so the copies of the old transform go and OBS takes the template's (#367).
+                foreach (string saved in ObsSavedFields.SceneItemNames)
+                {
+                    liveEntity.Remove(saved);
+                }
             }
         }
 

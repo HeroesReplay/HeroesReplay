@@ -14,7 +14,7 @@ namespace HeroesReplay.Core.Spectating.Clock;
 public sealed class StableGameTimer : IGameTimer
 {
     private readonly IGameController controller;
-    private readonly StableMatchClock clock = new();
+    private readonly MatchClock clock = new();
 
     public StableGameTimer(IGameController controller)
     {
@@ -30,7 +30,7 @@ public sealed class StableGameTimer : IGameTimer
             return Task.FromResult(new GameTimerReading(false, "memory", "no-process", null));
         }
 
-        StableClockSample sample = clock.Read(process);
+        MatchClockSample sample = clock.Read(process);
         string telemetry = clock.LastTelemetry.State;
         if (!sample.Ok)
         {

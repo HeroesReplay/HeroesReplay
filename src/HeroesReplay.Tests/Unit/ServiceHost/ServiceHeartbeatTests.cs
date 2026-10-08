@@ -284,6 +284,10 @@ public class ServiceHeartbeatTests
     [InlineData("GET /replays?api_token=s3cret&x=1", "api_token=[redacted]")]
     [InlineData("Authorization: Bearer abc.def-ghi", "Bearer [redacted]")]
     [InlineData("password=hunter2", "password=[redacted]")]
+    [InlineData(
+        "PUT https://www.googleapis.com/upload/youtube/v3/videos?part=snippet&key=s3cret&uploadType=resumable&upload_id=abc failed",
+        "&key=[redacted]&uploadType=resumable&upload_id=abc failed"
+    )]
     public void Redact_HidesTokensInErrors(string message, string expected)
     {
         string redacted = ServiceHeartbeat.Redact(message);
@@ -291,6 +295,17 @@ public class ServiceHeartbeatTests
         Assert.DoesNotContain("s3cret", redacted);
         Assert.DoesNotContain("abc.def-ghi", redacted);
         Assert.DoesNotContain("hunter2", redacted);
+    }
+
+    [Fact]
+    public void Redact_HidesAGoogleApiKeyWithoutItsParameterName()
+    {
+        // Built at run time so the source holds nothing shaped like a real key.
+        string key = "AIza" + new string('Z', 34) + "-";
+        string redacted = ServiceHeartbeat.Redact("YouTube said: key " + key + " is not valid.");
+
+        Assert.Equal("YouTube said: key [redacted] is not valid.", redacted);
+        Assert.Equal("AIza is a prefix.", ServiceHeartbeat.Redact("AIza is a prefix."));
     }
 
     [Theory]

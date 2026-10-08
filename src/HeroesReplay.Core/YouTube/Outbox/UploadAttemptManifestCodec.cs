@@ -10,9 +10,10 @@ public static class UploadAttemptManifestCodec
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
 
+    /// <summary>The session URI is written without the API key (#368).</summary>
     public static string Write(UploadAttemptManifest manifest)
     {
-        return JsonSerializer.Serialize(manifest, JsonOptions);
+        return JsonSerializer.Serialize(manifest?.WithoutSessionKey(), JsonOptions);
     }
 
     /// <summary>
