@@ -149,13 +149,23 @@ public sealed class ServiceDependencyMonitor
 
     /// <summary>
     /// <see cref="RunAsync"/> in the background until the returned handle is disposed or
-    /// <paramref name="stop"/> fires.
+    /// <paramref name="stop"/> fires. Each result goes to the heartbeat, then to
+    /// <paramref name="observe"/> when the role acts on it (the downloader pauses its replay list
+    /// while Heroes Profile rejects the key, #358).
     /// </summary>
-    public IDisposable Watch(CancellationToken stop)
+    public IDisposable Watch(CancellationToken stop, Action<ServiceDependencyResult> observe = null)
     {
         var linked = CancellationTokenSource.CreateLinkedTokenSource(stop);
         Task loop = Task.Run(
-            () => RunAsync(ServiceHeartbeat.RecordDependency, linked.Token),
+            () =>
+                RunAsync(
+                    result =>
+                    {
+                        ServiceHeartbeat.RecordDependency(result);
+                        observe?.Invoke(result);
+                    },
+                    linked.Token
+                ),
             CancellationToken.None
         );
         return new Watcher(linked, loop);

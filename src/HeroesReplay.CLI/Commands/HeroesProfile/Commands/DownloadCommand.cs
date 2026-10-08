@@ -61,7 +61,9 @@ public class DownloadCommand : Command
             stop.Token,
             dependency
         );
-        using IDisposable probing = probes.Watch(stop.Token);
+        // A rejected key pauses the replay list until a probe passes (#358).
+        downloader.ObserveDependency(dependency);
+        using IDisposable probing = probes.Watch(stop.Token, downloader.ObserveDependency);
         Task heroStats = StartHeroStats(scope.ServiceProvider, stop.Token);
         int failures = 0;
         while (!stop.Token.IsCancellationRequested)

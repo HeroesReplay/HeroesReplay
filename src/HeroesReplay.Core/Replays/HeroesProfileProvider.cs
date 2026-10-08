@@ -15,6 +15,7 @@ using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch.Rewards;
@@ -33,6 +34,7 @@ public class HeroesProfileProvider : IReplayProvider
     private readonly IHeroesProfileService heroesProfileService;
     private readonly IRequestQueue requestQueue;
     private readonly IHeroesProfileResume heroesProfileResume;
+    private readonly ReplayListBackoff listBackoff;
     private LoadedReplay staged;
     private int? heldBackId;
     private int minReplayId;
@@ -118,7 +120,20 @@ public class HeroesProfileProvider : IReplayProvider
         this.heroesProfileService =
             heroesProfileService ?? throw new ArgumentNullException(nameof(heroesProfileService));
         this.heroesProfileResume = heroesProfileResume;
+        listBackoff = new ReplayListBackoff(
+            (settings.ServiceHealth ?? new ServiceHealthSettings()).NextDependencyProbe(
+                failed: true
+            ),
+            logger
+        );
     }
+
+    /// <summary>
+    /// The download role's dependency probe (#305): a rejected Heroes Profile key pauses the
+    /// replay list until a probe passes (#358).
+    /// </summary>
+    public void ObserveDependency(ServiceDependencyResult result) =>
+        listBackoff.Observe(result, clock());
 
     internal void UseInstalledVersions(Func<IReadOnlyList<string>> source)
     {
@@ -860,13 +875,23 @@ public class HeroesProfileProvider : IReplayProvider
 
     private async Task<HeroesProfileReplay> GetNextReplayAsync()
     {
+        if (listBackoff.Paused && !listBackoff.TryList(clock()))
+        {
+            // Heroes Profile refused the key: no list call until the next turn or a passing
+            // probe (#358). Not an outage, and nothing to log again.
+            return null;
+        }
+
         try
         {
+            // A refused key is not retried here: the same key gets the same answer (#358).
             HeroesProfileReplay found = await ResilienceRetry
                 .Constant<HeroesProfileReplay>(
                     retries: 60,
                     delay: settings.HeroesProfileApi.APIRetryWaitTime,
-                    retry: outcome => ResilienceRetry.Failed(outcome, replay => replay == null)
+                    retry: outcome =>
+                        !listBackoff.Paused
+                        && ResilienceRetry.Failed(outcome, replay => replay == null)
                 )
                 .ExecuteAsync(
                     _ => new ValueTask<HeroesProfileReplay>(ListOnceAsync()),
@@ -874,7 +899,12 @@ public class HeroesProfileProvider : IReplayProvider
                 )
                 .ConfigureAwait(false);
 
-            if (found == null && heroesProfileResume != null && heroesProfileResume.Consume())
+            if (
+                found == null
+                && !listBackoff.Paused
+                && heroesProfileResume != null
+                && heroesProfileResume.Consume()
+            )
             {
                 logger.LogInformation(
                     "Connectivity restored. Retrying Heroes Profile replay list once."
@@ -890,7 +920,7 @@ public class HeroesProfileProvider : IReplayProvider
         }
         catch (Exception e)
         {
-            if (heroesProfileResume != null && heroesProfileResume.Consume())
+            if (!listBackoff.Paused && heroesProfileResume != null && heroesProfileResume.Consume())
             {
                 logger.LogWarning(
                     e,
@@ -940,6 +970,12 @@ public class HeroesProfileProvider : IReplayProvider
             ReplayListing page = await heroesProfileService
                 .ListPageAsync(currentMin)
                 .ConfigureAwait(false);
+            listBackoff.Record(page, clock());
+            if (page?.RejectedStatus != null)
+            {
+                return null;
+            }
+
             ReplayListing launchable = ReplayDownloadPick.Launchable(
                 page,
                 installed,
