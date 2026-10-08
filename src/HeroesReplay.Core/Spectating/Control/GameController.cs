@@ -49,7 +49,7 @@ public class GameController : IGameController
     private readonly LoadingScreen loadingScreen = new();
     private readonly ClientScreen clientScreens = new();
     private readonly IClientWindows clientWindows = new Win32ClientWindows();
-    private readonly ScreenShadow screenShadow;
+
     private LoadingScreenSample lastScreen;
     private ClientScreenSample lastClientScreen;
     private string lastClockReason = "no-process";
@@ -123,11 +123,6 @@ public class GameController : IGameController
         this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
-        screenShadow = new ScreenShadow(
-            logger,
-            TimeProvider.System,
-            settings.OCR?.ShadowFrameInterval
-        );
     }
 
     public async Task<ClientHoldReason> LaunchAsync()
@@ -860,9 +855,8 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, hold);
             }
 
-            bool awardScreen = MatchEndBanner.EndsLaunchWait(text);
-            ShadowScreen(ScreenState.EndScreen, awardScreen, text);
-            if (awardScreen)
+            // The MVP/awards screen from memory only (#292): CEndOfGameAwardsPanel shown.
+            if (clientScreen?.OnAwards == true)
             {
                 logger.LogInformation("The client is on the award screen. This replay is over.");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.AwardScreen);
@@ -1198,7 +1192,7 @@ public class GameController : IGameController
                         screen?.Reason,
                         screen?.MenuSeen,
                         lastClockReason,
-                        ScreenShadow.Excerpt(text),
+                        WindowText.Excerpt(text),
                         stuck
                     );
                 }
@@ -1639,82 +1633,6 @@ public class GameController : IGameController
         return HomeScreenCue.Sees(client?.OnHome, screen?.OnMenu);
     }
 
-    /// <summary>
-    /// Shadow mode (#292): the memory verdict of the HeroesClientSDK menu screens
-    /// (<see cref="ClientScreen"/>) next to an OCR verdict the caller already has. It
-    /// changes no decision and never throws into the caller.
-    /// </summary>
-    private void ShadowScreen(ScreenState state, bool ocr, string ocrText)
-    {
-        if (settings.OCR?.ShadowEnabled == false)
-        {
-            return;
-        }
-
-        try
-        {
-            ClientScreenSample? screen = ReadClientScreen();
-            GameDataWindowSample? window =
-                state == ScreenState.GameDataStartup
-                    ? GameDataProgressWindow.Read(clientWindows, GetGameProcess()?.Id)
-                    : null;
-            ShadowObservation observed = screenShadow.Observe(
-                state,
-                ocr,
-                ScreenMemoryVerdicts.For(state, screen, window),
-                ocrText,
-                ScreenMemoryVerdicts.Describe(state, screen, window)
-            );
-            if (observed.SaveFrame)
-            {
-                SaveShadowFrame(state);
-            }
-        }
-        catch (Exception e)
-        {
-            logger.LogDebug(e, "Screen shadow failed for {State}.", state);
-        }
-    }
-
-    /// <summary>
-    /// A fresh frame of the game window when OCR and memory disagree, saved under the replay
-    /// context's shadow folder. The OCR frame is already disposed by then.
-    /// </summary>
-    private void SaveShadowFrame(ScreenState state)
-    {
-        string directory = context.Current?.Directory?.FullName;
-        if (string.IsNullOrWhiteSpace(directory))
-        {
-            logger.LogDebug(
-                "No screen shadow frame for {State}: there is no replay context directory.",
-                state
-            );
-            return;
-        }
-
-        if (!TryGetGameHandle(out IntPtr handle))
-        {
-            logger.LogDebug("No screen shadow frame for {State}: there is no game window.", state);
-            return;
-        }
-
-        using Bitmap frame = capture.Capture(handle);
-        if (frame == null)
-        {
-            logger.LogDebug(
-                "No screen shadow frame for {State}: the capture returned no bitmap.",
-                state
-            );
-            return;
-        }
-
-        string folder = Path.Combine(directory, ScreenShadow.FrameFolder);
-        Directory.CreateDirectory(folder);
-        string path = Path.Combine(folder, ScreenShadow.FrameFileName(state, DateTimeOffset.Now));
-        frame.Save(path, ImageFormat.Png);
-        logger.LogInformation("Saved the screen shadow frame for {State} to {Path}.", state, path);
-    }
-
     private LoadingScreenSample? ReadScreenInMemory()
     {
         Process process = GetGameProcess();
@@ -1778,7 +1696,7 @@ public class GameController : IGameController
                     sample.Screen,
                     sample.Reason,
                     sample.MenuSeen,
-                    ScreenMemoryVerdicts.Describe(sample)
+                    ClientScreenDescription.Describe(sample)
                 );
                 lastClientScreen = sample;
             }
@@ -1834,85 +1752,22 @@ public class GameController : IGameController
         return ReplayLoadCue.PresentedInMemory(clockRunning, screen, ReadClientScreen()) ?? false;
     }
 
-    public async Task<bool> TrySeeEndScreenAsync(bool nearCore)
-    {
-        try
-        {
-            string text = await ReadEndScreenTextAsync().ConfigureAwait(false);
-            if (text == null)
-            {
-                return false;
-            }
-
-            bool endScreen = MatchEndBanner.IsEnd(text, nearCore);
-            ShadowScreen(ScreenState.EndScreen, endScreen, text);
-            if (endScreen)
-            {
-                logger.LogInformation("End-screen OCR saw: {Text}", text.Replace('\n', ' '));
-            }
-
-            return endScreen;
-        }
-        catch (Exception e)
-        {
-            logger.LogDebug(e, "End-screen OCR failed.");
-            return false;
-        }
-    }
-
     /// <summary>
-    /// Shadow mode only (#292): OCR of the end-screen banner next to memory's MVP read
-    /// (<see cref="ClientScreenSample.OnAwards"/>), from the replay's core-death time on. Only the
-    /// MVP and award words count (<see cref="MatchEndBanner.EndsLaunchWait"/>), the same screen
-    /// memory names. It decides nothing.
+    /// The MVP and awards screen from memory only (#292): HeroesClientSDK
+    /// <see cref="ClientScreenSample.OnAwards"/>, the in-game <c>CEndOfGameAwardsPanel</c> shown.
+    /// The window is not OCR'd for MVP, award titles, VICTORY or DEFEAT, so
+    /// <paramref name="nearCore"/> no longer matters: a camp tooltip can't read as the end.
     /// </summary>
-    public async Task ShadowEndScreenAsync()
+    public Task<bool> TrySeeEndScreenAsync(bool nearCore)
     {
-        if (settings.OCR?.ShadowEnabled == false)
+        _ = nearCore;
+        bool awards = ReadClientScreen()?.OnAwards == true;
+        if (awards)
         {
-            return;
+            logger.LogInformation("The MVP screen is up (client memory: CEndOfGameAwardsPanel).");
         }
 
-        try
-        {
-            string text = await ReadEndScreenTextAsync().ConfigureAwait(false);
-            if (text != null)
-            {
-                ShadowScreen(ScreenState.EndScreen, MatchEndBanner.EndsLaunchWait(text), text);
-            }
-        }
-        catch (Exception e)
-        {
-            logger.LogDebug(e, "End-screen shadow OCR failed.");
-        }
-    }
-
-    /// <summary>The OCR'd banner area of the game window, or null when there is no frame.</summary>
-    private async Task<string> ReadEndScreenTextAsync()
-    {
-        if (!TryGetGameHandle(out IntPtr handle))
-        {
-            return null;
-        }
-
-        using Bitmap frame = capture.Capture(handle);
-        if (frame == null || frame.Width < 200 || frame.Height < 200)
-        {
-            return null;
-        }
-
-        var crop = new Rectangle(
-            frame.Width / 5,
-            frame.Height / 8,
-            frame.Width * 3 / 5,
-            frame.Height / 3
-        );
-        using Bitmap region = frame.Clone(crop, frame.PixelFormat);
-        using Bitmap resized = region.GetResized(zoom: 2);
-        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized)
-            .ConfigureAwait(false);
-        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-        return result?.Text ?? string.Empty;
+        return Task.FromResult(awards);
     }
 
     private static async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
