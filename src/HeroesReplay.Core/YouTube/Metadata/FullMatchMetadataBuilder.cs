@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using HeroesReplay.Core.Clips;
+using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Shared;
 
@@ -39,6 +40,12 @@ public sealed record FullMatchMetadataInput
     /// <summary>Caller sets this only after completion and media validation. It is not inferred.</summary>
     public bool IsCompleteRecording { get; init; }
     public string Winner { get; init; }
+
+    /// <summary>
+    /// Heroes Profile hero statistics for the replay's patch and game type, or null. Only used
+    /// when <c>YouTube:Titles:StatHooks:Enabled</c> is true.
+    /// </summary>
+    public HeroStatsSnapshot HeroStats { get; init; }
 }
 
 public sealed class FullMatchMetadata
@@ -60,11 +67,17 @@ public sealed class FullMatchMetadata
     public bool ClaimsPentakill { get; init; }
     public bool ClaimsTeamWipe { get; init; }
     public bool IncludesSpoiler { get; init; }
+
+    /// <summary>
+    /// The Heroes Profile statistics hook picked for the title's draft slot, or null. Its
+    /// <c>Stats:</c> line and the attribution stay in the description even when a long title drops it.
+    /// </summary>
+    public string StatHook { get; init; }
 }
 
 public static class FullMatchMetadataBuilder
 {
-    public const string TemplateVersion = "6";
+    public const string TemplateVersion = "7";
     public const int TitleMaxCharacters = 100;
     public const int DescriptionMaxCharacters = 5000;
     public const int TagMaxCharacters = 30;
@@ -129,6 +142,11 @@ public static class FullMatchMetadataBuilder
         }
 
         string feature = FeatureSegment(titles, featuredHero);
+        StatHook hook =
+            draft.Title == null
+                ? Hook(input, titles, map, mode, namedLead ? focus : null, featuredHero)
+                : null;
+        string hookTitle = Clean(hook?.Title, 80);
         string title = TitleFor(
             titles,
             input.NamedPlayer,
@@ -137,11 +155,17 @@ public static class FullMatchMetadataBuilder
             rank,
             focus,
             feature,
-            draft.Title,
+            draft.Title ?? hookTitle,
             replayText
         );
 
         var lines = new List<string>();
+        if (hookTitle != null)
+        {
+            // Heroes Profile's terms: the attribution sits near the top, where YouTube shows it unfolded.
+            lines.Add(StatHookPicker.Attribution);
+        }
+
         if (input.IsCompleteRecording)
         {
             lines.Add("Full match.");
@@ -157,6 +181,7 @@ public static class FullMatchMetadataBuilder
         AddLine(lines, focus == null ? null : "Featured: " + focus);
         AddLine(lines, draft.Line == null ? null : "Draft: " + draft.Line);
         AddLine(lines, featuredHero == null ? null : "Featuring: " + featuredHero);
+        AddLine(lines, hookTitle == null ? null : Clean(hook.StatsLine, 400));
         AddLine(lines, Highlights(events));
         AddLine(lines, requestor == null ? null : "Requested by: " + requestor);
         string resultLine = winner == null ? null : "Result: " + winner;
@@ -195,7 +220,48 @@ public static class FullMatchMetadataBuilder
             ClaimsPentakill = pentakill && Has(combined, "pentakill"),
             ClaimsTeamWipe = teamWipe && Has(combined, "team wipe"),
             IncludesSpoiler = resultLine != null && Has(description, resultLine),
+            StatHook = hookTitle,
         };
+    }
+
+    /// <summary>
+    /// The statistics hook for the draft slot when the match has no draft note, or null. The title
+    /// never names a hero twice, so the named player and the featured hero are skipped.
+    /// </summary>
+    private static StatHook Hook(
+        FullMatchMetadataInput input,
+        YouTubeTitleSettings titles,
+        string map,
+        string mode,
+        string namedFocus,
+        string featuredHero
+    )
+    {
+        if (titles.StatHooks?.Enabled != true || input.HeroStats == null)
+        {
+            return null;
+        }
+
+        var named = new List<string>();
+        if (namedFocus != null)
+        {
+            named.Add(namedFocus);
+        }
+
+        if (featuredHero != null)
+        {
+            named.Add(featuredHero);
+        }
+
+        return StatHookPicker.Pick(
+            input.HeroStats,
+            input.HeroCatalog,
+            input.Roster,
+            map,
+            named,
+            titles.StatHooks,
+            mode
+        );
     }
 
     private static FullMatchMetadata Empty(string category)
