@@ -31,6 +31,7 @@ public class ServicesCommand : Command
         )
     {
         Subcommands.Add(StartCommand());
+        Subcommands.Add(EnsureCommand());
         Subcommands.Add(StopCommand());
         Subcommands.Add(StatusCommand());
         Subcommands.Add(SuperviseCommand());
@@ -309,29 +310,7 @@ public class ServicesCommand : Command
             ReadHeartbeat = record => ServiceReadyFile.TryRead(record),
             DeleteHeartbeat = record => ServiceReadyFile.Delete(record?.Nonce),
             StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
-            Launch = (role, started) =>
-            {
-                ServiceStartupHandshake handshake = CreateHandshake(exe);
-                if (handshake == null)
-                {
-                    return new ServiceLaunch(
-                        null,
-                        false,
-                        false,
-                        "role configuration could not be loaded."
-                    );
-                }
-
-                handshake.Cancelled = () => File.Exists(ServiceStopFile.DefaultPath);
-                return ServiceSupervisor.Restart(
-                    role,
-                    exe,
-                    (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
-                    ProcessNameOrNull,
-                    handshake,
-                    started
-                );
-            },
+            Launch = (role, started) => LaunchRole(exe, role, started),
             Kill = Kill,
             CloseGame = StopSpectatedGame,
             SpectateDown = () => MakeObsSafe(settings.SpectateDownObs),
@@ -346,6 +325,214 @@ public class ServicesCommand : Command
             ),
         };
         return supervision.Run(cancellationToken);
+    }
+
+    /// <summary>
+    /// One role through the <c>services start</c> launch: its prerequisites, its arguments, a new
+    /// nonce, and the ready handshake. A stop request ends the ready wait. The supervisor's
+    /// restarts and <c>services ensure</c> use it.
+    /// </summary>
+    private static ServiceLaunch LaunchRole(
+        string exe,
+        string role,
+        Action<ServiceProcessRecord> started
+    )
+    {
+        ServiceStartupHandshake handshake = CreateHandshake(exe);
+        if (handshake == null)
+        {
+            return new ServiceLaunch(null, false, false, "role configuration could not be loaded.");
+        }
+
+        handshake.Cancelled = () => File.Exists(ServiceStopFile.DefaultPath);
+        return ServiceSupervisor.Restart(
+            role,
+            exe,
+            (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
+            ProcessNameOrNull,
+            handshake,
+            started
+        );
+    }
+
+    private static Command EnsureCommand()
+    {
+        var command = new Command(
+            "ensure",
+            "Make sure the requested roles run from this install: start only the ones that are down (failed, exited, or never started), through the same startup checks as `services start`, and leave running ones alone. Never stops a running role and never mixes builds. With --supervise, attaches a supervisor when none runs. Exit 0: service.ensure_noop (nothing to do) or service.ensure_started. Exit 1, starting nothing: service.ensure_mismatch (a role runs from another install path or version), service.ensure_stop_pending (services.stop is down), service.ensure_budget_exhausted, service.ensure_stale (a requested role is alive but stale), service.ensure_supervisor_running (a requested role is down while a supervisor runs in any session; the supervisor owns its restarts), service.ensure_busy (another ensure runs). service.ensure_start_failed stops again what this ensure started."
+        );
+        var supervise = new Option<bool>("--supervise")
+        {
+            Description =
+                "Keep this console as the supervisor afterwards when none runs in any session (as `services start --supervise`). With a supervisor already running, ensure only checks.",
+        };
+        var roles = new Option<string>("--roles")
+        {
+            Description =
+                "Comma-separated roles to ensure: spectate, twitch, download, youtube. Default: all four. For proofs, e.g. `--roles download,youtube`.",
+        };
+        Option<string> output = CliOutput.CreateOption(
+            "JSON: the services status envelope (schemaVersion, ok, code, message, remediation, roles[] with action running/start/started/start_failed/blocked)."
+        );
+        command.Options.Add(supervise);
+        command.Options.Add(roles);
+        command.Options.Add(output);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                IReadOnlyList<string> selected = ServiceProcessPlan.ParseRoles(
+                    parseResult.GetValue(roles),
+                    out string error
+                );
+                if (selected == null)
+                {
+                    Console.Error.WriteLine(error);
+                    return Task.FromResult(1);
+                }
+
+                bool json = CliOutput.Format(parseResult, output) == CliOutputFormat.Json;
+                return Task.FromResult(
+                    Ensure(selected, parseResult.GetValue(supervise), json, cancellationToken)
+                );
+            }
+        );
+        return command;
+    }
+
+    private static int Ensure(
+        IReadOnlyList<string> selected,
+        bool supervise,
+        bool json,
+        CancellationToken cancellationToken
+    )
+    {
+        string exe = Environment.ProcessPath;
+        TextWriter stdout = Console.Out;
+        ServiceEnsureLock busy = ServiceEnsureLock.TryAcquire();
+        if (busy == null)
+        {
+            Write(
+                new ServiceEnsureReport
+                {
+                    Ok = false,
+                    Code = ServiceEnsureCodes.Busy,
+                    Message = "Another `heroesreplay services ensure` is running.",
+                    Remediation = "Wait for it to finish, then run ensure again.",
+                    CheckedAt = DateTimeOffset.UtcNow,
+                    Supervise = supervise,
+                    Requested = selected,
+                },
+                json,
+                stdout
+            );
+            return 1;
+        }
+
+        ServiceSupervisorMutex claim = null;
+        try
+        {
+            ServiceHealthSettings health = ServiceCollectionExtensions.LoadServiceHealthSettings();
+            var ensure = new ServiceEnsure
+            {
+                ExecutablePath = exe,
+                Version = ServiceSupervisor.CurrentVersion(),
+                Roles = selected,
+                Supervise = supervise,
+                Environment = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV"),
+                Health = health,
+                ProcessNameOrNull = ProcessNameOrNull,
+                Probe = ServiceProcessProbe.TryFromProcess,
+                ReadHeartbeat = record => ServiceReadyFile.TryRead(record),
+                StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
+                ReadSupervisor = () =>
+                    ServiceSupervisorFile.TryLoad(ServiceSupervisorFile.DefaultPath),
+                SupervisorLiveness = () =>
+                    ServiceSupervisorFile.Check(freshFor: ServiceSupervisorFile.FreshFor(health)),
+                Launch = (role, started) => LaunchRole(exe, role, started),
+                BeforeStart = starting =>
+                {
+                    if (starting.Contains("spectate", StringComparer.OrdinalIgnoreCase))
+                    {
+                        PatchObsCollection(exe);
+                    }
+
+                    try
+                    {
+                        AspireDashboardHost.EnsureRunning();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine(
+                            $"Aspire dashboard was not started. Continuing without the dashboard. {e.Message}"
+                        );
+                    }
+                },
+                Kill = Kill,
+                DeleteHeartbeat = record => ServiceReadyFile.Delete(record?.Nonce),
+                Log = json ? Console.Error : stdout,
+            };
+
+            ServiceEnsureReport plan = ensure.Plan();
+            if (plan.Ok && plan.SupervisorAttached)
+            {
+                // Claimed before any start, as `services start --supervise` does (#293).
+                claim = SupervisorGate().TryClaim();
+                if (claim == null)
+                {
+                    plan = plan with
+                    {
+                        Ok = false,
+                        Code = ServiceEnsureCodes.SupervisorRunning,
+                        Message =
+                            "A supervisor started in this session or another while ensure was deciding. Nothing was started.",
+                        Remediation = "Run `heroesreplay services ensure` again.",
+                        SupervisorAttached = false,
+                    };
+                }
+            }
+
+            ServiceEnsureReport result;
+            // In JSON, the launch lines go to stderr so stdout is only the report.
+            if (json)
+            {
+                Console.SetOut(Console.Error);
+            }
+
+            try
+            {
+                result = ensure.Apply(plan);
+            }
+            finally
+            {
+                Console.SetOut(stdout);
+            }
+
+            Write(result, json, stdout);
+            busy.Dispose();
+            busy = null;
+            if (!result.Ok || !result.SupervisorAttached)
+            {
+                return result.ExitCode;
+            }
+
+            return Supervise(exe, cancellationToken);
+        }
+        finally
+        {
+            busy?.Dispose();
+            claim?.Dispose();
+        }
+    }
+
+    private static void Write(ServiceEnsureReport report, bool json, TextWriter output)
+    {
+        if (json)
+        {
+            output.WriteLine(report.ToJson());
+            return;
+        }
+
+        ServiceEnsure.WriteText(output, report);
     }
 
     /// <summary>Spectate stays down: show the waiting scene on (or stop) a live stream this install started.</summary>
@@ -545,6 +732,8 @@ public class ServicesCommand : Command
                                 freshFor: ServiceSupervisorFile.FreshFor(health)
                             ),
                         ReadMachine = ReadMachineHealth,
+                        ReadObsRestorePending = () =>
+                            ObsCollectionRollback.DescribePending(ObsManagedFiles.ForThisUser()),
                     }
                 );
                 return Task.FromResult(code);

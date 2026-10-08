@@ -28,7 +28,103 @@ public class UpdateCommand : Command
         Subcommands.Add(ReleaseHealthCommand());
         Subcommands.Add(MigrateStreamArmCommand());
         Subcommands.Add(InstallObsCommand());
+        Subcommands.Add(RestoreObsCommand());
         Subcommands.Add(LauncherCommand());
+    }
+
+    private static Command RestoreObsCommand()
+    {
+        var command = new Command(
+            "restore-obs",
+            "Called by apply-release.ps1 on a rollback, while the failed build is still installed: put back the OBS scene collection the restored install (--previous) ran with, the backup taken before the failed release first wrote it (%LOCALAPPDATA%\\HeroesReplay\\obs\\release-rollback.json). OBS closed: the backup's bytes are written back. OBS running: it goes in through the spare collection {collection}-next without stopping the stream or a recording (OBS:LiveCollectionSwap); when that cannot run, the restore waits in restore-pending.json (services status shows it) until the restored build finds OBS closed or swaps it at its next replay. A custom collection is never overwritten, and nothing happens when the release did not write the collection. Exit 1 when the collection was kept as it is (custom, unreadable, another install's record) or OBS stayed on the spare."
+        );
+        Option<string> previous = new("--previous")
+        {
+            Description =
+                "The install being restored (app.previous). Its obs\\Default.json must be the template the record names.",
+            Required = true,
+        };
+        Option<string> install = new("--install")
+        {
+            Description =
+                "The failed install, for its settings and obs\\Default.json. Default: this exe's folder.",
+        };
+        Option<string> environment = EnvironmentOption();
+        command.Options.Add(previous);
+        command.Options.Add(install);
+        command.Options.Add(environment);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromResult(
+                    RestoreObs(
+                        parseResult.GetValue(previous),
+                        parseResult.GetValue(install),
+                        parseResult.GetValue(environment)
+                    )
+                );
+            }
+        );
+        return command;
+    }
+
+    private static int RestoreObs(string previous, string install, string environment)
+    {
+        string failed = string.IsNullOrWhiteSpace(install)
+            ? AppContext.BaseDirectory
+            : Path.GetFullPath(install);
+        OBSSettings obs;
+        try
+        {
+            obs = ServiceCollectionExtensions.LoadInstallObsSettings(failed, environment).Obs;
+        }
+        catch (Exception e)
+        {
+            // Without settings there is no websocket to swap through; a write while OBS is closed still works.
+            Console.Error.WriteLine(
+                $"The settings in {failed} could not be read, so the live swap is off. {e.Message}"
+            );
+            obs = new OBSSettings { LiveCollectionSwap = false };
+        }
+
+        try
+        {
+            ObsRollbackResult result = ObsCollectionRollback.Restore(
+                new ObsRollbackRequest
+                {
+                    Managed = ObsManagedFiles.ForThisUser(),
+                    PreviousTemplatePath = Path.Combine(
+                        Path.GetFullPath(previous),
+                        "obs",
+                        "Default.json"
+                    ),
+                    FailedTemplatePath = Path.Combine(failed, "obs", "Default.json"),
+                    ObsIsRunning = NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
+                    OpenSwitch = obs.LiveCollectionSwap
+                        ? () =>
+                            ObsWebsocketCollectionSwitch.Open(
+                                obs.WebSocketEndpoint,
+                                SecretResolver.Resolve(obs.WebSocketPassword)
+                            )
+                        : null,
+                }
+            );
+            string line = $"OBS rollback ({result.Outcome}): {result.Message}";
+            if (result.Ok)
+            {
+                Console.WriteLine(line);
+                return 0;
+            }
+
+            Console.Error.WriteLine(line);
+            return 1;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"The OBS collection was not put back. {e.Message}");
+            return 1;
+        }
     }
 
     private static Command LauncherCommand()

@@ -60,6 +60,7 @@ public class CliResultTests
                 "spectator",
                 "supervisor",
                 "machine",
+                "obsRestorePending",
             ],
             Names(report.ToJson())
         );
@@ -129,6 +130,34 @@ public class CliResultTests
             ],
             Names(CliJson.Serialize(validation))
         );
+    }
+
+    [Fact]
+    public void ServicesEnsure_KeepsItsFields()
+    {
+        var report = new ServiceEnsureReport { Ok = true, Code = "service.ensure_noop" };
+
+        Assert.IsAssignableFrom<ICliResult>(report);
+        Assert.Equal(
+            [
+                "schemaVersion",
+                "ok",
+                "code",
+                "message",
+                "remediation",
+                "environment",
+                "checkedAt",
+                "stopRequested",
+                "supervise",
+                "supervisorRunning",
+                "supervisorAttached",
+                "requested",
+                "started",
+                "roles",
+            ],
+            Names(report.ToJson())
+        );
+        Assert.Equal(report.ToJson(), CliJson.Serialize(report));
     }
 
     [Fact]

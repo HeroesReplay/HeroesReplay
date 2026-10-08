@@ -231,6 +231,12 @@ public sealed record ServiceStatusReport : ICliResult
     /// <summary>Memory and leaking process counts (#251). Warnings here do not change <see cref="Ok"/>.</summary>
     public MachineHealthReport Machine { get; init; }
 
+    /// <summary>
+    /// A release rollback that still waits to put back the OBS scene collection the restored
+    /// build ran with (#304), or null. It does not change <see cref="Ok"/>.
+    /// </summary>
+    public string ObsRestorePending { get; init; }
+
     [JsonIgnore]
     public int ExitCode => Ok ? 0 : 1;
 

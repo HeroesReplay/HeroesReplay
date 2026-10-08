@@ -555,7 +555,11 @@ public static class ServiceSupervisor
             query.SupervisorLiveness?.Invoke(),
             now
         );
-        report = report with { Machine = ReadMachine(query.ReadMachine) };
+        report = report with
+        {
+            Machine = ReadMachine(query.ReadMachine),
+            ObsRestorePending = ReadObsRestorePending(query.ReadObsRestorePending),
+        };
         TextWriter output = query.Out ?? Console.Out;
         if (query.Output == CliOutputFormat.Json)
         {
@@ -640,6 +644,11 @@ public static class ServiceSupervisor
         }
 
         WriteMachineText(output, report.Machine);
+        if (!string.IsNullOrWhiteSpace(report.ObsRestorePending))
+        {
+            output.WriteLine($"OBS rollback: waiting. {report.ObsRestorePending}");
+        }
+
         if (spectator == null)
         {
             output.WriteLine("Spectator status: no snapshot.");
@@ -710,6 +719,18 @@ public static class ServiceSupervisor
             ? string.Empty
             : "; " + supervisor.Detail;
         return pid + via + detail;
+    }
+
+    private static string ReadObsRestorePending(Func<string> read)
+    {
+        try
+        {
+            return read?.Invoke();
+        }
+        catch (Exception e)
+        {
+            return "The pending OBS rollback could not be read: " + e.Message;
+        }
     }
 
     private static MachineHealthReport ReadMachine(Func<MachineHealthReport> read)
@@ -957,7 +978,7 @@ public static class ServiceSupervisor
         return message;
     }
 
-    private static string CurrentVersion()
+    internal static string CurrentVersion()
     {
         Assembly assembly = typeof(ServiceSupervisor).Assembly;
         string informational = assembly

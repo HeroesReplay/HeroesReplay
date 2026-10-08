@@ -37,7 +37,8 @@ public class CliJsonOutputTests
             "obs bundle",
             "client status",
             "deps install",
-            "services status"
+            "services status",
+            "services ensure"
         );
 
     [Theory]

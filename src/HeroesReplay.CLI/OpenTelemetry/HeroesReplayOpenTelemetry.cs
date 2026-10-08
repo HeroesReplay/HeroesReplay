@@ -67,6 +67,7 @@ public static class HeroesReplayOpenTelemetry
             })
             .WithMetrics(metrics =>
             {
+                metrics.AddMeter(HeroesReplayTelemetry.SourceName);
                 metrics.AddRuntimeInstrumentation();
                 metrics.AddHttpClientInstrumentation();
                 metrics.AddOtlpExporter(exporter =>
