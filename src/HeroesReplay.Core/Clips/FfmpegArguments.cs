@@ -12,6 +12,13 @@ public static class FfmpegArguments
             && fileStart + 1 < recordingSeconds;
     }
 
+    /// <summary>
+    /// ffprobe arguments that print only the container duration in seconds. The container is
+    /// read from the file, never forced, so a plain or a fragmented MP4 (#310) is read the same way.
+    /// </summary>
+    public static string[] ProbeDuration(string input) =>
+        ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", input];
+
     public static string[] Cut(
         string input,
         string output,

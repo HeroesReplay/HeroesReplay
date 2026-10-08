@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Shared;
 using Newtonsoft.Json.Linq;
 
@@ -76,6 +77,16 @@ public static class ObsValidator
     public const string FpsLow = "obs.fps_low";
     public const string ProfileUnreadable = "obs.profile_unreadable";
     public const string RecordingFormat = "obs.recording_format";
+
+    /// <summary>
+    /// The profile records an MP4 format that a crash, a power loss, or a killed
+    /// <c>obs-ffmpeg-mux</c> leaves unreadable (#310). A warning: the spectator sets
+    /// <c>OBS:RecordingFormat</c> before each recording.
+    /// </summary>
+    public const string RecordingNotCrashSafe = "obs.recording_not_crash_safe";
+
+    /// <summary><c>OBS:RecordingFormat</c> is not one of <see cref="ObsRecordingFormat.Allowed"/>.</summary>
+    public const string RecordingFormatInvalid = "obs.recording_format_invalid";
     public const string StreamKeyMissing = "obs.stream_key_missing";
     public const string StreamServiceUnexpected = "obs.stream_service_unexpected";
     public const string FilterMissing = "obs.filter_missing";
@@ -104,6 +115,8 @@ public static class ObsValidator
         "GetSceneItemId",
         "SetSceneItemEnabled",
         "SetSourceFilterEnabled",
+        "GetProfileParameter",
+        "SetProfileParameter",
         "SetRecordDirectory",
         "GetRecordStatus",
         "StartRecord",
@@ -1076,6 +1089,14 @@ public static class ObsValidator
         List<ObsFinding> findings
     )
     {
+        string invalid = ObsRecordingFormat.Validate(obs?.RecordingFormat);
+        if (invalid != null)
+        {
+            findings.Add(
+                new ObsFinding(RecordingFormatInvalid, Error, "OBS:RecordingFormat", invalid)
+            );
+        }
+
         ObsProfileInfo profile;
         try
         {
@@ -1096,8 +1117,10 @@ public static class ObsValidator
         }
 
         CheckBitrates(profile, video, findings);
+        string configured = ObsRecordingFormat.Resolve(obs?.RecordingFormat);
         if (profile.RecordsMp4)
         {
+            CheckCrashSafety(profile, configured, findings);
             return;
         }
 
@@ -1117,7 +1140,58 @@ public static class ObsValidator
                             ? ", so OBS:RecordingEnabled recordings would never be uploaded or cleaned up"
                             : ""
                     )
-                    + ". Set Settings > Output > Recording > Recording Format to MPEG-4 (.mp4) or Hybrid MP4."
+                    + ". "
+                    + (
+                        configured != null && ObsProfileInfo.Mp4Formats.Contains(configured)
+                            ? "The spectator sets OBS:RecordingFormat ("
+                                + configured
+                                + ") before its next recording; a custom FFmpeg output ignores it. "
+                            : string.Empty
+                    )
+                    + "Set OBS:RecordingFormat to "
+                    + ObsRecordingFormat.Default
+                    + ", or Settings > Output > Recording > Recording Format to Fragmented MP4."
+            )
+        );
+    }
+
+    /// <summary>
+    /// <see cref="RecordingNotCrashSafe"/>: an MP4 format other than <c>fragmented_mp4</c>. In the
+    /// #310 crash test a plain MP4, and a <c>hybrid_mp4</c> set while OBS ran, lost the whole file
+    /// when OBS and <c>obs-ffmpeg-mux</c> were killed: the index is written when the recording
+    /// stops.
+    /// </summary>
+    private static void CheckCrashSafety(
+        ObsProfileInfo profile,
+        string configured,
+        List<ObsFinding> findings
+    )
+    {
+        if (profile.RecordsCrashSafe)
+        {
+            return;
+        }
+
+        string next = ObsRecordingFormat.IsCrashSafe(configured)
+            ? "The spectator sets OBS:RecordingFormat ("
+                + configured
+                + ") before each recording, so its next recording is crash-safe unless a custom FFmpeg output ignores it. This is the format left from before or set by hand."
+            : "OBS:RecordingFormat is "
+                + (configured ?? "not a valid format")
+                + ", which the spectator sets before each recording. Set it to "
+                + ObsRecordingFormat.Default
+                + ".";
+        findings.Add(
+            new ObsFinding(
+                RecordingNotCrashSafe,
+                Warning,
+                profile.RecordingFormat,
+                "OBS records "
+                    + profile.RecordingFormat
+                    + " ("
+                    + profile.OutputMode
+                    + " output). In the #310 crash test that format lost the whole file when OBS and obs-ffmpeg-mux were killed, as a crash or a power loss does; fragmented MP4 kept it. "
+                    + next
             )
         );
     }

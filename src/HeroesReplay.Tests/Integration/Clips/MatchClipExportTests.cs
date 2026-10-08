@@ -16,14 +16,20 @@ using Xunit;
 namespace HeroesReplay.Tests.Integration.Clips;
 
 /// <summary>
-/// Runs the real ffprobe and ffmpeg against a 1920x1080 mp4 written the way OBS writes one
-/// (index at the end of the file), with a real replay that has a pentakill.
+/// Runs the real ffprobe and ffmpeg against a 1920x1080 mp4 written the way OBS writes one, with
+/// a real replay that has a pentakill: a plain MP4 (index at the end of the file), a fragmented
+/// MP4 (OBS's fragmented_mp4 muxer flags, #310), and a fragmented MP4 cut off mid-write the way a
+/// killed obs-ffmpeg-mux leaves it.
 /// Needs ffmpeg where clips look for it (FfmpegLocator): the deps install folder, C:\ffmpeg\bin, or PATH.
 /// </summary>
 [Trait(TestCategories.Category, TestCategories.Integration)]
 public class MatchClipExportTests : IClassFixture<ReplayFixture>
 {
     private const int LeadSeconds = 30;
+
+    /// <summary>What OBS 32.2.2 gives obs-ffmpeg-mux for a fragmented_* recording format.</summary>
+    private const string FragmentedMovFlags = "frag_keyframe+empty_moov+delay_moov";
+
     private readonly ReplayFixture fixture;
 
     public MatchClipExportTests(ReplayFixture fixture)
@@ -31,8 +37,20 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
         this.fixture = fixture;
     }
 
-    [Fact]
-    public async Task ExportAsync_ReadsTheDurationAndCutsAFullFrameClip()
+    public enum RecordingLayout
+    {
+        Plain,
+        Fragmented,
+
+        /// <summary>Fragmented, with the last 15% of the file missing: OBS and its muxer were killed.</summary>
+        FragmentedCutOff,
+    }
+
+    [Theory]
+    [InlineData(RecordingLayout.Plain)]
+    [InlineData(RecordingLayout.Fragmented)]
+    [InlineData(RecordingLayout.FragmentedCutOff)]
+    public async Task ExportAsync_ReadsTheDurationAndCutsAFullFrameClip(RecordingLayout layout)
     {
         // Real pentakills are rare, so the window is built from the first five real killing blows.
         TeamKillBlow[] blows = TeamKillDeaths
@@ -64,10 +82,21 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
                 "ffmpeg",
                 "-v error -f lavfi -i testsrc2=size=1920x1080:rate=10 -t "
                     + length.ToString(CultureInfo.InvariantCulture)
-                    + " -c:v libx264 -preset ultrafast -pix_fmt yuv420p \""
+                    + " -c:v libx264 -preset ultrafast -g 20 -pix_fmt yuv420p "
+                    + (
+                        layout == RecordingLayout.Plain
+                            ? string.Empty
+                            : "-movflags " + FragmentedMovFlags + " "
+                    )
+                    + "\""
                     + recording
                     + "\""
             );
+            if (layout == RecordingLayout.FragmentedCutOff)
+            {
+                using var file = new FileStream(recording, FileMode.Open, FileAccess.ReadWrite);
+                file.SetLength(file.Length * 85 / 100);
+            }
 
             // The recording starts LeadSeconds before the clip on the match clock.
             var clock = new RecordingClock();
@@ -91,10 +120,24 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
                 logger
             );
 
-            Assert.Contains(
+            string read = Assert.Single(
                 logger.Lines,
-                line => line.Contains("duration", StringComparison.OrdinalIgnoreCase)
+                line => line.StartsWith("Read duration ", StringComparison.Ordinal)
             );
+            double probed = double.Parse(
+                read.Substring("Read duration ".Length).Split('s')[0],
+                CultureInfo.InvariantCulture
+            );
+            if (layout == RecordingLayout.FragmentedCutOff)
+            {
+                // The fragments before the cut are read; the cut-off one is not.
+                Assert.InRange(probed, length * 0.6, length * 0.9);
+            }
+            else
+            {
+                Assert.InRange(probed, length - 1, length + 1);
+            }
+
             string index = Path.Combine(directory, "clips.json");
             Assert.True(File.Exists(index), string.Join(Environment.NewLine, logger.Lines));
             using JsonDocument rows = JsonDocument.Parse(File.ReadAllText(index));

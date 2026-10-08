@@ -17,7 +17,7 @@ Do **not** commit `service.json` (Twitch stream key).
 - SoundCloud widget on Desktop Audio (`reroute_audio` off — Control audio via OBS cannot capture that player)
 - Report scenes `match-report` (Heroes Profile match page), `prediction-report`, and `request-queue`
 - No Mic/Aux device. Desktop Audio (`DesktopAudioDevice1`, default output) only
-- Profile template: QSV local recording into `C:\heroesreplay\Data\Contexts` — no start-streaming
+- Profile template: QSV local recording into `C:\heroesreplay\Data\Contexts` — no start-streaming. `RecFormat2=fragmented_mp4` in `[SimpleOutput]` and `[AdvOut]` (#310). On an existing machine the spectator sets the format before each recording (`OBS:RecordingFormat`)
 
 ## Names
 

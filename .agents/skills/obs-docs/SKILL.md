@@ -98,7 +98,12 @@ Every message is a JSON text frame `{"op": <opcode>, "d": {...}}`.
 | `mkv` | Matroska | Survives a crash. Many uploaders and editors want MP4, so it is remuxed afterwards (File > Remux Recordings, or ffmpeg). |
 | `mov`, `flv`, `ts`, `m3u8`, `fragmented_mov`, `hybrid_mov` | Others | |
 
-Treat crash behavior as something to measure on the machine that records. HeroesReplay's test of it is #310.
+Treat crash behavior as something to measure on the machine that records. HeroesReplay's test of it is #310. HeroesReplay records `fragmented_mp4`: `docs/obs-operations.md`, Recording container.
+
+When OBS 32.2.2 applies a `RecFormat2` change (frontend `SimpleOutput.cpp` and `AdvancedOutput.cpp`):
+- **At every `StartRecord`:** the file extension, and for `fragmented_*` the muxer flags `movflags=frag_keyframe+empty_moov+delay_moov` (unless custom muxer settings already set `movflags`).
+- **Only when OBS creates its outputs** (start, or applying Settings): which muxer writes the file. `hybrid_mp4` and `hybrid_mov` get OBS's own `mp4_output` / `mov_output`; every other format gets `ffmpeg_muxer`, the separate `obs-ffmpeg-mux.exe` process. `SetProfileParameter` does not recreate the outputs, so a change to or from a hybrid format waits for the next OBS start.
+- **Killing only `obs64` is not a crash test** for a format `obs-ffmpeg-mux` writes: that process sees the pipe close and finishes the file. Kill both to see what a power loss does.
 
 ## v4 to v5 request map
 

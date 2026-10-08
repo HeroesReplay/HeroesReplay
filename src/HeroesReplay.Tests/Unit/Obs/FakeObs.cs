@@ -82,12 +82,18 @@ internal sealed class FakeObs : IObsReadSessionFactory
         new()
         {
             [("Output", "Mode")] = "Simple",
-            [("SimpleOutput", "RecFormat2")] = "mp4",
+            [("SimpleOutput", "RecFormat2")] = "fragmented_mp4",
             [("SimpleOutput", "RecEncoder")] = "qsv_h264",
             [("SimpleOutput", "StreamEncoder")] = "x264",
             [("SimpleOutput", "VBitrate")] = "6000",
             [("SimpleOutput", "RecQuality")] = "Stream",
         };
+
+    /// <summary>
+    /// SetProfileParameter is answered as a success but changes nothing, like an OBS whose
+    /// profile did not keep the value: the read-back differs.
+    /// </summary>
+    public bool IgnoreProfileWrites { get; set; }
 
     /// <summary>GetRecordDirectory: where OBS writes its next recording.</summary>
     public string RecordDirectory { get; set; } = @"C:\heroesreplay\Data\Contexts\65820711";
@@ -566,6 +572,50 @@ internal sealed class FakeObs : IObsReadSessionFactory
         return new Session(this);
     }
 
+    /// <summary>The spectator's view before StartRecord: the Gets plus the recording format write.</summary>
+    public IObsRecordFormatSession OpenRecordFormat()
+    {
+        Opened++;
+        return new Session(this);
+    }
+
+    /// <summary>
+    /// The spectator's record socket over this OBS, always identified. StartRecord and StopRecord
+    /// are logged in <see cref="Requests"/> in order with the profile requests.
+    /// </summary>
+    internal IObsRecordSocket RecordSocket() => new RecordSocketView(this);
+
+    private void SetProfileParameter(string category, string name, string value)
+    {
+        Requests.Add("SetProfileParameter");
+        Sent.Add(
+            (
+                "SetProfileParameter",
+                new JObject
+                {
+                    ["parameterCategory"] = category,
+                    ["parameterName"] = name,
+                    ["parameterValue"] = value,
+                }
+            )
+        );
+        if (Failures.TryGetValue("SetProfileParameter", out Exception failure))
+        {
+            throw failure;
+        }
+
+        if (!IgnoreProfileWrites)
+        {
+            ProfileParameters[(category, name)] = value;
+        }
+    }
+
+    private void StartRecord()
+    {
+        Requests.Add("StartRecord");
+        Recording = true;
+    }
+
     private string StopRecord()
     {
         Requests.Add("StopRecord");
@@ -582,7 +632,7 @@ internal sealed class FakeObs : IObsReadSessionFactory
         return RecordPath;
     }
 
-    private sealed class Session : IObsPageSession, IObsRecordStopSession
+    private sealed class Session : IObsPageSession, IObsRecordStopSession, IObsRecordFormatSession
     {
         private readonly FakeObs owner;
 
@@ -602,6 +652,41 @@ internal sealed class FakeObs : IObsReadSessionFactory
 
         public string StopRecord() => owner.StopRecord();
 
+        public void SetRecordingFormat(string category, string format) =>
+            owner.SetProfileParameter(category, ObsRecordingFormat.ParameterName, format);
+
         public void Dispose() => owner.Disposed++;
+    }
+
+    private sealed class RecordSocketView : IObsRecordSocket
+    {
+        private readonly FakeObs owner;
+
+        public RecordSocketView(FakeObs owner)
+        {
+            this.owner = owner;
+        }
+
+        public bool IsIdentified => true;
+
+        public bool IsConnected => true;
+
+        public bool IsRecording() => owner.Recording;
+
+        public void StartRecord() => owner.StartRecord();
+
+        public string StopRecord() => owner.StopRecord();
+
+        public bool IsStreamActive() => false;
+
+        public void StartStream() => owner.Requests.Add("StartStream");
+
+        public void StopStream() => owner.Requests.Add("StopStream");
+
+        public event EventHandler<ObsRecordSignal> RecordSignal
+        {
+            add { }
+            remove { }
+        }
     }
 }
