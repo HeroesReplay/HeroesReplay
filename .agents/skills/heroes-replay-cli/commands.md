@@ -474,6 +474,26 @@ Show what an update would change in the live OBS scene collection, without chang
 - **Exit:** 0 when nothing conflicts, 1 on a conflict or when the collection or the template cannot be read.
 - **Codes:** `obs.plan_in_sync`, `obs.plan_changes`, `obs.plan_conflict`, `obs.plan_base_unknown`, `obs.collection_custom`, `obs.collection_missing`, `obs.collection_unreadable`, `obs.template_missing`
 
+## `obs backup`
+
+Copy the live OBS scene collection (OBS:SceneCollectionName) into %LOCALAPPDATA%\HeroesReplay\obs\backups, the folder every HeroesReplay write backs it up to (the newest 10 are kept), and list its backups with their time, size and SHA-256. Only reads the collection, so it is safe while OBS runs. --list lists without copying. Exit 1 when there is no collection or the copy failed.
+
+- **Options:** `--list`, `--output` (`-o`)
+- **Before:** None. Reads the live collection only, so it is safe while OBS runs.
+- **Changes:** Copies the live collection into `%LOCALAPPDATA%\HeroesReplay\obs\backups` (the newest 10 are kept), unless `--list`.
+- **Exit:** 0 when backed up or listed, 1 when there is no collection or the copy failed.
+- **Codes:** `obs.backed_up`, `obs.backups_listed`, `obs.collection_missing`, `obs.restore_failed`
+
+## `obs restore`
+
+Write a backup of the live OBS scene collection back over it, byte for byte, while OBS is closed. The collection it replaces is backed up first (so a restore can be undone with the next backup), the write is atomic, and a release rollback that waited for OBS is cleared. managed-collections.json is not changed. Refused while OBS runs (obs.restore_obs_running), and for a file that is not a backup of this collection (obs.backup_other_file) or not a scene collection (obs.backup_invalid). Exit 1 when nothing was restored.
+
+- **Options:** `--output` (`-o`)
+- **Before:** OBS closed (refused while it runs). A backup of this collection. On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
+- **Changes:** Backs up the current collection, then writes the backup over it atomically and clears a waiting release rollback. `managed-collections.json` is not changed.
+- **Exit:** 0 when restored or already the same, 1 when nothing was restored.
+- **Codes:** `obs.restored`, `obs.already_restored`, `obs.restore_obs_running`, `obs.backup_missing`, `obs.backup_other_file`, `obs.backup_invalid`, `obs.restore_failed`
+
 ## `update check`
 
 Print the installed version and the latest release tag. Does not download or restart.

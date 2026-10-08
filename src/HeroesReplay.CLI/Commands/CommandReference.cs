@@ -419,6 +419,33 @@ public static class CommandReference
             CodesIn(typeof(ObsPlanCodes))
         ),
         new(
+            "obs backup",
+            "None. Reads the live collection only, so it is safe while OBS runs.",
+            "Copies the live collection into `%LOCALAPPDATA%\\HeroesReplay\\obs\\backups` (the newest 10 are kept), unless `--list`.",
+            "0 when backed up or listed, 1 when there is no collection or the copy failed.",
+            [
+                ObsBackupCodes.BackedUp,
+                ObsBackupCodes.Listed,
+                ObsBackupCodes.CollectionMissing,
+                ObsBackupCodes.Failed,
+            ]
+        ),
+        new(
+            "obs restore",
+            "OBS closed (refused while it runs). A backup of this collection. " + LiveAsk,
+            "Backs up the current collection, then writes the backup over it atomically and clears a waiting release rollback. `managed-collections.json` is not changed.",
+            "0 when restored or already the same, 1 when nothing was restored.",
+            [
+                ObsBackupCodes.Restored,
+                ObsBackupCodes.AlreadyRestored,
+                ObsBackupCodes.ObsRunning,
+                ObsBackupCodes.BackupMissing,
+                ObsBackupCodes.BackupOther,
+                ObsBackupCodes.BackupInvalid,
+                ObsBackupCodes.Failed,
+            ]
+        ),
+        new(
             "config effective",
             "None. Resolves no `op://` reference.",
             "Nothing. Secrets are always redacted.",

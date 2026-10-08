@@ -30,6 +30,8 @@ description: >
 | `obs inspect`, `obs validate`, `obs bundle`, `obs plan`, `check obs` | Read only: Get requests, or no connection at all (`obs bundle` and `obs plan` read files). The stream key is never returned. `obs bundle --write` is the packaging step and writes only a publish folder's manifest. | Both |
 | MCP `obs_inspect`, `obs_validate`, `obs_screenshot` | Read only (`ObsReadOnly`), one short session per call | Both. This is the production way for an agent to look. |
 | `obs pages` | Writes `Data\queue.html` and `Data\prediction-report.html`, then reloads the browser sources that show them. The reload is its only OBS change. | Both. On the live box, only to fix a stale page. |
+| `obs backup` | Nothing in OBS. Copies the live collection file into `%LOCALAPPDATA%\HeroesReplay\obs\backups` (`--list` only lists). | Both |
+| `obs restore` | Writes a backup over the live collection, only while OBS is closed (it refuses otherwise) | Dev. Live: only with the owner, in a scheduled downtime. |
 | `obs arm` / `obs disarm` | Write or delete the machine's ingest arm, `%LOCALAPPDATA%\HeroesReplay\stream-armed`. OBS itself is not touched. | Live: never without the owner. Dev: only for a stream proof. |
 | `services start` | Updates the collection's paths, or replaces a managed collection with a new template, only while OBS is closed | Dev. Live: only in a scheduled downtime. |
 | The spectator (`spectate`, `services start` roles) | Starts OBS when needed, changes scenes, starts and stops the recording, starts the stream when allowed, and live-swaps a new template between replays | Dev for proofs. Live: it is the production stack. |
