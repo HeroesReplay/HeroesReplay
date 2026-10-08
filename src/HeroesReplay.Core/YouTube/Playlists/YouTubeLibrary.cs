@@ -224,13 +224,7 @@ public class YouTubeLibrary : IYouTubeLibrary
 
             YouTubePlaylistCache cache = LoadCache();
             pass.Planned = Pending(Plan(record), cache);
-            pass.Filed = await FileAsync(
-                    pass.Planned,
-                    cache,
-                    budget,
-                    cancellationToken,
-                    () => SaveCache(cache)
-                )
+            await FileAsync(pass, cache, budget, cancellationToken, () => SaveCache(cache))
                 .ConfigureAwait(false);
         }
         catch (Exception exception) when (YouTubeListQuota.IsRefused(exception))
@@ -692,8 +686,17 @@ public class YouTubeLibrary : IYouTubeLibrary
         return items.Where(item => !filed.Contains(FiledKey(item))).ToList();
     }
 
-    private async Task<int> FileAsync(
-        IReadOnlyList<YouTubeLibraryItem> items,
+    /// <summary>
+    /// Files <see cref="YouTubeLibraryPass.Planned"/>. Items whose playlist already exists go
+    /// first, so a backlog is never held behind playlist creation. Then at most
+    /// <c>YouTube:LibraryMaxNewPlaylistsPerPass</c> playlists are created, the one the most
+    /// items wait for first, each followed by its items. YouTube throttles <c>playlists.insert</c>
+    /// on its own (a 429 while the day's quota is far from spent, production 2026-10-08): that
+    /// ends the creates for this pass only, and the items still waiting stay planned.
+    /// A throttled <c>playlistItems.insert</c> still ends the whole pass.
+    /// </summary>
+    private async Task FileAsync(
+        YouTubeLibraryPass pass,
         YouTubePlaylistCache cache,
         Budget budget,
         CancellationToken cancellationToken,
@@ -702,10 +705,16 @@ public class YouTubeLibrary : IYouTubeLibrary
     {
         cache.PlaylistIds ??= new Dictionary<string, string>(StringComparer.Ordinal);
         cache.FiledVideoIds ??= new List<string>();
+        IReadOnlyList<YouTubeLibraryItem> items = pass.Planned;
         var filed = new HashSet<string>(cache.FiledVideoIds, StringComparer.Ordinal);
-        bool listed = false;
+        List<YouTubeLibraryItem> pending = items
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(item?.VideoId)
+                && !string.IsNullOrWhiteSpace(item.PlaylistTitle)
+                && filed.Add(FiledKey(item))
+            )
+            .ToList();
         int failures = 0;
-        int count = 0;
         bool wrote = false;
 
         // YouTube throttles playlist writes sent back to back, whatever quota is left.
@@ -720,74 +729,22 @@ public class YouTubeLibrary : IYouTubeLibrary
             wrote = true;
         }
 
-        foreach (YouTubeLibraryItem item in items)
+        // False ends the filing: the day's units are spent, or too many failures in a row.
+        // A throttled or exhausted insert is thrown to the pass, which ends it.
+        async Task<bool> FileOneAsync(YouTubeLibraryItem item, string playlistId)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string filedKey = FiledKey(item);
-            if (string.IsNullOrWhiteSpace(item?.VideoId) || filed.Contains(filedKey))
+            if (!budget.TrySpend(YouTubeQuotaUnits.PlaylistItemInsert))
             {
-                continue;
+                return false;
             }
 
+            await SpaceWriteAsync().ConfigureAwait(false);
             try
             {
-                if (
-                    !cache.PlaylistIds.TryGetValue(item.PlaylistTitle, out string playlistId)
-                    || string.IsNullOrWhiteSpace(playlistId)
-                )
-                {
-                    if (!listed)
-                    {
-                        listed = true;
-                        if (
-                            !await ListPlaylistsAsync(cache, budget, cancellationToken)
-                                .ConfigureAwait(false)
-                        )
-                        {
-                            break;
-                        }
-
-                        persist();
-                    }
-
-                    if (
-                        !cache.PlaylistIds.TryGetValue(item.PlaylistTitle, out playlistId)
-                        || string.IsNullOrWhiteSpace(playlistId)
-                    )
-                    {
-                        if (!budget.TrySpend(YouTubeQuotaUnits.PlaylistInsert))
-                        {
-                            break;
-                        }
-
-                        await SpaceWriteAsync().ConfigureAwait(false);
-                        playlistId = await playlists
-                            .CreateAsync(item.PlaylistTitle, cancellationToken)
-                            .ConfigureAwait(false);
-                        cache.PlaylistIds[item.PlaylistTitle] = playlistId;
-                        persist();
-                    }
-                }
-
-                if (!budget.TrySpend(YouTubeQuotaUnits.PlaylistItemInsert))
-                {
-                    break;
-                }
-
-                await SpaceWriteAsync().ConfigureAwait(false);
                 await playlists
                     .InsertAsync(playlistId, item.VideoId.Trim(), cancellationToken)
                     .ConfigureAwait(false);
-                filed.Add(filedKey);
-                cache.FiledVideoIds.Add(filedKey);
-                count++;
-                failures = 0;
-                persist();
-                logger.LogInformation(
-                    "Filed {VideoId} into {Playlist}.",
-                    item.VideoId,
-                    item.PlaylistTitle
-                );
             }
             catch (OperationCanceledException)
             {
@@ -795,21 +752,182 @@ public class YouTubeLibrary : IYouTubeLibrary
             }
             catch (Exception exception) when (!YouTubeListQuota.IsRefused(exception))
             {
-                failures++;
                 logger.LogWarning(
                     exception,
                     "Could not file {VideoId} into {Playlist}.",
                     item.VideoId,
                     item.PlaylistTitle
                 );
-                if (failures >= FailuresBeforeStop)
+                return !Failed();
+            }
+
+            cache.FiledVideoIds.Add(FiledKey(item));
+            pass.Filed++;
+            failures = 0;
+            persist();
+            logger.LogInformation(
+                "Filed {VideoId} into {Playlist}.",
+                item.VideoId,
+                item.PlaylistTitle
+            );
+            return true;
+        }
+
+        bool Failed()
+        {
+            failures++;
+            if (failures < FailuresBeforeStop)
+            {
+                return false;
+            }
+
+            logger.LogWarning(
+                "YouTube library filing stopped after {Failures} failures in a row.",
+                failures
+            );
+            return true;
+        }
+
+        // A title missing from the cache may still be on the channel (created by a run whose
+        // cache write was lost, or by hand): one playlists.list (mine) before any create.
+        List<string> missing = pending
+            .Select(item => item.PlaylistTitle)
+            .Where(title => KnownPlaylist(cache, title) == null)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        bool stopped = false;
+        if (missing.Count > 0)
+        {
+            stopped = !await ListPlaylistsAsync(cache, missing, budget, cancellationToken)
+                .ConfigureAwait(false);
+            persist();
+        }
+
+        // 1. Playlists that exist.
+        foreach (YouTubeLibraryItem item in pending)
+        {
+            if (stopped)
+            {
+                break;
+            }
+
+            if (KnownPlaylist(cache, item.PlaylistTitle) is string playlistId)
+            {
+                stopped = !await FileOneAsync(item, playlistId).ConfigureAwait(false);
+            }
+        }
+
+        // 2. New playlists: the one the most items wait for first, then the one with the
+        // newest video (the plan is newest first, and GroupBy keeps that order on a tie).
+        List<IGrouping<string, YouTubeLibraryItem>> create = pending
+            .Where(item => KnownPlaylist(cache, item.PlaylistTitle) == null)
+            .GroupBy(item => item.PlaylistTitle, StringComparer.Ordinal)
+            .OrderByDescending(group => group.Count())
+            .ToList();
+        int cap = Math.Max(0, settings.YouTube.LibraryMaxNewPlaylistsPerPass);
+        int attempts = 0;
+        Exception throttle = null;
+        var waiting = new List<IGrouping<string, YouTubeLibraryItem>>();
+        foreach (IGrouping<string, YouTubeLibraryItem> group in create)
+        {
+            if (stopped)
+            {
+                break;
+            }
+
+            if (throttle != null || attempts >= cap)
+            {
+                waiting.Add(group);
+                continue;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!budget.TrySpend(YouTubeQuotaUnits.PlaylistInsert))
+            {
+                break;
+            }
+
+            attempts++;
+            await SpaceWriteAsync().ConfigureAwait(false);
+            string playlistId;
+            try
+            {
+                playlistId = await playlists
+                    .CreateAsync(group.Key, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+                when (YouTubeListQuota.Classify(exception) == YouTubeQuotaRefusal.RateLimited)
+            {
+                // Creation is throttled, not filing. Nothing is cached for this title.
+                throttle = exception;
+                waiting.Add(group);
+                continue;
+            }
+            catch (Exception exception) when (!YouTubeListQuota.IsRefused(exception))
+            {
+                logger.LogWarning(
+                    exception,
+                    "Could not create YouTube playlist {Playlist}; {Count} insert(s) wait for it.",
+                    group.Key,
+                    group.Count()
+                );
+                stopped = Failed();
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(playlistId))
+            {
+                logger.LogWarning(
+                    "YouTube returned no id for the new playlist {Playlist}; {Count} insert(s) wait for it.",
+                    group.Key,
+                    group.Count()
+                );
+                stopped = Failed();
+                continue;
+            }
+
+            cache.PlaylistIds[group.Key] = playlistId;
+            persist();
+            foreach (YouTubeLibraryItem item in group)
+            {
+                if (!await FileOneAsync(item, playlistId).ConfigureAwait(false))
                 {
-                    logger.LogWarning(
-                        "YouTube library filing stopped after {Failures} failures in a row.",
-                        failures
-                    );
+                    stopped = true;
                     break;
                 }
+            }
+        }
+
+        if (waiting.Count > 0)
+        {
+            int waitingItems = waiting.Sum(group => group.Count());
+            string titles = DescribeWaiting(waiting);
+            if (throttle != null)
+            {
+                logger.LogWarning(
+                    "YouTube throttled playlist creation (playlists.insert): {Error} {Items} playlist insert(s) wait for {Count} new playlist(s): {Titles}. Filing into existing playlists went on ({Filed} filed this pass). The next pass tries the creates again in {Interval}.",
+                    throttle.Message,
+                    waitingItems,
+                    waiting.Count,
+                    titles,
+                    pass.Filed,
+                    settings.YouTube.LibraryInterval
+                );
+            }
+            else
+            {
+                logger.LogInformation(
+                    "{Items} playlist insert(s) wait for {Count} new playlist(s) past YouTube:LibraryMaxNewPlaylistsPerPass ({Cap}); later passes create them: {Titles}.",
+                    waitingItems,
+                    waiting.Count,
+                    cap,
+                    titles
+                );
             }
         }
 
@@ -817,19 +935,41 @@ public class YouTubeLibrary : IYouTubeLibrary
         {
             logger.LogInformation(
                 "YouTube library pass used its units for today. {Left} playlist insert(s) wait for a later pass.",
-                items.Count - count
+                items.Count - pass.Filed
             );
         }
-
-        return count;
     }
 
+    private static string DescribeWaiting(
+        IReadOnlyList<IGrouping<string, YouTubeLibraryItem>> waiting
+    )
+    {
+        const int Shown = 10;
+        string titles = string.Join(
+            "; ",
+            waiting.Take(Shown).Select(group => $"{group.Key} ({group.Count()})")
+        );
+        return waiting.Count > Shown ? $"{titles}; and {waiting.Count - Shown} more" : titles;
+    }
+
+    private static string KnownPlaylist(YouTubePlaylistCache cache, string title) =>
+        cache.PlaylistIds.TryGetValue(title, out string id) && !string.IsNullOrWhiteSpace(id)
+            ? id
+            : null;
+
+    /// <summary>
+    /// Reads every page of the channel's playlists (<c>mine</c>, 1 unit per 50) into the cache.
+    /// A <paramref name="wanted"/> title also matches a channel playlist that differs only in
+    /// case or spacing, so the pass never creates a second playlist of the same name.
+    /// </summary>
     private async Task<bool> ListPlaylistsAsync(
         YouTubePlaylistCache cache,
+        IReadOnlyList<string> wanted,
         Budget budget,
         CancellationToken cancellationToken
     )
     {
+        var listed = new List<YouTubePlaylist>();
         string pageToken = null;
         do
         {
@@ -848,6 +988,7 @@ public class YouTubeLibrary : IYouTubeLibrary
                     && !string.IsNullOrWhiteSpace(playlist.Id)
                 )
                 {
+                    listed.Add(playlist);
                     cache.PlaylistIds.TryAdd(playlist.Title, playlist.Id);
                 }
             }
@@ -855,8 +996,55 @@ public class YouTubeLibrary : IYouTubeLibrary
             pageToken = page?.NextPageToken;
         } while (!string.IsNullOrEmpty(pageToken));
 
+        foreach (string title in wanted)
+        {
+            if (KnownPlaylist(cache, title) != null)
+            {
+                continue;
+            }
+
+            YouTubePlaylist same = listed.FirstOrDefault(playlist =>
+                string.Equals(
+                    NormalTitle(playlist.Title),
+                    NormalTitle(title),
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+            if (same != null)
+            {
+                cache.PlaylistIds[title] = same.Id;
+                logger.LogInformation(
+                    "Filing {Playlist} into the channel's playlist {Title} ({PlaylistId}).",
+                    title,
+                    same.Title,
+                    same.Id
+                );
+            }
+        }
+
+        foreach (
+            IGrouping<string, YouTubePlaylist> twins in listed
+                .GroupBy(playlist => NormalTitle(playlist.Title), StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+        )
+        {
+            logger.LogWarning(
+                "The YouTube channel has {Count} playlists titled {Title} ({PlaylistIds}). The library pass files into {Used}; delete the others in YouTube Studio.",
+                twins.Count(),
+                twins.Key,
+                string.Join(", ", twins.Select(playlist => playlist.Id)),
+                KnownPlaylist(cache, twins.First().Title)
+            );
+        }
+
         return true;
     }
+
+    private static string NormalTitle(string title) =>
+        string.Join(
+            ' ',
+            (title ?? string.Empty).Split((char[])null, StringSplitOptions.RemoveEmptyEntries)
+        );
 
     private async Task<YouTubeLibraryPass> DryRunAsync(
         string data,

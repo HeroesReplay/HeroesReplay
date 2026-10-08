@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Google;
+using Google.Apis.Requests;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Retention;
@@ -943,6 +946,182 @@ public sealed class YouTubeLibraryTests : IDisposable
     }
 
     [Fact]
+    public async Task RunOnce_ThrottledCreateStillFilesExistingPlaylistsAndLeavesTheRestPlanned()
+    {
+        AppendRecord("video-1", "Sky Temple", "2.57.0.98304");
+        AppendRecord("video-2", "Dragon Shire", "2.57.0.98304");
+        var client = new FakeClient { CreateError = PlaylistCreateThrottle() };
+        client.Existing.Add(new YouTubePlaylist("existing-sky", "Sky Temple"));
+        client.Existing.Add(new YouTubePlaylist("existing-sl", "Storm League"));
+        YouTubeLibrary library = Library(client);
+
+        YouTubeLibraryPass throttled = await library.RunOnceAsync(true, CancellationToken.None);
+
+        // Every item whose playlist exists is filed; the first refused create ends the creates.
+        Assert.Null(throttled.Skipped);
+        Assert.Equal(8, throttled.Planned.Count);
+        Assert.Equal(3, throttled.Filed);
+        Assert.Equal(
+            new[]
+            {
+                ("existing-sky", "video-1"),
+                ("existing-sl", "video-1"),
+                ("existing-sl", "video-2"),
+            },
+            client.Inserted
+        );
+        Assert.Equal(1, client.CreateAttempts);
+        Assert.Empty(client.Created);
+        YouTubePlaylistCache cache = ReadCache();
+        Assert.Equal(
+            new[] { "Sky Temple", "Storm League" },
+            cache.PlaylistIds.Keys.OrderBy(title => title, StringComparer.Ordinal)
+        );
+        // A playlist throttle is not the day's quota.
+        Assert.Null(
+            new YouTubeQuotaUnits(directory, Settings(false).YouTube).Read(Noon).LibraryPausedUntil
+        );
+
+        // The waiting items stay planned, and the next pass creates their playlists.
+        client.CreateError = null;
+        library.Clock = () => Noon.AddHours(1);
+        YouTubeLibraryPass next = await library.RunOnceAsync(false, CancellationToken.None);
+
+        Assert.Null(next.Skipped);
+        Assert.Equal(5, next.Planned.Count);
+        Assert.Equal(5, next.Filed);
+        Assert.Equal(
+            new[] { "Storm League - Platinum", "Season 2026", "Dragon Shire" },
+            client.Created
+        );
+        Assert.Equal(8, client.Inserted.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task RunOnce_CreatesAtMostTheCapPerPassAfterFilingExistingPlaylists()
+    {
+        Assert.Equal(3, new YouTubeSettings().LibraryMaxNewPlaylistsPerPass);
+        AppendRecord("video-1", "Sky Temple", "2.57.0.98304");
+        AppendRecord("video-2", "Dragon Shire", "2.57.0.98304");
+        var client = new FakeClient();
+        client.Existing.Add(new YouTubePlaylist("existing-sky", "Sky Temple"));
+        AppSettings settings = Settings(false);
+        settings.YouTube.LibraryMaxNewPlaylistsPerPass = 2;
+        YouTubeLibrary library = Library(client, settings: settings);
+
+        YouTubeLibraryPass first = await library.RunOnceAsync(true, CancellationToken.None);
+
+        // The existing playlist is filed before any create. The playlists two videos wait
+        // for come before the map playlist only one waits for.
+        Assert.Equal(("existing-sky", "video-1"), client.Inserted[0]);
+        Assert.Equal(new[] { "Storm League", "Storm League - Platinum" }, client.Created);
+        Assert.Equal(5, first.Filed);
+        Assert.Equal(8, first.Planned.Count);
+
+        YouTubeLibraryPass second = await library.RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Equal(
+            new[] { "Storm League", "Storm League - Platinum", "Season 2026", "Dragon Shire" },
+            client.Created
+        );
+        Assert.Equal(3, second.Filed);
+
+        YouTubeLibraryPass third = await library.RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Empty(third.Planned);
+        Assert.Equal(4, client.CreateAttempts);
+    }
+
+    [Fact]
+    public async Task RunOnce_CapOfZeroOnlyFilesExistingPlaylists()
+    {
+        AppendRecord("video-7", "Dragon Shire", "2.57.0.98304");
+        var client = new FakeClient();
+        client.Existing.Add(new YouTubePlaylist("existing-map", "Dragon Shire"));
+        AppSettings settings = Settings(false);
+        settings.YouTube.LibraryMaxNewPlaylistsPerPass = 0;
+
+        YouTubeLibraryPass pass = await Library(client, settings: settings)
+            .RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Equal(0, client.CreateAttempts);
+        Assert.Equal(new[] { ("existing-map", "video-7") }, client.Inserted);
+        Assert.Equal(1, pass.Filed);
+    }
+
+    [Fact]
+    public async Task RunOnce_ThrottledInsertStillEndsThePassBeforeAnyCreate()
+    {
+        AppendRecord("video-7", "Dragon Shire", "2.57.0.98304");
+        var client = new FakeClient
+        {
+            InsertError = new InvalidOperationException(
+                "The service youtube has thrown an exception. HttpStatusCode is TooManyRequests. [rateLimitExceeded]"
+            ),
+        };
+        client.Existing.Add(new YouTubePlaylist("existing-map", "Dragon Shire"));
+
+        YouTubeLibraryPass pass = await Library(client).RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Null(pass.Skipped);
+        Assert.Equal(1, client.InsertAttempts);
+        Assert.Equal(0, client.CreateAttempts);
+        Assert.Equal(0, pass.Filed);
+        Assert.Null(
+            new YouTubeQuotaUnits(directory, Settings(false).YouTube).Read(Noon).LibraryPausedUntil
+        );
+    }
+
+    [Fact]
+    public async Task RunOnce_PlaylistOnTheChannelButNotInTheCacheIsNotCreatedAgain()
+    {
+        // A manual run created these playlists, but its cache write was lost.
+        File.WriteAllText(
+            Path.Combine(directory, YouTubeLibrary.CacheFileName),
+            JsonSerializer.Serialize(
+                new YouTubePlaylistCache
+                {
+                    PlaylistIds = new Dictionary<string, string>
+                    {
+                        ["Dragon Shire"] = "cached-map",
+                    },
+                }
+            )
+        );
+        AppendRecord("video-7", "Dragon Shire", "2.57.0.98304");
+        var client = new FakeClient();
+        client.Existing.Add(new YouTubePlaylist("yt-sl", "Storm League"));
+        // YouTube Studio may keep a title with other case or spacing.
+        client.Existing.Add(new YouTubePlaylist("yt-rank", "storm league -  Platinum "));
+        client.Existing.Add(new YouTubePlaylist("yt-season", "Season 2026"));
+        YouTubeLibrary library = Library(client);
+
+        YouTubeLibraryPass pass = await library.RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Equal(0, client.CreateAttempts);
+        Assert.Equal(1, client.PlaylistListCalls);
+        Assert.Equal(
+            new[]
+            {
+                ("cached-map", "video-7"),
+                ("yt-sl", "video-7"),
+                ("yt-rank", "video-7"),
+                ("yt-season", "video-7"),
+            },
+            client.Inserted
+        );
+        Assert.Equal(4, pass.Filed);
+        Assert.Equal("yt-rank", ReadCache().PlaylistIds["Storm League - Platinum"]);
+
+        // Every title is cached now: the next pass neither lists nor creates.
+        YouTubeLibraryPass next = await library.RunOnceAsync(true, CancellationToken.None);
+
+        Assert.Empty(next.Planned);
+        Assert.Equal(1, client.PlaylistListCalls);
+        Assert.Equal(0, client.CreateAttempts);
+    }
+
+    [Fact]
     public async Task RunOnce_StopsWhenTheDaysLibraryUnitsAreSpent()
     {
         AppendRecord("video-1", "Sky Temple", "2.57.0.98304");
@@ -1045,10 +1224,37 @@ public sealed class YouTubeLibraryTests : IDisposable
                 DryRun = dryRun,
                 EntryFileNameUploaded = "youtube-entry-uploaded.json",
                 SeasonName = "Season 2026",
+                // Most tests file one video into four new playlists; the cap has its own tests.
+                LibraryMaxNewPlaylistsPerPass = 10,
             },
         };
 
     private static int UploadsListing(FakeClient client) => client.ChannelCalls + client.PageCalls;
+
+    /// <summary>The playlists.insert refusal production logged on 2026-10-08.</summary>
+    internal static GoogleApiException PlaylistCreateThrottle() =>
+        new("youtube", "Resource has been exhausted (e.g. check quota).")
+        {
+            HttpStatusCode = HttpStatusCode.TooManyRequests,
+            Error = new RequestError
+            {
+                Code = 429,
+                Message = "Resource has been exhausted (e.g. check quota).",
+                Errors =
+                [
+                    new SingleError
+                    {
+                        Reason = "RATE_LIMIT_EXCEEDED",
+                        Domain = "youtube.api.v3.PlaylistInsertResponse.Error",
+                    },
+                ],
+            },
+        };
+
+    private YouTubePlaylistCache ReadCache() =>
+        JsonSerializer.Deserialize<YouTubePlaylistCache>(
+            File.ReadAllText(Path.Combine(directory, YouTubeLibrary.CacheFileName))
+        );
 
     private void AppendRecord(string videoId, string map, string version) =>
         YouTubeLibraryRecord.Append(
@@ -1127,6 +1333,7 @@ public sealed class YouTubeLibraryTests : IDisposable
         public int ChannelCalls { get; set; }
         public int PageCalls { get; set; }
         public int Calls { get; private set; }
+        public int PlaylistListCalls { get; private set; }
         public bool Consent { get; set; } = true;
         public int ConsentChecks { get; private set; }
 
@@ -1177,6 +1384,7 @@ public sealed class YouTubeLibraryTests : IDisposable
         )
         {
             Calls++;
+            PlaylistListCalls++;
             return Task.FromResult(new YouTubePlaylistsPage { Playlists = Existing.ToList() });
         }
 
@@ -1196,9 +1404,19 @@ public sealed class YouTubeLibraryTests : IDisposable
             return Task.FromResult(found);
         }
 
+        public Exception CreateError { get; set; }
+
+        public int CreateAttempts { get; private set; }
+
         public Task<string> CreateAsync(string title, CancellationToken cancellationToken)
         {
             Calls++;
+            CreateAttempts++;
+            if (CreateError != null)
+            {
+                throw CreateError;
+            }
+
             Created.Add(title);
             return Task.FromResult("pl-" + (Created.Count - 1));
         }
