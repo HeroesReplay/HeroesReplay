@@ -167,7 +167,7 @@ public class ObsValidatorTests : IDisposable
             "C:/heroesreplay/HeroesReplay/obs/Ranks/bronze.png",
             @"C:\heroesreplay\app\obs",
             @"C:\heroesreplay\Data",
-            path => path == checkout
+            new FakeObsFileSystem().With(checkout)
         );
 
         Assert.Equal(ObsValidator.PathStale, finding.Code);
@@ -185,7 +185,7 @@ public class ObsValidatorTests : IDisposable
             "file:///C:/heroesreplay/Data/prediction-report.html",
             @"C:\heroesreplay\app\obs",
             @"C:\heroesreplay\Data",
-            _ => false
+            new FakeObsFileSystem()
         );
         ObsFinding asset = ObsValidator.CheckReference(
             "hots-logo",
@@ -193,13 +193,187 @@ public class ObsValidatorTests : IDisposable
             "C:/heroesreplay/app/obs/hots-logo.png",
             @"C:\heroesreplay\app\obs",
             @"C:\heroesreplay\Data",
-            _ => false
+            new FakeObsFileSystem()
         );
 
         Assert.Equal(ObsValidator.RuntimeFileMissing, runtime.Code);
         Assert.Equal(ObsValidator.Warning, runtime.Severity);
         Assert.Equal(ObsValidator.FileMissing, asset.Code);
         Assert.Equal(ObsValidator.Error, asset.Severity);
+    }
+
+    [Theory]
+    [InlineData(@"C:\heroesreplay\app\obs")]
+    [InlineData(@"C:\SaltySadism\app\obs")]
+    public void OverSsh_AFileBehindTheJunction_IsCheckedAtItsTarget(string assetRoot)
+    {
+        // #335: over SSH the stream PC runs the exe from C:\SaltySadism\app, and the collection
+        // still names C:\heroesreplay, a junction to it that the SSH logon may not traverse.
+        FakeObsFileSystem files = FakeObsFileSystem
+            .OverSsh()
+            .With(@"C:\SaltySadism\app\obs\hots-logo.png", @"C:\SaltySadism\Data\OBS.txt");
+
+        Assert.Null(
+            ObsValidator.CheckReference(
+                "hots-logo",
+                "file",
+                "C:/heroesreplay/app/obs/hots-logo.png",
+                assetRoot,
+                @"C:\heroesreplay\Data",
+                files
+            )
+        );
+        Assert.Null(
+            ObsValidator.CheckReference(
+                "current-replay",
+                "file",
+                "C:/heroesreplay/Data/OBS.txt",
+                assetRoot,
+                @"C:\heroesreplay\Data",
+                files
+            )
+        );
+    }
+
+    [Fact]
+    public void OverSsh_AJunctionWhoseTargetCannotBeRead_IsUnverifiable_NotMissing()
+    {
+        FakeObsFileSystem files = FakeObsFileSystem.OverSsh(targetReadable: false);
+
+        ObsFinding asset = ObsValidator.CheckReference(
+            "hots-logo",
+            "file",
+            "C:/heroesreplay/app/obs/hots-logo.png",
+            @"C:\SaltySadism\app\obs",
+            @"C:\heroesreplay\Data",
+            files
+        );
+        ObsFinding runtime = ObsValidator.CheckReference(
+            "prediction-report-browser",
+            "url",
+            "file:///C:/heroesreplay/Data/prediction-report.html",
+            @"C:\SaltySadism\app\obs",
+            @"C:\heroesreplay\Data",
+            files
+        );
+
+        foreach (ObsFinding finding in new[] { asset, runtime })
+        {
+            Assert.Equal(ObsValidator.FileUnverifiable, finding.Code);
+            Assert.Equal(ObsValidator.Warning, finding.Severity);
+            Assert.Contains(
+                @"It goes through C:\heroesreplay, a junction or symbolic link",
+                finding.Message,
+                StringComparison.Ordinal
+            );
+            Assert.Contains("desktop session", finding.Message, StringComparison.Ordinal);
+        }
+
+        Assert.Equal("hots-logo.file", asset.Subject);
+    }
+
+    [Fact]
+    public void OverSsh_AFileMissingAtTheJunctionsTarget_IsStillMissing()
+    {
+        FakeObsFileSystem files = FakeObsFileSystem
+            .OverSsh()
+            .With(@"C:\SaltySadism\app\obs\other.png");
+
+        ObsFinding asset = ObsValidator.CheckReference(
+            "hots-logo",
+            "file",
+            "C:/heroesreplay/app/obs/hots-logo.png",
+            @"C:\heroesreplay\app\obs",
+            @"C:\heroesreplay\Data",
+            files
+        );
+        ObsFinding runtime = ObsValidator.CheckReference(
+            "current-replay",
+            "file",
+            "C:/heroesreplay/Data/OBS.txt",
+            @"C:\heroesreplay\app\obs",
+            @"C:\heroesreplay\Data",
+            files
+        );
+
+        Assert.Equal(ObsValidator.FileMissing, asset.Code);
+        Assert.Equal(ObsValidator.Error, asset.Severity);
+        Assert.Contains(
+            @"checked as C:\SaltySadism\app\obs\hots-logo.png through the link C:\heroesreplay",
+            asset.Message,
+            StringComparison.Ordinal
+        );
+        Assert.Equal(ObsValidator.RuntimeFileMissing, runtime.Code);
+        Assert.Equal(ObsValidator.Warning, runtime.Severity);
+    }
+
+    [Fact]
+    public void OverSsh_APathThroughTheJunctionToThisInstallsCopy_IsNotStale()
+    {
+        // Location:DataDirectory names the junction's target; the collection names the junction.
+        Assert.Null(
+            ObsValidator.CheckReference(
+                "current-replay",
+                "file",
+                "C:/heroesreplay/Data/OBS.txt",
+                @"C:\SaltySadism\app\obs",
+                @"C:\SaltySadism\Data",
+                FakeObsFileSystem.OverSsh().With(@"C:\SaltySadism\Data\OBS.txt")
+            )
+        );
+    }
+
+    [Fact]
+    public void OverSsh_AnotherInstallsCopyBehindTheJunction_IsStillStale()
+    {
+        ObsFinding finding = ObsValidator.CheckReference(
+            "hots-logo",
+            "file",
+            "C:/heroesreplay/HeroesReplay/obs/hots-logo.png",
+            @"C:\SaltySadism\app\obs",
+            @"C:\heroesreplay\Data",
+            FakeObsFileSystem
+                .OverSsh()
+                .With(
+                    @"C:\SaltySadism\HeroesReplay\obs\hots-logo.png",
+                    @"C:\SaltySadism\app\obs\hots-logo.png"
+                )
+        );
+
+        Assert.Equal(ObsValidator.PathStale, finding.Code);
+        Assert.Contains(@"C:\SaltySadism\app\obs\hots-logo.png", finding.Message);
+    }
+
+    [Fact]
+    public void OverSsh_ACollectionBehindAnUnreadableJunction_PassesWithWarnings()
+    {
+        // The 12 obs.file_missing errors the stream PC printed over SSH become warnings.
+        FakeObs obs = FakeObs.Installed(@"C:\heroesreplay\Data", @"C:\heroesreplay\app\obs");
+
+        ObsValidation validation = ObsValidator.Validate(
+            obs.Open(null, null),
+            FakeObs.InspectionSettings(@"C:\heroesreplay\Data"),
+            FakeObsFileSystem.OverSsh(targetReadable: false)
+        );
+
+        Assert.True(validation.Ok, Describe(validation));
+        Assert.DoesNotContain(
+            validation.Findings,
+            finding => finding.Code is ObsValidator.FileMissing or ObsValidator.RuntimeFileMissing
+        );
+        Assert.Contains(
+            validation.Findings,
+            finding =>
+                finding.Code == ObsValidator.FileUnverifiable
+                && finding.Subject == "current-replay.file"
+        );
+        Assert.Contains(
+            validation.Findings,
+            finding =>
+                finding.Code == ObsValidator.FileUnverifiable
+                && finding.Subject != "current-replay.file"
+                && finding.Message.Contains(@"C:\heroesreplay\app\obs", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
@@ -212,7 +386,7 @@ public class ObsValidatorTests : IDisposable
                 "https://overlay.example/widget?token=SECRET",
                 null,
                 null,
-                _ => false
+                new FakeObsFileSystem()
             )
         );
         ObsFinding broken = ObsValidator.CheckReference(
@@ -221,7 +395,7 @@ public class ObsValidatorTests : IDisposable
             "https://?token=SECRET",
             null,
             null,
-            _ => false
+            new FakeObsFileSystem()
         );
 
         Assert.Equal(ObsValidator.UrlInvalid, broken.Code);

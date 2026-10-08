@@ -122,6 +122,7 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 | `obs.stream_service_unexpected` | warning | Settings > Stream: Twitch. |
 | `obs.filter_stale` | warning | An old `Scroll` filter on the match report source. Right-click the source > Filters, and disable or remove it. With loop off it moves the page out of its frame and the scene looks blank (transparent). |
 | `obs.filter_missing`, `obs.path_stale`, `obs.collection_custom` | warning | Let `services start` update a managed collection while OBS is closed, or fix the source by hand. |
+| `obs.file_unverifiable` | warning | This session could not check a source's file: a junction or symbolic link on the way (named in the message) could not be traversed or read. Over SSH the stream PC's `C:\heroesreplay` is a junction to `C:\SaltySadism` that a network logon may not traverse; a junction that can be read is checked at its target instead, so this shows only when even that fails. Run `obs validate` in the desktop session, or check the file through the link's target. |
 
 The full list is in the `heroes-replay-cli` skill (`obs_validate`).
 

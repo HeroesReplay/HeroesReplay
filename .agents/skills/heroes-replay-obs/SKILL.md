@@ -65,7 +65,8 @@ heroesreplay obs inspect --output json
 ```
 
 - Both are read-only.
-- Over SSH, `C:\heroesreplay` is a junction that a network logon cannot traverse. Every collection asset under `C:\heroesreplay\app\obs` therefore reports `obs.file_missing`, and every data file reports `obs.runtime_file_missing`, even though OBS (in the interactive session) loads them. Check such a path through `C:\SaltySadism\...` before believing it.
+- Over SSH, `C:\heroesreplay` is a junction to `C:\SaltySadism` that a network logon cannot traverse ("untrusted mount point"). Since #335, `obs validate` reads the junction itself without following it and checks the same file under its target, so the collection assets and data files that exist pass, and `obs.file_missing` or `obs.runtime_file_missing` there means the file is missing at the target too (the message names the path it checked). A build before #335 reports every one of them as missing; check such a path through `C:\SaltySadism\...` before believing it.
+- `obs.file_unverifiable` (a warning) means this session could not check the path at all: a junction or symbolic link on the way that it can neither traverse nor read, named in the message. OBS, in the desktop session, may still load the file. Check it from the desktop session or through the link's target.
 - Every other finding is real.
 
 ## Secrets and the profile
