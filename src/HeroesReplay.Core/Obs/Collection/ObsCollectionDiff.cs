@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using HeroesReplay.Core.Obs.Inspection;
 
 namespace HeroesReplay.Core.Obs.Collection;
 
@@ -140,9 +141,13 @@ public sealed record ObsCollectionDiffResult(
 /// rewrite, compared property by property for every source, filter, and scene item. The base
 /// tells who changed a value: the template (a managed change), the operator (an override,
 /// addition, or removal), or both (a conflict). Without a base, a difference is unattributed.
-/// Ids OBS assigns (<c>uuid</c>, scene item ids), hotkeys, private settings, and the plug-in
-/// version stamps are not compared, nor are the order of sources, filters, and items, global
-/// audio, and transitions.
+/// Ids OBS assigns (<c>uuid</c>, scene item ids), hotkeys, private settings, the plug-in
+/// version stamps, and the fields OBS writes on save (<see cref="ObsSavedFields"/>) are not
+/// compared, nor are the order of sources, filters, and items, global audio, and transitions. A
+/// scene item's position and bounding box compare within
+/// <see cref="ObsPlacement.PixelTolerance"/> and its scale within
+/// <see cref="ObsPlacement.ScaleTolerance"/>, the tolerance <c>obs validate</c> uses (#309): OBS
+/// saves the placement it loaded slightly rounded (#367).
 /// </summary>
 public static class ObsCollectionDiff
 {
@@ -259,7 +264,7 @@ public static class ObsCollectionDiff
             {
                 string templateValue = Value(n, property);
                 string liveValue = Value(l, property);
-                if (string.Equals(templateValue, liveValue, StringComparison.Ordinal))
+                if (Equal(key.Entity, property, templateValue, liveValue))
                 {
                     continue;
                 }
@@ -269,7 +274,8 @@ public static class ObsCollectionDiff
                     based != null,
                     baseValue,
                     templateValue,
-                    liveValue
+                    liveValue,
+                    (left, right) => Equal(key.Entity, property, left, right)
                 );
                 differences.Add(
                     Difference(key, property, kind, apply, baseValue, templateValue, liveValue)
@@ -296,7 +302,7 @@ public static class ObsCollectionDiff
             // Only the live collection has it now.
             (entityKind, entityApply) =
                 b == null ? (ObsDiffKind.OperatorAddition, ObsDiffApply.Keep)
-                : Same(b, l) ? (ObsDiffKind.ManagedRemoval, ObsDiffApply.Template)
+                : Same(key.Entity, b, l) ? (ObsDiffKind.ManagedRemoval, ObsDiffApply.Template)
                 : (ObsDiffKind.Conflict, ObsDiffApply.Refuse);
         }
         else
@@ -316,7 +322,8 @@ public static class ObsCollectionDiff
         bool baseKnown,
         string based,
         string template,
-        string live
+        string live,
+        Func<string, string, bool> equal
     )
     {
         if (!baseKnown)
@@ -324,7 +331,7 @@ public static class ObsCollectionDiff
             return (ObsDiffKind.Unattributed, ObsDiffApply.Keep);
         }
 
-        if (string.Equals(based, template, StringComparison.Ordinal))
+        if (equal(based, template))
         {
             // The template did not change it: the live value is the operator's.
             return live == null ? (ObsDiffKind.OperatorRemoval, ObsDiffApply.Keep)
@@ -332,7 +339,7 @@ public static class ObsCollectionDiff
                 : (ObsDiffKind.OperatorOverride, ObsDiffApply.Keep);
         }
 
-        if (string.Equals(based, live, StringComparison.Ordinal))
+        if (equal(based, live))
         {
             // Only the template moved.
             return template == null ? (ObsDiffKind.ManagedRemoval, ObsDiffApply.Template)
@@ -368,14 +375,45 @@ public static class ObsCollectionDiff
         };
 
     private static bool Same(
+        ObsDiffEntity entity,
         IReadOnlyDictionary<string, string> left,
         IReadOnlyDictionary<string, string> right
     ) =>
         left.Count == right.Count
         && left.All(pair =>
             right.TryGetValue(pair.Key, out string value)
-            && string.Equals(pair.Value, value, StringComparison.Ordinal)
+            && Equal(entity, pair.Key, pair.Value, value)
         );
+
+    /// <summary>
+    /// Two canonical values of one property are the same. A scene item's position and bounding
+    /// box are within <see cref="ObsPlacement.PixelTolerance"/> canvas pixels and its scale within
+    /// <see cref="ObsPlacement.ScaleTolerance"/>, as <c>obs validate</c> counts an item in place
+    /// (#309): OBS 32 saves a loaded placement of 139.01003 back as 139 (#367).
+    /// </summary>
+    private static bool Equal(ObsDiffEntity entity, string property, string left, string right)
+    {
+        if (string.Equals(left, right, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        double tolerance =
+            entity != ObsDiffEntity.SceneItem ? 0
+            : property is "pos.x" or "pos.y" or "bounds.x" or "bounds.y"
+                ? ObsPlacement.PixelTolerance
+            : property is "scale.x" or "scale.y" ? ObsPlacement.ScaleTolerance
+            : 0;
+        return tolerance > 0
+            && double.TryParse(left, NumberStyles.Float, CultureInfo.InvariantCulture, out double a)
+            && double.TryParse(
+                right,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out double b
+            )
+            && Math.Abs(a - b) <= tolerance;
+    }
 
     private static string Value(IReadOnlyDictionary<string, string> values, string property) =>
         values != null && values.TryGetValue(property, out string value) ? value : null;
@@ -565,6 +603,7 @@ public static class ObsCollectionDiff
                 {
                     if (
                         !ItemIgnored.Contains(property.Name)
+                        && !ObsSavedFields.SceneItemNames.Contains(property.Name)
                         && !runtime.SetsItem(scene, source, property.Name)
                     )
                     {

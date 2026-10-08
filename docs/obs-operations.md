@@ -105,6 +105,17 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 
   A source that exists on one side only is one line; its filters and scene items go with it.
 - **Not compared.** Ids OBS assigns (`uuid`, scene item ids), hotkeys, private settings, plug-in version stamps, the order of sources, filters, and items, global audio, transitions, and the values the spectator sets per replay: the info and tier text sources' text and file, the visibility of the game scene items it shows and hides, and each report browser source's url, css (the match report scroll), and height. Fractions compare at the single precision OBS saves (`0.66` and `0.6600000262260437` are equal); whole numbers, such as colors, compare exactly.
+- **Fields OBS writes on save (#367).** `ObsSavedFields` lists them by the OBS version that started writing them, and they are not compared, because `obs/Default.json` does not carry them:
+
+  | Where | Field | Since | What |
+  | --- | --- | --- | --- |
+  | Scene item | `pos_rel` | OBS 31.0 | The position relative to the canvas |
+  | Scene item | `scale_rel` | OBS 31.0 | The scale relative to `scale_ref` |
+  | Scene item | `bounds_rel` | OBS 31.0 | The bounding box relative to the canvas |
+  | Scene item | `scale_ref` | OBS 31.0 | The canvas size those were saved against |
+
+  OBS 31 and later load an item's transform from these copies when they are there. A merge that takes the template's position, scale, or bounding box for an item removes them from that item, so OBS loads the template's values. A new OBS version that saves another field of its own goes into that list, with its version.
+- **Placement tolerance.** A scene item's position and bounding box compare within 2 canvas pixels and its scale within 0.01, as `obs validate` counts an item in place (#309, `ObsPlacement`). OBS 32.2.2 saved the template's `waiting-screen` game capture at (139.01, 329.99), 395.38x226 back as (139, 330), 395.5x226. Before #367 that was 4 operator overrides, and the 26 items' saved fields were 208 operator additions, so `obs plan` called a collection that OBS had only loaded and saved operator work. `obs apply --backup` then recorded it as `Merged`, which no update replaces, and an update's additions-only merge refused it for the rounded placement. A template round-tripped by OBS 32.2.2 now diffs as in sync (`ObsCollectionDiffTests`, with that saved file as a fixture).
 - **Update.** `update.action` is what `update install-obs` would do now: `none`, `create`, `replace` (the whole collection, with the template), `merge` (the template's changes into a custom collection where the operator only added), `update_paths`, `restore` (a waiting release rollback), or `keep` (custom or unreadable), with `deferred` and `liveSwap` when it waits for OBS (a merge is never a live swap).
 - **Codes.** `obs.plan_in_sync`, `obs.plan_changes`, `obs.plan_base_unknown`, `obs.collection_custom`, `obs.collection_missing` (ok), and `obs.plan_conflict`, `obs.collection_unreadable`, `obs.template_missing` (not ok, exit 1). JSON is `schemaVersion` 1, `ok`, `code`, `message`, `base`, `update`, `pendingRollback`, `summary`, `differences`.
 ### Merging by hand (`obs apply`, #307)
