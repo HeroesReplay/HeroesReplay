@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Threading;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.CLI.Output;
+using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
@@ -355,11 +356,18 @@ public static class ServiceSupervisor
             }
 
             bool? gameClosed = hadSpectate ? CloseGame(shutdown.CloseGame) : null;
+            SwitcherStopResult switchers = hadSpectate
+                ? CloseIdleSwitchers(shutdown.CloseIdleSwitchers)
+                : null;
+            if (gameClosed == true && switchers?.LeftAlone.Count > 0)
+            {
+                // A switcher started Heroes again after the game closed: a game is still up.
+                gameClosed = false;
+            }
+
             if (gameClosed is bool closed)
             {
-                Console.WriteLine(
-                    closed ? "Heroes of the Storm: closed." : "Heroes of the Storm: still running."
-                );
+                Console.WriteLine(ServiceStopResult.DescribeGame(closed, switchers));
             }
 
             ServiceStreamCheck stream = null;
@@ -389,6 +397,7 @@ public static class ServiceSupervisor
             {
                 Roles = roles,
                 GameClosed = gameClosed,
+                Switchers = switchers,
                 Stream = stream,
                 Recording = recording,
                 Supervisor = supervisor,
@@ -512,6 +521,25 @@ public static class ServiceSupervisor
         {
             Console.Error.WriteLine("Could not close Heroes of the Storm. " + e.Message);
             return false;
+        }
+    }
+
+    /// <summary>Null when no step was given or the switchers could not be read.</summary>
+    private static SwitcherStopResult CloseIdleSwitchers(Func<SwitcherStopResult> closeSwitchers)
+    {
+        if (closeSwitchers == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return closeSwitchers();
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine("Could not close HeroesSwitcher_x64. " + e.Message);
+            return null;
         }
     }
 

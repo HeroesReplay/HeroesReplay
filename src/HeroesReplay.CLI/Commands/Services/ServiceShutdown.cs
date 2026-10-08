@@ -1,4 +1,5 @@
 using System;
+using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
@@ -22,6 +23,12 @@ public sealed class ServiceShutdown
 
     /// <summary>Closes Heroes of the Storm. True when no game process is left.</summary>
     public Func<bool> CloseGame { get; set; }
+
+    /// <summary>
+    /// Called right after <see cref="CloseGame"/>: closes each HeroesSwitcher_x64 left without a
+    /// Heroes child and leaves one whose Heroes child still runs (#359).
+    /// </summary>
+    public Func<SwitcherStopResult> CloseIdleSwitchers { get; set; }
 
     public Func<ObsShutdownPlan, ObsStreamResult> ConfirmStream { get; set; }
 

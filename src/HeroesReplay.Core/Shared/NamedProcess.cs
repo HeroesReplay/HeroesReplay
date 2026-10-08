@@ -6,6 +6,7 @@ namespace HeroesReplay.Core.Shared;
 public static class NamedProcess
 {
     public const string HeroesOfTheStorm = "HeroesOfTheStorm_x64";
+    public const string HeroesSwitcher = "HeroesSwitcher_x64";
     public const string BattleNet = "Battle.net";
 
     public static bool IsRunning(string processName)

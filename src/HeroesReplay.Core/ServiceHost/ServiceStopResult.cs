@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs.Recording;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.ServiceHost;
 
@@ -125,6 +127,12 @@ public sealed class ServiceStopResult
     /// <summary>Null when the game was not checked: spectate was not recorded.</summary>
     public bool? GameClosed { get; init; }
 
+    /// <summary>
+    /// The HeroesSwitcher_x64 processes closed after the game (#359). Null when they were not
+    /// checked: spectate was not recorded, or no step was given.
+    /// </summary>
+    public SwitcherStopResult Switchers { get; init; }
+
     /// <summary>Null when OBS was not read: a role is still running, or no reader was given.</summary>
     public ServiceStreamCheck Stream { get; init; }
 
@@ -142,11 +150,25 @@ public sealed class ServiceStopResult
     public bool Succeeded =>
         RolesExited
         && GameClosed != false
+        && Switchers?.AllStopped != false
         && (Stream == null || Stream.ConfirmsStopped)
         && (Recording == null || Recording.ConfirmsStopped)
         && Supervisor?.Exited != false;
 
     public int ExitCode => Succeeded ? 0 : 1;
+
+    /// <summary>
+    /// The <c>Heroes of the Storm:</c> line: the game, then each HeroesSwitcher_x64 closed after
+    /// it or left because its Heroes child is still up (#359).
+    /// </summary>
+    public static string DescribeGame(bool closed, SwitcherStopResult switchers)
+    {
+        string game = closed
+            ? "Heroes of the Storm: closed."
+            : "Heroes of the Storm: still running.";
+        string more = switchers?.Describe();
+        return string.IsNullOrEmpty(more) ? game : game + " " + more;
+    }
 
     public IReadOnlyList<string> Failures()
     {
@@ -166,6 +188,15 @@ public sealed class ServiceStopResult
         if (GameClosed == false)
         {
             failures.Add("Heroes of the Storm is still running.");
+        }
+
+        foreach (
+            SwitcherStop switcher in Switchers?.Stopped.Where(stop =>
+                stop.Outcome == SwitcherStopOutcome.StillRunning
+            ) ?? []
+        )
+        {
+            failures.Add($"{NamedProcess.HeroesSwitcher} pid {switcher.Pid} is still running.");
         }
 
         if (Stream != null && !Stream.ConfirmsStopped)
