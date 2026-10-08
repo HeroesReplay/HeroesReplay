@@ -591,7 +591,10 @@ public class ReplayMediaObservationTests
         Assert.Equal(ReplayMediaReason.AlreadyPublished, snapshot.Decision.RecordingReason);
         Assert.False(snapshot.Decision.PublicationCandidate);
         Assert.False(
-            SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = true }, loaded)
+            SessionMedia.ShouldRecord(
+                new OBSSettings { Enabled = true, RecordingEnabled = true },
+                loaded
+            )
         );
     }
 
@@ -1018,7 +1021,7 @@ public class ReplayMediaObservationTests
                 RecordAndUpload = false,
             }
         );
-        OBSSettings obs = new OBSSettings { RecordingEnabled = true };
+        OBSSettings obs = new OBSSettings { Enabled = true, RecordingEnabled = true };
         YouTubeSettings youtube = new YouTubeSettings { Enabled = true };
 
         MediaPolicySnapshot snapshot = await Log(temp)
@@ -1045,6 +1048,7 @@ public class ReplayMediaObservationTests
         LoadedReplay loaded = Loaded(RecordRequest(upload: true));
         OBSSettings obs = new OBSSettings
         {
+            Enabled = true,
             RecordingEnabled = false,
             RecordRequestedReplays = true,
         };

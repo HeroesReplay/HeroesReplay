@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,8 @@ internal sealed class RecordingSession
     private readonly ILogger logger;
     private readonly IObsRecordSocket socket;
     private readonly ObsRecordingBudget budget;
+    private readonly RecordingClaimStore claims;
+    private readonly Func<DateTimeOffset> now;
     private readonly object gate = new();
     private readonly ManualResetEventSlim wake = new(false);
     private volatile bool ownsRecording;
@@ -24,11 +27,23 @@ internal sealed class RecordingSession
     private bool disconnectSeen;
     private string stoppedPath;
 
-    public RecordingSession(ILogger logger, IObsRecordSocket socket, ObsRecordingBudget budget)
+    /// <summary>
+    /// <paramref name="claims"/> is where the recording this process starts is claimed for
+    /// <c>services stop</c> (#318). Null writes no claim.
+    /// </summary>
+    public RecordingSession(
+        ILogger logger,
+        IObsRecordSocket socket,
+        ObsRecordingBudget budget,
+        RecordingClaimStore claims = null,
+        Func<DateTimeOffset> now = null
+    )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.socket = socket ?? throw new ArgumentNullException(nameof(socket));
         this.budget = budget ?? ObsRecordingBudget.Default;
+        this.claims = claims;
+        this.now = now ?? (() => DateTimeOffset.UtcNow);
         if (this.budget.PollInterval <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(budget));
@@ -326,6 +341,8 @@ internal sealed class RecordingSession
                 replayId,
                 string.IsNullOrWhiteSpace(reason) ? "every replay" : reason
             );
+            // Before the request: a spectate killed while OBS confirms still leaves its claim.
+            Claim(replayId);
             socket.StartRecord();
             attempt.Called = true;
         }
@@ -461,6 +478,8 @@ internal sealed class RecordingSession
         if (StoppedSeen())
         {
             ReleaseOwnership();
+            // OBS reported the output stopped, so nothing is left running for services stop.
+            Unclaim();
             return ObsRecordingResult.Failed(
                 ObsOutputFailure.NotConfirmed,
                 "OBS stopped recording without an output path."
@@ -491,6 +510,8 @@ internal sealed class RecordingSession
 
     private ObsRecordingResult Finish(string path, int? replayId)
     {
+        // OBS gave the stopped file's path: the recording is no longer running.
+        Unclaim();
         if (SplitSeen())
         {
             ReleaseOwnership();
@@ -696,6 +717,60 @@ internal sealed class RecordingSession
             result.Failure,
             result.Detail
         );
+    }
+
+    /// <summary>
+    /// Records that this process asked OBS to record. A failed or unconfirmed start keeps the
+    /// claim: OBS may still be recording, and services stop checks it against OBS before it acts.
+    /// </summary>
+    private void Claim(int? replayId)
+    {
+        if (claims == null)
+        {
+            return;
+        }
+
+        try
+        {
+            claims.Save(
+                new RecordingClaim
+                {
+                    ReplayId = replayId,
+                    StartedAt = now(),
+                    ProcessId = Environment.ProcessId,
+                }
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not write the OBS recording claim {Path}. If spectate is killed before replay {ReplayId} ends, services stop will not find this recording.",
+                claims.FilePath,
+                replayId
+            );
+        }
+    }
+
+    private void Unclaim()
+    {
+        if (claims == null)
+        {
+            return;
+        }
+
+        try
+        {
+            claims.Clear();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not delete the OBS recording claim {Path}. services stop checks it against OBS and deletes it.",
+                claims.FilePath
+            );
+        }
     }
 
     private void TakeOwnership()

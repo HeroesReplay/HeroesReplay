@@ -173,6 +173,87 @@ public class GameManagerReportTests
         Assert.Equal(0, fixture.Obs.EndSessions);
     }
 
+    /// <summary>
+    /// #318: the stream reconcile can reach OBS after BeginSession failed, and the recording then
+    /// starts. The session end stops it even though the replay had no OBS session.
+    /// </summary>
+    [Fact]
+    public void SessionEnd_WithoutAnObsSession_StopsTheRecordingItOwns()
+    {
+        using var fixture = new Fixture();
+        string file = Path.Combine(Path.GetTempPath(), "65820711", "owned.mp4");
+        fixture.Obs.StopResult = ObsRecordingResult.FinalizedAt(file);
+
+        ObsRecordingResult stopped = fixture.Manager.StopSessionRecording(
+            new LoadedReplay { ReplayId = 65820711 },
+            obsSession: false
+        );
+
+        Assert.Equal(1, fixture.Obs.StopRecordings);
+        Assert.True(stopped.Finalized);
+        Assert.Equal(file, stopped.OutputPath);
+        Assert.Equal(0, fixture.Obs.EndSessions);
+    }
+
+    /// <summary>
+    /// With nothing owned, ObsController answers NotOwned without sending OBS anything. Without an
+    /// OBS session the session end then has no recording result, as before.
+    /// </summary>
+    [Fact]
+    public void SessionEnd_WithoutAnObsSessionOrARecording_HasNoResult()
+    {
+        using var fixture = new Fixture();
+        fixture.Obs.StopResult = ObsRecordingResult.Failed(
+            ObsOutputFailure.NotOwned,
+            "This process does not own the OBS recording."
+        );
+
+        Assert.Null(
+            fixture.Manager.StopSessionRecording(
+                new LoadedReplay { ReplayId = 65820711 },
+                obsSession: false
+            )
+        );
+        Assert.Equal(1, fixture.Obs.StopRecordings);
+    }
+
+    /// <summary>A graceful services stop mid-match stops the recording and leaves the stream.</summary>
+    [Fact]
+    public void ServicesStop_StopsTheOwnedRecordingAndNeverTheStream()
+    {
+        using var fixture = new Fixture();
+        string file = Path.Combine(Path.GetTempPath(), "65820711", "owned.mp4");
+        fixture.Obs.StopResult = ObsRecordingResult.FinalizedAt(file);
+        fixture.Stop.Cancel();
+
+        ObsRecordingResult stopped = fixture.Manager.StopSessionRecording(
+            new LoadedReplay { ReplayId = 65820711 },
+            obsSession: true
+        );
+
+        Assert.True(stopped.Finalized);
+        Assert.Equal(1, fixture.Obs.StopRecordings);
+    }
+
+    [Fact]
+    public void ServicesStop_AFailedStopIsStillTheSessionsResult()
+    {
+        using var fixture = new Fixture();
+        fixture.Obs.StopResult = ObsRecordingResult.Failed(
+            ObsOutputFailure.Timeout,
+            "Timed out waiting for the finalized OBS recording path."
+        );
+        fixture.Stop.Cancel();
+
+        ObsRecordingResult stopped = fixture.Manager.StopSessionRecording(
+            new LoadedReplay { ReplayId = 65820711 },
+            obsSession: true
+        );
+
+        Assert.Equal(ObsOutputFailure.Timeout, stopped.Failure);
+        Assert.Equal(1, fixture.Obs.StopRecordings);
+    }
+
     [Fact]
     public async Task StopDuringTheHold_EndsItWithoutLaunching()
     {
@@ -329,9 +410,19 @@ public class GameManagerReportTests
         public ObsRecordingResult StartRecording() =>
             ObsRecordingResult.Failed(ObsOutputFailure.NotRequested, "test");
 
-        public ObsRecordingResult StopRecording() =>
+        /// <summary>What StopRecording returns. NotOwned is ObsController with nothing recording.</summary>
+        public ObsRecordingResult StopResult { get; set; } =
             ObsRecordingResult.Failed(ObsOutputFailure.NotRequested, "test");
 
+        public int StopRecordings { get; private set; }
+
+        public ObsRecordingResult StopRecording()
+        {
+            StopRecordings++;
+            return StopResult;
+        }
+
+        /// <summary>Throws: the session end never starts or stops the stream.</summary>
         public ObsStreamResult StartStreaming() => throw new NotSupportedException();
 
         public ObsStreamResult StopStreaming() => throw new NotSupportedException();

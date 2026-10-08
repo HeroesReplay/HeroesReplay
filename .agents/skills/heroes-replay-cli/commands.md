@@ -365,11 +365,11 @@ Make sure the requested roles run from this install: start only the ones that ar
 
 ## `services stop`
 
-Ask the recorded processes to shut down, kill any still running after 20 seconds, and close Heroes of the Storm. Exits 1 unless every role exited, the game closed, and OBS is not streaming.
+Ask the recorded processes to shut down, kill any still running after 20 seconds, close Heroes of the Storm, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game closed, OBS is not streaming, and no recording spectate started is still running.
 
 - **Before:** On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
-- **Changes:** Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Never stops an OBS stream.
-- **Exit:** 0 when every role and the supervisor exited, the game closed, and OBS is closed or not streaming. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams.
+- **Changes:** Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when its duration matches the claim (#318). Never stops an OBS stream.
+- **Exit:** 0 when every role and the supervisor exited, the game closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked.
 
 ## `services status`
 

@@ -1,5 +1,6 @@
 using System;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
 
 namespace HeroesReplay.CLI.Commands.Services;
@@ -26,6 +27,12 @@ public sealed class ServiceShutdown
 
     /// <summary>Read-only OBS stream state. Called only after every role has exited.</summary>
     public Func<ServiceStreamCheck> ReadStream { get; set; }
+
+    /// <summary>
+    /// Stops the OBS recording spectate started and left running (#318). Called only after every
+    /// role has exited, after <see cref="ReadStream"/>. It never stops the stream.
+    /// </summary>
+    public Func<OrphanRecordingCheck> StopSpectateRecording { get; set; }
 
     /// <summary>
     /// Called after the stop file is down: waits for a running supervisor to exit, killing it

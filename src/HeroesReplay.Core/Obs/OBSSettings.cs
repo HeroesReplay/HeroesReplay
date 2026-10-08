@@ -5,10 +5,16 @@ namespace HeroesReplay.Core.Obs;
 
 public class OBSSettings
 {
+    /// <summary>
+    /// When false, spectate sends OBS nothing: no scenes, no report scenes, and no recording,
+    /// whatever <see cref="RecordingEnabled"/> and <see cref="RecordRequestedReplays"/> say (#318).
+    /// </summary>
     public bool Enabled { get; set; }
 
     /// <summary>Optional path to obs64.exe. Empty = default Program Files install.</summary>
     public string ExecutablePath { get; set; }
+
+    /// <summary>Record every spectated replay. Applies only while <see cref="Enabled"/> is true.</summary>
     public bool RecordingEnabled { get; set; }
 
     /// <summary>

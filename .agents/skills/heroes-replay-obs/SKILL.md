@@ -35,7 +35,7 @@ description: >
 | `obs arm` / `obs disarm` | Write or delete the machine's ingest arm, `%LOCALAPPDATA%\HeroesReplay\stream-armed`. OBS itself is not touched. | Live: never without the owner. Dev: only for a stream proof. |
 | `services start` | Updates the collection's paths, or replaces a managed collection with a new template, only while OBS is closed | Dev. Live: only in a scheduled downtime. |
 | The spectator (`spectate`, `services start` roles) | Starts OBS when needed, changes scenes, starts and stops the recording, starts the stream when allowed, and live-swaps a new template between replays | Dev for proofs. Live: it is the production stack. |
-| `services stop` | Never stops a stream. It checks that OBS is closed or not streaming, and fails otherwise. | Dev. Live: only in a scheduled downtime. |
+| `services stop` | Never stops a stream. It checks that OBS is closed or not streaming, and fails otherwise. Then it sends `StopRecord` for a recording spectate claimed (`obs-recording.json`) and left running, when the recording's duration matches the claim (#318). | Dev. Live: only in a scheduled downtime. |
 | `update install-obs`, `update migrate-stream-arm` | Write `%APPDATA%\obs-studio` and `%LOCALAPPDATA%\HeroesReplay` | Only from `apply-release.ps1`, never by hand on a dev box |
 | obs-mcp (royshil) | Everything, including `StartStream` and `RemoveInput`. It returns the stream key. | Dev only, registered per machine. Never in the repo, the release zip, or the live box. |
 
