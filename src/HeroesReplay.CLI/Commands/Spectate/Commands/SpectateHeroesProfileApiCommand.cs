@@ -36,6 +36,7 @@ public class SpectateHeroesProfileApiCommand : Command
             .BuildHeroesReplayProvider();
         using IServiceScope scope = provider.CreateScope();
         SpectateReleaseVersion.Write(scope.ServiceProvider);
+        SpectateClipTools.Check(scope.ServiceProvider);
         scope.ServiceProvider.GetRequiredService<BattleNetAgentReaper>().Reap("spectate start");
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
         using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(

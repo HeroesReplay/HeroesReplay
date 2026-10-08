@@ -18,7 +18,7 @@ namespace HeroesReplay.Tests.Integration.Clips;
 /// <summary>
 /// Runs the real ffprobe and ffmpeg against a 1920x1080 mp4 written the way OBS writes one
 /// (index at the end of the file), with a real replay that has a pentakill.
-/// Needs ffmpeg at C:\ffmpeg\bin or on PATH.
+/// Needs ffmpeg where clips look for it (FfmpegLocator): the deps install folder, C:\ffmpeg\bin, or PATH.
 /// </summary>
 [Trait(TestCategories.Category, TestCategories.Integration)]
 public class MatchClipExportTests : IClassFixture<ReplayFixture>
@@ -134,7 +134,7 @@ public class MatchClipExportTests : IClassFixture<ReplayFixture>
 
     private static string Run(string tool, string arguments)
     {
-        string path = FfmpegLocator.Find(tool);
+        string path = FfmpegLocator.From(null, null).Find(tool);
         Assert.False(string.IsNullOrWhiteSpace(path), tool + " was not found.");
         using Process process = Process.Start(
             new ProcessStartInfo(path, arguments)

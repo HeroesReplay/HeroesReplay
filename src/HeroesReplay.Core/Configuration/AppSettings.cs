@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
@@ -51,6 +53,8 @@ public class AppSettings
     public DiskBacklogSettings Disk { get; set; } = SpectateAdmission.DefaultWatermarks();
     public ReplayMediaPolicySettings ReplayMedia { get; set; } = new ReplayMediaPolicySettings();
     public RetentionSettings Retention { get; set; }
+    public ClipSettings Clips { get; set; } = new ClipSettings();
+    public DependencySettings Dependencies { get; set; } = new DependencySettings();
     public ReleaseSettings Release { get; set; }
     public ServiceHealthSettings ServiceHealth { get; set; } = new ServiceHealthSettings();
     public ServiceLogSettings ServiceLogs { get; set; } = new ServiceLogSettings();

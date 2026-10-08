@@ -25,7 +25,8 @@ Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `Her
 | `TwitchExtension` | Heroes Profile Twitch extension payloads |
 | `Obs` (`Collection`, `Inspection`, `Recording`, `Pages`) | OBS websocket control, the stream arm, report scenes. `Collection`: the scene collection and profile files OBS reads. `Inspection`: the read-only reads behind `obs inspect`, `obs validate`, and the MCP tools. `Recording`: the match recording and its HUD clock. `Pages`: `obs pages` |
 | `YouTube` (`Metadata`, `Publication`, `Playlists`, `Search`, `Outbox`, `Quota`) | Upload, titles and descriptions, publication budget, playlists, duplicate lookup, quota units |
-| `MediaPolicy`, `Clips`, `Retention` | What gets recorded and uploaded, pentakill detection and clips, disk cleanup |
+| `MediaPolicy`, `Clips`, `Retention` | What gets recorded and uploaded, pentakill detection and clips (`FfmpegLocator`, `check ffmpeg`), disk cleanup |
+| `Dependencies` | The pinned external tools (`dependencies.json`, embedded: ffmpeg and ffprobe) and `deps install`: download, size and SHA-256 check, staged install into `Dependencies:Directory` |
 | `Connectivity`, `ServiceHost` (`Logs`), `SelfUpdate`, `Status` | Outage handling, the four service processes and their role logs, release updates, `status.json` |
 | `Telemetry` | `HeroesReplayTelemetry` (traces and metrics) and `ReplaySessionFile`, which joins one replay's traces across processes |
 | `Shared` | Types used across slices: `Map`, `Hero`, `GameType`, `GameRank`, `EnglishMapNames`, `DurableFile`, `NamedProcess`, `ProcessTable` (parent pids, image paths, start times), resilience and secrets helpers |
@@ -175,6 +176,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `C:\heroesreplay\Data\Contexts` | Per-replay context + OBS recordings (`RecFilePath`) |
 | `C:\heroesreplay\Data\HeroesData` | heroes-data2 JSON cache (Heroes.Element). Downloaded from HeroesToolChest/heroes-data2 when that cache is missing |
 | `C:\heroesreplay\secrets` | Local backup of gitignored `appsettings.secrets.json` |
+| `C:\heroesreplay\tools\ffmpeg` | `ffmpeg.exe` and `ffprobe.exe` for clips, from `heroesreplay deps install` (`Dependencies:Directory`). `apply-release.ps1` runs it after every install. Never set up by hand |
 | `%USERPROFILE%\Documents\Heroes of the Storm\Interfaces` | AhliObs (`client configure`) |
 | `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` (`OBS:SceneCollectionName`) |
 | `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile (`OBS:ProfileName`). Machine-owned: `obs/Default/basic.ini` is copied only when it does not exist, and updates keep it |
@@ -207,6 +209,7 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 - OBS changes: `check obs`; keep scene/source names configurable; wait for `IsIdentified`.
 - Twitch: `check twitch`. PubSub reward topics are obsolete; do not add new ListenToRewards usage.
 - CLI command changes: Smoke tests + `--help` on the new command.
+- Clips and ffmpeg: `check ffmpeg`. External tools are installed by `heroesreplay deps install` from `src/HeroesReplay.Core/Dependencies/dependencies.json`, never by hand. Unit tests use a fake download; CI does not download ffmpeg.
 
 ## Repo skills (this tree)
 
@@ -217,7 +220,7 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 | `.agents/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, test categories |
 | `.agents/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
 | `.agents/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
-| `.agents/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. Binary is ffmpeg 9.0.2 at `C:\ffmpeg\bin`. |
+| `.agents/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. ffmpeg 9.0.2 is pinned (version, URL, SHA-256) in `src/HeroesReplay.Core/Dependencies/dependencies.json` only; `heroesreplay deps install` puts it in `C:\heroesreplay\tools\ffmpeg`, and `check ffmpeg` reports what clips will run. |
 | `.agents/skills/release-install` | Install production from the GitHub Release zip instead of cloning and building. |
 
 Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`, `/ffmpeg`, `/release-install`. `csharp-solid` is also in this folder.

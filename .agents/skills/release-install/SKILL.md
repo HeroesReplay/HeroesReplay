@@ -16,6 +16,7 @@ Production runs the zip attached to a GitHub Release. It does not clone the repo
 | `C:\heroesreplay\app` | The published exe, `appsettings.json`, `appsettings.prod.json`, `apply-release.ps1`, `version.txt`, and `obs\`. This is the directory that gets replaced. The update keeps the previous copy at `C:\heroesreplay\app.previous`. |
 | `C:\heroesreplay\Data` | Queue, replays, `spectated-ids.txt`, `requests.json`, contexts. Not in the zip. An update must not delete or rewrite it. |
 | `C:\heroesreplay\secrets\appsettings.secrets.json` | Tokens. Not in the zip. The helper copies it back to `appsettings.secrets.json` beside the exe. |
+| `C:\heroesreplay\tools\ffmpeg` | `ffmpeg.exe` and `ffprobe.exe` for clips, from `heroesreplay deps install` (`Dependencies:Directory`). Not in the zip, and outside `app`, so an update or a rollback leaves it alone. |
 
 `HEROES_REPLAY_ENV=prod` when starting services from that folder. `Release:Enabled` is true only in `appsettings.prod.json`. A source build under `src` or `worktrees` never replaces itself.
 
@@ -27,7 +28,8 @@ Stop any source-built `heroesreplay` and close Heroes of the Storm. OBS should b
 2. Extract it to `C:\heroesreplay\app`.
 3. Put secrets at `C:\heroesreplay\secrets\appsettings.secrets.json`.
 4. On the stream PC only, run `heroesreplay obs arm`. Twitch ingest needs this machine-local arm (`%LOCALAPPDATA%\HeroesReplay\stream-armed`) as well as `OBS:StreamingEnabled` from `appsettings.prod.json`. A first install has no previous install to migrate from, so nothing arms it for you.
-5. From `C:\heroesreplay\app`, run `heroesreplay services start` with `HEROES_REPLAY_ENV=prod`.
+5. From `C:\heroesreplay\app`, run `heroesreplay deps install`, then `heroesreplay check ffmpeg`. Clips need ffmpeg and ffprobe; the zip does not ship them. `deps install` downloads the build pinned in `src/HeroesReplay.Core/Dependencies/dependencies.json` (ffmpeg 9.0.2), checks its SHA-256, and puts the two exes in `C:\heroesreplay\tools\ffmpeg`. Later updates run it for you.
+6. From `C:\heroesreplay\app`, run `heroesreplay services start` with `HEROES_REPLAY_ENV=prod`.
 
 Do not point the install at the git worktree. The OBS profile (`basic.ini`) belongs to the machine: if `%APPDATA%\obs-studio\basic\profiles\{OBS:ProfileName}\basic.ini` already exists it is kept. Otherwise copy `app\obs\Default\basic.ini` there as a starting template and tune it in OBS.
 
@@ -42,6 +44,8 @@ Health gate: the new exe runs `update release-health --wait`. Healthy means ever
 - Unhealthy (exit 2): a role is down or stale, or spectate tried a replay and none reached a clock (`LoadTimedOut`, `ClientCrashed`, `ClientHung`, `Canceled`, `Error`), or the check crashed or hung.
 
 Unhealthy appends the tag to `skipped-releases.txt`, runs `services stop` (then kills any `heroesreplay` left), mirrors `app.previous` back, keeps the higher `MinReplayId`, runs `update install-obs` from the restored exe, and starts the stack the same way. A `services.stop` during the window is no verdict: nothing is rolled back. Delete a line from `skipped-releases.txt` to allow that release again. Every step is in `logs\apply-release.log`.
+
+Clip tools: after the copy and `update launcher`, and before the stack starts, the new exe runs `heroesreplay deps install`. It installs the ffmpeg build pinned in `src/HeroesReplay.Core/Dependencies/dependencies.json` (ffmpeg 9.0.2: `ffmpeg.exe` and `ffprobe.exe`, SHA-256 checked) into `C:\heroesreplay\tools\ffmpeg` once per machine, and on later updates finds it in place and does nothing, unless a release pins a new build. It is bounded by `Dependencies:DownloadTimeout` (5 min). A failure (no network, a hash mismatch, a locked exe) is a `WARNING` line in the log: the release still starts, is still judged only by the health gate, and is never rolled back for it. Spectate then logs one error at start that ffmpeg or ffprobe is missing, and the next update or a manual `heroesreplay deps install` fixes it. `heroesreplay check ffmpeg` shows what clips will run.
 
 OBS files: after the copy, the new exe runs `update install-obs`, which reads `OBS:SceneCollectionName` and `OBS:ProfileName` from the install. If OBS is open, scene files stay in `app\obs` and are not copied over the live collection; when the template changed, the new stack's first replay swaps it in live through the spare collection `{collection}-next`, without stopping the stream (`OBS:LiveCollectionSwap`, `docs/obs-operations.md`). If OBS is closed, `Default.json` replaces `scenes\{collection}.json`. The profile `basic.ini` is copied only when the machine has no profile of that name; an existing profile is kept and the log says so. `service.json` is never copied.
 

@@ -203,6 +203,29 @@ function Invoke-ReleaseCommand([string]$Exe, [string[]]$Arguments, [string]$What
     }
 }
 
+function Install-ClipTools([string]$Exe) {
+    # ffmpeg and ffprobe cut the pentakill clips. The new build installs the one it pins
+    # (src/HeroesReplay.Core/Dependencies/dependencies.json) into Dependencies:Directory
+    # (C:\heroesreplay\tools\ffmpeg). Once per machine: with that build in place it does nothing.
+    # It never blocks or rolls back a release: a failure is a warning, and spectate then logs one
+    # error at start until the next update or a manual `heroesreplay deps install` succeeds.
+    if (-not (Test-Path -LiteralPath $Exe)) {
+        Write-Host "WARNING: deps install was skipped: $Exe is missing. The release continues without ffmpeg."
+        return
+    }
+
+    try {
+        $global:LASTEXITCODE = 0
+        Invoke-ReleaseCommand $Exe @('deps', 'install') 'deps install'
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "WARNING: deps install exited $LASTEXITCODE. The release continues; clips are not cut until ffmpeg and ffprobe are installed (heroesreplay deps install, heroesreplay check ffmpeg)."
+        }
+    }
+    catch {
+        Write-Host "WARNING: deps install failed: $($_.Exception.Message) The release continues."
+    }
+}
+
 function Invoke-ReleaseHealth([string]$Exe, [string]$Since) {
     # 0 healthy, 2 unhealthy, 3 a stop was requested, 4 inconclusive. A crash or a hang is unhealthy.
     if (-not (Test-Path -LiteralPath $Exe)) {
@@ -509,6 +532,10 @@ try {
     # health gate then sees no stack. The new build rewrites it to `services start --supervise` with
     # every role and keeps the old one as start-live.cmd.previous for a rollback.
     Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'launcher', '--install', $InstallDir, '--environment', $environment) 'Launcher'
+
+    # The new build installs the ffmpeg it pins, before the stack starts so spectate finds it.
+    # A failure only warns (Install-ClipTools).
+    Install-ClipTools (Join-Path $InstallDir 'heroesreplay.exe')
 
     Clear-ServiceStop
     $since = (Get-Date).ToUniversalTime().ToString('o')

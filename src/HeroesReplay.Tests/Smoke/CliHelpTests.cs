@@ -24,6 +24,41 @@ public class CliHelpTests
         Assert.Contains(root.Subcommands, c => c.Name == "otel");
         Assert.Contains(root.Subcommands, c => c.Name == "update");
         Assert.Contains(root.Subcommands, c => c.Name == "obs");
+        Assert.Contains(root.Subcommands, c => c.Name == "deps");
+    }
+
+    [Fact]
+    public void DepsHelp_HasInstall()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("deps --help").Errors);
+        Assert.Empty(root.Parse("deps install --help").Errors);
+        // The exact arguments apply-release.ps1 passes, and a scratch folder.
+        Assert.Empty(root.Parse("deps install").Errors);
+        Assert.Empty(root.Parse("deps install --dir C:\\scratch\\tools").Errors);
+        Assert.NotEmpty(root.Parse("deps install --dir").Errors);
+        Command deps = root.Subcommands.Single(c => c.Name == "deps");
+        Assert.Contains("dependencies.json", deps.Description);
+        Command install = deps.Subcommands.Single(c => c.Name == "install");
+        Assert.Contains("SHA-256", install.Description);
+        Assert.Contains("ffprobe.exe", install.Description);
+        Assert.Contains(
+            "C:\\heroesreplay\\tools",
+            install.Options.Single(o => o.Name == "--dir").Description
+        );
+    }
+
+    [Fact]
+    public async Task DepsInstallAndCheckFfmpegHelp_ExitZero()
+    {
+        Assert.Equal(
+            0,
+            await new CommandLineService().InvokeAsync(new[] { "deps", "install", "--help" })
+        );
+        Assert.Equal(
+            0,
+            await new CommandLineService().InvokeAsync(new[] { "check", "ffmpeg", "--help" })
+        );
     }
 
     [Fact]
@@ -118,6 +153,9 @@ public class CliHelpTests
         Assert.Contains(check.Subcommands, c => c.Name == "timer");
         Assert.Contains(check.Subcommands, c => c.Name == "twitch-extension");
         Assert.Contains(check.Subcommands, c => c.Name == "battlenet");
+        Command ffmpeg = check.Subcommands.Single(c => c.Name == "ffmpeg");
+        Assert.Contains("-version", ffmpeg.Description);
+        Assert.Empty(root.Parse("check ffmpeg --help").Errors);
     }
 
     [Fact]
