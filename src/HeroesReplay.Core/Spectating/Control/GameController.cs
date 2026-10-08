@@ -896,11 +896,8 @@ public class GameController : IGameController
                 && !ReplayClientRoute.OtherReplayOnClient(replayOnClient, replayPath);
             bool loading = memoryLoading == true;
             bool timer = await IsMatchClockRunning().ConfigureAwait(false);
-            bool ocrLoginForm = ClientScreenText.IsLoginForm(text);
-            ShadowScreen(ScreenState.LoginForm, ocrLoginForm, text);
-
-            // Memory's login read decides; the login-form words count only when it cannot tell.
-            bool loginForm = LoginFormCue.Sees(clientScreen?.OnLogin, text);
+            // The email/password form from memory only (#292); the window is not OCR'd for it.
+            bool loginForm = LoginFormCue.Sees(clientScreen?.OnLogin);
             // A login form while the build downloads is the newest exe's handoff. Closing it
             // would stop the download.
             if (

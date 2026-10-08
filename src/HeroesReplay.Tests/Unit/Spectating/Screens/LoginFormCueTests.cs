@@ -6,23 +6,18 @@ namespace HeroesReplay.Tests.Unit.Spectating.Screens;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class LoginFormCueTests
 {
-    private const string FormText =
-        "Email or Phone Password Keep me logged in Log in Battle.net Account";
-
     [Fact]
-    public void Sees_MemoryDecidesWhenItCanTell()
+    public void Sees_TheFormMemoryReads()
     {
-        // Memory reads the form while OCR read an older frame, and memory reads Battle.net's
-        // AUTHENTICATION panel (not the form) while OCR still shows the form's words.
-        Assert.True(LoginFormCue.Sees(loginInMemory: true, "AUTHENTICATION Connecting..."));
-        Assert.False(LoginFormCue.Sees(loginInMemory: false, FormText));
+        // 2.57.0.98348 started by HeroesSwitcher without SSO: ScreenLoginUnified with no dialog.
+        Assert.True(LoginFormCue.Sees(loginInMemory: true));
     }
 
     [Fact]
-    public void Sees_OcrOnlyWhenMemoryCannotTell()
+    public void Sees_NotTheFormWhenMemorySaysOtherwiseOrCannotTell()
     {
-        Assert.True(LoginFormCue.Sees(loginInMemory: null, FormText));
-        Assert.False(LoginFormCue.Sees(loginInMemory: null, "PLAY COLLECTION LOOT WATCH"));
-        Assert.False(LoginFormCue.Sees(loginInMemory: null, null));
+        // Battle.net's AUTHENTICATION panel reads Authenticating, not Login (0.4.1).
+        Assert.False(LoginFormCue.Sees(loginInMemory: false));
+        Assert.False(LoginFormCue.Sees(loginInMemory: null));
     }
 }
