@@ -279,7 +279,7 @@ public static class CommandReference
         new(
             "heroesprofile download",
             "`HeroesProfileApi:ApiKey`.",
-            "Downloads Storm League replays into `Data\\Standard` and requested ones into `Data\\Requests`; keeps the hero statistics current while `YouTube:Titles:StatHooks:Enabled`. Does not launch the game.",
+            "Downloads Storm League replays into `Data\\Standard` and requested ones into `Data\\Requests`; keeps the hero statistics current while `YouTube:Titles:StatHooks:Enabled`. A Standard replay whose download Heroes Profile refuses with an HTTP status is skipped (replay id and status logged), not counted as an outage. Does not launch the game.",
             Blocks
         ),
         new(
@@ -297,8 +297,8 @@ public static class CommandReference
         new(
             "heroesprofile sample",
             "`HeroesProfileApi:ApiKey`; `--output` must not be a spectate queue folder.",
-            "Downloads the newest replays of `--map` into `--output`.",
-            "0 when replays were downloaded, 1 when `--count` is out of 1 to 20, `--output` is a queue folder, or nothing was listed."
+            "Downloads the newest listed replays of `--map` into `--output` until `--count` are there or the listing runs out. A download that still fails after the Heroes Profile retries (a 429 waits for `Retry-After`) is skipped: its replay id and HTTP status are logged, its partial file is deleted, and the summary lists each skip with its reason.",
+            "0 when at least one listed replay is in `--output` (downloaded or already there), even with skips. 1 when `--count` is out of 1 to 20, `--output` is a queue folder, nothing was listed, or every listed replay was skipped."
         ),
         new(
             "services start",

@@ -603,8 +603,8 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// The hero statistics refresh behind YouTube title hooks. Its own Heroes Profile client and
-    /// <c>HttpClient</c> carry no retry handler, so a 429 waits for <c>Retry-After</c> instead
-    /// of being retried every second.
+    /// <c>HttpClient</c> carry no retry handler, so the refresh decides each wait itself
+    /// (<c>Retry-After</c> on a 429, at most 5 times) instead of the replay pipeline's 10 retries.
     /// </summary>
     public static IServiceCollection AddHeroStatsRefresh(this IServiceCollection services)
     {
