@@ -70,7 +70,6 @@ public class AppSettings
     public string RequestedReplayCachePath =>
         Path.Combine(Location.DataDirectory, HeroesProfileApi.RequestsCacheDirectoryName);
     public string SpectateReportPath => Path.Combine(Location.DataDirectory, "SpectateReport");
-    public string CapturesPath => Path.Combine(Location.DataDirectory, "Capture");
     public static string StormReplaysAccountPath => Path.Combine(UserGameFolderPath, "Accounts");
     public static string UserStormInterfacePath => Path.Combine(UserGameFolderPath, "Interfaces");
     public static string UserGameFolderPath =>
