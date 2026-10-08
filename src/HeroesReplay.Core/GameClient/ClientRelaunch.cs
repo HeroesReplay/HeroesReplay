@@ -5,7 +5,8 @@ namespace HeroesReplay.Core.GameClient;
 /// <summary>
 /// Battle.net drops a Heroes launch that arrives while the previous session is still
 /// going off. A second request is sent only when that process never appears.
-/// A full-size window with no readable text is not a menu or a match.
+/// A blank startup window (<see cref="BlankStartupWindow"/>: a uniform full-size frame with no
+/// screen in memory yet) is not a menu or a match.
 /// </summary>
 public static class ClientRelaunch
 {
@@ -37,11 +38,6 @@ public static class ClientRelaunch
         }
 
         return sinceLastRequest >= RetryIfNoProcess;
-    }
-
-    public static bool IsBlankClientWindow(string text, int width, int height)
-    {
-        return string.IsNullOrWhiteSpace(text) && width >= 1000 && height >= 700;
     }
 
     /// <summary>

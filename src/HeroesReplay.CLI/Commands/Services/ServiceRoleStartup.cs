@@ -4,7 +4,6 @@ using System.Threading;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Twitch;
-using Windows.Media.Ocr;
 
 namespace HeroesReplay.CLI.Commands.Services;
 
@@ -14,63 +13,48 @@ internal static class ServiceRoleStartup
     {
         AppSettings settings = ServiceCollectionExtensions.LoadAppSettings();
         ReadGrantedScopes(settings.Twitch);
-        object engine = TryCreateOcr();
-        try
+        bool youtubeEnabled = settings.YouTube?.Enabled == true;
+        bool contextWritable =
+            !youtubeEnabled
+            || ServiceRoleChecks.DirectoryWritable(ServiceRoleChecks.ContextDirectory(settings));
+        bool oauthRequired = youtubeEnabled && settings.YouTube.DryRun == false;
+        string secretsPath = ServiceRoleChecks.YouTubeSecretsPath(settings);
+        bool oauthPresent = oauthRequired && secretsPath != null && File.Exists(secretsPath);
+        bool gameDataReady = ServiceRoleChecks.HeroesProfileGameDataReady(
+            ServiceRoleChecks.HeroDataFilePresent(settings.HeroesDataPath),
+            ServiceRoleChecks.MapCatalogPresent(settings.Maps)
+        );
+        ServiceRoleFacts facts = ServiceRoleChecks.Describe(
+            exe,
+            settings.Capture != null && ServiceRoleChecks.CaptureAvailable(settings.Capture.Method),
+            ServiceRoleChecks.PathsExist(
+                settings.Location?.DataDirectory,
+                settings.Location?.GameInstallDirectory,
+                settings.Location?.BattlenetPath
+            ),
+            ServiceRoleChecks.ObsPrerequisites(
+                settings.OBS?.Enabled == true,
+                settings.OBS?.WebSocketEndpoint,
+                DefaultObsPath(settings.OBS?.ExecutablePath)
+            ),
+            settings.Twitch,
+            ServiceRoleChecks.DirectoryWritable(ServiceRoleChecks.CacheDirectory(settings)),
+            settings.HeroesProfileApi,
+            settings.YouTube,
+            contextWritable,
+            oauthPresent,
+            gameDataReady
+        );
+        return new ServiceStartupHandshake
         {
-            bool youtubeEnabled = settings.YouTube?.Enabled == true;
-            bool contextWritable =
-                !youtubeEnabled
-                || ServiceRoleChecks.DirectoryWritable(
-                    ServiceRoleChecks.ContextDirectory(settings)
-                );
-            bool oauthRequired = youtubeEnabled && settings.YouTube.DryRun == false;
-            string secretsPath = ServiceRoleChecks.YouTubeSecretsPath(settings);
-            bool oauthPresent = oauthRequired && secretsPath != null && File.Exists(secretsPath);
-            bool gameDataReady = ServiceRoleChecks.HeroesProfileGameDataReady(
-                ServiceRoleChecks.HeroDataFilePresent(settings.HeroesDataPath),
-                ServiceRoleChecks.MapCatalogPresent(settings.Maps)
-            );
-            ServiceRoleFacts facts = ServiceRoleChecks.Describe(
-                exe,
-                engine != null ? new object() : null,
-                settings.Capture != null
-                    && ServiceRoleChecks.CaptureAvailable(settings.Capture.Method),
-                ServiceRoleChecks.PathsExist(
-                    settings.Location?.DataDirectory,
-                    settings.Location?.GameInstallDirectory,
-                    settings.Location?.BattlenetPath
-                ),
-                ServiceRoleChecks.ObsPrerequisites(
-                    settings.OBS?.Enabled == true,
-                    settings.OBS?.WebSocketEndpoint,
-                    DefaultObsPath(settings.OBS?.ExecutablePath)
-                ),
-                settings.Twitch,
-                ServiceRoleChecks.DirectoryWritable(ServiceRoleChecks.CacheDirectory(settings)),
-                settings.HeroesProfileApi,
-                settings.YouTube,
-                contextWritable,
-                oauthPresent,
-                gameDataReady
-            );
-            return new ServiceStartupHandshake
-            {
-                Spectate = facts.Spectate,
-                Twitch = facts.Twitch,
-                Download = facts.Download,
-                YouTube = facts.YouTube,
-                TryReadReady = record => ServiceReadyFile.TryRead(record),
-                ReadyTimeout = TimeSpan.FromSeconds(45),
-                PollInterval = TimeSpan.FromMilliseconds(200),
-            };
-        }
-        finally
-        {
-            if (engine is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-        }
+            Spectate = facts.Spectate,
+            Twitch = facts.Twitch,
+            Download = facts.Download,
+            YouTube = facts.YouTube,
+            TryReadReady = record => ServiceReadyFile.TryRead(record),
+            ReadyTimeout = TimeSpan.FromSeconds(45),
+            PollInterval = TimeSpan.FromMilliseconds(200),
+        };
     }
 
     /// <summary>
@@ -124,17 +108,5 @@ internal static class ServiceRoleStartup
             "64bit",
             "obs64.exe"
         );
-    }
-
-    private static object TryCreateOcr()
-    {
-        try
-        {
-            return OcrEngine.TryCreateFromUserProfileLanguages();
-        }
-        catch (Exception)
-        {
-            return null;
-        }
     }
 }

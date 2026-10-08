@@ -1,22 +1,16 @@
 using System;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Imaging;
-using System.IO;
-using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Spectating.Capture;
 using Microsoft.Extensions.Logging.Abstractions;
-using Windows.Graphics.Imaging;
-using Windows.Media.Ocr;
-using Windows.Storage.Streams;
 
 namespace HeroesReplay.CLI.Commands.Check;
 
 public static class BattleNetLauncherCheck
 {
-    public static async Task<CheckCommand.CheckResult> ReadAsync(OcrEngine engine)
+    public static async Task<CheckCommand.CheckResult> ReadAsync(LauncherOcr ocr)
     {
         Process[] processes = Process.GetProcessesByName("Battle.net");
         try
@@ -41,7 +35,7 @@ public static class BattleNetLauncherCheck
                 );
             }
 
-            if (engine == null)
+            if (ocr == null)
             {
                 return new CheckCommand.CheckResult(
                     "battlenet",
@@ -64,7 +58,7 @@ public static class BattleNetLauncherCheck
                 }
 
                 captured = true;
-                text = await RecognizeAsync(engine, bitmap).ConfigureAwait(false);
+                text = await ocr.RecognizeAsync(bitmap).ConfigureAwait(false);
             }
 
             if (!captured)
@@ -115,24 +109,6 @@ public static class BattleNetLauncherCheck
             {
                 process.Dispose();
             }
-        }
-    }
-
-    private static async Task<string> RecognizeAsync(OcrEngine engine, Bitmap bitmap)
-    {
-        using var stream = new InMemoryRandomAccessStream();
-        using (Stream netStream = stream.AsStream())
-        {
-            bitmap.Save(netStream, ImageFormat.Bmp);
-            netStream.Flush();
-            stream.Seek(0);
-            BitmapDecoder decoder = await BitmapDecoder.CreateAsync(
-                BitmapDecoder.BmpDecoderId,
-                stream
-            );
-            using SoftwareBitmap software = await decoder.GetSoftwareBitmapAsync();
-            OcrResult result = await engine.RecognizeAsync(software);
-            return result?.Text;
         }
     }
 }

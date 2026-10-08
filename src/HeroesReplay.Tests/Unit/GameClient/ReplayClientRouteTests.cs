@@ -556,7 +556,7 @@ public class ReplayClientRouteTests
                     replayPresented: false
                 ),
                 alreadyOpened: false,
-                windowBlank: ClientRelaunch.IsBlankClientWindow("", 1280, 720),
+                windowBlank: true,
                 gameDataStillStarting: false
             )
         );
@@ -565,7 +565,12 @@ public class ReplayClientRouteTests
     [Fact]
     public void OpenMatchingBuildNow_LeavesTheClientUpWhileGameDataStartupIsStillBlank()
     {
-        bool blank = ClientRelaunch.IsBlankClientWindow("", 1280, 720);
+        // A uniform full-size frame with no screen in memory yet (BlankStartupWindow).
+        bool blank = BlankStartupWindow.IsBlank(
+            BlankStartupWindowTests.Black,
+            null,
+            System.TimeSpan.FromSeconds(30)
+        );
         bool stillStarting = ClientRelaunch.KeepsWaitingForGameData(
             startupText: false,
             sawStartup: true,
@@ -598,7 +603,7 @@ public class ReplayClientRouteTests
             ReplayClientRoute.OpenMatchingBuildNow(
                 ReplayLaunchAuth.OpenMatchingBuild,
                 alreadyOpened: false,
-                windowBlank: ClientRelaunch.IsBlankClientWindow("Preparing game data", 403, 139),
+                windowBlank: false,
                 gameDataStillStarting: false
             )
         );
