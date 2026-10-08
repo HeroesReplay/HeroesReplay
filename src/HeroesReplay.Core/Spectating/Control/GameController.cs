@@ -544,23 +544,17 @@ public class GameController : IGameController
             return RunningClientBuild.Unreadable;
         }
 
-        try
+        // The SDK attaches read-only, reads the main module's file version, and never throws.
+        using HeroesClientProcess running = HeroesClientProcess.Attach(cachedProcess);
+        if (!running.Ok)
         {
-            string version = cachedProcess?.MainModule?.FileVersionInfo?.FileVersion;
-            if (string.IsNullOrWhiteSpace(version))
-            {
-                return RunningClientBuild.Unreadable;
-            }
+            logger.LogWarning(
+                "Could not read the running Heroes file version ({Reason}).",
+                running.Reason
+            );
+        }
 
-            return ReplayClientRoute.SameBuild(version, replayVersion)
-                ? RunningClientBuild.Matches
-                : RunningClientBuild.Differs;
-        }
-        catch (Exception e)
-        {
-            logger.LogWarning(e, "Could not read the running Heroes file version.");
-            return RunningClientBuild.Unreadable;
-        }
+        return ReplayClientRoute.RunningBuild(running.DetectedVersion, replayVersion);
     }
 
     private async Task WaitForAuthenticatedClientAsync()

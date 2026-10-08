@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HeroesClientSDK;
 using HeroesReplay.Core.HeroesProfile;
 
 namespace HeroesReplay.Core.GameClient;
@@ -97,6 +98,23 @@ public static class ReplayClientRoute
         string a = Normalize(left);
         string b = Normalize(right);
         return a.Length > 0 && string.Equals(a, b, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The running client's build against the replay's. <paramref name="running"/> is the
+    /// HeroesClientSDK <c>HeroesClientProcess.DetectedVersion</c> of the running exe; when it or
+    /// the replay's version is unknown, the build is <see cref="RunningClientBuild.Unreadable"/>.
+    /// </summary>
+    public static RunningClientBuild RunningBuild(HeroesClientVersion running, string replayVersion)
+    {
+        if (running is null || string.IsNullOrWhiteSpace(replayVersion))
+        {
+            return RunningClientBuild.Unreadable;
+        }
+
+        return SameBuild(running.ToString(), replayVersion)
+            ? RunningClientBuild.Matches
+            : RunningClientBuild.Differs;
     }
 
     /// <summary>
