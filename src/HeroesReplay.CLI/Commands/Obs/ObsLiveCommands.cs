@@ -32,7 +32,7 @@ public static class ObsLiveCommands
     public static Command ValidateCommand() =>
         Create(
             "validate",
-            "Check the collection OBS has loaded against obs/Default.json and this install's settings without changing it: the install's OBS files against obs/bundle.manifest, the websocket requests HeroesReplay sends, profile and collection, scenes, sources and filters, where each driven item and the game capture are placed, asset paths, Mic/Aux, canvas 1920x1080 and FPS, the recording format (.mp4), the stream and recording bitrate floor, and the stream service when OBS:StreamingEnabled. Findings have stable codes. Exit 0 when there is no error finding, 1 otherwise or when OBS cannot be read.",
+            "Check the collection OBS has loaded against obs/Default.json and this install's settings without changing it: the install's OBS files against obs/bundle.manifest, the websocket requests HeroesReplay sends, profile and collection, scenes, sources and filters, where each driven item and the game capture are placed, asset paths, Mic/Aux, canvas 1920x1080 and FPS, the recording format (.mp4, and crash-safe: fragmented MP4) and OBS:RecordingFormat, the stream and recording bitrate floor, and the stream service when OBS:StreamingEnabled. Findings have stable codes. Exit 0 when there is no error finding, 1 otherwise or when OBS cannot be read.",
             (json, output) =>
                 Validate(
                     new ObsWebsocketReadSessionFactory(),

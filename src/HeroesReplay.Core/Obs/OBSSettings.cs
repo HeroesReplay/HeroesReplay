@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HeroesReplay.Core.Obs.Recording;
 
 namespace HeroesReplay.Core.Obs;
 
@@ -16,6 +17,17 @@ public class OBSSettings
 
     /// <summary>Record every spectated replay. Applies only while <see cref="Enabled"/> is true.</summary>
     public bool RecordingEnabled { get; set; }
+
+    /// <summary>
+    /// The recording container. Right before each StartRecord the spectator sets the active
+    /// output mode's <c>RecFormat2</c> (<c>SimpleOutput</c> or <c>AdvOut</c>) to it, so the
+    /// machine's profile does not decide it (#310). One of <c>mp4</c>, <c>hybrid_mp4</c>,
+    /// <c>fragmented_mp4</c> (the default: the only one that stayed usable when OBS and its muxer
+    /// were killed), or <c>mkv</c> (not found by the uploader, clips, or retention, which look for
+    /// <c>*.mp4</c>). Any other value is <c>obs.recording_format_invalid</c>, and the profile's
+    /// format is left as it is.
+    /// </summary>
+    public string RecordingFormat { get; set; } = ObsRecordingFormat.Default;
 
     /// <summary>
     /// When false (the default), HeroesReplay never calls OBS StartStream/StopStream.
@@ -58,6 +70,14 @@ public class OBSSettings
     /// A process that was already running is never closed. Default false.
     /// </summary>
     public bool CloseOwnedOnStop { get; set; }
+
+    /// <summary>
+    /// When true (the default), spectate mutes every microphone input OBS has, the global
+    /// Mic/Aux devices and any audio input capture source, at each replay's session start and
+    /// right before it starts the stream (#314). Desktop Audio, media, and browser sources are
+    /// never touched. A mute that fails is a warning; it never stops the stream.
+    /// </summary>
+    public bool MuteMicrophones { get; set; } = true;
 
     /// <summary>
     /// After HeroesReplay starts OBS itself, how long the websocket identify is retried before

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
@@ -15,6 +17,7 @@ using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
+using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 using Microsoft.Kiota.Abstractions;
 
@@ -35,6 +38,7 @@ public class HeroesProfileProvider : IReplayProvider
     private int minReplayId;
     private Func<IReadOnlyList<string>> installedVersionSource;
     private Func<string, Replay> headerSource = ReplayHeader.Load;
+    private Func<DateTimeOffset> clock = () => DateTimeOffset.UtcNow;
     private readonly Dictionary<int, ReplayMediaPolicyInput> mediaFacts = new();
 
     public bool ContinuesWhenEmpty => true;
@@ -121,6 +125,11 @@ public class HeroesProfileProvider : IReplayProvider
         installedVersionSource = source;
     }
 
+    internal void UseClock(Func<DateTimeOffset> source)
+    {
+        clock = source ?? (() => DateTimeOffset.UtcNow);
+    }
+
     internal void UseReplayHeaders(Func<string, Replay> source)
     {
         headerSource = source ?? ReplayHeader.Load;
@@ -135,31 +144,13 @@ public class HeroesProfileProvider : IReplayProvider
         MediaRetention.SweepAndLog(settings, logger);
         if (settings.Twitch.EnableRequests)
         {
-            RewardQueueItem item = await requestQueue.DequeueItemAsync().ConfigureAwait(false);
-            if (item?.HeroesProfileReplay != null)
+            RequestFetch fetched = await FetchRequestAsync().ConfigureAwait(false);
+            if (fetched.Taken)
             {
-                await heroesProfileService
-                    .EnrichRankAsync(item.HeroesProfileReplay, provider.Token)
-                    .ConfigureAwait(false);
-                FileInfo requested = GetFileInfo(RequestsDirectory, item.HeroesProfileReplay);
-                // The spectator reads the redemption beside the replay. Write it before the
-                // replay appears, so the file is never seen without its request (#165).
-                StoreRequest(requested, item);
-                if (!requested.Exists)
-                {
-                    try
-                    {
-                        await DownloadReplayAsync(item.HeroesProfileReplay, requested)
-                            .ConfigureAwait(false);
-                    }
-                    catch
-                    {
-                        ForgetRequest(requested);
-                        throw;
-                    }
-                }
-
-                return true;
+                // A request whose download Heroes Profile did not answer still counts toward
+                // the role's outage mode. It stays queued either way (#351).
+                fetched.Outage?.Throw();
+                return fetched.File != null;
             }
         }
 
@@ -287,13 +278,11 @@ public class HeroesProfileProvider : IReplayProvider
         LoadedReplay loaded;
         if (settings.Twitch.EnableRequests)
         {
-            RewardQueueItem item = await requestQueue.DequeueItemAsync();
-
-            if (item != null)
+            RequestFetch fetched = await TryFetchRequestAsync().ConfigureAwait(false);
+            if (fetched.Taken)
             {
-                logger.LogInformation("Reward request item found, loading...");
                 activity?.SetTag("replay.source", "request");
-                loaded = await GetNextRequestedReplayAsync(item);
+                loaded = await LoadRequestedReplayAsync(fetched).ConfigureAwait(false);
                 TagLoaded(activity, loaded);
                 return loaded;
             }
@@ -322,40 +311,52 @@ public class HeroesProfileProvider : IReplayProvider
         );
     }
 
-    private async Task<LoadedReplay> GetNextRequestedReplayAsync(RewardQueueItem item)
+    private async Task<RequestFetch> TryFetchRequestAsync()
     {
         try
         {
-            if (item != null)
+            RequestFetch fetched = await FetchRequestAsync().ConfigureAwait(false);
+            if (fetched.Outage != null)
             {
-                await heroesProfileService
-                    .EnrichRankAsync(item.HeroesProfileReplay, provider.Token)
-                    .ConfigureAwait(false);
-
-                FileInfo fileInfo = GetFileInfo(RequestsDirectory, item.HeroesProfileReplay);
-
-                if (!fileInfo.Exists)
-                {
-                    await DownloadReplayAsync(item.HeroesProfileReplay, fileInfo)
-                        .ConfigureAwait(false);
-                }
-
-                fileInfo.Refresh();
-                StoreRequest(fileInfo, item);
-
-                Replay replay = await replayLoader
-                    .LoadAsync(fileInfo.FullName)
-                    .ConfigureAwait(false);
-
-                return new LoadedReplay
-                {
-                    ReplayId = item.HeroesProfileReplay.Id,
-                    RewardQueueItem = item,
-                    HeroesProfileReplay = item.HeroesProfileReplay,
-                    FileInfo = fileInfo,
-                    Replay = replay,
-                };
+                logger.LogError(
+                    fetched.Outage.SourceException,
+                    "Heroes Profile did not answer the download of a requested replay. The request stays queued."
+                );
             }
+
+            return fetched;
+        }
+        catch (OperationCanceledException) when (provider.Token.IsCancellationRequested)
+        {
+            return RequestFetch.Skipped;
+        }
+        catch (Exception e)
+        {
+            logger.LogCritical(e, "Could not provide a requested replay file. It stays queued.");
+            return RequestFetch.Skipped;
+        }
+    }
+
+    private async Task<LoadedReplay> LoadRequestedReplayAsync(RequestFetch fetched)
+    {
+        if (fetched.File == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            Replay replay = await replayLoader
+                .LoadAsync(fetched.File.FullName)
+                .ConfigureAwait(false);
+            return new LoadedReplay
+            {
+                ReplayId = fetched.Item.HeroesProfileReplay.Id,
+                RewardQueueItem = fetched.Item,
+                HeroesProfileReplay = fetched.Item.HeroesProfileReplay,
+                FileInfo = fetched.File,
+                Replay = replay,
+            };
         }
         catch (OperationCanceledException) when (provider.Token.IsCancellationRequested)
         {
@@ -363,10 +364,304 @@ public class HeroesProfileProvider : IReplayProvider
         }
         catch (Exception e)
         {
-            logger.LogCritical(e, "Could not provide a Replay file using HeroesProfile API.");
+            logger.LogCritical(e, "Could not load requested replay {Path}.", fetched.File.FullName);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The first due request's replay, on disk before the request leaves
+    /// <c>Data\requests.json</c> (#351). A download that can succeed later keeps the request
+    /// queued with a backoff. One that never can (Heroes Profile answers 404 or 410, or the
+    /// replay is below the supported patch line) fails the request and records a cancel that
+    /// <c>twitch connect</c> sends. A stop leaves the request as it was.
+    /// </summary>
+    private async Task<RequestFetch> FetchRequestAsync()
+    {
+        DateTimeOffset now = clock();
+        RewardQueueItem item = await requestQueue.PeekDownloadAsync(now).ConfigureAwait(false);
+        if (item == null)
+        {
+            return RequestFetch.None;
         }
 
-        return null;
+        RedemptionEnd recorded;
+        try
+        {
+            recorded = RedemptionDispositionLog.Recorded(
+                DispositionsPath(),
+                item.Request?.RedemptionId ?? Guid.Empty
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Another role is appending to it. Whether this redemption was already settled is
+            // not known, so nothing is downloaded or dequeued this pass.
+            logger.LogWarning(
+                "Could not read {File}. Request '{Title}' stays queued for the next pass. {Error}",
+                RedemptionDispositionLog.FileName,
+                item.Request?.RewardTitle,
+                e.Message
+            );
+            return RequestFetch.Skipped;
+        }
+
+        if (recorded == RedemptionEnd.Fulfill)
+        {
+            // Played and verified already, by a pass that was stopped before the request left
+            // the queue. It is not downloaded or played again.
+            RequestCompletion done = await requestQueue
+                .CompleteDownloadAsync(item, publish: null)
+                .ConfigureAwait(false);
+            logger.LogInformation(
+                "Request '{Title}' for replay {ReplayId} was already played and verified. It left the queue without a download ({Completion}).",
+                item.Request?.RewardTitle,
+                RequestedId(item),
+                done
+            );
+            return RequestFetch.Skipped;
+        }
+
+        if (recorded == RedemptionEnd.Cancel)
+        {
+            // A pass recorded the cancel and was stopped before the request left the queue.
+            await FailRequestAsync(
+                    item,
+                    item.Download?.FailureReason ?? "its replay could not be downloaded",
+                    cancelRecorded: true
+                )
+                .ConfigureAwait(false);
+            return RequestFetch.Skipped;
+        }
+
+        HeroesProfileReplay replay = item.HeroesProfileReplay;
+        if (replay == null || replay.Id <= 0)
+        {
+            await FailRequestAsync(item, "the request names no replay").ConfigureAwait(false);
+            return RequestFetch.Skipped;
+        }
+
+        if (
+            !RequestDownloadRetry.OnSupportedLine(
+                replay.GameVersion,
+                settings.Spectate?.VersionsSupported,
+                settings.Spectate?.MinimumGameVersion
+            )
+        )
+        {
+            string floor = settings.Spectate?.MinimumGameVersion;
+            await FailRequestAsync(
+                    item,
+                    string.IsNullOrWhiteSpace(floor)
+                        ? $"client {replay.GameVersion} is no longer supported"
+                        : $"client {replay.GameVersion} is older than the supported patch line ({floor} or newer)"
+                )
+                .ConfigureAwait(false);
+            return RequestFetch.Skipped;
+        }
+
+        await heroesProfileService.EnrichRankAsync(replay, provider.Token).ConfigureAwait(false);
+        // The file name carries the rank, which the lookup may fill in differently on a later
+        // pass. A replay already in Data\Requests under any name is that request's file.
+        FileInfo requested =
+            ExistingRequestFile(replay.Id) ?? GetFileInfo(RequestsDirectory, replay);
+        string partial = null;
+        if (!requested.Exists)
+        {
+            try
+            {
+                partial = await DownloadPartialAsync(replay, requested).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (provider.Token.IsCancellationRequested)
+            {
+                // A stop is not a failed attempt. The request stays queued as it was.
+                throw;
+            }
+            catch (Exception e)
+            {
+                int? status =
+                    e is ApiException api && api.ResponseStatusCode > 0
+                        ? api.ResponseStatusCode
+                        : null;
+                if (RequestDownloadRetry.Classify(status) == RequestDownloadVerdict.Fail)
+                {
+                    await FailRequestAsync(
+                            item,
+                            $"Heroes Profile no longer has the replay file (HTTP {status})"
+                        )
+                        .ConfigureAwait(false);
+                    return RequestFetch.Skipped;
+                }
+
+                await RetryLaterAsync(item, e, status, now).ConfigureAwait(false);
+                // Heroes Profile answered with a status: not an outage (#346).
+                return status != null
+                    ? RequestFetch.Skipped
+                    : new RequestFetch(true, null, item, ExceptionDispatchInfo.Capture(e));
+            }
+        }
+
+        RequestCompletion completion;
+        try
+        {
+            completion = await requestQueue
+                .CompleteDownloadAsync(item, () => Publish(requested, partial, item))
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            DeletePartial(partial);
+            throw;
+        }
+
+        switch (completion)
+        {
+            case RequestCompletion.Completed:
+                requested.Refresh();
+                if (partial != null)
+                {
+                    logger.LogInformation(
+                        "Downloaded Heroes Profile replay {ReplayId} ({Bytes} bytes).",
+                        replay.Id,
+                        requested.Length
+                    );
+                }
+
+                return new RequestFetch(true, requested, item, null);
+            case RequestCompletion.NotQueued:
+                DeletePartial(partial);
+                logger.LogInformation(
+                    "Request '{Title}' for replay {ReplayId} left the queue during its download. The replay was not kept.",
+                    item.Request?.RewardTitle,
+                    replay.Id
+                );
+                return RequestFetch.Skipped;
+            default:
+                // The queue was busy. The request stays queued and is downloaded again.
+                DeletePartial(partial);
+                return RequestFetch.Skipped;
+        }
+    }
+
+    /// <summary>
+    /// Runs under the queue lock, just before the request leaves the queue. The spectator reads
+    /// the redemption beside the replay, so it is written before the replay appears (#165).
+    /// </summary>
+    private void Publish(FileInfo requested, string partial, RewardQueueItem item)
+    {
+        StoreRequest(requested, item);
+        if (partial != null)
+        {
+            File.Move(partial, requested.FullName, overwrite: true);
+        }
+    }
+
+    private async Task RetryLaterAsync(
+        RewardQueueItem item,
+        Exception error,
+        int? status,
+        DateTimeOffset now
+    )
+    {
+        string reason = status is int code
+            ? $"HTTP {code}"
+            : $"{error.GetType().Name}: {error.Message}";
+        RequestDownload download = await requestQueue
+            .RetryDownloadLaterAsync(item, reason, now)
+            .ConfigureAwait(false);
+        logger.LogWarning(
+            "Download of requested replay {ReplayId} for {Login} failed ({Reason}, attempt {Attempts}). The request stays queued and is tried again at {NextAttempt:o}. The redemption is not refunded.",
+            RequestedId(item),
+            item.Request?.Login,
+            reason,
+            download?.Attempts,
+            download?.NextAttemptAt
+        );
+    }
+
+    /// <summary>
+    /// Gives a request up for good. The download role does not call Twitch: it records a cancel
+    /// in <c>Data\redemption-dispositions.txt</c> first, and <c>twitch connect</c> sends it
+    /// (<see cref="RedemptionFulfiller"/>), which returns the viewer's points.
+    /// </summary>
+    private async Task FailRequestAsync(
+        RewardQueueItem item,
+        string reason,
+        bool cancelRecorded = false
+    )
+    {
+        bool refund = item.Request?.RedemptionId is Guid id && id != Guid.Empty;
+        if (refund && !cancelRecorded)
+        {
+            RedemptionDispositionLog.Append(
+                DispositionsPath(),
+                RequestedId(item),
+                item.Request,
+                RedemptionEnd.Cancel
+            );
+        }
+
+        bool removed = await requestQueue
+            .FailDownloadAsync(item, reason, refund, clock())
+            .ConfigureAwait(false);
+        logger.LogWarning(
+            "Request '{Title}' from {Login} for replay {ReplayId} (redemption {RedemptionId}) cannot be played: {Reason}. {Outcome}",
+            item.Request?.RewardTitle,
+            item.Request?.Login,
+            RequestedId(item),
+            item.Request?.RedemptionId,
+            reason,
+            refund
+                ? "A cancel was recorded for twitch connect, which returns the points."
+                : "It has no redemption to refund."
+        );
+        if (!removed)
+        {
+            logger.LogWarning(
+                "The request queue was busy. Request '{Title}' leaves it on the next pass.",
+                item.Request?.RewardTitle
+            );
+        }
+    }
+
+    private static int? RequestedId(RewardQueueItem item) =>
+        item?.HeroesProfileReplay?.Id > 0 ? item.HeroesProfileReplay.Id : item?.Request?.ReplayId;
+
+    private FileInfo ExistingRequestFile(int replayId)
+    {
+        string separator = settings.StormReplay.Seperator;
+        string extension = settings.StormReplay.FileExtension;
+        if (string.IsNullOrEmpty(separator) || string.IsNullOrEmpty(extension))
+        {
+            return null;
+        }
+
+        string prefix = replayId.ToString(CultureInfo.InvariantCulture) + separator;
+        return RequestsDirectory
+            .GetFiles(prefix + "*" + extension)
+            .Where(file => file.Name.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+    }
+
+    private string DispositionsPath() =>
+        Path.Combine(settings.Location.DataDirectory, RedemptionDispositionLog.FileName);
+
+    /// <summary>
+    /// One pass over the request queue. <c>Taken</c> is false when no request was due.
+    /// <c>File</c> is the replay when the request left the queue with it on disk.
+    /// <c>Outage</c> is a download Heroes Profile did not answer.
+    /// </summary>
+    private sealed record RequestFetch(
+        bool Taken,
+        FileInfo File,
+        RewardQueueItem Item,
+        ExceptionDispatchInfo Outage
+    )
+    {
+        public static readonly RequestFetch None = new(false, null, null, null);
+
+        public static readonly RequestFetch Skipped = new(true, null, null, null);
     }
 
     private async Task<LoadedReplay> GetNextStandardReplayAsync()
@@ -433,85 +728,15 @@ public class HeroesProfileProvider : IReplayProvider
         }
     }
 
-    private void ForgetRequest(FileInfo replayFile)
-    {
-        try
-        {
-            CachedRequestReward.Delete(replayFile.FullName);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            logger.LogWarning(
-                e,
-                "Could not remove the request beside {Path}.",
-                replayFile.FullName
-            );
-        }
-    }
-
-    private async Task DownloadReplayAsync(HeroesProfileReplay replay, FileInfo fileInfo)
-    {
-        using Activity session = HeroesReplayTelemetry.BeginReplaySession(replay.Id);
-        using Activity activity = HeroesReplayTelemetry.StartSpan(
-            "heroesreplay.replay.download",
-            session
-        );
-        HeroesReplayTelemetry.TagReplay(activity, map: replay.Map, replayId: replay.Id);
-
-        try
-        {
-            await WriteDownloadAsync(replay, fileInfo).ConfigureAwait(false);
-        }
-        // A stop cancels the token. That is not an outage, so the resume flag stays for the next run.
-        catch (Exception e)
-            when (!provider.Token.IsCancellationRequested
-                && heroesProfileResume != null
-                && heroesProfileResume.Consume()
-            )
-        {
-            logger.LogWarning(
-                e,
-                "Connectivity restored. Retrying Heroes Profile download of {ReplayId} once.",
-                replay.Id
-            );
-            await WriteDownloadAsync(replay, fileInfo).ConfigureAwait(false);
-        }
-
-        ReplaySessionFile.Publish(session, replay.Id);
-        if (session != null)
-        {
-            logger.LogInformation(
-                "Replay session {ReplayId} trace {TraceId}.",
-                replay.Id,
-                session.TraceId
-            );
-        }
-    }
-
     /// <summary>
     /// The download goes to a <c>.part</c> file that is renamed when it is complete.
     /// A failed or cancelled download leaves no <c>.StormReplay</c> for the next run to load.
     /// </summary>
-    private async Task WriteDownloadAsync(HeroesProfileReplay replay, FileInfo fileInfo)
+    private async Task DownloadReplayAsync(HeroesProfileReplay replay, FileInfo fileInfo)
     {
-        string partial = PartialPath(fileInfo);
+        string partial = await DownloadPartialAsync(replay, fileInfo).ConfigureAwait(false);
         try
         {
-            await using (
-                FileStream file = new FileStream(
-                    partial,
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None
-                )
-            )
-            {
-                await heroesProfileService
-                    .DownloadReplayAsync(replay.Id, file, provider.Token)
-                    .ConfigureAwait(false);
-                await file.FlushAsync(provider.Token).ConfigureAwait(false);
-            }
-
             File.Move(partial, fileInfo.FullName, overwrite: true);
         }
         catch
@@ -528,10 +753,83 @@ public class HeroesProfileProvider : IReplayProvider
         );
     }
 
+    /// <summary>
+    /// The whole replay in <paramref name="fileInfo"/>'s <c>.part</c> file, which the caller
+    /// renames into place. A failed or cancelled download leaves no <c>.part</c> file.
+    /// </summary>
+    private async Task<string> DownloadPartialAsync(HeroesProfileReplay replay, FileInfo fileInfo)
+    {
+        using Activity session = HeroesReplayTelemetry.BeginReplaySession(replay.Id);
+        using Activity activity = HeroesReplayTelemetry.StartSpan(
+            "heroesreplay.replay.download",
+            session
+        );
+        HeroesReplayTelemetry.TagReplay(activity, map: replay.Map, replayId: replay.Id);
+
+        string partial = PartialPath(fileInfo);
+        try
+        {
+            await WritePartialAsync(replay, partial).ConfigureAwait(false);
+        }
+        // A stop cancels the token. That is not an outage, so the resume flag stays for the next run.
+        catch (Exception e)
+            when (!provider.Token.IsCancellationRequested
+                && heroesProfileResume != null
+                && heroesProfileResume.Consume()
+            )
+        {
+            logger.LogWarning(
+                e,
+                "Connectivity restored. Retrying Heroes Profile download of {ReplayId} once.",
+                replay.Id
+            );
+            await WritePartialAsync(replay, partial).ConfigureAwait(false);
+        }
+
+        ReplaySessionFile.Publish(session, replay.Id);
+        if (session != null)
+        {
+            logger.LogInformation(
+                "Replay session {ReplayId} trace {TraceId}.",
+                replay.Id,
+                session.TraceId
+            );
+        }
+
+        return partial;
+    }
+
+    private async Task WritePartialAsync(HeroesProfileReplay replay, string partial)
+    {
+        try
+        {
+            await using FileStream file = new FileStream(
+                partial,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None
+            );
+            await heroesProfileService
+                .DownloadReplayAsync(replay.Id, file, provider.Token)
+                .ConfigureAwait(false);
+            await file.FlushAsync(provider.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            DeletePartial(partial);
+            throw;
+        }
+    }
+
     private static string PartialPath(FileInfo fileInfo) => fileInfo.FullName + ".part";
 
     private void DeletePartial(string partial)
     {
+        if (partial == null)
+        {
+            return;
+        }
+
         try
         {
             File.Delete(partial);

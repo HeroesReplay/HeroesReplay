@@ -159,7 +159,7 @@ On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\He
 - ARAM: Silver City, Lost Cavern, Industrial District, Braxis Outpost.
 - ReplayId rewards: the current patch line (`MinimumGameVersion` and every newer build, including each `2.57.*` iteration). The build's exe does not have to be installed: an older build is downloaded through HeroesSwitcher when the replay plays. A build Blizzard no longer serves ends `BuildNotInstalled` and the redemption stays unfulfilled while the replay is held.
 - Spectator keys: `1`–`0` observe player. Do not send `C` (follow player camera) or Shift+Z ultra zoom.
-- Twitch: chat and EventSub redemptions reconnect with backoff; Helix predictions; channel-point rewards queue `Data\requests.json`. Reward prompts must say recent patch ReplayIds.
+- Twitch: chat and EventSub redemptions reconnect with backoff; Helix predictions; channel-point rewards queue `Data\requests.json`. Reward prompts must say recent patch ReplayIds. A request leaves the queue only once its replay is in `Data\Requests`. A failed download retries with backoff and is never refunded; only a gone file (Heroes Profile 404 or 410) or a client below the patch line fails it, and `twitch connect` then cancels the redemption (points returned). The download role never calls Twitch (#351).
 
 ### Calculators
 
@@ -183,7 +183,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `C:\heroesreplay\tools\ffmpeg` | `ffmpeg.exe` and `ffprobe.exe` for clips, from `heroesreplay deps install` (`Dependencies:Directory`). `apply-release.ps1` runs it after every install. Never set up by hand |
 | `%USERPROFILE%\Documents\Heroes of the Storm\Interfaces` | AhliObs (`client configure`) |
 | `%APPDATA%\obs-studio\basic\scenes\HeroesReplay.json` | OBS collection from `obs/Default.json` (`OBS:SceneCollectionName`) |
-| `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile (`OBS:ProfileName`). Machine-owned: `obs/Default/basic.ini` is copied only when it does not exist, and updates keep it |
+| `%APPDATA%\obs-studio\basic\profiles\HeroesReplay\basic.ini` | OBS profile (`OBS:ProfileName`). Machine-owned: `obs/Default/basic.ini` is copied only when it does not exist, and updates keep it. The spectator sets only `RecFormat2` (`OBS:RecordingFormat`, `fragmented_mp4`, #310) before each recording |
 | `%LOCALAPPDATA%\HeroesReplay\stream-armed` | Machine-local Twitch ingest arm. The live box, and ASA-SERVER for stream proofs (developer Twitch account) |
 | `%LOCALAPPDATA%\HeroesReplay\obs` | `backups\` (the live collection or profile before each write, newest 10), `managed-collections.json` (the template each live collection was written from), `templates\` (a copy of each of those templates, the base of a merge), `apply-undo.json` (the record from before the last `obs apply`), `release-rollback.json` (which backup a rollback of the last release puts back), `restore-pending.json` (a rollback that waits for OBS; `services status` shows it) and `assets\<bundle-hash>\` (verified copies of a build's OBS files the collection points at with `OBS:StableAssets`, on in dev, so removing a worktree leaves no missing images, #330). A custom collection is never overwritten. See `docs/obs-operations.md` |
 

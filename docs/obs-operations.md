@@ -15,9 +15,10 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 | Packaged assets (`obs/` in the release: images, HTML, video) | Release | Published with each release and listed in `obs/bundle.manifest`, with each file's size and SHA-256 and the scene and source contract. See [The bundle manifest](#the-bundle-manifest). With `OBS:StableAssets` (dev), the collection points at a verified copy in `%LOCALAPPDATA%\HeroesReplay\obs\assets\<bundle-hash>\` instead ([Updating the collection](#updating-the-collection)). |
 | Scene collection (`%APPDATA%\obs-studio\basic\scenes\<name>.json`) | Application, unless the operator customizes it | Installed from `obs/Default.json` and kept in step with each release. A custom collection is never overwritten. See [Updating the collection](#updating-the-collection). |
 | Generated pages (`Data\queue.html`, `Data\prediction-report.html`) | Runtime data | Written by the roles when the queue changes or a prediction opens or resolves. `heroesreplay obs pages` renders both with the current build and reloads the browser sources that show them. |
-| Profile (`%APPDATA%\obs-studio\basic\profiles\<name>\basic.ini`) | The machine | `obs/Default/basic.ini` is written only when the machine has no profile of that name. An existing profile is never replaced. |
-| Encoder, bitrate, output resolution, FPS, recording path | The machine | Not set by HeroesReplay. Only the [policy](#machine-profile-policy) below is validated. |
-| Global audio devices | The machine | The collection has Desktop Audio only. Mic/Aux should be Disabled (`obs.mic_enabled` is an error). |
+| Profile (`%APPDATA%\obs-studio\basic\profiles\<name>\basic.ini`) | The machine | `obs/Default/basic.ini` is written only when the machine has no profile of that name. An existing profile is never replaced. The spectator writes one value in it, the recording format, before each recording ([Recording container](#recording-container-310)). |
+| Encoder, bitrate, output resolution, FPS | The machine | Not set by HeroesReplay. Only the [policy](#machine-profile-policy) below is validated. |
+| Recording path and container | The spectator, per recording | `SetRecordDirectory` (the replay's context folder) and `RecFormat2` (`OBS:RecordingFormat`) right before each `StartRecord`. |
+| Global audio devices | The machine | The collection has Desktop Audio only. Mic/Aux should be Disabled: an automated machine has no microphone. Spectate mutes any microphone it finds anyway ([Microphones](#microphones-314)), and `obs.mic_enabled` is an error while one is live. |
 | Stream service and key (`service.json`) | Operator secret | Never packaged, copied, logged, or returned by a tool. The tools report only the service type, the named service (`Twitch`), and whether a key is set. |
 | Twitch ingest arm (`%LOCALAPPDATA%\HeroesReplay\stream-armed`) | The machine | Ingest needs this arm and `OBS:StreamingEnabled`. `heroesreplay obs arm` / `disarm` / `status`. The live box is armed. ASA-SERVER is armed only for a stream proof; its OBS streams to a developer Twitch account. |
 
@@ -127,14 +128,16 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 - `heroesreplay obs validate [--output json]` checks the loaded collection and profile against `obs/Default.json` and this install's settings. Findings have stable codes; any `error` makes it exit 1. Run it after changing OBS, the profile, or the collection, and before a release.
 - `heroesreplay obs plan [--output json]` shows, from the files, what an update would change in the collection and who changed each difference ([Planning an update](#planning-an-update-obs-plan-307)).
 - The MCP server (`heroesreplay mcp`; `.mcp.json` at the repo root and in the release zip) offers the same reads as `obs_inspect`, `obs_validate`, and `obs_screenshot`. Every request is a Get, so it can't change OBS. Fixes go through guarded CLI commands. obs-mcp, which has unrestricted tools and returns the stream key, is dev-only and is never in the repo, the release, or the live box.
-- **Preflight.** Before the spectator's first `StartStream` of a process, it validates over its own connection. Only `obs.request_unavailable` and `obs.stream_key_missing` stop the stream (`obsStreamBlockedBy` in `status.json`). Every other finding is logged once.
+- **Preflight.** Before the spectator's first `StartStream` of a process, it validates over its own connection. Only `obs.request_unavailable` and `obs.stream_key_missing` stop the stream (`obsStreamBlockedBy` in `status.json`). Every other finding is logged once. `obs.mic_enabled` does not stop it: the spectator mutes the microphone instead ([Microphones](#microphones-314)).
 
 | Code | Severity | Fix |
 | --- | --- | --- |
 | `obs.canvas_mismatch` | error | Settings > Video > Base (Canvas) Resolution 1920x1080. The output resolution can differ. |
-| `obs.recording_format` | error when `OBS:RecordingEnabled` | Settings > Output > Recording Format: MPEG-4 or Hybrid MP4. |
+| `obs.recording_format` | error when `OBS:RecordingEnabled` | The profile records a format that is not an `.mp4` file (MKV, MOV, ...). The spectator sets `OBS:RecordingFormat` before its next recording; to fix it now, Settings > Output > Recording Format: Fragmented MP4. |
+| `obs.recording_format_invalid` | error | `OBS:RecordingFormat` is not `mp4`, `hybrid_mp4`, `fragmented_mp4`, or `mkv`. The spectator leaves the profile's format as it is. Set it to `fragmented_mp4`. |
+| `obs.recording_not_crash_safe` | warning | The profile records `mp4` or `hybrid_mp4`, which a crash or a power loss can lose (#310). The spectator sets `OBS:RecordingFormat` (`fragmented_mp4`) before each recording, so this clears after the next one. When it says `OBS:RecordingFormat` itself is not crash-safe, set that to `fragmented_mp4`. |
 | `obs.stream_key_missing` | error when `OBS:StreamingEnabled` (stops the stream) | Settings > Stream: Twitch and its key. |
-| `obs.mic_enabled` / `obs.mic_muted` | error / warning | Settings > Audio > Mic/Auxiliary Audio: Disabled. |
+| `obs.mic_enabled` / `obs.mic_muted` | error / warning (neither stops the stream) | A live or muted microphone: a global Mic/Aux device or an audio input capture source. Settings > Audio > Mic/Auxiliary Audio: Disabled, or remove the source. Spectate mutes it until then ([Microphones](#microphones-314)). |
 | `obs.request_unavailable` | error (stops the stream) | Update OBS to 30.0 or later. |
 | `obs.bundle_invalid` | error | An install file differs from `obs/bundle.manifest` (size or SHA-256), or `Default.json` lacks a contract name. Install the release again. |
 | `obs.bundle_unverified` | warning | The install has no `obs/bundle.manifest` (packaged before schema 2). The next release brings one. |
@@ -148,6 +151,17 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 | `obs.file_unverifiable` | warning | This session could not check a source's file: a junction or symbolic link on the way (named in the message) could not be traversed or read. Over SSH the stream PC's `C:\heroesreplay` is a junction to `C:\SaltySadism` that a network logon may not traverse; a junction that can be read is checked at its target instead, so this shows only when even that fails. Run `obs validate` in the desktop session, or check the file through the link's target. |
 
 The full list is in the `heroes-replay-cli` skill (`obs_validate`).
+
+### Microphones (#314)
+
+An automated machine should have no microphone in OBS. The owner's decision was to mute, not to block the stream. The live box had none on 2026-10-08.
+
+- **What is muted.** Every microphone input: the enabled global Mic/Aux devices (`mic1` to `mic4` in GetSpecialInputs) and every audio input capture source (`wasapi_input_capture`, and the macOS and Linux kinds). `ObsMicrophones` finds them. Desktop Audio (an output capture), media, browser, and video capture sources are never touched.
+- **When.** At each replay's session start (`BeginSession`, after the live collection swap, because a collection brings its own global audio devices) and right before the spectator sends `StartStream`. A stream that is already live is left alone; the next session start mutes again. A microphone someone unmutes mid-session is live until then.
+- **How.** `GetInputMute`, then `SetInputMute` with `inputMuted` true for each one that is not muted, over the spectator's own connection (`IObsMicrophoneSession`: the read-only Gets plus mute; it cannot unmute). These are in `ObsValidator.RequiredRequests`. The read-only MCP session stays Get only.
+- **Logs.** Each mute is a warning once per session, with the input name, its slot or kind, and the fix. A mute or a read that fails is a warning once per session too, and the session, the recording, and the stream go on.
+- **Switch.** `OBS:MuteMicrophones` (default true). False sends OBS no microphone request at all.
+- **Validation.** `obs.mic_enabled` stays an error, and it is still not a stream blocker. It was not made a warning because it is reported only while a microphone is live: until the next session start or `StartStream`, or after someone unmutes it, the microphone is on the stream and in the recording. The message says that HeroesReplay mutes it (or that `OBS:MuteMicrophones` is off) and how to remove it. Once spectate mutes it, the same microphone is `obs.mic_muted`, a warning, so a machine that still has one keeps a warning until it is disabled or removed.
 
 ## Machine profile policy
 
@@ -168,7 +182,7 @@ Each machine owns its OBS profile. Start one with the OBS Auto-Configuration Wiz
   - Simple output: the bitrate is `VBitrate`, at CBR. A recording at `Stream` quality shares that encoder and is reported once, as the stream.
   - Advanced output: the bitrates live in `streamEncoder.json` and `recordEncoder.json`, which obs-websocket cannot read. Only a custom (FFmpeg) recording's `FFVBitrate` is checked; the other bitrates are reported as not known, and no finding is raised.
   - The floor is a proposal for the owner to confirm (#309). It is `ObsBitratePolicy`.
-- **Recording container: MP4 family.** MP4, Hybrid MP4 (OBS 30.2 and later, which survives a crash better) or fragmented MP4. The YouTube uploader, the pentakill clips and retention only find `*.mp4` in `Data\Contexts`. MKV would need a remux step in all three first; that is a later slice of #130 (D4/D5).
+- **Recording container: fragmented MP4.** The spectator sets it before each recording, so the profile's own format does not decide it. See [Recording container](#recording-container-310).
 - **Encoder.** Whatever the machine's GPU does well: QSV on Intel, NVENC on NVIDIA, x264 as the fallback. It is reported, not validated.
 - **Recording path.** The spectator sets the recording folder for each replay with `SetRecordDirectory` before every `StartRecord`, so the profile's own path does not matter. `obs inspect` reports it (`GetRecordDirectory`, `recordDirectory`); between replays it is the last replay's context folder. It is not validated: no idle value is wrong.
 - **Stream.** Service Twitch with that machine's own key, set in OBS on that machine. The live box streams to `saltysadism`; ASA-SERVER streams to a developer Twitch account, so its test streams never touch the live channel.
@@ -177,6 +191,45 @@ Each machine owns its OBS profile. Start one with the OBS Auto-Configuration Wiz
 | --- | --- | --- | --- |
 | ASA-SERVER (dev) | Its own, named by `OBS:ProfileName` and `OBS:SceneCollectionName` | Only for a stream proof, to the developer Twitch account: `OBS:StreamingEnabled` is false in dev, so a run sets `HEROES_REPLAY_OBS__StreamingEnabled=true` and the machine is armed | For tests: private `[TEST]` uploads or a dry run |
 | DESKTOP-8SJEK72 (live) | Its own, named the same way | Yes: prod settings plus the arm | Yes |
+
+### Recording container (#310)
+
+**Decision: fragmented MP4 (`fragmented_mp4`), set by the spectator before every recording.**
+
+- **Per recording, no profile migration.** Right before each `StartRecord`, where it already sets the record directory, the spectator reads `Output/Mode` and sets `SimpleOutput/RecFormat2` (Simple) or `AdvOut/RecFormat2` (Advanced) to `OBS:RecordingFormat` with `SetProfileParameter` (`ObsRecordingFormat`). It reads the value back.
+  - A profile that already has that format is not written.
+  - A failed request, or a read-back that differs, is a warning in the spectate log. The recording starts anyway, in whatever format OBS has.
+  - OBS saves the value in the machine's `basic.ini`. No release migrates a profile.
+- **`OBS:RecordingFormat`.** The default is `fragmented_mp4` in every environment (base settings, dev, and prod). It also accepts `mp4`, `hybrid_mp4`, and `mkv`.
+  - Any other value is `obs.recording_format_invalid` (error). The spectator then logs an error and leaves the profile's format alone.
+  - `mkv` is not found by the consumers below until a remux exists (#130).
+- **What OBS applies when.** OBS 32.2.2 reads `RecFormat2` at every `StartRecord`: the file extension, and for a `fragmented_*` format the muxer flags `movflags=frag_keyframe+empty_moov+delay_moov` (`SimpleOutput::ConfigureRecording`, the same in Advanced output).
+  - OBS picks the muxer itself only when it creates its outputs: at start, or when its settings are applied. `hybrid_mp4` gets OBS's own Hybrid MP4 muxer; every other format gets `obs-ffmpeg-mux`. `SetProfileParameter` does not recreate the outputs.
+  - So `mp4`, `fragmented_mp4`, and `mkv` take effect at the next recording. A change to or from `hybrid_mp4` takes effect after OBS restarts, and the spectator's log says so.
+- **Template.** `obs/Default/basic.ini` has `RecFormat2=fragmented_mp4` in both `[SimpleOutput]` and `[AdvOut]`, for a new machine.
+- **Validation.** `obs.recording_format` keeps its meaning: the profile records something that is not an `.mp4` file. That is an error when `OBS:RecordingEnabled`, otherwise a warning. An `.mp4` format other than `fragmented_mp4` is `obs.recording_not_crash_safe`, a warning; the spectator's next set clears it. `obs inspect` shows `recordsCrashSafe`.
+
+**Evidence (ASA-SERVER, 2026-10-08, OBS 32.2.2, Simple output, `qsv`, 1080p60; the [crash test on #310](https://github.com/HeroesReplay/HeroesReplay/issues/310)).** Each format was set with `SetProfileParameter`, about 29 s of a static scene was recorded, and then OBS was killed. Kill A killed `obs64` only. Kill B also killed `obs-ffmpeg-mux`, as a power loss, a BSOD, or a killed process tree does.
+
+| `RecFormat2` | Kill A | Kill B |
+| --- | --- | --- |
+| `mp4` (both machines before this change) | Playable | Lost (`moov atom not found`) |
+| `hybrid_mp4`, set while OBS ran | Playable | Lost: the same layout as `mp4`, through `obs-ffmpeg-mux` |
+| `fragmented_mp4` | Playable, one partial AAC packet at the end | Playable, 28.03 s, clip cut |
+| `mkv` | Playable | Playable, but ffprobe duration `N/A`, so no clip can be placed |
+
+- **A caveat about the test order.** Each format was set while OBS ran, and OBS was restarted after each kill. Given *What OBS applies when* above, the `hybrid_mp4` rows were very likely written by `obs-ffmpeg-mux`, because OBS had started with `mp4`. The `fragmented_mp4` rows were very likely written by OBS's own Hybrid MP4 muxer, because OBS had restarted with `hybrid_mp4` saved. Two things point that way: no muxer process ran, and Kill A and Kill B gave the same file. Both machines' profiles held `mp4`, so their OBS runs `obs-ffmpeg-mux`, and with this change `obs-ffmpeg-mux` writes the fragments from the first recording. That path was not killed live yet.
+- **Simulated:** `MatchClipExportTests` (Integration) writes a fragmented MP4 with ffmpeg 9.0.2 and those exact `movflags`, and then cuts the file off at 85% of its bytes. ffprobe still reads a duration, and the clip is cut. By hand, a 30 s fragmented file cut at 60% read 18.03 s, and a plain MP4 cut the same way had no `moov` atom.
+- **Consumers need no change.** `fragmented_mp4` keeps the `.mp4` extension:
+  - `YouTubeUploader` watches `*.mp4` and uploads as `video/*`.
+  - `PendingYouTubeUpload`, `MediaRetention` and `DryRunRecordings` glob `*.mp4`.
+  - `MatchClipExporter` probes and cuts the path OBS finalized (`FfmpegArguments.ProbeDuration` and `Cut`), with no container forced.
+
+**Before the next `master` release:**
+1. A private `[TEST]` YouTube upload of a fragmented MP4 recording from ASA-SERVER (dev is dry-run only).
+2. A Kill B check of that path on ASA-SERVER: a recording the spectator set to `fragmented_mp4`, with `obs-ffmpeg-mux` running, both processes killed, and then ffprobe and a clip cut.
+
+Prod gets the change only through a proven release. Its first recording after the release sets the profile, and that recording is already fragmented.
 
 ## Running and stopping
 

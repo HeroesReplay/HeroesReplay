@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Twitch.Rewards;
@@ -86,15 +87,69 @@ public class QueueBoardTests
         Assert.Contains("Follow one player.", html);
     }
 
+    /// <summary>#351: a retried download and a request that could not be played are both shown.</summary>
+    [Fact]
+    public void Write_RetriedAndFailedRequests_SayWhatHappened()
+    {
+        string html = Render(
+            new[]
+            {
+                new RewardQueueItem
+                {
+                    Request = new RewardRequest { Login = "waiting", ReplayId = 65625300 },
+                    HeroesProfileReplay = new HeroesProfileReplay
+                    {
+                        Id = 65625300,
+                        Map = "Cursed Hollow",
+                    },
+                    Download = new RequestDownload { Attempts = 2, LastError = "HTTP 503" },
+                },
+            },
+            failed: new[]
+            {
+                new RewardQueueItem
+                {
+                    Request = new RewardRequest { Login = "zemill <3", ReplayId = 65625279 },
+                    HeroesProfileReplay = new HeroesProfileReplay
+                    {
+                        Id = 65625279,
+                        Map = "Braxis Holdout",
+                    },
+                    Download = new RequestDownload
+                    {
+                        FailureReason = "Heroes Profile no longer has the replay file (HTTP 404)",
+                        RefundRequested = true,
+                    },
+                },
+            }
+        );
+
+        Assert.Contains("1 request waiting", html);
+        Assert.Contains("65625300 · download retry 2", html);
+        Assert.DoesNotContain("HTTP 503", html);
+        Assert.Contains("<h2>Could not play</h2>", html);
+        Assert.Contains(
+            "<span class=\"who\">zemill &lt;3</span> — <span class=\"map\">Braxis Holdout</span> <span class=\"meta\">replay 65625279 · Heroes Profile no longer has the replay file (HTTP 404) · refund requested</span>",
+            html
+        );
+    }
+
+    [Fact]
+    public void Write_NoFailures_HasNoCouldNotPlaySection()
+    {
+        Assert.DoesNotContain("Could not play", Render(null));
+    }
+
     private static string Render(
         IReadOnlyList<RewardQueueItem> items,
-        IReadOnlyList<SupportedReward> rewards = null
+        IReadOnlyList<SupportedReward> rewards = null,
+        IReadOnlyList<RewardQueueItem> failed = null
     )
     {
         string path = Path.Combine(Path.GetTempPath(), "hr-queue-" + Path.GetRandomFileName());
         try
         {
-            QueueBoard.Write(path, items, rewards);
+            QueueBoard.Write(path, items, rewards, failed);
             return File.ReadAllText(path);
         }
         finally

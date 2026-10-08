@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using HeroesReplay.Core.Obs.Recording;
 using Newtonsoft.Json.Linq;
 
 namespace HeroesReplay.Core.Obs.Inspection;
@@ -28,9 +29,9 @@ public sealed record ObsProfileInfo(
         StringComparer.OrdinalIgnoreCase
     )
     {
-        "mp4",
-        "hybrid_mp4",
-        "fragmented_mp4",
+        ObsRecordingFormat.Mp4,
+        ObsRecordingFormat.HybridMp4,
+        ObsRecordingFormat.FragmentedMp4,
     };
 
     /// <summary>
@@ -61,6 +62,14 @@ public sealed record ObsProfileInfo(
 
     public bool RecordsMp4 =>
         RecordingFormat != null && Mp4Formats.Contains(RecordingFormat.Trim().TrimStart('.'));
+
+    /// <summary>
+    /// True when the profile records <c>fragmented_mp4</c>, the one format whose file stayed
+    /// usable after OBS and its muxer were killed (#310). The spectator sets
+    /// <c>OBS:RecordingFormat</c> before each recording, so this is the format the profile holds
+    /// now, not necessarily the next recording's.
+    /// </summary>
+    public bool RecordsCrashSafe => ObsRecordingFormat.IsCrashSafe(RecordingFormat);
 
     /// <exception cref="ObsRequestException">OBS refused GetProfileParameter.</exception>
     public static ObsProfileInfo Read(IObsReadSession session)
@@ -115,7 +124,7 @@ public sealed record ObsProfileInfo(
     }
 
     /// <summary>The profile's value, or OBS's default when the profile does not set it.</summary>
-    private static string Parameter(IObsReadSession session, string category, string name)
+    internal static string Parameter(IObsReadSession session, string category, string name)
     {
         JObject response = session.Get(
             "GetProfileParameter",

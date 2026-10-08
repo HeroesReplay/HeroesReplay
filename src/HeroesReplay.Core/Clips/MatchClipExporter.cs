@@ -382,13 +382,11 @@ public static class MatchClipExporter
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        startInfo.ArgumentList.Add("-v");
-        startInfo.ArgumentList.Add("error");
-        startInfo.ArgumentList.Add("-show_entries");
-        startInfo.ArgumentList.Add("format=duration");
-        startInfo.ArgumentList.Add("-of");
-        startInfo.ArgumentList.Add("csv=p=0");
-        startInfo.ArgumentList.Add(path);
+        foreach (string argument in FfmpegArguments.ProbeDuration(path))
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
         try
         {
             using Process process = Process.Start(startInfo);

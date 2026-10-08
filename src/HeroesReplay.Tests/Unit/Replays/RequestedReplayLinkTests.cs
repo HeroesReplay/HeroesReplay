@@ -58,11 +58,11 @@ public sealed class RequestedReplayLinkTests : IDisposable
     public async Task DownloadedRequest_PlaysFromTheCacheWithItsRedemption()
     {
         AppSettings settings = Settings();
-        bool linkedBeforeTheFile = false;
+        bool replayVisibleDuringDownload = true;
         var downloads = new Downloads(() =>
         {
-            linkedBeforeTheFile = Directory
-                .GetFiles(Path.Combine(root, "Requests"), "*" + CachedRequestReward.Extension)
+            replayVisibleDuringDownload = Directory
+                .GetFiles(Path.Combine(root, "Requests"), "*.StormReplay")
                 .Any();
         });
         var downloader = new HeroesProfileProvider(
@@ -78,13 +78,23 @@ public sealed class RequestedReplayLinkTests : IDisposable
         Assert.True(await downloader.DownloadNextAsync());
         LoadedReplay loaded = await Cache(settings).TryLoadNextReplayAsync();
 
-        Assert.True(linkedBeforeTheFile);
+        // The spectator never sees the replay without its request: nothing is in Data\Requests
+        // while it downloads, and the sidecar is written before the replay is renamed into
+        // place, under the queue lock, just before the request leaves the queue (#351).
+        Assert.False(replayVisibleDuringDownload);
+        Assert.Single(
+            Directory.GetFiles(Path.Combine(root, "Requests"), "*" + CachedRequestReward.Extension)
+        );
         Assert.Equal(Requested, loaded.ReplayId);
         Assert.Equal(Redemption, loaded.RewardQueueItem?.Request?.RedemptionId);
         Assert.Equal("zemill", loaded.RewardQueueItem.Request.Login);
         Assert.True(ReplayRequestKind.ViewerEnteredReplayId(loaded));
     }
 
+    /// <summary>
+    /// A network error leaves nothing in Data\Requests for the spectator to find. The request
+    /// itself stays queued for its next attempt (#351, <c>RequestDownloadFailureTests</c>).
+    /// </summary>
     [Fact]
     public async Task DownloadThatFails_LeavesNoRequestBehind()
     {
@@ -329,11 +339,35 @@ public sealed class RequestedReplayLinkTests : IDisposable
             this.item = item;
         }
 
-        public Task<RewardQueueItem> DequeueItemAsync()
+        public Task<RewardQueueItem> PeekDownloadAsync(DateTimeOffset now) => Task.FromResult(item);
+
+        public Task<RequestCompletion> CompleteDownloadAsync(RewardQueueItem queued, Action publish)
         {
-            RewardQueueItem next = item;
+            if (item == null)
+            {
+                return Task.FromResult(RequestCompletion.NotQueued);
+            }
+
+            publish?.Invoke();
             item = null;
-            return Task.FromResult(next);
+            return Task.FromResult(RequestCompletion.Completed);
+        }
+
+        public Task<RequestDownload> RetryDownloadLaterAsync(
+            RewardQueueItem queued,
+            string error,
+            DateTimeOffset now
+        ) => Task.FromResult(new RequestDownload { Attempts = 1, LastError = error });
+
+        public Task<bool> FailDownloadAsync(
+            RewardQueueItem queued,
+            string reason,
+            bool refundRequested,
+            DateTimeOffset now
+        )
+        {
+            item = null;
+            return Task.FromResult(true);
         }
 
         public Task<RewardResponse> EnqueueItemAsync(RewardRequest request) =>

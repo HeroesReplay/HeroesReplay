@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -31,6 +32,9 @@ public class RequestQueue : IRequestQueue, IDisposable
     private readonly Mutex failedMutex;
     private readonly TimeSpan mutexWait;
     private const int DuplicateQueuePosition = -2;
+
+    /// <summary>How long a request given up after it was queued stays on the queue page.</summary>
+    public static readonly TimeSpan FailureWindow = TimeSpan.FromHours(24);
 
     public RequestQueue(
         ILogger<RequestQueue> logger,
@@ -74,7 +78,7 @@ public class RequestQueue : IRequestQueue, IDisposable
         boardPath = Path.Combine(settings.Location.DataDirectory, QueueBoard.FileName);
         try
         {
-            QueueBoard.Write(boardPath, ReadItems(queueFile), Rewards());
+            QueueBoard.Write(boardPath, ReadItems(queueFile), Rewards(), Failures());
         }
         catch (Exception e)
         {
@@ -133,31 +137,175 @@ public class RequestQueue : IRequestQueue, IDisposable
         }
     }
 
-    public Task<RewardQueueItem> DequeueItemAsync()
+    public Task<RewardQueueItem> PeekDownloadAsync(DateTimeOffset now)
     {
+        return Task.FromResult(
+            WithLock(
+                queueMutex,
+                () =>
+                    ReadItems(queueFile)
+                        .Find(item =>
+                            item != null
+                            && (
+                                item.Download?.NextAttemptAt is not DateTimeOffset next
+                                || next <= now
+                            )
+                        ),
+                null
+            )
+        );
+    }
+
+    public Task<RequestCompletion> CompleteDownloadAsync(RewardQueueItem item, Action publish)
+    {
+        if (item == null)
+        {
+            return Task.FromResult(RequestCompletion.NotQueued);
+        }
+
         return Task.FromResult(
             WithLock(
                 queueMutex,
                 () =>
                 {
                     List<RewardQueueItem> items = ReadItems(queueFile);
-                    if (items.Count == 0)
+                    int index = items.FindIndex(queued =>
+                        queued != null && queued.IsSameRequest(item)
+                    );
+                    if (index < 0)
+                    {
+                        return RequestCompletion.NotQueued;
+                    }
+
+                    // The replay reaches the disk before the request leaves the queue. A kill
+                    // between the two leaves the request queued with its replay already there,
+                    // and the next pass finds the file and only dequeues (#351).
+                    publish?.Invoke();
+                    items.RemoveAt(index);
+                    SaveQueue(items);
+                    logger.LogInformation(
+                        "Request: '{Title}' removed from the queue. Its replay is on disk.",
+                        item.Request?.RewardTitle
+                    );
+                    return RequestCompletion.Completed;
+                },
+                RequestCompletion.Busy
+            )
+        );
+    }
+
+    public Task<RequestDownload> RetryDownloadLaterAsync(
+        RewardQueueItem item,
+        string error,
+        DateTimeOffset now
+    )
+    {
+        if (item == null)
+        {
+            return Task.FromResult<RequestDownload>(null);
+        }
+
+        return Task.FromResult(
+            WithLock(
+                queueMutex,
+                () =>
+                {
+                    List<RewardQueueItem> items = ReadItems(queueFile);
+                    RewardQueueItem queued = items.Find(entry =>
+                        entry != null && entry.IsSameRequest(item)
+                    );
+                    if (queued == null)
                     {
                         return null;
                     }
 
-                    RewardQueueItem item = items[0];
-                    items.RemoveAt(0);
+                    RequestDownload download = queued.Download ?? new RequestDownload();
+                    download.Attempts++;
+                    download.LastError = error;
+                    download.NextAttemptAt = now + RequestDownloadRetry.Delay(download.Attempts);
+                    queued.Download = download;
                     SaveQueue(items);
-                    logger.LogInformation(
-                        "Request: '{Title}' removed from the queue.",
-                        item.Request?.RewardTitle
-                    );
-                    return item;
+                    return download;
                 },
                 null
             )
         );
+    }
+
+    public Task<bool> FailDownloadAsync(
+        RewardQueueItem item,
+        string reason,
+        bool refundRequested,
+        DateTimeOffset now
+    )
+    {
+        if (item == null)
+        {
+            return Task.FromResult(true);
+        }
+
+        RequestDownload download = item.Download ?? new RequestDownload();
+        download.NextAttemptAt = null;
+        download.FailedAt = now;
+        download.FailureReason = reason;
+        download.RefundRequested = refundRequested;
+        item.Download = download;
+
+        // Kept as failed before it leaves the queue: a kill in between leaves it in both, and
+        // the next pass replaces the failed record instead of adding a second one.
+        RememberDownloadFailure(item);
+        return Task.FromResult(
+            WithLock(
+                queueMutex,
+                () =>
+                {
+                    List<RewardQueueItem> items = ReadItems(queueFile);
+                    int removed = items.RemoveAll(queued =>
+                        queued != null && queued.IsSameRequest(item)
+                    );
+                    if (removed > 0)
+                    {
+                        SaveQueue(items);
+                        logger.LogInformation(
+                            "Request: '{Title}' removed from the queue. It could not be downloaded.",
+                            item.Request?.RewardTitle
+                        );
+                    }
+
+                    return true;
+                },
+                false
+            )
+        );
+    }
+
+    /// <summary>
+    /// Requests given up in the last <paramref name="window"/>, newest first, at most
+    /// <paramref name="limit"/>: the queue page's "Could not play" list (#351). Records from
+    /// before #351 have no reason and are left out.
+    /// </summary>
+    public static IReadOnlyList<RewardQueueItem> RecentFailures(
+        IEnumerable<RewardQueueItem> failed,
+        DateTimeOffset now,
+        TimeSpan? window = null,
+        int limit = 5
+    )
+    {
+        if (failed == null)
+        {
+            return new List<RewardQueueItem>();
+        }
+
+        DateTimeOffset since = now - (window ?? FailureWindow);
+        return failed
+            .Where(item =>
+                item?.Download?.FailedAt is DateTimeOffset at
+                && at >= since
+                && !string.IsNullOrWhiteSpace(item.Download.FailureReason)
+            )
+            .OrderByDescending(item => item.Download.FailedAt)
+            .Take(limit)
+            .ToList();
     }
 
     public Task<(RewardQueueItem Item, int Position)?> RemoveItemAsync(string login)
@@ -418,10 +566,42 @@ public class RequestQueue : IRequestQueue, IDisposable
         );
     }
 
+    /// <summary>
+    /// A request given up after it was queued (#351). Its earlier record, from a pass that was
+    /// killed before the request left the queue, is replaced.
+    /// </summary>
+    private void RememberDownloadFailure(RewardQueueItem item)
+    {
+        WithLock(
+            failedMutex,
+            () =>
+            {
+                List<RewardQueueItem> items = ReadItems(failedFile);
+                items.RemoveAll(failed =>
+                    failed?.Download?.FailedAt != null && failed.IsSameRequest(item)
+                );
+                items.Add(item);
+                WriteItems(failedFile, items);
+                return 0;
+            },
+            0
+        );
+    }
+
     private void SaveQueue(List<RewardQueueItem> items)
     {
         WriteItems(queueFile, items);
-        QueueBoard.Write(boardPath, items, Rewards());
+        QueueBoard.Write(boardPath, items, Rewards(), Failures());
+    }
+
+    /// <summary>The queue page's recent failures. The failed file is read under its own lock.</summary>
+    private IReadOnlyList<RewardQueueItem> Failures()
+    {
+        return WithLock(
+            failedMutex,
+            () => RecentFailures(ReadItems(failedFile), DateTimeOffset.UtcNow),
+            null
+        );
     }
 
     private IReadOnlyList<SupportedReward> Rewards()

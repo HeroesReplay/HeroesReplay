@@ -89,16 +89,21 @@ public class ObsController : IObsController
                 ObsCrashSentinel.DefaultDirectory(),
                 () => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
                 logger
-            )
+            ),
+            microphones: new ObsBorrowedMicrophoneSession(this.obs)
         );
     }
 
+    /// <summary>
+    /// Identifies OBS, puts a newer collection template in through the live swap, then mutes
+    /// every microphone (<c>OBS:MuteMicrophones</c>, #314). Throws only when OBS does not identify.
+    /// </summary>
     public void BeginSession()
     {
         ObsCollectionApplyResult patch = PatchInstalledCollection();
         try
         {
-            coordinator.EnsureIdentified();
+            coordinator.BeginSession(() => SwapLiveCollection(patch));
         }
         catch (Exception)
         {
@@ -107,7 +112,6 @@ public class ObsController : IObsController
         }
 
         unavailableThisSession = false;
-        SwapLiveCollection(patch);
     }
 
     private bool SkipWhileUnavailable(string action)
@@ -309,18 +313,37 @@ public class ObsController : IObsController
             ShouldRecord,
             CurrentReplayId,
             reason,
-            () => SetRecordDirectoryForCurrentReplay()
+            () => PrepareRecordingOutput()
         );
     }
 
-    private void SetRecordDirectoryForCurrentReplay()
+    /// <summary>
+    /// Right before StartRecord, while no recording is active: the replay's context folder and
+    /// the recording format (#310). Either one that fails is logged, and the recording starts.
+    /// </summary>
+    private void PrepareRecordingOutput()
     {
-        string directory = context.Current?.Directory?.FullName;
-        if (!ShouldRecord() || string.IsNullOrWhiteSpace(directory))
+        if (!ShouldRecord())
         {
             return;
         }
 
+        string directory = context.Current?.Directory?.FullName;
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            SetRecordDirectory(directory);
+        }
+
+        ObsRecordingFormat.Apply(
+            new ObsBorrowedRecordFormatSession(obs),
+            settings.OBS?.RecordingFormat,
+            logger,
+            CurrentReplayId
+        );
+    }
+
+    private void SetRecordDirectory(string directory)
+    {
         try
         {
             obs.SetRecordDirectory(directory);

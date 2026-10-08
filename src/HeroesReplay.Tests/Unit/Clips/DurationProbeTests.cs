@@ -54,6 +54,36 @@ public class DurationProbeTests
         Assert.Null(MatchClipExporter.OwnedRecordingDurationLog(owned, context, null));
     }
 
+    /// <summary>
+    /// #310: OBS names a fragmented_mp4 recording like a plain one, with the .mp4 extension. The
+    /// probe never forces a container, so ffprobe reads the fragments from the file itself.
+    /// </summary>
+    [Fact]
+    public void ProbeDuration_ReadsAFragmentedRecordingAsItIsNamed()
+    {
+        const string context = @"C:\heroesreplay\Data\Contexts\65822779";
+        const string fragmented = context + @"\2026-10-08 13-34-12.mp4";
+
+        string[] arguments = FfmpegArguments.ProbeDuration(
+            RecordingOwnership.SelectFinalizedFile(fragmented, context)
+        );
+
+        Assert.Equal(
+            new[]
+            {
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "csv=p=0",
+                fragmented,
+            },
+            arguments
+        );
+        Assert.DoesNotContain("-f", arguments);
+    }
+
     [Fact]
     public void EmptyProbeError_IsRetried()
     {

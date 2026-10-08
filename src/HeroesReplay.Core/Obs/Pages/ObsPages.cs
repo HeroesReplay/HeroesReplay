@@ -160,7 +160,19 @@ public static class ObsPages
             var rewards = new SupportedRewardsHolder(
                 new GameData(NullLogger<GameData>.Instance, settings)
             );
-            QueueBoard.Write(Path.Combine(data, QueueBoard.FileName), items, rewards.Rewards);
+            string failedFileName = settings.Twitch?.FailedFileName;
+            IReadOnlyList<RewardQueueItem> failed = string.IsNullOrWhiteSpace(failedFileName)
+                ? null
+                : RequestQueue.RecentFailures(
+                    RequestQueue.Snapshot(Path.Combine(data, failedFileName)),
+                    DateTimeOffset.UtcNow
+                );
+            QueueBoard.Write(
+                Path.Combine(data, QueueBoard.FileName),
+                items,
+                rewards.Rewards,
+                failed
+            );
             return new ObsPageResult(
                 QueueBoard.FileName,
                 ObsPageOutcome.Written,
