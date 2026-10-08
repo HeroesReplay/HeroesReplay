@@ -62,7 +62,7 @@ pwsh -File tools/verify.ps1
 
 Secrets: skill `op-service-account`. On a new clone, set user env `OP_SERVICE_ACCOUNT` then `pwsh -File tools/fill-secrets-from-op.ps1`. Never commit or print resolved tokens.
 
-CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
+CLI: skill `heroes-replay-cli`; per command, its preconditions, side effects, exit codes, and stable codes are in `.agents/skills/heroes-replay-cli/commands.md`, generated from the command tree and `CommandReference` (#313). Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
 
 OBS ownership, updates, validation, and the machine profile policy: `docs/obs-operations.md`. `heroesreplay obs plan` shows what an update would change in the scene collection, difference by difference, and writes nothing (files only, safe while OBS runs). MCP discovery: `.mcp.json` at the repo root (source, `dotnet run`) and in the release zip (`heroesreplay.exe mcp`).
 
@@ -220,12 +220,16 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 | `.agents/skills/heroes-replay-cli` | spectate, check, calculators, secrets, `op://` |
 | `.agents/skills/op-service-account` | `OP_SERVICE_ACCOUNT`, fill secrets on a new clone |
 | `.agents/skills/dotnet-10-csharpier` | SDK, slnx, CSharpier, TFM, test categories |
-| `.agents/skills/obs-websocket-v5` | OBS Studio control, scenes, recording, `check obs` |
+| `.agents/skills/obs-websocket-v5` | HeroesReplay's OBS client code: `ObsController`, the session per replay, the read-only session, `check obs` |
+| `.agents/skills/heroes-replay-obs` | OBS operations and safety: who owns what, which commands change OBS, the stream arm and preflight, dev vs live rules. Points to `docs/obs-operations.md` |
+| `.agents/skills/obs-docs` | Generic OBS and obs-websocket 5 reference: protocol, codes, profile sections, recording containers, v4 to v5 map |
 | `.agents/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
 | `.agents/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. ffmpeg 9.0.2 is pinned (version, URL, SHA-256) in `src/HeroesReplay.Core/Dependencies/dependencies.json` only; `heroesreplay deps install` puts it in `C:\heroesreplay\tools\ffmpeg`, and `check ffmpeg` reports what clips will run. |
 | `.agents/skills/release-install` | Install production from the GitHub Release zip instead of cloning and building. |
 
-Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/twitch-integration`, `/ffmpeg`, `/release-install`. `csharp-solid` is also in this folder.
+Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/heroes-replay-obs`, `/obs-docs`, `/twitch-integration`, `/ffmpeg`, `/release-install`. `csharp-solid` is also in this folder.
+
+**Grok reads `.agents/skills` itself** (#313). Grok 1.0.46 scans `.agents/skills` next to `.grok/skills` at each level, so there is no `.grok/skills` mirror: a stale copy there would shadow the real skill. `AgentDocsTests` fails if one appears, and checks that every skill name is one Grok accepts. Grok loads project skills only in a trusted project, and trust is per repository root. Trusting `C:\heroesreplay` does not trust the `C:\heroesreplay\HeroesReplay` checkout or its worktrees. Trust the checkout itself in Grok (`/hooks-trust`, or start Grok there with `--trust`), and `grok inspect` lists the repo skills as `project`.
 
 ## Official .NET skills
 
@@ -244,4 +248,4 @@ Not vendored because they do not apply to this repo: `migrate-dotnet8-to-dotnet9
 
 Grok already provides `review`, `create-skill`, and `long-running-background-tasks`. They stay with the tool and are not copied into this repo.
 
-There is no high-quality public skill specifically for **obs-websocket 5** or **TwitchLib 3.x** — that is why the two repo skills exist. Channel-point redemptions arrive over Twitch EventSub (`EventSubRewardListener`), not PubSub.
+There is no high-quality public skill specifically for **obs-websocket 5** or **TwitchLib 3.x** — that is why the repo skills exist. The MIT `damionrashford/media-os` OBS skills were evaluated and not vendored (#313; the reasons are in the obs-docs skill), and the unlicensed `zeke/obs-skill` stays out. Channel-point redemptions arrive over Twitch EventSub (`EventSubRewardListener`), not PubSub.

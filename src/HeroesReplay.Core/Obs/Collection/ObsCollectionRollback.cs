@@ -317,9 +317,11 @@ public static class ObsCollectionRollback
                 file.Message
                     + " The collection the restored build ran with is "
                     + source
-                    + ": close OBS and copy it over "
+                    + ": to put it back over "
                     + destination
-                    + " to put it back by hand.",
+                    + " by hand, close OBS and run heroesreplay obs restore \""
+                    + Path.GetFileName(source)
+                    + "\".",
                 source
             );
         }

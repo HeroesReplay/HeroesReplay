@@ -1,18 +1,23 @@
 ---
 name: obs-websocket-v5
 description: >
-  OBS Studio 30.0+ obs-websocket 5.3+ control for HeroesReplay (obs-websocket-dotnet 5.7).
-  Use when changing ObsController, OBS settings, scenes, recording, check obs, the read-only
-  OBS MCP tools (obs_inspect, obs_validate, obs_screenshot), or /obs-websocket-v5.
+  HeroesReplay's obs-websocket 5 client code (OBS Studio 30.0+, obs-websocket-dotnet 5.7):
+  ObsController and the one session per replay, the profile and collection check, the read-only
+  session behind obs inspect / obs validate and the OBS MCP tools, and the requests the spectator
+  sends. Use when changing that code, check obs, or /obs-websocket-v5. Generic protocol facts:
+  skill obs-docs. What may be done to OBS on which machine: skill heroes-replay-obs.
 ---
 
 # OBS websocket 5
 
-The operating model (who owns what, collection updates, validation codes and fixes, the machine profile policy) is in `docs/obs-operations.md`; this skill covers the code.
+This skill covers HeroesReplay's OBS client code. Three other sources cover the rest:
+- **Operating model:** who owns what, collection updates, validation codes and fixes, and the machine profile policy are in `docs/obs-operations.md`.
+- **Safety rules:** what an agent may do to OBS on the dev and the live machine is in skill `heroes-replay-obs`.
+- **Generic reference:** the wire protocol, status codes, profile sections, recording containers, and the v4 to v5 request map are in skill `obs-docs`.
 
 ## Protocol
 
-- OBS 28+ ships websocket **5**; HeroesReplay needs **OBS 30.0+ (obs-websocket 5.3+)**, because `SetRecordDirectory` arrived in 5.3.0. The minimum capability set is `ObsValidator.RequiredRequests` (the requests the spectator sends); `obs validate` reports any the running OBS lacks as `obs.request_unavailable`. Default URL `ws://127.0.0.1:4455` (not 4444).
+- OBS 28+ ships websocket **5**; HeroesReplay needs **OBS 30.0+ (obs-websocket 5.3+)**, because `SetRecordDirectory` arrived in 5.3.0. The minimum capability set is `ObsValidator.RequiredRequests` (the requests the spectator sends); `obs validate` reports any the running OBS lacks as `obs.request_unavailable`. Default URL `ws://127.0.0.1:4455` (not 4444). Message and auth details: `obs-docs`.
 - Package: `obs-websocket-dotnet` 5.7.x (net10).
 - User enables **Tools → WebSocket Server Settings**. Password: `OBS:WebSocketPassword`.
 
@@ -47,18 +52,13 @@ Fixes stay out of MCP: `obs arm` / `obs disarm` and `obs pages` today. `obs plan
 
 **Generated pages.** `Data\queue.html` and `Data\prediction-report.html` are not collection assets. The roles render them when the queue changes or a prediction opens or resolves, so a new build's layout reaches OBS only then. `heroesreplay obs pages` renders both with the current build and reloads every browser source whose local file or `file://` URL is one of them (`IObsPageSession`: the read-only Gets plus `PressInputPropertiesButton` `refreshnocache`, nothing else).
 
-**obs-mcp (royshil) is dev-only.** It registers about 120 tools with no read-only mode, including `StartStream`, `StopStream`, `SetCurrentProfile`, `RemoveInput`, and `GetStreamServiceSettings` (which returns the stream key). On ASA-SERVER it may be registered per machine for interactive tweaking (`claude mcp add obs --scope user -e OBS_WEBSOCKET_URL=ws://127.0.0.1:4455 -- cmd /c npx -y obs-mcp@latest`). It is never in the repo, the release zip, or the production machine's agent config. Its `obs-get-source-screenshot` returns only the first 100 base64 characters; use `obs_screenshot`.
+**obs-mcp (royshil) is dev-only** (unrestricted, returns the stream key): the rule and where it may be registered are in skill `heroes-replay-obs`. Its `obs-get-source-screenshot` returns only the first 100 base64 characters; use `obs_screenshot`.
 
-## API map (v4 name → v5)
+## Requests the spectator sends
 
-| Old | New |
-| --- | --- |
-| `SetCurrentScene` | `SetCurrentProgramScene` |
-| `GetSourcesList` | `GetInputList` |
-| `GetSourceSettings` / `SetSourceSettings` | `GetInputSettings` / `SetInputSettings` |
-| `SetSourceRender` | `GetSceneItemId` + `SetSceneItemEnabled` |
-| `StartRecording` / `StopRecording` | `StartRecord` / `StopRecord` + `GetRecordStatus`. `RecordingEnabled` is false in base settings and true in dev and prod. Records only while `OBS:Enabled` is true (false sends OBS nothing, recording included, #318), and then when `RecordingEnabled` or (`RecordRequestedReplays` and the replay has a Twitch request that wants a recording), unless the replay is already on YouTube or `ReplayMedia` policy disallows it. Every session end, a graceful `services stop` included, stops the recording this process owns, with or without an OBS session. Spectate claims each recording in `%LOCALAPPDATA%\HeroesReplay\obs-recording.json` (`RecordingClaimStore`) until OBS finalizes it, and `services stop` uses that claim to stop one a killed spectate left running (`OrphanRecording`; `StopRecord` only, never `StopStream`). |
-| `SetRecordingFolder` | `SetRecordDirectory` |
+Scenes with `SetCurrentProgramScene`; source settings with `GetInputList`, `GetInputSettings` and `SetInputSettings`; show and hide with `GetSceneItemId` + `SetSceneItemEnabled`; the recording with `SetRecordDirectory` (the replay's context folder), `StartRecord` / `StopRecord` and `GetRecordStatus`. The v4 names these replace are mapped in `obs-docs`. `RecordingEnabled` is false in base settings and true in dev and prod. Records only while `OBS:Enabled` is true (false sends OBS nothing, recording included, #318), and then when `RecordingEnabled` or (`RecordRequestedReplays` and the replay has a Twitch request that wants a recording), unless the replay is already on YouTube or `ReplayMedia` policy disallows it.
+
+Every session end, a graceful `services stop` included, stops the recording this process owns, with or without an OBS session. Spectate claims each recording in `%LOCALAPPDATA%\HeroesReplay\obs-recording.json` (`RecordingClaimStore`) before `StartRecord` and deletes the claim when OBS finalizes the file. After the roles exit, `services stop` uses that claim to stop a recording a killed spectate left running (`OrphanRecording`, over `IObsRecordStopSession`: the read-only Gets plus `StopRecord`, never `StopStream`).
 
 Scene and source names stay in `appsettings` (`GameSceneName`, `WaitingSceneName`, `InfoSourceName`, `RankImagesSourceNames`, `ReportScenes`). `ReportScenes` cycle in order after the game: `match-report` (1 minute 15 seconds), `prediction-report` (10s), `request-queue` (10s). Post-game Heroes Profile is one scene, `match-report`: the full `Match/Single/[ID]` page, team sections included, in a 1920x1080 browser source. The page scrolls itself from top to bottom over the scene's `DisplayTime` (`MatchReportBrowserCss.WithScroll`); the OBS Scroll filter is not used, because the page is taller than the 8192px browser source limit. Do not add a scene per section. Each report source's CSS is rebuilt from `OBS:ReportBrowserCss` and, with `HideReportHeader`, `MatchReportBrowserCss.Header`: only the site menu and top navigation, consent dialogs, and ads are hidden. The replay id links, the footer, and the team sections show. The CSS OBS saved in the source is replaced, not appended to. A `file:///` report scene is skipped while its file does not exist, and the whole cycle is skipped when the replay has no Heroes Profile id.
 
