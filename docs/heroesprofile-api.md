@@ -18,6 +18,8 @@ dotnet tool restore
 
 Paths included: `/replays`, `/replays/**`, `/download/replay`, `/replay/{replayID}`. Do not csharpier `Generated/`. List and download always go through `HeroesProfileClient` with `Authorization: Bearer`.
 
+Hand-written partials of `HeroesProfileClient` sit next to `Generated/` and use the same request adapter and key: `MmrTier.cs` (`/mmr/tier`) and `GlobalStats.cs` (`GetGlobalAsync`, `GetJobAsync`) for the global statistics. Those are not generated on purpose: an uncached global query answers 202 with a `job_id`, the result comes from `/jobs/{id}` in the shape of the original call (the spec has no model for it), and the spec leaves out fields we read (`win_rate`, `games_played`, `ban_rate`, `confidence_interval`). `GlobalStats.cs` returns the status, body, `Retry-After`, job id, and `error.code` without throwing, so the caller decides what a 202, 429, or error means.
+
 ## Endpoints we use
 
 | Call | Path |
@@ -26,8 +28,24 @@ Paths included: `/replays`, `/replays/**`, `/download/replay`, `/replay/{replayI
 | Download | `GET /download/replay?replayID={id}` |
 | One match | `GET /replays?after={id-1}` then pick `replayID` |
 | Rank badge | `GET /replay/{replayID}` (average player MMR) |
+| Hero statistics: newest patch | `GET /patches` (newest `game_version` with `valid_globals`; `2.57.0.98348` is major `2.57`) |
+| Hero statistics: ids | `GET /heroes` (`id`, `name`, `attribute_id`) |
+| Hero statistics: every hero on every map | `GET /heroes/stats?timeframe_type=major&timeframe=2.57&game_type=sl&group_by_map=true` (one object per map, a `data` row per hero: `hero_id`, `wins`, `games_played`, `ban_rate`) |
+| Hero statistics: one hero against and with each other | `GET /heroes/matchups?timeframe_type=major&timeframe=2.57&game_type=sl&hero=Valla` (`enemy[]` and `ally[]`, each with `hero.attribute_id`, `wins`, `games_played`) |
+| A job's result | `GET /jobs/{id}` (202 still running, 200 the result) |
 
 `region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable`. Skip when `downloadable` is false or `deleted` is non-zero.
+
+### Hero statistics (YouTube title hooks)
+
+`HeroStatsRefresh` (download role, and `heroesprofile hero-stats`) makes these calls for `YouTube:Titles:StatHooks` (issue #272; `docs/youtube-uploader.md`). Measured on 2026-10-08 with our key:
+
+- Weekly allowances per endpoint (rolling 7 days, `x-hp-quota-limit` and `x-hp-quota-remaining`): `heroes/matchups` 100,000, `heroes/stats` 10,000, `heroes/maps` 10,000, `/patches` and `/heroes` 1,000,000. One refresh is `/patches`, `/heroes`, one `heroes/stats`, and about 90 `heroes/matchups`, once a day per game type.
+- 60 requests a minute, polls included (`x-ratelimit-limit`). `group_by_map=true` is 1 a minute. The refresh spaces requests 1.1 s apart (`HeroesProfileApi:HeroStats:RequestSpacing`) and `group_by_map` calls 61 s apart (`GroupByMapSpacing`).
+- A global call answers 202 `{"async":true,"status":"pending","job_id":"..."}` with `Retry-After` (10 s) and `x-global-job-id`. Polling `/jobs/{id}` costs no quota. The refresh waits `Retry-After` before each poll and gives up on a job after `JobTimeout` (15 min).
+- 429 waits for `Retry-After` (60 s without one), at most 5 times. Its `HttpClient` (`heroes-profile-stats`) has no retry handler, unlike the replay calls above, so a rate limit is not retried every second. 401 or 403 (`endpoint_not_in_plan`, a bad key) stops the refresh until the download role restarts, with one warning. 422 (`timeframe_unavailable` early in a patch) skips that patch and game type until the next refresh is due. A 5xx or a network error is retried 3 times, 30 s apart. A hero whose matchups fail is saved without them.
+- `enemy[].win_rate` in matchups is the queried hero's loss rate against that enemy (its `hovertext` says "Lost against a team with X"). Every rate is computed from `wins` and `games_played`, never read from `win_rate`.
+- Heroes Profile's terms (section 4) require "Data provided by Heroes Profile" and a visible link to https://www.heroesprofile.com/ on the same screen as the data. The description's second line carries it whenever a hook is used.
 
 Auth is `Authorization: Bearer` ([Migrating](https://www.heroesprofile.com/Api/Migrating)). The v1 key is `op://Heroes Replay/Heroes Profile API Key/password` (skill `op-service-account`). The old `api.heroesprofile.com` `api_token` key is not accepted.
 

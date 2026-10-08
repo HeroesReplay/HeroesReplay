@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Telemetry;
@@ -40,6 +41,7 @@ public class DownloadCommand : Command
             .AddSingleton<ReplayHelper>()
             .AddSingleton<IReplayHelper>(sp => sp.GetRequiredService<ReplayHelper>())
             .AddSingleton<HeroesProfileProvider>()
+            .AddHeroStatsRefresh()
             .BuildHeroesReplayProvider();
         using Activity ready = HeroesReplayTelemetry.StartSpan("heroesreplay.service.ready");
         using IServiceScope scope = provider.CreateScope();
@@ -53,6 +55,7 @@ public class DownloadCommand : Command
             scope.ServiceProvider.GetRequiredService<AppSettings>().ServiceHealth,
             stop.Token
         );
+        Task heroStats = StartHeroStats(scope.ServiceProvider, stop.Token);
         int failures = 0;
         while (!stop.Token.IsCancellationRequested)
         {
@@ -118,6 +121,37 @@ public class DownloadCommand : Command
             {
                 break;
             }
+        }
+
+        await StopHeroStatsAsync(heroStats).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Keeps the hero statistics behind YouTube title hooks current while
+    /// <c>YouTube:Titles:StatHooks:Enabled</c> is on. It runs beside the download loop and never
+    /// holds a download back. Spectate only reads the files it writes.
+    /// </summary>
+    private static Task StartHeroStats(IServiceProvider services, CancellationToken token)
+    {
+        AppSettings settings = services.GetRequiredService<AppSettings>();
+        if (settings.YouTube?.Titles?.StatHooks?.Enabled != true)
+        {
+            return Task.CompletedTask;
+        }
+
+        HeroStatsRefresh refresh = services.GetRequiredService<HeroStatsRefresh>();
+        return Task.Run(() => refresh.RunAsync(token), CancellationToken.None);
+    }
+
+    private static async Task StopHeroStatsAsync(Task heroStats)
+    {
+        try
+        {
+            await heroStats.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The role is stopping.
         }
     }
 }

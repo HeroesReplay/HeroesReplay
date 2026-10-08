@@ -150,7 +150,7 @@ public class MatchDraftTests
         Assert.Contains("Draft: Blue double bruiser, Red dive", metadata.DescriptionLines);
         Assert.Contains("Dive", metadata.Tags);
         Assert.Contains("Heroes of the Storm", metadata.Tags);
-        Assert.Equal("6", metadata.TemplateVersion);
+        Assert.Equal("7", metadata.TemplateVersion);
     }
 
     [Fact]

@@ -31,6 +31,9 @@ public class HeroesProfileApiSettings
     public string StandardCacheDirectoryName { get; set; }
     public string RequestsCacheDirectoryName { get; set; }
 
+    /// <summary>The per-patch hero statistics behind YouTube title hooks.</summary>
+    public HeroStatsSettings HeroStats { get; set; } = new HeroStatsSettings();
+
     public bool MatchesReplayUrl(Uri url)
     {
         if (url == null)
