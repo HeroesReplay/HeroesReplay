@@ -1,6 +1,8 @@
 using System;
 using System.Globalization;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Shared;
 using Newtonsoft.Json.Linq;
 
 namespace HeroesReplay.Core.Obs.Recording;
@@ -35,7 +37,10 @@ public enum OrphanRecordingState
     Unknown,
 }
 
-/// <summary>What <c>services stop</c> found and did about a recording spectate left running.</summary>
+/// <summary>
+/// What <c>services stop</c>, or the next spectate when it starts, found and did about a recording
+/// spectate left running.
+/// </summary>
 public sealed record OrphanRecordingCheck(
     OrphanRecordingState State,
     string Detail,
@@ -70,16 +75,24 @@ public sealed record OrphanRecordingCheck(
 }
 
 /// <summary>
-/// After every role exited, <c>services stop</c> stops the OBS recording that spectate started and
-/// left running: spectate was killed after its graceful budget, or its own stop did not finish
-/// (#318). It acts only on the claim spectate wrote (<see cref="RecordingClaimStore"/>), and only
-/// when the recording OBS reports started when the claim says. It sends <c>StopRecord</c> and
-/// never touches the stream.
+/// Stops the OBS recording that spectate started and left running: spectate was killed after its
+/// graceful budget, or its own stop did not finish (#318), or the supervisor restarted it after a
+/// crash, a stale heartbeat, or a stalled launch (#342). <c>services stop</c> runs it after every
+/// role exited, and spectate runs it when it starts, before its first replay
+/// (<see cref="OrphanRecordingOnStart"/>). It acts only on the claim spectate wrote
+/// (<see cref="RecordingClaimStore"/>), only when the claimant is dead, and only when the recording
+/// OBS reports started when the claim says. It sends <c>StopRecord</c> and never touches the stream.
 /// </summary>
 public static class OrphanRecording
 {
     /// <summary>The smallest difference allowed between the claim's age and OBS's recorded time.</summary>
     public static readonly TimeSpan MatchTolerance = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// The allowance between the claimant's recorded start time and the live pid's, as for a
+    /// role's or the supervisor's recorded start time.
+    /// </summary>
+    private static readonly TimeSpan StartTimeTolerance = TimeSpan.FromSeconds(2);
 
     /// <summary>How long OBS gets to report the recording inactive after <c>StopRecord</c>.</summary>
     public static readonly TimeSpan StopConfirmTimeout = TimeSpan.FromSeconds(10);
@@ -108,16 +121,51 @@ public static class OrphanRecording
     }
 
     /// <summary>
+    /// True while the spectate that wrote <paramref name="claim"/> still runs, and so still owns
+    /// its recording: its pid is alive and started when the claim says (within 2 s), so a reused
+    /// pid does not count (#342). A claim from a build that recorded no process start time counts
+    /// a live pid that started no later than the claim, since a reused pid starts after the
+    /// claimant exited. When the pid's start time cannot be read from this process, a running
+    /// <c>heroesreplay</c> with that pid counts.
+    /// </summary>
+    public static bool ClaimantRunning(
+        RecordingClaim claim,
+        Func<int, ProcessTableEntry> findProcess
+    )
+    {
+        if (claim == null || claim.ProcessId <= 0 || findProcess == null)
+        {
+            return false;
+        }
+
+        ProcessTableEntry process = findProcess(claim.ProcessId);
+        if (process == null)
+        {
+            return false;
+        }
+
+        if (process.StartTime is not DateTimeOffset started)
+        {
+            return ServiceProcessPlan.IsHeroesReplay(process.Name);
+        }
+
+        return claim.ProcessStartedAt is DateTimeOffset recorded
+            ? (started - recorded).Duration() <= StartTimeTolerance
+            : started <= claim.StartedAt;
+    }
+
+    /// <summary>
     /// Never throws. The claim is deleted once OBS answered for it (no recording, another
     /// recording, or the claimed one stopped), and kept while that is not known.
-    /// <paramref name="claimantRunning"/> is true when the claim's process id is a running
-    /// spectate, which still owns its recording. <paramref name="open"/> is called only when a
-    /// claim exists and OBS runs.
+    /// <paramref name="findProcess"/> looks up the claim's pid (<see cref="ProcessTable.Find"/>);
+    /// a claimant that still runs owns its recording (<see cref="ClaimantRunning"/>).
+    /// <paramref name="open"/> is called only when a claim exists, its claimant is dead, and OBS
+    /// runs.
     /// </summary>
     public static OrphanRecordingCheck Stop(
         RecordingClaimStore claims,
         bool obsRunning,
-        Func<int, bool> claimantRunning,
+        Func<int, ProcessTableEntry> findProcess,
         Func<IObsRecordStopSession> open,
         DateTimeOffset now,
         Action<TimeSpan> wait = null
@@ -142,7 +190,7 @@ public static class OrphanRecording
         }
 
         string claimed = Describe(claim);
-        if (claimantRunning?.Invoke(claim.ProcessId) == true)
+        if (ClaimantRunning(claim, findProcess))
         {
             return new OrphanRecordingCheck(
                 OrphanRecordingState.ClaimantRunning,

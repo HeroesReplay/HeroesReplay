@@ -510,6 +510,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<RecordingClock>()
             .AddSingleton<IGameFirewall, NetshGameFirewall>()
             .AddSingleton<BattleNetAgentReaper>()
+            .AddSingleton<OrphanRecordingOnStart>()
             .AddSingleton<IReplayOpener, MediumIntegrityReplayOpener>()
             .AddSingleton(serviceProvider => new MediaPolicyAttemptLog(
                 MediaPolicyAttemptLog.AttemptsRoot(settings),

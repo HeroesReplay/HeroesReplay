@@ -7,11 +7,16 @@ namespace HeroesReplay.Core.Obs.Recording;
 
 /// <summary>
 /// The OBS recording a spectate process started and has not yet seen finalized (#318).
-/// <c>services stop</c> reads it after every role exited, so a recording that a killed or
-/// stuck spectate left running is stopped instead of growing until the disk is full.
+/// <c>services stop</c> reads it after every role exited, and the next spectate reads it when it
+/// starts (#342), so a recording that a killed or stuck spectate left running is stopped instead
+/// of growing until the disk is full.
 /// </summary>
 public sealed record RecordingClaim
 {
+    private static readonly Lazy<DateTimeOffset?> ThisProcessStartedAt = new(() =>
+        ProcessTable.Find(Environment.ProcessId)?.StartTime
+    );
+
     public int? ReplayId { get; init; }
 
     /// <summary>When OBS confirmed the recording active, UTC.</summary>
@@ -19,6 +24,22 @@ public sealed record RecordingClaim
 
     /// <summary>The spectate process that owns the recording.</summary>
     public int ProcessId { get; init; }
+
+    /// <summary>
+    /// When <see cref="ProcessId"/> started (<see cref="ProcessTable"/>, UTC), so a reused pid is
+    /// not taken for the claimant (#342). Null in a claim written before #342.
+    /// </summary>
+    public DateTimeOffset? ProcessStartedAt { get; init; }
+
+    /// <summary>The claim of a recording this process asks OBS for at <paramref name="startedAt"/>.</summary>
+    public static RecordingClaim ForThisProcess(int? replayId, DateTimeOffset startedAt) =>
+        new()
+        {
+            ReplayId = replayId,
+            StartedAt = startedAt,
+            ProcessId = Environment.ProcessId,
+            ProcessStartedAt = ThisProcessStartedAt.Value,
+        };
 }
 
 /// <summary>

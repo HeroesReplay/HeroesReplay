@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
 using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.ServiceHost;
@@ -93,6 +94,8 @@ public class SpectateFileCommand : Command
         SpectateClipTools.Check(scope.ServiceProvider);
         scope.ServiceProvider.GetRequiredService<BattleNetAgentReaper>().Reap("spectate start");
         IEngine engine = scope.ServiceProvider.GetRequiredService<IEngine>();
+        // Before the first replay: a recording an earlier spectate left running (#342).
+        scope.ServiceProvider.GetRequiredService<OrphanRecordingOnStart>().Run();
         return await engine.RunAsync() ? 0 : 1;
     }
 }
