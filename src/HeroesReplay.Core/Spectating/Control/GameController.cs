@@ -42,6 +42,9 @@ public class GameController : IGameController
     private readonly StormClientConfigurator clientConfigurator;
 
     private readonly object controllerLock = new object();
+
+    // One attached client per process for every memory reader, the timer's clock included (#382).
+    private readonly SharedClientProcess clientProcess;
     private readonly MatchClock matchClock = new();
     private readonly LoadingScreen loadingScreen = new();
     private readonly ClientScreen clientScreens = new();
@@ -102,10 +105,13 @@ public class GameController : IGameController
         IReplayOpener replayOpener,
         StormClientConfigurator clientConfigurator,
         OcrEngine engine,
-        CancellationTokenProvider tokenProvider
+        CancellationTokenProvider tokenProvider,
+        SharedClientProcess clientProcess
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.clientProcess =
+            clientProcess ?? throw new ArgumentNullException(nameof(clientProcess));
         this.context = context ?? throw new ArgumentNullException(nameof(context));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.obsController =
@@ -544,17 +550,18 @@ public class GameController : IGameController
             return RunningClientBuild.Unreadable;
         }
 
-        // The SDK attaches read-only, reads the main module's file version, and never throws.
-        using HeroesClientProcess running = HeroesClientProcess.Attach(cachedProcess);
-        if (!running.Ok)
+        // The client the memory readers share: read-only, its main module's file version (#382).
+        (bool ok, string reason, HeroesClientVersion detected) = clientProcess.Read(
+            cachedProcess,
+            running =>
+                (running?.Ok == true, running?.Reason ?? "no-process", running?.DetectedVersion)
+        );
+        if (!ok)
         {
-            logger.LogWarning(
-                "Could not read the running Heroes file version ({Reason}).",
-                running.Reason
-            );
+            logger.LogWarning("Could not read the running Heroes file version ({Reason}).", reason);
         }
 
-        return ReplayClientRoute.RunningBuild(running.DetectedVersion, replayVersion);
+        return ReplayClientRoute.RunningBuild(detected, replayVersion);
     }
 
     private async Task WaitForAuthenticatedClientAsync()
@@ -1830,7 +1837,10 @@ public class GameController : IGameController
 
         try
         {
-            LoadingScreenSample sample = loadingScreen.Read(process);
+            LoadingScreenSample sample = clientProcess.Read(
+                process,
+                client => loadingScreen.Read(client)
+            );
             if (sample.Screen != lastScreen.Screen || sample.MenuSeen != lastScreen.MenuSeen)
             {
                 logger.LogInformation(
@@ -1865,7 +1875,10 @@ public class GameController : IGameController
 
         try
         {
-            ClientScreenSample sample = clientScreens.Read(process);
+            ClientScreenSample sample = clientProcess.Read(
+                process,
+                client => clientScreens.Read(client)
+            );
             if (
                 sample.Screen != lastClientScreen.Screen
                 || sample.Reason != lastClientScreen.Reason
@@ -1902,7 +1915,10 @@ public class GameController : IGameController
 
         try
         {
-            MatchClockSample sample = matchClock.Read(process);
+            MatchClockSample sample = clientProcess.Read(
+                process,
+                client => matchClock.Read(client)
+            );
             lastClockReason = sample.Reason;
             return sample;
         }
@@ -2233,12 +2249,15 @@ public class GameController : IGameController
             process.Dispose();
         }
 
+        // The game exited: the memory readers' client goes with it (#382).
+        clientProcess.Detach();
         return null;
     }
 
     public void Kill()
     {
         ClearProcessCache();
+        clientProcess.Detach();
         replayOnClient = null;
         try
         {
