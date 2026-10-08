@@ -125,11 +125,21 @@ public class CliHelpTests
                 // The exact arguments tools/package-release.ps1 and verify-release.ps1 pass.
                 "obs bundle --install C:\\publish --write",
                 "obs bundle --install C:\\extract",
+                "obs plan --help",
+                "obs plan",
+                "obs plan -o json",
+                "obs plan --install C:\\staged --previous C:\\app --environment prod --output json",
             }
         )
         {
             Assert.Empty(root.Parse(help).Errors);
         }
+
+        Assert.NotEmpty(root.Parse("obs plan --output yaml").Errors);
+        Assert.Contains(
+            "safe while OBS runs",
+            obs.Subcommands.Single(c => c.Name == "plan").Description
+        );
 
         Assert.Contains("SHA-256", obs.Subcommands.Single(c => c.Name == "bundle").Description);
         Assert.NotEmpty(root.Parse("obs bundle --output yaml").Errors);

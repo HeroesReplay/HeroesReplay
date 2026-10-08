@@ -64,7 +64,7 @@ Secrets: skill `op-service-account`. On a new clone, set user env `OP_SERVICE_AC
 
 CLI: skill `heroes-replay-cli`. Connectivity: `check`. Live spectator for agents: `heroesreplay mcp` (stdio MCP; status file `%LOCALAPPDATA%/HeroesReplay/status.json`). Spectator and MCP are **two processes**.
 
-OBS ownership, updates, validation, and the machine profile policy: `docs/obs-operations.md`. MCP discovery: `.mcp.json` at the repo root (source, `dotnet run`) and in the release zip (`heroesreplay.exe mcp`).
+OBS ownership, updates, validation, and the machine profile policy: `docs/obs-operations.md`. `heroesreplay obs plan` shows what an update would change in the scene collection, difference by difference, and writes nothing (files only, safe while OBS runs). MCP discovery: `.mcp.json` at the repo root (source, `dotnet run`) and in the release zip (`heroesreplay.exe mcp`).
 
 Production MCP is read-only. `heroesreplay mcp` reads OBS with `obs_inspect`, `obs_validate`, and `obs_screenshot`, which send only Get requests (`ObsReadOnly`) and never return the stream key. Nothing in it starts or stops a stream or recording, changes a scene, or arms a machine; that stays with guarded CLI commands. obs-mcp (royshil, about 120 unrestricted tools, returns the stream key) is **dev-only**: register it per machine on ASA-SERVER (`claude mcp add obs --scope user …`) if wanted. Never add it to the repo, the release zip, or DESKTOP-8SJEK72.
 

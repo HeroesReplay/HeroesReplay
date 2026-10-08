@@ -75,10 +75,30 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 - **Effective settings.** The data folder and collection name come from the install's `appsettings.json`, with the `HEROES_REPLAY_ENV` overlay and `HEROES_REPLAY_` variables applied.
 - **New machine.** `tools/bootstrap-workstation.ps1` writes the collection only when the machine has none.
 
+### Planning an update (`obs plan`, #307)
+
+`heroesreplay obs plan [--install <dir>] [--previous <dir>] [--output json]` shows what an update would change, and changes nothing. It reads files only (no websocket), so it is safe while OBS runs: the live collection, `managed-collections.json`, and `restore-pending.json` are read, and the update's own decision (`ObsCollectionPatcher`, run as `update install-obs` runs it) is made on copies in a temp folder that is deleted. To preview a staged release, run its exe with `--install <staged folder> --previous C:\heroesreplay\app`.
+
+- **Structured diff.** The live collection, `--install`'s `obs/Default.json`, and the base (the template the collection was last written from: this install's or `--previous`'s, found by the SHA-256 in the record) are compared after the path rewrite, property by property, for every source, filter, and scene item:
+
+  | Kind | Means | A merge |
+  | --- | --- | --- |
+  | `managedChange`, `managedAddition`, `managedRemoval` | The template moved; the live value is still the old template's | takes the template's |
+  | `operatorOverride`, `operatorAddition`, `operatorRemoval` | The operator changed, added, or removed it; the template did not | keeps it (a removed managed source is never re-added) |
+  | `conflict` | Both changed it | refuses |
+  | `unattributed` | It differs and there is no base | keeps it |
+
+  A source that exists on one side only is one line; its filters and scene items go with it.
+- **Not compared.** Ids OBS assigns (`uuid`, scene item ids), hotkeys, private settings, plug-in version stamps, the order of sources, filters, and items, global audio, transitions, and the values the spectator sets per replay: the info and tier text sources' text and file, the visibility of the game scene items it shows and hides, and each report browser source's url, css (the match report scroll), and height. Fractions compare at the single precision OBS saves (`0.66` and `0.6600000262260437` are equal); whole numbers, such as colors, compare exactly.
+- **Update.** `update.action` is what `update install-obs` would do now: `none`, `create`, `replace` (the whole collection, with the template), `update_paths`, `restore` (a waiting release rollback), or `keep` (custom or unreadable), with `deferred` and `liveSwap` when it waits for OBS.
+- **Codes.** `obs.plan_in_sync`, `obs.plan_changes`, `obs.plan_base_unknown`, `obs.collection_custom`, `obs.collection_missing` (ok), and `obs.plan_conflict`, `obs.collection_unreadable`, `obs.template_missing` (not ok, exit 1). JSON is `schemaVersion` 1, `ok`, `code`, `message`, `base`, `update`, `pendingRollback`, `summary`, `differences`.
+- `obs apply` (a merge that keeps operator overrides and additions, refusing on a conflict), `obs backup` and `obs restore`, and `update install-obs` using the diff, are the next parts of #307.
+
 ## Checking OBS
 
 - `heroesreplay obs inspect [--output json]` reads live OBS without changing it: versions, profile and collection, canvas, output size and FPS, output mode, recording format and encoders, the stream and recording bitrates and rate control, the record directory, scenes, global audio, stream and record status, stats, the stream service (never the key), and the arm.
 - `heroesreplay obs validate [--output json]` checks the loaded collection and profile against `obs/Default.json` and this install's settings. Findings have stable codes; any `error` makes it exit 1. Run it after changing OBS, the profile, or the collection, and before a release.
+- `heroesreplay obs plan [--output json]` shows, from the files, what an update would change in the collection and who changed each difference ([Planning an update](#planning-an-update-obs-plan-307)).
 - The MCP server (`heroesreplay mcp`; `.mcp.json` at the repo root and in the release zip) offers the same reads as `obs_inspect`, `obs_validate`, and `obs_screenshot`. Every request is a Get, so it can't change OBS. Fixes go through guarded CLI commands. obs-mcp, which has unrestricted tools and returns the stream key, is dev-only and is never in the repo, the release, or the live box.
 - **Preflight.** Before the spectator's first `StartStream` of a process, it validates over its own connection. Only `obs.request_unavailable` and `obs.stream_key_missing` stop the stream (`obsStreamBlockedBy` in `status.json`). Every other finding is logged once.
 
