@@ -198,15 +198,8 @@ public static class ObsValidator
             global,
             findings
         );
-        CheckPaths(
-            session,
-            inputs,
-            global,
-            packaged.AssetRoot,
-            settings?.DataDirectory,
-            files,
-            findings
-        );
+        ExpectedAssets assets = ExpectedAssets.For(settings, packaged.AssetRoot);
+        CheckPaths(session, inputs, global, assets, settings?.DataDirectory, files, findings);
         CheckMicrophone(session, global, findings);
         JObject video = session.Get("GetVideoSettings");
         CheckVideo(video, findings);
@@ -226,12 +219,34 @@ public static class ObsValidator
             Code = firstError?.Code,
             Endpoint = settings?.Obs?.WebSocketEndpoint,
             PackagedCollection = packaged.Path,
-            AssetRoot = packaged.AssetRoot,
+            AssetRoot = assets.Root,
             DataDirectory = settings?.DataDirectory,
             Errors = ordered.Count(finding => finding.Severity == Error),
             Warnings = ordered.Count(finding => finding.Severity == Warning),
             Findings = ordered,
         };
+    }
+
+    /// <summary>
+    /// The folder the collection's asset paths should name, and the older asset folders an
+    /// update moves them from: the install's <c>obs</c> folder, or with <c>OBS:StableAssets</c>
+    /// its stable copy (#330).
+    /// </summary>
+    private sealed record ExpectedAssets(string Root, IReadOnlyList<string> MovedFrom)
+    {
+        public static ExpectedAssets For(ObsInspectionSettings settings, string install)
+        {
+            if (install == null || string.IsNullOrWhiteSpace(settings?.AssetStoreRoot))
+            {
+                return new ExpectedAssets(install, null);
+            }
+
+            var store = new ObsAssetStore(settings.AssetStoreRoot);
+            string planned = settings.Obs?.StableAssets == true ? store.Planned(install) : null;
+            return planned == null
+                ? new ExpectedAssets(install, [store.AnyCopy])
+                : new ExpectedAssets(planned, [store.AnyCopy, install]);
+        }
     }
 
     private sealed record Packaged(
@@ -702,7 +717,7 @@ public static class ObsValidator
         IObsReadSession session,
         IReadOnlyList<JObject> inputs,
         IReadOnlyDictionary<string, string> global,
-        string assetRoot,
+        ExpectedAssets assets,
         string dataDirectory,
         IObsFileSystem files,
         List<ObsFinding> findings
@@ -736,9 +751,10 @@ public static class ObsValidator
                     name,
                     property,
                     value,
-                    assetRoot,
+                    assets.Root,
                     dataDirectory,
-                    files
+                    files,
+                    assets.MovedFrom
                 );
                 if (finding != null)
                 {
@@ -803,7 +819,8 @@ public static class ObsValidator
         string value,
         string assetRoot,
         string dataDirectory,
-        IObsFileSystem files
+        IObsFileSystem files,
+        IReadOnlyList<string> movedFrom = null
     )
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -834,7 +851,7 @@ public static class ObsValidator
         ArgumentNullException.ThrowIfNull(files);
         string local = LocalPath(trimmed);
         string expected = LocalPath(
-            ObsCollectionPaths.RewriteValue(property, trimmed, assetRoot, dataDirectory)
+            ObsCollectionPaths.RewriteValue(property, trimmed, assetRoot, dataDirectory, movedFrom)
         );
         bool rooted = Path.IsPathFullyQualified(local);
         ObsPathCheck found = rooted
@@ -907,6 +924,14 @@ public static class ObsValidator
                     + ". services start rewrites the collection paths while OBS is closed."
             : runtime ? " HeroesReplay writes it under Location:DataDirectory while it spectates."
             : string.Empty;
+        if (rooted && ObsCollectionPaths.IsEphemeral(local))
+        {
+            // #330: a build ran from a git worktree, wrote its own paths, and the worktree is gone.
+            fix +=
+                " It was in a git worktree, which is removed with its branch. Fix: close OBS and run `heroesreplay services start` from a current build;"
+                + " it moves the managed collection's paths without replacing it. With OBS:StableAssets (on in dev) it first copies the OBS files to "
+                + @"%LOCALAPPDATA%\HeroesReplay\obs\assets, so removing a worktree cannot break them again.";
+        }
         return new ObsFinding(
             runtime ? RuntimeFileMissing : FileMissing,
             runtime ? Warning : Error,

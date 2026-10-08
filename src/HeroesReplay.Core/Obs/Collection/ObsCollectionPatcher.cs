@@ -41,6 +41,23 @@ public sealed record ObsCollectionUpdate
     public string PreviousTemplatePath { get; init; }
 
     public DateTime UtcNow { get; init; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// <c>OBS:StableAssets</c>: point the collection at a verified copy of the install's OBS files
+    /// in <see cref="ObsAssetStore"/>, not at the install's own <c>obs</c> folder (#330). When the
+    /// copy cannot be made, the install's folder is used, as without it.
+    /// </summary>
+    public bool StableAssets { get; init; }
+
+    /// <summary>
+    /// The folder the collection's assets point at, when the caller already knows it
+    /// (<c>obs plan</c> passes the copy it would use). Null: the template's folder, or its
+    /// stable copy with <see cref="StableAssets"/>.
+    /// </summary>
+    public string AssetRoot { get; init; }
+
+    /// <summary>Where stable copies are kept; <see cref="ObsAssetStore.For"/> of <see cref="Managed"/> when null.</summary>
+    public ObsAssetStore AssetStore { get; init; }
 }
 
 /// <summary>
@@ -63,7 +80,8 @@ public static class ObsCollectionPatcher
         string dataDirectory,
         bool obsIsRunning,
         string collectionName,
-        ObsManagedFiles managed
+        ObsManagedFiles managed,
+        bool stableAssets = false
     )
     {
         string template = ObsCollectionPaths.FindCollection(startDirectory);
@@ -83,6 +101,7 @@ public static class ObsCollectionPatcher
                 ObsIsRunning = obsIsRunning,
                 CollectionName = collectionName,
                 Managed = managed,
+                StableAssets = stableAssets,
             }
         );
     }
@@ -122,7 +141,16 @@ public static class ObsCollectionPatcher
             );
         }
 
-        var target = new Target(update, templateFull, destinationFull, template, templateNames);
+        Assets assets = ResolveAssets(update, templateFull);
+        var target = new Target(
+            update,
+            templateFull,
+            destinationFull,
+            template,
+            templateNames,
+            assets.Root,
+            assets.MovedFrom
+        );
 
         // A release rollback that waited for OBS comes first, when this is the install it restored.
         ObsCollectionApplyResult restored = ObsCollectionRollback.CompletePending(
@@ -138,6 +166,55 @@ public static class ObsCollectionPatcher
             return restored;
         }
 
+        if (ObsCollectionPaths.IsEphemeral(target.AssetRoot))
+        {
+            // A git worktree is deleted with its branch, and OBS would show missing images (#330).
+            return ObsCollectionApplyResult.Drifted(
+                "Refusing to point OBS at "
+                    + target.AssetRoot
+                    + ": it is inside a git worktree, which is removed with it. The collection was left as it is. "
+                    + (
+                        assets.Copy is { Ok: false }
+                            ? assets.Copy.Message + " "
+                            : "Turn on OBS:StableAssets (on in appsettings.dev.json) so the OBS files are copied to "
+                                + assets.Store.Root
+                                + ", or run services start from a stable install. "
+                    )
+                    + "obs validate reports the files that are missing."
+            );
+        }
+
+        ObsCollectionApplyResult result = ApplyToCollection(update, target, destinationFull);
+        if (assets.Copy is { Ok: true })
+        {
+            PruneCopies(update, assets, destinationFull);
+            if (assets.Copy.Copied)
+            {
+                result = result with { Message = assets.Copy.Message + " " + result.Message };
+            }
+        }
+        else if (assets.Copy is { Ok: false })
+        {
+            result = result with
+            {
+                Message =
+                    assets.Copy.Message
+                    + " The collection points at "
+                    + target.AssetRoot
+                    + ". "
+                    + result.Message,
+            };
+        }
+
+        return result;
+    }
+
+    private static ObsCollectionApplyResult ApplyToCollection(
+        ObsCollectionUpdate update,
+        Target target,
+        string destinationFull
+    )
+    {
         if (!File.Exists(destinationFull))
         {
             return update.ObsIsRunning
@@ -169,13 +246,13 @@ public static class ObsCollectionPatcher
 
         ObsManagedCollection record = update.Managed.Read(destinationFull);
         IReadOnlyList<string> previousNames = PreviousNames(update.PreviousTemplatePath);
-        bool managed = new[] { record?.Sources, previousNames, templateNames }.Any(names =>
+        bool managed = new[] { record?.Sources, previousNames, target.TemplateNames }.Any(names =>
             names != null && !Drift(names, liveNames).Custom
         );
         if (!managed)
         {
             return ObsCollectionApplyResult.Drifted(
-                DescribeCustom(record?.Sources ?? templateNames, liveNames)
+                DescribeCustom(record?.Sources ?? target.TemplateNames, liveNames)
             );
         }
 
@@ -214,7 +291,14 @@ public static class ObsCollectionPatcher
                 : Install(target, "Replaced the live OBS collection with this install's template.");
         }
 
-        string updated = ObsCollectionPaths.Rewrite(live, target.AssetRoot, update.DataDirectory);
+        // Paths only: the template and its record stay. Asset paths under a worktree, an older
+        // stable copy, or this install's own obs folder (when it is copied) move too (#330).
+        string updated = ObsCollectionPaths.Rewrite(
+            live,
+            target.AssetRoot,
+            update.DataDirectory,
+            target.MovedFrom
+        );
         if (string.Equals(updated, live, StringComparison.Ordinal))
         {
             return ObsCollectionApplyResult.Unchanged(
@@ -267,12 +351,73 @@ public static class ObsCollectionPatcher
         string TemplatePath,
         string DestinationPath,
         string Template,
-        IReadOnlyList<string> TemplateNames
+        IReadOnlyList<string> TemplateNames,
+        string AssetRoot,
+        IReadOnlyList<string> MovedFrom
     )
     {
-        public string AssetRoot => Path.GetDirectoryName(TemplatePath);
-
         public string Hash { get; } = Sha256(Template);
+    }
+
+    /// <summary>
+    /// Where the collection's assets point: <see cref="Root"/>, and the older asset folders a
+    /// path update moves from. <see cref="Copy"/> is the stable copy, when one was asked for.
+    /// </summary>
+    private sealed record Assets(
+        string Root,
+        IReadOnlyList<string> MovedFrom,
+        ObsAssetStore Store,
+        ObsAssetCopy Copy
+    );
+
+    private static Assets ResolveAssets(ObsCollectionUpdate update, string templateFull)
+    {
+        string install = Path.GetDirectoryName(templateFull);
+        ObsAssetStore store = update.AssetStore ?? ObsAssetStore.For(update.Managed);
+        string root = update.AssetRoot;
+        ObsAssetCopy copy = null;
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            root = install;
+            if (update.StableAssets)
+            {
+                copy = store.Ensure(install, update.UtcNow);
+                root = copy.Ok ? copy.AssetRoot : install;
+            }
+        }
+
+        // Any stable copy moves to the root, so turning OBS:StableAssets off moves back too.
+        var movedFrom = new List<string> { store.AnyCopy };
+        if (!ObsManagedFiles.SamePath(root, install))
+        {
+            movedFrom.Add(install);
+        }
+
+        return new Assets(root, movedFrom, store, copy);
+    }
+
+    /// <summary>
+    /// Removes stable copies nothing uses any more. Never the one in use, and never one a
+    /// collection or a kept backup (a release rollback's source) points at.
+    /// </summary>
+    private static void PruneCopies(
+        ObsCollectionUpdate update,
+        Assets assets,
+        string destinationFull
+    )
+    {
+        try
+        {
+            assets.Store.Prune(
+                ObsAssetStore.References(destinationFull, update.Managed),
+                assets.Copy.BundleHash,
+                update.UtcNow
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Pruning is housekeeping; the next update tries again.
+        }
     }
 
     /// <summary>

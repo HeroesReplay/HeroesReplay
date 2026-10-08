@@ -177,6 +177,58 @@ public class ObsValidatorTests : IDisposable
     }
 
     [Fact]
+    public void AFileInARemovedWorktree_IsMissing_AndTheFindingNamesTheFix()
+    {
+        // ASA-SERVER on 2026-10-08: 9 obs.file_missing errors after an agent's worktree went (#330).
+        const string install = @"C:\heroesreplay\HeroesReplay\obs";
+        const string copy = @"C:\heroesreplay\HeroesReplay\obs\Ranks\gold.png";
+
+        ObsFinding finding = ObsValidator.CheckReference(
+            "gold-image",
+            "file",
+            "C:/heroesreplay/HeroesReplay/.claude/worktrees/agent-abf31f3ca8421b217/obs/Ranks/gold.png",
+            install,
+            @"C:\heroesreplay\Data",
+            new FakeObsFileSystem().With(copy)
+        );
+
+        Assert.Equal(ObsValidator.FileMissing, finding.Code);
+        Assert.Equal(ObsValidator.Error, finding.Severity);
+        Assert.Contains("This install expects " + copy + ", which exists", finding.Message);
+        Assert.Contains("git worktree", finding.Message, StringComparison.Ordinal);
+        Assert.Contains("heroesreplay services start", finding.Message, StringComparison.Ordinal);
+        Assert.Contains("OBS:StableAssets", finding.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithStableAssets_TheCopyIsExpected_AndTheInstallFolderIsStale()
+    {
+        string store = Path.Combine(data, "assets");
+        OBSSettings settings = FakeObs.Settings();
+        settings.StableAssets = true;
+        FakeObs obs = FakeObs.Installed(data);
+
+        ObsValidation validation = ObsValidator.Validate(
+            obs.Open(null, null),
+            FakeObs.InspectionSettings(data, settings) with
+            {
+                AssetStoreRoot = store,
+            }
+        );
+
+        string planned = new ObsAssetStore(store).Planned(FakeObs.RepoObsDirectory());
+        Assert.NotNull(planned);
+        Assert.Equal(planned, validation.AssetRoot);
+        // The collection still names the install's folder, whose files exist: a path to move.
+        ObsFinding stale = validation.Findings.First(finding =>
+            finding.Code == ObsValidator.PathStale
+        );
+        Assert.Equal(ObsValidator.Warning, stale.Severity);
+        Assert.Contains(planned, stale.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(Directory.Exists(planned));
+    }
+
+    [Fact]
     public void AMissingDataFile_IsARuntimeWarning_AndAMissingAssetAnError()
     {
         ObsFinding runtime = ObsValidator.CheckReference(

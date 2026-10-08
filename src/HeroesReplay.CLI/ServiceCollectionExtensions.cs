@@ -18,6 +18,7 @@ using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays;
@@ -278,7 +279,10 @@ public static class ServiceCollectionExtensions
             configuration.GetSection("Location").Get<LocationSettings>()?.DataDirectory,
             arm.IsArmed(),
             arm.FilePath
-        );
+        )
+        {
+            AssetStoreRoot = ObsAssetStore.For(ObsManagedFiles.ForThisUser()).Root,
+        };
     }
 
     public static AppSettings BindSettings(IConfiguration configuration)
