@@ -18,4 +18,11 @@ public class OCRSettings
     /// (<see cref="ScreenShadow"/>). It changes no decision.
     /// </summary>
     public bool ShadowEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The least time between two saved frames of shadow disagreements on one state; empty or
+    /// zero means <see cref="ScreenShadow.DefaultFrameInterval"/> (5 min). A shadow proof sets it
+    /// short so every disagreement has a frame to classify (#292).
+    /// </summary>
+    public TimeSpan? ShadowFrameInterval { get; set; }
 }

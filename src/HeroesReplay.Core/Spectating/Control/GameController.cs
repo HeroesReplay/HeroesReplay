@@ -123,7 +123,11 @@ public class GameController : IGameController
         this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
-        screenShadow = new ScreenShadow(logger, TimeProvider.System);
+        screenShadow = new ScreenShadow(
+            logger,
+            TimeProvider.System,
+            settings.OCR?.ShadowFrameInterval
+        );
     }
 
     public async Task<ClientHoldReason> LaunchAsync()
@@ -804,7 +808,11 @@ public class GameController : IGameController
 
             WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
             string text = window.Text;
-            if (BattleNetDisconnect.IsShown(text))
+            ClientScreenSample? clientScreen = ReadClientScreen();
+
+            // The email and password form also says "Battle.net" and "Log in". Memory's login
+            // read, or the login-form words, keep it off the disconnect path (#385).
+            if (BattleNetDisconnect.IsShown(text, clientScreen?.OnLogin))
             {
                 logger.LogWarning("Battle.net disconnect dialog: {Text}", text);
                 return new ColdBoot(RetryDisconnect: true, ClientHoldReason.None);
@@ -820,10 +828,31 @@ public class GameController : IGameController
                 ClientScreenText.IsRegionUnavailable(text),
                 text
             );
-            ClientHoldReason hold = ClientHold.Classify(text);
+
+            // Any game-launch failure the client shows (its launch result in a CStandardDialog,
+            // read from memory) is an invalid client, handled like the version dialog (#292).
+            LaunchFailure? launchFailure = ClientLaunchFailure.Read(clientScreen);
+            ClientHoldReason hold =
+                launchFailure != null
+                    ? ClientLaunchFailure.Classify(clientScreen)
+                    : ClientHold.Classify(text);
+            if (launchFailure is LaunchFailure failure && !loggedMismatch)
+            {
+                logger.LogWarning(
+                    "Heroes shows game-launch result {Code} {Key} in a {Dialog} (client memory). The client cannot play this replay.",
+                    failure.Code,
+                    failure.Key,
+                    ClientLaunchFailure.ResultDialog
+                );
+            }
+
             if (ClientDownloadHold.DialogFailsDownload(buildDownload, hold))
             {
-                return FailBuildDownload("the version mismatch dialog");
+                return FailBuildDownload(
+                    launchFailure is LaunchFailure failed
+                        ? $"game-launch result {failed}"
+                        : "the version mismatch dialog"
+                );
             }
 
             if (hold != ClientHoldReason.None)
@@ -880,8 +909,11 @@ public class GameController : IGameController
             ShadowScreen(ScreenState.MapLoading, ocrLoading, text);
             bool loading = memoryLoading ?? ocrLoading;
             bool timer = await IsMatchClockRunning().ConfigureAwait(false);
-            bool loginForm = ClientScreenText.IsLoginForm(text);
-            ShadowScreen(ScreenState.LoginForm, loginForm, text);
+            bool ocrLoginForm = ClientScreenText.IsLoginForm(text);
+            ShadowScreen(ScreenState.LoginForm, ocrLoginForm, text);
+
+            // Memory's login read decides; the login-form words count only when it cannot tell.
+            bool loginForm = LoginFormCue.Sees(clientScreen?.OnLogin, text);
             // A login form while the build downloads is the newest exe's handoff. Closing it
             // would stop the download.
             if (
@@ -1965,29 +1997,12 @@ public class GameController : IGameController
     {
         try
         {
-            if (!TryGetGameHandle(out IntPtr handle))
+            string text = await ReadEndScreenTextAsync().ConfigureAwait(false);
+            if (text == null)
             {
                 return false;
             }
 
-            using Bitmap frame = capture.Capture(handle);
-            if (frame == null || frame.Width < 200 || frame.Height < 200)
-            {
-                return false;
-            }
-
-            var crop = new Rectangle(
-                frame.Width / 5,
-                frame.Height / 8,
-                frame.Width * 3 / 5,
-                frame.Height / 3
-            );
-            using Bitmap region = frame.Clone(crop, frame.PixelFormat);
-            using Bitmap resized = region.GetResized(zoom: 2);
-            using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized)
-                .ConfigureAwait(false);
-            OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-            string text = result?.Text ?? string.Empty;
             bool endScreen = MatchEndBanner.IsEnd(text, nearCore);
             ShadowScreen(ScreenState.EndScreen, endScreen, text);
             if (endScreen)
@@ -2002,6 +2017,61 @@ public class GameController : IGameController
             logger.LogDebug(e, "End-screen OCR failed.");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Shadow mode only (#292): OCR of the end-screen banner next to memory's MVP read
+    /// (<see cref="ClientScreenSample.OnAwards"/>), from the replay's core-death time on. Only the
+    /// MVP and award words count (<see cref="MatchEndBanner.EndsLaunchWait"/>), the same screen
+    /// memory names. It decides nothing.
+    /// </summary>
+    public async Task ShadowEndScreenAsync()
+    {
+        if (settings.OCR?.ShadowEnabled == false)
+        {
+            return;
+        }
+
+        try
+        {
+            string text = await ReadEndScreenTextAsync().ConfigureAwait(false);
+            if (text != null)
+            {
+                ShadowScreen(ScreenState.EndScreen, MatchEndBanner.EndsLaunchWait(text), text);
+            }
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "End-screen shadow OCR failed.");
+        }
+    }
+
+    /// <summary>The OCR'd banner area of the game window, or null when there is no frame.</summary>
+    private async Task<string> ReadEndScreenTextAsync()
+    {
+        if (!TryGetGameHandle(out IntPtr handle))
+        {
+            return null;
+        }
+
+        using Bitmap frame = capture.Capture(handle);
+        if (frame == null || frame.Width < 200 || frame.Height < 200)
+        {
+            return null;
+        }
+
+        var crop = new Rectangle(
+            frame.Width / 5,
+            frame.Height / 8,
+            frame.Width * 3 / 5,
+            frame.Height / 3
+        );
+        using Bitmap region = frame.Clone(crop, frame.PixelFormat);
+        using Bitmap resized = region.GetResized(zoom: 2);
+        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized)
+            .ConfigureAwait(false);
+        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
+        return result?.Text ?? string.Empty;
     }
 
     private static async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
