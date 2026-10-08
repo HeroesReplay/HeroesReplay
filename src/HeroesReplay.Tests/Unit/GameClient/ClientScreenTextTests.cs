@@ -18,50 +18,24 @@ public class ClientScreenTextTests
     }
 
     [Fact]
-    public void IsGameDataDownload_MatchesTheVersionDataDialog()
+    public void RestartAfterGameData_ADownloadStillOnScreenLeavesTheClientRunning()
     {
-        Assert.True(
-            ClientScreenText.IsGameDataDownload(
-                "DOWNLOADING All data files must be fully downloaded to load this version of the game. Calculating... CANCEL"
-            )
-        );
-        Assert.False(ClientScreenText.IsGameDataDownload("Preparing game data"));
-        Assert.False(ClientScreenText.IsGameDataDownload("DOWNLOADING"));
-        Assert.False(ClientScreenText.IsGameDataDownload(null));
-        Assert.False(ClientScreenText.IsGameDataDownload("   "));
-    }
-
-    [Fact]
-    public void IsGameDataDownload_LaterSampleLeavesTheClientRunning()
-    {
-        const string dialog =
-            "DOWNLOADING All data files must be fully downloaded to load this version of the game. CANCEL";
-
-        Assert.True(ClientScreenText.IsGameDataDownload(string.Empty, dialog));
-        Assert.True(ClientScreenText.IsGameDataDownload("Preparing game data", dialog));
-        Assert.False(ClientScreenText.IsGameDataDownload(string.Empty, "Preparing game data"));
-        Assert.False(ClientScreenText.IsGameDataDownload(null, null));
-        Assert.True(ClientScreenText.IsGameDataStartup(string.Empty, "Preparing game data"));
+        // The DOWNLOADING dialog comes from memory (a shown CProgressBarDialog, #292): while it
+        // shows, or while "Preparing game data" shows, the client is not restarted.
         Assert.False(
             ClientInterfacePlan.RestartAfterGameData(
-                sawDownload: ClientScreenText.IsGameDataDownload(string.Empty, dialog),
-                downloadVisible: ClientScreenText.IsGameDataDownload(string.Empty, dialog),
-                gameDataStartup: ClientScreenText.IsGameDataStartup(string.Empty, dialog),
+                sawDownload: true,
+                downloadVisible: true,
+                gameDataStartup: false,
                 replayVisible: false,
                 restarts: 0
             )
         );
         Assert.False(
             ClientInterfacePlan.RestartAfterGameData(
-                sawDownload: ClientScreenText.IsGameDataDownload(string.Empty, dialog),
-                downloadVisible: ClientScreenText.IsGameDataDownload(
-                    string.Empty,
-                    "Preparing game data"
-                ),
-                gameDataStartup: ClientScreenText.IsGameDataStartup(
-                    string.Empty,
-                    "Preparing game data"
-                ),
+                sawDownload: true,
+                downloadVisible: false,
+                gameDataStartup: true,
                 replayVisible: false,
                 restarts: 0
             )

@@ -645,9 +645,10 @@ public class GameController : IGameController
         DateTimeOffset stuckSince = started;
         int waitRecoveries = 0;
 
-        async Task<bool> HoldForGameDataDownloadAsync(string primary, string later)
+        // The game-data DOWNLOADING dialog, from memory only (#292): a shown CProgressBarDialog.
+        async Task<bool> HoldForGameDataDownloadAsync(bool downloading)
         {
-            if (!ClientScreenText.IsGameDataDownload(primary, later))
+            if (!downloading)
             {
                 return false;
             }
@@ -876,12 +877,8 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.AwardScreen);
             }
 
-            ShadowScreen(
-                ScreenState.GameDataDownload,
-                ClientScreenText.IsGameDataDownload(text, null),
-                text
-            );
-            if (await HoldForGameDataDownloadAsync(text, null).ConfigureAwait(false))
+            bool downloading = clientScreen?.OnDownload == true;
+            if (await HoldForGameDataDownloadAsync(downloading).ConfigureAwait(false))
             {
                 continue;
             }
@@ -1062,7 +1059,7 @@ public class GameController : IGameController
             if (
                 ClientInterfacePlan.RestartAfterGameData(
                     sawGameDataDownload,
-                    downloadVisible: ClientScreenText.IsGameDataDownload(text),
+                    downloadVisible: downloading,
                     startup,
                     replayVisible,
                     dataRestarts,
@@ -1156,7 +1153,7 @@ public class GameController : IGameController
             }
 
             TimeSpan blankFor = blankTiming ? DateTimeOffset.UtcNow - blankSince : TimeSpan.Zero;
-            bool startupOrDownload = startup || ClientScreenText.IsGameDataDownload(text);
+            bool startupOrDownload = startup || downloading;
             bool gameDataStillStarting = ClientRelaunch.KeepsWaitingForGameData(
                 startup,
                 sawGameDataStartup,
@@ -1669,10 +1666,7 @@ public class GameController : IGameController
                 }
 
                 string text = await RecognizeFrameAsync(frame).ConfigureAwait(false);
-                if (
-                    ClientScreenText.IsGameDataStartup(text)
-                    || ClientScreenText.IsGameDataDownload(text)
-                )
+                if (ClientScreenText.IsGameDataStartup(text))
                 {
                     return text;
                 }
