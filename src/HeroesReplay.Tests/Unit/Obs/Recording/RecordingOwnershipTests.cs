@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Recording;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -318,6 +319,9 @@ public class RecordingOwnershipTests
         Assert.Equal(65820711, claim.ReplayId);
         Assert.Equal(at, claim.StartedAt);
         Assert.Equal(Environment.ProcessId, claim.ProcessId);
+        // #342: the next spectate tells this process from a reused pid by its start time.
+        Assert.NotNull(claim.ProcessStartedAt);
+        Assert.Equal(ProcessTable.Find(Environment.ProcessId).StartTime, claim.ProcessStartedAt);
         Assert.True(session.StopRecording(Noop, 65820711).Finalized);
         Assert.Null(temp.Store.TryLoad());
         Assert.False(File.Exists(temp.Store.FilePath));

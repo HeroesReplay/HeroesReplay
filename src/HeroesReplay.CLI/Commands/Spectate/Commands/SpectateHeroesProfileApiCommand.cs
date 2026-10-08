@@ -7,6 +7,7 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,6 +59,8 @@ public class SpectateHeroesProfileApiCommand : Command
             await firstProbe
         );
         using IDisposable probing = probes.Watch(stop.Token);
+        // Before the first replay: a recording the restarted spectate left running (#342).
+        scope.ServiceProvider.GetRequiredService<OrphanRecordingOnStart>().Run();
         return await engine.RunAsync() ? 0 : 1;
     }
 }

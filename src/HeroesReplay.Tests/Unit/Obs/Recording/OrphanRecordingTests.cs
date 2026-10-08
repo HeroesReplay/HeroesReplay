@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Recording;
+using HeroesReplay.Core.Shared;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs.Recording;
@@ -15,6 +16,9 @@ namespace HeroesReplay.Tests.Unit.Obs.Recording;
 public class OrphanRecordingTests : IDisposable
 {
     private static readonly DateTimeOffset Started = new(2026, 10, 8, 12, 33, 26, TimeSpan.Zero);
+
+    /// <summary>When the claimant spectate process started, some time before its recording.</summary>
+    private static readonly DateTimeOffset ClaimantStarted = Started.AddMinutes(-20);
 
     private readonly string directory = Path.Combine(
         Path.GetTempPath(),
@@ -136,7 +140,7 @@ public class OrphanRecordingTests : IDisposable
             pid =>
             {
                 asked = pid;
-                return true;
+                return Process(pid, ClaimantStarted);
             },
             obs.OpenRecordStop,
             Started.AddMinutes(5)
@@ -156,7 +160,7 @@ public class OrphanRecordingTests : IDisposable
         OrphanRecordingCheck check = OrphanRecording.Stop(
             claims,
             obsRunning: true,
-            _ => false,
+            _ => null,
             () =>
                 throw new ObsUnavailableException(
                     ObsUnavailableException.Unreachable,
@@ -216,6 +220,89 @@ public class OrphanRecordingTests : IDisposable
         Assert.NotNull(claims.TryLoad());
     }
 
+    /// <summary>#342: the claimant is its pid and its start time, so a reused pid is not it.</summary>
+    [Theory]
+    // The claimant itself, read a moment apart.
+    [InlineData(true, 0, "heroesreplay.exe", true)]
+    [InlineData(true, 1, "heroesreplay.exe", true)]
+    // The pid now belongs to a process that started after the claimant, even another heroesreplay.
+    [InlineData(true, 1500, "heroesreplay.exe", false)]
+    [InlineData(true, 1500, "notepad.exe", false)]
+    // A claim from before #342 has no start time: a pid alive since before the claim is the claimant.
+    [InlineData(false, 0, "heroesreplay.exe", true)]
+    [InlineData(false, 1500, "heroesreplay.exe", false)]
+    public void ClaimantRunning_MatchesThePidAndItsStartTime(
+        bool claimRecordsStartTime,
+        int liveStartedAfterClaimantSeconds,
+        string liveName,
+        bool running
+    )
+    {
+        var claim = new RecordingClaim
+        {
+            ReplayId = 65820711,
+            StartedAt = Started,
+            ProcessId = 4242,
+            ProcessStartedAt = claimRecordsStartTime ? ClaimantStarted : null,
+        };
+
+        Assert.Equal(
+            running,
+            OrphanRecording.ClaimantRunning(
+                claim,
+                pid =>
+                    pid == 4242
+                        ? Process(
+                            pid,
+                            ClaimantStarted.AddSeconds(liveStartedAfterClaimantSeconds),
+                            liveName
+                        )
+                        : null
+            )
+        );
+    }
+
+    [Fact]
+    public void ClaimantRunning_DeadPid_IsNotRunning()
+    {
+        var claim = new RecordingClaim
+        {
+            StartedAt = Started,
+            ProcessId = 4242,
+            ProcessStartedAt = ClaimantStarted,
+        };
+
+        Assert.False(OrphanRecording.ClaimantRunning(claim, _ => null));
+        Assert.False(
+            OrphanRecording.ClaimantRunning(
+                claim with
+                {
+                    ProcessId = 0,
+                },
+                pid => Process(pid, ClaimantStarted)
+            )
+        );
+    }
+
+    /// <summary>A pid this process cannot open has no start time: only a heroesreplay counts.</summary>
+    [Theory]
+    [InlineData("heroesreplay.exe", true)]
+    [InlineData("svchost.exe", false)]
+    public void ClaimantRunning_UnreadableStartTime_FallsBackToTheName(string name, bool running)
+    {
+        var claim = new RecordingClaim
+        {
+            StartedAt = Started,
+            ProcessId = 4242,
+            ProcessStartedAt = ClaimantStarted,
+        };
+
+        Assert.Equal(
+            running,
+            OrphanRecording.ClaimantRunning(claim, pid => Process(pid, null, name))
+        );
+    }
+
     [Theory]
     [InlineData(150, 152, true)]
     [InlineData(1800, 1810, true)]
@@ -248,8 +335,15 @@ public class OrphanRecordingTests : IDisposable
                 ReplayId = 65820711,
                 StartedAt = Started,
                 ProcessId = processId,
+                ProcessStartedAt = ClaimantStarted,
             }
         );
+
+    private static ProcessTableEntry Process(
+        int pid,
+        DateTimeOffset? startTime,
+        string name = "heroesreplay.exe"
+    ) => new(pid, 1, name, @"C:\heroesreplay\app\heroesreplay.exe", startTime);
 
     private static FakeObs Obs(TimeSpan? recordedFor = null)
     {
@@ -263,5 +357,5 @@ public class OrphanRecordingTests : IDisposable
         DateTimeOffset now,
         bool obsRunning = true,
         Action<TimeSpan> wait = null
-    ) => OrphanRecording.Stop(claims, obsRunning, _ => false, obs.OpenRecordStop, now, wait);
+    ) => OrphanRecording.Stop(claims, obsRunning, _ => null, obs.OpenRecordStop, now, wait);
 }

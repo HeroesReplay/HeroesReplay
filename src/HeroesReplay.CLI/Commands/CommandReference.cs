@@ -63,7 +63,7 @@ public static class CommandReference
             "spectate file",
             "Not elevated. Heroes of the Storm installed; a current-patch replay needs Battle.net signed in. OBS is optional. On ASA-SERVER only to prove a change (AGENTS.md phases). "
                 + LiveAsk,
-            "Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\\Contexts\\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. Starts the Aspire dashboard when OTLP :4317 is down.",
+            "Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\\Contexts\\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.",
             "0 after the queue has played. 1 on a parse error (`--player` not a BattleTag, a `--file` that does not exist) or when the engine stops on an unexpected error."
         ),
         new(
@@ -317,7 +317,7 @@ public static class CommandReference
         new(
             "services stop",
             LiveAsk,
-            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when its duration matches the claim (#318). Never stops an OBS stream.",
+            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.",
             "0 when every role and the supervisor exited, the game closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked."
         ),
         new(
