@@ -1221,7 +1221,8 @@ public class GameManager : IGameManager
                 settings.YouTube,
                 isCompleteRecording: true,
                 CancellationToken.None,
-                gameData.Heroes
+                gameData.Heroes,
+                StatHookSource.For(settings, loadedReplay, DateTimeOffset.UtcNow)
             )
             .ConfigureAwait(false);
         if (wrote)

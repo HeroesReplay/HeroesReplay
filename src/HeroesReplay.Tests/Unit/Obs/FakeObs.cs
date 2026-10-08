@@ -36,6 +36,8 @@ internal sealed class FakeObs : IObsReadSessionFactory
     public string Mic { get; set; }
     public bool MicMuted { get; set; }
     public HashSet<string> MissingRequests { get; } = new(StringComparer.Ordinal);
+    public string WebSocketVersion { get; set; } = "5.6.3";
+    public bool OmitAvailableRequests { get; set; }
     public Dictionary<string, Exception> Failures { get; } = new(StringComparer.Ordinal);
     public JObject StreamService { get; set; } =
         new()
@@ -203,15 +205,17 @@ internal sealed class FakeObs : IObsReadSessionFactory
             "GetVersion" => new JObject
             {
                 ["obsVersion"] = "32.2.2",
-                ["obsWebSocketVersion"] = "5.6.3",
+                ["obsWebSocketVersion"] = WebSocketVersion,
                 ["rpcVersion"] = 1,
                 ["platformDescription"] = "Windows 11",
-                ["availableRequests"] = new JArray(
-                    ObsValidator
-                        .RequiredRequests.Concat(ObsReadOnly.Requests)
-                        .Distinct()
-                        .Where(name => !MissingRequests.Contains(name))
-                ),
+                ["availableRequests"] = OmitAvailableRequests
+                    ? null
+                    : new JArray(
+                        ObsValidator
+                            .RequiredRequests.Concat(ObsReadOnly.Requests)
+                            .Distinct()
+                            .Where(name => !MissingRequests.Contains(name))
+                    ),
                 ["supportedImageFormats"] = new JArray("png", "jpg"),
             },
             "GetProfileList" => new JObject

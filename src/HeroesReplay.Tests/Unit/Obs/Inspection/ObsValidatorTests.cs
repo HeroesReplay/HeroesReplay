@@ -247,6 +247,61 @@ public class ObsValidatorTests : IDisposable
     }
 
     [Fact]
+    public void AnObsWebSocketBefore53_StopsTheStreamAndNamesItsVersion()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.WebSocketVersion = "5.2.3";
+        obs.MissingRequests.Add("SetRecordDirectory");
+
+        ObsValidation validation = Validate(obs);
+        ObsFinding finding = Single(validation, ObsValidator.RequestUnavailable);
+
+        Assert.False(validation.Ok);
+        Assert.Equal(ObsValidator.Error, finding.Severity);
+        Assert.Equal("SetRecordDirectory", finding.Subject);
+        Assert.Contains(
+            "obs-websocket 5.2.3 does not offer SetRecordDirectory",
+            finding.Message,
+            StringComparison.Ordinal
+        );
+        Assert.Contains("Update OBS Studio", finding.Message, StringComparison.Ordinal);
+        Assert.Same(finding, ObsValidator.BlocksStream(validation));
+    }
+
+    [Fact]
+    public void NoRequestList_FailsClosedOnEveryRequiredRequest()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.OmitAvailableRequests = true;
+
+        ObsValidation validation = Validate(obs);
+        var unavailable = validation
+            .Findings.Where(finding => finding.Code == ObsValidator.RequestUnavailable)
+            .ToList();
+
+        Assert.False(validation.Ok);
+        Assert.Equal(ObsValidator.RequestUnavailable, validation.Code);
+        Assert.Equal(
+            ObsValidator.RequiredRequests.OrderBy(name => name, StringComparer.Ordinal),
+            unavailable.Select(finding => finding.Subject)
+        );
+        Assert.All(unavailable, finding => Assert.Equal(ObsValidator.Error, finding.Severity));
+        Assert.Equal(ObsValidator.RequestUnavailable, ObsValidator.BlocksStream(validation)?.Code);
+    }
+
+    [Fact]
+    public void ExtraRequestsAndANewerObsWebSocket_AreNotFindings()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.WebSocketVersion = "6.0.0";
+
+        Assert.DoesNotContain(
+            Validate(obs).Findings,
+            finding => finding.Code == ObsValidator.RequestUnavailable
+        );
+    }
+
+    [Fact]
     public void FindingsAreErrorsFirst()
     {
         FakeObs obs = FakeObs.Installed(data);

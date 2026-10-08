@@ -654,6 +654,37 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IHeroesProfileService, HeroesProfileService>();
     }
 
+    /// <summary>
+    /// The hero statistics refresh behind YouTube title hooks. Its own Heroes Profile client and
+    /// <c>HttpClient</c> carry no retry handler, so a 429 waits for <c>Retry-After</c> instead
+    /// of being retried every second.
+    /// </summary>
+    public static IServiceCollection AddHeroStatsRefresh(this IServiceCollection services)
+    {
+        services.AddHttpClient(
+            HeroStatsApi.HttpClientName,
+            client => client.Timeout = HeroesProfileHttp.AttemptTimeout
+        );
+        return services.AddSingleton(sp =>
+        {
+            AppSettings settings = sp.GetRequiredService<AppSettings>();
+            HeroesProfileApiSettings api = settings.HeroesProfileApi;
+            HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
+                .CreateClient(HeroStatsApi.HttpClientName);
+            HeroesProfileClient client = HeroesProfileClientFactory.Create(
+                api?.ApiKey,
+                httpClient,
+                api?.ExternalV1BaseUri
+            );
+            return new HeroStatsRefresh(
+                new HeroStatsApi(client),
+                new HeroStatsStore(settings.Location.DataDirectory),
+                api?.HeroStats ?? new HeroStatsSettings(),
+                sp.GetRequiredService<ILogger<HeroStatsRefresh>>()
+            );
+        });
+    }
+
     private static IServiceCollection AddHeroesProfileKiotaClient(this IServiceCollection services)
     {
         services
