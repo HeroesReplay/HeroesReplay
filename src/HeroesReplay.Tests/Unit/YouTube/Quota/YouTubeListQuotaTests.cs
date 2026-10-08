@@ -1,4 +1,7 @@
 using System;
+using System.Net;
+using Google;
+using Google.Apis.Requests;
 using HeroesReplay.Core.YouTube.Quota;
 using Xunit;
 
@@ -40,6 +43,32 @@ public class YouTubeListQuotaTests
         Assert.Equal(YouTubeQuotaRefusal.RateLimited, YouTubeListQuota.Classify(refused));
         Assert.False(YouTubeListQuota.IsExhausted(refused));
         Assert.True(YouTubeListQuota.IsRefused(refused));
+    }
+
+    [Fact]
+    public void GoogleRateLimitReason_IsARateLimit()
+    {
+        // playlists.insert on 2026-10-08: 429, "Resource has been exhausted (e.g. check quota)."
+        var status = new GoogleApiException("youtube", "Resource has been exhausted.")
+        {
+            HttpStatusCode = HttpStatusCode.TooManyRequests,
+        };
+        var reason = new GoogleApiException("youtube", "Resource has been exhausted.")
+        {
+            Error = new RequestError
+            {
+                Errors = [new SingleError { Reason = "RATE_LIMIT_EXCEEDED" }],
+            },
+        };
+        var daily = new GoogleApiException("youtube", "Forbidden.")
+        {
+            HttpStatusCode = HttpStatusCode.Forbidden,
+            Error = new RequestError { Errors = [new SingleError { Reason = "quotaExceeded" }] },
+        };
+
+        Assert.Equal(YouTubeQuotaRefusal.RateLimited, YouTubeListQuota.Classify(status));
+        Assert.Equal(YouTubeQuotaRefusal.RateLimited, YouTubeListQuota.Classify(reason));
+        Assert.Equal(YouTubeQuotaRefusal.DailyQuota, YouTubeListQuota.Classify(daily));
     }
 
     [Fact]
