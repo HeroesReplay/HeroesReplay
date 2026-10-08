@@ -4,13 +4,12 @@ using System.Collections.Generic;
 namespace HeroesReplay.Core.Spectating.Screens;
 
 /// <summary>
-/// Screen text the spectator reads with OCR: the home screen and the map loading screen.
-/// The match clock is never read this way; it comes from memory.
+/// Screen text the spectator reads with OCR: the home screen. The map loading screen and the
+/// match clock are memory only (#292).
 /// </summary>
 public class OCRSettings
 {
     public IEnumerable<string> HomeScreenText { get; set; }
-    public IEnumerable<string> LoadingScreenText { get; set; }
     public TimeSpan CheckSleepDuration { get; set; }
 
     /// <summary>

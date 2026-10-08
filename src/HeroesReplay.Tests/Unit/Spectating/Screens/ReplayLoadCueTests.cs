@@ -67,57 +67,6 @@ public class ReplayLoadCueTests
     }
 
     [Fact]
-    public void SeesLoadingScreen_MatchesWelcomeTextOrTheMap()
-    {
-        Assert.True(
-            ReplayLoadCue.SeesLoadingScreen(
-                "WELCOME TO BRAXIS HOLDOUT",
-                map: "Braxis Holdout",
-                mapAlternative: null,
-                playerNames: null,
-                heroNames: null,
-                loadingScreenText: new[] { "WELCOME TO" }
-            )
-        );
-        Assert.True(
-            ReplayLoadCue.SeesLoadingScreen(
-                "welcome to alterac",
-                map: "Alterac Pass",
-                mapAlternative: "Alterac",
-                playerNames: null,
-                heroNames: null,
-                loadingScreenText: null
-            )
-        );
-    }
-
-    [Fact]
-    public void SeesLoadingScreen_IgnoresTheHomeScreenAndShortTerms()
-    {
-        Assert.False(
-            ReplayLoadCue.SeesLoadingScreen(
-                "PLAY COLLECTION LOOT WATCH",
-                map: "AI",
-                mapAlternative: " ",
-                playerNames: new[] { "Li", "  ab " },
-                heroNames: new[] { "Ty" },
-                loadingScreenText: new[] { "WELCOME TO" }
-            )
-        );
-        Assert.False(
-            ReplayLoadCue.SeesLoadingScreen(
-                "   ",
-                map: "Braxis Holdout",
-                mapAlternative: null,
-                playerNames: null,
-                heroNames: null,
-                loadingScreenText: new[] { "WELCOME TO" }
-            )
-        );
-        Assert.False(ReplayLoadCue.SeesLoadingScreen(null, null, null, null, null, null));
-    }
-
-    [Fact]
     public void PresentedInMemory_MatchWithNoClock_IsTheReplayOnScreen()
     {
         // #249: memory said Match (menu seen True), the clock did not read, and the launch
@@ -170,7 +119,7 @@ public class ReplayLoadCueTests
     }
 
     [Fact]
-    public void PresentedInMemory_MatchBeforeAnyMenu_LeavesItToTheClockAndOcr()
+    public void PresentedInMemory_MatchBeforeAnyMenu_LeavesItToTheClockAndClientScreen()
     {
         Assert.Null(
             ReplayLoadCue.PresentedInMemory(
@@ -180,18 +129,83 @@ public class ReplayLoadCueTests
         );
     }
 
+    // ClientScreen reads, 2.57.0.98304 loaded straight from the replay file through HeroesSwitcher
+    // (no menu on that process): the boot splash, then the map loading screen (#292).
+    private static readonly HeroesClientVersion Previous = new(2, 57, 0, 98304);
+
+    private static readonly ClientScreenSample Splash = new(
+        ClientScreenKind.Splash,
+        new[] { "ScreenLoading" },
+        MenuSeen: false,
+        "screens",
+        Previous
+    );
+
+    private static readonly ClientScreenSample MapPanel = new(
+        ClientScreenKind.MapLoading,
+        Array.Empty<string>(),
+        MenuSeen: false,
+        "map-panel",
+        Previous
+    );
+
+    private static readonly LoadingScreenSample LoadingBeforeMenu = new(
+        LoadingScreenKind.Loading,
+        MenuSeen: false,
+        "loading"
+    );
+
     [Fact]
-    public void SeesLoadingScreen_MatchesAHeroOrPlayerOnTheLoadingScreen()
+    public void PresentedInMemory_BeforeAnyMenu_ClientScreenTellsTheMapFromTheBootSplash()
     {
         Assert.True(
-            ReplayLoadCue.SeesLoadingScreen(
-                "Thrall skiya",
-                map: null,
-                mapAlternative: null,
-                playerNames: new[] { "skiya" },
-                heroNames: new[] { "Thrall" },
-                loadingScreenText: null
-            )
+            ReplayLoadCue.PresentedInMemory(clockRunning: false, LoadingBeforeMenu, MapPanel)
         );
+        Assert.False(
+            ReplayLoadCue.PresentedInMemory(clockRunning: false, LoadingBeforeMenu, Splash)
+        );
+        Assert.True(ReplayLoadCue.PresentedInMemory(clockRunning: false, screen: null, MapPanel));
+    }
+
+    [Fact]
+    public void PresentedInMemory_LoadingScreenStillDecidesAfterAMenu()
+    {
+        var menu = new LoadingScreenSample(LoadingScreenKind.Menu, MenuSeen: true, "menu");
+
+        Assert.False(ReplayLoadCue.PresentedInMemory(clockRunning: false, menu, MapPanel));
+    }
+
+    [Fact]
+    public void PresentedInMemory_NeitherReaderCanTell_IsUnknown()
+    {
+        var unknown = new ClientScreenSample(
+            ClientScreenKind.Unknown,
+            Array.Empty<string>(),
+            MenuSeen: false,
+            "no-state"
+        );
+
+        Assert.Null(
+            ReplayLoadCue.PresentedInMemory(clockRunning: false, LoadingBeforeMenu, unknown)
+        );
+        Assert.Null(ReplayLoadCue.PresentedInMemory(clockRunning: false, null, null));
+    }
+
+    [Fact]
+    public void MapLoadingInMemory_LoadingScreenFirstThenClientScreen()
+    {
+        var mapAfterMenu = new LoadingScreenSample(
+            LoadingScreenKind.Loading,
+            MenuSeen: true,
+            "loading"
+        );
+        var menu = new LoadingScreenSample(LoadingScreenKind.Menu, MenuSeen: true, "menu");
+
+        Assert.True(ReplayLoadCue.MapLoadingInMemory(mapAfterMenu, Splash));
+        Assert.False(ReplayLoadCue.MapLoadingInMemory(menu, MapPanel));
+        Assert.True(ReplayLoadCue.MapLoadingInMemory(LoadingBeforeMenu, MapPanel));
+        Assert.False(ReplayLoadCue.MapLoadingInMemory(LoadingBeforeMenu, Splash));
+        Assert.Null(ReplayLoadCue.MapLoadingInMemory(LoadingBeforeMenu, null));
+        Assert.Null(ReplayLoadCue.MapLoadingInMemory(null, null));
     }
 }
