@@ -201,6 +201,24 @@ public class ConnectivityWatchdogTests
     }
 
     [Fact]
+    public void Apply_SceneTheSpectatorAlreadyWrote_IsNotWrittenAgain()
+    {
+        // #357: the scene switch reaches status.json from the OBS controller at once. The next
+        // tick finds the same scene and the same connectivity there, so it writes nothing.
+        using Fixture fixture = CreateFixture(streamingEnabled: false);
+        fixture.Watchdog.Apply(OkSnapshot());
+        fixture.Obs.SwapToGameScene();
+        Assert.True(ObsStatus.Write(fixture.Store, fixture.Obs.ReadObsState));
+        Assert.Equal("game-scene", fixture.Store.Read().ObsSceneActual);
+        File.Delete(fixture.Path);
+
+        fixture.Watchdog.Apply(OkSnapshot());
+
+        Assert.False(File.Exists(fixture.Path));
+        Assert.False(ObsStatus.Write(fixture.Store, fixture.Obs.ReadObsState));
+    }
+
+    [Fact]
     public async Task ProbeAsync_UsesInjectedProbe()
     {
         using Fixture fixture = CreateFixture(streamingEnabled: true);
