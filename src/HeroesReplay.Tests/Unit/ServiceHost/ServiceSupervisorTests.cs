@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Services;
+using HeroesReplay.CLI.Output;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
 using Xunit;
 
@@ -388,11 +390,17 @@ public class ServiceSupervisorTests
         string path = Path.Combine(Path.GetTempPath(), $"heroesreplay-stop-{Guid.NewGuid():N}");
         try
         {
-            using var idle = ServiceStopFile.Link(CancellationToken.None, path);
+            using var idle = ServiceStopFile.Link(
+                CancellationToken.None,
+                path,
+                TimeSpan.FromMilliseconds(10)
+            );
             Assert.False(idle.Token.WaitHandle.WaitOne(300));
 
             ServiceStopFile.Request(path);
-            Assert.True(idle.Token.WaitHandle.WaitOne(2000));
+            // The watcher runs on the thread pool, which a busy machine can starve for a while:
+            // wait as long as it takes a working watcher, and fail only a dead one (#331).
+            Assert.True(idle.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(15)));
         }
         finally
         {
@@ -1232,6 +1240,146 @@ public class ServiceSupervisorTests
         }
     }
 
+    /// <summary>
+    /// #318: once every role exited, the stream is read as before, then the recording spectate
+    /// left running is stopped. The stop succeeds.
+    /// </summary>
+    [Fact]
+    public void Stop_StopsTheRecordingSpectateLeftAfterTheStreamCheck()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 80, 81);
+            var processes = new FakeProcesses(80, 81);
+            var steps = new List<string>();
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () =>
+            {
+                steps.Add("game");
+                return true;
+            };
+            shutdown.ReadStream = () =>
+            {
+                steps.Add("stream");
+                return ServiceStreamCheck.Inactive();
+            };
+            shutdown.StopSpectateRecording = () =>
+            {
+                steps.Add("recording");
+                return new OrphanRecordingCheck(
+                    OrphanRecordingState.Stopped,
+                    "Stopped the recording spectate pid 80 started for replay 65820711.",
+                    "2026-10-08 12-33-26.mp4"
+                );
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(new[] { "game", "stream", "recording" }, steps);
+            Assert.Equal(OrphanRecordingState.Stopped, result.Recording.State);
+            Assert.Equal(ServiceStreamState.Inactive, result.Stream.State);
+            Assert.Empty(result.Failures());
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData(OrphanRecordingState.None, 0)]
+    [InlineData(OrphanRecordingState.ClaimantRunning, 0)]
+    [InlineData(OrphanRecordingState.ObsNotRunning, 0)]
+    [InlineData(OrphanRecordingState.Inactive, 0)]
+    [InlineData(OrphanRecordingState.Stopped, 0)]
+    [InlineData(OrphanRecordingState.NotOwned, 0)]
+    [InlineData(OrphanRecordingState.Unreachable, 1)]
+    [InlineData(OrphanRecordingState.Failed, 1)]
+    [InlineData(OrphanRecordingState.Unknown, 1)]
+    public void Stop_FailsOnlyWhileARecordingSpectateStartedMayStillRun(
+        OrphanRecordingState state,
+        int expected
+    )
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 82);
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = ServiceStreamCheck.NotRunning;
+            shutdown.StopSpectateRecording = () => new OrphanRecordingCheck(state, "fake");
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(expected, result.ExitCode);
+            Assert.Equal(
+                expected == 1,
+                result.Failures().Any(failure => failure.Contains("OBS recording spectate"))
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_RoleStillRunning_DoesNotTouchTheRecording()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 83);
+            var processes = new FakeProcesses(83);
+            processes.Unkillable.Add(83);
+            int recordingChecks = 0;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = ServiceStreamCheck.Inactive;
+            shutdown.StopSpectateRecording = () =>
+            {
+                recordingChecks++;
+                return new OrphanRecordingCheck(OrphanRecordingState.None, null);
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Equal(0, recordingChecks);
+            Assert.Null(result.Recording);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_RecordingStepThatThrows_IsNotConfirmed()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.ReadStream = ServiceStreamCheck.NotRunning;
+            shutdown.StopSpectateRecording = () =>
+                throw new InvalidOperationException("claim locked");
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Equal(OrphanRecordingState.Unknown, result.Recording.State);
+            Assert.Contains("claim locked", result.Recording.Detail);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
     [Fact]
     public void Stop_KeepsTheTwentySecondGracefulBudgetBeforeKilling()
     {
@@ -1413,7 +1561,7 @@ public class ServiceSupervisorTests
                 spectator: null,
                 query: new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Out = output,
                     Time = new FixedClock(new DateTimeOffset(2026, 10, 2, 9, 0, 0, TimeSpan.Zero)),
                     LogDirectory = logs,
@@ -1597,7 +1745,7 @@ public class ServiceSupervisorTests
                 spectator: null,
                 query: new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Out = json,
                     ReadMachine = () => throw new InvalidOperationException("denied"),
                 }
@@ -1607,6 +1755,58 @@ public class ServiceSupervisorTests
             Assert.False(read.GetProperty("ok").GetBoolean());
             Assert.Contains("denied", read.GetProperty("warnings")[0].GetString());
             Assert.True(document.RootElement.GetProperty("ok").GetBoolean());
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Status_ShowsARollbackThatWaitsForOBSWithoutChangingTheExitCode()
+    {
+        string path = TempLock();
+        try
+        {
+            const string Waiting =
+                "A release rollback waits to put back x.bak over HeroesReplay.json.";
+            var text = new StringWriter();
+            int code = ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery { Out = text, ReadObsRestorePending = () => Waiting }
+            );
+
+            Assert.Equal(0, code);
+            Assert.Contains("OBS rollback: waiting. " + Waiting, text.ToString());
+
+            var json = new StringWriter();
+            ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery
+                {
+                    Output = CliOutputFormat.Json,
+                    Out = json,
+                    ReadObsRestorePending = () => Waiting,
+                }
+            );
+            using var document = System.Text.Json.JsonDocument.Parse(json.ToString());
+            Assert.Equal(
+                Waiting,
+                document.RootElement.GetProperty("obsRestorePending").GetString()
+            );
+
+            var none = new StringWriter();
+            ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery { Out = none, ReadObsRestorePending = () => null }
+            );
+            Assert.DoesNotContain("OBS rollback", none.ToString());
         }
         finally
         {

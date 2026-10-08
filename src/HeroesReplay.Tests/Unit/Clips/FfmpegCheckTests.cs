@@ -25,6 +25,7 @@ public class FfmpegCheckTests
 
         Assert.True(report.Ok);
         Assert.False(report.Warning);
+        Assert.Null(report.Reason);
         Assert.StartsWith("The pinned 9.0.2.", report.Detail);
         Assert.Contains(
             Ffmpeg + " (deps install): ffmpeg version 9.0.2-essentials_build-www.gyan.dev",
@@ -53,6 +54,7 @@ public class FfmpegCheckTests
 
         Assert.False(report.Ok);
         Assert.False(report.Warning);
+        Assert.Equal(FfmpegCheck.Missing, report.Reason);
         Assert.StartsWith("Clips cannot be cut.", report.Detail);
         Assert.Contains("ffprobe: not found in " + Searched, report.Detail);
         Assert.Contains("heroesreplay deps install", report.Detail);
@@ -79,6 +81,7 @@ public class FfmpegCheckTests
 
         Assert.True(report.Ok);
         Assert.True(report.Warning);
+        Assert.Equal(FfmpegCheck.NotPinned, report.Reason);
         Assert.StartsWith("Not every tool is the pinned 9.0.2; clips still cut.", report.Detail);
         Assert.Contains("Not the pinned 9.0.2", report.Detail);
         Assert.Contains(@"C:\ffmpeg\bin\ffmpeg.exe (C:\ffmpeg\bin)", report.Detail);
@@ -102,6 +105,7 @@ public class FfmpegCheckTests
         );
 
         Assert.False(report.Ok);
+        Assert.Equal(FfmpegCheck.NotRunnable, report.Reason);
         Assert.Contains("did not report a version (exit -1073741515", report.Detail);
     }
 
@@ -115,6 +119,7 @@ public class FfmpegCheckTests
         );
 
         Assert.False(report.Ok);
+        Assert.Equal(FfmpegCheck.NoLibx264, report.Reason);
         Assert.Contains("libx264", report.Detail);
     }
 

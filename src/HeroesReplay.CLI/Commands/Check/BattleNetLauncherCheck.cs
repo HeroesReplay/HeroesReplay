@@ -36,7 +36,8 @@ public static class BattleNetLauncherCheck
                 return new CheckCommand.CheckResult(
                     "battlenet",
                     false,
-                    "Battle.net has no visible window."
+                    "Battle.net has no visible window.",
+                    CheckCodes.BattleNetWindowMissing
                 );
             }
 
@@ -45,7 +46,8 @@ public static class BattleNetLauncherCheck
                 return new CheckCommand.CheckResult(
                     "battlenet",
                     false,
-                    "OCR is not available, so the Play/Update button was not read."
+                    "OCR is not available, so the Play/Update button was not read.",
+                    CheckCodes.BattleNetOcrUnavailable
                 );
             }
 
@@ -70,7 +72,8 @@ public static class BattleNetLauncherCheck
                 return new CheckCommand.CheckResult(
                     "battlenet",
                     false,
-                    "Could not capture the Battle.net window."
+                    "Could not capture the Battle.net window.",
+                    CheckCodes.BattleNetCaptureFailed
                 );
             }
 
@@ -80,7 +83,10 @@ public static class BattleNetLauncherCheck
                 return new CheckCommand.CheckResult(
                     "battlenet",
                     true,
-                    "Battle.net button is " + button + "."
+                    "Battle.net button is " + button + ".",
+                    button is "Update" or "Updating"
+                        ? CheckCodes.BattleNetUpdatePending
+                        : CheckCodes.BattleNetOk
                 );
             }
 
@@ -89,7 +95,8 @@ public static class BattleNetLauncherCheck
                 return new CheckCommand.CheckResult(
                     "battlenet",
                     true,
-                    "Battle.net is open. The Play or Update button is not on this page."
+                    "Battle.net is open. The Play or Update button is not on this page.",
+                    CheckCodes.BattleNetButtonHidden
                 );
             }
 
@@ -98,7 +105,8 @@ public static class BattleNetLauncherCheck
                 false,
                 string.IsNullOrWhiteSpace(text)
                     ? "Battle.net window was captured but no text was read."
-                    : "Battle.net window was captured but the Play/Update button was not read."
+                    : "Battle.net window was captured but the Play/Update button was not read.",
+                CheckCodes.BattleNetButtonUnread
             );
         }
         finally

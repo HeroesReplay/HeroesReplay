@@ -40,6 +40,7 @@ public class GameManager : IGameManager
     private readonly SpectatorStatusStore statusStore;
     private readonly StormClientConfigurator clientConfigurator;
     private int? clientPreparedFor;
+    private bool recordingWithoutObsNoted;
     private readonly IYouTubeReplayLookup youTubeReplayLookup;
     private readonly RecordingClock recordingClock;
     private readonly ILogger<GameManager> logger;
@@ -104,6 +105,7 @@ public class GameManager : IGameManager
         }
 
         LinkRequest(loadedReplay);
+        NoteRecordingWithoutObs();
         MediaRetention.SweepAndLog(settings, logger);
         await MarkExistingYouTubeVideoAsync(loadedReplay).ConfigureAwait(false);
         MediaPolicySnapshot preLaunch = await mediaPolicy
@@ -227,18 +229,11 @@ public class GameManager : IGameManager
         }
         finally
         {
-            ObsRecordingResult stopped = null;
-            if (enteredMatch && obsSession)
+            ObsRecordingResult stopped = enteredMatch
+                ? StopSessionRecording(loadedReplay, obsSession)
+                : null;
+            if (enteredMatch && (obsSession || stopped != null))
             {
-                try
-                {
-                    stopped = obsController.StopRecording();
-                }
-                catch (Exception e)
-                {
-                    logger.LogWarning(e, "Could not stop OBS recording.");
-                }
-
                 bool allowsMedia = MatchCompletion.AllowsMedia(
                     spectator.Outcome,
                     recordingClock.SampleCount,
@@ -296,6 +291,63 @@ public class GameManager : IGameManager
                 whileReporting
             )
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Stops the recording this process started, at every session end and on a graceful
+    /// <c>services stop</c>, with or without an OBS session (#318). A recording can start without
+    /// one: the stream reconcile may identify OBS after <see cref="BeginObsSession"/> failed.
+    /// Without an owned recording nothing is sent to OBS, and the stream is never stopped here.
+    /// Null when there was no OBS session and nothing was owned, as before.
+    /// </summary>
+    internal ObsRecordingResult StopSessionRecording(LoadedReplay loadedReplay, bool obsSession)
+    {
+        ObsRecordingResult stopped;
+        try
+        {
+            stopped = obsController.StopRecording();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not stop OBS recording.");
+            return null;
+        }
+
+        bool stopping = tokenProvider.Token.IsCancellationRequested;
+        if (stopped is { Owned: true })
+        {
+            if (stopping)
+            {
+                logger.LogInformation(
+                    "Spectate is stopping. It stopped the OBS recording it started for replay {ReplayId} ({Path}). The OBS stream was not touched.",
+                    loadedReplay?.ReplayId,
+                    stopped.OutputPath
+                );
+            }
+            else if (!obsSession)
+            {
+                logger.LogInformation(
+                    "Stopped the OBS recording for replay {ReplayId} ({Path}). This replay had no OBS session, but the recording started after the stream reconcile reached OBS.",
+                    loadedReplay?.ReplayId,
+                    stopped.OutputPath
+                );
+            }
+
+            return stopped;
+        }
+
+        // A failed stop of an owned recording: anything but "nothing was owned".
+        if (stopping && RecordingWasAttempted(stopped))
+        {
+            logger.LogWarning(
+                "Spectate is stopping, and the OBS recording for replay {ReplayId} was not confirmed stopped ({Failure}). {Detail} services stop checks OBS again once spectate has exited.",
+                loadedReplay?.ReplayId,
+                stopped.Failure,
+                stopped.Detail
+            );
+        }
+
+        return obsSession ? stopped : null;
     }
 
     /// <summary>
@@ -483,6 +535,25 @@ public class GameManager : IGameManager
         }
     }
 
+    /// <summary>
+    /// OBS:Enabled=false records nothing (#318). Said once per process, so a recording switch
+    /// that is on does not look like it still records.
+    /// </summary>
+    private void NoteRecordingWithoutObs()
+    {
+        if (recordingWithoutObsNoted || !SessionMedia.RecordingNeedsObs(settings.OBS))
+        {
+            return;
+        }
+
+        recordingWithoutObsNoted = true;
+        logger.LogInformation(
+            "OBS:Enabled is false, so spectate records nothing and sends OBS nothing. OBS:RecordingEnabled ({RecordingEnabled}) and OBS:RecordRequestedReplays ({RecordRequested}) apply only while OBS:Enabled is true.",
+            settings.OBS.RecordingEnabled,
+            settings.OBS.RecordRequestedReplays
+        );
+    }
+
     public bool LastMatchClockSeen => spectator.MatchClockSeen;
 
     public void ReleaseClientAfterDefer()
@@ -654,10 +725,12 @@ public class GameManager : IGameManager
         long pending = 0;
         try
         {
+            // A dry run never sends a recording, so none waits for upload (#317).
             pending = PendingUploadSize.Bytes(
                 settings.ContextsDirectory,
                 settings.YouTube?.EntryFileName,
-                settings.YouTube?.EntryFileNameUploaded
+                settings.YouTube?.EntryFileNameUploaded,
+                dryRun: settings.YouTube?.DryRun == true
             );
         }
         catch (Exception e)

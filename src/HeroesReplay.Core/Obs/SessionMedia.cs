@@ -36,9 +36,13 @@ public static class SessionMedia
 
     public static bool ShouldStream(OBSSettings obs) => obs is { StreamingEnabled: true };
 
+    /// <summary>
+    /// <c>OBS:Enabled=false</c> sends OBS nothing: no scenes and no recording, whatever
+    /// <c>OBS:RecordingEnabled</c>, <c>OBS:RecordRequestedReplays</c>, or the media policy say (#318).
+    /// </summary>
     public static bool ShouldRecord(OBSSettings obs, LoadedReplay replay)
     {
-        if (obs == null || replay?.AlreadyOnYouTube == true)
+        if (obs is not { Enabled: true } || replay?.AlreadyOnYouTube == true)
         {
             return false;
         }
@@ -55,6 +59,13 @@ public static class SessionMedia
 
         return obs.RecordRequestedReplays && WantsRecording(replay);
     }
+
+    /// <summary>
+    /// True when a recording switch is on but <c>OBS:Enabled</c> is off, so nothing is recorded.
+    /// Spectate says so once rather than leave the switch looking active.
+    /// </summary>
+    public static bool RecordingNeedsObs(OBSSettings obs) =>
+        obs is { Enabled: false } && (obs.RecordingEnabled || obs.RecordRequestedReplays);
 
     public static bool ShouldWriteYouTubeEntry(YouTubeSettings youtube, LoadedReplay replay)
     {

@@ -1,21 +1,16 @@
 using System;
 using System.IO;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.ServiceHost;
 
 namespace HeroesReplay.CLI.Commands.Services;
-
-public enum ServiceStatusOutput
-{
-    Text,
-    Json,
-}
 
 /// <summary>
 /// What <c>services status</c> reads besides the lock and the process table. Tests replace each.
 /// </summary>
 public sealed class ServiceStatusQuery
 {
-    public ServiceStatusOutput Output { get; set; } = ServiceStatusOutput.Text;
+    public CliOutputFormat Output { get; set; } = CliOutputFormat.Text;
     public TimeProvider Time { get; set; }
     public ServiceHealthSettings Settings { get; set; }
     public Func<ServiceProcessRecord, ServiceReadyReport> ReadHeartbeat { get; set; }
@@ -39,8 +34,6 @@ public sealed class ServiceStatusQuery
     /// <summary>The machine section (#251). Null leaves it out.</summary>
     public Func<MachineHealthReport> ReadMachine { get; set; }
 
-    public static ServiceStatusOutput ParseOutput(string value) =>
-        string.Equals(value, "json", StringComparison.OrdinalIgnoreCase)
-            ? ServiceStatusOutput.Json
-            : ServiceStatusOutput.Text;
+    /// <summary>A release rollback that still waits to put back the OBS collection (#304). Null reads none.</summary>
+    public Func<string> ReadObsRestorePending { get; set; }
 }

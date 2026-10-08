@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -17,6 +18,8 @@ public static class ObsFileTransaction
 
     private const string BackupExtension = ".bak";
 
+    private const string StampFormat = "yyyyMMdd'T'HHmmssfff'Z'";
+
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
     /// <summary>
@@ -28,6 +31,19 @@ public static class ObsFileTransaction
     public static string Write(
         string path,
         string contents,
+        string backupDirectory,
+        DateTime utcNow
+    ) => Write(path, Utf8.GetBytes(contents ?? string.Empty), backupDirectory, utcNow);
+
+    /// <summary>
+    /// Replaces <paramref name="path"/> with exactly <paramref name="contents"/>, with the same
+    /// backup and atomic swap. A rollback puts a backup's bytes back unchanged.
+    /// </summary>
+    /// <exception cref="IOException">The backup or the write failed; <paramref name="path"/> is unchanged.</exception>
+    /// <exception cref="UnauthorizedAccessException">The same, for a file or folder this user cannot write.</exception>
+    public static string Write(
+        string path,
+        byte[] contents,
         string backupDirectory,
         DateTime utcNow
     )
@@ -50,7 +66,7 @@ public static class ObsFileTransaction
         );
         try
         {
-            File.WriteAllText(temp, contents ?? string.Empty, Utf8);
+            File.WriteAllBytes(temp, contents ?? []);
             if (File.Exists(full))
             {
                 File.Replace(temp, full, destinationBackupFileName: null);
@@ -68,6 +84,24 @@ public static class ObsFileTransaction
         return backup;
     }
 
+    /// <summary>
+    /// Copies <paramref name="path"/> into the backup folder, as a write does first, without
+    /// changing it. Null when the file does not exist.
+    /// </summary>
+    public static string Snapshot(string path, string backupDirectory, DateTime utcNow)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(backupDirectory);
+        string full = Path.GetFullPath(path);
+        return File.Exists(full) ? Backup(full, backupDirectory, utcNow) : null;
+    }
+
+    /// <summary>True when <paramref name="backup"/> is named as a backup of <paramref name="path"/>.</summary>
+    public static bool IsBackupOf(string backup, string path) =>
+        BackupTime(backup) != null
+        && Path.GetFileName(backup)
+            .StartsWith(BackupKey(Path.GetFullPath(path)) + ".", StringComparison.Ordinal);
+
     /// <summary>The backups of <paramref name="path"/>, newest first.</summary>
     public static string[] Backups(string backupDirectory, string path)
     {
@@ -84,6 +118,47 @@ public static class ObsFileTransaction
             .ToArray();
     }
 
+    /// <summary>
+    /// The backups of <paramref name="path"/> taken at or after <paramref name="sinceUtc"/>, oldest
+    /// first. The first one is the file as it was before the first write from that time on.
+    /// </summary>
+    public static string[] BackupsSince(string backupDirectory, string path, DateTime sinceUtc)
+    {
+        DateTime since = WholeMilliseconds(sinceUtc.ToUniversalTime());
+        return Backups(backupDirectory, path)
+            .Where(file => BackupTime(file) is DateTime taken && taken >= since)
+            .Reverse()
+            .ToArray();
+    }
+
+    /// <summary>When a backup was taken, read from its name. Null for any other file.</summary>
+    public static DateTime? BackupTime(string backup)
+    {
+        string name = Path.GetFileName(backup ?? string.Empty);
+        if (!name.EndsWith(BackupExtension, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string stem = name.Substring(0, name.Length - BackupExtension.Length);
+        int dot = stem.LastIndexOf('.');
+        if (
+            dot < 0
+            || !DateTime.TryParseExact(
+                stem.Substring(dot + 1),
+                StampFormat,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out DateTime taken
+            )
+        )
+        {
+            return null;
+        }
+
+        return taken;
+    }
+
     private static string Backup(string full, string backupDirectory, DateTime utcNow)
     {
         Directory.CreateDirectory(backupDirectory);
@@ -91,7 +166,7 @@ public static class ObsFileTransaction
             backupDirectory,
             BackupKey(full)
                 + "."
-                + utcNow.ToUniversalTime().ToString("yyyyMMdd'T'HHmmssfff'Z'")
+                + utcNow.ToUniversalTime().ToString(StampFormat, CultureInfo.InvariantCulture)
                 + BackupExtension
         );
         File.Copy(full, backup, overwrite: true);
@@ -102,6 +177,10 @@ public static class ObsFileTransaction
 
         return backup;
     }
+
+    /// <summary>A backup's name keeps the time to the millisecond.</summary>
+    private static DateTime WholeMilliseconds(DateTime utc) =>
+        new(utc.Ticks - utc.Ticks % TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
 
     /// <summary>
     /// The folder and file name, so the profiles' basic.ini files and the scene collections each

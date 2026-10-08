@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HeroesReplay.Core.Obs.Recording;
 
 namespace HeroesReplay.Core.ServiceHost;
 
@@ -114,7 +115,8 @@ public sealed record ServiceStreamCheck(ServiceStreamState State, string Detail)
 
 /// <summary>
 /// The outcome of <c>services stop</c>. It succeeds only when every recorded role exited, the game
-/// closed (when spectate was recorded), and OBS is confirmed not streaming.
+/// closed (when spectate was recorded), OBS is confirmed not streaming, and no recording spectate
+/// started is left running.
 /// </summary>
 public sealed class ServiceStopResult
 {
@@ -126,6 +128,12 @@ public sealed class ServiceStopResult
     /// <summary>Null when OBS was not read: a role is still running, or no reader was given.</summary>
     public ServiceStreamCheck Stream { get; init; }
 
+    /// <summary>
+    /// The recording spectate started and left running (#318). Null when it was not checked: a
+    /// role is still running, or no step was given.
+    /// </summary>
+    public OrphanRecordingCheck Recording { get; init; }
+
     /// <summary>Null when no supervisor was running.</summary>
     public ServiceRoleStop Supervisor { get; init; }
 
@@ -135,6 +143,7 @@ public sealed class ServiceStopResult
         RolesExited
         && GameClosed != false
         && (Stream == null || Stream.ConfirmsStopped)
+        && (Recording == null || Recording.ConfirmsStopped)
         && Supervisor?.Exited != false;
 
     public int ExitCode => Succeeded ? 0 : 1;
@@ -169,6 +178,15 @@ public sealed class ServiceStopResult
                         + Stream.Detail
                         + " Stop the stream in OBS, or enable Tools > WebSocket Server Settings and run `heroesreplay services stop` again."
                 : "OBS stream state was not confirmed. " + Stream.Detail
+            );
+        }
+
+        if (Recording != null && !Recording.ConfirmsStopped)
+        {
+            failures.Add(
+                "The OBS recording spectate started was not confirmed stopped. "
+                    + Recording.Detail
+                    + " Then run `heroesreplay services stop` again."
             );
         }
 

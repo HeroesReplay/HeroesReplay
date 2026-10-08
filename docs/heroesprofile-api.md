@@ -36,6 +36,10 @@ Hand-written partials of `HeroesProfileClient` sit next to `Generated/` and use 
 
 `region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable`. Skip when `downloadable` is false or `deleted` is non-zero.
 
+### Retries and rejected downloads
+
+The replay calls above share one `HttpClient` (`heroes-profile`) with the `Microsoft.Extensions.Http.Resilience` pipeline in `HeroesProfileHttp`: a 2 min timeout per attempt and up to 10 retries. A network error, a timeout, or a 5xx is retried 1 s apart. A 429 waits for its `Retry-After` (1 s without one); a `Retry-After` longer than 1 minute is a quota, not the per-minute limit, so that 429 is not retried. When the last attempt still fails, Kiota throws `ApiException` with the HTTP status, and the caller skips that replay (#346): `heroesprofile sample` logs the replay id and status, deletes the partial file, tries the next listed replay, and prints a summary of what it downloaded and skipped; the download role logs the replay id and status and lists the replay after it, without counting the rejection as an outage.
+
 ### Hero statistics (YouTube title hooks)
 
 `HeroStatsRefresh` (download role, and `heroesprofile hero-stats`) makes these calls for `YouTube:Titles:StatHooks` (issue #272; `docs/youtube-uploader.md`). Measured on 2026-10-08 with our key:
@@ -43,7 +47,7 @@ Hand-written partials of `HeroesProfileClient` sit next to `Generated/` and use 
 - Weekly allowances per endpoint (rolling 7 days, `x-hp-quota-limit` and `x-hp-quota-remaining`): `heroes/matchups` 100,000, `heroes/stats` 10,000, `heroes/maps` 10,000, `/patches` and `/heroes` 1,000,000. One refresh is `/patches`, `/heroes`, one `heroes/stats`, and about 90 `heroes/matchups`, once a day per game type.
 - 60 requests a minute, polls included (`x-ratelimit-limit`). `group_by_map=true` is 1 a minute. The refresh spaces requests 1.1 s apart (`HeroesProfileApi:HeroStats:RequestSpacing`) and `group_by_map` calls 61 s apart (`GroupByMapSpacing`).
 - A global call answers 202 `{"async":true,"status":"pending","job_id":"..."}` with `Retry-After` (10 s) and `x-global-job-id`. Polling `/jobs/{id}` costs no quota. The refresh waits `Retry-After` before each poll and gives up on a job after `JobTimeout` (15 min).
-- 429 waits for `Retry-After` (60 s without one), at most 5 times. Its `HttpClient` (`heroes-profile-stats`) has no retry handler, unlike the replay calls above, so a rate limit is not retried every second. 401 or 403 (`endpoint_not_in_plan`, a bad key) stops the refresh until the download role restarts, with one warning. 422 (`timeframe_unavailable` early in a patch) skips that patch and game type until the next refresh is due. A 5xx or a network error is retried 3 times, 30 s apart. A hero whose matchups fail is saved without them.
+- 429 waits for `Retry-After` (60 s without one), at most 5 times. Its `HttpClient` (`heroes-profile-stats`) has no retry handler, unlike the replay calls above, so the refresh decides each wait itself. 401 or 403 (`endpoint_not_in_plan`, a bad key) stops the refresh until the download role restarts, with one warning. 422 (`timeframe_unavailable` early in a patch) skips that patch and game type until the next refresh is due. A 5xx or a network error is retried 3 times, 30 s apart. A hero whose matchups fail is saved without them.
 - `enemy[].win_rate` in matchups is the queried hero's loss rate against that enemy (its `hovertext` says "Lost against a team with X"). Every rate is computed from `wins` and `games_played`, never read from `win_rate`.
 - Heroes Profile's terms (section 4) require "Data provided by Heroes Profile" and a visible link to https://www.heroesprofile.com/ on the same screen as the data. The description's second line carries it whenever a hook is used.
 

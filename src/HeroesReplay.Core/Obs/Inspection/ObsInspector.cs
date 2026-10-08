@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HeroesReplay.Core.Shared;
 using Newtonsoft.Json.Linq;
 
 namespace HeroesReplay.Core.Obs.Inspection;
@@ -10,9 +11,9 @@ namespace HeroesReplay.Core.Obs.Inspection;
 /// <see cref="IObsReadSession"/>. <see cref="Ok"/> is false only when OBS could not be read
 /// at all; a request that failed is named in <see cref="Unread"/>.
 /// </summary>
-public sealed record ObsInspection
+public sealed record ObsInspection : ICliResult
 {
-    public int SchemaVersion => 1;
+    public int SchemaVersion => CliJson.SchemaVersion;
     public bool Ok { get; init; }
 
     /// <summary>Stable failure code, such as <c>obs.unreachable</c>. Null when <see cref="Ok"/>.</summary>
@@ -23,13 +24,20 @@ public sealed record ObsInspection
     public ObsSelectionInfo Selection { get; init; }
     public ObsVideoInfo Video { get; init; }
 
-    /// <summary>Output mode, recording format, and encoders from the active profile.</summary>
+    /// <summary>Output mode, recording format, encoders, and bitrates from the active profile.</summary>
     public ObsProfileInfo Profile { get; init; }
     public string ProgramScene { get; init; }
     public IReadOnlyList<ObsSceneInfo> Scenes { get; init; }
     public IReadOnlyList<ObsInputInfo> Inputs { get; init; }
     public ObsStreamStatusInfo Stream { get; init; }
     public ObsRecordStatusInfo Record { get; init; }
+
+    /// <summary>
+    /// GetRecordDirectory: where OBS writes its next recording. Reported, not validated: the
+    /// spectator sets it to the replay's context folder with SetRecordDirectory before every
+    /// StartRecord, so between replays it is the last replay's folder.
+    /// </summary>
+    public string RecordDirectory { get; init; }
     public ObsStatsInfo Stats { get; init; }
 
     /// <summary>The service type and whether a key is set. Never the key or the server.</summary>
@@ -224,6 +232,7 @@ public static class ObsInspector
             Inputs = ReadInputs(session, Read("GetInputList"), Read("GetSpecialInputs")),
             Stream = ReadStream(Read("GetStreamStatus")),
             Record = ReadRecord(Read("GetRecordStatus")),
+            RecordDirectory = ObsResponse.String(Read("GetRecordDirectory"), "recordDirectory"),
             Stats = ReadStats(Read("GetStats")),
             StreamService = ReadStreamService(Read("GetStreamServiceSettings")),
             StreamArm = ObsStreamArmInfo.From(settings),

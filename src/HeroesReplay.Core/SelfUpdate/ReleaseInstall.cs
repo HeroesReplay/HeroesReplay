@@ -160,8 +160,9 @@ public static class ReleaseInstall
     /// <summary>
     /// What <c>apply-release.ps1</c> does with the release's OBS files. The scene collection goes
     /// through <see cref="ObsCollectionPatcher"/> as a release: a collection HeroesReplay manages is
-    /// replaced with this install's template (backed up first), a custom one is kept and reported,
-    /// and while OBS is running the replacement waits until HeroesReplay finds OBS closed. The
+    /// replaced with this install's template (backed up first), a custom one where the operator
+    /// only added gets the template's changes merged in (#307), any other custom one is kept and
+    /// reported, and while OBS is running the write waits until HeroesReplay finds OBS closed. The
     /// profile (<c>basic.ini</c>) is machine-owned: the packaged one is only a template, written when
     /// this machine has no profile of that name and OBS is closed. <c>service.json</c> (the stream
     /// key) is never copied. Returns one line per decision for the update log. First the install's
@@ -200,26 +201,41 @@ public static class ReleaseInstall
         string scene = Path.Combine(obsDirectory, "Default.json");
         if (File.Exists(scene))
         {
+            string destination = ObsNames.CollectionFile(request.AppData, request.CollectionName);
+            string previousTemplate = string.IsNullOrWhiteSpace(request.PreviousInstall)
+                ? null
+                : Path.Combine(request.PreviousInstall, "obs", "Default.json");
+            ObsManagedCollection before = request.Managed.Read(destination);
+            if (previousTemplate != null)
+            {
+                // An earlier release's record must never stand in for this one, even when this
+                // install fails before it records its own.
+                request.Managed.ClearRollback();
+            }
+
             ObsCollectionApplyResult collection = ObsCollectionPatcher.Apply(
                 new ObsCollectionUpdate
                 {
                     TemplatePath = scene,
-                    DestinationPath = ObsNames.CollectionFile(
-                        request.AppData,
-                        request.CollectionName
-                    ),
+                    DestinationPath = destination,
                     DataDirectory = request.DataDirectory,
                     ObsIsRunning = request.ObsIsRunning,
                     CollectionName = request.CollectionName,
                     Managed = request.Managed,
                     Release = true,
-                    PreviousTemplatePath = string.IsNullOrWhiteSpace(request.PreviousInstall)
-                        ? null
-                        : Path.Combine(request.PreviousInstall, "obs", "Default.json"),
+                    PreviousTemplatePath = previousTemplate,
+                    Runtime = request.Runtime,
                     UtcNow = request.UtcNow,
+                    StableAssets = request.StableAssets,
                 }
             );
             notes.Add("OBS collection: " + collection.Message);
+            if (previousTemplate != null)
+            {
+                notes.Add(
+                    RecordRollback(request, destination, previousTemplate, before, collection)
+                );
+            }
         }
 
         string ini = Path.Combine(request.InstallDirectory, "obs", "Default", "basic.ini");
@@ -259,6 +275,38 @@ public static class ReleaseInstall
         return notes;
     }
 
+    /// <summary>
+    /// A release (one with a replaced install): what a rollback needs to put back the collection
+    /// the replaced build ran with (<see cref="ObsCollectionRollback"/>).
+    /// </summary>
+    private static string RecordRollback(
+        ReleaseObsInstall request,
+        string destination,
+        string previousTemplate,
+        ObsManagedCollection before,
+        ObsCollectionApplyResult collection
+    )
+    {
+        try
+        {
+            return "OBS rollback: "
+                + ObsCollectionRollback.Record(
+                    request.Managed,
+                    destination,
+                    previousTemplate,
+                    before,
+                    collection,
+                    request.UtcNow,
+                    ReadVersion(request.InstallDirectory)
+                );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return "OBS rollback: the record was not saved, so a rollback leaves the collection to the restored build. "
+                + e.Message;
+        }
+    }
+
     private static string ReleaseSettingsFileName() => "version.txt";
 
     private static bool IsStreamKey(string file)
@@ -294,5 +342,11 @@ public sealed record ReleaseObsInstall
     /// <summary>The install being replaced (<c>app.previous</c>), when there is one.</summary>
     public string PreviousInstall { get; init; }
 
+    /// <summary>Values the spectator sets per replay, which a merge does not count as the operator's.</summary>
+    public ObsRuntimeValues Runtime { get; init; }
+
     public DateTime UtcNow { get; init; } = DateTime.UtcNow;
+
+    /// <summary>The new install's <c>OBS:StableAssets</c> (<see cref="ObsCollectionUpdate.StableAssets"/>).</summary>
+    public bool StableAssets { get; init; }
 }

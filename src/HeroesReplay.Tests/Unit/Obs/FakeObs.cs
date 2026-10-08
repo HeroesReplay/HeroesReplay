@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Pages;
+using HeroesReplay.Core.Obs.Recording;
 using Newtonsoft.Json.Linq;
 
 namespace HeroesReplay.Tests.Unit.Obs;
@@ -52,6 +51,20 @@ internal sealed class FakeObs : IObsReadSessionFactory
         };
     public byte[] Png { get; set; } = TinyPng.Create(32, 18);
 
+    /// <summary>GetRecordStatus outputActive. StopRecord turns it off unless <see cref="KeepRecordingOnStop"/>.</summary>
+    public bool Recording { get; set; } = true;
+
+    /// <summary>GetRecordStatus outputDuration, in milliseconds.</summary>
+    public long RecordedMilliseconds { get; set; } = 60000;
+
+    /// <summary>The path StopRecord returns.</summary>
+    public string RecordPath { get; set; }
+
+    public bool KeepRecordingOnStop { get; set; }
+
+    /// <summary>StopRecord throws this, like an OBS that refuses the request.</summary>
+    public Exception StopRecordError { get; set; }
+
     /// <summary>GetVideoSettings: a 1920x1080 canvas scaled to 720p at 59.94 FPS.</summary>
     public JObject Video { get; } =
         new()
@@ -72,7 +85,12 @@ internal sealed class FakeObs : IObsReadSessionFactory
             [("SimpleOutput", "RecFormat2")] = "mp4",
             [("SimpleOutput", "RecEncoder")] = "qsv_h264",
             [("SimpleOutput", "StreamEncoder")] = "x264",
+            [("SimpleOutput", "VBitrate")] = "6000",
+            [("SimpleOutput", "RecQuality")] = "Stream",
         };
+
+    /// <summary>GetRecordDirectory: where OBS writes its next recording.</summary>
+    public string RecordDirectory { get; set; } = @"C:\heroesreplay\Data\Contexts\65820711";
     public int Opened { get; private set; }
     public int Disposed { get; private set; }
     public string OpenedEndpoint { get; private set; }
@@ -174,10 +192,17 @@ internal sealed class FakeObs : IObsReadSessionFactory
 
     public void RemoveSceneItem(string scene, string source)
     {
-        ((JArray)Source(scene)["settings"]["items"])
-            .Single(item => (string)item["name"] == source)
-            .Remove();
+        SceneItem(scene, source).Remove();
     }
+
+    /// <summary>
+    /// A scene item as the collection saves it (<c>pos</c>, <c>align</c>, <c>scale</c>,
+    /// <c>bounds_type</c>, <c>bounds</c>), to move before a test reads it.
+    /// </summary>
+    public JObject SceneItem(string scene, string source) =>
+        ((JArray)Source(scene)["settings"]["items"])
+            .OfType<JObject>()
+            .Single(item => (string)item["name"] == source);
 
     public IObsReadSession Open(string endpoint, string password)
     {
@@ -261,6 +286,11 @@ internal sealed class FakeObs : IObsReadSessionFactory
                 ),
             },
             "GetSceneItemList" => SceneItems((string)data?["sceneName"]),
+            "GetSceneItemTransform" => SceneItemTransform(
+                (string)data?["sceneName"],
+                (long?)data?["sceneItemId"]
+            ),
+            "GetRecordDirectory" => new JObject { ["recordDirectory"] = RecordDirectory },
             "GetInputList" => new JObject { ["inputs"] = new JArray(Inputs()) },
             "GetInputSettings" => InputSettings((string)data?["inputName"]),
             "GetInputMute" => Audio(
@@ -293,10 +323,10 @@ internal sealed class FakeObs : IObsReadSessionFactory
             },
             "GetRecordStatus" => new JObject
             {
-                ["outputActive"] = true,
+                ["outputActive"] = Recording,
                 ["outputPaused"] = false,
                 ["outputTimecode"] = "00:01:00.000",
-                ["outputDuration"] = 60000,
+                ["outputDuration"] = RecordedMilliseconds,
                 ["outputBytes"] = 1234567,
             },
             "GetStats" => new JObject
@@ -350,6 +380,53 @@ internal sealed class FakeObs : IObsReadSessionFactory
                     }
                 )
             ),
+        };
+    }
+
+    private static readonly string[] BoundsTypes =
+    {
+        "OBS_BOUNDS_NONE",
+        "OBS_BOUNDS_STRETCH",
+        "OBS_BOUNDS_SCALE_INNER",
+        "OBS_BOUNDS_SCALE_OUTER",
+        "OBS_BOUNDS_SCALE_TO_WIDTH",
+        "OBS_BOUNDS_SCALE_TO_HEIGHT",
+        "OBS_BOUNDS_MAX_ONLY",
+    };
+
+    /// <summary>GetSceneItemTransform from the item's saved transform, as obs-websocket names it.</summary>
+    private JObject SceneItemTransform(string sceneName, long? sceneItemId)
+    {
+        JObject item = Sources()
+            .Where(source => IsScene(source) && (string)source["name"] == sceneName)
+            .SelectMany(scene => ((JArray)scene["settings"]["items"]).OfType<JObject>())
+            .FirstOrDefault(candidate => (long?)candidate["id"] == sceneItemId);
+        if (item == null)
+        {
+            throw new ObsRequestException("GetSceneItemTransform", 600, "No scene item was found.");
+        }
+
+        return new JObject
+        {
+            ["sceneItemTransform"] = new JObject
+            {
+                ["positionX"] = item["pos"]?["x"] ?? 0,
+                ["positionY"] = item["pos"]?["y"] ?? 0,
+                ["rotation"] = item["rot"] ?? 0,
+                ["scaleX"] = item["scale"]?["x"] ?? 1,
+                ["scaleY"] = item["scale"]?["y"] ?? 1,
+                ["alignment"] = item["align"] ?? 5,
+                ["boundsType"] = BoundsTypes[(int?)item["bounds_type"] ?? 0],
+                ["boundsAlignment"] = item["bounds_align"] ?? 0,
+                ["boundsWidth"] = item["bounds"]?["x"] ?? 0,
+                ["boundsHeight"] = item["bounds"]?["y"] ?? 0,
+                ["cropLeft"] = item["crop_left"] ?? 0,
+                ["cropRight"] = item["crop_right"] ?? 0,
+                ["cropTop"] = item["crop_top"] ?? 0,
+                ["cropBottom"] = item["crop_bottom"] ?? 0,
+                ["sourceWidth"] = 1920,
+                ["sourceHeight"] = 1080,
+            },
         };
     }
 
@@ -482,7 +559,30 @@ internal sealed class FakeObs : IObsReadSessionFactory
     /// <summary>The browser sources reloaded through <see cref="IObsPageSession.Reload"/>, in order.</summary>
     public List<string> Reloaded { get; } = new();
 
-    private sealed class Session : IObsPageSession
+    /// <summary>A session that may also stop the recording, as <c>services stop</c> opens.</summary>
+    public IObsRecordStopSession OpenRecordStop()
+    {
+        Opened++;
+        return new Session(this);
+    }
+
+    private string StopRecord()
+    {
+        Requests.Add("StopRecord");
+        if (StopRecordError != null)
+        {
+            throw StopRecordError;
+        }
+
+        if (!KeepRecordingOnStop)
+        {
+            Recording = false;
+        }
+
+        return RecordPath;
+    }
+
+    private sealed class Session : IObsPageSession, IObsRecordStopSession
     {
         private readonly FakeObs owner;
 
@@ -500,31 +600,8 @@ internal sealed class FakeObs : IObsReadSessionFactory
             owner.Reloaded.Add(inputName);
         }
 
+        public string StopRecord() => owner.StopRecord();
+
         public void Dispose() => owner.Disposed++;
-    }
-}
-
-internal static class TinyPng
-{
-    /// <summary>A noisy PNG, so its base64 is far longer than 100 characters.</summary>
-    public static byte[] Create(int width, int height)
-    {
-        using var bitmap = new Bitmap(width, height);
-        var random = new Random(7);
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                bitmap.SetPixel(
-                    x,
-                    y,
-                    Color.FromArgb(random.Next(256), random.Next(256), random.Next(256))
-                );
-            }
-        }
-
-        using var stream = new MemoryStream();
-        bitmap.Save(stream, ImageFormat.Png);
-        return stream.ToArray();
     }
 }

@@ -5,10 +5,16 @@ namespace HeroesReplay.Core.Obs;
 
 public class OBSSettings
 {
+    /// <summary>
+    /// When false, spectate sends OBS nothing: no scenes, no report scenes, and no recording,
+    /// whatever <see cref="RecordingEnabled"/> and <see cref="RecordRequestedReplays"/> say (#318).
+    /// </summary>
     public bool Enabled { get; set; }
 
     /// <summary>Optional path to obs64.exe. Empty = default Program Files install.</summary>
     public string ExecutablePath { get; set; }
+
+    /// <summary>Record every spectated replay. Applies only while <see cref="Enabled"/> is true.</summary>
     public bool RecordingEnabled { get; set; }
 
     /// <summary>
@@ -37,6 +43,15 @@ public class OBSSettings
     /// OBS switches back. When false, the collection is replaced only while OBS is closed.
     /// </summary>
     public bool LiveCollectionSwap { get; set; } = true;
+
+    /// <summary>
+    /// When true, the managed collection points at a verified copy of this install's OBS files
+    /// under <c>%LOCALAPPDATA%\HeroesReplay\obs\assets\&lt;bundle-hash&gt;</c>, not at the
+    /// install's own <c>obs</c> folder, so removing a build's folder (a git worktree) leaves no
+    /// missing images (#330). On in <c>appsettings.dev.json</c>. Off by default and in prod: a
+    /// release updates <c>app\obs</c> in place, and OBS reloads a changed asset from there.
+    /// </summary>
+    public bool StableAssets { get; set; }
 
     /// <summary>
     /// When true, shutdown may close an OBS process this coordinator launched.

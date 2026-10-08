@@ -8,7 +8,9 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Recording;
+using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -32,13 +34,12 @@ public class ObsDesiredStateTests
         var socket = new FakeSession();
         var process = new FakeProcess { Exists = true };
         Harness harness = Open(Settings(executable), socket, process);
-        int obsBefore = CountObs64();
         var clock = Stopwatch.StartNew();
 
         ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
 
         clock.Stop();
-        Assert.Equal(obsBefore, CountObs64());
+        Assert.Equal(0, ObsStartedByThisProcess());
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), clock.Elapsed.ToString());
         Assert.Empty(harness.Waits);
         Assert.False(File.Exists(executable));
@@ -605,6 +606,37 @@ public class ObsDesiredStateTests
         Assert.Null(stopped.OutputPath);
         Assert.Equal(1, socket.StopRecordCalls);
         Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal(0, harness.Process.LaunchCalls);
+    }
+
+    /// <summary>
+    /// #318: with OBS:Enabled=false and OBS:RecordingEnabled=true, the recording start and the
+    /// session end send OBS nothing, not even a connect.
+    /// </summary>
+    [Fact]
+    public void Recording_ObsDisabled_SendsObsNothing()
+    {
+        var socket = new FakeSession { IdentifyOnConnect = true, RecordOnStart = true };
+        OBSSettings obs = Settings(enabled: false, streaming: false);
+        obs.RecordingEnabled = true;
+        Harness harness = Open(obs, socket);
+        var replay = new LoadedReplay { ReplayId = 65820711, PolicyAllowsRecording = true };
+
+        ObsRecordingResult started = harness.Coordinator.StartRecording(
+            () => SessionMedia.ShouldRecord(obs, replay),
+            65820711,
+            "unit"
+        );
+        ObsRecordingResult stopped = harness.Coordinator.StopRecording(65820711);
+
+        Assert.Equal(ObsOutputFailure.NotRequested, started.Failure);
+        Assert.False(started.Owned);
+        Assert.Equal(ObsOutputFailure.NotOwned, stopped.Failure);
+        Assert.Equal(0, socket.ConnectCalls);
+        Assert.Equal(0, socket.StartRecordCalls);
+        Assert.Equal(0, socket.StopRecordCalls);
+        Assert.Equal(0, socket.StopStreamCalls);
+        Assert.False(socket.Recording);
         Assert.Equal(0, harness.Process.LaunchCalls);
     }
 
@@ -1182,12 +1214,10 @@ public class ObsDesiredStateTests
     [Fact]
     public void ObsStatus_CopiesDesiredVersusActualWithoutWritingStatusJson()
     {
-        string live = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HeroesReplay",
-            "status.json"
-        );
-        DateTime? before = File.Exists(live) ? File.GetLastWriteTimeUtc(live) : null;
+        // ObsStatus only fills the object it is given; the caller's store writes status.json.
+        // This test used to compare the live %LOCALAPPDATA%\HeroesReplay\status.json timestamp
+        // before and after, which a running stack on the same machine rewrites every few
+        // seconds (#331).
         var status = new SpectatorStatus();
         ObsStatus.Copy(status, null);
         Assert.Null(status.ObsStreamDesired);
@@ -1221,8 +1251,6 @@ public class ObsDesiredStateTests
         Assert.Contains("scene=" + WaitingScene, line, StringComparison.Ordinal);
         Assert.Contains("stream desired=True", line, StringComparison.Ordinal);
         Assert.Contains("active=False", line, StringComparison.Ordinal);
-        DateTime? after = File.Exists(live) ? File.GetLastWriteTimeUtc(live) : null;
-        Assert.Equal(before, after);
     }
 
     [Fact]
@@ -1404,21 +1432,21 @@ public class ObsDesiredStateTests
             PollInterval = TimeSpan.FromMilliseconds(5),
         };
 
-    private static int CountObs64()
-    {
-        Process[] found = Process.GetProcessesByName(ObsLaunchDecision.ProcessName);
-        try
-        {
-            return found.Length;
-        }
-        finally
-        {
-            foreach (Process process in found)
-            {
-                process.Dispose();
-            }
-        }
-    }
+    /// <summary>
+    /// obs64 processes this test process started. Counting every obs64 on the machine made the
+    /// test depend on whether someone opened or closed OBS meanwhile (#331).
+    /// </summary>
+    private static int ObsStartedByThisProcess() =>
+        ProcessTable
+            .Snapshot()
+            .Count(entry =>
+                entry.ParentPid == Environment.ProcessId
+                && string.Equals(
+                    entry.Name,
+                    ObsLaunchDecision.ProcessName + ".exe",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
 
     private sealed class Harness
     {

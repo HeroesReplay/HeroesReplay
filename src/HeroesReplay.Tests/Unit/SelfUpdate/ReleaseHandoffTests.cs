@@ -23,6 +23,12 @@ namespace HeroesReplay.Tests.Unit.SelfUpdate;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class ReleaseHandoffTests
 {
+    /// <summary>
+    /// How long a test waits for something that must happen. Only a hung engine takes this
+    /// long, so a busy machine (parallel test runs, builds) does not fail the test (#331).
+    /// </summary>
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(15);
+
     [Fact]
     public async Task Update_IsStagedWhenTheReportStartsAndHandedOffAfterIt()
     {
@@ -294,7 +300,7 @@ public class ReleaseHandoffTests
         try
         {
             Task run = engine.RunAsync();
-            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Task finished = await Task.WhenAny(run, Task.Delay(Patience));
             Assert.Same(run, finished);
             await run;
         }
@@ -334,7 +340,7 @@ public class ReleaseHandoffTests
             await Task.Delay(TimeSpan.FromMilliseconds(200));
             Assert.False(run.IsCompleted);
             cancel.Cancel();
-            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Task finished = await Task.WhenAny(run, Task.Delay(Patience));
             Assert.Same(run, finished);
             await run;
         }
@@ -371,10 +377,10 @@ public class ReleaseHandoffTests
         try
         {
             Task run = engine.RunAsync();
-            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            await provider.Settled.Task.WaitAsync(Patience);
             Assert.False(run.IsCompleted);
             cancel.Cancel();
-            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Task finished = await Task.WhenAny(run, Task.Delay(Patience));
             Assert.Same(run, finished);
             await run;
             Assert.Equal(new[] { 101 }, provider.Deferred.ToArray());
@@ -420,10 +426,10 @@ public class ReleaseHandoffTests
         try
         {
             Task run = engine.RunAsync();
-            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            await provider.Settled.Task.WaitAsync(Patience);
             Assert.False(run.IsCompleted);
             cancel.Cancel();
-            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Task finished = await Task.WhenAny(run, Task.Delay(Patience));
             Assert.Same(run, finished);
             await run;
             Assert.Empty(provider.Deferred);
@@ -473,10 +479,10 @@ public class ReleaseHandoffTests
         try
         {
             Task run = engine.RunAsync();
-            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            await provider.Settled.Task.WaitAsync(Patience);
             Assert.False(run.IsCompleted);
             cancel.Cancel();
-            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Task finished = await Task.WhenAny(run, Task.Delay(Patience));
             Assert.Same(run, finished);
             await run;
             Assert.Equal(new[] { 101 }, provider.Deferred.ToArray());
@@ -717,7 +723,7 @@ public class ReleaseHandoffTests
             await Task.Delay(TimeSpan.FromMilliseconds(200));
             Assert.False(run.IsCompleted);
             cancel.Cancel();
-            Task finished = await Task.WhenAny(run, Task.Delay(TimeSpan.FromSeconds(3)));
+            Task finished = await Task.WhenAny(run, Task.Delay(Patience));
             Assert.Same(run, finished);
             await run;
         }
@@ -912,6 +918,13 @@ public class ReleaseHandoffTests
 
         public List<int> Requeued { get; } = new();
 
+        /// <summary>
+        /// Set when the engine first settles a replay (requeue, defer, or spectated). Tests wait
+        /// for it instead of a fixed 300 ms, which a busy machine could outlast (#331).
+        /// </summary>
+        public TaskCompletionSource Settled { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public bool ContinuesWhenEmpty { get; }
 
         public void Enqueue(int replayId)
@@ -952,6 +965,7 @@ public class ReleaseHandoffTests
 
             Requeued.Add(replayId);
             staged = replay;
+            Settled.TrySetResult();
         }
 
         public List<int> Deferred { get; } = new();
@@ -968,6 +982,8 @@ public class ReleaseHandoffTests
             {
                 staged = null;
             }
+
+            Settled.TrySetResult();
         }
 
         public void MarkSpectated(LoadedReplay replay)
@@ -975,6 +991,7 @@ public class ReleaseHandoffTests
             if (replay?.ReplayId is int replayId)
             {
                 SpectatedIds.Add(replayId);
+                Settled.TrySetResult();
             }
         }
     }

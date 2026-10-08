@@ -162,7 +162,8 @@ public class ServiceHeartbeatTests
             heartbeat.Start(CancellationToken.None);
             DateTimeOffset first = Read("download", "beat5", root).HeartbeatAt.Value;
 
-            DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+            // The timer runs on the thread pool; only a dead timer takes this long (#331).
+            DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(15);
             DateTimeOffset? later = first;
             while (later <= first && DateTimeOffset.UtcNow < deadline)
             {
@@ -290,6 +291,15 @@ public class ServiceHeartbeatTests
         Assert.DoesNotContain("s3cret", redacted);
         Assert.DoesNotContain("abc.def-ghi", redacted);
         Assert.DoesNotContain("hunter2", redacted);
+    }
+
+    [Theory]
+    [InlineData("Check the v1 Bearer key.")]
+    [InlineData("This is not the v1 Bearer key, it is the uploader key.")]
+    [InlineData("Bearer tokens expire.")]
+    public void Redact_KeepsProseThatOnlyNamesACredential(string message)
+    {
+        Assert.Equal(message, ServiceHeartbeat.Redact(message));
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Tests.Unit.Support;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -23,7 +24,7 @@ public class ObsInspectorTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(data, recursive: true);
+        TestTemp.Delete(data);
     }
 
     [Fact]
@@ -87,6 +88,35 @@ public class ObsInspectorTests : IDisposable
         Assert.False(inspection.StreamArm.StreamingEnabled);
         Assert.False(inspection.StreamArm.MayStart);
         Assert.Null(inspection.StreamArm.BlockedBy);
+    }
+
+    [Fact]
+    public void Inspect_ReportsTheBitratesAndTheRecordDirectory()
+    {
+        FakeObs simple = FakeObs.Installed(data);
+        FakeObs advanced = FakeObs.Installed(data);
+        advanced.ProfileParameters[("Output", "Mode")] = "Advanced";
+        advanced.ProfileParameters[("AdvOut", "RecType")] = "FFmpeg";
+        advanced.ProfileParameters[("AdvOut", "FFExtension")] = "mp4";
+        advanced.ProfileParameters[("AdvOut", "FFVBitrate")] = "8000";
+
+        ObsInspection inspection = Inspect(simple);
+        ObsProfileInfo custom = Inspect(advanced).Profile;
+
+        ObsProfileInfo profile = inspection.Profile;
+        Assert.Equal(6000, profile.StreamBitrateKbps);
+        Assert.Equal("CBR", profile.StreamRateControl);
+        Assert.Equal("Stream", profile.RecordingQuality);
+        Assert.Equal(6000, profile.RecordingBitrateKbps);
+        Assert.True(profile.RecordingSharesStreamEncoder);
+        Assert.Equal(@"C:\heroesreplay\Data\Contexts\65820711", inspection.RecordDirectory);
+        Assert.Contains("GetRecordDirectory", simple.Requests);
+        Assert.Empty(inspection.Unread);
+
+        // Advanced output keeps the stream bitrate in streamEncoder.json, out of reach.
+        Assert.Null(custom.StreamBitrateKbps);
+        Assert.Equal(8000, custom.RecordingBitrateKbps);
+        Assert.False(custom.RecordingSharesStreamEncoder);
     }
 
     [Fact]

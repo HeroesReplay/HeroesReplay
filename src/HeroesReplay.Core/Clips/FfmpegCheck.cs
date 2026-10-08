@@ -19,7 +19,12 @@ public sealed record FfmpegToolStatus(
     string Error
 );
 
-public sealed record FfmpegCheckReport(bool Ok, bool Warning, string Detail);
+/// <summary>
+/// <see cref="Reason"/> is the first problem: <see cref="FfmpegCheck.Missing"/>,
+/// <see cref="FfmpegCheck.NotRunnable"/>, <see cref="FfmpegCheck.NoLibx264"/>, or (a warning)
+/// <see cref="FfmpegCheck.NotPinned"/>. Null when every tool is the pinned build.
+/// </summary>
+public sealed record FfmpegCheckReport(bool Ok, bool Warning, string Detail, string Reason = null);
 
 /// <summary>
 /// <c>heroesreplay check ffmpeg</c>. Fails when ffmpeg or ffprobe is missing, does not report a
@@ -30,6 +35,11 @@ public sealed record FfmpegCheckReport(bool Ok, bool Warning, string Detail);
 public static class FfmpegCheck
 {
     public const string DepsInstallHint = "Run `heroesreplay deps install`.";
+
+    public const string Missing = "missing";
+    public const string NotRunnable = "not_runnable";
+    public const string NoLibx264 = "libx264_missing";
+    public const string NotPinned = "not_pinned";
 
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(15);
 
@@ -67,6 +77,7 @@ public static class FfmpegCheck
     {
         bool ok = true;
         bool warning = false;
+        string reason = null;
         var lines = new List<string>();
         foreach (FfmpegToolStatus tool in tools)
         {
@@ -74,6 +85,7 @@ public static class FfmpegCheck
             if (!found.Found)
             {
                 ok = false;
+                reason ??= Missing;
                 lines.Add($"{found.Tool}: not found in {searched}. {DepsInstallHint}");
                 continue;
             }
@@ -82,6 +94,7 @@ public static class FfmpegCheck
             if (tool.VersionLine == null)
             {
                 ok = false;
+                reason ??= NotRunnable;
                 lines.Add(
                     $"{found.Tool}: {where} did not report a version ({tool.Error}). {DepsInstallHint}"
                 );
@@ -91,6 +104,7 @@ public static class FfmpegCheck
             if (tool.EncodesH264 == false)
             {
                 ok = false;
+                reason ??= NoLibx264;
                 lines.Add(
                     $"{found.Tool}: {where}: {tool.VersionLine}. It cannot encode libx264, which clips use. {DepsInstallHint}"
                 );
@@ -117,7 +131,8 @@ public static class FfmpegCheck
         return new FfmpegCheckReport(
             ok,
             ok && warning,
-            summary + string.Concat(lines.Select(line => Environment.NewLine + "  " + line))
+            summary + string.Concat(lines.Select(line => Environment.NewLine + "  " + line)),
+            ok && warning ? NotPinned : reason
         );
     }
 

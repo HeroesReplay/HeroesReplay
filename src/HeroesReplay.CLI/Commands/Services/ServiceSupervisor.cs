@@ -5,7 +5,9 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using HeroesReplay.CLI.OpenTelemetry;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.ServiceHost.Logs;
 using HeroesReplay.Core.Status;
@@ -239,8 +241,9 @@ public static class ServiceSupervisor
 
     /// <summary>
     /// Ask every recorded role to exit, kill the ones left after the graceful budget, close the
-    /// game, then read the OBS stream state. Exit code 0 needs all three confirmed. A role that is
-    /// still running stays in the lock so status and a second stop can still find it.
+    /// game, read the OBS stream state, then stop a recording spectate left running (never the
+    /// stream, #318). Exit code 0 needs all four confirmed. A role that is still running stays in
+    /// the lock so status and a second stop can still find it, and OBS is not opened then.
     /// </summary>
     public static ServiceStopResult Stop(string lockPath, ServiceShutdown shutdown)
     {
@@ -360,15 +363,26 @@ public static class ServiceSupervisor
             }
 
             ServiceStreamCheck stream = null;
+            OrphanRecordingCheck recording = null;
             if (survivors.Count > 0)
             {
                 // The spectator may still hold its OBS session. Do not open a second websocket.
                 Console.WriteLine("OBS stream: not read, because a role is still running.");
+                Console.WriteLine("OBS recording: not checked, because a role is still running.");
             }
-            else if (shutdown.ReadStream != null)
+            else
             {
-                stream = ReadStream(shutdown.ReadStream);
-                Console.WriteLine("OBS stream: " + stream.Describe());
+                if (shutdown.ReadStream != null)
+                {
+                    stream = ReadStream(shutdown.ReadStream);
+                    Console.WriteLine("OBS stream: " + stream.Describe());
+                }
+
+                if (shutdown.StopSpectateRecording != null)
+                {
+                    recording = StopSpectateRecording(shutdown.StopSpectateRecording);
+                    Console.WriteLine("OBS recording: " + recording.Describe());
+                }
             }
 
             var result = new ServiceStopResult
@@ -376,6 +390,7 @@ public static class ServiceSupervisor
                 Roles = roles,
                 GameClosed = gameClosed,
                 Stream = stream,
+                Recording = recording,
                 Supervisor = supervisor,
             };
             if (killed.Count > 0)
@@ -513,6 +528,22 @@ public static class ServiceSupervisor
         }
     }
 
+    private static OrphanRecordingCheck StopSpectateRecording(Func<OrphanRecordingCheck> stop)
+    {
+        try
+        {
+            return stop()
+                ?? new OrphanRecordingCheck(
+                    OrphanRecordingState.Unknown,
+                    "The OBS recording check returned nothing."
+                );
+        }
+        catch (Exception e)
+        {
+            return new OrphanRecordingCheck(OrphanRecordingState.Unknown, e.Message);
+        }
+    }
+
     /// <summary>
     /// Classify every role as ready, degraded, stale, stopped, or failed from the lock, the
     /// process table, and each role's heartbeat. Exit code 0 unless a role is failed, stale, or
@@ -554,9 +585,13 @@ public static class ServiceSupervisor
             query.SupervisorLiveness?.Invoke(),
             now
         );
-        report = report with { Machine = ReadMachine(query.ReadMachine) };
+        report = report with
+        {
+            Machine = ReadMachine(query.ReadMachine),
+            ObsRestorePending = ReadObsRestorePending(query.ReadObsRestorePending),
+        };
         TextWriter output = query.Out ?? Console.Out;
-        if (query.Output == ServiceStatusOutput.Json)
+        if (query.Output == CliOutputFormat.Json)
         {
             output.WriteLine(report.ToJson());
         }
@@ -639,6 +674,11 @@ public static class ServiceSupervisor
         }
 
         WriteMachineText(output, report.Machine);
+        if (!string.IsNullOrWhiteSpace(report.ObsRestorePending))
+        {
+            output.WriteLine($"OBS rollback: waiting. {report.ObsRestorePending}");
+        }
+
         if (spectator == null)
         {
             output.WriteLine("Spectator status: no snapshot.");
@@ -709,6 +749,18 @@ public static class ServiceSupervisor
             ? string.Empty
             : "; " + supervisor.Detail;
         return pid + via + detail;
+    }
+
+    private static string ReadObsRestorePending(Func<string> read)
+    {
+        try
+        {
+            return read?.Invoke();
+        }
+        catch (Exception e)
+        {
+            return "The pending OBS rollback could not be read: " + e.Message;
+        }
     }
 
     private static MachineHealthReport ReadMachine(Func<MachineHealthReport> read)
@@ -956,7 +1008,7 @@ public static class ServiceSupervisor
         return message;
     }
 
-    private static string CurrentVersion()
+    internal static string CurrentVersion()
     {
         Assembly assembly = typeof(ServiceSupervisor).Assembly;
         string informational = assembly

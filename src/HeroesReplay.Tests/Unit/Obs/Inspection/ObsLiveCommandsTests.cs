@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using HeroesReplay.CLI.Commands.Obs;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs.Inspection;
@@ -22,7 +23,7 @@ public class ObsLiveCommandsTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(data, recursive: true);
+        TestTemp.Delete(data);
     }
 
     [Fact]
@@ -81,6 +82,11 @@ public class ObsLiveCommandsTests : IDisposable
         Assert.Contains("Canvas 1920x1080, output 1280x720", text);
         Assert.Contains("Simple output: records mp4 with qsv_h264", text);
         Assert.Contains("Stream service: Twitch, key set.", text);
+        Assert.Contains(
+            "Bitrate: stream 6000 kbps CBR, recording Stream quality, 6000 kbps CBR.",
+            text
+        );
+        Assert.Contains(@"Record directory: C:\heroesreplay\Data\Contexts\65820711.", text);
         Assert.DoesNotContain(FakeObs.StreamKey, text);
     }
 
@@ -100,6 +106,14 @@ public class ObsLiveCommandsTests : IDisposable
         Assert.Equal(
             "mp4",
             document.RootElement.GetProperty("profile").GetProperty("recordingFormat").GetString()
+        );
+        Assert.Equal(
+            6000,
+            document.RootElement.GetProperty("profile").GetProperty("streamBitrateKbps").GetInt64()
+        );
+        Assert.Equal(
+            @"C:\heroesreplay\Data\Contexts\65820711",
+            document.RootElement.GetProperty("recordDirectory").GetString()
         );
         Assert.DoesNotContain(FakeObs.StreamKey, output.ToString());
     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using HeroesReplay.CLI.Commands.Services;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using Xunit;
@@ -287,7 +288,7 @@ public class ServiceSupervisorFileTests
                 spectator: null,
                 query: new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Out = json,
                     ReadSupervisor = () => State(updatedAgo: TimeSpan.FromSeconds(12)),
                     SupervisorLiveness = () => ServiceSupervisorLiveness.ByStateFile,

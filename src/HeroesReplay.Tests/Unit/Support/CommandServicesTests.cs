@@ -1,18 +1,22 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using HeroesReplay.CLI;
 using HeroesReplay.CLI.Commands.HeroesProfile.Commands;
 using HeroesReplay.CLI.Commands.Twitch.Commands;
+using HeroesReplay.Core;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.GameClient.Firewall;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Spectating.Reports;
 using HeroesReplay.Core.Twitch;
+using HeroesReplay.Core.Twitch.ChatMessages;
 using HeroesReplay.Core.Twitch.Predictions;
 using HeroesReplay.Core.Twitch.RedeemedRewards;
 using HeroesReplay.Core.Twitch.Rewards;
@@ -31,8 +35,9 @@ namespace HeroesReplay.Tests.Unit.Support;
 /// Each command that builds its own service provider can resolve the services it asks for
 /// (#297: <c>twitch predictions test</c> missed <see cref="PredictionReportWriter"/>). Nothing is
 /// connected or started. The data directory is a temp folder, so a constructor that writes a page
-/// (the request queue writes its board) does not touch the machine's Data folder. Spectate is not
-/// here: its engine builds the game controller, capture, and the OBS controller.
+/// (the request queue writes its board) does not touch the machine's Data folder. Spectate's
+/// engine is built but not run: the game controller, capture, and OBS controller only keep their
+/// dependencies until it runs (#301).
 /// </summary>
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class CommandServicesTests
@@ -50,6 +55,8 @@ public class CommandServicesTests
     [InlineData("check")]
     [InlineData("client")]
     [InlineData("calculators report")]
+    [InlineData("spectate heroesprofile")]
+    [InlineData("spectate file")]
     public void Command_ResolvesItsRootServices(string command)
     {
         CancellationToken token = CancellationToken.None;
@@ -124,6 +131,33 @@ public class CommandServicesTests
                 new ServiceCollection().AddReportServices(token, typeof(ReplayFileProvider)),
                 new[] { typeof(ISpectateReportWriter) }
             ),
+            "spectate heroesprofile" => (
+                new ServiceCollection().AddSpectateServices(token, typeof(ReplayCacheProvider)),
+                new[]
+                {
+                    typeof(BattleNetAgentReaper),
+                    typeof(OrphanRecordingOnStart),
+                    typeof(IEngine),
+                }
+            ),
+            // An existing file, so the provider queues that path and reads no replay folder.
+            "spectate file" => (
+                new ServiceCollection().AddSpectateServices(
+                    token,
+                    typeof(ReplayFileProvider),
+                    new ReplayPathOptions
+                    {
+                        Path = typeof(CommandServicesTests).Assembly.Location,
+                        PlayOnce = true,
+                    }
+                ),
+                new[]
+                {
+                    typeof(BattleNetAgentReaper),
+                    typeof(OrphanRecordingOnStart),
+                    typeof(IEngine),
+                }
+            ),
             _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
         };
         string data = Directory.CreateTempSubdirectory("hr-command-services-").FullName;
@@ -144,6 +178,30 @@ public class CommandServicesTests
         {
             Directory.Delete(data, recursive: true);
         }
+    }
+
+    // Chat and channel-point redemptions belong to the twitch role. Spectate never posts to chat
+    // or answers a redemption, so it registers none of what does (#301).
+    [Fact]
+    public void Spectate_RegistersNoChatOrRedemptionServices()
+    {
+        IServiceCollection services = new ServiceCollection().AddSpectateServices(
+            CancellationToken.None,
+            typeof(ReplayCacheProvider)
+        );
+        Type[] twitchRole =
+        [
+            typeof(ITwitchBot),
+            typeof(ITwitchClient),
+            typeof(IOnMessageHandler),
+            typeof(IMessageHandler),
+            typeof(IOnRewardHandler),
+            typeof(IRewardHandler),
+            typeof(EventSubRewardListener),
+            typeof(IRedemptionCanceller),
+        ];
+
+        Assert.DoesNotContain(services, descriptor => twitchRole.Contains(descriptor.ServiceType));
     }
 
     // Every AppSettings the command registers points at data, whether it is an instance or a

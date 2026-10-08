@@ -59,7 +59,12 @@ public class ObsController : IObsController
             settings,
             socket,
             new WindowsObsProcess(),
-            new RecordingSession(logger, socket, ObsRecordingBudget.Default),
+            new RecordingSession(
+                logger,
+                socket,
+                ObsRecordingBudget.Default,
+                new RecordingClaimStore(RecordingClaimStore.DefaultPath)
+            ),
             ObsBackoff.Default,
             Thread.Sleep,
             TimeSpan.FromSeconds(10),
@@ -75,6 +80,9 @@ public class ObsController : IObsController
                         arm.IsArmed(),
                         arm.FilePath
                     )
+                    {
+                        AssetStoreRoot = ObsAssetStore.For(ObsManagedFiles.ForThisUser()).Root,
+                    }
                 ),
             settings.OBS?.StartupIdentifyTimeout,
             sentinel: new ObsCrashSentinel(
@@ -123,7 +131,9 @@ public class ObsController : IObsController
                 settings.Location?.DataDirectory,
                 obsRunning,
                 ObsNames.SceneCollection(settings.OBS),
-                ObsManagedFiles.ForThisUser()
+                ObsManagedFiles.ForThisUser(),
+                settings.OBS?.StableAssets == true,
+                ObsRuntimeValues.From(settings.OBS)
             );
             if (result.Drift)
             {

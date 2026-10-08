@@ -25,6 +25,37 @@ public class CliHelpTests
         Assert.Contains(root.Subcommands, c => c.Name == "update");
         Assert.Contains(root.Subcommands, c => c.Name == "obs");
         Assert.Contains(root.Subcommands, c => c.Name == "deps");
+        Assert.Contains(root.Subcommands, c => c.Name == "config");
+    }
+
+    [Fact]
+    public async Task ConfigEffectiveHelp_ExitsZero_AndParsesItsOptions()
+    {
+        Assert.Equal(
+            0,
+            await new CommandLineService().InvokeAsync(new[] { "config", "effective", "--help" })
+        );
+        var root = new HeroesReplayCommand();
+        foreach (
+            string line in new[]
+            {
+                "config --help",
+                "config effective",
+                "config effective --redact",
+                "config effective --section OBS -o json",
+                "config effective --environment prod --install C:\\heroesreplay\\app --output text",
+            }
+        )
+        {
+            Assert.Empty(root.Parse(line).Errors);
+        }
+
+        Assert.NotEmpty(root.Parse("config effective --output yaml").Errors);
+        Command effective = root
+            .Subcommands.Single(c => c.Name == "config")
+            .Subcommands.Single(c => c.Name == "effective");
+        Assert.Contains("(set)", effective.Description);
+        Assert.Contains("op://", effective.Description);
     }
 
     [Fact]
@@ -94,11 +125,43 @@ public class CliHelpTests
                 // The exact arguments tools/package-release.ps1 and verify-release.ps1 pass.
                 "obs bundle --install C:\\publish --write",
                 "obs bundle --install C:\\extract",
+                "obs plan --help",
+                "obs plan",
+                "obs plan -o json",
+                "obs plan --install C:\\staged --previous C:\\app --environment prod --output json",
+                "obs apply --help",
+                "obs apply",
+                "obs apply --backup",
+                "obs apply --backup -o json",
+                "obs apply --install C:\\staged --previous C:\\app --environment dev --output text",
+                "obs backup --help",
+                "obs backup",
+                "obs backup --list -o json",
+                "obs restore --help",
+                "obs restore scenes-HeroesReplay.json.20261008T140000000Z.bak",
+                "obs restore C:\\backups\\x.bak --output json",
             }
         )
         {
             Assert.Empty(root.Parse(help).Errors);
         }
+
+        Assert.NotEmpty(root.Parse("obs plan --output yaml").Errors);
+        Assert.NotEmpty(root.Parse("obs apply --output yaml").Errors);
+        Assert.NotEmpty(root.Parse("obs apply --backup extra").Errors);
+        Command apply = obs.Subcommands.Single(c => c.Name == "apply");
+        Assert.Contains("refused while it runs", apply.Description);
+        Assert.Contains("Without --backup it writes nothing", apply.Description);
+        Assert.Contains("obs.apply_conflict", apply.Description);
+        Assert.NotEmpty(root.Parse("obs restore").Errors);
+        Assert.Contains(
+            "Refused while OBS runs",
+            obs.Subcommands.Single(c => c.Name == "restore").Description
+        );
+        Assert.Contains(
+            "safe while OBS runs",
+            obs.Subcommands.Single(c => c.Name == "plan").Description
+        );
 
         Assert.Contains("SHA-256", obs.Subcommands.Single(c => c.Name == "bundle").Description);
         Assert.NotEmpty(root.Parse("obs bundle --output yaml").Errors);
@@ -122,6 +185,14 @@ public class CliHelpTests
         Assert.Contains(update.Subcommands, c => c.Name == "release-health");
         Assert.Contains(update.Subcommands, c => c.Name == "migrate-stream-arm");
         Assert.Contains(update.Subcommands, c => c.Name == "install-obs");
+        Assert.Contains(update.Subcommands, c => c.Name == "restore-obs");
+        // The exact arguments apply-release.ps1 passes on a rollback (#304).
+        Assert.Empty(
+            root.Parse(
+                "update restore-obs --previous C:\\app.previous --install C:\\app --environment prod"
+            ).Errors
+        );
+        Assert.NotEmpty(root.Parse("update restore-obs --install C:\\app").Errors);
         Assert.Empty(root.Parse("update migrate-stream-arm --previous C:\\app").Errors);
         Assert.NotEmpty(root.Parse("update migrate-stream-arm").Errors);
         Assert.Empty(root.Parse("update install-obs --install C:\\app --environment prod").Errors);
@@ -207,6 +278,27 @@ public class CliHelpTests
         Assert.Contains(services.Subcommands, c => c.Name == "start");
         Assert.Contains(services.Subcommands, c => c.Name == "stop");
         Assert.Contains(services.Subcommands, c => c.Name == "status");
+    }
+
+    [Fact]
+    public async Task ServicesEnsureHelp_ParsesAndExitsZero()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("services ensure --help").Errors);
+        Assert.Empty(root.Parse("services ensure --roles download,youtube --supervise").Errors);
+        Assert.Empty(root.Parse("services ensure --output json").Errors);
+        Assert.Empty(root.Parse("services ensure -o text --roles download").Errors);
+        Assert.NotEmpty(root.Parse("services ensure --output yaml").Errors);
+        Command ensure = root
+            .Subcommands.Single(c => c.Name == "services")
+            .Subcommands.Single(c => c.Name == "ensure");
+        Assert.Contains("service.ensure_noop", ensure.Description);
+        Assert.Contains("service.ensure_mismatch", ensure.Description);
+        Assert.Contains("Never stops a running role", ensure.Description);
+        Assert.Equal(
+            0,
+            await new CommandLineService().InvokeAsync(new[] { "services", "ensure", "--help" })
+        );
     }
 
     [Fact]
