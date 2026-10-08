@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Status;
 
@@ -49,12 +50,36 @@ public sealed class SpectatorStatusStore
             throw new ArgumentNullException(nameof(update));
         }
 
+        PatchIfChanged(status =>
+        {
+            update(status);
+            return true;
+        });
+    }
+
+    /// <summary>
+    /// Like <see cref="Patch"/>, but status.json is written only when <paramref name="update"/>
+    /// returns true, which is how it says it changed a field. A patch that changes nothing
+    /// writes nothing (#357). True when the file was written.
+    /// </summary>
+    public bool PatchIfChanged(Func<SpectatorStatus, bool> update)
+    {
+        if (update == null)
+        {
+            throw new ArgumentNullException(nameof(update));
+        }
+
         lock (gate)
         {
-            update(current);
+            if (!update(current))
+            {
+                return false;
+            }
+
             current.UpdatedAt = DateTimeOffset.UtcNow;
             current.SnapshotStale = false;
             WriteUnlocked(current);
+            return true;
         }
     }
 
@@ -138,21 +163,13 @@ public sealed class SpectatorStatusStore
 
     private void WriteUnlocked(SpectatorStatus status)
     {
-        string directory = Path.GetDirectoryName(FilePath);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        string temp = FilePath + ".tmp";
         string json = JsonSerializer.Serialize(status, JsonOptions);
         // A watcher can hold status.json open. Replace retries instead of failing the focus loop.
         for (int attempt = 0; ; attempt++)
         {
             try
             {
-                File.WriteAllText(temp, json);
-                File.Move(temp, FilePath, overwrite: true);
+                DurableFile.Replace(FilePath, json);
                 return;
             }
             catch (Exception ex) when (IsSharingViolation(ex) && attempt < 60)

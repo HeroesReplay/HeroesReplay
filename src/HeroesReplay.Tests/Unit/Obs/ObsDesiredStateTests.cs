@@ -467,6 +467,155 @@ public class ObsDesiredStateTests
     }
 
     [Fact]
+    public void SelectScene_ReachesStatusJsonWithoutAWatchdogTick()
+    {
+        // Dev e2e 2026-10-08 (#357): streaming off, so the watchdog ticked every 5 minutes, and
+        // status.json said prediction-report for 4 minutes while game-scene was on air.
+        string path = StatusPath();
+        try
+        {
+            var store = new SpectatorStatusStore(path);
+            var socket = new FakeSession { IsIdentified = true, IsConnected = true };
+            Harness harness = Open(Settings(streaming: false), socket, statusStore: store);
+            harness.Coordinator.SelectScene("prediction-report");
+            Assert.Equal("prediction-report", ReadStatus(path).ObsSceneActual);
+
+            harness.Coordinator.SelectScene("game-scene");
+
+            SpectatorStatus onAir = ReadStatus(path);
+            Assert.Equal("game-scene", onAir.ObsSceneDesired);
+            Assert.Equal("game-scene", onAir.ObsSceneActual);
+            Assert.Equal(true, onAir.ObsWebsocketIdentified);
+            Assert.Equal(false, onAir.ObsStreamDesired);
+            Assert.Contains(
+                " scene=game-scene ",
+                ObsStatus.Describe(onAir),
+                StringComparison.Ordinal
+            );
+        }
+        finally
+        {
+            DeleteStatus(path);
+        }
+    }
+
+    [Fact]
+    public void SelectScene_SameSceneAgain_DoesNotRewriteStatusJson()
+    {
+        string path = StatusPath();
+        try
+        {
+            var store = new SpectatorStatusStore(path);
+            var socket = new FakeSession { IsIdentified = true, IsConnected = true };
+            Harness harness = Open(Settings(streaming: false), socket, statusStore: store);
+            harness.Coordinator.SelectScene("game-scene");
+            Assert.True(File.Exists(path));
+            File.Delete(path);
+
+            harness.Coordinator.SelectScene("game-scene");
+
+            // OBS got the request again, but no OBS field changed, so nothing was written.
+            Assert.Equal(2, socket.SelectCalls);
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            DeleteStatus(path);
+        }
+    }
+
+    [Fact]
+    public void BeginSession_WritesObsToStatusJsonAndAnUnchangedStartWritesNothing()
+    {
+        // The first replay of the dev e2e had every obs* field null for its first minutes (#357).
+        string path = StatusPath();
+        try
+        {
+            var store = new SpectatorStatusStore(path);
+            var socket = new FakeSession
+            {
+                IsIdentified = true,
+                IsConnected = true,
+                ProgramScene = WaitingScene,
+            };
+            Harness harness = Open(Settings(streaming: false), socket, statusStore: store);
+
+            harness.Coordinator.BeginSession();
+
+            SpectatorStatus started = ReadStatus(path);
+            Assert.Equal(true, started.ObsWebsocketIdentified);
+            Assert.Equal(WaitingScene, started.ObsSceneActual);
+            Assert.Equal(false, started.ObsStreamDesired);
+            Assert.Equal(false, started.ObsStreamActive);
+            Assert.Equal(WaitingScene, harness.Coordinator.State.SceneActual);
+
+            File.Delete(path);
+            harness.Coordinator.BeginSession();
+
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            DeleteStatus(path);
+        }
+    }
+
+    [Fact]
+    public void BeginSession_ObsNotIdentified_StillWritesThatToStatusJson()
+    {
+        string path = StatusPath();
+        try
+        {
+            var store = new SpectatorStatusStore(path);
+            Harness harness = Open(
+                Settings(streaming: false),
+                new FakeSession(),
+                statusStore: store
+            );
+
+            Assert.Throws<TimeoutException>(() => harness.Coordinator.BeginSession());
+
+            SpectatorStatus status = ReadStatus(path);
+            Assert.Equal(false, status.ObsWebsocketIdentified);
+            Assert.Null(status.ObsSceneActual);
+        }
+        finally
+        {
+            DeleteStatus(path);
+        }
+    }
+
+    [Fact]
+    public void SelectScene_StatusWriteFails_TheSceneStaysOnAir()
+    {
+        var socket = new FakeSession { IsIdentified = true, IsConnected = true };
+        Harness harness = Open(
+            Settings(streaming: false),
+            socket,
+            stateChanged: () => throw new IOException("status.json is held open.")
+        );
+
+        harness.Coordinator.SelectScene("game-scene");
+
+        Assert.Equal(1, socket.SelectCalls);
+        Assert.Equal("game-scene", harness.Coordinator.State.SceneActual);
+    }
+
+    private static string StatusPath() =>
+        Path.Combine(Path.GetTempPath(), $"heroesreplay-obs-status-{Guid.NewGuid():N}.json");
+
+    private static SpectatorStatus ReadStatus(string path) =>
+        new SpectatorStatusStore(path).TryReadShared();
+
+    private static void DeleteStatus(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Reconcile_StreamingDisabled_DoesNotStart()
     {
         var socket = new FakeSession { IsIdentified = true, IsConnected = true };
@@ -1487,13 +1636,22 @@ public class ObsDesiredStateTests
         Action beforeLaunch = null,
         Func<bool> armed = null,
         Func<ObsValidation> preflight = null,
-        IObsMicrophoneSession microphones = null
+        IObsMicrophoneSession microphones = null,
+        SpectatorStatusStore statusStore = null,
+        Action stateChanged = null
     )
     {
         socket ??= new FakeSession();
         process ??= new FakeProcess();
         var waits = new List<TimeSpan>();
-        var coordinator = new ObsCoordinator(
+        ObsCoordinator coordinator = null;
+        // Wired like ObsController: the writer reads the coordinator's newest state.
+        if (statusStore != null)
+        {
+            stateChanged ??= () => ObsStatus.Write(statusStore, () => coordinator.State);
+        }
+
+        coordinator = new ObsCoordinator(
             NullLogger.Instance,
             new AppSettings { OBS = obs },
             socket,
@@ -1505,7 +1663,8 @@ public class ObsDesiredStateTests
             beforeLaunch,
             armed ?? (() => true),
             preflight,
-            microphones: microphones
+            microphones: microphones,
+            stateChanged: stateChanged
         );
         return new Harness
         {

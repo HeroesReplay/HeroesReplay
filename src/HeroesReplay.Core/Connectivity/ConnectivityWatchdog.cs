@@ -23,11 +23,6 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     private readonly object gate = new();
     private int failCount;
     private int recoverCount;
-    private string lastWrittenDetail;
-    private bool? lastWrittenOnline;
-    private string lastWrittenBlocked;
-    private string lastWrittenSceneDesired;
-    private string lastWrittenSceneActual;
     private volatile bool keepStreamThroughRestart;
 
     public ConnectivityWatchdog(
@@ -145,33 +140,21 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         }
 
         ReconcileDesiredStream();
+        bool online = IsOnline;
         string detail = snapshot.Describe();
-        ObsRuntimeSnapshot obs = obsController?.ReadObsState();
-        string blocked = obs?.StreamBlockedBy;
-        // A scene switch is written too, so status.json follows the scene on air (#282).
-        string sceneDesired = obs?.SceneDesired;
-        string sceneActual = obs?.SceneActual;
-        if (
-            changed != null
-            || lastWrittenOnline != IsOnline
-            || lastWrittenDetail != detail
-            || lastWrittenBlocked != blocked
-            || lastWrittenSceneDesired != sceneDesired
-            || lastWrittenSceneActual != sceneActual
-        )
+        // Written only when connectivity or an OBS field (the scene on air #282, the stream
+        // block) differs from status.json. A scene switch the spectator already wrote (#357)
+        // is not written again here. The OBS state is read under the store's lock, so an older
+        // snapshot does not overwrite the scene the spectator just wrote.
+        statusStore.PatchIfChanged(status =>
         {
-            lastWrittenOnline = IsOnline;
-            lastWrittenDetail = detail;
-            lastWrittenBlocked = blocked;
-            lastWrittenSceneDesired = sceneDesired;
-            lastWrittenSceneActual = sceneActual;
-            statusStore.Patch(status =>
-            {
-                status.ConnectivityOnline = IsOnline;
-                status.Connectivity = detail;
-                ObsStatus.Copy(status, obs);
-            });
-        }
+            bool connectivityChanged =
+                status.ConnectivityOnline != online
+                || !string.Equals(status.Connectivity, detail, StringComparison.Ordinal);
+            status.ConnectivityOnline = online;
+            status.Connectivity = detail;
+            return ObsStatus.Copy(status, obsController?.ReadObsState()) | connectivityChanged;
+        });
 
         if (changed == null)
         {

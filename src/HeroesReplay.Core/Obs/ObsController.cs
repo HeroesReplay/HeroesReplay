@@ -12,6 +12,7 @@ using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using OBSWebsocketDotNet;
@@ -43,7 +44,8 @@ public class ObsController : IObsController
         IReplayContext context,
         AppSettings settings,
         OBSWebsocket obs,
-        CancellationTokenProvider tokenProvider
+        CancellationTokenProvider tokenProvider,
+        SpectatorStatusStore statusStore
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -90,7 +92,9 @@ public class ObsController : IObsController
                 () => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
                 logger
             ),
-            microphones: new ObsBorrowedMicrophoneSession(this.obs)
+            microphones: new ObsBorrowedMicrophoneSession(this.obs),
+            // A scene switch and a session start reach status.json at once (#357).
+            stateChanged: () => ObsStatus.Write(statusStore, ReadObsState)
         );
     }
 

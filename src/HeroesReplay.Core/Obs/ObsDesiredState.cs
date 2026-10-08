@@ -293,13 +293,35 @@ public sealed class ObsBackoff
 
 public static class ObsStatus
 {
-    public static void Copy(SpectatorStatus status, ObsRuntimeSnapshot snapshot)
+    /// <summary>
+    /// Copies the OBS fields of <paramref name="snapshot"/> into <paramref name="status"/>.
+    /// True when one of them changed.
+    /// </summary>
+    public static bool Copy(SpectatorStatus status, ObsRuntimeSnapshot snapshot)
     {
         if (status == null || snapshot == null)
         {
-            return;
+            return false;
         }
 
+        string detail = snapshot.Stream?.Detail ?? snapshot.Launch?.Detail;
+        bool changed =
+            status.ObsProcessRunning != snapshot.ProcessRunning
+            || status.ObsWebsocketIdentified != snapshot.WebsocketIdentified
+            || !string.Equals(
+                status.ObsSceneDesired,
+                snapshot.SceneDesired,
+                StringComparison.Ordinal
+            )
+            || !string.Equals(status.ObsSceneActual, snapshot.SceneActual, StringComparison.Ordinal)
+            || status.ObsStreamDesired != snapshot.StreamDesired
+            || status.ObsStreamActive != snapshot.StreamActive
+            || !string.Equals(
+                status.ObsStreamBlockedBy,
+                snapshot.StreamBlockedBy,
+                StringComparison.Ordinal
+            )
+            || !string.Equals(status.ObsDetail, detail, StringComparison.Ordinal);
         status.ObsProcessRunning = snapshot.ProcessRunning;
         status.ObsWebsocketIdentified = snapshot.WebsocketIdentified;
         status.ObsSceneDesired = snapshot.SceneDesired;
@@ -307,8 +329,19 @@ public static class ObsStatus
         status.ObsStreamDesired = snapshot.StreamDesired;
         status.ObsStreamActive = snapshot.StreamActive;
         status.ObsStreamBlockedBy = snapshot.StreamBlockedBy;
-        status.ObsDetail = snapshot.Stream?.Detail ?? snapshot.Launch?.Detail;
+        status.ObsDetail = detail;
+        return changed;
     }
+
+    /// <summary>
+    /// Writes the OBS fields of status.json when one of them differs from what the store holds,
+    /// so a scene switch shows at once and not at the watchdog's next tick (#357). The store
+    /// writes the whole file through a temp file and a rename. Nothing changed, nothing written.
+    /// <paramref name="latest"/> is read under the store's lock, as the watchdog's tick does,
+    /// so neither writer puts an older snapshot over a newer one.
+    /// </summary>
+    public static bool Write(SpectatorStatusStore store, Func<ObsRuntimeSnapshot> latest) =>
+        store != null && latest != null && store.PatchIfChanged(status => Copy(status, latest()));
 
     /// <summary>
     /// Sets the code of a refused recording start and clears it on the next start. The detail

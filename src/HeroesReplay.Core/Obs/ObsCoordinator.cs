@@ -34,6 +34,7 @@ internal sealed class ObsCoordinator
     private readonly Func<DateTimeOffset> now;
     private readonly ObsCrashSentinel sentinel;
     private readonly ObsMicrophoneMute microphones;
+    private readonly Action stateChanged;
 
     // The watchdog reconciles the stream while the spectator switches scenes on its own thread.
     private readonly object stateGate = new();
@@ -67,7 +68,8 @@ internal sealed class ObsCoordinator
         TimeSpan? startupIdentifyTimeout = null,
         Func<DateTimeOffset> now = null,
         ObsCrashSentinel sentinel = null,
-        IObsMicrophoneSession microphones = null
+        IObsMicrophoneSession microphones = null,
+        Action stateChanged = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -91,6 +93,7 @@ internal sealed class ObsCoordinator
         this.sentinel = sentinel;
         // No microphone session means nothing is muted.
         this.microphones = microphones == null ? null : new ObsMicrophoneMute(logger, microphones);
+        this.stateChanged = stateChanged;
     }
 
     public ObsRuntimeSnapshot State => state;
@@ -100,8 +103,9 @@ internal sealed class ObsCoordinator
     /// <summary>
     /// Puts <paramref name="scene"/> on the program output. Once OBS accepts it, it is both the
     /// scene the spectator asked for and the scene on air in <see cref="State"/>, so status.json
-    /// follows each switch rather than the scene the session started on (#282). A refused scene
-    /// throws and leaves <see cref="State"/> as it was.
+    /// follows each switch rather than the scene the session started on (#282). The new state
+    /// goes to the status writer at once, not at the watchdog's next tick (#357). A refused
+    /// scene throws and leaves <see cref="State"/> as it was.
     /// </summary>
     public void SelectScene(string scene)
     {
@@ -112,6 +116,8 @@ internal sealed class ObsCoordinator
             // rest of OBS once so the scene has a snapshot to live in.
             Remember(null, scene);
         }
+
+        Publish();
     }
 
     /// <summary>False when there is no <see cref="State"/> yet to show the scene.</summary>
@@ -127,6 +133,28 @@ internal sealed class ObsCoordinator
 
             state = state with { SceneDesired = scene, SceneActual = scene };
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Tells the status writer that <see cref="State"/> changed. It reads the newest state and
+    /// writes status.json only when an OBS field changed. A write that fails is logged; the
+    /// scene stays on air.
+    /// </summary>
+    private void Publish()
+    {
+        if (stateChanged == null || state == null)
+        {
+            return;
+        }
+
+        try
+        {
+            stateChanged();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not write the OBS state to status.json.");
         }
     }
 
@@ -151,22 +179,33 @@ internal sealed class ObsCoordinator
     /// Starts a replay's session. Identifies OBS (throws when it does not), lets
     /// <paramref name="collectionReady"/> put the collection in place, then mutes every
     /// microphone (#314). The live collection swap comes first because a collection brings its
-    /// own global audio devices. Only the identify throws.
+    /// own global audio devices. Only the identify throws. Either way, OBS is read once and
+    /// the status writer gets it, so status.json shows OBS from the session's start (#357).
     /// </summary>
     public void BeginSession(Action collectionReady = null)
     {
-        EnsureIdentified();
-        microphones?.NewSession();
         try
         {
-            collectionReady?.Invoke();
-        }
-        catch (Exception e)
-        {
-            logger.LogWarning(e, "The OBS collection was not prepared for this replay.");
-        }
+            EnsureIdentified();
+            microphones?.NewSession();
+            try
+            {
+                collectionReady?.Invoke();
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "The OBS collection was not prepared for this replay.");
+            }
 
-        MuteMicrophones(ObsMicrophoneMute.AtSessionStart);
+            MuteMicrophones(ObsMicrophoneMute.AtSessionStart);
+        }
+        finally
+        {
+            // The process, stream, recording, and program scene, read again. The last stream
+            // result stays, so a stream block the watchdog found stays until its next reconcile.
+            Remember(state?.Stream, ReadScene());
+            Publish();
+        }
     }
 
     /// <summary>
