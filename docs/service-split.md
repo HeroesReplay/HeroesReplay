@@ -46,11 +46,11 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 ## Contracts already on disk
 
 - `%LOCALAPPDATA%\HeroesReplay\status.json` — phase, timer, map, replay id, core death, and when the session ends `completedReplayId`, `completedAt`, and `completedWinnerTeam`. Twitch predictions and `status` read this. They do not call into the spectator.
-- `Data\requests.json` (and the failed file) — Twitch enqueues; the downloader fulfills; the spectator only sees local `.StormReplay` files. Both processes lock the files with a named mutex.
+- `Data\requests.json` (and the failed file) — Twitch enqueues; the downloader fulfills; the spectator only sees local `.StormReplay` files. Both processes lock the files with a named mutex. A request leaves `requests.json` only once its replay is in `Data\Requests` (#351). A failed download keeps it queued with `Download.Attempts` and `NextAttemptAt` (backoff, no refund); one Heroes Profile answers 404 or 410, or a replay below the supported patch line, moves it to the failed file with its reason and writes a `Cancel` disposition.
 - `%LOCALAPPDATA%\HeroesReplay\panel-requests.json` — `!talents` and `!stats` from `twitch connect`. The spectator consumes the pending panel and sends the hotkey.
 - `Data\Standard` and `Data\Requests` — replay cache. `spectate heroesprofile` plays that cache (same shape as `spectate file`).
 - `Data\Requests\<replay>.request.json` — the redemption of a requested replay. The downloader writes it before the replay file appears. The spectator links the session to it by replay id, whichever folder or path loaded the file (#165).
-- `Data\redemption-dispositions.txt` — the spectator appends a line when a requested match is verified. `twitch connect` marks that redemption FULFILLED on Twitch and records it in `Data\redemption-fulfilled.txt`. A session that was not verified writes nothing: the redemption stays UNFULFILLED and the replay plays again (#169).
+- `Data\redemption-dispositions.txt` — the spectator appends a `Fulfill` line when a requested match is verified, and the downloader a `Cancel` line when a request's replay can never be downloaded (#351). `twitch connect` marks the redemption FULFILLED, or CANCELED through `IRedemptionCanceller` (the points go back), and records it in `Data\redemption-fulfilled.txt`. It never cancels a redemption that also has a `Fulfill` line, and sends nothing with requests off or `Twitch:DryRunMode`. A session that was not verified writes nothing: the redemption stays UNFULFILLED and the replay plays again (#169).
 - `Data\Contexts\<id>\` — recording, end screenshot, YouTube entry. The uploader already keys off these files.
 
 ## Order of work
