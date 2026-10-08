@@ -11,6 +11,30 @@
         />
     </Target>
 
+    <!--
+        HeroesClientSDK restores from .packages (nuget.config). Before NuGet collects the package
+        references, fetch the pinned release asset when it is missing, or stop with the command
+        to run. CollectPackageReferences runs for a solution restore and a project restore alike.
+    -->
+    <PropertyGroup>
+        <HeroesClientSDKPackage>$(MSBuildThisFileDirectory).packages\HeroesClientSDK.$(HeroesClientSDKVersion).nupkg</HeroesClientSDKPackage>
+    </PropertyGroup>
+
+    <Target
+        Name="RestoreHeroesClientSDKPackage"
+        BeforeTargets="CollectPackageReferences"
+        Condition="'$(HeroesClientSDKVersion)' != '' AND !Exists('$(HeroesClientSDKPackage)')"
+    >
+        <Exec
+            Command="pwsh -NoProfile -File &quot;$(MSBuildThisFileDirectory)tools\restore-sdk-package.ps1&quot;"
+            ContinueOnError="true"
+        />
+        <Error
+            Condition="!Exists('$(HeroesClientSDKPackage)')"
+            Text="HeroesClientSDK $(HeroesClientSDKVersion) is not in .packages. Run: pwsh -File tools/restore-sdk-package.ps1 (it downloads the GitHub Release asset and checks the SHA-256 in Directory.Packages.props)."
+        />
+    </Target>
+
     <Target
         Name="InstallGitHooks"
         BeforeTargets="Build"
