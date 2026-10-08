@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.ServiceHost;
 
@@ -82,17 +82,9 @@ public sealed record ServiceEnsureRole
 /// The <c>services ensure</c> result, in the <c>services status</c> envelope:
 /// <see cref="SchemaVersion"/>, <see cref="Ok"/>, <see cref="Code"/>.
 /// </summary>
-public sealed record ServiceEnsureReport
+public sealed record ServiceEnsureReport : ICliResult
 {
-    public const int CurrentSchemaVersion = 1;
-
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
+    public const int CurrentSchemaVersion = CliJson.SchemaVersion;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
     public bool Ok { get; init; }
@@ -120,10 +112,10 @@ public sealed record ServiceEnsureReport
     [JsonIgnore]
     public int ExitCode => Ok ? 0 : 1;
 
-    public string ToJson() => JsonSerializer.Serialize(this, Json);
+    public string ToJson() => CliJson.Serialize(this);
 
     public static ServiceEnsureReport FromJson(string json) =>
-        JsonSerializer.Deserialize<ServiceEnsureReport>(json, Json);
+        JsonSerializer.Deserialize<ServiceEnsureReport>(json, CliJson.Options);
 }
 
 /// <summary>

@@ -12,8 +12,9 @@ public static class ServiceLogRedaction
         @"(?i)\b(access_token|api_token|api_key|apikey|token|key|secret|password)=([^&\s""']+)",
         RegexOptions.Compiled
     );
+    // "the v1 Bearer key" names a kind of credential; it is not one.
     private static readonly Regex BearerToken = new(
-        @"(?i)\b(bearer|oauth:)\s*[A-Za-z0-9._\-]+",
+        @"(?i)\b(bearer|oauth:)\s*(?!(?:key|keys|token|tokens)\b)[A-Za-z0-9._\-]+",
         RegexOptions.Compiled
     );
 

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Services;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.ServiceHost;
 using Xunit;
 
@@ -1413,7 +1414,7 @@ public class ServiceSupervisorTests
                 spectator: null,
                 query: new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Out = output,
                     Time = new FixedClock(new DateTimeOffset(2026, 10, 2, 9, 0, 0, TimeSpan.Zero)),
                     LogDirectory = logs,
@@ -1597,7 +1598,7 @@ public class ServiceSupervisorTests
                 spectator: null,
                 query: new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Out = json,
                     ReadMachine = () => throw new InvalidOperationException("denied"),
                 }
@@ -1640,7 +1641,7 @@ public class ServiceSupervisorTests
                 spectator: null,
                 query: new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Out = json,
                     ReadObsRestorePending = () => Waiting,
                 }

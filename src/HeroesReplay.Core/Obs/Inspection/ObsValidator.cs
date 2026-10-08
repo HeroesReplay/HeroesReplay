@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.Shared;
 using Newtonsoft.Json.Linq;
 
 namespace HeroesReplay.Core.Obs.Inspection;
@@ -19,9 +20,9 @@ public sealed record ObsFinding(string Code, string Severity, string Subject, st
 /// The live OBS collection compared with the packaged <c>obs/Default.json</c> contract.
 /// <see cref="Ok"/> is true when OBS was read and no finding is an error.
 /// </summary>
-public sealed record ObsValidation
+public sealed record ObsValidation : ICliResult
 {
-    public int SchemaVersion => 1;
+    public int SchemaVersion => CliJson.SchemaVersion;
     public bool Ok { get; init; }
 
     /// <summary>The first error's code, or the reason OBS could not be read. Null when <see cref="Ok"/>.</summary>

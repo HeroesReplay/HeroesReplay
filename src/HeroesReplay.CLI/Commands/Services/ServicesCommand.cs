@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
@@ -370,14 +371,9 @@ public class ServicesCommand : Command
             Description =
                 "Comma-separated roles to ensure: spectate, twitch, download, youtube. Default: all four. For proofs, e.g. `--roles download,youtube`.",
         };
-        var output = new Option<string>("--output")
-        {
-            Description =
-                "text (default) or json: the services status envelope (schemaVersion, ok, code, message, remediation, roles[] with action running/start/started/start_failed/blocked).",
-            DefaultValueFactory = _ => "text",
-        };
-        output.AcceptOnlyFromAmong("text", "json");
-        output.Aliases.Add("-o");
+        Option<string> output = CliOutput.CreateOption(
+            "JSON: the services status envelope (schemaVersion, ok, code, message, remediation, roles[] with action running/start/started/start_failed/blocked)."
+        );
         command.Options.Add(supervise);
         command.Options.Add(roles);
         command.Options.Add(output);
@@ -394,9 +390,7 @@ public class ServicesCommand : Command
                     return Task.FromResult(1);
                 }
 
-                bool json =
-                    ServiceStatusQuery.ParseOutput(parseResult.GetValue(output))
-                    == ServiceStatusOutput.Json;
+                bool json = CliOutput.Format(parseResult, output) == CliOutputFormat.Json;
                 return Task.FromResult(
                     Ensure(selected, parseResult.GetValue(supervise), json, cancellationToken)
                 );
@@ -708,14 +702,9 @@ public class ServicesCommand : Command
             "status",
             "Classify each role as ready, degraded, stale, stopped, or failed from its heartbeat, with the cause and the fix, plus the spectator status file. Exits 1 when a role is failed, stale, or degraded."
         );
-        var output = new Option<string>("--output")
-        {
-            Description =
-                "text (default) or json. JSON is a stable envelope: schemaVersion, ok, code (service.ready, service.degraded, service.stale, service.stopped, service.failed), roles[].",
-            DefaultValueFactory = _ => "text",
-        };
-        output.AcceptOnlyFromAmong("text", "json");
-        output.Aliases.Add("-o");
+        Option<string> output = CliOutput.CreateOption(
+            "JSON is a stable envelope: schemaVersion, ok, code (service.ready, service.degraded, service.stale, service.stopped, service.failed), roles[]."
+        );
         command.Options.Add(output);
         command.SetAction(
             (parseResult, cancellationToken) =>
@@ -729,7 +718,7 @@ public class ServicesCommand : Command
                     ServiceProcessProbe.TryFromProcess,
                     new ServiceStatusQuery
                     {
-                        Output = ServiceStatusQuery.ParseOutput(parseResult.GetValue(output)),
+                        Output = CliOutput.Format(parseResult, output),
                         Settings = health,
                         StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
                         Environment = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV"),

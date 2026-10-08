@@ -2,11 +2,10 @@ using System;
 using System.CommandLine;
 using System.IO;
 using System.Linq;
-using System.Text.Encodings.Web;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Commands.Obs;
 
@@ -17,24 +16,16 @@ namespace HeroesReplay.CLI.Commands.Obs;
 /// </summary>
 public static class ObsLiveCommands
 {
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
-
     public static Command InspectCommand() =>
         Create(
             "inspect",
             "Read live OBS without changing it: versions, active profile and scene collection, canvas and FPS, output mode, recording format, encoders and bitrates, the record directory, scenes, inputs and global audio, stream and record status, stats, the stream service (never the key), and the stream arm. Exit 1 when OBS cannot be read.",
-            json =>
+            (json, output) =>
                 Inspect(
                     new ObsWebsocketReadSessionFactory(),
                     ServiceCollectionExtensions.LoadObsInspectionSettings,
                     json,
-                    Console.Out
+                    output
                 )
         );
 
@@ -42,12 +33,12 @@ public static class ObsLiveCommands
         Create(
             "validate",
             "Check the collection OBS has loaded against obs/Default.json and this install's settings without changing it: the install's OBS files against obs/bundle.manifest, the websocket requests HeroesReplay sends, profile and collection, scenes, sources and filters, where each driven item and the game capture are placed, asset paths, Mic/Aux, canvas 1920x1080 and FPS, the recording format (.mp4), the stream and recording bitrate floor, and the stream service when OBS:StreamingEnabled. Findings have stable codes. Exit 0 when there is no error finding, 1 otherwise or when OBS cannot be read.",
-            json =>
+            (json, output) =>
                 Validate(
                     new ObsWebsocketReadSessionFactory(),
                     ServiceCollectionExtensions.LoadObsInspectionSettings,
                     json,
-                    Console.Out
+                    output
                 )
         );
 
@@ -67,7 +58,7 @@ public static class ObsLiveCommands
             run.Value ?? ObsInspector.Unavailable(run.Settings, run.Code, run.Message);
         if (json)
         {
-            output.WriteLine(JsonSerializer.Serialize(inspection, Json));
+            output.WriteLine(CliJson.Serialize(inspection));
         }
         else
         {
@@ -93,7 +84,7 @@ public static class ObsLiveCommands
             run.Value ?? ObsValidator.Unavailable(run.Settings, run.Code, run.Message);
         if (json)
         {
-            output.WriteLine(JsonSerializer.Serialize(validation, Json));
+            output.WriteLine(CliJson.Serialize(validation));
         }
         else
         {
@@ -103,17 +94,12 @@ public static class ObsLiveCommands
         return validation.Ok ? 0 : 1;
     }
 
-    private static Command Create(string name, string description, Func<bool, int> run)
+    private static Command Create(string name, string description, Func<bool, TextWriter, int> run)
     {
         var command = new Command(name, description);
-        var format = new Option<string>("--output")
-        {
-            Description =
-                "text (default) or json. JSON is the same object the MCP tool returns: schemaVersion, ok, code, and the details.",
-            DefaultValueFactory = _ => "text",
-        };
-        format.AcceptOnlyFromAmong("text", "json");
-        format.Aliases.Add("-o");
+        Option<string> format = CliOutput.CreateOption(
+            "JSON is the same object the MCP tool returns: schemaVersion, ok, code, and the details."
+        );
         command.Options.Add(format);
         command.SetAction(
             (parseResult, cancellationToken) =>
@@ -121,11 +107,8 @@ public static class ObsLiveCommands
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(
                     run(
-                        string.Equals(
-                            parseResult.GetValue(format),
-                            "json",
-                            StringComparison.OrdinalIgnoreCase
-                        )
+                        CliOutput.Format(parseResult, format) == CliOutputFormat.Json,
+                        CliOutput.Out(parseResult)
                     )
                 );
             }

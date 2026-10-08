@@ -102,7 +102,7 @@ public sealed class SpectatorMcpTools
         )
     ]
     public Task<CheckCommand.CheckResult> CheckConfig(CancellationToken cancellationToken) =>
-        CheckCommand.CheckConfigAsync(cancellationToken);
+        CheckCommand.RunTargetAsync("config", cancellationToken);
 
     [
         McpServerTool(
@@ -117,7 +117,7 @@ public sealed class SpectatorMcpTools
         )
     ]
     public Task<CheckCommand.CheckResult> CheckHeroesProfile(CancellationToken cancellationToken) =>
-        CheckCommand.CheckHeroesProfileAsync(cancellationToken);
+        CheckCommand.RunTargetAsync("heroesprofile", cancellationToken);
 
     [
         McpServerTool(
@@ -130,7 +130,7 @@ public sealed class SpectatorMcpTools
         Description("Connect to obs-websocket 5 and return the OBS Studio version.")
     ]
     public Task<CheckCommand.CheckResult> CheckObs(CancellationToken cancellationToken) =>
-        CheckCommand.CheckObsAsync(cancellationToken);
+        CheckCommand.RunTargetAsync("obs", cancellationToken);
 
     [
         McpServerTool(
@@ -143,7 +143,7 @@ public sealed class SpectatorMcpTools
         Description("Call Twitch Helix GetUsers for the configured channel.")
     ]
     public Task<CheckCommand.CheckResult> CheckTwitch(CancellationToken cancellationToken) =>
-        CheckCommand.CheckTwitchAsync(cancellationToken);
+        CheckCommand.RunTargetAsync("twitch", cancellationToken);
 
     [
         McpServerTool(
@@ -156,7 +156,7 @@ public sealed class SpectatorMcpTools
         Description("Read the Battle.net window and report whether the button says Play or Update.")
     ]
     public Task<CheckCommand.CheckResult> CheckBattleNet(CancellationToken cancellationToken) =>
-        CheckCommand.CheckBattleNetAsync(cancellationToken);
+        CheckCommand.RunTargetAsync("battlenet", cancellationToken);
 
     private static GameProcessInfo ProbeGameProcess()
     {

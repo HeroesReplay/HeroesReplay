@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesClientSDK;
 using HeroesReplay.CLI.OpenTelemetry;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
@@ -27,134 +29,220 @@ namespace HeroesReplay.CLI.Commands.Check;
 
 public class CheckCommand : Command
 {
+    /// <summary>A passing result whose detail starts with this prints as <c>[WARN]</c>.</summary>
+    public const string WarningPrefix = "Warning: ";
+
+    /// <summary>
+    /// Every target, in the order <c>check --help</c> lists them. <see cref="CheckTarget.InAll"/>
+    /// marks the ones a bare <c>check</c> runs; <see cref="AllOrder"/> is their order.
+    /// </summary>
+    public static readonly IReadOnlyList<CheckTarget> Targets =
+    [
+        new(
+            "config",
+            "Bind settings and report which secrets are present.",
+            CheckConfigAsync,
+            InAll: true
+        ),
+        new(
+            "heroesprofile",
+            "Call Heroes Profile GET /replays with the v1 Bearer key.",
+            CheckHeroesProfileAsync,
+            InAll: true
+        ),
+        new(
+            "obs",
+            "Connect to obs-websocket 5, read the server version, verify scene files, and check the active profile and scene collection.",
+            CheckObsAsync,
+            InAll: true
+        ),
+        new(
+            "twitch",
+            "Call Helix GetUsers (and Predictions when enabled) for the configured channel.",
+            CheckTwitchAsync,
+            InAll: true
+        ),
+        new(
+            "client",
+            "Verify windowed 1080p and AhliObs in Heroes of the Storm Variables.txt.",
+            CheckClientAsync,
+            InAll: true
+        ),
+        new(
+            "connectivity",
+            "Probe 1.1.1.1, Twitch, and Heroes Profile without starting an OBS stream.",
+            CheckConnectivityAsync,
+            InAll: true
+        ),
+        new(
+            "timer",
+            "Read the HeroesOfTheStorm_x64 match clock from memory (read-only) and report whether it is running.",
+            CheckTimerAsync,
+            InAll: false
+        ),
+        new(
+            "twitch-extension",
+            "Report TwitchExtension:Enabled, or call uploader/whoami when the extension is on (issue 49).",
+            CheckTwitchExtensionAsync,
+            InAll: false
+        ),
+        new(
+            "battlenet",
+            "Read the Battle.net window and report the Play or Update button.",
+            CheckBattleNetAsync,
+            InAll: true
+        ),
+        new(
+            "ffmpeg",
+            "Resolve ffmpeg and ffprobe (Clips:FfmpegDirectory, the deps install folder, C:\\ffmpeg\\bin, PATH) and report each path and -version line. Fails when one is missing, does not run, or ffmpeg cannot encode libx264; a working build that is not the pinned version is a warning.",
+            CheckFfmpegAsync,
+            InAll: true
+        ),
+    ];
+
+    /// <summary>What a bare <c>check</c> runs, in this order.</summary>
+    public static readonly IReadOnlyList<string> AllOrder =
+    [
+        "config",
+        "heroesprofile",
+        "obs",
+        "twitch",
+        "client",
+        "ffmpeg",
+        "battlenet",
+        "connectivity",
+    ];
+
     public CheckCommand()
         : base(
             "check",
             "Validate configuration, connectivity to Heroes Profile, OBS, Twitch, and the internet, and the ffmpeg tools clips use."
         )
     {
-        Subcommands.Add(
-            Build("config", "Bind settings and report which secrets are present.", CheckConfigAsync)
+        Option<string> output = CliOutput.CreateOption(
+            "JSON: schemaVersion, ok, code, message, environment, details.checks[] (name, ok, status ok|warn|fail, code check.<target>.<reason>, detail). Applies to every target. Secret values never appear.",
+            recursive: true
         );
-        Subcommands.Add(
-            Build(
-                "heroesprofile",
-                "Call Heroes Profile GET /replays with the v1 Bearer key.",
-                CheckHeroesProfileAsync
-            )
-        );
-        Subcommands.Add(
-            Build(
-                "obs",
-                "Connect to obs-websocket 5, read the server version, verify scene files, and check the active profile and scene collection.",
-                CheckObsAsync
-            )
-        );
-        Subcommands.Add(
-            Build(
-                "twitch",
-                "Call Helix GetUsers (and Predictions when enabled) for the configured channel.",
-                CheckTwitchAsync
-            )
-        );
-        Subcommands.Add(
-            Build(
-                "client",
-                "Verify windowed 1080p and AhliObs in Heroes of the Storm Variables.txt.",
-                CheckClientAsync
-            )
-        );
-        Subcommands.Add(
-            Build(
-                "connectivity",
-                "Probe 1.1.1.1, Twitch, and Heroes Profile without starting an OBS stream.",
-                CheckConnectivityAsync
-            )
-        );
-        Subcommands.Add(
-            Build(
-                "timer",
-                "Read the HeroesOfTheStorm_x64 match clock from memory (read-only) and report whether it is running.",
-                CheckTimerAsync
-            )
-        );
-        Subcommands.Add(
-            Build(
-                "twitch-extension",
-                "Report TwitchExtension:Enabled, or call uploader/whoami when the extension is on (issue 49).",
-                CheckTwitchExtensionAsync
-            )
-        );
-        Subcommands.Add(
-            Build(
-                "battlenet",
-                "Read the Battle.net window and report the Play or Update button.",
-                CheckBattleNetAsync
-            )
-        );
-        Subcommands.Add(
-            Build(
-                "ffmpeg",
-                "Resolve ffmpeg and ffprobe (Clips:FfmpegDirectory, the deps install folder, C:\\ffmpeg\\bin, PATH) and report each path and -version line. Fails when one is missing, does not run, or ffmpeg cannot encode libx264; a working build that is not the pinned version is a warning.",
-                CheckFfmpegAsync
-            )
-        );
-
-        SetAction(
-            async (parseResult, cancellationToken) =>
-            {
-                return await RunAllAsync(cancellationToken);
-            }
-        );
-    }
-
-    private static Command Build(
-        string name,
-        string description,
-        Func<CancellationToken, Task<CheckResult>> action
-    )
-    {
-        var command = new Command(name, description);
-        command.SetAction(
-            async (parseResult, cancellationToken) =>
-            {
-                CheckResult result = await action(cancellationToken);
-                Write(result);
-                return result.Ok ? 0 : 1;
-            }
-        );
-        return command;
-    }
-
-    private static async Task<int> RunAllAsync(CancellationToken cancellationToken)
-    {
-        CheckResult[] results =
+        Options.Add(output);
+        foreach (CheckTarget target in Targets)
         {
-            await CheckConfigAsync(cancellationToken),
-            await CheckHeroesProfileAsync(cancellationToken),
-            await CheckObsAsync(cancellationToken),
-            await CheckTwitchAsync(cancellationToken),
-            await CheckClientAsync(cancellationToken),
-            await CheckFfmpegAsync(cancellationToken),
-            await CheckBattleNetAsync(cancellationToken),
-            await CheckConnectivityAsync(cancellationToken),
-        };
-
-        bool ok = true;
-        foreach (CheckResult result in results)
-        {
-            Write(result);
-            ok &= result.Ok;
+            var command = new Command(target.Name, target.Description);
+            command.SetAction(
+                (parseResult, cancellationToken) =>
+                    RunAsync([target], parseResult, output, cancellationToken)
+            );
+            Subcommands.Add(command);
         }
 
-        return ok ? 0 : 1;
+        SetAction(
+            (parseResult, cancellationToken) =>
+                RunAsync(
+                    AllOrder.Select(name => Targets.Single(target => target.Name == name)).ToList(),
+                    parseResult,
+                    output,
+                    cancellationToken
+                )
+        );
     }
 
-    public static async Task<CheckResult> CheckConfigAsync(CancellationToken cancellationToken)
+    private static async Task<int> RunAsync(
+        IReadOnlyList<CheckTarget> targets,
+        ParseResult parseResult,
+        Option<string> option,
+        CancellationToken cancellationToken
+    )
+    {
+        CliOutputFormat format = CliOutput.Format(parseResult, option);
+        TextWriter output = CliOutput.Out(parseResult);
+        var run = new CheckRun(cancellationToken, CliOutput.Progress(format, parseResult, output));
+        var results = new List<CheckResult>();
+        foreach (CheckTarget target in targets)
+        {
+            CheckResult result = await RunTargetAsync(target, run).ConfigureAwait(false);
+            results.Add(result);
+            if (format == CliOutputFormat.Text)
+            {
+                WriteText(result, output);
+            }
+        }
+
+        CliResult<CheckDetails> report = Report(results);
+        return format == CliOutputFormat.Json
+            ? CliOutput.WriteJson(report, output)
+            : CliOutput.ExitCode(report);
+    }
+
+    /// <summary>
+    /// One target as <c>check &lt;name&gt;</c> and the MCP <c>check_*</c> tools run it: the result
+    /// always has a code, and every secret this run resolved is masked in its detail.
+    /// </summary>
+    public static Task<CheckResult> RunTargetAsync(
+        string name,
+        CancellationToken cancellationToken
+    ) =>
+        RunTargetAsync(
+            Targets.Single(target => target.Name == name),
+            new CheckRun(cancellationToken, TextWriter.Null)
+        );
+
+    private static async Task<CheckResult> RunTargetAsync(CheckTarget target, CheckRun run)
+    {
+        CheckResult result;
+        try
+        {
+            result = await target.Run(run).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            result = Fail(target.Name, e);
+        }
+
+        return Finish(result, run.Redaction);
+    }
+
+    /// <summary>Fills a missing code (<c>.ok</c> or <c>.error</c>) and masks secrets in the detail.</summary>
+    public static CheckResult Finish(CheckResult result, CliRedaction redaction) =>
+        result with
+        {
+            Code = result.Code ?? CheckCodes.For(result.Name, result.Ok ? "ok" : "error"),
+            Detail = redaction?.Redact(result.Detail) ?? result.Detail,
+        };
+
+    /// <summary>
+    /// The <c>check --output json</c> envelope. <c>ok</c> when every check passed (a warning
+    /// passes). <c>code</c> is the first failure's code, else the first warning's, else the only
+    /// check's code, else <see cref="CheckCodes.AllOk"/>.
+    /// </summary>
+    public static CliResult<CheckDetails> Report(IReadOnlyList<CheckResult> results)
+    {
+        List<CheckEntry> checks = results.Select(CheckEntry.From).ToList();
+        List<CheckEntry> failed = checks.Where(check => check.Status == CheckEntry.Fail).ToList();
+        CheckEntry warned = checks.FirstOrDefault(check => check.Status == CheckEntry.Warn);
+        string code =
+            failed.FirstOrDefault()?.Code
+            ?? warned?.Code
+            ?? (checks.Count == 1 ? checks[0].Code : CheckCodes.AllOk);
+        string message =
+            failed.Count > 0
+                ? $"{failed.Count} of {checks.Count} check(s) failed: {string.Join(", ", failed.Select(check => check.Name))}."
+            : warned != null
+                ? $"{checks.Count} check(s) passed, {checks.Count(check => check.Status == CheckEntry.Warn)} with a warning."
+            : $"{checks.Count} check(s) passed.";
+        return new CliResult<CheckDetails>
+        {
+            Ok = failed.Count == 0,
+            Code = code,
+            Message = message,
+            Environment = CliJson.CurrentEnvironment(),
+            Details = new CheckDetails(checks),
+        };
+    }
+
+    public static Task<CheckResult> CheckConfigAsync(CheckRun run)
     {
         try
         {
-            using var provider = CreateProvider(cancellationToken);
+            using var provider = run.CreateProvider();
             AppSettings settings = provider.GetRequiredService<AppSettings>();
             var lines = new List<string>
             {
@@ -172,34 +260,41 @@ public class CheckCommand : Command
             };
 
             bool hasProfile = !string.IsNullOrWhiteSpace(settings.HeroesProfileApi?.ApiKey);
-            return new CheckResult(
-                "config",
-                hasProfile,
+            return Task.FromResult(
                 hasProfile
-                    ? string.Join(Environment.NewLine, lines)
-                    : "Heroes Profile API key is missing. Set HeroesProfileApi:ApiKey to an op:// reference or a token."
+                    ? new CheckResult(
+                        "config",
+                        true,
+                        string.Join(Environment.NewLine, lines),
+                        CheckCodes.ConfigOk
+                    )
+                    : new CheckResult(
+                        "config",
+                        false,
+                        "Heroes Profile API key is missing. Set HeroesProfileApi:ApiKey to an op:// reference or a token.",
+                        CheckCodes.ConfigHeroesProfileKeyMissing
+                    )
             );
         }
         catch (Exception e)
         {
-            return Fail("config", e);
+            return Task.FromResult(Fail("config", e));
         }
     }
 
-    public static async Task<CheckResult> CheckHeroesProfileAsync(
-        CancellationToken cancellationToken
-    )
+    public static async Task<CheckResult> CheckHeroesProfileAsync(CheckRun run)
     {
         try
         {
-            using var provider = CreateProvider(cancellationToken);
+            using var provider = run.CreateProvider();
             AppSettings settings = provider.GetRequiredService<AppSettings>();
             if (string.IsNullOrWhiteSpace(settings.HeroesProfileApi?.ApiKey))
             {
                 return new CheckResult(
                     "heroesprofile",
                     false,
-                    "API key is missing. Put `op://Heroes Replay/Heroes Profile API Key/password` in appsettings.secrets.json or set HEROES_REPLAY_HeroesProfileApi__ApiKey."
+                    "API key is missing. Put `op://Heroes Replay/Heroes Profile API Key/password` in appsettings.secrets.json or set HEROES_REPLAY_HeroesProfileApi__ApiKey.",
+                    CheckCodes.HeroesProfileKeyMissing
                 );
             }
 
@@ -210,13 +305,19 @@ public class CheckCommand : Command
             int maxId = await api.GetMaxReplayIdAsync();
             activity?.SetTag("heroesprofile.max_id", maxId);
             bool ok = maxId > 0 && maxId != settings.HeroesProfileApi.FallbackMaxReplayId;
-            return new CheckResult(
-                "heroesprofile",
-                ok,
-                ok
-                    ? $"GET /replays max_replay_id returned {maxId}."
-                    : $"GET /replays max_replay_id returned {maxId} (fallback {settings.HeroesProfileApi.FallbackMaxReplayId}). Check the v1 Bearer key."
-            );
+            return ok
+                ? new CheckResult(
+                    "heroesprofile",
+                    true,
+                    $"GET /replays max_replay_id returned {maxId}.",
+                    CheckCodes.HeroesProfileOk
+                )
+                : new CheckResult(
+                    "heroesprofile",
+                    false,
+                    $"GET /replays max_replay_id returned {maxId} (fallback {settings.HeroesProfileApi.FallbackMaxReplayId}). Check the v1 Bearer key.",
+                    CheckCodes.HeroesProfileRequestFailed
+                );
         }
         catch (Exception e)
         {
@@ -224,13 +325,13 @@ public class CheckCommand : Command
         }
     }
 
-    public static async Task<CheckResult> CheckObsAsync(CancellationToken cancellationToken)
+    public static Task<CheckResult> CheckObsAsync(CheckRun run)
     {
         string files = null;
         bool filesOk = false;
         try
         {
-            using var provider = CreateProvider(cancellationToken);
+            using var provider = run.CreateProvider();
             AppSettings settings = provider.GetRequiredService<AppSettings>();
             ObsCollectionInspection inspection = InspectObsFiles(settings);
             files = inspection.Message;
@@ -246,17 +347,17 @@ public class CheckCommand : Command
                     settings.OBS.WebSocketEndpoint,
                     settings.OBS.WebSocketPassword ?? string.Empty
                 );
-                if (
-                    !obs.IsIdentified
-                    && !identified.Wait(TimeSpan.FromSeconds(8), cancellationToken)
-                )
+                if (!obs.IsIdentified && !identified.Wait(TimeSpan.FromSeconds(8), run.Token))
                 {
-                    return new CheckResult(
-                        "obs",
-                        false,
-                        files
-                            + " "
-                            + $"No Identify from {settings.OBS.WebSocketEndpoint}. Enable Tools → WebSocket Server Settings (port 4455)."
+                    return Task.FromResult(
+                        new CheckResult(
+                            "obs",
+                            false,
+                            files
+                                + " "
+                                + $"No Identify from {settings.OBS.WebSocketEndpoint}. Enable Tools → WebSocket Server Settings (port 4455).",
+                            CheckCodes.ObsUnreachable
+                        )
                     );
                 }
 
@@ -264,18 +365,21 @@ public class CheckCommand : Command
                 string connected =
                     $"Connected. OBS {version.OBSStudioVersion}, websocket {version.PluginVersion}.";
                 ObsSelectionResult selection = ReadSelection(obs, settings.OBS);
-                return new CheckResult(
-                    "obs",
-                    filesOk && selection.Ok,
-                    files
-                        + " "
-                        + connected
-                        + " "
-                        + (
-                            selection.Ok
-                                ? selection.Detail
-                                : selection.Reason + ": " + selection.Detail
-                        )
+                return Task.FromResult(
+                    new CheckResult(
+                        "obs",
+                        filesOk && selection.Ok,
+                        files
+                            + " "
+                            + connected
+                            + " "
+                            + (
+                                selection.Ok
+                                    ? selection.Detail
+                                    : selection.Reason + ": " + selection.Detail
+                            ),
+                        ObsCode(selection, filesOk)
+                    )
                 );
             }
             finally
@@ -302,9 +406,21 @@ public class CheckCommand : Command
                 detail = files + " " + detail;
             }
 
-            return new CheckResult("obs", false, detail);
+            return Task.FromResult(new CheckResult("obs", false, detail, CheckCodes.ObsError));
         }
     }
+
+    /// <summary>A wrong profile or collection is the first fix; then the install's own files.</summary>
+    public static string ObsCode(ObsSelectionResult selection, bool filesOk) =>
+        selection?.Ok != true
+            ? selection?.Reason switch
+            {
+                ObsSelection.ProfileMismatch => CheckCodes.ObsProfileMismatch,
+                ObsSelection.CollectionMismatch => CheckCodes.ObsCollectionMismatch,
+                _ => CheckCodes.ObsSelectionUnreadable,
+            }
+        : filesOk ? CheckCodes.ObsOk
+        : CheckCodes.ObsFilesInvalid;
 
     private static ObsSelectionResult ReadSelection(OBSWebsocket obs, OBSSettings settings)
     {
@@ -333,11 +449,11 @@ public class CheckCommand : Command
         );
     }
 
-    public static async Task<CheckResult> CheckTwitchAsync(CancellationToken cancellationToken)
+    public static async Task<CheckResult> CheckTwitchAsync(CheckRun run)
     {
         try
         {
-            using var provider = CreateProvider(cancellationToken);
+            using var provider = run.CreateProvider();
             AppSettings settings = provider.GetRequiredService<AppSettings>();
             if (
                 string.IsNullOrWhiteSpace(settings.Twitch?.AccessToken)
@@ -347,7 +463,8 @@ public class CheckCommand : Command
                 return new CheckResult(
                     "twitch",
                     false,
-                    "Twitch AccessToken or ClientId is missing. Helix was not called."
+                    "Twitch AccessToken or ClientId is missing. Helix was not called.",
+                    CheckCodes.TwitchCredentialsMissing
                 );
             }
 
@@ -358,7 +475,12 @@ public class CheckCommand : Command
             var users = await api.Helix.Users.GetUsersAsync(logins: new List<string> { login });
             if (users?.Users == null || users.Users.Length == 0)
             {
-                return new CheckResult("twitch", false, $"Helix returned no user for `{login}`.");
+                return new CheckResult(
+                    "twitch",
+                    false,
+                    $"Helix returned no user for `{login}`.",
+                    CheckCodes.TwitchUserNotFound
+                );
             }
 
             string extra = string.Empty;
@@ -378,10 +500,7 @@ public class CheckCommand : Command
                 }
             }
 
-            string scopes = await ReadTwitchScopesAsync(
-                    settings.Twitch.AccessToken,
-                    cancellationToken
-                )
+            string scopes = await ReadTwitchScopesAsync(settings.Twitch.AccessToken, run.Token)
                 .ConfigureAwait(false);
             bool chatOk =
                 !settings.Twitch.EnableChatBot
@@ -406,7 +525,8 @@ public class CheckCommand : Command
             return new CheckResult(
                 "twitch",
                 chatOk && rewardsOk && predictionsOk,
-                $"Helix OK for {users.Users[0].DisplayName} ({users.Users[0].Id}).{extra}"
+                $"Helix OK for {users.Users[0].DisplayName} ({users.Users[0].Id}).{extra}",
+                TwitchCode(predictionsOk, chatOk, rewardsOk)
             );
         }
         catch (Exception e)
@@ -414,6 +534,12 @@ public class CheckCommand : Command
             return Fail("twitch", e);
         }
     }
+
+    public static string TwitchCode(bool predictionsOk, bool chatOk, bool rewardsOk) =>
+        !predictionsOk ? CheckCodes.TwitchPredictionsScopeMissing
+        : !chatOk ? CheckCodes.TwitchChatScopeMissing
+        : !rewardsOk ? CheckCodes.TwitchRedemptionsScopeMissing
+        : CheckCodes.TwitchOk;
 
     private static bool ScopeHas(string scopes, string name)
     {
@@ -437,19 +563,17 @@ public class CheckCommand : Command
         return read.Status is int status ? "validate-failed-" + status : "validate-failed";
     }
 
-    public static async Task<CheckResult> CheckConnectivityAsync(
-        CancellationToken cancellationToken
-    )
+    public static async Task<CheckResult> CheckConnectivityAsync(CheckRun run)
     {
         try
         {
-            using var provider = CreateProvider(cancellationToken);
+            using var provider = run.CreateProvider();
             IConnectivityWatchdog watchdog = provider.GetRequiredService<IConnectivityWatchdog>();
             AppSettings settings = provider.GetRequiredService<AppSettings>();
             using Activity activity = HeroesReplayTelemetry.StartSpan(
                 "heroesreplay.check.connectivity"
             );
-            ConnectivitySnapshot snapshot = await watchdog.ProbeAsync(cancellationToken);
+            ConnectivitySnapshot snapshot = await watchdog.ProbeAsync(run.Token);
             activity?.SetTag("connectivity.internet", snapshot.Internet);
             activity?.SetTag("connectivity.twitch", snapshot.Twitch);
             activity?.SetTag("connectivity.heroesprofile", snapshot.HeroesProfile);
@@ -460,7 +584,12 @@ public class CheckCommand : Command
                 settings.OBS?.StreamingEnabled == true
                     ? " OBS:StreamingEnabled is true (this check does not StartStream)."
                     : " OBS:StreamingEnabled is false (StartStream will not run).";
-            return new CheckResult("connectivity", ok, snapshot.Describe() + streamNote);
+            return new CheckResult(
+                "connectivity",
+                ok,
+                snapshot.Describe() + streamNote,
+                ok ? CheckCodes.ConnectivityOk : CheckCodes.ConnectivityOffline
+            );
         }
         catch (Exception e)
         {
@@ -468,7 +597,7 @@ public class CheckCommand : Command
         }
     }
 
-    public static async Task<CheckResult> CheckTimerAsync(CancellationToken cancellationToken)
+    public static async Task<CheckResult> CheckTimerAsync(CheckRun run)
     {
         try
         {
@@ -487,7 +616,12 @@ public class CheckCommand : Command
                 });
             if (process == null)
             {
-                return new CheckResult("timer", false, "HeroesOfTheStorm_x64 is not running.");
+                return new CheckResult(
+                    "timer",
+                    false,
+                    "HeroesOfTheStorm_x64 is not running.",
+                    CheckCodes.TimerGameNotRunning
+                );
             }
 
             // The spectator's own clock: read-only memory, no HUD crop and no OCR.
@@ -495,10 +629,10 @@ public class CheckCommand : Command
             TimeSpan? first = null;
             TimeSpan? last = null;
             StableClockSample sample = default;
-            for (int read = 1; read <= 5 && !cancellationToken.IsCancellationRequested; read++)
+            for (int read = 1; read <= 5 && !run.Token.IsCancellationRequested; read++)
             {
                 sample = clock.Read(process);
-                Console.WriteLine(
+                run.Progress.WriteLine(
                     $"sample {read}: reason={sample.Reason} seconds={sample.Seconds:0.00} ticks={sample.Ticks} scale={sample.Scale}"
                 );
                 if (sample.Ok)
@@ -508,14 +642,23 @@ public class CheckCommand : Command
                     last = time;
                 }
 
-                await Task.Delay(1000, cancellationToken);
+                await Task.Delay(1000, run.Token);
             }
 
             bool running = StableMatchClock.IsRunning(first, last);
-            string detail = running
-                ? $"pid={process.Id} match clock {last} is running."
-                : $"pid={process.Id} match clock is not running (last reason {sample.Reason}). The menu and loading screen read near-zero; a match must be playing.";
-            return new CheckResult("timer", running, detail);
+            return running
+                ? new CheckResult(
+                    "timer",
+                    true,
+                    $"pid={process.Id} match clock {last} is running.",
+                    CheckCodes.TimerOk
+                )
+                : new CheckResult(
+                    "timer",
+                    false,
+                    $"pid={process.Id} match clock is not running (last reason {sample.Reason}). The menu and loading screen read near-zero; a match must be playing.",
+                    CheckCodes.TimerClockNotRunning
+                );
         }
         catch (Exception e)
         {
@@ -523,13 +666,11 @@ public class CheckCommand : Command
         }
     }
 
-    public static async Task<CheckResult> CheckTwitchExtensionAsync(
-        CancellationToken cancellationToken
-    )
+    public static async Task<CheckResult> CheckTwitchExtensionAsync(CheckRun run)
     {
         try
         {
-            using var provider = CreateProvider(cancellationToken);
+            using var provider = run.CreateProvider();
             AppSettings settings = provider.GetRequiredService<AppSettings>();
             CheckResult disabled = TwitchExtensionDisabled(
                 settings.TwitchExtension?.Enabled == true
@@ -544,13 +685,14 @@ public class CheckCommand : Command
                 return new CheckResult(
                     "twitch-extension",
                     false,
-                    "Uploader key is missing. Put `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password` in TwitchExtension:ApiKey. This is not the v1 Bearer key."
+                    "Uploader key is missing. Put `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password` in TwitchExtension:ApiKey. This is not the v1 Bearer key.",
+                    CheckCodes.TwitchExtensionKeyMissing
                 );
             }
 
             ITwitchExtensionService extension =
                 provider.GetRequiredService<ITwitchExtensionService>();
-            return TwitchExtensionWhoAmI(await extension.WhoAmIAsync(cancellationToken));
+            return TwitchExtensionWhoAmI(await extension.WhoAmIAsync(run.Token));
         }
         catch (Exception e)
         {
@@ -565,7 +707,14 @@ public class CheckCommand : Command
             return new CheckResult(
                 "twitch-extension",
                 false,
-                who?.Message ?? "uploader/whoami failed."
+                who?.Message ?? "uploader/whoami failed.",
+                who?.StatusCode switch
+                {
+                    401 or 403 => CheckCodes.TwitchExtensionKeyRejected,
+                    429 => CheckCodes.TwitchExtensionRateLimited,
+                    null or 0 => CheckCodes.TwitchExtensionUnreachable,
+                    _ => CheckCodes.TwitchExtensionHttpError,
+                }
             );
         }
 
@@ -573,7 +722,8 @@ public class CheckCommand : Command
         return new CheckResult(
             "twitch-extension",
             true,
-            $"Connected to {channel}. entitlement.active={who.EntitlementActive}. player_linked={who.PlayerLinked}."
+            $"Connected to {channel}. entitlement.active={who.EntitlementActive}. player_linked={who.PlayerLinked}.",
+            CheckCodes.TwitchExtensionOk
         );
     }
 
@@ -584,14 +734,19 @@ public class CheckCommand : Command
             return null;
         }
 
-        return new CheckResult("twitch-extension", true, "Twitch extension is disabled.");
+        return new CheckResult(
+            "twitch-extension",
+            true,
+            "Twitch extension is disabled.",
+            CheckCodes.TwitchExtensionDisabled
+        );
     }
 
-    public static Task<CheckResult> CheckClientAsync(CancellationToken cancellationToken)
+    public static Task<CheckResult> CheckClientAsync(CheckRun run)
     {
         try
         {
-            using var provider = CreateProvider(cancellationToken);
+            using var provider = run.CreateProvider();
             StormClientConfigurator configurator =
                 provider.GetRequiredService<StormClientConfigurator>();
             ClientStatusResult status = configurator.GetStatus();
@@ -599,12 +754,22 @@ public class CheckCommand : Command
             if (status.MatchesPreset)
             {
                 return Task.FromResult(
-                    new CheckResult("client", true, $"Windowed 1080p + AhliObs match.{extra}")
+                    new CheckResult(
+                        "client",
+                        true,
+                        $"Windowed 1080p + AhliObs match.{extra}",
+                        CheckCodes.ClientOk
+                    )
                 );
             }
 
             return Task.FromResult(
-                new CheckResult("client", false, string.Join("; ", status.Mismatches) + extra)
+                new CheckResult(
+                    "client",
+                    false,
+                    string.Join("; ", status.Mismatches) + extra,
+                    CheckCodes.ClientPresetMismatch
+                )
             );
         }
         catch (Exception e)
@@ -613,7 +778,7 @@ public class CheckCommand : Command
         }
     }
 
-    public static async Task<CheckResult> CheckFfmpegAsync(CancellationToken cancellationToken)
+    public static async Task<CheckResult> CheckFfmpegAsync(CheckRun run)
     {
         try
         {
@@ -623,7 +788,7 @@ public class CheckCommand : Command
             var tools = new List<FfmpegToolStatus>();
             foreach (string tool in FfmpegLocator.Tools)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                run.Token.ThrowIfCancellationRequested();
                 tools.Add(
                     await FfmpegCheck.ProbeAsync(locator.Resolve(tool)).ConfigureAwait(false)
                 );
@@ -645,13 +810,18 @@ public class CheckCommand : Command
 
     /// <summary>A warning passes (exit 0) and prints as <c>[WARN]</c>.</summary>
     public static CheckResult ToCheckResult(FfmpegCheckReport report) =>
-        new("ffmpeg", report.Ok, report.Warning ? WarningPrefix + report.Detail : report.Detail);
+        new(
+            "ffmpeg",
+            report.Ok,
+            report.Warning ? WarningPrefix + report.Detail : report.Detail,
+            report.Reason == null ? CheckCodes.FfmpegOk : CheckCodes.For("ffmpeg", report.Reason)
+        );
 
-    public static async Task<CheckResult> CheckBattleNetAsync(CancellationToken cancellationToken)
+    public static async Task<CheckResult> CheckBattleNetAsync(CheckRun run)
     {
         try
         {
-            using var provider = CreateProvider(cancellationToken);
+            using var provider = run.CreateProvider();
             return await BattleNetLauncherCheck
                 .ReadAsync(provider.GetService<Windows.Media.Ocr.OcrEngine>())
                 .ConfigureAwait(false);
@@ -662,27 +832,13 @@ public class CheckCommand : Command
         }
     }
 
-    private static ServiceProvider CreateProvider(CancellationToken cancellationToken)
+    private static void WriteText(CheckResult result, TextWriter output)
     {
-        return new ServiceCollection()
-            .AddCheckServices(cancellationToken)
-            .BuildHeroesReplayProvider();
-    }
-
-    /// <summary>A passing result whose detail starts with this prints as <c>[WARN]</c>.</summary>
-    public const string WarningPrefix = "Warning: ";
-
-    private static void Write(CheckResult result)
-    {
-        string status =
-            !result.Ok ? "FAIL"
-            : result.Detail?.StartsWith(WarningPrefix, StringComparison.Ordinal) == true ? "WARN"
-            : "OK";
-        Console.WriteLine($"[{status}] {result.Name}: {result.Detail}");
+        output.WriteLine($"[{CheckEntry.Label(result)}] {result.Name}: {result.Detail}");
     }
 
     private static CheckResult Fail(string name, Exception exception) =>
-        new(name, false, exception.Message);
+        new(name, false, exception.Message, CheckCodes.For(name, "error"));
 
     private static string NullToMissing(string value) =>
         string.IsNullOrWhiteSpace(value) ? "missing" : value;
@@ -696,5 +852,85 @@ public class CheckCommand : Command
         return names.Count == 0 ? "none" : string.Join(", ", names);
     }
 
-    public sealed record CheckResult(string Name, bool Ok, string Detail);
+    /// <summary>
+    /// One target's result. <see cref="Code"/> is stable (<see cref="CheckCodes"/>); a detail that
+    /// starts with <see cref="WarningPrefix"/> on a passing result is a warning.
+    /// </summary>
+    public sealed record CheckResult(string Name, bool Ok, string Detail, string Code = null);
+}
+
+/// <summary>One <c>check</c> target: its subcommand name, help text, and the read it runs.</summary>
+public sealed record CheckTarget(
+    string Name,
+    string Description,
+    Func<CheckRun, Task<CheckCommand.CheckResult>> Run,
+    bool InAll
+);
+
+/// <summary>
+/// What one <c>check</c> invocation shares across its targets: the cancellation token, where
+/// <c>check timer</c> prints its samples (stderr in JSON mode), and the secrets the targets
+/// resolved, so <see cref="CliRedaction"/> can mask them in every detail.
+/// </summary>
+public sealed class CheckRun
+{
+    public CheckRun(CancellationToken token, TextWriter progress)
+    {
+        Token = token;
+        Progress = progress ?? TextWriter.Null;
+    }
+
+    public CancellationToken Token { get; }
+    public TextWriter Progress { get; }
+    public CliRedaction Redaction { get; } = new();
+
+    /// <summary>The check services with their settings bound; their secrets are remembered for masking.</summary>
+    public ServiceProvider CreateProvider()
+    {
+        ServiceProvider provider = new ServiceCollection()
+            .AddCheckServices(Token)
+            .BuildHeroesReplayProvider();
+        Redaction.Remember(provider.GetRequiredService<AppSettings>());
+        return provider;
+    }
+}
+
+/// <summary><c>check --output json</c> details: one entry per target that ran, in run order.</summary>
+public sealed record CheckDetails(IReadOnlyList<CheckEntry> Checks);
+
+/// <summary>
+/// One check in JSON. <see cref="Status"/> is <c>ok</c>, <c>warn</c> (passes), or <c>fail</c>;
+/// <see cref="Detail"/> has no <c>Warning:</c> prefix, because the status says it.
+/// </summary>
+public sealed record CheckEntry(string Name, bool Ok, string Status, string Code, string Detail)
+{
+    public const string Pass = "ok";
+    public const string Warn = "warn";
+    public const string Fail = "fail";
+
+    public static CheckEntry From(CheckCommand.CheckResult result)
+    {
+        bool warning =
+            result.Ok
+            && result.Detail?.StartsWith(CheckCommand.WarningPrefix, StringComparison.Ordinal)
+                == true;
+        return new CheckEntry(
+            result.Name,
+            result.Ok,
+            !result.Ok ? Fail
+                : warning ? Warn
+                : Pass,
+            result.Code,
+            warning ? result.Detail[CheckCommand.WarningPrefix.Length..] : result.Detail
+        );
+    }
+
+    /// <summary>The text-mode tag: <c>OK</c>, <c>WARN</c>, or <c>FAIL</c>.</summary>
+    public static string Label(CheckCommand.CheckResult result) =>
+        From(result).Status switch
+        {
+            Fail => "FAIL",
+            Warn => "WARN",
+            _ => "OK",
+        };
 }
