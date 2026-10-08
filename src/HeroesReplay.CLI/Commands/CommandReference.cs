@@ -415,19 +415,20 @@ public static class CommandReference
             "obs plan",
             "None. Reads files only (no websocket), so it is safe while OBS runs.",
             "Nothing. Compares the live collection with the install's `obs/Default.json` and the template it was last written from.",
-            "0 when nothing conflicts, 1 on a conflict or when the collection or the template cannot be read.",
-            CodesIn(typeof(ObsPlanCodes))
+            "0 when nothing conflicts, 1 on a conflict or when the settings, the collection, or the template cannot be read.",
+            [.. CodesIn(typeof(ObsPlanCodes)), ObsLiveRead.SettingsUnreadable]
         ),
         new(
             "obs backup",
             "None. Reads the live collection only, so it is safe while OBS runs.",
             "Copies the live collection into `%LOCALAPPDATA%\\HeroesReplay\\obs\\backups` (the newest 10 are kept), unless `--list`.",
-            "0 when backed up or listed, 1 when there is no collection or the copy failed.",
+            "0 when backed up or listed, 1 when the settings cannot be read, there is no collection, or the copy failed.",
             [
                 ObsBackupCodes.BackedUp,
                 ObsBackupCodes.Listed,
                 ObsBackupCodes.CollectionMissing,
                 ObsBackupCodes.Failed,
+                ObsLiveRead.SettingsUnreadable,
             ]
         ),
         new(
@@ -443,6 +444,7 @@ public static class CommandReference
                 ObsBackupCodes.BackupOther,
                 ObsBackupCodes.BackupInvalid,
                 ObsBackupCodes.Failed,
+                ObsLiveRead.SettingsUnreadable,
             ]
         ),
         new(

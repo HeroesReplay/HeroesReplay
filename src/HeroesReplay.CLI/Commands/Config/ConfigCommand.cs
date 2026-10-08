@@ -1,9 +1,8 @@
 using System;
 using System.CommandLine;
 using System.IO;
-using System.Text.Encodings.Web;
-using System.Text.Json;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.ServiceHost.Logs;
 using Microsoft.Extensions.Configuration;
@@ -23,13 +22,6 @@ public class ConfigCommand : Command
     public const string EnvironmentVariablesSource = "HEROES_REPLAY_ environment variables";
 
     private const int TextValueLimit = 160;
-
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
 
     public ConfigCommand()
         : base(
@@ -66,14 +58,9 @@ public class ConfigCommand : Command
             Description =
                 "Redaction is always on; this flag changes nothing and is accepted for the #130 spelling.",
         };
-        var format = new Option<string>("--output")
-        {
-            Description =
-                "text (default) or json: schemaVersion, ok, code, environment, layers, settings.",
-            DefaultValueFactory = _ => "text",
-        };
-        format.AcceptOnlyFromAmong("text", "json");
-        format.Aliases.Add("-o");
+        Option<string> format = CliOutput.CreateOption(
+            "JSON: schemaVersion, ok, code, message, environment, environmentSource, basePath, section, layers, redactedCount, settings."
+        );
         command.Options.Add(section);
         command.Options.Add(environment);
         command.Options.Add(install);
@@ -88,12 +75,8 @@ public class ConfigCommand : Command
                         parseResult.GetValue(install),
                         parseResult.GetValue(environment),
                         parseResult.GetValue(section),
-                        string.Equals(
-                            parseResult.GetValue(format),
-                            "json",
-                            StringComparison.OrdinalIgnoreCase
-                        ),
-                        Console.Out
+                        CliOutput.Format(parseResult, format) == CliOutputFormat.Json,
+                        CliOutput.Out(parseResult)
                     )
                 );
             }
@@ -123,14 +106,11 @@ public class ConfigCommand : Command
 
         if (json)
         {
-            output.WriteLine(JsonSerializer.Serialize(effective, Json));
-        }
-        else
-        {
-            WriteText(effective, output);
+            return CliOutput.WriteJson(effective, output);
         }
 
-        return effective.Ok ? 0 : 1;
+        WriteText(effective, output);
+        return CliOutput.ExitCode(effective);
     }
 
     /// <summary>The provider's layer, as <see cref="ServiceCollectionExtensions.BuildConfiguration"/> adds them.</summary>
