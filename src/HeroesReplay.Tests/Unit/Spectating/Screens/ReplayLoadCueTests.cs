@@ -122,7 +122,7 @@ public class ReplayLoadCueTests
     {
         // #249: memory said Match (menu seen True), the clock did not read, and the launch
         // waited for a menu. A match in memory is the replay, with or without a clock read.
-        var match = new LoadingScreenSample(ClientScreen.Match, MenuSeen: true, "match");
+        var match = new LoadingScreenSample(LoadingScreenKind.Match, MenuSeen: true, "match");
 
         Assert.True(ReplayLoadCue.PresentedInMemory(clockRunning: false, match));
     }
@@ -134,7 +134,7 @@ public class ReplayLoadCueTests
         Assert.True(
             ReplayLoadCue.PresentedInMemory(
                 clockRunning: true,
-                new LoadingScreenSample(ClientScreen.Menu, MenuSeen: true, "menu")
+                new LoadingScreenSample(LoadingScreenKind.Menu, MenuSeen: true, "menu")
             )
         );
     }
@@ -145,26 +145,26 @@ public class ReplayLoadCueTests
         Assert.False(
             ReplayLoadCue.PresentedInMemory(
                 clockRunning: false,
-                new LoadingScreenSample(ClientScreen.Menu, MenuSeen: true, "menu")
+                new LoadingScreenSample(LoadingScreenKind.Menu, MenuSeen: true, "menu")
             )
         );
         Assert.True(
             ReplayLoadCue.PresentedInMemory(
                 clockRunning: false,
-                new LoadingScreenSample(ClientScreen.Loading, MenuSeen: true, "loading")
+                new LoadingScreenSample(LoadingScreenKind.Loading, MenuSeen: true, "loading")
             )
         );
         Assert.Null(ReplayLoadCue.PresentedInMemory(clockRunning: false, screen: null));
         Assert.Null(
             ReplayLoadCue.PresentedInMemory(
                 clockRunning: false,
-                new LoadingScreenSample(ClientScreen.Loading, MenuSeen: false, "loading")
+                new LoadingScreenSample(LoadingScreenKind.Loading, MenuSeen: false, "loading")
             )
         );
         Assert.Null(
             ReplayLoadCue.PresentedInMemory(
                 clockRunning: false,
-                new LoadingScreenSample(ClientScreen.Unknown, MenuSeen: true, "no-state")
+                new LoadingScreenSample(LoadingScreenKind.Unknown, MenuSeen: true, "no-state")
             )
         );
     }
@@ -175,7 +175,7 @@ public class ReplayLoadCueTests
         Assert.Null(
             ReplayLoadCue.PresentedInMemory(
                 clockRunning: false,
-                new LoadingScreenSample(ClientScreen.Match, MenuSeen: false, "match")
+                new LoadingScreenSample(LoadingScreenKind.Match, MenuSeen: false, "match")
             )
         );
     }

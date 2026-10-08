@@ -625,10 +625,10 @@ public class CheckCommand : Command
             }
 
             // The spectator's own clock: read-only memory, no HUD crop and no OCR.
-            using var clock = new StableMatchClock();
+            using var clock = new MatchClock();
             TimeSpan? first = null;
             TimeSpan? last = null;
-            StableClockSample sample = default;
+            MatchClockSample sample = default;
             for (int read = 1; read <= 5 && !run.Token.IsCancellationRequested; read++)
             {
                 sample = clock.Read(process);
@@ -645,7 +645,7 @@ public class CheckCommand : Command
                 await Task.Delay(1000, run.Token);
             }
 
-            bool running = StableMatchClock.IsRunning(first, last);
+            bool running = MatchClock.IsRunning(first, last);
             return running
                 ? new CheckResult(
                     "timer",

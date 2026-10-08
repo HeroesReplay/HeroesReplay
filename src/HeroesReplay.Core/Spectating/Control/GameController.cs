@@ -42,9 +42,9 @@ public class GameController : IGameController
     private readonly StormClientConfigurator clientConfigurator;
 
     private readonly object controllerLock = new object();
-    private readonly StableMatchClock matchClock = new();
-    private readonly LoadingScreenMemory loadingScreen = new();
-    private readonly ClientScreenMemory clientScreens = new();
+    private readonly MatchClock matchClock = new();
+    private readonly LoadingScreen loadingScreen = new();
+    private readonly ClientScreen clientScreens = new();
     private readonly ScreenShadow screenShadow;
     private LoadingScreenSample lastScreen;
     private ClientScreenSample lastClientScreen;
@@ -1724,22 +1724,25 @@ public class GameController : IGameController
     /// The memory clock, only while it moves. The menu reads zero, and the last match's clock
     /// can sit frozen until the next one starts, so one read is not a running match. A fresh
     /// cell on a relaunched client is confirmed inside the same probe
-    /// (<see cref="StableMatchClock.ReadRunningAsync"/>).
+    /// (<see cref="MatchClock.ReadRunningAsync"/>).
     /// </summary>
     public Task<TimeSpan?> TryReadRunningMatchClockAsync() =>
-        StableMatchClock.ReadRunningAsync(
+        MatchClock.ReadRunningAsync(
             ReadMatchClockSample,
-            () => Task.Delay(StableMatchClock.RunningProbe)
+            () => Task.Delay(MatchClock.RunningProbe)
         );
 
     /// <summary>
-    /// Home is memory first (<see cref="HomeScreenCue"/>). OCR's words decide only when memory
-    /// cannot tell, and its text still vetoes a login form. Shadow mode sees the same memory read.
+    /// Home is memory first (<see cref="HomeScreenCue"/>): the client's own home screen
+    /// (<see cref="ClientScreen"/>) when it can tell, else a menu in <see cref="LoadingScreen"/>.
+    /// OCR's words decide only when memory cannot tell, and its text still vetoes a login form.
+    /// Shadow mode sees the same memory read.
     /// </summary>
     private bool SeesHome(WordScan scan)
     {
         LoadingScreenSample? screen = ReadScreenInMemory();
-        bool home = HomeScreenCue.Sees(screen?.OnMenu, scan.Found, scan.Text);
+        ClientScreenSample? client = ReadClientScreen();
+        bool home = HomeScreenCue.Sees(client?.OnHome, screen?.OnMenu, scan.Found, scan.Text);
         bool loginForm = ClientScreenText.IsLoginForm(scan.Text);
         ShadowScreen(ScreenState.Home, scan.Found && !loginForm, scan.Text);
         ShadowScreen(ScreenState.LoginForm, loginForm, scan.Text);
@@ -1748,7 +1751,7 @@ public class GameController : IGameController
 
     /// <summary>
     /// Shadow mode (#292): the memory verdict of the HeroesClientSDK menu screens
-    /// (<see cref="ClientScreenMemory"/>) next to an OCR verdict the caller already has. It
+    /// (<see cref="ClientScreen"/>) next to an OCR verdict the caller already has. It
     /// changes no decision and never throws into the caller.
     /// </summary>
     private void ShadowScreen(ScreenState state, bool ocr, string ocrText)
@@ -1889,18 +1892,18 @@ public class GameController : IGameController
         }
     }
 
-    private StableClockSample ReadMatchClockSample()
+    private MatchClockSample ReadMatchClockSample()
     {
         Process process = GetGameProcess();
         if (process == null)
         {
             lastClockReason = "no-process";
-            return new StableClockSample(false, lastClockReason, 0, 0, 0);
+            return new MatchClockSample(false, lastClockReason);
         }
 
         try
         {
-            StableClockSample sample = matchClock.Read(process);
+            MatchClockSample sample = matchClock.Read(process);
             lastClockReason = sample.Reason;
             return sample;
         }
@@ -1908,7 +1911,7 @@ public class GameController : IGameController
         {
             logger.LogDebug(e, "Could not read the match clock.");
             lastClockReason = "read-failed";
-            return new StableClockSample(false, lastClockReason, 0, 0, 0);
+            return new MatchClockSample(false, lastClockReason);
         }
     }
 
