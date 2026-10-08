@@ -128,6 +128,64 @@ public static class ObsCollectionPaths
     public static IReadOnlyList<string> SceneNames(string json) =>
         NamedSources(json, scenesOnly: true);
 
+    /// <summary>Scene name → the names of the items in it, bottom first, as OBS saves them.</summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> SceneItemNames(string json)
+    {
+        var scenes = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return scenes;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        if (
+            !document.RootElement.TryGetProperty("sources", out JsonElement sources)
+            || sources.ValueKind != JsonValueKind.Array
+        )
+        {
+            return scenes;
+        }
+
+        foreach (JsonElement source in sources.EnumerateArray())
+        {
+            if (
+                !source.TryGetProperty("id", out JsonElement id)
+                || id.ValueKind != JsonValueKind.String
+                || !string.Equals(id.GetString(), "scene", StringComparison.Ordinal)
+                || !source.TryGetProperty("name", out JsonElement name)
+                || name.ValueKind != JsonValueKind.String
+            )
+            {
+                continue;
+            }
+
+            var items = new List<string>();
+            if (
+                source.TryGetProperty("settings", out JsonElement settings)
+                && settings.ValueKind == JsonValueKind.Object
+                && settings.TryGetProperty("items", out JsonElement list)
+                && list.ValueKind == JsonValueKind.Array
+            )
+            {
+                foreach (JsonElement item in list.EnumerateArray())
+                {
+                    if (
+                        item.ValueKind == JsonValueKind.Object
+                        && item.TryGetProperty("name", out JsonElement itemName)
+                        && itemName.ValueKind == JsonValueKind.String
+                    )
+                    {
+                        items.Add(itemName.GetString());
+                    }
+                }
+            }
+
+            scenes.TryAdd(name.GetString(), items);
+        }
+
+        return scenes;
+    }
+
     public static IReadOnlyList<string> MissingScenes(string json, IEnumerable<string> required) =>
         MissingNames(SceneNames(json), required);
 

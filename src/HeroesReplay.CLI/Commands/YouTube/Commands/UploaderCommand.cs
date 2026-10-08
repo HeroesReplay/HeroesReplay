@@ -1,3 +1,4 @@
+using System;
 using System.CommandLine;
 using System.Diagnostics;
 using System.Threading;
@@ -8,6 +9,7 @@ using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.YouTube;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.CLI.Commands.YouTube.Commands;
 
@@ -35,11 +37,21 @@ public class UploaderCommand : Command
         using Activity ready = HeroesReplayTelemetry.StartSpan("heroesreplay.service.ready");
         using IServiceScope scope = provider.CreateScope();
         IYouTubeUploader uploader = scope.ServiceProvider.GetRequiredService<IYouTubeUploader>();
+        AppSettings settings = scope.ServiceProvider.GetRequiredService<AppSettings>();
+        // A token refresh before ready, then on an interval: no YouTube quota (#305).
+        var probes = new ServiceDependencyMonitor(
+            new YouTubeOAuthProbe(settings),
+            settings.ServiceHealth,
+            scope.ServiceProvider.GetRequiredService<ILogger<ServiceDependencyMonitor>>()
+        );
+        ServiceDependencyResult dependency = await probes.FirstAsync(stop.Token);
         using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
             "youtube",
-            scope.ServiceProvider.GetRequiredService<AppSettings>().ServiceHealth,
-            stop.Token
+            settings.ServiceHealth,
+            stop.Token,
+            dependency
         );
+        using IDisposable probing = probes.Watch(stop.Token);
         await uploader.ListenAsync();
     }
 }

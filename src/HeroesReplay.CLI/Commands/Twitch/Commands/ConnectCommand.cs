@@ -48,6 +48,14 @@ public class ConnectCommand : Command
             ILogger<ConnectCommand>
         >();
         AppSettings settings = scope.ServiceProvider.GetRequiredService<AppSettings>();
+        // Twitch's token validator while chat, redemptions, or predictions are on (#305). It
+        // runs beside the reward sync and the chat sign-in below.
+        var probes = new ServiceDependencyMonitor(
+            new TwitchTokenProbe(settings.Twitch),
+            settings.ServiceHealth,
+            scope.ServiceProvider.GetRequiredService<ILogger<ServiceDependencyMonitor>>()
+        );
+        Task<ServiceDependencyResult> firstProbe = probes.FirstAsync(stop.Token);
         if (!ShouldSyncRewards(settings.Twitch))
         {
             logger.LogInformation(
@@ -76,8 +84,10 @@ public class ConnectCommand : Command
         using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
             "twitch",
             settings.ServiceHealth,
-            stop.Token
+            stop.Token,
+            await firstProbe
         );
+        using IDisposable probing = probes.Watch(stop.Token);
         StatusPredictionWatcher predictions =
             scope.ServiceProvider.GetRequiredService<StatusPredictionWatcher>();
         RedemptionFulfiller redemptions =

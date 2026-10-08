@@ -173,7 +173,7 @@ public class UpdateCommand : Command
     {
         var command = new Command(
             "install-obs",
-            "Called by apply-release.ps1: replace the scene collection HeroesReplay manages with the release's (backed up to %LOCALAPPDATA%\\HeroesReplay\\obs\\backups, written atomically), keep a custom one, and install the profile template only when this machine has no profile. While OBS is running nothing is written; the collection is replaced the next time HeroesReplay finds OBS closed. Never copies service.json."
+            "Called by apply-release.ps1: check the release's obs folder against obs\\bundle.manifest (sizes and SHA-256) and refuse a mismatch with obs.bundle_invalid (exit 1, nothing written; a release with no manifest installs with a warning), then replace the scene collection HeroesReplay manages with the release's (backed up to %LOCALAPPDATA%\\HeroesReplay\\obs\\backups, written atomically), keep a custom one, and install the profile template only when this machine has no profile. While OBS is running nothing is written; the collection is replaced the next time HeroesReplay finds OBS closed. Never copies service.json."
         );
         Option<string> install = new("--install")
         {
@@ -233,6 +233,11 @@ public class UpdateCommand : Command
             }
 
             return 0;
+        }
+        catch (ObsBundleInvalidException e)
+        {
+            Console.Error.WriteLine(e.Message);
+            return 1;
         }
         catch (Exception e)
         {

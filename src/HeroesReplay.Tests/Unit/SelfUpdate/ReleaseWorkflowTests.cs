@@ -120,6 +120,21 @@ public class ReleaseWorkflowTests
         Assert.Contains("obs\\bundle.manifest", verify, StringComparison.Ordinal);
         Assert.Contains("'HeroesClientSDK.dll'", verify, StringComparison.Ordinal);
         Assert.Contains("'--help'", verify, StringComparison.Ordinal);
+
+        // #308: the published build writes the schema 2 manifest, and the check hashes every file.
+        Assert.Contains("obs bundle --install $out --write", package, StringComparison.Ordinal);
+        Assert.True(
+            package.IndexOf("obs bundle --install $out --write", StringComparison.Ordinal)
+                < package.IndexOf("Compress-Archive", StringComparison.Ordinal),
+            "package-release.ps1 writes the manifest after the zip is made."
+        );
+        Assert.Contains("Get-FileHash", verify, StringComparison.Ordinal);
+        Assert.Contains("collectionSha256", verify, StringComparison.Ordinal);
+        Assert.Contains(
+            "@('obs', 'bundle', '--install', $extract)",
+            verify,
+            StringComparison.Ordinal
+        );
         foreach (
             string secret in new[]
             {

@@ -16,7 +16,7 @@ public class ObsCommand : Command
     public ObsCommand()
         : base(
             "obs",
-            "OBS on this machine: the Twitch ingest arm, the report-scene pages, and read-only inspection and validation. Twitch ingest starts only when OBS:StreamingEnabled is true and this machine is armed."
+            "OBS on this machine: the Twitch ingest arm, the report-scene pages, read-only inspection and validation, and the check of the install's OBS files against their manifest. Twitch ingest starts only when OBS:StreamingEnabled is true and this machine is armed."
         )
     {
         Subcommands.Add(ArmCommand());
@@ -25,6 +25,7 @@ public class ObsCommand : Command
         Subcommands.Add(PagesCommand());
         Subcommands.Add(ObsLiveCommands.InspectCommand());
         Subcommands.Add(ObsLiveCommands.ValidateCommand());
+        Subcommands.Add(ObsBundleCommand.Create());
     }
 
     private static Command PagesCommand()

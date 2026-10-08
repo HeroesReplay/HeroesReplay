@@ -10,6 +10,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Telemetry;
+using HeroesReplay.HeroesProfile.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -34,14 +35,7 @@ public class DownloadCommand : Command
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
-        using ServiceProvider provider = new ServiceCollection()
-            .AddTwitchServices(stop.Token, "heroesreplay-download")
-            .AddSingleton<ReplayLoader>()
-            .AddSingleton<IReplayLoader>(sp => sp.GetRequiredService<ReplayLoader>())
-            .AddSingleton<ReplayHelper>()
-            .AddSingleton<IReplayHelper>(sp => sp.GetRequiredService<ReplayHelper>())
-            .AddSingleton<HeroesProfileProvider>()
-            .AddHeroStatsRefresh()
+        using ServiceProvider provider = AddServices(new ServiceCollection(), stop.Token)
             .BuildHeroesReplayProvider();
         using Activity ready = HeroesReplayTelemetry.StartSpan("heroesreplay.service.ready");
         using IServiceScope scope = provider.CreateScope();
@@ -50,11 +44,24 @@ public class DownloadCommand : Command
         ILogger<DownloadCommand> logger = scope.ServiceProvider.GetRequiredService<
             ILogger<DownloadCommand>
         >();
+        AppSettings settings = scope.ServiceProvider.GetRequiredService<AppSettings>();
+        // One Heroes Profile call before ready, then on an interval (#305).
+        var probes = new ServiceDependencyMonitor(
+            new HeroesProfileApiProbe(
+                scope.ServiceProvider.GetRequiredService<HeroesProfileClient>(),
+                settings.HeroesProfileApi
+            ),
+            settings.ServiceHealth,
+            scope.ServiceProvider.GetRequiredService<ILogger<ServiceDependencyMonitor>>()
+        );
+        ServiceDependencyResult dependency = await probes.FirstAsync(stop.Token);
         using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
             "download",
-            scope.ServiceProvider.GetRequiredService<AppSettings>().ServiceHealth,
-            stop.Token
+            settings.ServiceHealth,
+            stop.Token,
+            dependency
         );
+        using IDisposable probing = probes.Watch(stop.Token);
         Task heroStats = StartHeroStats(scope.ServiceProvider, stop.Token);
         int failures = 0;
         while (!stop.Token.IsCancellationRequested)
@@ -154,4 +161,18 @@ public class DownloadCommand : Command
             // The role is stopping.
         }
     }
+
+    /// <summary>The services this command resolves: the Twitch services and the downloader.</summary>
+    public static IServiceCollection AddServices(
+        IServiceCollection services,
+        CancellationToken cancellationToken
+    ) =>
+        services
+            .AddTwitchServices(cancellationToken, "heroesreplay-download")
+            .AddSingleton<ReplayLoader>()
+            .AddSingleton<IReplayLoader>(sp => sp.GetRequiredService<ReplayLoader>())
+            .AddSingleton<ReplayHelper>()
+            .AddSingleton<IReplayHelper>(sp => sp.GetRequiredService<ReplayHelper>())
+            .AddSingleton<HeroesProfileProvider>()
+            .AddHeroStatsRefresh();
 }
