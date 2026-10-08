@@ -317,8 +317,8 @@ public static class CommandReference
         new(
             "services stop",
             LiveAsk,
-            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.",
-            "0 when every role and the supervisor exited, the game closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked."
+            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Then closes each `HeroesSwitcher_x64` that has no Heroes child (`CloseMainWindow`, then a kill after 5 s) and leaves one whose Heroes child still runs; the `Heroes of the Storm:` line names each switcher (#359). Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.",
+            "0 when every role and the supervisor exited, the game and every `HeroesSwitcher_x64` without a Heroes child closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked."
         ),
         new(
             "services status",

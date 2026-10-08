@@ -1543,7 +1543,7 @@ public class GameController : IGameController
 
     private void CloseIdleSwitcher()
     {
-        Process[] switchers = Process.GetProcessesByName("HeroesSwitcher_x64");
+        Process[] switchers = Process.GetProcessesByName(NamedProcess.HeroesSwitcher);
         try
         {
             bool switcherRunning = false;
