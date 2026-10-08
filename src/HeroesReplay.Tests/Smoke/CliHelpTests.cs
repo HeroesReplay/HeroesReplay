@@ -129,6 +129,12 @@ public class CliHelpTests
                 "obs plan",
                 "obs plan -o json",
                 "obs plan --install C:\\staged --previous C:\\app --environment prod --output json",
+                "obs backup --help",
+                "obs backup",
+                "obs backup --list -o json",
+                "obs restore --help",
+                "obs restore scenes-HeroesReplay.json.20261008T140000000Z.bak",
+                "obs restore C:\\backups\\x.bak --output json",
             }
         )
         {
@@ -136,6 +142,11 @@ public class CliHelpTests
         }
 
         Assert.NotEmpty(root.Parse("obs plan --output yaml").Errors);
+        Assert.NotEmpty(root.Parse("obs restore").Errors);
+        Assert.Contains(
+            "Refused while OBS runs",
+            obs.Subcommands.Single(c => c.Name == "restore").Description
+        );
         Assert.Contains(
             "safe while OBS runs",
             obs.Subcommands.Single(c => c.Name == "plan").Description
