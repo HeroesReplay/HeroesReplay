@@ -233,11 +233,14 @@ public static class ObsCollectionBackups
         byte[] current = File.Exists(collection) ? TryRead(collection) : null;
         if (current != null && current.AsSpan().SequenceEqual(contents))
         {
+            string undone = UndoApply(managed, collection, source);
             return result with
             {
                 Ok = true,
                 Code = ObsBackupCodes.AlreadyRestored,
-                Message = $"{collection} already has the bytes of {source}. Nothing was written.",
+                Message =
+                    $"{collection} already has the bytes of {source}. Nothing was written."
+                    + (undone == null ? string.Empty : " " + undone),
             };
         }
 
@@ -257,6 +260,7 @@ public static class ObsCollectionBackups
 
         // A restore by hand is the latest write: a release rollback that waited for OBS is over.
         managed.ClearPendingRestore(collection);
+        string undoneApply = UndoApply(managed, collection, source);
         return result with
         {
             Ok = true,
@@ -270,8 +274,26 @@ public static class ObsCollectionBackups
                         ? string.Empty
                         : $" The collection it replaced was saved to {saved}."
                 )
-                + " managed-collections.json is unchanged: an update treats the restored file as it would the one it replaced.",
+                + " "
+                + (
+                    undoneApply
+                    ?? "managed-collections.json is unchanged: an update treats the restored file as it would the one it replaced."
+                ),
         };
+    }
+
+    /// <summary>The backup <c>obs apply</c> took puts its record back too (<see cref="ObsCollectionApply.Undo"/>).</summary>
+    private static string UndoApply(ObsManagedFiles managed, string collection, string backup)
+    {
+        try
+        {
+            return ObsCollectionApply.Undo(managed, collection, backup);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return "managed-collections.json could not be put back to its entry from before obs apply: "
+                + e.Message;
+        }
     }
 
     private static string Resolve(ObsManagedFiles managed, string backup)

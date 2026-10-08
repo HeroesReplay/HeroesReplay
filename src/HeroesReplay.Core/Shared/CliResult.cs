@@ -9,7 +9,7 @@ namespace HeroesReplay.Core.Shared;
 /// <see cref="Ok"/> (exit 0 exactly when true), and a stable <see cref="Code"/>. Every
 /// <see cref="CliResult{TDetails}"/> implements it, and so do the results that came before the
 /// envelope and keep their own fields after these three: <c>services status</c> and
-/// <c>ensure</c>, <c>obs inspect</c>, <c>validate</c>, <c>bundle</c>, <c>plan</c>,
+/// <c>ensure</c>, <c>obs inspect</c>, <c>validate</c>, <c>bundle</c>, <c>plan</c>, <c>apply</c>,
 /// <c>backup</c> and <c>restore</c>, and <c>config effective</c>.
 /// </summary>
 public interface ICliResult

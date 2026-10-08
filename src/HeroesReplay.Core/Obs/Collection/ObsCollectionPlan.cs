@@ -58,8 +58,8 @@ public sealed record ObsPlanUpdate
 {
     /// <summary>
     /// <c>none</c>, <c>create</c>, <c>replace</c> (the whole collection, with the template),
-    /// <c>update_paths</c>, <c>restore</c> (a release rollback that waits), or <c>keep</c>
-    /// (custom or unreadable).
+    /// <c>merge</c> (the template's changes, keeping the operator's additions), <c>update_paths</c>,
+    /// <c>restore</c> (a release rollback that waits), or <c>keep</c> (custom or unreadable).
     /// </summary>
     public string Action { get; init; }
 
@@ -101,7 +101,8 @@ public sealed record ObsCollectionPlanResult : ICliResult
 
     /// <summary>
     /// Where the base came from: <c>install</c> (the live collection was written from this
-    /// template), <c>previous</c> (from <c>--previous</c>), or <c>none</c>.
+    /// template), <c>previous</c> (from <c>--previous</c>), <c>stored</c> (the copy in
+    /// <c>%LOCALAPPDATA%\HeroesReplay\obs\templates</c>), or <c>none</c>.
     /// </summary>
     public string Base { get; init; }
 
@@ -227,15 +228,27 @@ public static class ObsCollectionPlan
         }
 
         string live = ReadText(collection);
-        (string baseTemplate, string baseName) = Base(request, record, template, templateHash);
+        ObsCollectionBase found = ObsCollectionMerge.FindBase(
+            record,
+            template,
+            templateHash,
+            ReadText(request.PreviousTemplatePath),
+            request.Managed
+        );
+        (string baseTemplate, string baseName) = (found.Text, found.Source);
         (string assetRoot, IReadOnlyList<string> movedFrom) = Assets(request);
         ObsCollectionDiffResult diff;
         try
         {
             diff = ObsCollectionDiff.Compare(
-                Normalize(baseTemplate, assetRoot, request.DataDirectory, movedFrom),
-                Normalize(template, assetRoot, request.DataDirectory, movedFrom),
-                Normalize(
+                ObsCollectionMerge.Normalize(
+                    baseTemplate,
+                    assetRoot,
+                    request.DataDirectory,
+                    movedFrom
+                ),
+                ObsCollectionMerge.Normalize(template, assetRoot, request.DataDirectory, movedFrom),
+                ObsCollectionMerge.Normalize(
                     live ?? throw new IOException("It could not be read."),
                     assetRoot,
                     request.DataDirectory,
@@ -277,41 +290,6 @@ public static class ObsCollectionPlan
     }
 
     /// <summary>
-    /// The template the live collection was last written from, when this install or the
-    /// previous one has it.
-    /// </summary>
-    private static (string Template, string Name) Base(
-        ObsCollectionPlanRequest request,
-        ObsManagedCollection record,
-        string template,
-        string templateHash
-    )
-    {
-        if (record == null)
-        {
-            return (null, "none");
-        }
-
-        if (string.Equals(record.TemplateSha256, templateHash, StringComparison.Ordinal))
-        {
-            return (template, "install");
-        }
-
-        if (
-            string.Equals(
-                record.TemplateSha256,
-                ObsCollectionPatcher.TemplateHash(request.PreviousTemplatePath),
-                StringComparison.Ordinal
-            )
-        )
-        {
-            return (ReadText(request.PreviousTemplatePath), "previous");
-        }
-
-        return (null, "none");
-    }
-
-    /// <summary>
     /// The update's own decision, made by <see cref="ObsCollectionPatcher.Apply"/> on copies of
     /// the live collection, its record, and a waiting rollback in a temp folder.
     /// </summary>
@@ -345,6 +323,12 @@ public static class ObsCollectionPlan
             if (record != null)
             {
                 managed.Save(copy, record);
+
+                // The stored base, so the update's merge decision is the real one.
+                managed.SaveTemplate(
+                    request.Managed.ReadTemplate(record.TemplateSha256),
+                    request.UtcNow
+                );
             }
 
             bool restoring =
@@ -366,6 +350,7 @@ public static class ObsCollectionPlan
                     Managed = managed,
                     Release = true,
                     PreviousTemplatePath = request.PreviousTemplatePath,
+                    Runtime = request.Runtime,
                     UtcNow = request.UtcNow,
                     // The copy the update would use, named but not made; the real store's
                     // copies are recognised as older asset folders.
@@ -375,6 +360,7 @@ public static class ObsCollectionPlan
             );
             string action =
                 applied.Drift ? "keep"
+                : applied.Merged ? "merge"
                 : !applied.Wrote && !applied.Deferred ? "none"
                 : restoring ? "restore"
                 : !existed ? "create"
@@ -430,6 +416,8 @@ public static class ObsCollectionPlan
         {
             "create" => "An update creates the collection from the template",
             "replace" => "An update replaces the whole collection with the template",
+            "merge" =>
+                "An update merges the template's changes into the collection and keeps the operator's additions",
             "update_paths" => "An update points the asset and data paths at this install",
             "restore" => "An update puts back the collection a release rollback waits to restore",
             "keep" => "An update keeps the collection as it is",
@@ -472,14 +460,6 @@ public static class ObsCollectionPlan
             ObsDiffKind.Conflict => "conflict",
             _ => "unattributed",
         };
-
-    private static string Normalize(
-        string json,
-        string assetRoot,
-        string dataDirectory,
-        IReadOnlyList<string> movedFrom
-    ) =>
-        json == null ? null : ObsCollectionPaths.Rewrite(json, assetRoot, dataDirectory, movedFrom);
 
     /// <summary>The asset root an update would use, and the folders its path update moves from.</summary>
     private static (string Root, IReadOnlyList<string> MovedFrom) Assets(

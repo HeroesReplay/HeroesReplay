@@ -907,7 +907,8 @@ public class ServicesCommand : Command
                 Process.GetProcessesByName("obs64").Length > 0,
                 ObsNames.SceneCollection(obs),
                 ObsManagedFiles.ForThisUser(),
-                obs?.StableAssets == true
+                obs?.StableAssets == true,
+                ObsRuntimeValues.From(obs)
             );
             if (result.Drift || result.Wrote || result.Deferred)
             {

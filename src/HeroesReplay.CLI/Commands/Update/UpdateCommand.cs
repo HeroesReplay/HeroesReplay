@@ -269,7 +269,7 @@ public class UpdateCommand : Command
     {
         var command = new Command(
             "install-obs",
-            "Called by apply-release.ps1: check the release's obs folder against obs\\bundle.manifest (sizes and SHA-256) and refuse a mismatch with obs.bundle_invalid (exit 1, nothing written; a release with no manifest installs with a warning), then replace the scene collection HeroesReplay manages with the release's (backed up to %LOCALAPPDATA%\\HeroesReplay\\obs\\backups, written atomically), keep a custom one, and install the profile template only when this machine has no profile. While OBS is running nothing is written; the collection is replaced the next time HeroesReplay finds OBS closed. Never copies service.json."
+            "Called by apply-release.ps1: check the release's obs folder against obs\\bundle.manifest (sizes and SHA-256) and refuse a mismatch with obs.bundle_invalid (exit 1, nothing written; a release with no manifest installs with a warning), then replace the scene collection HeroesReplay manages with the release's (backed up to %LOCALAPPDATA%\\HeroesReplay\\obs\\backups, written atomically), merge the release's template changes into a custom one where the operator only added scenes, sources, filters, or settings (keeping them), keep any other custom one (a conflict is listed), and install the profile template only when this machine has no profile. Every template it writes from is kept in %LOCALAPPDATA%\\HeroesReplay\\obs\\templates as the base of a later merge. While OBS is running nothing is written; the collection is replaced (or merged) the next time HeroesReplay finds OBS closed. Never copies service.json."
         );
         Option<string> install = new("--install")
         {
@@ -322,6 +322,7 @@ public class UpdateCommand : Command
                         CollectionName = ObsNames.SceneCollection(obs),
                         PreviousInstall = previous,
                         StableAssets = obs?.StableAssets == true,
+                        Runtime = ObsRuntimeValues.From(obs),
                     }
                 )
             )
