@@ -471,8 +471,8 @@ Show what an update would change in the live OBS scene collection, without chang
 - **Options:** `--install`, `--previous`, `--environment`, `--output` (`-o`)
 - **Before:** None. Reads files only (no websocket), so it is safe while OBS runs.
 - **Changes:** Nothing. Compares the live collection with the install's `obs/Default.json` and the template it was last written from.
-- **Exit:** 0 when nothing conflicts, 1 on a conflict or when the collection or the template cannot be read.
-- **Codes:** `obs.plan_in_sync`, `obs.plan_changes`, `obs.plan_conflict`, `obs.plan_base_unknown`, `obs.collection_custom`, `obs.collection_missing`, `obs.collection_unreadable`, `obs.template_missing`
+- **Exit:** 0 when nothing conflicts, 1 on a conflict or when the settings, the collection, or the template cannot be read.
+- **Codes:** `obs.plan_in_sync`, `obs.plan_changes`, `obs.plan_conflict`, `obs.plan_base_unknown`, `obs.collection_custom`, `obs.collection_missing`, `obs.collection_unreadable`, `obs.template_missing`, `obs.settings_unreadable`
 
 ## `obs backup`
 
@@ -481,8 +481,8 @@ Copy the live OBS scene collection (OBS:SceneCollectionName) into %LOCALAPPDATA%
 - **Options:** `--list`, `--output` (`-o`)
 - **Before:** None. Reads the live collection only, so it is safe while OBS runs.
 - **Changes:** Copies the live collection into `%LOCALAPPDATA%\HeroesReplay\obs\backups` (the newest 10 are kept), unless `--list`.
-- **Exit:** 0 when backed up or listed, 1 when there is no collection or the copy failed.
-- **Codes:** `obs.backed_up`, `obs.backups_listed`, `obs.collection_missing`, `obs.restore_failed`
+- **Exit:** 0 when backed up or listed, 1 when the settings cannot be read, there is no collection, or the copy failed.
+- **Codes:** `obs.backed_up`, `obs.backups_listed`, `obs.collection_missing`, `obs.restore_failed`, `obs.settings_unreadable`
 
 ## `obs restore`
 
@@ -492,7 +492,7 @@ Write a backup of the live OBS scene collection back over it, byte for byte, whi
 - **Before:** OBS closed (refused while it runs). A backup of this collection. On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
 - **Changes:** Backs up the current collection, then writes the backup over it atomically and clears a waiting release rollback. `managed-collections.json` is not changed.
 - **Exit:** 0 when restored or already the same, 1 when nothing was restored.
-- **Codes:** `obs.restored`, `obs.already_restored`, `obs.restore_obs_running`, `obs.backup_missing`, `obs.backup_other_file`, `obs.backup_invalid`, `obs.restore_failed`
+- **Codes:** `obs.restored`, `obs.already_restored`, `obs.restore_obs_running`, `obs.backup_missing`, `obs.backup_other_file`, `obs.backup_invalid`, `obs.restore_failed`, `obs.settings_unreadable`
 
 ## `update check`
 

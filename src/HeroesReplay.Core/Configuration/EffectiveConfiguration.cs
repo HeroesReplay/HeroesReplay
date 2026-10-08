@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using HeroesReplay.Core.ServiceHost.Logs;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Configuration;
 
 namespace HeroesReplay.Core.Configuration;
@@ -38,10 +39,13 @@ public sealed record EffectiveSetting(
     IReadOnlyList<string> Overrides
 );
 
-/// <summary>What <c>heroesreplay config effective</c> prints, as text or JSON.</summary>
-public sealed record EffectiveConfiguration
+/// <summary>
+/// What <c>heroesreplay config effective</c> prints, as text or JSON. The JSON is written by the
+/// shared <see cref="CliJson"/> serializer (#311) with the fields it had.
+/// </summary>
+public sealed record EffectiveConfiguration : ICliResult
 {
-    public int SchemaVersion => 1;
+    public int SchemaVersion => CliJson.SchemaVersion;
     public bool Ok { get; init; }
 
     /// <summary>Null when <see cref="Ok"/>; otherwise <c>config.base_missing</c>, <c>config.unreadable</c>, or <c>config.section_not_found</c>.</summary>

@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Text.Encodings.Web;
 using System.Text.Json;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Obs.Collection;
 
@@ -54,17 +54,13 @@ public static class ObsBackupCodes
     public const string Failed = "obs.restore_failed";
 }
 
-/// <summary>The <c>obs backup</c> and <c>obs restore</c> result envelope.</summary>
-public sealed record ObsBackupResult
+/// <summary>
+/// The <c>obs backup</c> and <c>obs restore</c> result envelope, written by the shared
+/// <see cref="CliJson"/> serializer (#311) with the fields it had.
+/// </summary>
+public sealed record ObsBackupResult : ICliResult
 {
-    public const int CurrentSchemaVersion = 1;
-
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
+    public const int CurrentSchemaVersion = CliJson.SchemaVersion;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
@@ -85,7 +81,7 @@ public sealed record ObsBackupResult
     /// <summary>The collection's backups, newest first.</summary>
     public IReadOnlyList<ObsBackupInfo> Backups { get; init; } = [];
 
-    public string ToJson() => JsonSerializer.Serialize(this, Json);
+    public string ToJson() => CliJson.Serialize(this);
 }
 
 /// <summary>

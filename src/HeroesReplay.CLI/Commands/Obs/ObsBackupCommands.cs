@@ -2,8 +2,10 @@ using System;
 using System.CommandLine;
 using System.IO;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Commands.Obs;
@@ -27,7 +29,8 @@ public static class ObsBackupCommands
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(
                     Run(
-                        parseResult.GetValue(format),
+                        parseResult,
+                        format,
                         collection =>
                             parseResult.GetValue(list)
                                 ? ObsCollectionBackups.List(
@@ -66,7 +69,8 @@ public static class ObsBackupCommands
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(
                     Run(
-                        parseResult.GetValue(format),
+                        parseResult,
+                        format,
                         collection =>
                             ObsCollectionBackups.Restore(
                                 ObsManagedFiles.ForThisUser(),
@@ -82,22 +86,19 @@ public static class ObsBackupCommands
         return command;
     }
 
-    private static Option<string> OutputOption()
-    {
-        var format = new Option<string>("--output")
-        {
-            Description =
-                "text (default) or json: schemaVersion, ok, code, message, collection, backup, saved, backups.",
-            DefaultValueFactory = _ => "text",
-        };
-        format.AcceptOnlyFromAmong("text", "json");
-        format.Aliases.Add("-o");
-        return format;
-    }
+    private static Option<string> OutputOption() =>
+        CliOutput.CreateOption(
+            "JSON: schemaVersion, ok, code, message, collection, backup, saved, backups."
+        );
 
-    private static int Run(string format, Func<string, ObsBackupResult> run)
+    private static int Run(
+        ParseResult parseResult,
+        Option<string> format,
+        Func<string, ObsBackupResult> run
+    )
     {
-        string collection;
+        string collection = null;
+        string unreadable = null;
         try
         {
             collection = ObsNames.CollectionFile(
@@ -107,21 +108,25 @@ public static class ObsBackupCommands
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"Settings could not be loaded. {e.Message}");
-            return 1;
+            unreadable = $"Settings could not be loaded. {e.Message}";
         }
 
-        ObsBackupResult result = run(collection);
-        if (string.Equals(format, "json", StringComparison.OrdinalIgnoreCase))
+        ObsBackupResult result =
+            unreadable == null
+                ? run(collection)
+                : new ObsBackupResult
+                {
+                    Ok = false,
+                    Code = ObsLiveRead.SettingsUnreadable,
+                    Message = unreadable,
+                };
+        if (CliOutput.Format(parseResult, format) == CliOutputFormat.Json)
         {
-            Console.WriteLine(result.ToJson());
-        }
-        else
-        {
-            WriteText(result, result.Ok ? Console.Out : Console.Error);
+            return CliOutput.WriteJson(result, CliOutput.Out(parseResult));
         }
 
-        return result.Ok ? 0 : 1;
+        WriteText(result, result.Ok ? CliOutput.Out(parseResult) : CliOutput.Error(parseResult));
+        return CliOutput.ExitCode(result);
     }
 
     private static void WriteText(ObsBackupResult result, TextWriter output)

@@ -10,8 +10,10 @@ using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
 using HeroesReplay.CLI.Commands.Deps;
 using HeroesReplay.CLI.Commands.Obs;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using Xunit;
 
@@ -61,6 +63,9 @@ public class AgentDocsTests
             DepsCommand.Installed,
             DepsCommand.AlreadyInstalled,
             DepsCommand.Failed,
+            .. CommandReference.CodesIn(typeof(ObsPlanCodes)),
+            .. CommandReference.CodesIn(typeof(ObsBackupCodes)),
+            .. CommandReference.CodesIn(typeof(ConfigurationProvenance)),
         ];
 
         List<string> missing = codes

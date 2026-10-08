@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Obs.Collection;
 
@@ -69,10 +68,11 @@ public sealed record ObsPlanUpdate
 /// <summary>
 /// The <c>obs plan</c> result envelope (#307). <see cref="Ok"/> is false only when the update
 /// cannot be planned (no template, an unreadable live collection) or a value has a conflict.
+/// It is written by the shared <see cref="CliJson"/> serializer (#311) with the fields it had.
 /// </summary>
-public sealed record ObsCollectionPlanResult
+public sealed record ObsCollectionPlanResult : ICliResult
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = CliJson.SchemaVersion;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
@@ -110,18 +110,10 @@ public sealed record ObsCollectionPlanResult
 
     public IReadOnlyList<ObsCollectionDifference> Differences { get; init; } = [];
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
-
-    public string ToJson() => JsonSerializer.Serialize(this, Json);
+    public string ToJson() => CliJson.Serialize(this);
 
     public static ObsCollectionPlanResult FromJson(string json) =>
-        JsonSerializer.Deserialize<ObsCollectionPlanResult>(json, Json);
+        JsonSerializer.Deserialize<ObsCollectionPlanResult>(json, CliJson.Options);
 }
 
 /// <summary>The stable <c>code</c> of an <c>obs plan</c>.</summary>
