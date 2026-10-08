@@ -186,6 +186,68 @@ public static class ObsCollectionPaths
         return scenes;
     }
 
+    /// <summary>
+    /// Scene name → item name → where the collection places that item (the first item of that
+    /// name in the scene).
+    /// </summary>
+    public static IReadOnlyDictionary<
+        string,
+        IReadOnlyDictionary<string, ObsPlacement>
+    > ScenePlacements(string json)
+    {
+        var scenes = new Dictionary<string, IReadOnlyDictionary<string, ObsPlacement>>(
+            StringComparer.Ordinal
+        );
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return scenes;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        if (
+            !document.RootElement.TryGetProperty("sources", out JsonElement sources)
+            || sources.ValueKind != JsonValueKind.Array
+        )
+        {
+            return scenes;
+        }
+
+        foreach (JsonElement source in sources.EnumerateArray())
+        {
+            if (
+                !source.TryGetProperty("id", out JsonElement id)
+                || id.ValueKind != JsonValueKind.String
+                || !string.Equals(id.GetString(), "scene", StringComparison.Ordinal)
+                || !source.TryGetProperty("name", out JsonElement name)
+                || name.ValueKind != JsonValueKind.String
+                || !source.TryGetProperty("settings", out JsonElement settings)
+                || settings.ValueKind != JsonValueKind.Object
+                || !settings.TryGetProperty("items", out JsonElement list)
+                || list.ValueKind != JsonValueKind.Array
+            )
+            {
+                continue;
+            }
+
+            var items = new Dictionary<string, ObsPlacement>(StringComparer.Ordinal);
+            foreach (JsonElement item in list.EnumerateArray())
+            {
+                if (
+                    item.ValueKind == JsonValueKind.Object
+                    && item.TryGetProperty("name", out JsonElement itemName)
+                    && itemName.ValueKind == JsonValueKind.String
+                )
+                {
+                    items.TryAdd(itemName.GetString(), ObsPlacement.FromCollection(item));
+                }
+            }
+
+            scenes.TryAdd(name.GetString(), items);
+        }
+
+        return scenes;
+    }
+
     public static IReadOnlyList<string> MissingScenes(string json, IEnumerable<string> required) =>
         MissingNames(SceneNames(json), required);
 
