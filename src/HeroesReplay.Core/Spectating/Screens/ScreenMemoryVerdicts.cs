@@ -100,6 +100,13 @@ public static class ScreenMemoryVerdicts
             text += $", launch result {code} {read.LaunchResult}";
         }
 
+        // The build tells which client a shadow observation came from during a handoff, when the
+        // newest exe and the replay's older build run side by side.
+        if (read.ClientVersion != null)
+        {
+            text += $", build {read.ClientVersion}";
+        }
+
         return text;
     }
 

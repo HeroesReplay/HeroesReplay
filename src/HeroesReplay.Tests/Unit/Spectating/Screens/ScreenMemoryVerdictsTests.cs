@@ -277,14 +277,14 @@ public class ScreenMemoryVerdictsTests
     }
 
     [Fact]
-    public void Describe_NamesTheScreenReasonShownScreensMenuSeenDialogsAndLaunchResult()
+    public void Describe_NamesTheScreenReasonShownScreensMenuSeenDialogsLaunchResultAndBuild()
     {
         Assert.Equal(
-            "Login, screens, shown [BackgroundHero,LoginUnified,HeroCutscene,NavigationHero,ForegroundHero], menu seen True",
+            "Login, screens, shown [BackgroundHero,LoginUnified,HeroCutscene,NavigationHero,ForegroundHero], menu seen True, build 2.57.0.98348",
             ScreenMemoryVerdicts.Describe(Login)
         );
         Assert.Equal(
-            "Dialog, screens, shown [BackgroundHero,LoginUnified], menu seen True, dialogs [CStandardDialog], launch result 23 GameLaunchUnsupportedNoData",
+            "Dialog, screens, shown [BackgroundHero,LoginUnified], menu seen True, dialogs [CStandardDialog], launch result 23 GameLaunchUnsupportedNoData, build 2.57.0.98348",
             ScreenMemoryVerdicts.Describe(VersionDialog)
         );
         Assert.Equal("not read", ScreenMemoryVerdicts.Describe(null));
