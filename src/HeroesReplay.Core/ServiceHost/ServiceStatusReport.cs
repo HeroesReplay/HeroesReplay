@@ -146,6 +146,15 @@ public sealed record ServiceRoleRestartStatus
 public sealed record ServiceSupervisorSummary
 {
     public bool Running { get; init; }
+
+    /// <summary>
+    /// How <see cref="Running"/> was decided: <c>mutex</c>, or <c>supervisor.json</c> when this
+    /// session cannot see the mutex (an SSH logon). Null when neither showed a supervisor.
+    /// </summary>
+    public string SeenVia { get; init; }
+
+    /// <summary>Why <c>supervisor.json</c> did or did not count. Null when the mutex decided.</summary>
+    public string Detail { get; init; }
     public int? Pid { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
     public DateTimeOffset? UpdatedAt { get; init; }

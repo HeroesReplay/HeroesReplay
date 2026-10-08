@@ -532,6 +532,8 @@ public class ServicesCommand : Command
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
+                ServiceHealthSettings health =
+                    ServiceCollectionExtensions.LoadServiceHealthSettings();
                 int code = ServiceSupervisor.Status(
                     ServiceLockStore.DefaultPath,
                     ProcessNameOrNull,
@@ -540,7 +542,7 @@ public class ServicesCommand : Command
                     new ServiceStatusQuery
                     {
                         Output = ServiceStatusQuery.ParseOutput(parseResult.GetValue(output)),
-                        Settings = ServiceCollectionExtensions.LoadServiceHealthSettings(),
+                        Settings = health,
                         StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
                         Environment = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV"),
                         LogDirectory = ServiceCollectionExtensions
@@ -548,7 +550,10 @@ public class ServicesCommand : Command
                             .ResolvedDirectory,
                         ReadSupervisor = () =>
                             ServiceSupervisorFile.TryLoad(ServiceSupervisorFile.DefaultPath),
-                        SupervisorRunning = () => ServiceSupervisorFile.IsRunning(),
+                        SupervisorLiveness = () =>
+                            ServiceSupervisorFile.Check(
+                                freshFor: ServiceSupervisorFile.FreshFor(health)
+                            ),
                         ReadMachine = ReadMachineHealth,
                     }
                 );

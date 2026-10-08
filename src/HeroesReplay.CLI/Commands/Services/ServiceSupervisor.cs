@@ -551,7 +551,7 @@ public static class ServiceSupervisor
         report = ServiceHealthClassifier.WithSupervisor(
             report,
             query.ReadSupervisor?.Invoke(),
-            query.SupervisorRunning?.Invoke() == true,
+            query.SupervisorLiveness?.Invoke(),
             now
         );
         report = report with { Machine = ReadMachine(query.ReadMachine) };
@@ -668,8 +668,11 @@ public static class ServiceSupervisor
 
         if (!supervisor.Running)
         {
+            string why = string.IsNullOrWhiteSpace(supervisor.Detail)
+                ? string.Empty
+                : "; " + supervisor.Detail;
             output.WriteLine(
-                $"  Supervisor: not running (pid {supervisor.Pid} left supervisor.json). Restart counts below are its last."
+                $"  Supervisor: not running (pid {supervisor.Pid} left supervisor.json{why}). Restart counts below are its last."
             );
             return;
         }
@@ -681,12 +684,29 @@ public static class ServiceSupervisor
             )
         );
         output.WriteLine(
-            $"  Supervisor: running, pid {supervisor.Pid}{(supervisor.Stopping ? ", stopping" : "")}, roles {string.Join(", ", supervisor.Supervised)}; backoff {backoff}; budget {supervisor.Budget} per {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(supervisor.BudgetWindowSeconds))}; stale roles killed after {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(supervisor.StaleRestartAfterSeconds))}."
+            $"  Supervisor: running ({SeenVia(supervisor)}){(supervisor.Stopping ? ", stopping" : "")}, roles {string.Join(", ", supervisor.Supervised)}; backoff {backoff}; budget {supervisor.Budget} per {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(supervisor.BudgetWindowSeconds))}; stale roles killed after {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(supervisor.StaleRestartAfterSeconds))}."
         );
         if (!string.IsNullOrWhiteSpace(supervisor.LogPath))
         {
             output.WriteLine($"{"", 20}Log: {supervisor.LogPath}");
         }
+    }
+
+    /// <summary>
+    /// "pid 14420, seen via supervisor.json; mutex not visible from this session" (#283), or
+    /// "pid 14420, seen via its mutex".
+    /// </summary>
+    private static string SeenVia(ServiceSupervisorSummary supervisor)
+    {
+        string pid = supervisor.Pid is int value ? $"pid {value}, " : string.Empty;
+        string via =
+            supervisor.SeenVia == ServiceSupervisorLiveness.ViaStateFile
+                ? "seen via supervisor.json"
+                : "seen via its mutex";
+        string detail = string.IsNullOrWhiteSpace(supervisor.Detail)
+            ? string.Empty
+            : "; " + supervisor.Detail;
+        return pid + via + detail;
     }
 
     private static MachineHealthReport ReadMachine(Func<MachineHealthReport> read)
