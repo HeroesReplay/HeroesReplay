@@ -1,6 +1,7 @@
 # Builds heroesreplay-win-x64.zip, the release production installs. release.yml uploads it;
 # ci.yml builds it on every pull request and push, and tools/verify-release.ps1 checks it.
-# Framework-dependent win-x64 publish. The CLI project publishes obs/bundle.manifest under obs\.
+# Framework-dependent win-x64 publish. The CLI project publishes the assets obs/bundle.manifest
+# lists under obs\, and the published build writes the zip's obs\bundle.manifest (schema 2).
 # The zip never carries appsettings.secrets.json or OBS service.json (the stream key).
 # version.txt is $Version exactly, with no newline: the update compares it to the release tag.
 param(
@@ -32,6 +33,17 @@ try {
     Set-Content -LiteralPath (Join-Path $out 'version.txt') -Value $Version -NoNewline
     # MCP discovery for an agent started in the install folder: the read-only `heroesreplay mcp`.
     Copy-Item -LiteralPath (Join-Path $root 'tools\release.mcp.json') -Destination (Join-Path $out '.mcp.json') -Force
+
+    # obs\bundle.manifest, schema 2 (#308): the published build turns the checkout's asset list into
+    # JSON with each packaged OBS file's size and SHA-256, Default.json's hash, and the scene and
+    # source contract (ObsContract from the packaged appsettings.json and prod overlay). The hashes
+    # are of the files in this folder, so they are the bytes the zip carries. Last, after every OBS
+    # file is in place. update install-obs refuses a bundle that no longer matches it.
+    Copy-Item -LiteralPath (Join-Path $root 'obs\bundle.manifest') -Destination (Join-Path $out 'obs\bundle.manifest') -Force
+    & (Join-Path $out 'heroesreplay.exe') obs bundle --install $out --write
+    if ($LASTEXITCODE -ne 0) {
+        throw "obs bundle --write exited $LASTEXITCODE"
+    }
 
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $zip) | Out-Null
     if (Test-Path -LiteralPath $zip) {

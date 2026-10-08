@@ -88,11 +88,20 @@ public class CliHelpTests
                 "obs inspect --output json",
                 "obs validate -o json",
                 "obs validate --output text",
+                "obs bundle --help",
+                "obs bundle",
+                "obs bundle --install C:\\app -o json",
+                // The exact arguments tools/package-release.ps1 and verify-release.ps1 pass.
+                "obs bundle --install C:\\publish --write",
+                "obs bundle --install C:\\extract",
             }
         )
         {
             Assert.Empty(root.Parse(help).Errors);
         }
+
+        Assert.Contains("SHA-256", obs.Subcommands.Single(c => c.Name == "bundle").Description);
+        Assert.NotEmpty(root.Parse("obs bundle --output yaml").Errors);
 
         Assert.Contains(
             "stable codes",
