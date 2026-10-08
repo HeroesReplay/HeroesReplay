@@ -490,6 +490,8 @@ public static class ServiceCollectionExtensions
                 }
             )
             .AddSingleton<GameTimerLog>()
+            // One attached client per Heroes process for the timer and the controller (#382).
+            .AddSingleton<SharedClientProcess>()
             .AddSingleton(
                 typeof(IGameController),
                 settings.Capture.Method switch
