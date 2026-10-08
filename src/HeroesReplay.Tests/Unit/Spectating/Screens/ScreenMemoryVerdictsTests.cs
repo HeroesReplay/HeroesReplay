@@ -1,4 +1,5 @@
 using HeroesClientSDK;
+using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Spectating.Screens;
 using Xunit;
 
@@ -240,6 +241,39 @@ public class ScreenMemoryVerdictsTests
         {
             Assert.Null(ScreenMemoryVerdicts.For(state, sample));
         }
+    }
+
+    [Fact]
+    public void For_GameDataStartup_ComesFromTheClientWindowsNotMemory()
+    {
+        var shown = new GameDataWindowSample(true, "progress dialog #32770 \"Progress\" 404x143");
+        var hidden = new GameDataWindowSample(false, "no progress dialog");
+
+        Assert.True(ScreenMemoryVerdicts.For(ScreenState.GameDataStartup, Home, shown));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.GameDataStartup, Boot, hidden));
+        Assert.Null(ScreenMemoryVerdicts.For(ScreenState.GameDataStartup, Home, null));
+        Assert.Equal(
+            "windows: progress dialog #32770 \"Progress\" 404x143",
+            ScreenMemoryVerdicts.Describe(ScreenState.GameDataStartup, Home, shown)
+        );
+        Assert.Equal(
+            "windows: not read",
+            ScreenMemoryVerdicts.Describe(ScreenState.GameDataStartup, Home, null)
+        );
+    }
+
+    [Fact]
+    public void For_OtherStates_IgnoreTheWindowRead()
+    {
+        var shown = new GameDataWindowSample(true, "progress dialog");
+
+        Assert.True(ScreenMemoryVerdicts.For(ScreenState.Home, Home, shown));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.GameDataDownload, Home, shown));
+        Assert.Null(ScreenMemoryVerdicts.For(ScreenState.RegionUnavailable, Home, shown));
+        Assert.Equal(
+            ScreenMemoryVerdicts.Describe(Login),
+            ScreenMemoryVerdicts.Describe(ScreenState.LoginForm, Login, shown)
+        );
     }
 
     [Fact]
