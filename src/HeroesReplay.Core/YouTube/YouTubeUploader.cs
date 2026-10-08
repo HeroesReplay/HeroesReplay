@@ -118,15 +118,21 @@ public class YouTubeUploader : IYouTubeUploader
         retries = new InterruptedUploadRetries(settings?.Location?.DataDirectory);
     }
 
-    private void JoinKnownReplaySessions()
+    /// <summary>
+    /// Joins each replay session once. The idle loop calls this every 2 seconds; a span per
+    /// known session on every call added about 200 spans a second to old replay traces, and the
+    /// Aspire dashboard grew to 8.5 GB on production (2026-10-08).
+    /// </summary>
+    internal void JoinKnownReplaySessions()
     {
         foreach (int id in ReplaySessionFile.ReadIds(ReplaySessionFilePath))
         {
-            using System.Diagnostics.Activity session = HoldReplaySession(id);
-            if (session == null)
+            if (joinedReplaySessions.Contains(id))
             {
                 continue;
             }
+
+            using System.Diagnostics.Activity session = HoldReplaySession(id);
         }
     }
 
