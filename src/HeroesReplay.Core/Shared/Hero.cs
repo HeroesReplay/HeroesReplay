@@ -29,6 +29,13 @@ public class Hero
     /// <summary>herodata ratings (1 to 10). Null when the catalog has none.</summary>
     public HeroRatings Ratings { get; }
 
+    /// <summary>
+    /// herodata heroUnits: the hero's other hero units besides <see cref="UnitId"/>, such as
+    /// HeroDVaPilot or HeroBaleog. A replay names the unit it spawned for each player, and these
+    /// map that unit back to the hero (#348).
+    /// </summary>
+    public IReadOnlyList<string> HeroUnitIds { get; }
+
     public Hero(
         string name,
         string unitId,
@@ -38,7 +45,8 @@ public class Hero
         string role = null,
         DateTime? releaseDate = null,
         bool? isMelee = null,
-        HeroRatings ratings = null
+        HeroRatings ratings = null,
+        IReadOnlyList<string> heroUnitIds = null
     )
     {
         Name = name;
@@ -50,6 +58,7 @@ public class Hero
         ReleaseDate = releaseDate;
         IsMelee = isMelee;
         Ratings = ratings;
+        HeroUnitIds = heroUnitIds ?? Array.Empty<string>();
     }
 }
 

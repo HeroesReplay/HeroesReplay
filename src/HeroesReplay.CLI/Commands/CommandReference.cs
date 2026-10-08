@@ -419,6 +419,14 @@ public static class CommandReference
             [.. CodesIn(typeof(ObsPlanCodes)), ObsLiveRead.SettingsUnreadable]
         ),
         new(
+            "obs apply",
+            "None without `--backup` (reads files only, also while OBS runs). With `--backup`: OBS closed (refused while it runs), no release rollback waiting. "
+                + LiveAsk,
+            "Nothing without `--backup`. With it: makes the stable asset copy when `OBS:StableAssets` is on, backs up the live collection, writes the three-way merge (the template's changes, the operator's overrides, additions and removals kept) atomically, saves the template in `%LOCALAPPDATA%\\HeroesReplay\\obs\\templates`, and records it in `managed-collections.json` and `apply-undo.json` (`obs restore` of that backup puts the record back).",
+            "0 when merged, in sync, or ready (without `--backup`); 1 when refused (conflict, unknown base, OBS running, a waiting rollback, an unverified merge, a worktree asset folder) or the settings, the collection, or the template cannot be read.",
+            [.. CodesIn(typeof(ObsApplyCodes)), ObsLiveRead.SettingsUnreadable]
+        ),
+        new(
             "obs backup",
             "None. Reads the live collection only, so it is safe while OBS runs.",
             "Copies the live collection into `%LOCALAPPDATA%\\HeroesReplay\\obs\\backups` (the newest 10 are kept), unless `--list`.",
@@ -434,7 +442,7 @@ public static class CommandReference
         new(
             "obs restore",
             "OBS closed (refused while it runs). A backup of this collection. " + LiveAsk,
-            "Backs up the current collection, then writes the backup over it atomically and clears a waiting release rollback. `managed-collections.json` is not changed.",
+            "Backs up the current collection, then writes the backup over it atomically and clears a waiting release rollback. `managed-collections.json` is not changed, unless the backup is the one `obs apply` took: then its record goes back to what it was before the apply.",
             "0 when restored or already the same, 1 when nothing was restored.",
             [
                 ObsBackupCodes.Restored,
@@ -488,7 +496,7 @@ public static class CommandReference
         new(
             "update install-obs",
             ReleaseOnly,
-            "Checks the release's `obs` folder against `obs\\bundle.manifest`, then replaces a managed collection (with a backup), keeps a custom one, and installs the profile template only when the machine has none. Writes nothing while OBS runs.",
+            "Checks the release's `obs` folder against `obs\\bundle.manifest`, then replaces a managed collection (with a backup), merges the template's changes into a custom one where the operator only added (keeping the additions), keeps any other custom one, saves the templates in `%LOCALAPPDATA%\\HeroesReplay\\obs\\templates`, and installs the profile template only when the machine has none. Writes nothing while OBS runs.",
             "0 when done or deferred, 1 on `obs.bundle_invalid` or a failed copy.",
             [ObsValidator.BundleInvalid]
         ),

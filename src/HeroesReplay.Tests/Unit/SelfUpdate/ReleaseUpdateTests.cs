@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.SelfUpdate;
 using Xunit;
+using Fixture = HeroesReplay.Tests.Unit.Obs.Collection.ObsCollectionFixture;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;
 
@@ -397,6 +399,224 @@ public class ReleaseUpdateTests
         }
     }
 
+    /// <summary>#307: an operator-added source no longer stops a release's template changes.</summary>
+    [Fact]
+    public void InstallObsFiles_OperatorAddedSource_GetsTheTemplateChangesMergedIn()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string previous = Path.Combine(root, "app.previous");
+        string appData = Path.Combine(root, "appdata");
+        try
+        {
+            WriteTemplateJson(previous, Fixture.Layout(css: "body{}"));
+            WriteTemplateJson(install, Fixture.Layout(css: "body{margin:0}"));
+            string live = LiveCollection(appData);
+            string before = Fixture.Layout(
+                css: "body{}",
+                extraSources: [Fixture.Source("my-webcam", "dshow_input", "{\"device\":\"cam\"}")]
+            );
+            File.WriteAllText(live, before);
+            RecordFrom(appData, live, previous);
+
+            IReadOnlyList<string> notes = InstallObs(
+                install,
+                appData,
+                obsIsRunning: false,
+                previousInstall: previous
+            );
+
+            string merged = File.ReadAllText(live);
+            Assert.Contains("body{margin:0}", merged, StringComparison.Ordinal);
+            Assert.Contains("my-webcam", merged, StringComparison.Ordinal);
+            Assert.Contains("\"cam\"", merged, StringComparison.Ordinal);
+            Assert.Contains(
+                notes,
+                note => note.Contains("Merged this install's OBS collection template changes (1)")
+            );
+            string backup = Assert.Single(
+                ObsFileTransaction.Backups(Managed(appData).BackupDirectory, live)
+            );
+            Assert.Equal(before, File.ReadAllText(backup));
+            ObsManagedCollection record = Managed(appData).Read(live);
+            Assert.Equal(TemplateHashOf(install), record.TemplateSha256);
+            Assert.True(record.Merged);
+            Assert.Contains("my-webcam", record.Sources);
+
+            // The next release replaces nothing: the merged collection is merged again.
+            Assert.NotNull(Managed(appData).ReadTemplate(TemplateHashOf(previous)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>#307: the operator and the template changed the same value: kept as before, the conflict named.</summary>
+    [Fact]
+    public void InstallObsFiles_OperatorChangedAValueTheTemplateAlsoChanges_IsKept_AndTheConflictListed()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string previous = Path.Combine(root, "app.previous");
+        string appData = Path.Combine(root, "appdata");
+        try
+        {
+            WriteTemplateJson(previous, Fixture.Layout(cropTop: "0"));
+            WriteTemplateJson(install, Fixture.Layout(cropTop: "20"));
+            string live = LiveCollection(appData);
+            string before = Fixture.Layout(
+                cropTop: "10",
+                extraSources: [Fixture.Source("my-webcam", "dshow_input")]
+            );
+            File.WriteAllText(live, before);
+            RecordFrom(appData, live, previous);
+
+            IReadOnlyList<string> notes = InstallObs(
+                install,
+                appData,
+                obsIsRunning: false,
+                previousInstall: previous
+            );
+
+            Assert.Equal(before, File.ReadAllText(live));
+            Assert.Empty(ObsFileTransaction.Backups(Managed(appData).BackupDirectory, live));
+            Assert.Contains(
+                notes,
+                note =>
+                    note.Contains("not overwritten", StringComparison.Ordinal)
+                    && note.Contains("both changed 1 value", StringComparison.Ordinal)
+                    && note.Contains(
+                        "filter 'Crop/Pad' on 'countdown' settings.top: template 20, live 10, was 0",
+                        StringComparison.Ordinal
+                    )
+            );
+            Assert.Equal(TemplateHashOf(previous), Managed(appData).Read(live).TemplateSha256);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>#307: a collection the operator did not touch is replaced with the template, as before.</summary>
+    [Fact]
+    public void InstallObsFiles_PristineCollection_IsReplacedAsBefore()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string previous = Path.Combine(root, "app.previous");
+        string appData = Path.Combine(root, "appdata");
+        try
+        {
+            string old = Fixture.Layout(css: "body{}");
+            WriteTemplateJson(previous, old);
+            WriteTemplateJson(
+                install,
+                Fixture.Layout(
+                    css: "body{margin:0}",
+                    extraSources: [Fixture.Source("queue-browser")]
+                )
+            );
+            string live = LiveCollection(appData);
+            File.WriteAllText(live, old);
+            RecordFrom(appData, live, previous);
+
+            IReadOnlyList<string> notes = InstallObs(
+                install,
+                appData,
+                obsIsRunning: false,
+                previousInstall: previous
+            );
+
+            Assert.Contains(
+                notes,
+                note =>
+                    note.Contains(
+                        "Replaced the live OBS collection with this install's template",
+                        StringComparison.Ordinal
+                    )
+            );
+            Assert.Equal(
+                File.ReadAllText(Path.Combine(install, "obs", "Default.json")),
+                File.ReadAllText(live)
+            );
+            ObsManagedCollection record = Managed(appData).Read(live);
+            Assert.Equal(TemplateHashOf(install), record.TemplateSha256);
+            Assert.False(record.Merged);
+            Assert.Equal(
+                old,
+                File.ReadAllText(
+                    Assert.Single(
+                        ObsFileTransaction.Backups(Managed(appData).BackupDirectory, live)
+                    )
+                )
+            );
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// #307: while OBS runs the merge waits (never a live swap), and services start merges it
+    /// later from the stored base, after app.previous has moved on.
+    /// </summary>
+    [Fact]
+    public void InstallObsFiles_WhileObsRuns_MergesOnceObsIsClosed_FromTheStoredBase()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-obs-" + Path.GetRandomFileName());
+        string install = Path.Combine(root, "app");
+        string previous = Path.Combine(root, "app.previous");
+        string appData = Path.Combine(root, "appdata");
+        try
+        {
+            WriteTemplateJson(previous, Fixture.Layout(css: "body{}"));
+            WriteTemplateJson(install, Fixture.Layout(css: "body{margin:0}"));
+            string live = LiveCollection(appData);
+            string before = Fixture.Layout(
+                css: "body{}",
+                extraSources: [Fixture.Source("my-webcam", "dshow_input")]
+            );
+            File.WriteAllText(live, before);
+            RecordFrom(appData, live, previous);
+
+            IReadOnlyList<string> notes = InstallObs(
+                install,
+                appData,
+                obsIsRunning: true,
+                previousInstall: previous
+            );
+
+            Assert.Equal(before, File.ReadAllText(live));
+            Assert.Contains(
+                notes,
+                note => note.Contains("the next time HeroesReplay finds OBS closed")
+            );
+            Directory.Delete(previous, recursive: true);
+
+            ObsCollectionApplyResult start = ObsCollectionPatcher.Apply(
+                new ObsCollectionUpdate
+                {
+                    TemplatePath = Path.Combine(install, "obs", "Default.json"),
+                    DestinationPath = live,
+                    Managed = Managed(appData),
+                }
+            );
+
+            Assert.True(start.Merged, start.Message);
+            Assert.True(start.Wrote);
+            Assert.Null(start.Replacement);
+            Assert.Contains("body{margin:0}", File.ReadAllText(live), StringComparison.Ordinal);
+            Assert.Contains("my-webcam", File.ReadAllText(live), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void InstallObsSettings_UseTheEnvironmentOverlay()
     {
@@ -458,6 +678,37 @@ public class ReleaseUpdateTests
         Directory.CreateDirectory(Path.Combine(install, "obs"));
         File.WriteAllText(Path.Combine(install, "obs", "Default.json"), Collection(sources));
     }
+
+    private static void WriteTemplateJson(string install, string json)
+    {
+        Directory.CreateDirectory(Path.Combine(install, "obs"));
+        File.WriteAllText(Path.Combine(install, "obs", "Default.json"), json);
+    }
+
+    private static string LiveCollection(string appData)
+    {
+        string live = Path.Combine(appData, "obs-studio", "basic", "scenes", "HeroesReplay.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(live)!);
+        return live;
+    }
+
+    private static string TemplateHashOf(string install) =>
+        ObsCollectionPatcher.TemplateHash(Path.Combine(install, "obs", "Default.json"));
+
+    /// <summary>The live collection was last written from that install's template, as a release records it.</summary>
+    private static void RecordFrom(string appData, string live, string install) =>
+        Managed(appData)
+            .Save(
+                live,
+                new ObsManagedCollection(
+                    TemplateHashOf(install),
+                    ObsCollectionPaths
+                        .SourceNames(File.ReadAllText(Path.Combine(install, "obs", "Default.json")))
+                        .Order(StringComparer.Ordinal)
+                        .ToList(),
+                    DateTime.UtcNow.AddDays(-1)
+                )
+            );
 
     private static string Collection(params string[] sources) =>
         "{\"name\":\"HeroesReplay\",\"sources\":["

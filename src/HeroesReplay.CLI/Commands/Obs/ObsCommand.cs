@@ -18,7 +18,7 @@ public class ObsCommand : Command
     public ObsCommand()
         : base(
             "obs",
-            "OBS on this machine: the Twitch ingest arm, the report-scene pages, read-only inspection and validation, the check of the install's OBS files against their manifest, and the plan of what an update would change in the scene collection. Twitch ingest starts only when OBS:StreamingEnabled is true and this machine is armed."
+            "OBS on this machine: the Twitch ingest arm, the report-scene pages, read-only inspection and validation, the check of the install's OBS files against their manifest, the plan of what an update would change in the scene collection, a merge of template changes that keeps the operator's work, and the collection's backups. Twitch ingest starts only when OBS:StreamingEnabled is true and this machine is armed."
         )
     {
         Subcommands.Add(ArmCommand());
@@ -29,6 +29,7 @@ public class ObsCommand : Command
         Subcommands.Add(ObsLiveCommands.ValidateCommand());
         Subcommands.Add(ObsBundleCommand.Create());
         Subcommands.Add(ObsPlanCommand.Create());
+        Subcommands.Add(ObsApplyCommand.Create());
         Subcommands.Add(ObsBackupCommands.BackupCommand());
         Subcommands.Add(ObsBackupCommands.RestoreCommand());
     }

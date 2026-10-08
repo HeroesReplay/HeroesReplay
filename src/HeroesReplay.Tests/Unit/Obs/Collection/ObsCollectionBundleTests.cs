@@ -691,7 +691,53 @@ public class ObsCollectionBundleTests
             );
 
     [Fact]
-    public void Apply_OperatorAddedAScene_KeepsTheCollectionEvenWhenTheTemplateChanges()
+    public void Apply_OperatorAddedAScene_GetsTheTemplateChangesMergedIn_FromTheStoredBase()
+    {
+        string root = TempRoot();
+        try
+        {
+            string template = WriteTemplate(root, "Ranks/bronze.png");
+            string destination = Path.Combine(root, "live", "HeroesReplay.json");
+            Apply(root, template, destination, @"C:\heroesreplay\Data", false);
+            string custom = File.ReadAllText(destination)
+                .Replace(
+                    "\"sources\": [",
+                    "\"sources\": [ { \"name\": \"intermission\", \"id\": \"scene\", \"settings\": {} },"
+                );
+            File.WriteAllText(destination, custom);
+
+            // The template changes in place: the old one is only in obs\templates now (#307).
+            File.WriteAllText(
+                template,
+                File.ReadAllText(template).Replace("\"file\"", "\"unload\": true, \"file\"")
+            );
+
+            ObsCollectionApplyResult result = Apply(
+                root,
+                template,
+                destination,
+                @"C:\heroesreplay\Data",
+                obsIsRunning: false,
+                release: true
+            );
+
+            Assert.False(result.Drift, result.Message);
+            Assert.True(result.Merged);
+            Assert.True(result.Wrote);
+            string merged = File.ReadAllText(destination);
+            Assert.Contains("intermission", merged, StringComparison.Ordinal);
+            Assert.Contains("\"unload\": true", merged, StringComparison.Ordinal);
+            Assert.Equal(custom, File.ReadAllText(result.Backup));
+            Assert.True(Managed(root).Read(destination).Merged);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Apply_OperatorAddedAScene_IsKept_WhenTheBaseIsNotStored()
     {
         string root = TempRoot();
         try
@@ -709,6 +755,7 @@ public class ObsCollectionBundleTests
                 template,
                 File.ReadAllText(template).Replace("\"file\"", "\"unload\": true, \"file\"")
             );
+            Directory.Delete(Managed(root).TemplateDirectory, recursive: true);
 
             ObsCollectionApplyResult result = Apply(
                 root,
@@ -722,6 +769,7 @@ public class ObsCollectionBundleTests
             Assert.True(result.Drift);
             Assert.False(result.Wrote);
             Assert.Contains("intermission", result.Message, StringComparison.Ordinal);
+            Assert.Contains("is not stored", result.Message, StringComparison.Ordinal);
             Assert.Equal(custom, File.ReadAllText(destination));
         }
         finally

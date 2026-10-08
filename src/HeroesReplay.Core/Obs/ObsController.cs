@@ -136,7 +136,8 @@ public class ObsController : IObsController
                 obsRunning,
                 ObsNames.SceneCollection(settings.OBS),
                 ObsManagedFiles.ForThisUser(),
-                settings.OBS?.StableAssets == true
+                settings.OBS?.StableAssets == true,
+                ObsRuntimeValues.From(settings.OBS)
             );
             if (result.Drift)
             {

@@ -1,0 +1,788 @@
+{
+  "description": "Issue #348. Hero fields captured from four replays on build 2.57.0.98348 (player names left out): the two ARAM replays from the issue and one Storm League and one Quick Match replay. units are the player's hero units in birth order; spawned is the PlayerSpawned stat event. catalog is the heroes-data2 98304 subset these players name, by unit or by lobby id.",
+  "catalog": [
+    {
+      "name": "Abathur",
+      "unitId": "HeroAbathur",
+      "hyperlinkId": "Abathur",
+      "attributeId": "Abat",
+      "heroUnitIds": [
+        "AbathurSymbiote"
+      ]
+    },
+    {
+      "name": "Cassia",
+      "unitId": "HeroAmazon",
+      "hyperlinkId": "Cassia",
+      "attributeId": "Amaz",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Artanis",
+      "unitId": "HeroArtanis",
+      "hyperlinkId": "Artanis",
+      "attributeId": "Arts",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Auriel",
+      "unitId": "HeroAuriel",
+      "hyperlinkId": "Auriel",
+      "attributeId": "Auri",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Azmodan",
+      "unitId": "HeroAzmodan",
+      "hyperlinkId": "Azmodan",
+      "attributeId": "Azmo",
+      "heroUnitIds": []
+    },
+    {
+      "name": "The Butcher",
+      "unitId": "HeroButcher",
+      "hyperlinkId": "TheButcher",
+      "attributeId": "Butc",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Valla",
+      "unitId": "HeroDemonHunter",
+      "hyperlinkId": "Valla",
+      "attributeId": "Demo",
+      "heroUnitIds": []
+    },
+    {
+      "name": "D.Va",
+      "unitId": "HeroDVaMech",
+      "hyperlinkId": "DVa",
+      "attributeId": "DVA0",
+      "heroUnitIds": [
+        "HeroDVaPilot"
+      ]
+    },
+    {
+      "name": "Brightwing",
+      "unitId": "HeroFaerieDragon",
+      "hyperlinkId": "Brightwing",
+      "attributeId": "Faer",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Blaze",
+      "unitId": "HeroFirebat",
+      "hyperlinkId": "Blaze",
+      "attributeId": "Fire",
+      "heroUnitIds": [
+        "FirebatBunkerDropBunkerUnit"
+      ]
+    },
+    {
+      "name": "Garrosh",
+      "unitId": "HeroGarrosh",
+      "hyperlinkId": "Garrosh",
+      "attributeId": "Garr",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Hogger",
+      "unitId": "HeroHogger",
+      "hyperlinkId": "Hogger",
+      "attributeId": "HOGG",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Junkrat",
+      "unitId": "HeroJunkrat",
+      "hyperlinkId": "Junkrat",
+      "attributeId": "Junk",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Kel'Thuzad",
+      "unitId": "HeroKelThuzad",
+      "hyperlinkId": "KelThuzad",
+      "attributeId": "KelT",
+      "heroUnitIds": []
+    },
+    {
+      "name": "E.T.C.",
+      "unitId": "HeroL90ETC",
+      "hyperlinkId": "ETC",
+      "attributeId": "L90E",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Leoric",
+      "unitId": "HeroLeoric",
+      "hyperlinkId": "Leoric",
+      "attributeId": "Leor",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Li Li",
+      "unitId": "HeroLiLi",
+      "hyperlinkId": "LiLi",
+      "attributeId": "LiLi",
+      "heroUnitIds": []
+    },
+    {
+      "name": "The Lost Vikings",
+      "unitId": "HeroLostVikingsController",
+      "hyperlinkId": "LostVikings",
+      "attributeId": "Lost",
+      "heroUnitIds": [
+        "HeroBaleog",
+        "HeroErik",
+        "HeroOlaf"
+      ]
+    },
+    {
+      "name": "Maiev",
+      "unitId": "HeroMaiev",
+      "hyperlinkId": "Maiev",
+      "attributeId": "Maie",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Malfurion",
+      "unitId": "HeroMalfurion",
+      "hyperlinkId": "Malfurion",
+      "attributeId": "Malf",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Murky",
+      "unitId": "HeroMurky",
+      "hyperlinkId": "Murky",
+      "attributeId": "Murk",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Qhira",
+      "unitId": "HeroNexusHunter",
+      "hyperlinkId": "Qhira",
+      "attributeId": "NXHU",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Nova",
+      "unitId": "HeroNova",
+      "hyperlinkId": "Nova",
+      "attributeId": "Nova",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Orphea",
+      "unitId": "HeroOrphea",
+      "hyperlinkId": "Orphea",
+      "attributeId": "ORPH",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Ragnaros",
+      "unitId": "HeroRagnaros",
+      "hyperlinkId": "Ragnaros",
+      "attributeId": "Ragn",
+      "heroUnitIds": [
+        "RagnarosBigRag"
+      ]
+    },
+    {
+      "name": "Rehgar",
+      "unitId": "HeroRehgar",
+      "hyperlinkId": "Rehgar",
+      "attributeId": "Rehg",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Stitches",
+      "unitId": "HeroStitches",
+      "hyperlinkId": "Stitches",
+      "attributeId": "Stit",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Stukov",
+      "unitId": "HeroStukov",
+      "hyperlinkId": "Stukov",
+      "attributeId": "STUK",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Sylvanas",
+      "unitId": "HeroSylvanas",
+      "hyperlinkId": "Sylvanas",
+      "attributeId": "Sylv",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Tassadar",
+      "unitId": "HeroTassadar",
+      "hyperlinkId": "Tassadar",
+      "attributeId": "Tass",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Thrall",
+      "unitId": "HeroThrall",
+      "hyperlinkId": "Thrall",
+      "attributeId": "Thra",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Tracer",
+      "unitId": "HeroTracer",
+      "hyperlinkId": "Tracer",
+      "attributeId": "Tra0",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Valeera",
+      "unitId": "HeroValeera",
+      "hyperlinkId": "Valeera",
+      "attributeId": "VALE",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Varian",
+      "unitId": "HeroVarian",
+      "hyperlinkId": "Varian",
+      "attributeId": "Vari",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Whitemane",
+      "unitId": "HeroWhitemane",
+      "hyperlinkId": "Whitemane",
+      "attributeId": "WHIT",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Nazeebo",
+      "unitId": "HeroWitchDoctor",
+      "hyperlinkId": "Nazeebo",
+      "attributeId": "Witc",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Li-Ming",
+      "unitId": "HeroWizard",
+      "hyperlinkId": "LiMing",
+      "attributeId": "Wiza",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Xal'atath",
+      "unitId": "HeroXalatath",
+      "hyperlinkId": "Xalatath",
+      "attributeId": "HXAL",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Yrel",
+      "unitId": "HeroYrel",
+      "hyperlinkId": "Yrel",
+      "attributeId": "YREL",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Zagara",
+      "unitId": "HeroZagara",
+      "hyperlinkId": "Zagara",
+      "attributeId": "Zaga",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Zarya",
+      "unitId": "HeroZarya",
+      "hyperlinkId": "Zarya",
+      "attributeId": "Zary",
+      "heroUnitIds": []
+    },
+    {
+      "name": "Zeratul",
+      "unitId": "HeroZeratul",
+      "hyperlinkId": "Zeratul",
+      "attributeId": "Zera",
+      "heroUnitIds": []
+    }
+  ],
+  "replays": [
+    {
+      "replayId": 65745237,
+      "gameMode": "ARAM",
+      "map": "Silver City",
+      "players": [
+        {
+          "index": 0,
+          "team": 0,
+          "character": "Zeratul",
+          "heroId": "Leoric",
+          "heroAttributeId": "Leor",
+          "units": [
+            "HeroZeratul"
+          ],
+          "spawned": "HeroZeratul"
+        },
+        {
+          "index": 1,
+          "team": 0,
+          "character": "Stitches",
+          "heroId": "Butcher",
+          "heroAttributeId": "Butc",
+          "units": [
+            "HeroStitches"
+          ],
+          "spawned": "HeroStitches"
+        },
+        {
+          "index": 2,
+          "team": 0,
+          "character": "Azmodan",
+          "heroId": "Tracer",
+          "heroAttributeId": "Tra0",
+          "units": [
+            "HeroAzmodan"
+          ],
+          "spawned": "HeroAzmodan"
+        },
+        {
+          "index": 3,
+          "team": 0,
+          "character": "Valla",
+          "heroId": "Thrall",
+          "heroAttributeId": "Thra",
+          "units": [
+            "HeroDemonHunter"
+          ],
+          "spawned": "HeroDemonHunter"
+        },
+        {
+          "index": 4,
+          "team": 0,
+          "character": "Rehgar",
+          "heroId": "Abathur",
+          "heroAttributeId": "Abat",
+          "units": [
+            "HeroRehgar"
+          ],
+          "spawned": "HeroRehgar"
+        },
+        {
+          "index": 5,
+          "team": 1,
+          "character": "Valla",
+          "heroId": "Orphea",
+          "heroAttributeId": "ORPH",
+          "units": [
+            "HeroDemonHunter"
+          ],
+          "spawned": "HeroDemonHunter"
+        },
+        {
+          "index": 6,
+          "team": 1,
+          "character": "Garrosh",
+          "heroId": "Murky",
+          "heroAttributeId": "Murk",
+          "units": [
+            "HeroGarrosh"
+          ],
+          "spawned": "HeroGarrosh"
+        },
+        {
+          "index": 7,
+          "team": 1,
+          "character": "Qhira",
+          "heroId": "Valeera",
+          "heroAttributeId": "VALE",
+          "units": [
+            "HeroNexusHunter"
+          ],
+          "spawned": "HeroNexusHunter"
+        },
+        {
+          "index": 8,
+          "team": 1,
+          "character": "Artanis",
+          "heroId": "Stukov",
+          "heroAttributeId": "STUK",
+          "units": [
+            "HeroArtanis"
+          ],
+          "spawned": "HeroArtanis"
+        },
+        {
+          "index": 9,
+          "team": 1,
+          "character": "Brightwing",
+          "heroId": "Varian",
+          "heroAttributeId": "Vari",
+          "units": [
+            "HeroFaerieDragon"
+          ],
+          "spawned": "HeroFaerieDragon"
+        }
+      ]
+    },
+    {
+      "replayId": 65773257,
+      "gameMode": "ARAM",
+      "map": "Silver City",
+      "players": [
+        {
+          "index": 0,
+          "team": 0,
+          "character": "Cassia",
+          "heroId": "Azmodan",
+          "heroAttributeId": "Azmo",
+          "units": [
+            "HeroAmazon"
+          ],
+          "spawned": "HeroAmazon"
+        },
+        {
+          "index": 1,
+          "team": 0,
+          "character": "Xal'atath",
+          "heroId": "LiLi",
+          "heroAttributeId": "LiLi",
+          "units": [
+            "HeroXalatath"
+          ],
+          "spawned": "HeroXalatath"
+        },
+        {
+          "index": 2,
+          "team": 0,
+          "character": "Yrel",
+          "heroId": "Whitemane",
+          "heroAttributeId": "WHIT",
+          "units": [
+            "HeroYrel"
+          ],
+          "spawned": "HeroYrel"
+        },
+        {
+          "index": 3,
+          "team": 0,
+          "character": "Junkrat",
+          "heroId": "Ragnaros",
+          "heroAttributeId": "Ragn",
+          "units": [
+            "HeroJunkrat"
+          ],
+          "spawned": "HeroJunkrat"
+        },
+        {
+          "index": 4,
+          "team": 0,
+          "character": "Blaze",
+          "heroId": "Zarya",
+          "heroAttributeId": "Zary",
+          "units": [
+            "HeroFirebat"
+          ],
+          "spawned": "HeroFirebat"
+        },
+        {
+          "index": 5,
+          "team": 1,
+          "character": "Tassadar",
+          "heroId": "Valeera",
+          "heroAttributeId": "VALE",
+          "units": [
+            "HeroTassadar"
+          ],
+          "spawned": "HeroTassadar"
+        },
+        {
+          "index": 6,
+          "team": 1,
+          "character": "Nazeebo",
+          "heroId": "Zagara",
+          "heroAttributeId": "Zaga",
+          "units": [
+            "HeroWitchDoctor"
+          ],
+          "spawned": "HeroWitchDoctor"
+        },
+        {
+          "index": 7,
+          "team": 1,
+          "character": "Hogger",
+          "heroId": "Malfurion",
+          "heroAttributeId": "Malf",
+          "units": [
+            "HeroHogger"
+          ],
+          "spawned": "HeroHogger"
+        },
+        {
+          "index": 8,
+          "team": 1,
+          "character": "Ragnaros",
+          "heroId": "KelThuzad",
+          "heroAttributeId": "KelT",
+          "units": [
+            "HeroRagnaros"
+          ],
+          "spawned": "HeroRagnaros"
+        },
+        {
+          "index": 9,
+          "team": 1,
+          "character": "Zagara",
+          "heroId": "Nova",
+          "heroAttributeId": "Nova",
+          "units": [
+            "HeroZagara"
+          ],
+          "spawned": "HeroZagara"
+        }
+      ]
+    },
+    {
+      "replayId": 65822779,
+      "gameMode": "StormLeague",
+      "map": "Volskaya Foundry",
+      "players": [
+        {
+          "index": 0,
+          "team": 0,
+          "character": "Sylvanas",
+          "heroId": "Sylvanas",
+          "heroAttributeId": "Sylv",
+          "units": [
+            "HeroSylvanas"
+          ],
+          "spawned": "HeroSylvanas"
+        },
+        {
+          "index": 1,
+          "team": 0,
+          "character": "Auriel",
+          "heroId": "Auriel",
+          "heroAttributeId": "Auri",
+          "units": [
+            "HeroAuriel"
+          ],
+          "spawned": "HeroAuriel"
+        },
+        {
+          "index": 2,
+          "team": 0,
+          "character": "Li-Ming",
+          "heroId": "Wizard",
+          "heroAttributeId": "Wiza",
+          "units": [
+            "HeroWizard"
+          ],
+          "spawned": "HeroWizard"
+        },
+        {
+          "index": 3,
+          "team": 0,
+          "character": "Stitches",
+          "heroId": "Stitches",
+          "heroAttributeId": "Stit",
+          "units": [
+            "HeroStitches"
+          ],
+          "spawned": "HeroStitches"
+        },
+        {
+          "index": 4,
+          "team": 0,
+          "character": "Thrall",
+          "heroId": "Thrall",
+          "heroAttributeId": "Thra",
+          "units": [
+            "HeroThrall"
+          ],
+          "spawned": "HeroThrall"
+        },
+        {
+          "index": 5,
+          "team": 1,
+          "character": "Maiev",
+          "heroId": "Maiev",
+          "heroAttributeId": "Maie",
+          "units": [
+            "HeroMaiev"
+          ],
+          "spawned": "HeroMaiev"
+        },
+        {
+          "index": 6,
+          "team": 1,
+          "character": "E.T.C.",
+          "heroId": "L90ETC",
+          "heroAttributeId": "L90E",
+          "units": [
+            "HeroL90ETC"
+          ],
+          "spawned": "HeroL90ETC"
+        },
+        {
+          "index": 7,
+          "team": 1,
+          "character": "Valla",
+          "heroId": "DemonHunter",
+          "heroAttributeId": "Demo",
+          "units": [
+            "HeroDemonHunter"
+          ],
+          "spawned": "HeroDemonHunter"
+        },
+        {
+          "index": 8,
+          "team": 1,
+          "character": "Rehgar",
+          "heroId": "Rehgar",
+          "heroAttributeId": "Rehg",
+          "units": [
+            "HeroRehgar"
+          ],
+          "spawned": "HeroRehgar"
+        },
+        {
+          "index": 9,
+          "team": 1,
+          "character": "The Lost Vikings",
+          "heroId": "LostVikings",
+          "heroAttributeId": "Lost",
+          "units": [
+            "HeroLostVikingsController",
+            "HeroOlaf",
+            "HeroBaleog",
+            "HeroErik"
+          ],
+          "spawned": "HeroLostVikingsController"
+        }
+      ]
+    },
+    {
+      "replayId": 65823384,
+      "gameMode": "QuickMatch",
+      "map": "Sky Temple",
+      "players": [
+        {
+          "index": 0,
+          "team": 0,
+          "character": "Stukov",
+          "heroId": "Stukov",
+          "heroAttributeId": "STUK",
+          "units": [
+            "HeroStukov"
+          ],
+          "spawned": "HeroStukov"
+        },
+        {
+          "index": 1,
+          "team": 0,
+          "character": "Ragnaros",
+          "heroId": "Ragnaros",
+          "heroAttributeId": "Ragn",
+          "units": [
+            "HeroRagnaros"
+          ],
+          "spawned": "HeroRagnaros"
+        },
+        {
+          "index": 2,
+          "team": 0,
+          "character": "Yrel",
+          "heroId": "Yrel",
+          "heroAttributeId": "YREL",
+          "units": [
+            "HeroYrel"
+          ],
+          "spawned": "HeroYrel"
+        },
+        {
+          "index": 3,
+          "team": 0,
+          "character": "The Lost Vikings",
+          "heroId": "LostVikings",
+          "heroAttributeId": "Lost",
+          "units": [
+            "HeroLostVikingsController",
+            "HeroOlaf",
+            "HeroBaleog",
+            "HeroErik"
+          ],
+          "spawned": "HeroLostVikingsController"
+        },
+        {
+          "index": 4,
+          "team": 0,
+          "character": "Li-Ming",
+          "heroId": "Wizard",
+          "heroAttributeId": "Wiza",
+          "units": [
+            "HeroWizard"
+          ],
+          "spawned": "HeroWizard"
+        },
+        {
+          "index": 5,
+          "team": 1,
+          "character": "Malfurion",
+          "heroId": "Malfurion",
+          "heroAttributeId": "Malf",
+          "units": [
+            "HeroMalfurion"
+          ],
+          "spawned": "HeroMalfurion"
+        },
+        {
+          "index": 6,
+          "team": 1,
+          "character": "D.Va",
+          "heroId": "DVa",
+          "heroAttributeId": "DVA0",
+          "units": [
+            "HeroDVaMech",
+            "HeroDVaPilot"
+          ],
+          "spawned": "HeroDVaPilot"
+        },
+        {
+          "index": 7,
+          "team": 1,
+          "character": "Maiev",
+          "heroId": "Maiev",
+          "heroAttributeId": "Maie",
+          "units": [
+            "HeroMaiev"
+          ],
+          "spawned": "HeroMaiev"
+        },
+        {
+          "index": 8,
+          "team": 1,
+          "character": "Azmodan",
+          "heroId": "Azmodan",
+          "heroAttributeId": "Azmo",
+          "units": [
+            "HeroAzmodan"
+          ],
+          "spawned": "HeroAzmodan"
+        },
+        {
+          "index": 9,
+          "team": 1,
+          "character": "Nova",
+          "heroId": "Nova",
+          "heroAttributeId": "Nova",
+          "units": [
+            "HeroNova"
+          ],
+          "spawned": "HeroNova"
+        }
+      ]
+    }
+  ]
+}
