@@ -16,7 +16,7 @@ Do **not** commit `service.json` (Twitch stream key).
 - Local countdown: `countdown/index.html`
 - SoundCloud widget on Desktop Audio (`reroute_audio` off — Control audio via OBS cannot capture that player)
 - Report scenes `match-report` (Heroes Profile match page), `prediction-report`, and `request-queue`
-- No Mic/Aux device. Desktop Audio (`DesktopAudioDevice1`, default output) only
+- No Mic/Aux device. Desktop Audio (`DesktopAudioDevice1`, default output) only. Spectate mutes any microphone a machine adds (`OBS:MuteMicrophones`, #314)
 - Profile template: QSV local recording into `C:\heroesreplay\Data\Contexts` — no start-streaming
 
 ## Names
