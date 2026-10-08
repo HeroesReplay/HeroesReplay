@@ -1457,7 +1457,7 @@
             "visible": false,
             "locked": false,
             "rot": 0.0,
-            "align": 5,
+            "align": 9,
             "bounds_type": 0,
             "bounds_align": 0,
             "bounds_crop": false,
@@ -1469,7 +1469,7 @@
             "group_item_backup": false,
             "pos": {
               "x": 5.0,
-              "y": 913.0
+              "y": 1060.0
             },
             "scale": {
               "x": 0.4154411852359772,
