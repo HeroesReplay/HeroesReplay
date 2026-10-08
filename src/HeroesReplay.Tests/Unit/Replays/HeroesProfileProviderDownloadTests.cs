@@ -6,11 +6,13 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Twitch;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -244,14 +246,221 @@ public class HeroesProfileProviderDownloadTests
         }
     }
 
-    private static HeroesProfileProvider Standard(string root, IHeroesProfileService service)
+    private const int Limit = 5;
+
+    /// <summary>
+    /// #280: 97 week-old replays of a re-downloaded build waited in Data\Standard and stopped
+    /// every download. Only replays inside the media window count toward the limit.
+    /// </summary>
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(Limit - 1, true)]
+    [InlineData(Limit, false)]
+    public async Task DownloadNextAsync_OnlyReplaysInsideTheMediaWindowCountTowardTheLimit(
+        int fresh,
+        bool downloads
+    )
+    {
+        string root = NewRoot();
+        Dictionary<int, DateTime> played = Backlog(expired: 97, fresh);
+        var service = new ListedDownloads(
+            newest: 65590000,
+            listPage: minId => Builds((minId + 1, Current))
+        );
+
+        try
+        {
+            WriteStandard(root, played.Keys);
+            HeroesProfileProvider provider = Standard(root, service);
+            provider.UseReplayHeaders(path => Header(path, played));
+
+            Assert.Equal(downloads, await provider.DownloadNextAsync());
+
+            int downloaded = downloads ? 1 : 0;
+            Assert.Equal(downloaded, service.Downloaded.Count);
+            // The expired backlog stays on disk as filler.
+            Assert.Equal(
+                97 + fresh + downloaded,
+                Directory.GetFiles(Path.Combine(root, "Standard")).Length
+            );
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadNextAsync_LogsTheWaitingCountAndTheFreshCountAgainstTheLimit()
+    {
+        string root = NewRoot();
+        Dictionary<int, DateTime> played = Backlog(expired: 97, fresh: Limit);
+        var service = new ListedDownloads(
+            newest: 65590000,
+            listPage: minId => Builds((minId + 1, Current))
+        );
+        var logger = new ListLogger();
+
+        try
+        {
+            WriteStandard(root, played.Keys);
+            HeroesProfileProvider provider = Standard(root, service, logger);
+            provider.UseReplayHeaders(path => Header(path, played));
+
+            Assert.False(await provider.DownloadNextAsync());
+
+            Assert.Empty(service.Listed);
+            LogLine line = Assert.Single(logger.Lines);
+            Assert.Equal(
+                "102 replays waiting to be spectated (5 fresh, limit 5). Not downloading another.",
+                line.Message
+            );
+            Assert.Equal(102, line.Values["Waiting"]);
+            Assert.Equal(Limit, line.Values["Fresh"]);
+            Assert.Equal(Limit, line.Values["Limit"]);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A listed replay already past its window would never count toward the limit, so it keeps
+    /// the old cap on every waiting replay. Otherwise expired downloads would never stop.
+    /// </summary>
+    [Theory]
+    [InlineData(Limit - 1, true)]
+    [InlineData(Limit, false)]
+    public async Task DownloadNextAsync_AnExpiredListingKeepsTheCapOnEveryWaitingReplay(
+        int expired,
+        bool downloads
+    )
+    {
+        string root = NewRoot();
+        Dictionary<int, DateTime> played = Backlog(expired, fresh: 0);
+        DateTime now = DateTime.UtcNow;
+        var service = new ListedDownloads(
+            newest: 65660000,
+            listPage: minId => Replay(minId + 1, now - TimeSpan.FromDays(7))
+        );
+
+        try
+        {
+            WriteStandard(root, played.Keys);
+            HeroesProfileProvider provider = Provider(
+                root,
+                service,
+                resume: null,
+                CancellationToken.None,
+                enableRequests: false,
+                maxReplayAge: TimeSpan.Zero
+            );
+            provider.UseReplayHeaders(path => Header(path, played));
+
+            Assert.Equal(downloads, await provider.DownloadNextAsync());
+
+            Assert.Equal(downloads ? 1 : 0, service.Downloaded.Count);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>A replay whose game date cannot be read counts, as every waiting replay did.</summary>
+    [Fact]
+    public async Task DownloadNextAsync_CountsAWaitingReplayWhoseGameDateCannotBeRead()
+    {
+        string root = NewRoot();
+        var service = new ListedDownloads(
+            newest: 65590000,
+            listPage: minId => Builds((minId + 1, Current))
+        );
+        int reads = 0;
+
+        try
+        {
+            WriteStandard(root, Backlog(expired: 0, fresh: Limit).Keys);
+            HeroesProfileProvider provider = Standard(root, service);
+            provider.UseReplayHeaders(_ =>
+            {
+                reads++;
+                return null;
+            });
+
+            Assert.False(await provider.DownloadNextAsync());
+            Assert.False(await provider.DownloadNextAsync());
+
+            Assert.Empty(service.Downloaded);
+            Assert.Equal(Limit, reads);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>Week-old replays from 6553xxxx, then fresh ones from 6558xxxx.</summary>
+    private static Dictionary<int, DateTime> Backlog(int expired, int fresh)
+    {
+        DateTime now = DateTime.UtcNow;
+        var played = new Dictionary<int, DateTime>();
+        for (int index = 1; index <= expired; index++)
+        {
+            played[65530000 + index] = now - TimeSpan.FromDays(7);
+        }
+
+        for (int index = 1; index <= fresh; index++)
+        {
+            played[65580000 + index] = now - TimeSpan.FromHours(1);
+        }
+
+        return played;
+    }
+
+    private static void WriteStandard(string root, IEnumerable<int> ids)
+    {
+        string standard = Path.Combine(root, "Standard");
+        Directory.CreateDirectory(standard);
+        foreach (int id in ids)
+        {
+            File.WriteAllBytes(
+                Path.Combine(
+                    standard,
+                    id + "_Storm League_Diamond 3_Cursed Hollow_abc.StormReplay"
+                ),
+                new byte[] { 1 }
+            );
+        }
+    }
+
+    private static Heroes.ReplayParser.Replay Header(
+        string path,
+        IReadOnlyDictionary<int, DateTime> played
+    )
+    {
+        int id = int.Parse(Path.GetFileName(path).Split('_')[0]);
+        return new Heroes.ReplayParser.Replay
+        {
+            Timestamp = played[id],
+            ReplayVersion = "2.57.0.98285",
+        };
+    }
+
+    private static HeroesProfileProvider Standard(
+        string root,
+        IHeroesProfileService service,
+        ILogger<HeroesProfileProvider> logger = null
+    )
     {
         HeroesProfileProvider provider = Provider(
             root,
             service,
             resume: null,
             CancellationToken.None,
-            enableRequests: false
+            enableRequests: false,
+            logger: logger
         );
         provider.UseInstalledVersions(() => new[] { Previous, Current });
         return provider;
@@ -314,7 +523,8 @@ public class HeroesProfileProviderDownloadTests
         IHeroesProfileResume resume,
         CancellationToken token,
         bool enableRequests = true,
-        TimeSpan? maxReplayAge = null
+        TimeSpan? maxReplayAge = null,
+        ILogger<HeroesProfileProvider> logger = null
     )
     {
         var settings = new AppSettings
@@ -327,6 +537,13 @@ public class HeroesProfileProviderDownloadTests
                 MinReplayId = 65580000,
                 GameTypes = new[] { "Storm League" },
                 StandardMaxReplayAge = maxReplayAge ?? TimeSpan.FromHours(12),
+                CachedReplayLimit = Limit,
+            },
+            ReplayMedia = new ReplayMediaPolicySettings
+            {
+                RecordingMode = ReplayRecordingMode.Selected,
+                PublicationMode = ReplayPublicationMode.AllEligible,
+                OrdinaryCandidateMaxAge = TimeSpan.FromDays(3),
             },
             StormReplay = new StormReplaySettings
             {
@@ -339,7 +556,7 @@ public class HeroesProfileProviderDownloadTests
         };
 
         return new HeroesProfileProvider(
-            NullLogger<HeroesProfileProvider>.Instance,
+            logger ?? NullLogger<HeroesProfileProvider>.Instance,
             new NoLoader(),
             new ReplayHelper(NullLogger<ReplayHelper>.Instance, settings),
             new OneRequest(),
@@ -380,6 +597,38 @@ public class HeroesProfileProviderDownloadTests
 
         public Task<(RewardQueueItem Item, int Position)?> FindNextByLoginAsync(string login) =>
             Task.FromResult<(RewardQueueItem Item, int Position)?>(null);
+    }
+
+    private sealed record LogLine(string Message, IReadOnlyDictionary<string, object> Values);
+
+    private sealed class ListLogger : ILogger<HeroesProfileProvider>
+    {
+        public List<LogLine> Lines { get; } = new();
+
+        public IDisposable BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception exception,
+            Func<TState, Exception, string> formatter
+        )
+        {
+            var values = new Dictionary<string, object>();
+            if (state is IEnumerable<KeyValuePair<string, object>> pairs)
+            {
+                foreach (KeyValuePair<string, object> pair in pairs)
+                {
+                    values[pair.Key] = pair.Value;
+                }
+            }
+
+            Lines.Add(new LogLine(formatter(state, exception), values));
+        }
     }
 
     private sealed class NoLoader : IReplayLoader

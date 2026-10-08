@@ -94,6 +94,75 @@ public class ReplayQueuePickTests
         }
     }
 
+    /// <summary>
+    /// #280: the downloader fetches fresh replays past a backlog of an older build. They have the
+    /// highest ids, so they play first, and the backlog still plays when nothing fresh waits.
+    /// </summary>
+    [Fact]
+    public async Task TryLoadNext_PlaysFreshDownloadsBeforeTheBacklogAndThenTheBacklog()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-queue-280-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(Path.Combine(root, "Standard"));
+        Directory.CreateDirectory(Path.Combine(root, "Requests"));
+        File.WriteAllText(Path.Combine(root, SpectateQueue.SpectatedFileName), string.Empty);
+        var versions = new Dictionary<int, string>
+        {
+            [65530001] = "2.57.0.98285",
+            [65541919] = "2.57.0.98285",
+            [65660001] = "2.57.0.98348",
+            [65660002] = "2.57.0.98348",
+        };
+        foreach (int id in versions.Keys)
+        {
+            File.WriteAllBytes(
+                Path.Combine(root, "Standard", id + "_Storm League_Map_.StormReplay"),
+                new byte[] { 1 }
+            );
+        }
+
+        var settings = new AppSettings
+        {
+            Location = new LocationSettings { DataDirectory = root },
+            HeroesProfileApi = new HeroesProfileApiSettings
+            {
+                StandardCacheDirectoryName = "Standard",
+                RequestsCacheDirectoryName = "Requests",
+            },
+            StormReplay = new StormReplaySettings { Seperator = "_" },
+            Spectate = new SpectateSettings { MinimumGameVersion = "2.57.0.98285" },
+        };
+        var provider = new ReplayCacheProvider(
+            NullLogger<ReplayCacheProvider>.Instance,
+            new VersionLoader(versions),
+            new ReplayHelper(NullLogger<ReplayHelper>.Instance, settings),
+            new IdleProfile(),
+            new CancellationTokenProvider(),
+            settings
+        );
+        provider.UseInstalledVersions(() => new[] { "2.57.0.98285", "2.57.0.98348" });
+
+        try
+        {
+            var order = new List<int>();
+            for (int pick = 0; pick < versions.Count; pick++)
+            {
+                LoadedReplay next = await provider.TryLoadNextReplayAsync();
+                order.Add(next.ReplayId.Value);
+                provider.MarkSpectated(next);
+            }
+
+            Assert.Equal(new[] { 65660002, 65660001, 65541919, 65530001 }, order);
+            Assert.Null(await provider.TryLoadNextReplayAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     [Theory]
     [InlineData(false, 30)]
     [InlineData(true, 10)]

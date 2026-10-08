@@ -1,6 +1,10 @@
+using System;
 using System.Collections.Generic;
 
 namespace HeroesReplay.Core.Replays;
+
+/// <summary>Replays waiting to be spectated, and how many of them are still fresh.</summary>
+public readonly record struct WaitingReplays(int Waiting, int Fresh);
 
 /// <summary>
 /// Files the downloader must not treat as a full spectate queue.
@@ -13,8 +17,23 @@ public static class SpectateQueue
     public const string QuarantineFileName = "quarantine-ids.txt";
     public const string DeferredFileName = "deferred-replays.txt";
 
-    public static int CountWaiting(IEnumerable<int> onDisk, IEnumerable<int> notWaiting, int stopAt)
+    /// <summary>
+    /// Every waiting replay, and the fresh ones among them: still inside the media window.
+    /// Only fresh replays count toward the download limit (#280). A waiting replay past its
+    /// window stays on disk and is still played when nothing fresh is waiting. A null
+    /// <paramref name="isFresh"/> counts every waiting replay as fresh.
+    /// </summary>
+    public static WaitingReplays CountWaiting(
+        IEnumerable<int> onDisk,
+        IEnumerable<int> notWaiting,
+        Func<int, bool> isFresh
+    )
     {
+        if (onDisk == null)
+        {
+            return default;
+        }
+
         var skip = new HashSet<int>();
         if (notWaiting != null)
         {
@@ -25,11 +44,7 @@ public static class SpectateQueue
         }
 
         int waiting = 0;
-        if (onDisk == null)
-        {
-            return 0;
-        }
-
+        int fresh = 0;
         foreach (int id in onDisk)
         {
             if (skip.Contains(id))
@@ -38,13 +53,13 @@ public static class SpectateQueue
             }
 
             waiting++;
-            if (stopAt > 0 && waiting >= stopAt)
+            if (isFresh == null || isFresh(id))
             {
-                return waiting;
+                fresh++;
             }
         }
 
-        return waiting;
+        return new WaitingReplays(waiting, fresh);
     }
 
     /// <summary>

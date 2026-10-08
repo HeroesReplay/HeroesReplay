@@ -14,6 +14,12 @@ public class HeroesProfileApiSettings
     public int MinReplayId { get; set; }
     public int FallbackMaxReplayId { get; set; }
     public int ApiMaxReturnedReplays { get; set; }
+
+    /// <summary>
+    /// The downloader stops while this many Standard replays inside their media window are
+    /// waiting. A waiting replay past its window (<c>ReplayMedia</c>, judged by game date) does
+    /// not count, so a backlog cannot block fresh downloads (#280).
+    /// </summary>
     public int CachedReplayLimit { get; set; } = 5;
 
     /// <summary>A Standard candidate older than this makes the cursor jump to recent ids. Zero turns it off.</summary>
