@@ -165,6 +165,42 @@ public sealed class ObsCollectionPlanTests : IDisposable
     }
 
     [Fact]
+    public void Plan_OperatorAddedSource_SaysTheUpdateMerges_FromTheStoredBase()
+    {
+        string old = Layout(css: "body{}");
+        WriteTemplate(Install, Layout(css: "body{margin:0}"));
+        File.WriteAllText(
+            Live,
+            Layout(css: "body{}", extraSources: [Source("my-webcam", "dshow_input")])
+        );
+        Managed.SaveTemplate(old, DateTime.UtcNow);
+        Managed.Save(
+            Live,
+            new ObsManagedCollection(
+                ObsCollectionPatcher.HashOf(old),
+                ObsCollectionPaths.SourceNames(old).Order(StringComparer.Ordinal).ToList(),
+                DateTime.UtcNow
+            )
+        );
+        Dictionary<string, byte[]> before = Snapshot();
+
+        ObsCollectionPlanResult running = Plan(obsIsRunning: true);
+        ObsCollectionPlanResult closed = Plan(obsIsRunning: false);
+
+        Assert.Equal("stored", closed.Base);
+        Assert.Equal(ObsPlanCodes.Changes, closed.Code);
+        Assert.Equal("merge", closed.Update.Action);
+        Assert.False(closed.Update.Deferred);
+        Assert.Contains("keeps the operator's additions", closed.Message);
+        Assert.Equal("merge", running.Update.Action);
+        Assert.True(running.Update.Deferred);
+        Assert.False(running.Update.LiveSwap);
+        Dictionary<string, byte[]> after = Snapshot();
+        Assert.Equal(before.Keys.Order(), after.Keys.Order());
+        Assert.All(before, file => Assert.Equal(file.Value, after[file.Key]));
+    }
+
+    [Fact]
     public void Plan_WithoutACollection_SaysTheUpdateCreatesIt()
     {
         WriteTemplate(Install, Layout());

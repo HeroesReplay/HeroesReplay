@@ -474,6 +474,16 @@ Show what an update would change in the live OBS scene collection, without chang
 - **Exit:** 0 when nothing conflicts, 1 on a conflict or when the collection or the template cannot be read.
 - **Codes:** `obs.plan_in_sync`, `obs.plan_changes`, `obs.plan_conflict`, `obs.plan_base_unknown`, `obs.collection_custom`, `obs.collection_missing`, `obs.collection_unreadable`, `obs.template_missing`
 
+## `obs apply`
+
+Merge the install's obs/Default.json changes into the live OBS scene collection and keep the operator's overrides, additions, and removals. Three-way, with the template the collection was last written from (the SHA-256 in managed-collections.json: this install's template, --previous's, or the copy in %LOCALAPPDATA%\HeroesReplay\obs\templates), as `obs plan` shows it. Without --backup it writes nothing and shows the merge, also while OBS runs. With --backup, OBS must be closed (refused while it runs, obs.apply_obs_running): the live collection is backed up to %LOCALAPPDATA%\HeroesReplay\obs\backups, the merge is written atomically, and managed-collections.json names this template (and that the collection keeps the operator's work, so no update replaces it); `obs restore <backup>` undoes it, record included. Refused on a conflict (obs.apply_conflict), without a known base (obs.apply_base_unknown), while a release rollback waits (obs.apply_rollback_pending), and when the merge does not compare as the template plus the operator's work (obs.apply_unverified). Exit 0 when merged, in sync, or ready; 1 when refused or the collection or template cannot be read.
+
+- **Options:** `--backup`, `--install`, `--previous`, `--environment`, `--output` (`-o`)
+- **Before:** None without `--backup` (reads files only, also while OBS runs). With `--backup`: OBS closed (refused while it runs), no release rollback waiting. On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
+- **Changes:** Nothing without `--backup`. With it: backs up the live collection, writes the three-way merge (the template's changes, the operator's overrides, additions and removals kept) atomically, saves the template in `%LOCALAPPDATA%\HeroesReplay\obs\templates`, and records it in `managed-collections.json` and `apply-undo.json` (`obs restore` of that backup puts the record back).
+- **Exit:** 0 when merged, in sync, or ready (without `--backup`); 1 when refused (conflict, unknown base, OBS running, a waiting rollback, an unverified merge) or the collection or template cannot be read.
+- **Codes:** `obs.applied`, `obs.apply_ready`, `obs.apply_in_sync`, `obs.apply_conflict`, `obs.apply_base_unknown`, `obs.apply_obs_running`, `obs.apply_rollback_pending`, `obs.apply_unverified`, `obs.apply_failed`, `obs.collection_missing`, `obs.collection_unreadable`, `obs.template_missing`
+
 ## `obs backup`
 
 Copy the live OBS scene collection (OBS:SceneCollectionName) into %LOCALAPPDATA%\HeroesReplay\obs\backups, the folder every HeroesReplay write backs it up to (the newest 10 are kept), and list its backups with their time, size and SHA-256. Only reads the collection, so it is safe while OBS runs. --list lists without copying. Exit 1 when there is no collection or the copy failed.
@@ -490,7 +500,7 @@ Write a backup of the live OBS scene collection back over it, byte for byte, whi
 
 - **Options:** `--output` (`-o`)
 - **Before:** OBS closed (refused while it runs). A backup of this collection. On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
-- **Changes:** Backs up the current collection, then writes the backup over it atomically and clears a waiting release rollback. `managed-collections.json` is not changed.
+- **Changes:** Backs up the current collection, then writes the backup over it atomically and clears a waiting release rollback. `managed-collections.json` is not changed, unless the backup is the one `obs apply` took: then its record goes back to what it was before the apply.
 - **Exit:** 0 when restored or already the same, 1 when nothing was restored.
 - **Codes:** `obs.restored`, `obs.already_restored`, `obs.restore_obs_running`, `obs.backup_missing`, `obs.backup_other_file`, `obs.backup_invalid`, `obs.restore_failed`
 
@@ -531,11 +541,11 @@ Called by apply-release.ps1 once: arm this machine for Twitch ingest when the in
 
 ## `update install-obs`
 
-Called by apply-release.ps1: check the release's obs folder against obs\bundle.manifest (sizes and SHA-256) and refuse a mismatch with obs.bundle_invalid (exit 1, nothing written; a release with no manifest installs with a warning), then replace the scene collection HeroesReplay manages with the release's (backed up to %LOCALAPPDATA%\HeroesReplay\obs\backups, written atomically), keep a custom one, and install the profile template only when this machine has no profile. While OBS is running nothing is written; the collection is replaced the next time HeroesReplay finds OBS closed. Never copies service.json.
+Called by apply-release.ps1: check the release's obs folder against obs\bundle.manifest (sizes and SHA-256) and refuse a mismatch with obs.bundle_invalid (exit 1, nothing written; a release with no manifest installs with a warning), then replace the scene collection HeroesReplay manages with the release's (backed up to %LOCALAPPDATA%\HeroesReplay\obs\backups, written atomically), merge the release's template changes into a custom one where the operator only added scenes, sources, filters, or settings (keeping them), keep any other custom one (a conflict is listed), and install the profile template only when this machine has no profile. Every template it writes from is kept in %LOCALAPPDATA%\HeroesReplay\obs\templates as the base of a later merge. While OBS is running nothing is written; the collection is replaced (or merged) the next time HeroesReplay finds OBS closed. Never copies service.json.
 
 - **Options:** `--install` (required), `--previous`, `--environment`
 - **Before:** Run by `apply-release.ps1` with the new build. Do not run it by hand on a dev box.
-- **Changes:** Checks the release's `obs` folder against `obs\bundle.manifest`, then replaces a managed collection (with a backup), keeps a custom one, and installs the profile template only when the machine has none. Writes nothing while OBS runs.
+- **Changes:** Checks the release's `obs` folder against `obs\bundle.manifest`, then replaces a managed collection (with a backup), merges the template's changes into a custom one where the operator only added (keeping the additions), keeps any other custom one, saves the templates in `%LOCALAPPDATA%\HeroesReplay\obs\templates`, and installs the profile template only when the machine has none. Writes nothing while OBS runs.
 - **Exit:** 0 when done or deferred, 1 on `obs.bundle_invalid` or a failed copy.
 - **Codes:** `obs.bundle_invalid`
 

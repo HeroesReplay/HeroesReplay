@@ -160,8 +160,9 @@ public static class ReleaseInstall
     /// <summary>
     /// What <c>apply-release.ps1</c> does with the release's OBS files. The scene collection goes
     /// through <see cref="ObsCollectionPatcher"/> as a release: a collection HeroesReplay manages is
-    /// replaced with this install's template (backed up first), a custom one is kept and reported,
-    /// and while OBS is running the replacement waits until HeroesReplay finds OBS closed. The
+    /// replaced with this install's template (backed up first), a custom one where the operator
+    /// only added gets the template's changes merged in (#307), any other custom one is kept and
+    /// reported, and while OBS is running the write waits until HeroesReplay finds OBS closed. The
     /// profile (<c>basic.ini</c>) is machine-owned: the packaged one is only a template, written when
     /// this machine has no profile of that name and OBS is closed. <c>service.json</c> (the stream
     /// key) is never copied. Returns one line per decision for the update log. First the install's
@@ -223,6 +224,7 @@ public static class ReleaseInstall
                     Managed = request.Managed,
                     Release = true,
                     PreviousTemplatePath = previousTemplate,
+                    Runtime = request.Runtime,
                     UtcNow = request.UtcNow,
                 }
             );
@@ -338,6 +340,9 @@ public sealed record ReleaseObsInstall
 
     /// <summary>The install being replaced (<c>app.previous</c>), when there is one.</summary>
     public string PreviousInstall { get; init; }
+
+    /// <summary>Values the spectator sets per replay, which a merge does not count as the operator's.</summary>
+    public ObsRuntimeValues Runtime { get; init; }
 
     public DateTime UtcNow { get; init; } = DateTime.UtcNow;
 }

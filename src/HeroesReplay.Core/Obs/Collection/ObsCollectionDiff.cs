@@ -83,6 +83,12 @@ public sealed record ObsCollectionDifference
     /// <summary>For a filter, its name.</summary>
     public string Filter { get; init; }
 
+    /// <summary>
+    /// For a scene item of a source placed more than once in its scene: which placement, counted
+    /// from the bottom (2, 3, ...). Null for the first one.
+    /// </summary>
+    public int? Occurrence { get; init; }
+
     /// <summary>The property, dotted (<c>settings.url</c>, <c>pos.x</c>). Null when the whole entity differs.</summary>
     public string Property { get; init; }
 
@@ -100,7 +106,9 @@ public sealed record ObsCollectionDifference
         string where = Entity switch
         {
             ObsDiffEntity.Filter => $"filter '{Filter}' on '{Source}'",
-            ObsDiffEntity.SceneItem => $"'{Source}' in scene '{Scene}'",
+            ObsDiffEntity.SceneItem => Occurrence == null
+                ? $"'{Source}' in scene '{Scene}'"
+                : $"'{Source}' (#{Occurrence}) in scene '{Scene}'",
             _ => $"source '{Source}'",
         };
         string what = Property == null ? where : $"{where} {Property}";
@@ -351,6 +359,7 @@ public static class ObsCollectionDiff
             Source = key.SourceName,
             Scene = key.Entity == ObsDiffEntity.SceneItem ? key.Owner : null,
             Filter = key.Entity == ObsDiffEntity.Filter ? key.Name : null,
+            Occurrence = key.Occurrence > 1 ? key.Occurrence : null,
             Property = property,
             Base = based,
             Template = template,
@@ -383,22 +392,22 @@ public static class ObsCollectionDiff
             .Where(key => key.Entity == entity)
             .Distinct()
             .OrderBy(key => key.Owner ?? string.Empty, StringComparer.Ordinal)
-            .ThenBy(key => key.Name, StringComparer.Ordinal);
+            .ThenBy(key => key.Name, StringComparer.Ordinal)
+            .ThenBy(key => key.Occurrence);
 
     /// <summary>
     /// A source, filter, or scene item. <see cref="Owner"/> is the source of a filter or the scene
-    /// of an item; <see cref="Name"/> is the source, the filter, or the item's source (with
-    /// <c>#2</c>, <c>#3</c> for a source placed more than once in one scene).
+    /// of an item; <see cref="Name"/> is the source, the filter, or the item's source, and
+    /// <see cref="Occurrence"/> counts a source placed more than once in one scene (1 otherwise).
     /// </summary>
-    private readonly record struct EntityKey(ObsDiffEntity Entity, string Owner, string Name)
+    private readonly record struct EntityKey(
+        ObsDiffEntity Entity,
+        string Owner,
+        string Name,
+        int Occurrence = 1
+    )
     {
-        public string SourceName =>
-            Entity switch
-            {
-                ObsDiffEntity.Filter => Owner,
-                ObsDiffEntity.SceneItem => Name.Split('#')[0],
-                _ => Name,
-            };
+        public string SourceName => Entity == ObsDiffEntity.Filter ? Owner : Name;
     }
 
     /// <summary>Every entity of one collection, flattened to property → canonical value.</summary>
@@ -564,11 +573,7 @@ public static class ObsCollectionDiff
                 }
 
                 entities.TryAdd(
-                    new EntityKey(
-                        ObsDiffEntity.SceneItem,
-                        scene,
-                        count == 1 ? source : source + "#" + count
-                    ),
+                    new EntityKey(ObsDiffEntity.SceneItem, scene, source, count),
                     values
                 );
             }

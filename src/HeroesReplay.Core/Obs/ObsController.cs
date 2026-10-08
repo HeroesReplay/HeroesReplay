@@ -128,7 +128,8 @@ public class ObsController : IObsController
                 settings.Location?.DataDirectory,
                 obsRunning,
                 ObsNames.SceneCollection(settings.OBS),
-                ObsManagedFiles.ForThisUser()
+                ObsManagedFiles.ForThisUser(),
+                ObsRuntimeValues.From(settings.OBS)
             );
             if (result.Drift)
             {

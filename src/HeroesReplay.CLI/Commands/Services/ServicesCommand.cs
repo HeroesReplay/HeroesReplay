@@ -907,7 +907,8 @@ public class ServicesCommand : Command
                 dataDirectory,
                 Process.GetProcessesByName("obs64").Length > 0,
                 ObsNames.SceneCollection(obs),
-                ObsManagedFiles.ForThisUser()
+                ObsManagedFiles.ForThisUser(),
+                ObsRuntimeValues.From(obs)
             );
             if (result.Drift || result.Wrote || result.Deferred)
             {

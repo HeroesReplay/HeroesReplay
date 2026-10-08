@@ -129,6 +129,11 @@ public class CliHelpTests
                 "obs plan",
                 "obs plan -o json",
                 "obs plan --install C:\\staged --previous C:\\app --environment prod --output json",
+                "obs apply --help",
+                "obs apply",
+                "obs apply --backup",
+                "obs apply --backup -o json",
+                "obs apply --install C:\\staged --previous C:\\app --environment dev --output text",
                 "obs backup --help",
                 "obs backup",
                 "obs backup --list -o json",
@@ -142,6 +147,12 @@ public class CliHelpTests
         }
 
         Assert.NotEmpty(root.Parse("obs plan --output yaml").Errors);
+        Assert.NotEmpty(root.Parse("obs apply --output yaml").Errors);
+        Assert.NotEmpty(root.Parse("obs apply --backup extra").Errors);
+        Command apply = obs.Subcommands.Single(c => c.Name == "apply");
+        Assert.Contains("refused while it runs", apply.Description);
+        Assert.Contains("Without --backup it writes nothing", apply.Description);
+        Assert.Contains("obs.apply_conflict", apply.Description);
         Assert.NotEmpty(root.Parse("obs restore").Errors);
         Assert.Contains(
             "Refused while OBS runs",
