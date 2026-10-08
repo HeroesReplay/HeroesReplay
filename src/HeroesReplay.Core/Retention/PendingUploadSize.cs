@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using HeroesReplay.Core.YouTube;
@@ -31,6 +32,24 @@ public static class PendingUploadSize
         string uploadedFileName
     ) => Measure(contextsDirectory, entryFileName, uploadedFileName).Count;
 
+    /// <summary>The recordings <see cref="Count"/> counts, oldest first.</summary>
+    public static IReadOnlyList<string> Recordings(
+        string contextsDirectory,
+        string entryFileName,
+        string uploadedFileName
+    )
+    {
+        var recordings = new List<string>();
+        foreach (
+            (string path, long _) in Waiting(contextsDirectory, entryFileName, uploadedFileName)
+        )
+        {
+            recordings.Add(path);
+        }
+
+        return recordings;
+    }
+
     private static (long Bytes, int Count) Measure(
         string contextsDirectory,
         string entryFileName,
@@ -40,6 +59,23 @@ public static class PendingUploadSize
         long total = 0;
         int count = 0;
         foreach (
+            (string _, long length) in Waiting(contextsDirectory, entryFileName, uploadedFileName)
+        )
+        {
+            total += length;
+            count++;
+        }
+
+        return (total, count);
+    }
+
+    private static IEnumerable<(string Path, long Length)> Waiting(
+        string contextsDirectory,
+        string entryFileName,
+        string uploadedFileName
+    )
+    {
+        foreach (
             string path in PendingYouTubeUpload.Find(
                 contextsDirectory,
                 entryFileName,
@@ -47,24 +83,32 @@ public static class PendingUploadSize
             )
         )
         {
+            long length;
             try
             {
                 var info = new FileInfo(path);
                 if (
-                    info.Exists
-                    && info.Length > 0
-                    && !IsInserted(info.DirectoryName, entryFileName)
+                    !info.Exists
+                    || info.Length <= 0
+                    || IsInserted(info.DirectoryName, entryFileName)
                 )
                 {
-                    total += info.Length;
-                    count++;
+                    continue;
                 }
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
 
-        return (total, count);
+                length = info.Length;
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            yield return (path, length);
+        }
     }
 
     public static bool IsInserted(string directory, string entryFileName)

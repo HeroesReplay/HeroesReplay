@@ -80,18 +80,28 @@ Production and dev use `Selected` (#204): a replay that no publication window ca
 
 ### The recording cap
 
-The mode says what is worth recording. The recording cap (`ReplayMedia:CapRecordingToPublication`, on by default, #250) says whether the pipeline can still take one more, so the spectator records only roughly what can be uploaded and published. Before launch it counts the recordings waiting for their `videos.insert` and the slots in `Data\publication-reservations.txt` whose publish time is still ahead. The first matching line decides, and the spectator logs it as `recording cap ... (reason)`:
+The mode says what is worth recording. The recording cap (`ReplayMedia:CapRecordingToPublication`, on by default, #250, #370) says whether the pipeline can still take one more: whether this replay's recording would be uploaded before the replay stops being a candidate. Before launch it counts two things:
+
+- **Waiting for upload.** Recordings on disk that still wait for their `videos.insert` and need a publication slot. A recording whose send failed after it reserved a slot is counted with the slots instead, so it is not counted twice.
+- **Scheduled.** The slots in `Data\publication-reservations.txt` whose publish time is still ahead. These are mostly uploads that only wait for their `publishAt`. They need no disk and no upload. They count only because they fill the publication window.
+
+The publication window holds what the pacing rules publish within `MaxPublishAhead` (at least one day): `min(MaxPublicPerDay - ReservedRequestSlotsPerDay, MaxPublicPerWeek / 7)` a day, and no more than a day of upload calls. While the window has a free slot, a new recording is sent at once. When it is full, a recording waits on disk until the window slides far enough to reach a free time. That happens at the same pace, behind every recording already waiting. The uploader deletes an ordinary recording that is still waiting once its game is older than `OrdinaryCandidateMaxAge`. So the wait has to end, with a day to spare (`RecordingCap.SendSlack`), before the replay's candidate expiry: its game time plus `OrdinaryCandidateMaxAge` for an ordinary replay, or plus 7 days for a notable or high-skill one.
+
+The first matching line decides, and the spectator logs it as `recording cap ... (reason)`, with how many wait for upload, how many are scheduled, and the expected wait:
 
 | Reason | Records | When |
 | --- | --- | --- |
 | `cap-requested` | yes | A paid `RecordAndUpload` request. Always recorded. |
 | `cap-off` | yes | `CapRecordingToPublication` is false. |
 | `cap-not-live` | yes | YouTube is disabled or a dry run (dev): nothing piles up for YouTube. |
-| `cap-upload-backlog` | no | The waiting recordings are at least one day of upload calls: `min(DailyUploadCalls - UploadCallReserve, MaxInsertsPerQuotaDay)`. |
-| `cap-publication-full` | no | Waiting recordings plus scheduled slots are at least what the pacing rules publish within `MaxPublishAhead` (at least one day): `min(MaxPublicPerDay - ReservedRequestSlotsPerDay, MaxPublicPerWeek / 7)` a day. |
-| `cap-room` | yes | Otherwise. |
+| `cap-upload-backlog` | no | The recordings waiting for upload are at least one day of upload calls: `min(DailyUploadCalls - UploadCallReserve, MaxInsertsPerQuotaDay)`. |
+| `cap-room` | yes | A private listing, or the window has a free slot: waiting plus scheduled is under what it holds. |
+| `cap-queued` | yes | The window is full, and the slots that must open first (waiting plus scheduled plus this one, less what the window holds), at the window's daily pace, still leave a day before the replay expires. |
+| `cap-publication-full` | no | The window is full, and this replay would wait until less than a day before it expires, or its game time is unknown. |
 
-With the production settings that is 4 a day over 3 days, so about 12 videos in flight and about 4 ordinary recordings a day. Notable and high-skill replays are capped like ordinary ones; only a request goes past the cap. A capped replay is still spectated and streamed, without an mp4. Before the cap, production recorded about 25 replays a day while 4 a day could go public, and the rest waited on disk until they were too old to publish (#250).
+With the production settings the window holds 10 a day over 3 days, so 30 slots, and a full window opens about one slot every 2.4 hours. On 2026-10-08 the stream PC had 10 recordings waiting for upload and 29 uploads scheduled (#370). Before #370 the cap stopped at 30 in flight, so it recorded nothing for about a day, although a replay played 6 hours earlier would have waited one day and still had 1.75 days of its 3 left. Now that replay is recorded (`cap-queued`). One played 2 days earlier is not. In steady state about 17 fresh recordings wait (about 37 GB), and a video goes public about 4 to 5 days after its game. Without the queue only about one waited, so a slot whose map, rank, or hero cooldown ruled out that one recording went unused. The publication pace is the same either way.
+
+Notable and high-skill replays are capped like ordinary ones. Only a request goes past the cap. A capped replay is still spectated and streamed, without an mp4. Before the cap, production recorded about 25 replays a day while 4 a day could go public, and the rest waited on disk until they were too old to publish (#250).
 
 ### The disk gates
 
@@ -238,7 +248,7 @@ Eight ordinary games that end at 10:00, 10:30, and every half hour to 13:30 UTC,
 | 7 | 13:00 | next day 14:00 | reserved |
 | 8 | 13:30 | next day 16:00 | reserved |
 
-A paid request that ends at 14:00 that day publishes at 14:00, as soon as it is uploaded. A ninth ordinary game publishes on the third day at 10:00. Every recording goes on the retention sweep that follows its upload; none waits on disk for the quota. With `MaxPublishAhead` 3 days and 4 non-request videos a day, the recording cap stops recording ordinary games once about 12 wait for upload or their publish time.
+A paid request that ends at 14:00 that day publishes at 14:00, as soon as it is uploaded. A ninth ordinary game publishes on the third day at 10:00. Every recording goes on the retention sweep that follows its upload; none waits on disk for the quota. With `MaxPublishAhead` 3 days and 4 non-request videos a day, the window holds 12. Once it is full, the recording cap records an ordinary game only while the recordings ahead of it drain, at 4 a day, at least a day before the game is 3 days old.
 
 ## What the video contains
 
