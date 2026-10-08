@@ -8,6 +8,7 @@ using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Pages;
+using HeroesReplay.Core.Obs.Recording;
 using Newtonsoft.Json.Linq;
 
 namespace HeroesReplay.Tests.Unit.Obs;
@@ -51,6 +52,20 @@ internal sealed class FakeObs : IObsReadSessionFactory
             },
         };
     public byte[] Png { get; set; } = TinyPng.Create(32, 18);
+
+    /// <summary>GetRecordStatus outputActive. StopRecord turns it off unless <see cref="KeepRecordingOnStop"/>.</summary>
+    public bool Recording { get; set; } = true;
+
+    /// <summary>GetRecordStatus outputDuration, in milliseconds.</summary>
+    public long RecordedMilliseconds { get; set; } = 60000;
+
+    /// <summary>The path StopRecord returns.</summary>
+    public string RecordPath { get; set; }
+
+    public bool KeepRecordingOnStop { get; set; }
+
+    /// <summary>StopRecord throws this, like an OBS that refuses the request.</summary>
+    public Exception StopRecordError { get; set; }
 
     /// <summary>GetVideoSettings: a 1920x1080 canvas scaled to 720p at 59.94 FPS.</summary>
     public JObject Video { get; } =
@@ -293,10 +308,10 @@ internal sealed class FakeObs : IObsReadSessionFactory
             },
             "GetRecordStatus" => new JObject
             {
-                ["outputActive"] = true,
+                ["outputActive"] = Recording,
                 ["outputPaused"] = false,
                 ["outputTimecode"] = "00:01:00.000",
-                ["outputDuration"] = 60000,
+                ["outputDuration"] = RecordedMilliseconds,
                 ["outputBytes"] = 1234567,
             },
             "GetStats" => new JObject
@@ -482,7 +497,30 @@ internal sealed class FakeObs : IObsReadSessionFactory
     /// <summary>The browser sources reloaded through <see cref="IObsPageSession.Reload"/>, in order.</summary>
     public List<string> Reloaded { get; } = new();
 
-    private sealed class Session : IObsPageSession
+    /// <summary>A session that may also stop the recording, as <c>services stop</c> opens.</summary>
+    public IObsRecordStopSession OpenRecordStop()
+    {
+        Opened++;
+        return new Session(this);
+    }
+
+    private string StopRecord()
+    {
+        Requests.Add("StopRecord");
+        if (StopRecordError != null)
+        {
+            throw StopRecordError;
+        }
+
+        if (!KeepRecordingOnStop)
+        {
+            Recording = false;
+        }
+
+        return RecordPath;
+    }
+
+    private sealed class Session : IObsPageSession, IObsRecordStopSession
     {
         private readonly FakeObs owner;
 
@@ -499,6 +537,8 @@ internal sealed class FakeObs : IObsReadSessionFactory
             owner.Requests.Add("PressInputPropertiesButton");
             owner.Reloaded.Add(inputName);
         }
+
+        public string StopRecord() => owner.StopRecord();
 
         public void Dispose() => owner.Disposed++;
     }

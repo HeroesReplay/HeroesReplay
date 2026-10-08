@@ -480,7 +480,7 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "stop",
-            "Ask the recorded processes to shut down, kill any still running after 20 seconds, and close Heroes of the Storm. Exits 1 unless every role exited, the game closed, and OBS is not streaming."
+            "Ask the recorded processes to shut down, kill any still running after 20 seconds, close Heroes of the Storm, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game closed, OBS is not streaming, and no recording spectate started is still running."
         );
         command.SetAction(
             (parseResult, cancellationToken) =>
@@ -499,6 +499,8 @@ public class ServicesCommand : Command
                         CloseGame = StopSpectatedGame,
                         ConfirmStream = ObsServiceStop.DelegateToSpectator,
                         ReadStream = ServiceStreamProbe.Read,
+                        StopSpectateRecording = () =>
+                            ServiceRecordingProbe.StopLeftRecording(ProcessNameOrNull),
                         StopSupervisor = StopSupervisor,
                     }
                 );

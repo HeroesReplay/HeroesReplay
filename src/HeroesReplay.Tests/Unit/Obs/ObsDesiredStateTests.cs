@@ -8,6 +8,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Recording;
+using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -605,6 +606,37 @@ public class ObsDesiredStateTests
         Assert.Null(stopped.OutputPath);
         Assert.Equal(1, socket.StopRecordCalls);
         Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal(0, harness.Process.LaunchCalls);
+    }
+
+    /// <summary>
+    /// #318: with OBS:Enabled=false and OBS:RecordingEnabled=true, the recording start and the
+    /// session end send OBS nothing, not even a connect.
+    /// </summary>
+    [Fact]
+    public void Recording_ObsDisabled_SendsObsNothing()
+    {
+        var socket = new FakeSession { IdentifyOnConnect = true, RecordOnStart = true };
+        OBSSettings obs = Settings(enabled: false, streaming: false);
+        obs.RecordingEnabled = true;
+        Harness harness = Open(obs, socket);
+        var replay = new LoadedReplay { ReplayId = 65820711, PolicyAllowsRecording = true };
+
+        ObsRecordingResult started = harness.Coordinator.StartRecording(
+            () => SessionMedia.ShouldRecord(obs, replay),
+            65820711,
+            "unit"
+        );
+        ObsRecordingResult stopped = harness.Coordinator.StopRecording(65820711);
+
+        Assert.Equal(ObsOutputFailure.NotRequested, started.Failure);
+        Assert.False(started.Owned);
+        Assert.Equal(ObsOutputFailure.NotOwned, stopped.Failure);
+        Assert.Equal(0, socket.ConnectCalls);
+        Assert.Equal(0, socket.StartRecordCalls);
+        Assert.Equal(0, socket.StopRecordCalls);
+        Assert.Equal(0, socket.StopStreamCalls);
+        Assert.False(socket.Recording);
         Assert.Equal(0, harness.Process.LaunchCalls);
     }
 

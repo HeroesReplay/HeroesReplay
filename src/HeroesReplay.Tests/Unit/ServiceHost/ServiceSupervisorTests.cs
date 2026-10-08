@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Services;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
 using Xunit;
 
@@ -1225,6 +1226,146 @@ public class ServiceSupervisorTests
             Assert.Equal(1, result.ExitCode);
             Assert.Equal(ServiceStreamState.Unknown, result.Stream.State);
             Assert.Contains("socket broke", result.Stream.Detail);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// #318: once every role exited, the stream is read as before, then the recording spectate
+    /// left running is stopped. The stop succeeds.
+    /// </summary>
+    [Fact]
+    public void Stop_StopsTheRecordingSpectateLeftAfterTheStreamCheck()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 80, 81);
+            var processes = new FakeProcesses(80, 81);
+            var steps = new List<string>();
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () =>
+            {
+                steps.Add("game");
+                return true;
+            };
+            shutdown.ReadStream = () =>
+            {
+                steps.Add("stream");
+                return ServiceStreamCheck.Inactive();
+            };
+            shutdown.StopSpectateRecording = () =>
+            {
+                steps.Add("recording");
+                return new OrphanRecordingCheck(
+                    OrphanRecordingState.Stopped,
+                    "Stopped the recording spectate pid 80 started for replay 65820711.",
+                    "2026-10-08 12-33-26.mp4"
+                );
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(new[] { "game", "stream", "recording" }, steps);
+            Assert.Equal(OrphanRecordingState.Stopped, result.Recording.State);
+            Assert.Equal(ServiceStreamState.Inactive, result.Stream.State);
+            Assert.Empty(result.Failures());
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData(OrphanRecordingState.None, 0)]
+    [InlineData(OrphanRecordingState.ClaimantRunning, 0)]
+    [InlineData(OrphanRecordingState.ObsNotRunning, 0)]
+    [InlineData(OrphanRecordingState.Inactive, 0)]
+    [InlineData(OrphanRecordingState.Stopped, 0)]
+    [InlineData(OrphanRecordingState.NotOwned, 0)]
+    [InlineData(OrphanRecordingState.Unreachable, 1)]
+    [InlineData(OrphanRecordingState.Failed, 1)]
+    [InlineData(OrphanRecordingState.Unknown, 1)]
+    public void Stop_FailsOnlyWhileARecordingSpectateStartedMayStillRun(
+        OrphanRecordingState state,
+        int expected
+    )
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 82);
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = ServiceStreamCheck.NotRunning;
+            shutdown.StopSpectateRecording = () => new OrphanRecordingCheck(state, "fake");
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(expected, result.ExitCode);
+            Assert.Equal(
+                expected == 1,
+                result.Failures().Any(failure => failure.Contains("OBS recording spectate"))
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_RoleStillRunning_DoesNotTouchTheRecording()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 83);
+            var processes = new FakeProcesses(83);
+            processes.Unkillable.Add(83);
+            int recordingChecks = 0;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = ServiceStreamCheck.Inactive;
+            shutdown.StopSpectateRecording = () =>
+            {
+                recordingChecks++;
+                return new OrphanRecordingCheck(OrphanRecordingState.None, null);
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Equal(0, recordingChecks);
+            Assert.Null(result.Recording);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_RecordingStepThatThrows_IsNotConfirmed()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.ReadStream = ServiceStreamCheck.NotRunning;
+            shutdown.StopSpectateRecording = () =>
+                throw new InvalidOperationException("claim locked");
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Equal(OrphanRecordingState.Unknown, result.Recording.State);
+            Assert.Contains("claim locked", result.Recording.Detail);
         }
         finally
         {

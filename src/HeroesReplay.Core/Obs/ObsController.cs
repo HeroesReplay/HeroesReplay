@@ -59,7 +59,12 @@ public class ObsController : IObsController
             settings,
             socket,
             new WindowsObsProcess(),
-            new RecordingSession(logger, socket, ObsRecordingBudget.Default),
+            new RecordingSession(
+                logger,
+                socket,
+                ObsRecordingBudget.Default,
+                new RecordingClaimStore(RecordingClaimStore.DefaultPath)
+            ),
             ObsBackoff.Default,
             Thread.Sleep,
             TimeSpan.FromSeconds(10),
