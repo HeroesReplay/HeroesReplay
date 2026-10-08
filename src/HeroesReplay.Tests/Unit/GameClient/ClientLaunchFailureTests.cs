@@ -76,6 +76,37 @@ public class ClientLaunchFailureTests
     }
 
     [Fact]
+    public void Read_TheDownloadingMessageIsNotAFailure()
+    {
+        // Result 12, GameLaunchVersionDownloadMessage, is "All data files must be fully
+        // downloaded to load this version of the game." (2.57.0.98348 string table).
+        ClientScreenSample downloading = NotAvailable with
+        {
+            LaunchResultCode = 12,
+            LaunchResult = "GameLaunchVersionDownloadMessage",
+        };
+
+        Assert.Null(ClientLaunchFailure.Read(downloading));
+        Assert.Equal(ClientHoldReason.None, ClientLaunchFailure.Classify(downloading));
+    }
+
+    [Fact]
+    public void Read_TheRegionResultIsTheSameInvalidClient()
+    {
+        // GameLaunchUnsupportedInCN (20): "Replays and saved games created before version 1.3.0
+        // are not supported in this region." The only region result in the client's table.
+        ClientScreenSample region = NotAvailable with
+        {
+            LaunchResultCode = 20,
+            LaunchResult = "GameLaunchUnsupportedInCN",
+        };
+
+        Assert.True(ClientLaunchFailure.Read(region)?.IsRegion);
+        Assert.False(ClientLaunchFailure.Read(NotAvailable)?.IsRegion);
+        Assert.Equal(ClientHoldReason.VersionMismatch, ClientLaunchFailure.Classify(region));
+    }
+
+    [Fact]
     public void Read_NoFailureOnScreen_IsNull()
     {
         ClientScreenSample cleared = NotAvailable with

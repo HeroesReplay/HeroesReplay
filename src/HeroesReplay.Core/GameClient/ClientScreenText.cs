@@ -2,6 +2,14 @@ using System;
 
 namespace HeroesReplay.Core.GameClient;
 
+/// <summary>
+/// The text rules left from the client's OCR (#292): Battle.net's own dialogs, which are not
+/// game-launch results and which no live run can reproduce. "The selected region is currently
+/// unavailable. Please try again later or select another region." and "Game client version mismatch
+/// with selected region. ..." are Battle.net authentication errors from the client's error table,
+/// shown in its Battle.net error dialog. The email and password form's words keep the disconnect
+/// rule off that form (#385). Every client screen comes from memory or the client's windows.
+/// </summary>
 public static class ClientScreenText
 {
     public static bool IsLoginForm(string text)
@@ -19,26 +27,14 @@ public static class ClientScreenText
         return password && (email || logIn);
     }
 
+    /// <summary>Battle.net's "Game client version mismatch with selected region." error.</summary>
     public static bool IsVersionMismatch(string text)
     {
         return !string.IsNullOrWhiteSpace(text)
-            && (
-                text.Contains("version mismatch", StringComparison.OrdinalIgnoreCase)
-                || IsVersionNotAvailable(text)
-            );
+            && text.Contains("version mismatch", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// "The version of Heroes of the Storm required to play this game is not available." Blizzard
-    /// no longer serves the replay's build, so that client will never arrive.
-    /// </summary>
-    public static bool IsVersionNotAvailable(string text)
-    {
-        return !string.IsNullOrWhiteSpace(text)
-            && text.Contains("version of Heroes", StringComparison.OrdinalIgnoreCase)
-            && text.Contains("not available", StringComparison.OrdinalIgnoreCase);
-    }
-
+    /// <summary>Battle.net's "The selected region is currently unavailable." error.</summary>
     public static bool IsRegionUnavailable(string text)
     {
         if (string.IsNullOrWhiteSpace(text))

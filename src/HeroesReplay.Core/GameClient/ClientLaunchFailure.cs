@@ -22,11 +22,27 @@ public static class ClientLaunchFailure
     public const string ResultDialog = "CStandardDialog";
 
     /// <summary>
-    /// The game-launch results that name the account's region (the client's
-    /// <c>@UI/GameLaunch*</c> keys whose message is about a region). Empty until the keys are read
-    /// from a running client.
+    /// The game-launch results whose message is about a region. Read from the running
+    /// 2.57.0.98348 client's own string table on 2026-10-08 (#292): only
+    /// <c>GameLaunchUnsupportedInCN</c> (20), "Replays and saved games created before version 1.3.0
+    /// are not supported in this region." The generic rule handles it like every other failure.
+    /// Battle.net's "The selected region is currently unavailable." is not a game-launch result
+    /// (see <see cref="ClientHold.Classify"/>).
     /// </summary>
-    public static readonly IReadOnlyList<string> RegionResults = Array.Empty<string>();
+    public static readonly IReadOnlyList<string> RegionResults = new[]
+    {
+        "GameLaunchUnsupportedInCN",
+    };
+
+    /// <summary>
+    /// Results in the game-launch table that are not failures: <c>GameLaunchVersionDownloadMessage</c>
+    /// (12) is "All data files must be fully downloaded to load this version of the game.", the
+    /// DOWNLOADING message (2.57.0.98348 string table, 2026-10-08).
+    /// </summary>
+    public static readonly IReadOnlyList<string> NotFailures = new[]
+    {
+        "GameLaunchVersionDownloadMessage",
+    };
 
     /// <summary>
     /// The failure on screen, or null when memory shows none: no message dialog, no failure
@@ -42,6 +58,7 @@ public static class ClientLaunchFailure
             || read.LaunchResultCode is not int code
             || code <= 0
             || string.IsNullOrWhiteSpace(read.LaunchResult)
+            || Contains(NotFailures, read.LaunchResult)
         )
         {
             return null;
@@ -56,6 +73,19 @@ public static class ClientLaunchFailure
     /// </summary>
     public static ClientHoldReason Classify(ClientScreenSample? sample) =>
         Read(sample) is null ? ClientHoldReason.None : ClientHoldReason.VersionMismatch;
+
+    internal static bool Contains(IReadOnlyList<string> keys, string key)
+    {
+        foreach (string candidate in keys)
+        {
+            if (string.Equals(candidate, key, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// True when a failure shows a region result, false on any other known screen, null when
@@ -77,20 +107,7 @@ public static class ClientLaunchFailure
 /// <summary>A game-launch failure: the client's result code and its message key.</summary>
 public readonly record struct LaunchFailure(int Code, string Key)
 {
-    public bool IsRegion => Contains(ClientLaunchFailure.RegionResults, Key);
+    public bool IsRegion => ClientLaunchFailure.Contains(ClientLaunchFailure.RegionResults, Key);
 
     public override string ToString() => $"{Code} {Key}";
-
-    private static bool Contains(IReadOnlyList<string> keys, string key)
-    {
-        foreach (string candidate in keys)
-        {
-            if (string.Equals(candidate, key, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }
