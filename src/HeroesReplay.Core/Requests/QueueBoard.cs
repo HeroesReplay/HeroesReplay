@@ -14,10 +14,15 @@ public static class QueueBoard
     public const string ReplayIdExample = "12345678";
     public const string BattleTagExample = "Name#1234";
 
+    /// <summary>
+    /// The waiting requests, the how-to, and under "Could not play" the requests in
+    /// <c>failed</c>: given up after they were queued (#351), newest first, with their reason.
+    /// </summary>
     public static void Write(
         string path,
         IReadOnlyList<RewardQueueItem> items,
-        IReadOnlyList<SupportedReward> rewards = null
+        IReadOnlyList<SupportedReward> rewards = null,
+        IReadOnlyList<RewardQueueItem> failed = null
     )
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -43,6 +48,8 @@ public static class QueueBoard
         html.Append("p.help{font-size:26px;line-height:1.35;margin:0 56px 12px;color:#c5d2e0;}");
         html.Append("span.label{color:#f2d38a;}");
         html.Append("ol{font-size:32px;line-height:1.4;margin:8px 72px 24px;}");
+        html.Append("h2{font-size:40px;margin:16px 56px 4px;color:#f29a8a;}");
+        html.Append("ul.failed{font-size:26px;line-height:1.35;margin:4px 72px 24px;}");
         html.Append(
             ".who{color:#f2d38a;} .map{color:#e8eef7;} .meta{color:#9aabc0;font-size:26px;}"
         );
@@ -88,16 +95,61 @@ public static class QueueBoard
                     html.Append(id);
                 }
 
+                if (item?.Download?.Attempts > 0)
+                {
+                    html.Append(" · download retry ").Append(item.Download.Attempts);
+                }
+
                 html.Append("</span></li>");
             }
 
             html.Append("</ol>");
         }
 
+        AppendFailed(html, failed);
         html.Append("</body></html>");
         string temp = path + ".tmp";
         File.WriteAllText(temp, html.ToString());
         File.Move(temp, path, overwrite: true);
+    }
+
+    private static void AppendFailed(StringBuilder html, IReadOnlyList<RewardQueueItem> failed)
+    {
+        if (failed == null || failed.Count == 0)
+        {
+            return;
+        }
+
+        html.Append("<h2>Could not play</h2><ul class=\"failed\">");
+        foreach (RewardQueueItem item in failed)
+        {
+            string who = Encode(item?.Request?.Login);
+            string map = Encode(item?.HeroesProfileReplay?.Map);
+            string title = Encode(item?.Request?.RewardTitle);
+            int? id =
+                item?.HeroesProfileReplay?.Id > 0
+                    ? item.HeroesProfileReplay.Id
+                    : item?.Request?.ReplayId;
+            html.Append("<li><span class=\"who\">")
+                .Append(string.IsNullOrWhiteSpace(who) ? "viewer" : who)
+                .Append("</span> — <span class=\"map\">")
+                .Append(string.IsNullOrWhiteSpace(map) ? title : map)
+                .Append("</span> <span class=\"meta\">");
+            if (id > 0)
+            {
+                html.Append("replay ").Append(id.Value).Append(" · ");
+            }
+
+            html.Append(Encode(item?.Download?.FailureReason));
+            if (item?.Download?.RefundRequested == true)
+            {
+                html.Append(" · refund requested");
+            }
+
+            html.Append("</span></li>");
+        }
+
+        html.Append("</ul>");
     }
 
     private static void AppendHowTo(StringBuilder html, IReadOnlyList<SupportedReward> rewards)

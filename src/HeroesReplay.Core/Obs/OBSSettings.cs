@@ -72,6 +72,14 @@ public class OBSSettings
     public bool CloseOwnedOnStop { get; set; }
 
     /// <summary>
+    /// When true (the default), spectate mutes every microphone input OBS has, the global
+    /// Mic/Aux devices and any audio input capture source, at each replay's session start and
+    /// right before it starts the stream (#314). Desktop Audio, media, and browser sources are
+    /// never touched. A mute that fails is a warning; it never stops the stream.
+    /// </summary>
+    public bool MuteMicrophones { get; set; } = true;
+
+    /// <summary>
     /// After HeroesReplay starts OBS itself, how long the websocket identify is retried before
     /// it fails. An OBS that was already running gets one attempt. Default 60 seconds.
     /// </summary>

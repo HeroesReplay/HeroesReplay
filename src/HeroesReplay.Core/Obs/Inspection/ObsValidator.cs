@@ -44,8 +44,9 @@ public sealed record ObsValidation : ICliResult
 /// active profile and collection (<see cref="ObsSelection"/>), the scenes and sources it drives
 /// (<see cref="ObsContract"/>), source kinds, that each contract item is in its scene and where
 /// it is placed (<see cref="ObsPlacement"/>) against <c>obs/Default.json</c>, local asset paths
-/// after <see cref="ObsCollectionPaths.RewriteValue"/>, the Mic/Aux global input, the canvas and
-/// FPS, the recording format and the bitrates (<see cref="ObsBitratePolicy"/>), the stream
+/// after <see cref="ObsCollectionPaths.RewriteValue"/>, the microphones
+/// (<see cref="ObsMicrophones"/>), the canvas and FPS, the recording format and the bitrates
+/// (<see cref="ObsBitratePolicy"/>), the stream
 /// service when this install streams, and the filters the packaged sources have. <c>obs validate</c>,
 /// <c>obs_validate</c>, and the spectator's preflight before its first StartStream run it.
 /// </summary>
@@ -100,7 +101,7 @@ public static class ObsValidator
     /// The obs-websocket requests HeroesReplay sends while it spectates: the minimum capability
     /// set. OBS must offer all of them (GetVersion <c>availableRequests</c>). SetRecordDirectory
     /// arrived in obs-websocket 5.3.0 (OBS 30.0), the newest one here, so OBS 30.0 or later is
-    /// required.
+    /// required. GetSpecialInputs, GetInputMute and SetInputMute are the microphone mute (#314).
     /// </summary>
     public static readonly IReadOnlyList<string> RequiredRequests =
     [
@@ -112,6 +113,9 @@ public static class ObsValidator
         "GetInputList",
         "GetInputSettings",
         "SetInputSettings",
+        "GetSpecialInputs",
+        "GetInputMute",
+        "SetInputMute",
         "GetSceneItemId",
         "SetSceneItemEnabled",
         "SetSourceFilterEnabled",
@@ -126,11 +130,11 @@ public static class ObsValidator
         "StopStream",
     ];
 
-    private static readonly string[] MicSlots = { "mic1", "mic2", "mic3", "mic4" };
-
     /// <summary>
     /// Findings that stop the spectator's first StartStream: a stream could not work, so it is
-    /// not started. Everything else is logged and the stream starts.
+    /// not started. Everything else is logged and the stream starts. <see cref="MicEnabled"/> is
+    /// not one: the owner chose mute, not block (#314), and the spectator mutes it first
+    /// (<c>OBS:MuteMicrophones</c>).
     /// </summary>
     public static readonly IReadOnlySet<string> StreamBlockers = new HashSet<string>(
         StringComparer.Ordinal
@@ -213,7 +217,7 @@ public static class ObsValidator
         );
         ExpectedAssets assets = ExpectedAssets.For(settings, packaged.AssetRoot);
         CheckPaths(session, inputs, global, assets, settings?.DataDirectory, files, findings);
-        CheckMicrophone(session, global, findings);
+        CheckMicrophones(session, settings?.Obs, global, inputs, findings);
         JObject video = session.Get("GetVideoSettings");
         CheckVideo(video, findings);
         CheckProfile(session, settings?.Obs, video, findings);
@@ -987,19 +991,34 @@ public static class ObsValidator
             StringComparison.OrdinalIgnoreCase
         );
 
-    private static void CheckMicrophone(
+    /// <summary>
+    /// Every microphone the spectator mutes (<see cref="ObsMicrophones"/>): an unmuted one is
+    /// <see cref="MicEnabled"/>, an error, because it is live on the stream and in the recording
+    /// until the spectator's next session start or StartStream mutes it; a muted one is
+    /// <see cref="MicMuted"/>, a warning. Neither stops the stream (#314).
+    /// </summary>
+    private static void CheckMicrophones(
         IObsReadSession session,
+        OBSSettings obs,
         IReadOnlyDictionary<string, string> global,
+        IEnumerable<JObject> inputs,
         List<ObsFinding> findings
     )
     {
-        foreach ((string name, string slot) in global)
+        string mitigation =
+            obs?.MuteMicrophones == true
+                ? " HeroesReplay mutes it at each replay's session start and before it starts the stream (OBS:MuteMicrophones), so it is live only until then, or after someone unmutes it."
+                : " OBS:MuteMicrophones is off, so HeroesReplay leaves it live.";
+        foreach (ObsMicrophone microphone in ObsMicrophones.Find(global, inputs))
         {
-            if (!MicSlots.Contains(slot, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
+            string name = microphone.Name;
+            bool device = microphone.GlobalAudio != null;
+            string what = device
+                ? "Global audio device '" + name + "' (" + microphone.GlobalAudio + ")"
+                : "Audio input capture source '" + name + "' (" + microphone.Source + ")";
+            string fix = device
+                ? "Set Settings > Audio > Global Audio Devices > Mic/Auxiliary Audio to Disabled"
+                : "Remove the source from the collection";
             bool? muted = ObsInspector.ReadMuted(session, name);
             findings.Add(
                 muted == true
@@ -1007,21 +1026,26 @@ public static class ObsValidator
                         MicMuted,
                         Warning,
                         name,
-                        "Global audio device '"
-                            + name
-                            + "' ("
-                            + slot
-                            + ") is enabled but muted. Set Settings > Audio > Global Audio Devices > Mic/Auxiliary Audio to Disabled so an unmute cannot broadcast a microphone."
+                        what
+                            + " is enabled but muted. "
+                            + fix
+                            + " so an unmute cannot broadcast a microphone."
                     )
                     : new ObsFinding(
                         MicEnabled,
                         Error,
                         name,
-                        "Global audio device '"
-                            + name
-                            + "' ("
-                            + slot
-                            + ") is enabled and not muted, so OBS captures whichever microphone Windows selects. Set Settings > Audio > Global Audio Devices > Mic/Auxiliary Audio to Disabled."
+                        what
+                            + " is enabled and not muted, so OBS captures "
+                            + (
+                                device
+                                    ? "whichever microphone Windows selects."
+                                    : "that microphone."
+                            )
+                            + mitigation
+                            + " "
+                            + fix
+                            + "."
                     )
             );
         }

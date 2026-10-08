@@ -72,6 +72,41 @@ public class ObsValidatorTests : IDisposable
         Assert.Equal(ObsValidator.Error, finding.Severity);
         Assert.Equal("Mic/Aux", finding.Subject);
         Assert.Contains("Disabled", finding.Message, StringComparison.Ordinal);
+        // #314: it is muted by the spectator, not a reason to stop the stream.
+        Assert.Contains("HeroesReplay mutes it", finding.Message, StringComparison.Ordinal);
+        Assert.Contains("OBS:MuteMicrophones", finding.Message, StringComparison.Ordinal);
+        Assert.Null(ObsValidator.BlocksStream(validation));
+    }
+
+    [Fact]
+    public void UnmutedMicrophone_WithMuteMicrophonesOff_SaysItStaysLive()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.Mic = "Mic/Aux";
+        OBSSettings settings = FakeObs.Settings();
+        settings.MuteMicrophones = false;
+
+        ObsFinding finding = Single(Validate(obs, settings), ObsValidator.MicEnabled);
+
+        Assert.Equal(ObsValidator.Error, finding.Severity);
+        Assert.DoesNotContain("HeroesReplay mutes it", finding.Message, StringComparison.Ordinal);
+        Assert.Contains("leaves it live", finding.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false, ObsValidator.MicEnabled, ObsValidator.Error)]
+    [InlineData(true, ObsValidator.MicMuted, ObsValidator.Warning)]
+    public void AnAudioInputCaptureSource_IsAMicrophoneToo(bool muted, string code, string severity)
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.MicSources["Headset"] = muted;
+
+        ObsFinding finding = Single(Validate(obs), code);
+
+        Assert.Equal(severity, finding.Severity);
+        Assert.Equal("Headset", finding.Subject);
+        Assert.Contains("wasapi_input_capture", finding.Message, StringComparison.Ordinal);
+        Assert.Contains("Remove the source", finding.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -549,6 +584,11 @@ public class ObsValidatorTests : IDisposable
         Assert.Contains("SetSourceFilterEnabled", ObsValidator.RequiredRequests);
         Assert.DoesNotContain("SetSourceFilterSettings", ObsValidator.RequiredRequests);
         Assert.Contains("SetRecordDirectory", ObsValidator.RequiredRequests);
+        // The microphone mute at session start and before StartStream (#314).
+        Assert.Contains("GetSpecialInputs", ObsValidator.RequiredRequests);
+        Assert.Contains("GetInputMute", ObsValidator.RequiredRequests);
+        Assert.Contains("SetInputMute", ObsValidator.RequiredRequests);
+        Assert.DoesNotContain("SetInputMute", ObsReadOnly.Requests);
     }
 
     [Fact]

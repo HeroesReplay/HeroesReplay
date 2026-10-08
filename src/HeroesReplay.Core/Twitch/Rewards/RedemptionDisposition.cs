@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Threading;
 using HeroesReplay.Core.Requests;
 
 namespace HeroesReplay.Core.Twitch.Rewards;
@@ -13,6 +14,14 @@ public enum RedemptionEnd
 
     /// <summary>Written by older builds for a session that was not verified. Never sent.</summary>
     Refund,
+
+    /// <summary>
+    /// Written by the download role when a request's replay can never be downloaded (#351).
+    /// <c>twitch connect</c> sets the redemption CANCELED, which returns the viewer's points.
+    /// Never sent for a redemption that also has a <see cref="Fulfill"/> line. An older build
+    /// does not read the word and skips the line.
+    /// </summary>
+    Cancel,
 }
 
 /// <summary>
@@ -43,8 +52,9 @@ public sealed record RedemptionDispositionLine(
 );
 
 /// <summary>
-/// <c>Data\redemption-dispositions.txt</c>: the spectator appends one line per finished
-/// requested session, and <c>twitch connect</c> sends the fulfilled ones to Twitch. A line is
+/// <c>Data\redemption-dispositions.txt</c>: the spectator appends one line per verified
+/// requested session, the download role one per request whose replay can never be downloaded,
+/// and <c>twitch connect</c> sends them to Twitch (FULFILLED or CANCELED). A line is
 /// <c>replayId end redemptionId [rewardId broadcasterId]</c>. Older lines have only the first
 /// three fields.
 /// </summary>
@@ -53,6 +63,45 @@ public static class RedemptionDispositionLog
     public const string FileName = "redemption-dispositions.txt";
 
     private const string NoBroadcaster = "-";
+
+    // Two roles append to the file. A second writer that opens it at the same instant gets a
+    // sharing violation, so an append is tried a few times before it gives up.
+    private const int AppendAttempts = 5;
+    private static readonly TimeSpan AppendRetryDelay = TimeSpan.FromMilliseconds(50);
+
+    /// <summary>
+    /// What is already recorded for <paramref name="redemptionId"/>: <see cref="RedemptionEnd.Fulfill"/>
+    /// when its match was verified, else <see cref="RedemptionEnd.Cancel"/> when a cancel was
+    /// recorded, else <see cref="RedemptionEnd.None"/>.
+    /// </summary>
+    public static RedemptionEnd Recorded(string path, Guid redemptionId)
+    {
+        if (redemptionId == Guid.Empty)
+        {
+            return RedemptionEnd.None;
+        }
+
+        RedemptionEnd recorded = RedemptionEnd.None;
+        foreach (RedemptionDispositionLine line in Read(path))
+        {
+            if (line.RedemptionId != redemptionId)
+            {
+                continue;
+            }
+
+            if (line.End == RedemptionEnd.Fulfill)
+            {
+                return RedemptionEnd.Fulfill;
+            }
+
+            if (line.End == RedemptionEnd.Cancel)
+            {
+                recorded = RedemptionEnd.Cancel;
+            }
+        }
+
+        return recorded;
+    }
 
     public static void Append(string path, int? replayId, RewardRequest request, RedemptionEnd end)
     {
@@ -86,7 +135,18 @@ public static class RedemptionDispositionLog
             + " "
             + broadcaster
             + Environment.NewLine;
-        File.AppendAllText(path, line);
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.AppendAllText(path, line);
+                return;
+            }
+            catch (IOException) when (attempt < AppendAttempts)
+            {
+                Thread.Sleep(AppendRetryDelay);
+            }
+        }
     }
 
     public static IReadOnlyList<RedemptionDispositionLine> Read(string path)

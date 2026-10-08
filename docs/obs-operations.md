@@ -18,7 +18,7 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 | Profile (`%APPDATA%\obs-studio\basic\profiles\<name>\basic.ini`) | The machine | `obs/Default/basic.ini` is written only when the machine has no profile of that name. An existing profile is never replaced. The spectator writes one value in it, the recording format, before each recording ([Recording container](#recording-container-310)). |
 | Encoder, bitrate, output resolution, FPS | The machine | Not set by HeroesReplay. Only the [policy](#machine-profile-policy) below is validated. |
 | Recording path and container | The spectator, per recording | `SetRecordDirectory` (the replay's context folder) and `RecFormat2` (`OBS:RecordingFormat`) right before each `StartRecord`. |
-| Global audio devices | The machine | The collection has Desktop Audio only. Mic/Aux should be Disabled (`obs.mic_enabled` is an error). |
+| Global audio devices | The machine | The collection has Desktop Audio only. Mic/Aux should be Disabled: an automated machine has no microphone. Spectate mutes any microphone it finds anyway ([Microphones](#microphones-314)), and `obs.mic_enabled` is an error while one is live. |
 | Stream service and key (`service.json`) | Operator secret | Never packaged, copied, logged, or returned by a tool. The tools report only the service type, the named service (`Twitch`), and whether a key is set. |
 | Twitch ingest arm (`%LOCALAPPDATA%\HeroesReplay\stream-armed`) | The machine | Ingest needs this arm and `OBS:StreamingEnabled`. `heroesreplay obs arm` / `disarm` / `status`. The live box is armed. ASA-SERVER is armed only for a stream proof; its OBS streams to a developer Twitch account. |
 
@@ -128,7 +128,7 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 - `heroesreplay obs validate [--output json]` checks the loaded collection and profile against `obs/Default.json` and this install's settings. Findings have stable codes; any `error` makes it exit 1. Run it after changing OBS, the profile, or the collection, and before a release.
 - `heroesreplay obs plan [--output json]` shows, from the files, what an update would change in the collection and who changed each difference ([Planning an update](#planning-an-update-obs-plan-307)).
 - The MCP server (`heroesreplay mcp`; `.mcp.json` at the repo root and in the release zip) offers the same reads as `obs_inspect`, `obs_validate`, and `obs_screenshot`. Every request is a Get, so it can't change OBS. Fixes go through guarded CLI commands. obs-mcp, which has unrestricted tools and returns the stream key, is dev-only and is never in the repo, the release, or the live box.
-- **Preflight.** Before the spectator's first `StartStream` of a process, it validates over its own connection. Only `obs.request_unavailable` and `obs.stream_key_missing` stop the stream (`obsStreamBlockedBy` in `status.json`). Every other finding is logged once.
+- **Preflight.** Before the spectator's first `StartStream` of a process, it validates over its own connection. Only `obs.request_unavailable` and `obs.stream_key_missing` stop the stream (`obsStreamBlockedBy` in `status.json`). Every other finding is logged once. `obs.mic_enabled` does not stop it: the spectator mutes the microphone instead ([Microphones](#microphones-314)).
 
 | Code | Severity | Fix |
 | --- | --- | --- |
@@ -137,7 +137,7 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 | `obs.recording_format_invalid` | error | `OBS:RecordingFormat` is not `mp4`, `hybrid_mp4`, `fragmented_mp4`, or `mkv`. The spectator leaves the profile's format as it is. Set it to `fragmented_mp4`. |
 | `obs.recording_not_crash_safe` | warning | The profile records `mp4` or `hybrid_mp4`, which a crash or a power loss can lose (#310). The spectator sets `OBS:RecordingFormat` (`fragmented_mp4`) before each recording, so this clears after the next one. When it says `OBS:RecordingFormat` itself is not crash-safe, set that to `fragmented_mp4`. |
 | `obs.stream_key_missing` | error when `OBS:StreamingEnabled` (stops the stream) | Settings > Stream: Twitch and its key. |
-| `obs.mic_enabled` / `obs.mic_muted` | error / warning | Settings > Audio > Mic/Auxiliary Audio: Disabled. |
+| `obs.mic_enabled` / `obs.mic_muted` | error / warning (neither stops the stream) | A live or muted microphone: a global Mic/Aux device or an audio input capture source. Settings > Audio > Mic/Auxiliary Audio: Disabled, or remove the source. Spectate mutes it until then ([Microphones](#microphones-314)). |
 | `obs.request_unavailable` | error (stops the stream) | Update OBS to 30.0 or later. |
 | `obs.bundle_invalid` | error | An install file differs from `obs/bundle.manifest` (size or SHA-256), or `Default.json` lacks a contract name. Install the release again. |
 | `obs.bundle_unverified` | warning | The install has no `obs/bundle.manifest` (packaged before schema 2). The next release brings one. |
@@ -151,6 +151,17 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 | `obs.file_unverifiable` | warning | This session could not check a source's file: a junction or symbolic link on the way (named in the message) could not be traversed or read. Over SSH the stream PC's `C:\heroesreplay` is a junction to `C:\SaltySadism` that a network logon may not traverse; a junction that can be read is checked at its target instead, so this shows only when even that fails. Run `obs validate` in the desktop session, or check the file through the link's target. |
 
 The full list is in the `heroes-replay-cli` skill (`obs_validate`).
+
+### Microphones (#314)
+
+An automated machine should have no microphone in OBS. The owner's decision was to mute, not to block the stream. The live box had none on 2026-10-08.
+
+- **What is muted.** Every microphone input: the enabled global Mic/Aux devices (`mic1` to `mic4` in GetSpecialInputs) and every audio input capture source (`wasapi_input_capture`, and the macOS and Linux kinds). `ObsMicrophones` finds them. Desktop Audio (an output capture), media, browser, and video capture sources are never touched.
+- **When.** At each replay's session start (`BeginSession`, after the live collection swap, because a collection brings its own global audio devices) and right before the spectator sends `StartStream`. A stream that is already live is left alone; the next session start mutes again. A microphone someone unmutes mid-session is live until then.
+- **How.** `GetInputMute`, then `SetInputMute` with `inputMuted` true for each one that is not muted, over the spectator's own connection (`IObsMicrophoneSession`: the read-only Gets plus mute; it cannot unmute). These are in `ObsValidator.RequiredRequests`. The read-only MCP session stays Get only.
+- **Logs.** Each mute is a warning once per session, with the input name, its slot or kind, and the fix. A mute or a read that fails is a warning once per session too, and the session, the recording, and the stream go on.
+- **Switch.** `OBS:MuteMicrophones` (default true). False sends OBS no microphone request at all.
+- **Validation.** `obs.mic_enabled` stays an error, and it is still not a stream blocker. It was not made a warning because it is reported only while a microphone is live: until the next session start or `StartStream`, or after someone unmutes it, the microphone is on the stream and in the recording. The message says that HeroesReplay mutes it (or that `OBS:MuteMicrophones` is off) and how to remove it. Once spectate mutes it, the same microphone is `obs.mic_muted`, a warning, so a machine that still has one keeps a warning until it is disabled or removed.
 
 ## Machine profile policy
 

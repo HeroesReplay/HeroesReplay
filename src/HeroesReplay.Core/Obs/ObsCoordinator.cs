@@ -8,7 +8,8 @@ namespace HeroesReplay.Core.Obs;
 
 /// <summary>
 /// One owner for the OBS process, websocket, waiting scene, stream, and recording
-/// desired state. Replay sessions use this coordinator and its socket.
+/// desired state, and for keeping every microphone muted (#314). Replay sessions use this
+/// coordinator and its socket.
 /// </summary>
 internal sealed class ObsCoordinator
 {
@@ -32,6 +33,7 @@ internal sealed class ObsCoordinator
     private readonly TimeSpan startupIdentifyTimeout;
     private readonly Func<DateTimeOffset> now;
     private readonly ObsCrashSentinel sentinel;
+    private readonly ObsMicrophoneMute microphones;
 
     // The watchdog reconciles the stream while the spectator switches scenes on its own thread.
     private readonly object stateGate = new();
@@ -64,7 +66,8 @@ internal sealed class ObsCoordinator
         Func<ObsValidation> preflight = null,
         TimeSpan? startupIdentifyTimeout = null,
         Func<DateTimeOffset> now = null,
-        ObsCrashSentinel sentinel = null
+        ObsCrashSentinel sentinel = null,
+        IObsMicrophoneSession microphones = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -86,6 +89,8 @@ internal sealed class ObsCoordinator
                 : TimeSpan.FromSeconds(60);
         this.now = now ?? (() => DateTimeOffset.UtcNow);
         this.sentinel = sentinel;
+        // No microphone session means nothing is muted.
+        this.microphones = microphones == null ? null : new ObsMicrophoneMute(logger, microphones);
     }
 
     public ObsRuntimeSnapshot State => state;
@@ -140,6 +145,42 @@ internal sealed class ObsCoordinator
         {
             throw new TimeoutException("OBS websocket at " + Endpoint() + " did not identify.");
         }
+    }
+
+    /// <summary>
+    /// Starts a replay's session. Identifies OBS (throws when it does not), lets
+    /// <paramref name="collectionReady"/> put the collection in place, then mutes every
+    /// microphone (#314). The live collection swap comes first because a collection brings its
+    /// own global audio devices. Only the identify throws.
+    /// </summary>
+    public void BeginSession(Action collectionReady = null)
+    {
+        EnsureIdentified();
+        microphones?.NewSession();
+        try
+        {
+            collectionReady?.Invoke();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "The OBS collection was not prepared for this replay.");
+        }
+
+        MuteMicrophones(ObsMicrophoneMute.AtSessionStart);
+    }
+
+    /// <summary>
+    /// <c>OBS:MuteMicrophones</c>: mutes every microphone OBS has. A failure is logged and the
+    /// caller goes on; the decision was mute, not block (#314).
+    /// </summary>
+    private void MuteMicrophones(string moment)
+    {
+        if (microphones == null || settings.OBS?.MuteMicrophones != true)
+        {
+            return;
+        }
+
+        microphones.MuteAll(moment);
     }
 
     public void Disconnect()
@@ -286,6 +327,9 @@ internal sealed class ObsCoordinator
             );
         }
 
+        // Last thing before the stream goes out: a microphone unmuted since the session began
+        // must not go live with it.
+        MuteMicrophones(ObsMicrophoneMute.BeforeStartStream);
         ObsStreamResult stream = ObsBackoff.Run(
             backoff.Delays(),
             () => recording.StartStreaming(EnsureIdentified),

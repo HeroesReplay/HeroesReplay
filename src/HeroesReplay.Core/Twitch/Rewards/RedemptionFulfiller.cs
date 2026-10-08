@@ -9,12 +9,16 @@ using Microsoft.Extensions.Logging;
 namespace HeroesReplay.Core.Twitch.Rewards;
 
 /// <summary>
-/// Marks a viewer's redemption FULFILLED on Twitch once the spectator verified the requested
-/// match (#165). The spectator never calls Helix: it appends the verified session to
-/// <c>Data\redemption-dispositions.txt</c>, and this loop in <c>twitch connect</c> sends it.
-/// A redemption that was sent, or that Twitch refused for good, is written to
-/// <c>Data\redemption-fulfilled.txt</c> and is not sent again. A network error is retried on the
-/// next pass. A session that was not verified writes nothing, so its redemption stays UNFULFILLED.
+/// Sends the redemption dispositions to Twitch from <c>twitch connect</c>. The spectator and the
+/// download role never call Helix: they append to <c>Data\redemption-dispositions.txt</c>, and
+/// this loop sends each line. A <see cref="RedemptionEnd.Fulfill"/> line (the spectator verified
+/// the requested match, #165) marks the redemption FULFILLED. A <see cref="RedemptionEnd.Cancel"/>
+/// line (the download role found the requested replay can never be downloaded, #351) cancels it
+/// through <see cref="IRedemptionCanceller"/>, which returns the viewer's points, unless the same
+/// redemption also has a Fulfill line. A redemption that was sent, or that Twitch refused for
+/// good, is written to <c>Data\redemption-fulfilled.txt</c> and is not sent again. A network
+/// error is retried on the next pass. A session that was not verified writes nothing, so its
+/// redemption stays UNFULFILLED.
 /// </summary>
 public sealed class RedemptionFulfiller
 {
@@ -25,17 +29,20 @@ public sealed class RedemptionFulfiller
     private readonly ILogger<RedemptionFulfiller> logger;
     private readonly AppSettings settings;
     private readonly IRedemptionStatusClient twitch;
+    private readonly IRedemptionCanceller canceller;
     private bool warnedNotConfigured;
 
     public RedemptionFulfiller(
         ILogger<RedemptionFulfiller> logger,
         AppSettings settings,
-        IRedemptionStatusClient twitch
+        IRedemptionStatusClient twitch,
+        IRedemptionCanceller canceller
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.twitch = twitch ?? throw new ArgumentNullException(nameof(twitch));
+        this.canceller = canceller ?? throw new ArgumentNullException(nameof(canceller));
     }
 
     /// <summary>
@@ -50,13 +57,13 @@ public sealed class RedemptionFulfiller
         if (!Enabled(settings.Twitch))
         {
             logger.LogInformation(
-                "Redemptions are not marked fulfilled on Twitch (requests off, or Twitch:DryRunMode)."
+                "Redemptions are not marked fulfilled or cancelled on Twitch (requests off, or Twitch:DryRunMode)."
             );
             return;
         }
 
         logger.LogInformation(
-            "Marking verified requests FULFILLED on Twitch from {Path}.",
+            "Marking verified requests FULFILLED, and requests whose replay cannot be downloaded CANCELED, on Twitch from {Path}.",
             DispositionsPath()
         );
         while (!cancellationToken.IsCancellationRequested)
@@ -85,7 +92,7 @@ public sealed class RedemptionFulfiller
         }
     }
 
-    /// <summary>One pass. Returns how many redemptions Twitch now shows FULFILLED.</summary>
+    /// <summary>One pass. Returns how many redemptions Twitch now shows FULFILLED or CANCELED.</summary>
     public async Task<int> SendPendingAsync(CancellationToken cancellationToken)
     {
         string sentPath = SentPath();
@@ -94,55 +101,118 @@ public sealed class RedemptionFulfiller
             return 0;
         }
 
-        HashSet<Guid> sent = ReadSent(sentPath);
-        int fulfilled = 0;
-        foreach (
-            RedemptionDispositionLine line in RedemptionDispositionLog.Read(DispositionsPath())
-        )
+        IReadOnlyList<RedemptionDispositionLine> lines = RedemptionDispositionLog.Read(
+            DispositionsPath()
+        );
+        var verified = new HashSet<Guid>();
+        foreach (RedemptionDispositionLine line in lines)
         {
-            if (line.End != RedemptionEnd.Fulfill || !sent.Add(line.RedemptionId))
+            if (line.End == RedemptionEnd.Fulfill)
+            {
+                verified.Add(line.RedemptionId);
+            }
+        }
+
+        HashSet<Guid> sent = ReadSent(sentPath);
+        int updated = 0;
+        foreach (RedemptionDispositionLine line in lines)
+        {
+            bool fulfil = line.End == RedemptionEnd.Fulfill;
+            bool cancel = line.End == RedemptionEnd.Cancel;
+            // A played and verified match is never refunded, whatever else was recorded.
+            if ((!fulfil && !cancel) || (cancel && verified.Contains(line.RedemptionId)))
+            {
+                continue;
+            }
+
+            if (!sent.Add(line.RedemptionId))
             {
                 continue;
             }
 
             if (line.RewardId == Guid.Empty || string.IsNullOrWhiteSpace(line.BroadcasterId))
             {
-                logger.LogWarning(
-                    "Redemption {RedemptionId} for replay {ReplayId} was verified, but its reward was not recorded. Mark it fulfilled in the Twitch reward queue.",
-                    line.RedemptionId,
-                    line.ReplayId
-                );
+                if (fulfil)
+                {
+                    logger.LogWarning(
+                        "Redemption {RedemptionId} for replay {ReplayId} was verified, but its reward was not recorded. Mark it fulfilled in the Twitch reward queue.",
+                        line.RedemptionId,
+                        line.ReplayId
+                    );
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "Redemption {RedemptionId} for replay {ReplayId} cannot be played, but its reward was not recorded. Reject it in the Twitch reward queue to return the points.",
+                        line.RedemptionId,
+                        line.ReplayId
+                    );
+                }
+
                 MarkSent(sentPath, line, "unknown-reward");
                 continue;
             }
 
-            RedemptionUpdate result = await twitch
-                .UpdateAsync(
-                    line.BroadcasterId,
-                    line.RewardId,
-                    line.RedemptionId,
-                    RewardRedemptionStatus.Fulfilled,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+            RedemptionUpdate result = fulfil
+                ? await twitch
+                    .UpdateAsync(
+                        line.BroadcasterId,
+                        line.RewardId,
+                        line.RedemptionId,
+                        RewardRedemptionStatus.Fulfilled,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false)
+                : await canceller
+                    .CancelAsync(
+                        line.BroadcasterId,
+                        line.RewardId,
+                        line.RedemptionId,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
             switch (result)
             {
                 case RedemptionUpdate.Updated:
-                    fulfilled++;
-                    MarkSent(sentPath, line, "fulfilled");
-                    logger.LogInformation(
-                        "Redemption {RedemptionId} for replay {ReplayId} is FULFILLED on Twitch.",
-                        line.RedemptionId,
-                        line.ReplayId
-                    );
+                    updated++;
+                    MarkSent(sentPath, line, fulfil ? "fulfilled" : "canceled");
+                    if (fulfil)
+                    {
+                        logger.LogInformation(
+                            "Redemption {RedemptionId} for replay {ReplayId} is FULFILLED on Twitch.",
+                            line.RedemptionId,
+                            line.ReplayId
+                        );
+                    }
+                    else
+                    {
+                        logger.LogInformation(
+                            "Redemption {RedemptionId} for replay {ReplayId} is CANCELED on Twitch. The viewer's points were returned.",
+                            line.RedemptionId,
+                            line.ReplayId
+                        );
+                    }
+
                     break;
                 case RedemptionUpdate.Refused:
                     MarkSent(sentPath, line, "refused");
-                    logger.LogWarning(
-                        "Twitch refused to fulfil redemption {RedemptionId} for replay {ReplayId}. It is not sent again.",
-                        line.RedemptionId,
-                        line.ReplayId
-                    );
+                    if (fulfil)
+                    {
+                        logger.LogWarning(
+                            "Twitch refused to fulfil redemption {RedemptionId} for replay {ReplayId}. It is not sent again.",
+                            line.RedemptionId,
+                            line.ReplayId
+                        );
+                    }
+                    else
+                    {
+                        logger.LogWarning(
+                            "Twitch refused to cancel redemption {RedemptionId} for replay {ReplayId}. It is not sent again. Reject it in the Twitch reward queue to return the points.",
+                            line.RedemptionId,
+                            line.ReplayId
+                        );
+                    }
+
                     break;
                 case RedemptionUpdate.NotConfigured:
                     sent.Remove(line.RedemptionId);
@@ -150,7 +220,7 @@ public sealed class RedemptionFulfiller
                     {
                         warnedNotConfigured = true;
                         logger.LogWarning(
-                            "Twitch:ClientId or Twitch:AccessToken is missing. Verified redemptions wait until it is set."
+                            "Twitch:ClientId or Twitch:AccessToken is missing. Redemptions wait until it is set."
                         );
                     }
 
@@ -162,7 +232,7 @@ public sealed class RedemptionFulfiller
             }
         }
 
-        return fulfilled;
+        return updated;
     }
 
     private string DispositionsPath() =>
