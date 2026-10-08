@@ -525,7 +525,8 @@ try {
     # %LOCALAPPDATA%\HeroesReplay\obs\backups. A custom collection is kept. While OBS is running the
     # replacement waits until HeroesReplay finds OBS closed. The profile (basic.ini) belongs to the
     # machine: the packaged one is only copied when the machine has none, and an existing profile is
-    # kept. service.json (stream key) is never copied.
+    # kept. service.json (stream key) is never copied. With --previous it also records, in
+    # obs\release-rollback.json, what a rollback needs to put back the collection the replaced build ran with.
     Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'install-obs', '--install', $InstallDir, '--previous', $previous, '--environment', $environment) 'OBS scene files'
 
     # A hand-made start-live.cmd may start the roles in cmd /k windows, or only some of them, and the
@@ -586,6 +587,14 @@ try {
     # While the new build is still installed: put back the launcher the restored install was started by.
     Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'launcher', '--restore') 'Launcher'
 
+    # Also with the new build (an older one does not have the command): put back the OBS scene
+    # collection the restored install ran with, the backup taken before this release first wrote it
+    # (%LOCALAPPDATA%\HeroesReplay\obs\release-rollback.json). With OBS closed the file is written back.
+    # With OBS running it goes in through the spare collection, so a live stream stays up; when that
+    # cannot run, it waits and services status shows it. A custom collection is never overwritten,
+    # and a release that never wrote the collection leaves it alone. The output says which.
+    Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'restore-obs', '--previous', $previous, '--install', $InstallDir, '--environment', $environment) 'OBS rollback'
+
     # The failed install may have moved MinReplayId forward. Keep the higher one after the restore.
     $failedSettings = Join-Path ([System.IO.Path]::GetTempPath()) ('heroesreplay-failed-' + [System.IO.Path]::GetRandomFileName() + '.json')
     try {
@@ -607,6 +616,8 @@ try {
 
     Protect-MinReplayId (Join-Path $InstallDir 'heroesreplay.exe') $failedSettings (Join-Path $InstallDir 'appsettings.json')
     Remove-Item -LiteralPath $failedSettings -Force -ErrorAction SilentlyContinue
+    # The restored build checks the collection against its own template. After restore-obs the record
+    # names that template, so a collection put back is kept as it is.
     Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'install-obs', '--install', $InstallDir, '--environment', $environment) 'OBS scene files'
 
     Clear-ServiceStop

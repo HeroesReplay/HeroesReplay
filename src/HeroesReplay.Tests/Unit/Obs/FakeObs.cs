@@ -87,7 +87,12 @@ internal sealed class FakeObs : IObsReadSessionFactory
             [("SimpleOutput", "RecFormat2")] = "mp4",
             [("SimpleOutput", "RecEncoder")] = "qsv_h264",
             [("SimpleOutput", "StreamEncoder")] = "x264",
+            [("SimpleOutput", "VBitrate")] = "6000",
+            [("SimpleOutput", "RecQuality")] = "Stream",
         };
+
+    /// <summary>GetRecordDirectory: where OBS writes its next recording.</summary>
+    public string RecordDirectory { get; set; } = @"C:\heroesreplay\Data\Contexts\65820711";
     public int Opened { get; private set; }
     public int Disposed { get; private set; }
     public string OpenedEndpoint { get; private set; }
@@ -189,10 +194,17 @@ internal sealed class FakeObs : IObsReadSessionFactory
 
     public void RemoveSceneItem(string scene, string source)
     {
-        ((JArray)Source(scene)["settings"]["items"])
-            .Single(item => (string)item["name"] == source)
-            .Remove();
+        SceneItem(scene, source).Remove();
     }
+
+    /// <summary>
+    /// A scene item as the collection saves it (<c>pos</c>, <c>align</c>, <c>scale</c>,
+    /// <c>bounds_type</c>, <c>bounds</c>), to move before a test reads it.
+    /// </summary>
+    public JObject SceneItem(string scene, string source) =>
+        ((JArray)Source(scene)["settings"]["items"])
+            .OfType<JObject>()
+            .Single(item => (string)item["name"] == source);
 
     public IObsReadSession Open(string endpoint, string password)
     {
@@ -276,6 +288,11 @@ internal sealed class FakeObs : IObsReadSessionFactory
                 ),
             },
             "GetSceneItemList" => SceneItems((string)data?["sceneName"]),
+            "GetSceneItemTransform" => SceneItemTransform(
+                (string)data?["sceneName"],
+                (long?)data?["sceneItemId"]
+            ),
+            "GetRecordDirectory" => new JObject { ["recordDirectory"] = RecordDirectory },
             "GetInputList" => new JObject { ["inputs"] = new JArray(Inputs()) },
             "GetInputSettings" => InputSettings((string)data?["inputName"]),
             "GetInputMute" => Audio(
@@ -365,6 +382,53 @@ internal sealed class FakeObs : IObsReadSessionFactory
                     }
                 )
             ),
+        };
+    }
+
+    private static readonly string[] BoundsTypes =
+    {
+        "OBS_BOUNDS_NONE",
+        "OBS_BOUNDS_STRETCH",
+        "OBS_BOUNDS_SCALE_INNER",
+        "OBS_BOUNDS_SCALE_OUTER",
+        "OBS_BOUNDS_SCALE_TO_WIDTH",
+        "OBS_BOUNDS_SCALE_TO_HEIGHT",
+        "OBS_BOUNDS_MAX_ONLY",
+    };
+
+    /// <summary>GetSceneItemTransform from the item's saved transform, as obs-websocket names it.</summary>
+    private JObject SceneItemTransform(string sceneName, long? sceneItemId)
+    {
+        JObject item = Sources()
+            .Where(source => IsScene(source) && (string)source["name"] == sceneName)
+            .SelectMany(scene => ((JArray)scene["settings"]["items"]).OfType<JObject>())
+            .FirstOrDefault(candidate => (long?)candidate["id"] == sceneItemId);
+        if (item == null)
+        {
+            throw new ObsRequestException("GetSceneItemTransform", 600, "No scene item was found.");
+        }
+
+        return new JObject
+        {
+            ["sceneItemTransform"] = new JObject
+            {
+                ["positionX"] = item["pos"]?["x"] ?? 0,
+                ["positionY"] = item["pos"]?["y"] ?? 0,
+                ["rotation"] = item["rot"] ?? 0,
+                ["scaleX"] = item["scale"]?["x"] ?? 1,
+                ["scaleY"] = item["scale"]?["y"] ?? 1,
+                ["alignment"] = item["align"] ?? 5,
+                ["boundsType"] = BoundsTypes[(int?)item["bounds_type"] ?? 0],
+                ["boundsAlignment"] = item["bounds_align"] ?? 0,
+                ["boundsWidth"] = item["bounds"]?["x"] ?? 0,
+                ["boundsHeight"] = item["bounds"]?["y"] ?? 0,
+                ["cropLeft"] = item["crop_left"] ?? 0,
+                ["cropRight"] = item["crop_right"] ?? 0,
+                ["cropTop"] = item["crop_top"] ?? 0,
+                ["cropBottom"] = item["crop_bottom"] ?? 0,
+                ["sourceWidth"] = 1920,
+                ["sourceHeight"] = 1080,
+            },
         };
     }
 

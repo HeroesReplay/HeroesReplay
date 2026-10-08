@@ -1,12 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.CommandLine;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Dependencies;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Commands.Deps;
 
@@ -16,6 +20,10 @@ namespace HeroesReplay.CLI.Commands.Deps;
 /// </summary>
 public class DepsCommand : Command
 {
+    public const string Installed = "deps.installed";
+    public const string AlreadyInstalled = "deps.already_installed";
+    public const string Failed = "deps.failed";
+
     public DepsCommand()
         : base(
             "deps",
@@ -37,15 +45,32 @@ public class DepsCommand : Command
                 "Tools folder; ffmpeg goes in <dir>\\ffmpeg. Default Dependencies:Directory (C:\\heroesreplay\\tools), which FfmpegLocator searches after Clips:FfmpegDirectory.",
         };
         command.Options.Add(directory);
+        Option<string> output = CliOutput.CreateOption(
+            "JSON: schemaVersion, ok, code (deps.installed, deps.already_installed, deps.failed), message, environment, details (directory, tools[] with name, version, outcome, ok, message; note). Download progress goes to stderr."
+        );
+        command.Options.Add(output);
         command.SetAction(
             (parseResult, cancellationToken) =>
-                InstallAsync(parseResult.GetValue(directory), cancellationToken)
+            {
+                CliOutputFormat format = CliOutput.Format(parseResult, output);
+                TextWriter stdout = CliOutput.Out(parseResult);
+                return InstallAsync(
+                    parseResult.GetValue(directory),
+                    format,
+                    stdout,
+                    CliOutput.Progress(format, parseResult, stdout),
+                    cancellationToken
+                );
+            }
         );
         return command;
     }
 
     private static async Task<int> InstallAsync(
         string directory,
+        CliOutputFormat format,
+        TextWriter output,
+        TextWriter progress,
         CancellationToken cancellationToken
     )
     {
@@ -56,11 +81,11 @@ public class DepsCommand : Command
             settings.DownloadTimeout > TimeSpan.Zero
                 ? settings.DownloadTimeout
                 : TimeSpan.FromMinutes(5);
-        bool ok = true;
+        var tools = new List<DepsToolResult>();
         // Dependencies:DownloadTimeout bounds the whole install, so the client has no limit of its own.
         using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("HeroesReplay", "1"));
-        var installer = new DependencyInstaller(http, Console.WriteLine);
+        var installer = new DependencyInstaller(http, progress.WriteLine);
         foreach (DependencyPin pin in DependencyManifest.Pins)
         {
             using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -87,11 +112,18 @@ public class DepsCommand : Command
                 );
             }
 
-            Console.WriteLine(result.Message);
-            ok &= result.Ok;
+            if (format == CliOutputFormat.Text)
+            {
+                output.WriteLine(result.Message);
+            }
+
+            tools.Add(
+                new DepsToolResult(pin.Name, pin.Version, result.Outcome, result.Ok, result.Message)
+            );
         }
 
-        if (!string.IsNullOrWhiteSpace(directory) && ok)
+        string note = null;
+        if (!string.IsNullOrWhiteSpace(directory) && tools.All(tool => tool.Ok))
         {
             FfmpegLocator locator = FfmpegLocator.From(clips, settings);
             if (
@@ -102,12 +134,62 @@ public class DepsCommand : Command
                 )
             )
             {
-                Console.WriteLine(
-                    $"Clips look in {locator.InstallDirectory}, not {root}. Set Dependencies:Directory (or Clips:FfmpegDirectory) to use this copy."
-                );
+                note =
+                    $"Clips look in {locator.InstallDirectory}, not {root}. Set Dependencies:Directory (or Clips:FfmpegDirectory) to use this copy.";
+                if (format == CliOutputFormat.Text)
+                {
+                    output.WriteLine(note);
+                }
             }
         }
 
-        return ok ? 0 : 1;
+        CliResult<DepsInstallDetails> report = Report(root, tools, note);
+        return format == CliOutputFormat.Json
+            ? CliOutput.WriteJson(report, output)
+            : CliOutput.ExitCode(report);
+    }
+
+    /// <summary>
+    /// The <c>deps install</c> result: <see cref="Failed"/> when a tool failed (exit 1),
+    /// <see cref="Installed"/> when one was downloaded, else <see cref="AlreadyInstalled"/>.
+    /// </summary>
+    public static CliResult<DepsInstallDetails> Report(
+        string directory,
+        IReadOnlyList<DepsToolResult> tools,
+        string note
+    )
+    {
+        DepsToolResult failed = tools.FirstOrDefault(tool => !tool.Ok);
+        bool installed = tools.Any(tool => tool.Outcome == DependencyInstallOutcome.Installed);
+        return new CliResult<DepsInstallDetails>
+        {
+            Ok = failed == null,
+            Code =
+                failed != null ? Failed
+                : installed ? Installed
+                : AlreadyInstalled,
+            Message = failed?.Message ?? string.Join(" ", tools.Select(tool => tool.Message)),
+            Environment = CliJson.CurrentEnvironment(),
+            Details = new DepsInstallDetails(directory, tools, note),
+        };
     }
 }
+
+/// <summary>One pinned tool after <c>deps install</c>.</summary>
+public sealed record DepsToolResult(
+    string Name,
+    string Version,
+    DependencyInstallOutcome Outcome,
+    bool Ok,
+    string Message
+);
+
+/// <summary>
+/// <c>deps install --output json</c> details. <see cref="Note"/> is set when <c>--dir</c> is not
+/// where clips look.
+/// </summary>
+public sealed record DepsInstallDetails(
+    string Directory,
+    IReadOnlyList<DepsToolResult> Tools,
+    string Note
+);

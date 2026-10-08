@@ -15,6 +15,7 @@ public class TwitchExtensionCheckTests
         Assert.True(result.Ok);
         Assert.Equal("twitch-extension", result.Name);
         Assert.Equal("Twitch extension is disabled.", result.Detail);
+        Assert.Equal("check.twitch_extension.disabled", result.Code);
     }
 
     [Fact]
@@ -42,6 +43,38 @@ public class TwitchExtensionCheckTests
             "This uploader key is not valid. Create a new one at heroesprofile.com/Api/Account.",
             result.Detail
         );
+        Assert.Equal("check.twitch_extension.key_rejected", result.Code);
+    }
+
+    [Theory]
+    [InlineData(401, "check.twitch_extension.key_rejected")]
+    [InlineData(403, "check.twitch_extension.key_rejected")]
+    [InlineData(429, "check.twitch_extension.rate_limited")]
+    [InlineData(0, "check.twitch_extension.unreachable")]
+    [InlineData(502, "check.twitch_extension.http_error")]
+    public void AFailedWhoAmI_HasAStableCodePerStatus(int status, string code)
+    {
+        CheckCommand.CheckResult result = CheckCommand.TwitchExtensionWhoAmI(
+            new ExtensionWhoAmI
+            {
+                Reachable = false,
+                StatusCode = status,
+                Message = "no",
+            }
+        );
+
+        Assert.False(result.Ok);
+        Assert.Equal(code, result.Code);
+        Assert.Contains(code, CheckCodes.All);
+    }
+
+    [Fact]
+    public void NoWhoAmIAtAll_IsUnreachable()
+    {
+        Assert.Equal(
+            CheckCodes.TwitchExtensionUnreachable,
+            CheckCommand.TwitchExtensionWhoAmI(null).Code
+        );
     }
 
     [Theory]
@@ -63,5 +96,6 @@ public class TwitchExtensionCheckTests
         Assert.True(result.Ok);
         Assert.StartsWith("Connected to SaltySadism.", result.Detail);
         Assert.Contains(expected, result.Detail);
+        Assert.Equal(CheckCodes.TwitchExtensionOk, result.Code);
     }
 }

@@ -64,14 +64,41 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
   Any other collection is custom: an operator added or removed a scene or source. A custom collection is never overwritten, and the output names the extra and missing names.
 - **Template changed.** A managed collection is replaced with the new template. A managed collection with no record yet is replaced once by a release (`update install-obs`, which `apply-release.ps1` runs): equal names do not mean equal filters and settings, so an older build's collection is never taken for this template. `services start` and the spectator only update its paths and save no record, so they never replace an operator's collection that a release has not seen (#218).
 - **Template unchanged.** Only the asset and data paths are pointed at this install. Positions, volumes and filters that OBS saved are kept.
-- **Backup and atomic write.** Every write copies the current file to `%LOCALAPPDATA%\HeroesReplay\obs\backups\<folder>-<file>.<UTC>.bak` (the newest 10 per file), writes a temp file beside it, and swaps it in. A failed write leaves the original. To roll back, close OBS and copy a backup over the collection.
+- **Backup and atomic write.** Every write copies the current file to `%LOCALAPPDATA%\HeroesReplay\obs\backups\<folder>-<file>.<UTC>.bak` (the newest 10 per file), writes a temp file beside it, and swaps it in. A failed write leaves the original. A release rollback puts the right backup back by itself (below); by hand, close OBS and copy a backup over the collection.
+- **Release rollback (#304).** A release's `update install-obs --previous` records in `%LOCALAPPDATA%\HeroesReplay\obs\release-rollback.json` the collection file, when the install started, the backup its own write took (if any), the replaced install's template hash, and the collection's record before the install. When the health gate rolls the release back, `apply-release.ps1` runs `update restore-obs` with the failed exe, after `services stop` and before `app.previous` is copied back:
+  - **Source.** The backup the install took, else the first backup of the collection from after the install started (a live swap or `services start` of the failed build). That is the collection as the restored build left it. No such backup means the release never wrote the collection: nothing is restored, the record goes back to what it was, and the log says so.
+  - **OBS closed.** The backup's exact bytes are written back through `ObsFileTransaction` (the failed release's collection becomes a backup too).
+  - **OBS running.** The backup goes in through the same live swap as a release (`{SceneCollectionName}-next`), so the stream and a recording stay up. When the swap cannot run (websocket down, another collection active, `OBS:LiveCollectionSwap` off), the restore waits in `obs\restore-pending.json`, `services status` shows `OBS rollback: waiting.`, and the restored build finishes it the next time it finds OBS closed or at its next replay. Any other install drops it. A build from before this existed ignores the file and replaces the collection with its own template instead.
+  - **Record.** `managed-collections.json` goes back to its entry from before the install (the restored template), so the restored build keeps the file. With no entry then, it names the restored template.
+  - **Never over a custom collection.** A collection whose names match neither the failed release's record, its template, nor the backup was changed by hand after the release wrote it: it is kept, `restore-obs` exits 1, and the log names the backup to copy by hand.
+  - The profile (`basic.ini`) is not part of it: a release never replaces an existing profile.
 - **Effective settings.** The data folder and collection name come from the install's `appsettings.json`, with the `HEROES_REPLAY_ENV` overlay and `HEROES_REPLAY_` variables applied.
 - **New machine.** `tools/bootstrap-workstation.ps1` writes the collection only when the machine has none.
 
+### Planning an update (`obs plan`, #307)
+
+`heroesreplay obs plan [--install <dir>] [--previous <dir>] [--output json]` shows what an update would change, and changes nothing. It reads files only (no websocket), so it is safe while OBS runs: the live collection, `managed-collections.json`, and `restore-pending.json` are read, and the update's own decision (`ObsCollectionPatcher`, run as `update install-obs` runs it) is made on copies in a temp folder that is deleted. To preview a staged release, run its exe with `--install <staged folder> --previous C:\heroesreplay\app`.
+
+- **Structured diff.** The live collection, `--install`'s `obs/Default.json`, and the base (the template the collection was last written from: this install's or `--previous`'s, found by the SHA-256 in the record) are compared after the path rewrite, property by property, for every source, filter, and scene item:
+
+  | Kind | Means | A merge |
+  | --- | --- | --- |
+  | `managedChange`, `managedAddition`, `managedRemoval` | The template moved; the live value is still the old template's | takes the template's |
+  | `operatorOverride`, `operatorAddition`, `operatorRemoval` | The operator changed, added, or removed it; the template did not | keeps it (a removed managed source is never re-added) |
+  | `conflict` | Both changed it | refuses |
+  | `unattributed` | It differs and there is no base | keeps it |
+
+  A source that exists on one side only is one line; its filters and scene items go with it.
+- **Not compared.** Ids OBS assigns (`uuid`, scene item ids), hotkeys, private settings, plug-in version stamps, the order of sources, filters, and items, global audio, transitions, and the values the spectator sets per replay: the info and tier text sources' text and file, the visibility of the game scene items it shows and hides, and each report browser source's url, css (the match report scroll), and height. Fractions compare at the single precision OBS saves (`0.66` and `0.6600000262260437` are equal); whole numbers, such as colors, compare exactly.
+- **Update.** `update.action` is what `update install-obs` would do now: `none`, `create`, `replace` (the whole collection, with the template), `update_paths`, `restore` (a waiting release rollback), or `keep` (custom or unreadable), with `deferred` and `liveSwap` when it waits for OBS.
+- **Codes.** `obs.plan_in_sync`, `obs.plan_changes`, `obs.plan_base_unknown`, `obs.collection_custom`, `obs.collection_missing` (ok), and `obs.plan_conflict`, `obs.collection_unreadable`, `obs.template_missing` (not ok, exit 1). JSON is `schemaVersion` 1, `ok`, `code`, `message`, `base`, `update`, `pendingRollback`, `summary`, `differences`.
+- `obs apply` (a merge that keeps operator overrides and additions, refusing on a conflict), `obs backup` and `obs restore`, and `update install-obs` using the diff, are the next parts of #307.
+
 ## Checking OBS
 
-- `heroesreplay obs inspect [--output json]` reads live OBS without changing it: versions, profile and collection, canvas, output size and FPS, output mode, recording format and encoders, scenes, global audio, stream and record status, stats, the stream service (never the key), and the arm.
+- `heroesreplay obs inspect [--output json]` reads live OBS without changing it: versions, profile and collection, canvas, output size and FPS, output mode, recording format and encoders, the stream and recording bitrates and rate control, the record directory, scenes, global audio, stream and record status, stats, the stream service (never the key), and the arm.
 - `heroesreplay obs validate [--output json]` checks the loaded collection and profile against `obs/Default.json` and this install's settings. Findings have stable codes; any `error` makes it exit 1. Run it after changing OBS, the profile, or the collection, and before a release.
+- `heroesreplay obs plan [--output json]` shows, from the files, what an update would change in the collection and who changed each difference ([Planning an update](#planning-an-update-obs-plan-307)).
 - The MCP server (`heroesreplay mcp`; `.mcp.json` at the repo root and in the release zip) offers the same reads as `obs_inspect`, `obs_validate`, and `obs_screenshot`. Every request is a Get, so it can't change OBS. Fixes go through guarded CLI commands. obs-mcp, which has unrestricted tools and returns the stream key, is dev-only and is never in the repo, the release, or the live box.
 - **Preflight.** Before the spectator's first `StartStream` of a process, it validates over its own connection. Only `obs.request_unavailable` and `obs.stream_key_missing` stop the stream (`obsStreamBlockedBy` in `status.json`). Every other finding is logged once.
 
@@ -85,6 +112,8 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 | `obs.bundle_invalid` | error | An install file differs from `obs/bundle.manifest` (size or SHA-256), or `Default.json` lacks a contract name. Install the release again. |
 | `obs.bundle_unverified` | warning | The install has no `obs/bundle.manifest` (packaged before schema 2). The next release brings one. |
 | `obs.fps_low` | warning | Settings > Video: 30 or 60 FPS. |
+| `obs.scene_item_misplaced` | warning | A driven item or the game capture is not where `obs/Default.json` puts it (position, anchor, scale, or bounding box). Right-click it > Transform > Edit Transform, or let a release replace a managed collection. See [the policy](#machine-profile-policy). |
+| `obs.bitrate_low` | warning | The stream or recording video bitrate is below the floor for the output size and FPS. Settings > Output: raise the Video Bitrate. |
 | `obs.stream_service_unexpected` | warning | Settings > Stream: Twitch. |
 | `obs.filter_stale` | warning | An old `Scroll` filter on the match report source. Right-click the source > Filters, and disable or remove it. With loop off it moves the page out of its frame and the scene looks blank (transparent). |
 | `obs.filter_missing`, `obs.path_stale`, `obs.collection_custom` | warning | Let `services start` update a managed collection while OBS is closed, or fix the source by hand. |
@@ -95,11 +124,24 @@ The full list is in the `heroes-replay-cli` skill (`obs_validate`).
 
 Each machine owns its OBS profile. Start one with the OBS Auto-Configuration Wizard on that machine; don't copy another machine's `basic.ini`. HeroesReplay validates only these constraints:
 
-- **Canvas 1920x1080.** The scenes, the full-canvas report pages, and the match report's one-canvas scroll are laid out for it. The output (scaled) resolution, bitrate and encoder are the machine's choice.
+- **Canvas 1920x1080.** The scenes, the full-canvas report pages, and the match report's one-canvas scroll are laid out for it. The output (scaled) resolution and the encoder are the machine's choice.
 - **30 FPS or more** (60 recommended).
+- **Scene items where `obs/Default.json` puts them.** HeroesReplay shows and hides the info, tier, rank, and report sources but never moves them. `obs validate` compares each contract item, and each game capture in a contract scene, with the template: the position and anchor, then the scale, or the bounding box when the item has one. Up to 2 canvas pixels or 0.01 of scale is still in place. A moved item is `obs.scene_item_misplaced`, a warning: an operator may move one on purpose. The template is the truth, for example `current-replay` anchored bottom-left (alignment 9) at (5, 1060) since #276.
+- **Video bitrate at or above the floor.** Below it the game's motion breaks into blocks on stream and in the uploads. The floor depends on the output (scaled) resolution and FPS. It is three quarters of Twitch's guidance (6000, 4500, and 3000 kbps), rounded down to a multiple of 500:
+
+  | Output | Floor |
+  | --- | --- |
+  | 1080p above 30 FPS | 4500 kbps |
+  | 1080p at 30 FPS, or 720p above 30 FPS | 3000 kbps |
+  | Anything lower | 2000 kbps |
+
+  A bitrate below the floor is `obs.bitrate_low`, a warning that never blocks a stream or a recording.
+  - Simple output: the bitrate is `VBitrate`, at CBR. A recording at `Stream` quality shares that encoder and is reported once, as the stream.
+  - Advanced output: the bitrates live in `streamEncoder.json` and `recordEncoder.json`, which obs-websocket cannot read. Only a custom (FFmpeg) recording's `FFVBitrate` is checked; the other bitrates are reported as not known, and no finding is raised.
+  - The floor is a proposal for the owner to confirm (#309). It is `ObsBitratePolicy`.
 - **Recording container: MP4 family.** MP4, Hybrid MP4 (OBS 30.2 and later, which survives a crash better) or fragmented MP4. The YouTube uploader, the pentakill clips and retention only find `*.mp4` in `Data\Contexts`. MKV would need a remux step in all three first; that is a later slice of #130 (D4/D5).
 - **Encoder.** Whatever the machine's GPU does well: QSV on Intel, NVENC on NVIDIA, x264 as the fallback. It is reported, not validated.
-- **Recording path.** The spectator sets the recording folder per replay with `SetRecordDirectory`, so the profile's own path doesn't matter.
+- **Recording path.** The spectator sets the recording folder for each replay with `SetRecordDirectory` before every `StartRecord`, so the profile's own path does not matter. `obs inspect` reports it (`GetRecordDirectory`, `recordDirectory`); between replays it is the last replay's context folder. It is not validated: no idle value is wrong.
 - **Stream.** Service Twitch with that machine's own key, set in OBS on that machine. The live box streams to `saltysadism`; ASA-SERVER streams to a developer Twitch account, so its test streams never touch the live channel.
 
 | Machine | Profile and collection | Streams | Records |

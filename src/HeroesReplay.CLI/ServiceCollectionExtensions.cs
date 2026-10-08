@@ -137,11 +137,15 @@ public static class ServiceCollectionExtensions
         IConfigurationRoot configuration = GetConfiguration();
         AppSettings settings = BindSettings(configuration);
 
+        // Logs go to stderr: stdout carries the result (check --output json) or, under
+        // heroesreplay mcp, the JSON-RPC stream the check_* tools answer on.
         return services
             .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-check")
             .AddMemoryCache()
             .AddLogging(builder =>
-                builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole()
+                builder
+                    .AddConfiguration(configuration.GetSection("Logging"))
+                    .AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace)
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
@@ -435,6 +439,11 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>();
     }
 
+    /// <summary>
+    /// The services <c>spectate</c> resolves. There is no chat bot, chat client, or reward
+    /// handler here: chat and channel-point redemptions belong to the twitch role
+    /// (<c>twitch connect</c>), so spectate cannot post to chat or answer a redemption (#301).
+    /// </summary>
     public static IServiceCollection AddSpectateServices(
         this IServiceCollection services,
         CancellationToken token,
@@ -445,26 +454,6 @@ public static class ServiceCollectionExtensions
         IConfigurationRoot configuration = GetConfiguration();
         AppSettings settings = BindSettings(configuration);
         services.AddSingleton(replayPath ?? new ReplayPathOptions());
-
-        var rewardHandler = typeof(IRewardHandler);
-        var rewardHandlerTypes = rewardHandler
-            .Assembly.GetTypes()
-            .Where(type => type.IsClass && rewardHandler.IsAssignableFrom(type));
-
-        foreach (var type in rewardHandlerTypes)
-        {
-            services.AddSingleton(rewardHandler, type);
-        }
-
-        var commandHandler = typeof(IMessageHandler);
-        var commandHandlerTypes = rewardHandler
-            .Assembly.GetTypes()
-            .Where(type => type.IsClass && commandHandler.IsAssignableFrom(type));
-
-        foreach (var type in commandHandlerTypes)
-        {
-            services.AddSingleton(commandHandler, type);
-        }
 
         return services
             .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-spectate")
@@ -513,14 +502,6 @@ public static class ServiceCollectionExtensions
                     _ => typeof(TalentNotifier),
                 }
             )
-            .AddSingleton(
-                typeof(ITwitchBot),
-                settings.Capture.Method switch
-                {
-                    CaptureMethod.None => typeof(FakeTwitchBot),
-                    _ => typeof(TwitchBot),
-                }
-            )
             .AddSingleton(typeof(IReplayProvider), replayProvider)
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
@@ -549,40 +530,6 @@ public static class ServiceCollectionExtensions
             .AddHeroesProfileService()
             .AddSingleton<IExtensionPayloadsBuilder, ExtensionPayloadBuilder>()
             .AddSingleton<IContextFileManager, ContextFileManager>()
-            .AddSingleton<IOnMessageHandler, OnMessageReceivedHandler>()
-            .AddSingleton<IOnRewardHandler, OnRewardRedeemedHandler>()
-            .AddSingleton<ICustomRewardsHolder, SupportedRewardsHolder>()
-            .AddSingleton<IRewardRequestFactory, RewardRequestFactory>()
-            .AddSingleton<IRequestQueue, RequestQueue>()
-            .AddSingleton(
-                typeof(ITwitchClient),
-                settings.Capture.Method switch
-                {
-                    CaptureMethod.None => typeof(FakeTwitchClient),
-                    _ => typeof(TwitchClient),
-                }
-            )
-            .AddSingleton<ITwitchPubSub, TwitchPubSub>()
-            .AddSingleton<ITwitchAPI, TwitchAPI>()
-            .AddSingleton<EventSubRewardListener>()
-            .AddSingleton(serviceProvider =>
-            {
-                AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
-                return new ConnectionCredentials(
-                    settings.Twitch.Account,
-                    settings.Twitch.AccessToken,
-                    TwitchChatEndpoint.SecureWebSocket
-                );
-            })
-            .AddSingleton<IApiSettings>(serviceProvider =>
-            {
-                AppSettings settings = serviceProvider.GetRequiredService<AppSettings>();
-                return new ApiSettings
-                {
-                    AccessToken = settings.Twitch.AccessToken,
-                    ClientId = settings.Twitch.ClientId,
-                };
-            })
             .AddSingleton<OBSWebsocket>()
             .AddSingleton<IObsController, ObsController>()
             .AddSingleton<IReleaseUpdateGate, ReleaseUpdateGate>()
@@ -706,18 +653,25 @@ public static class ServiceCollectionExtensions
         });
     }
 
-    private static IConfigurationRoot GetConfiguration()
+    private static IConfigurationRoot GetConfiguration() =>
+        BuildConfiguration(
+            DefaultBasePath(),
+            Environment.GetEnvironmentVariable(EnvironmentVariable)
+        );
+
+    /// <summary>The variable that names the appsettings overlay (<c>dev</c>, <c>prod</c>).</summary>
+    public const string EnvironmentVariable = "HEROES_REPLAY_ENV";
+
+    /// <summary>
+    /// Where the commands read <c>appsettings.json</c>: the current directory when it has one,
+    /// otherwise this exe's folder.
+    /// </summary>
+    public static string DefaultBasePath()
     {
         string basePath = Directory.GetCurrentDirectory();
-        if (!File.Exists(Path.Combine(basePath, "appsettings.json")))
-        {
-            basePath = AppContext.BaseDirectory;
-        }
-
-        return BuildConfiguration(
-            basePath,
-            Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV")
-        );
+        return File.Exists(Path.Combine(basePath, "appsettings.json"))
+            ? basePath
+            : AppContext.BaseDirectory;
     }
 
     /// <summary>

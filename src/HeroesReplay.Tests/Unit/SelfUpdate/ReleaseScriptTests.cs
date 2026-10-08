@@ -147,6 +147,55 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void ApplyRelease_PutsBackTheObsCollectionOnlyOnTheUnhealthyPathWithTheNewBuild()
+    {
+        // #304: the failed build (the restored one may not have the command) puts back the
+        // collection the restored install ran with, after the stack stopped and before the
+        // previous install is copied back. Healthy, inconclusive and stopped never call it.
+        string script = File.ReadAllText(FindScript());
+        const string Rollback =
+            "Invoke-ReleaseCommand (Join-Path $InstallDir 'heroesreplay.exe') @('update', 'restore-obs', '--previous', $previous, '--install', $InstallDir, '--environment', $environment) 'OBS rollback'";
+        int gate = script.IndexOf(
+            "$health = Invoke-ReleaseHealth (Join-Path $InstallDir 'heroesreplay.exe') $since",
+            StringComparison.Ordinal
+        );
+        int unhealthy = script.IndexOf(
+            "is unhealthy (release-health exit",
+            gate,
+            StringComparison.Ordinal
+        );
+        int stop = script.IndexOf("Stop-HeroesReplayStack", unhealthy, StringComparison.Ordinal);
+        int launcher = script.IndexOf(
+            "@('update', 'launcher', '--restore')",
+            StringComparison.Ordinal
+        );
+        int restoreObs = script.IndexOf(Rollback, StringComparison.Ordinal);
+        int restoreInstall = script.IndexOf(
+            "Restore-PreviousInstall $previous",
+            stop,
+            StringComparison.Ordinal
+        );
+        int restoredObs = script.IndexOf(
+            "'update', 'install-obs', '--install', $InstallDir, '--environment'",
+            StringComparison.Ordinal
+        );
+
+        Assert.Equal(1, CountOf(script, "'restore-obs'"));
+        Assert.True(gate > 0 && unhealthy > gate && stop > unhealthy);
+        Assert.True(
+            restoreObs > stop && restoreObs > launcher && restoreInstall > restoreObs,
+            "The OBS rollback runs with the new exe after the stop and before the old install returns."
+        );
+        Assert.True(restoredObs > restoreInstall);
+        Assert.DoesNotContain("restore-obs", script.Substring(0, unhealthy));
+        // A failed OBS rollback only shows in the log: Invoke-ReleaseCommand never throws or exits.
+        Assert.DoesNotMatch(
+            @"(?m)^\s*(exit|throw)\b",
+            script.Substring(launcher, restoreInstall - launcher)
+        );
+    }
+
+    [Fact]
     public void ApplyRelease_InstallsTheClipToolsBeforeTheStartAndOnlyWarns()
     {
         string script = File.ReadAllText(FindScript());

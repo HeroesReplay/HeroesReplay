@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Services;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
 using Xunit;
@@ -1554,7 +1555,7 @@ public class ServiceSupervisorTests
                 spectator: null,
                 query: new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Out = output,
                     Time = new FixedClock(new DateTimeOffset(2026, 10, 2, 9, 0, 0, TimeSpan.Zero)),
                     LogDirectory = logs,
@@ -1738,7 +1739,7 @@ public class ServiceSupervisorTests
                 spectator: null,
                 query: new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Out = json,
                     ReadMachine = () => throw new InvalidOperationException("denied"),
                 }
@@ -1748,6 +1749,58 @@ public class ServiceSupervisorTests
             Assert.False(read.GetProperty("ok").GetBoolean());
             Assert.Contains("denied", read.GetProperty("warnings")[0].GetString());
             Assert.True(document.RootElement.GetProperty("ok").GetBoolean());
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Status_ShowsARollbackThatWaitsForOBSWithoutChangingTheExitCode()
+    {
+        string path = TempLock();
+        try
+        {
+            const string Waiting =
+                "A release rollback waits to put back x.bak over HeroesReplay.json.";
+            var text = new StringWriter();
+            int code = ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery { Out = text, ReadObsRestorePending = () => Waiting }
+            );
+
+            Assert.Equal(0, code);
+            Assert.Contains("OBS rollback: waiting. " + Waiting, text.ToString());
+
+            var json = new StringWriter();
+            ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery
+                {
+                    Output = CliOutputFormat.Json,
+                    Out = json,
+                    ReadObsRestorePending = () => Waiting,
+                }
+            );
+            using var document = System.Text.Json.JsonDocument.Parse(json.ToString());
+            Assert.Equal(
+                Waiting,
+                document.RootElement.GetProperty("obsRestorePending").GetString()
+            );
+
+            var none = new StringWriter();
+            ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery { Out = none, ReadObsRestorePending = () => null }
+            );
+            Assert.DoesNotContain("OBS rollback", none.ToString());
         }
         finally
         {

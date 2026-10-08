@@ -4,8 +4,10 @@ using System.CommandLine;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Pages;
 using HeroesReplay.Core.Shared;
 
@@ -16,7 +18,7 @@ public class ObsCommand : Command
     public ObsCommand()
         : base(
             "obs",
-            "OBS on this machine: the Twitch ingest arm, the report-scene pages, read-only inspection and validation, and the check of the install's OBS files against their manifest. Twitch ingest starts only when OBS:StreamingEnabled is true and this machine is armed."
+            "OBS on this machine: the Twitch ingest arm, the report-scene pages, read-only inspection and validation, the check of the install's OBS files against their manifest, and the plan of what an update would change in the scene collection. Twitch ingest starts only when OBS:StreamingEnabled is true and this machine is armed."
         )
     {
         Subcommands.Add(ArmCommand());
@@ -26,6 +28,7 @@ public class ObsCommand : Command
         Subcommands.Add(ObsLiveCommands.InspectCommand());
         Subcommands.Add(ObsLiveCommands.ValidateCommand());
         Subcommands.Add(ObsBundleCommand.Create());
+        Subcommands.Add(ObsPlanCommand.Create());
     }
 
     private static Command PagesCommand()
@@ -164,11 +167,26 @@ public class ObsCommand : Command
             "status",
             "Print the stream arm, OBS:StreamingEnabled, and the expected OBS profile and scene collection. Does not connect to OBS."
         );
+        Option<string> output = CliOutput.CreateOption(
+            "JSON: schemaVersion, ok, code (obs.ingest_ready, obs.stream_not_armed, obs.streaming_disabled, obs.settings_unreadable), message, environment, details (streamArm, profile, sceneCollection)."
+        );
+        command.Options.Add(output);
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return Task.FromResult(Status(new ObsStreamArm()));
+                var arm = new ObsStreamArm();
+                CliResult<ObsStatusDetails> status = ReadStatus(
+                    arm.IsArmed(),
+                    arm.FilePath,
+                    ServiceCollectionExtensions.LoadObsSettings
+                );
+                TextWriter stdout = CliOutput.Out(parseResult);
+                return Task.FromResult(
+                    CliOutput.Format(parseResult, output) == CliOutputFormat.Json
+                        ? CliOutput.WriteJson(status, stdout)
+                        : WriteStatus(status, stdout, CliOutput.Error(parseResult))
+                );
             }
         );
         return command;
@@ -215,35 +233,90 @@ public class ObsCommand : Command
         return 0;
     }
 
-    private static int Status(ObsStreamArm arm)
+    public const string IngestReady = "obs.ingest_ready";
+    public const string StreamingDisabled = "obs.streaming_disabled";
+
+    /// <summary>
+    /// <c>obs status</c> without connecting to OBS. Ok unless the settings cannot be loaded
+    /// (<see cref="ObsLiveRead.SettingsUnreadable"/>, exit 1). The code says whether this
+    /// machine may start Twitch ingest: <see cref="IngestReady"/>,
+    /// <see cref="ObsStreamArm.NotArmedReason"/>, or <see cref="StreamingDisabled"/>.
+    /// </summary>
+    public static CliResult<ObsStatusDetails> ReadStatus(
+        bool armed,
+        string armFile,
+        Func<OBSSettings> load
+    )
     {
-        bool armed = arm.IsArmed();
-        Console.WriteLine($"Stream arm: {(armed ? "armed" : "not armed")} ({arm.FilePath})");
         OBSSettings obs;
         try
         {
-            obs = ServiceCollectionExtensions.LoadObsSettings();
+            obs = load();
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"Settings could not be loaded. {e.Message}");
-            return 1;
+            return new CliResult<ObsStatusDetails>
+            {
+                Ok = false,
+                Code = ObsLiveRead.SettingsUnreadable,
+                Message = $"Settings could not be loaded. {e.Message}",
+                Environment = CliJson.CurrentEnvironment(),
+                Details = new ObsStatusDetails(
+                    new ObsStreamArmInfo(armed, armFile, false, false, null),
+                    null,
+                    null
+                ),
+            };
         }
 
         bool streaming = SessionMedia.ShouldStream(obs);
-        Console.WriteLine($"OBS:StreamingEnabled: {streaming}");
-        Console.WriteLine($"OBS profile: {ObsNames.Profile(obs)} (OBS:ProfileName)");
-        Console.WriteLine(
-            $"OBS scene collection: {ObsNames.SceneCollection(obs)} (OBS:SceneCollectionName)"
-        );
         string blocked = TwitchIngestGuard.BlockedBy(streaming, armed);
-        Console.WriteLine(
-            streaming && armed
+        bool mayStart = streaming && armed;
+        return new CliResult<ObsStatusDetails>
+        {
+            Ok = true,
+            Code = mayStart ? IngestReady : blocked ?? StreamingDisabled,
+            Message = mayStart
                 ? "Twitch ingest: may start (the profile and scene collection are checked first)."
                 : "Twitch ingest: off. "
                     + (blocked != null ? blocked + ". " : string.Empty)
-                    + TwitchIngestGuard.Refusal(streaming, armed)
+                    + TwitchIngestGuard.Refusal(streaming, armed),
+            Environment = CliJson.CurrentEnvironment(),
+            Details = new ObsStatusDetails(
+                new ObsStreamArmInfo(armed, armFile, streaming, mayStart, blocked),
+                ObsNames.Profile(obs),
+                ObsNames.SceneCollection(obs)
+            ),
+        };
+    }
+
+    private static int WriteStatus(
+        CliResult<ObsStatusDetails> status,
+        TextWriter output,
+        TextWriter error
+    )
+    {
+        ObsStreamArmInfo arm = status.Details.StreamArm;
+        output.WriteLine($"Stream arm: {(arm.Armed ? "armed" : "not armed")} ({arm.ArmFile})");
+        if (!status.Ok)
+        {
+            error.WriteLine(status.Message);
+            return 1;
+        }
+
+        output.WriteLine($"OBS:StreamingEnabled: {arm.StreamingEnabled}");
+        output.WriteLine($"OBS profile: {status.Details.Profile} (OBS:ProfileName)");
+        output.WriteLine(
+            $"OBS scene collection: {status.Details.SceneCollection} (OBS:SceneCollectionName)"
         );
+        output.WriteLine(status.Message);
         return 0;
     }
 }
+
+/// <summary><c>obs status --output json</c> details: the arm, and the profile and collection HeroesReplay expects.</summary>
+public sealed record ObsStatusDetails(
+    ObsStreamArmInfo StreamArm,
+    string Profile,
+    string SceneCollection
+);

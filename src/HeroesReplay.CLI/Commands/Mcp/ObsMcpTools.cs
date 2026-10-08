@@ -39,7 +39,7 @@ public sealed class ObsMcpTools
             UseStructuredContent = true
         ),
         Description(
-            "Read live OBS over obs-websocket without changing it: OBS and websocket versions, active profile and scene collection against OBS:ProfileName / OBS:SceneCollectionName, video settings, program scene, scenes and their items, inputs with mute and volume (global audio devices flagged), stream and record status, GetStats, the stream service type and whether a key is set (never the key), and this machine's stream arm."
+            "Read live OBS over obs-websocket without changing it: OBS and websocket versions, active profile and scene collection against OBS:ProfileName / OBS:SceneCollectionName, video settings, the profile's output mode, encoders and bitrates, the record directory, program scene, scenes and their items, inputs with mute and volume (global audio devices flagged), stream and record status, GetStats, the stream service type and whether a key is set (never the key), and this machine's stream arm."
         )
     ]
     public ObsInspection Inspect()
@@ -58,7 +58,7 @@ public sealed class ObsMcpTools
             UseStructuredContent = true
         ),
         Description(
-            "Compare the collection OBS has loaded with the packaged obs/Default.json contract, and the install's OBS files with obs/bundle.manifest, without changing anything. Findings have stable codes: obs.profile_mismatch, obs.collection_mismatch, obs.scene_missing, obs.source_missing, obs.source_kind_mismatch, obs.scene_item_missing, obs.file_missing, obs.runtime_file_missing, obs.path_stale, obs.url_invalid, obs.mic_enabled, obs.mic_muted, obs.collection_custom, obs.request_unavailable, obs.asset_missing, obs.bundle_invalid, obs.bundle_unverified, obs.canvas_mismatch, obs.fps_low, obs.profile_unreadable, obs.recording_format, obs.stream_key_missing, obs.stream_service_unexpected, obs.filter_missing, obs.filter_stale. ok is false when any finding is an error."
+            "Compare the collection OBS has loaded with the packaged obs/Default.json contract, and the install's OBS files with obs/bundle.manifest, without changing anything. Findings have stable codes: obs.profile_mismatch, obs.collection_mismatch, obs.scene_missing, obs.source_missing, obs.source_kind_mismatch, obs.scene_item_missing, obs.scene_item_misplaced, obs.file_missing, obs.runtime_file_missing, obs.path_stale, obs.url_invalid, obs.mic_enabled, obs.mic_muted, obs.collection_custom, obs.request_unavailable, obs.asset_missing, obs.bundle_invalid, obs.bundle_unverified, obs.canvas_mismatch, obs.fps_low, obs.profile_unreadable, obs.recording_format, obs.bitrate_low, obs.stream_key_missing, obs.stream_service_unexpected, obs.filter_missing, obs.filter_stale. ok is false when any finding is an error."
         )
     ]
     public ObsValidation Validate()

@@ -292,6 +292,15 @@ public class ServiceHeartbeatTests
         Assert.DoesNotContain("hunter2", redacted);
     }
 
+    [Theory]
+    [InlineData("Check the v1 Bearer key.")]
+    [InlineData("This is not the v1 Bearer key, it is the uploader key.")]
+    [InlineData("Bearer tokens expire.")]
+    public void Redact_KeepsProseThatOnlyNamesACredential(string message)
+    {
+        Assert.Equal(message, ServiceHeartbeat.Redact(message));
+    }
+
     [Fact]
     public void Redact_CapsLongErrors()
     {

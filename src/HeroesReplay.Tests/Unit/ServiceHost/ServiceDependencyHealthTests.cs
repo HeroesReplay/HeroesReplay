@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using HeroesReplay.CLI.Commands.Services;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.ServiceHost;
 using Xunit;
 
@@ -190,7 +191,7 @@ public class ServiceDependencyHealthTests
                 probeOrNull: _ => null,
                 query: new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Out = output,
                     Time = new FixedClock(Now),
                     ReadHeartbeat = _ => beat,

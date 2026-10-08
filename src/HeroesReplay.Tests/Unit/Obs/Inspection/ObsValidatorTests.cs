@@ -2,7 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs.Inspection;
@@ -535,6 +537,254 @@ public class ObsValidatorTests : IDisposable
         Assert.Null(ObsValidator.BlocksStream(Validate(mic)));
     }
 
+    [Fact]
+    public void TheTemplate_AnchorsCurrentReplayBottomLeft()
+    {
+        // #276 moved the replay info to the bottom-left corner; obs/Default.json is the truth.
+        ObsPlacement placement = ObsCollectionPaths.ScenePlacements(
+            File.ReadAllText(Path.Combine(FakeObs.RepoObsDirectory(), "Default.json"))
+        )["game-scene"]["current-replay"];
+
+        Assert.Equal(5, placement.X);
+        Assert.Equal(1060, placement.Y);
+        Assert.Equal(9, placement.Alignment);
+        Assert.Equal("bottom-left (9)", ObsPlacement.AlignmentName(placement.Alignment));
+        Assert.Equal(ObsPlacement.NoBounds, placement.BoundsType);
+    }
+
+    [Fact]
+    public void FromTransform_ReadsWhatObs32Answers()
+    {
+        // GetSceneItemTransform for game-scene/current-replay on ASA-SERVER (OBS 32.2.2).
+        JObject transform = JObject.Parse(
+            """
+            {
+              "alignment": 9, "boundsAlignment": 0, "boundsHeight": 0,
+              "boundsType": "OBS_BOUNDS_NONE", "boundsWidth": 0,
+              "cropBottom": 0, "cropLeft": 0, "cropRight": 0, "cropToBounds": false, "cropTop": 0,
+              "height": 203.95938110351562, "positionX": 5, "positionY": 1060, "rotation": 0,
+              "scaleX": 0.4154411852359772, "scaleY": 0.41624364256858826,
+              "sourceHeight": 490, "sourceWidth": 384, "width": 159.5294189453125
+            }
+            """
+        );
+        ObsPlacement template = ObsCollectionPaths.ScenePlacements(
+            File.ReadAllText(Path.Combine(FakeObs.RepoObsDirectory(), "Default.json"))
+        )["game-scene"]["current-replay"];
+
+        ObsPlacement live = ObsPlacement.FromTransform(transform);
+
+        Assert.Equal(
+            new ObsPlacement(
+                5,
+                1060,
+                9,
+                0.4154411852359772,
+                0.41624364256858826,
+                ObsPlacement.NoBounds,
+                0,
+                0
+            ),
+            live
+        );
+        Assert.Empty(live.Differences(template));
+    }
+
+    [Fact]
+    public void AMovedItem_IsMisplaced_AndOnlyAWarning()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        JObject item = obs.SceneItem("game-scene", "current-replay");
+        item["pos"]["y"] = 1040;
+        item["align"] = 5;
+
+        ObsValidation validation = Validate(obs);
+
+        Assert.True(validation.Ok, Describe(validation));
+        ObsFinding finding = Single(validation, ObsValidator.SceneItemMisplaced);
+        Assert.Equal(ObsValidator.Warning, finding.Severity);
+        Assert.Equal("game-scene/current-replay", finding.Subject);
+        Assert.Contains("at (5, 1040) instead of (5, 1060)", finding.Message);
+        Assert.Contains("anchored top-left (5) instead of bottom-left (9)", finding.Message);
+        Assert.Contains("GetSceneItemTransform", string.Join(",", obs.Requests));
+        Assert.Null(ObsValidator.BlocksStream(validation));
+    }
+
+    [Fact]
+    public void AnItemWithinTolerance_IsInPlace()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        JObject item = obs.SceneItem("game-scene", "current-replay");
+        item["pos"]["x"] = 5 + ObsPlacement.PixelTolerance - 0.5;
+        item["pos"]["y"] = 1060 - ObsPlacement.PixelTolerance;
+        item["scale"]["x"] = (double)item["scale"]["x"] + ObsPlacement.ScaleTolerance / 2;
+
+        Assert.DoesNotContain(
+            Validate(obs).Findings,
+            finding => finding.Code == ObsValidator.SceneItemMisplaced
+        );
+    }
+
+    [Fact]
+    public void AMovedReportPageAndAResizedGameCapture_AreMisplaced()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.SceneItem("match-report", "match-report-browser")["pos"]["x"] = 240;
+        JObject capture = obs.SceneItem("game-scene", "game-capture");
+        capture["bounds"]["x"] = 1280;
+        capture["bounds"]["y"] = 720;
+        // The scale does not count for an item with a bounding box.
+        capture["scale"]["x"] = 0.5;
+
+        ObsValidation validation = Validate(obs);
+
+        Assert.Equal(
+            ["game-scene/game-capture", "match-report/match-report-browser"],
+            validation
+                .Findings.Where(finding => finding.Code == ObsValidator.SceneItemMisplaced)
+                .Select(finding => finding.Subject)
+        );
+        Assert.Contains(
+            "bounded to 1280x720 instead of 1920x1080",
+            Misplaced(validation, "game-scene/game-capture").Message
+        );
+        Assert.DoesNotContain("scaled", Misplaced(validation, "game-scene/game-capture").Message);
+    }
+
+    [Fact]
+    public void AnItemWithAnotherBoundingBoxOrScale_IsMisplaced()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.SceneItem("game-scene", "game-capture")["bounds_type"] = 1;
+        obs.SceneItem("game-scene", "rank-points")["scale"]["y"] = 2.0;
+
+        ObsValidation validation = Validate(obs);
+
+        Assert.Contains(
+            "bounding box stretch instead of scale inner",
+            Misplaced(validation, "game-scene/game-capture").Message
+        );
+        Assert.Contains(
+            "scaled 1.14x2 instead of 1.14x1.143",
+            Misplaced(validation, "game-scene/rank-points").Message
+        );
+    }
+
+    [Fact]
+    public void AnUnreadableTransform_IsSkipped()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.SceneItem("game-scene", "current-replay")["pos"]["y"] = 10;
+        obs.Failures["GetSceneItemTransform"] = new ObsRequestException(
+            "GetSceneItemTransform",
+            204,
+            "Unknown request type."
+        );
+
+        ObsValidation validation = Validate(obs);
+
+        Assert.DoesNotContain(
+            validation.Findings,
+            finding => finding.Code == ObsValidator.SceneItemMisplaced
+        );
+        Assert.True(validation.Ok, Describe(validation));
+    }
+
+    [Fact]
+    public void AStreamBitrateBelowTheFloor_IsAWarning()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.Video["outputWidth"] = 1920;
+        obs.Video["outputHeight"] = 1080;
+        obs.ProfileParameters[("SimpleOutput", "VBitrate")] = "2500";
+
+        ObsValidation validation = Validate(obs);
+
+        Assert.True(validation.Ok, Describe(validation));
+        ObsFinding finding = Single(validation, ObsValidator.BitrateLow);
+        Assert.Equal(ObsValidator.Warning, finding.Severity);
+        Assert.Equal("stream", finding.Subject);
+        Assert.Contains("2500 kbps and records at the same bitrate", finding.Message);
+        Assert.Contains("4500 kbps floor for 1920x1080 at 59.94 FPS", finding.Message);
+        Assert.Null(ObsValidator.BlocksStream(validation));
+    }
+
+    [Fact]
+    public void AStreamBitrateAboveTheFloor_IsNotAFinding()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.Video["outputWidth"] = 1920;
+        obs.Video["outputHeight"] = 1080;
+        obs.ProfileParameters[("SimpleOutput", "VBitrate")] = "6000";
+
+        Assert.DoesNotContain(
+            Validate(obs).Findings,
+            finding => finding.Code == ObsValidator.BitrateLow
+        );
+    }
+
+    [Fact]
+    public void AProfileWithoutABitrate_IsNotAFinding()
+    {
+        FakeObs simple = FakeObs.Installed(data);
+        simple.ProfileParameters.Remove(("SimpleOutput", "VBitrate"));
+        FakeObs advanced = FakeObs.Installed(data);
+        advanced.ProfileParameters[("Output", "Mode")] = "Advanced";
+        advanced.ProfileParameters[("AdvOut", "RecFormat2")] = "hybrid_mp4";
+        advanced.ProfileParameters[("AdvOut", "Encoder")] = "obs_qsv11_v2";
+
+        foreach (FakeObs obs in new[] { simple, advanced })
+        {
+            ObsValidation validation = Validate(obs);
+            Assert.DoesNotContain(
+                validation.Findings,
+                finding => finding.Code == ObsValidator.BitrateLow
+            );
+            Assert.True(validation.Ok, Describe(validation));
+        }
+    }
+
+    [Fact]
+    public void ACustomFfmpegRecordingBelowTheFloor_IsARecordingWarning()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.ProfileParameters[("Output", "Mode")] = "Advanced";
+        obs.ProfileParameters[("AdvOut", "RecType")] = "FFmpeg";
+        obs.ProfileParameters[("AdvOut", "FFExtension")] = "mp4";
+        obs.ProfileParameters[("AdvOut", "FFVBitrate")] = "1500";
+
+        ObsFinding finding = Single(Validate(obs), ObsValidator.BitrateLow);
+
+        Assert.Equal("recording", finding.Subject);
+        Assert.Contains("1500 kbps, below the 3000 kbps floor", finding.Message);
+    }
+
+    [Theory]
+    [InlineData(1080L, 60.0, 4500L)]
+    [InlineData(1080L, 59.94, 4500L)]
+    [InlineData(1080L, 30.0, 3000L)]
+    [InlineData(720L, 60.0, 3000L)]
+    [InlineData(720L, 30.0, 2000L)]
+    [InlineData(480L, 60.0, 2000L)]
+    [InlineData(null, 60.0, null)]
+    [InlineData(1080L, null, null)]
+    public void BitrateFloor_FollowsTheOutputSizeAndFps(long? height, double? fps, long? floor)
+    {
+        Assert.Equal(floor, ObsBitratePolicy.FloorKbps(height, fps));
+    }
+
+    [Theory]
+    [InlineData(0, "center (0)")]
+    [InlineData(5, "top-left (5)")]
+    [InlineData(9, "bottom-left (9)")]
+    [InlineData(10, "bottom-right (10)")]
+    [InlineData(4, "top (4)")]
+    [InlineData(2, "right (2)")]
+    public void Alignment_IsNamedWithItsValue(int alignment, string name)
+    {
+        Assert.Equal(name, ObsPlacement.AlignmentName(alignment));
+    }
+
     [Theory]
     [InlineData("file:///C:/heroes%20replay/a.html?x=1#top", @"C:\heroes replay\a.html")]
     [InlineData("C:/heroesreplay/Data/OBS.txt", @"C:\heroesreplay\Data\OBS.txt")]
@@ -549,6 +799,12 @@ public class ObsValidatorTests : IDisposable
 
     private static ObsFinding Single(ObsValidation validation, string code) =>
         Assert.Single(validation.Findings, finding => finding.Code == code);
+
+    private static ObsFinding Misplaced(ObsValidation validation, string subject) =>
+        Assert.Single(
+            validation.Findings,
+            finding => finding.Code == ObsValidator.SceneItemMisplaced && finding.Subject == subject
+        );
 
     private static string Describe(ObsValidation validation) =>
         string.Join(

@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.IO;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Configuration;
 
 namespace HeroesReplay.CLI.Commands.Obs;
@@ -22,7 +23,7 @@ public sealed record ObsBundleReport(
     int Files,
     IReadOnlyList<ObsBundleProblem> Problems,
     string Message
-);
+) : ICliResult;
 
 /// <summary>
 /// <c>obs bundle</c>: the install's OBS files against <c>obs\bundle.manifest</c>, without OBS.
@@ -31,13 +32,6 @@ public sealed record ObsBundleReport(
 /// </summary>
 public static class ObsBundleCommand
 {
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
-
     public static Command Create()
     {
         var command = new Command(
@@ -54,13 +48,9 @@ public static class ObsBundleCommand
             Description =
                 "Write obs\\bundle.manifest (schema 2) in --install from the paths its current manifest lists: each file's size and SHA-256, Default.json's hash, and the scene and source contract from that folder's appsettings.json and appsettings.prod.json. Refuses a source checkout. Exit 1 when a listed file is missing or obs\\Default.json lacks a contract name.",
         };
-        var format = new Option<string>("--output")
-        {
-            Description = "text (default) or json: schemaVersion, ok, code, format, and problems.",
-            DefaultValueFactory = _ => "text",
-        };
-        format.AcceptOnlyFromAmong("text", "json");
-        format.Aliases.Add("-o");
+        Option<string> format = CliOutput.CreateOption(
+            "JSON: schemaVersion, ok, code, format, manifest, files, problems, and message."
+        );
         command.Options.Add(install);
         command.Options.Add(write);
         command.Options.Add(format);
@@ -69,15 +59,16 @@ public static class ObsBundleCommand
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 string folder = parseResult.GetValue(install);
-                bool json = string.Equals(
-                    parseResult.GetValue(format),
-                    "json",
-                    StringComparison.OrdinalIgnoreCase
-                );
+                bool json = CliOutput.Format(parseResult, format) == CliOutputFormat.Json;
+                TextWriter output = CliOutput.Out(parseResult);
                 return Task.FromResult(
                     parseResult.GetValue(write)
-                        ? Write(folder ?? AppContext.BaseDirectory, Console.Out, Console.Error)
-                        : Check(folder ?? AppContext.BaseDirectory, json, Console.Out)
+                        ? Write(
+                            folder ?? AppContext.BaseDirectory,
+                            output,
+                            CliOutput.Error(parseResult)
+                        )
+                        : Check(folder ?? AppContext.BaseDirectory, json, output)
                 );
             }
         );
@@ -119,7 +110,7 @@ public static class ObsBundleCommand
 
         if (json)
         {
-            output.WriteLine(JsonSerializer.Serialize(report, Json));
+            output.WriteLine(CliJson.Serialize(report));
         }
         else
         {
