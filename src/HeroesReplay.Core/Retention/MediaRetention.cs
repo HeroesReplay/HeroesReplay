@@ -190,7 +190,7 @@ public static class MediaRetention
                 continue;
             }
 
-            bool dryRun = dir.GetFiles("youtube-dry-run.json").Length > 0;
+            bool dryRun = dir.GetFiles(DryRunRecordings.PlanFileName).Length > 0;
             bool remoteUpload =
                 !dryRun && (inserted || dir.GetFiles("youtube-entry-uploaded.json").Length > 0);
             FileInfo[] videos = dir.GetFiles("*.mp4");
