@@ -70,7 +70,7 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 
 ## Checking OBS
 
-- `heroesreplay obs inspect [--output json]` reads live OBS without changing it: versions, profile and collection, canvas, output size and FPS, output mode, recording format and encoders, scenes, global audio, stream and record status, stats, the stream service (never the key), and the arm.
+- `heroesreplay obs inspect [--output json]` reads live OBS without changing it: versions, profile and collection, canvas, output size and FPS, output mode, recording format and encoders, the stream and recording bitrates and rate control, the record directory, scenes, global audio, stream and record status, stats, the stream service (never the key), and the arm.
 - `heroesreplay obs validate [--output json]` checks the loaded collection and profile against `obs/Default.json` and this install's settings. Findings have stable codes; any `error` makes it exit 1. Run it after changing OBS, the profile, or the collection, and before a release.
 - The MCP server (`heroesreplay mcp`; `.mcp.json` at the repo root and in the release zip) offers the same reads as `obs_inspect`, `obs_validate`, and `obs_screenshot`. Every request is a Get, so it can't change OBS. Fixes go through guarded CLI commands. obs-mcp, which has unrestricted tools and returns the stream key, is dev-only and is never in the repo, the release, or the live box.
 - **Preflight.** Before the spectator's first `StartStream` of a process, it validates over its own connection. Only `obs.request_unavailable` and `obs.stream_key_missing` stop the stream (`obsStreamBlockedBy` in `status.json`). Every other finding is logged once.
@@ -85,6 +85,8 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 | `obs.bundle_invalid` | error | An install file differs from `obs/bundle.manifest` (size or SHA-256), or `Default.json` lacks a contract name. Install the release again. |
 | `obs.bundle_unverified` | warning | The install has no `obs/bundle.manifest` (packaged before schema 2). The next release brings one. |
 | `obs.fps_low` | warning | Settings > Video: 30 or 60 FPS. |
+| `obs.scene_item_misplaced` | warning | A driven item or the game capture is not where `obs/Default.json` puts it (position, anchor, scale, or bounding box). Right-click it > Transform > Edit Transform, or let a release replace a managed collection. See [the policy](#machine-profile-policy). |
+| `obs.bitrate_low` | warning | The stream or recording video bitrate is below the floor for the output size and FPS. Settings > Output: raise the Video Bitrate. |
 | `obs.stream_service_unexpected` | warning | Settings > Stream: Twitch. |
 | `obs.filter_stale` | warning | An old `Scroll` filter on the match report source. Right-click the source > Filters, and disable or remove it. With loop off it moves the page out of its frame and the scene looks blank (transparent). |
 | `obs.filter_missing`, `obs.path_stale`, `obs.collection_custom` | warning | Let `services start` update a managed collection while OBS is closed, or fix the source by hand. |
@@ -95,11 +97,24 @@ The full list is in the `heroes-replay-cli` skill (`obs_validate`).
 
 Each machine owns its OBS profile. Start one with the OBS Auto-Configuration Wizard on that machine; don't copy another machine's `basic.ini`. HeroesReplay validates only these constraints:
 
-- **Canvas 1920x1080.** The scenes, the full-canvas report pages, and the match report's one-canvas scroll are laid out for it. The output (scaled) resolution, bitrate and encoder are the machine's choice.
+- **Canvas 1920x1080.** The scenes, the full-canvas report pages, and the match report's one-canvas scroll are laid out for it. The output (scaled) resolution and the encoder are the machine's choice.
 - **30 FPS or more** (60 recommended).
+- **Scene items where `obs/Default.json` puts them.** HeroesReplay shows and hides the info, tier, rank, and report sources but never moves them. `obs validate` compares each contract item, and each game capture in a contract scene, with the template: the position and anchor, then the scale, or the bounding box when the item has one. Up to 2 canvas pixels or 0.01 of scale is still in place. A moved item is `obs.scene_item_misplaced`, a warning: an operator may move one on purpose. The template is the truth, for example `current-replay` anchored bottom-left (alignment 9) at (5, 1060) since #276.
+- **Video bitrate at or above the floor.** Below it the game's motion breaks into blocks on stream and in the uploads. The floor depends on the output (scaled) resolution and FPS. It is three quarters of Twitch's guidance (6000, 4500, and 3000 kbps), rounded down to a multiple of 500:
+
+  | Output | Floor |
+  | --- | --- |
+  | 1080p above 30 FPS | 4500 kbps |
+  | 1080p at 30 FPS, or 720p above 30 FPS | 3000 kbps |
+  | Anything lower | 2000 kbps |
+
+  A bitrate below the floor is `obs.bitrate_low`, a warning that never blocks a stream or a recording.
+  - Simple output: the bitrate is `VBitrate`, at CBR. A recording at `Stream` quality shares that encoder and is reported once, as the stream.
+  - Advanced output: the bitrates live in `streamEncoder.json` and `recordEncoder.json`, which obs-websocket cannot read. Only a custom (FFmpeg) recording's `FFVBitrate` is checked; the other bitrates are reported as not known, and no finding is raised.
+  - The floor is a proposal for the owner to confirm (#309). It is `ObsBitratePolicy`.
 - **Recording container: MP4 family.** MP4, Hybrid MP4 (OBS 30.2 and later, which survives a crash better) or fragmented MP4. The YouTube uploader, the pentakill clips and retention only find `*.mp4` in `Data\Contexts`. MKV would need a remux step in all three first; that is a later slice of #130 (D4/D5).
 - **Encoder.** Whatever the machine's GPU does well: QSV on Intel, NVENC on NVIDIA, x264 as the fallback. It is reported, not validated.
-- **Recording path.** The spectator sets the recording folder per replay with `SetRecordDirectory`, so the profile's own path doesn't matter.
+- **Recording path.** The spectator sets the recording folder for each replay with `SetRecordDirectory` before every `StartRecord`, so the profile's own path does not matter. `obs inspect` reports it (`GetRecordDirectory`, `recordDirectory`); between replays it is the last replay's context folder. It is not validated: no idle value is wrong.
 - **Stream.** Service Twitch with that machine's own key, set in OBS on that machine. The live box streams to `saltysadism`; ASA-SERVER streams to a developer Twitch account, so its test streams never touch the live channel.
 
 | Machine | Profile and collection | Streams | Records |

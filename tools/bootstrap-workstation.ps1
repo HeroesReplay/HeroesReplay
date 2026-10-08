@@ -3,6 +3,7 @@
 # gitignored secrets from 1Password. Scene paths in Default.json are relative to obs\.
 # heroesreplay rewrites the live collection to this folder when OBS is closed. Pass the
 # names when OBS:ProfileName or OBS:SceneCollectionName is not HeroesReplay on this machine.
+# It also fetches the pinned HeroesClientSDK package into .packages (tools/restore-sdk-package.ps1).
 # See AGENTS.md and .agents/skills/op-service-account/SKILL.md.
 param(
     [string]$ProfileName = 'HeroesReplay',
@@ -82,6 +83,20 @@ Write-Host 'Twitch ingest also needs this machine armed: heroesreplay obs arm (t
 $fill = Join-Path $root 'tools\fill-secrets-from-op.ps1'
 if (Test-Path $fill) {
     & $fill
+}
+
+# HeroesClientSDK restores from .packages (nuget.config): the public GitHub Release asset, no
+# credentials, checked against the SHA-256 pinned in Directory.Packages.props. The build also
+# fetches it when it is missing.
+$sdk = Join-Path $root 'tools\restore-sdk-package.ps1'
+if (Test-Path $sdk) {
+    try {
+        & $sdk -Root $root
+    }
+    catch {
+        Write-Warning "HeroesClientSDK was not fetched: $($_.Exception.Message)"
+        Write-Warning 'Run pwsh -File tools/restore-sdk-package.ps1 before dotnet restore.'
+    }
 }
 
 $hooks = Join-Path $root 'tools\install-git-hooks.ps1'

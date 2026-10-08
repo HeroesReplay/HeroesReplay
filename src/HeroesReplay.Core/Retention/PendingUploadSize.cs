@@ -11,11 +11,18 @@ namespace HeroesReplay.Core.Retention;
 /// </summary>
 public static class PendingUploadSize
 {
+    /// <summary>
+    /// The bytes the Disk pending-bytes gates read. With <paramref name="dryRun"/>
+    /// (<c>YouTube:DryRun</c>) no recording is ever sent, planned or not, so none waits for an
+    /// insert and the total is zero (#317). With DryRun off every waiting recording counts, one an
+    /// earlier dry run planned too: a live uploader opens a new attempt for it and sends it.
+    /// </summary>
     public static long Bytes(
         string contextsDirectory,
         string entryFileName,
-        string uploadedFileName
-    ) => Measure(contextsDirectory, entryFileName, uploadedFileName).Bytes;
+        string uploadedFileName,
+        bool dryRun = false
+    ) => dryRun ? 0 : Measure(contextsDirectory, entryFileName, uploadedFileName).Bytes;
 
     /// <summary>Recordings still waiting for a videos.insert.</summary>
     public static int Count(

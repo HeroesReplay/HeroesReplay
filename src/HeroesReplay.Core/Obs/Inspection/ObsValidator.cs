@@ -41,11 +41,11 @@ public sealed record ObsValidation : ICliResult
 /// Read-only checks of the collection OBS has loaded, and of the install's OBS files against
 /// <c>obs/bundle.manifest</c> (<see cref="ObsCollectionBundle"/>): the requests HeroesReplay sends, the
 /// active profile and collection (<see cref="ObsSelection"/>), the scenes and sources it drives
-/// (<see cref="ObsContract"/>), source kinds and that each contract item is in its scene (not
-/// its transform) against <c>obs/Default.json</c>, local asset paths after
-/// <see cref="ObsCollectionPaths.RewriteValue"/>,
-/// the Mic/Aux global input, the canvas and FPS, the recording format, the stream service when
-/// this install streams, and the filters the packaged sources have. <c>obs validate</c>,
+/// (<see cref="ObsContract"/>), source kinds, that each contract item is in its scene and where
+/// it is placed (<see cref="ObsPlacement"/>) against <c>obs/Default.json</c>, local asset paths
+/// after <see cref="ObsCollectionPaths.RewriteValue"/>, the Mic/Aux global input, the canvas and
+/// FPS, the recording format and the bitrates (<see cref="ObsBitratePolicy"/>), the stream
+/// service when this install streams, and the filters the packaged sources have. <c>obs validate</c>,
 /// <c>obs_validate</c>, and the spectator's preflight before its first StartStream run it.
 /// </summary>
 public static class ObsValidator
@@ -62,6 +62,8 @@ public static class ObsValidator
     public const string SourceMissing = "obs.source_missing";
     public const string SourceKindMismatch = "obs.source_kind_mismatch";
     public const string SceneItemMissing = "obs.scene_item_missing";
+    public const string SceneItemMisplaced = "obs.scene_item_misplaced";
+    public const string BitrateLow = "obs.bitrate_low";
     public const string CollectionCustom = "obs.collection_custom";
     public const string FileMissing = "obs.file_missing";
     public const string RuntimeFileMissing = "obs.runtime_file_missing";
@@ -79,6 +81,7 @@ public static class ObsValidator
     public const string FilterStale = "obs.filter_stale";
 
     private const string BrowserSourceKind = "browser_source";
+    private const string GameCaptureKind = "game_capture";
     private const string ScrollFilterKind = "scroll_filter";
 
     /// <summary>
@@ -170,7 +173,10 @@ public static class ObsValidator
             .Where(input => !string.IsNullOrWhiteSpace(ObsResponse.String(input, "inputName")))
             .ToList();
 
-        CheckContract(session, ObsContract.From(settings?.Obs), scenes, inputs, packaged, findings);
+        ObsContract contract = ObsContract.From(settings?.Obs);
+        var sceneItems = new SceneItems(session);
+        CheckContract(contract, scenes, inputs, packaged, sceneItems, findings);
+        CheckPlacement(session, contract, scenes, packaged, sceneItems, findings);
         CheckDrift(
             packaged,
             ObsNames.SceneCollection(settings?.Obs),
@@ -181,8 +187,9 @@ public static class ObsValidator
         );
         CheckPaths(session, inputs, global, packaged.AssetRoot, settings?.DataDirectory, findings);
         CheckMicrophone(session, global, findings);
-        CheckVideo(session.Get("GetVideoSettings"), findings);
-        CheckProfile(session, settings?.Obs, findings);
+        JObject video = session.Get("GetVideoSettings");
+        CheckVideo(video, findings);
+        CheckProfile(session, settings?.Obs, video, findings);
         CheckStreamService(session, settings?.Obs, findings);
         CheckFilters(session, packaged, scenes, inputs, findings);
 
@@ -211,8 +218,31 @@ public static class ObsValidator
         string AssetRoot,
         IReadOnlyList<string> Names,
         IReadOnlyDictionary<string, string> Kinds,
-        IReadOnlyDictionary<string, IReadOnlyList<ObsFilterInfo>> Filters = null
+        IReadOnlyDictionary<string, IReadOnlyList<ObsFilterInfo>> Filters = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, ObsPlacement>> Placements = null
     );
+
+    /// <summary>GetSceneItemList per scene, read once and shared by the checks that need it.</summary>
+    private sealed class SceneItems(IObsReadSession session)
+    {
+        private readonly Dictionary<string, IReadOnlyList<ObsSceneItemInfo>> read = new(
+            StringComparer.Ordinal
+        );
+
+        public IReadOnlyList<ObsSceneItemInfo> In(string scene)
+        {
+            if (!read.TryGetValue(scene, out IReadOnlyList<ObsSceneItemInfo> items))
+            {
+                items =
+                    ObsInspector.SceneItems(
+                        session.Get("GetSceneItemList", new JObject { ["sceneName"] = scene })
+                    ) ?? [];
+                read[scene] = items;
+            }
+
+            return items;
+        }
+    }
 
     private static Packaged ReadPackaged(string installDirectory, List<ObsFinding> findings)
     {
@@ -254,7 +284,8 @@ public static class ObsValidator
                 assetRoot,
                 ObsCollectionPaths.SourceNames(json),
                 ObsCollectionPaths.SourceKinds(json),
-                ObsCollectionPaths.SourceFilters(json)
+                ObsCollectionPaths.SourceFilters(json),
+                ObsCollectionPaths.ScenePlacements(json)
             );
         }
         catch (Exception e) when (e is IOException or JsonException)
@@ -410,11 +441,11 @@ public static class ObsValidator
     }
 
     private static void CheckContract(
-        IObsReadSession session,
         ObsContract contract,
         IReadOnlyList<string> scenes,
         IReadOnlyList<JObject> inputs,
         Packaged packaged,
+        SceneItems sceneItems,
         List<ObsFinding> findings
     )
     {
@@ -481,7 +512,6 @@ public static class ObsValidator
         }
 
         var liveScenes = new HashSet<string>(scenes, StringComparer.Ordinal);
-        var itemsByScene = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (ObsContractItem item in contract.Items)
         {
             if (!liveScenes.Contains(item.Scene) || !byName.ContainsKey(item.Source))
@@ -490,23 +520,7 @@ public static class ObsValidator
                 continue;
             }
 
-            if (!itemsByScene.TryGetValue(item.Scene, out HashSet<string> names))
-            {
-                names = new HashSet<string>(
-                    (
-                        ObsInspector.SceneItems(
-                            session.Get(
-                                "GetSceneItemList",
-                                new JObject { ["sceneName"] = item.Scene }
-                            )
-                        ) ?? []
-                    ).Select(sceneItem => sceneItem.Name),
-                    StringComparer.Ordinal
-                );
-                itemsByScene[item.Scene] = names;
-            }
-
-            if (!names.Contains(item.Source))
+            if (!sceneItems.In(item.Scene).Any(sceneItem => sceneItem.Name == item.Source))
             {
                 findings.Add(
                     new ObsFinding(
@@ -521,6 +535,106 @@ public static class ObsValidator
                     )
                 );
             }
+        }
+    }
+
+    /// <summary>
+    /// Each contract item, and each game capture in a contract scene, against where
+    /// <c>obs/Default.json</c> places it (GetSceneItemTransform): position and anchor, then the
+    /// scale, or the bounding box when it has one, within <see cref="ObsPlacement"/>'s
+    /// tolerance. HeroesReplay shows and hides these items but never moves them, so a moved item
+    /// stays wrong on stream. A warning: an operator may move one on purpose.
+    /// </summary>
+    private static void CheckPlacement(
+        IObsReadSession session,
+        ObsContract contract,
+        IReadOnlyList<string> scenes,
+        Packaged packaged,
+        SceneItems sceneItems,
+        List<ObsFinding> findings
+    )
+    {
+        if (packaged.Placements == null)
+        {
+            return;
+        }
+
+        var targets = new List<ObsContractItem>(contract.Items);
+        foreach (string scene in contract.Scenes)
+        {
+            if (packaged.Placements.TryGetValue(scene, out var placed))
+            {
+                targets.AddRange(
+                    placed
+                        .Keys.Where(source =>
+                            packaged.Kinds != null
+                            && packaged.Kinds.TryGetValue(source, out string kind)
+                            && string.Equals(kind, GameCaptureKind, StringComparison.Ordinal)
+                        )
+                        .Select(source => new ObsContractItem(scene, source))
+                );
+            }
+        }
+
+        var liveScenes = new HashSet<string>(scenes, StringComparer.Ordinal);
+        foreach (ObsContractItem item in targets.Distinct())
+        {
+            if (
+                !liveScenes.Contains(item.Scene)
+                || !packaged.Placements.TryGetValue(item.Scene, out var template)
+                || !template.TryGetValue(item.Source, out ObsPlacement expected)
+            )
+            {
+                continue;
+            }
+
+            // A missing item is its own finding.
+            long? id = sceneItems
+                .In(item.Scene)
+                .FirstOrDefault(sceneItem => sceneItem.Name == item.Source)
+                ?.Id;
+            if (id == null)
+            {
+                continue;
+            }
+
+            ObsPlacement live;
+            try
+            {
+                live = ObsPlacement.FromTransform(
+                    session
+                        .Get(
+                            "GetSceneItemTransform",
+                            new JObject { ["sceneName"] = item.Scene, ["sceneItemId"] = id.Value }
+                        )
+                        ?["sceneItemTransform"] as JObject
+                );
+            }
+            catch (ObsRequestException)
+            {
+                continue;
+            }
+
+            IReadOnlyList<string> differences = live?.Differences(expected) ?? [];
+            if (differences.Count == 0)
+            {
+                continue;
+            }
+
+            findings.Add(
+                new ObsFinding(
+                    SceneItemMisplaced,
+                    Warning,
+                    item.Scene + "/" + item.Source,
+                    "Item '"
+                        + item.Source
+                        + "' in scene '"
+                        + item.Scene
+                        + "' is not where obs/Default.json places it: "
+                        + string.Join("; ", differences)
+                        + ". HeroesReplay shows and hides it but never moves it. Move it back in OBS (right-click > Transform > Edit Transform), or let a release replace a collection HeroesReplay manages."
+                )
+            );
         }
     }
 
@@ -836,6 +950,7 @@ public static class ObsValidator
     private static void CheckProfile(
         IObsReadSession session,
         OBSSettings obs,
+        JObject video,
         List<ObsFinding> findings
     )
     {
@@ -851,13 +966,14 @@ public static class ObsValidator
                     ProfileUnreadable,
                     Warning,
                     ObsNames.Profile(obs),
-                    "The OBS profile settings could not be read, so the recording format was not checked. "
+                    "The OBS profile settings could not be read, so the recording format and the bitrates were not checked. "
                         + e.Message
                 )
             );
             return;
         }
 
+        CheckBitrates(profile, video, findings);
         if (profile.RecordsMp4)
         {
             return;
@@ -882,6 +998,81 @@ public static class ObsValidator
                     + ". Set Settings > Output > Recording > Recording Format to MPEG-4 (.mp4) or Hybrid MP4."
             )
         );
+    }
+
+    /// <summary>
+    /// The stream and recording bitrates the profile parameters hold, against
+    /// <see cref="ObsBitratePolicy"/> for the output size and FPS. A bitrate the profile does not
+    /// hold (Advanced output, a quality-based recording) is not checked. A recording that is the
+    /// stream's encoder output is reported once, as the stream.
+    /// </summary>
+    private static void CheckBitrates(
+        ObsProfileInfo profile,
+        JObject video,
+        List<ObsFinding> findings
+    )
+    {
+        long? height = ObsResponse.Long(video, "outputHeight");
+        long? numerator = ObsResponse.Long(video, "fpsNumerator");
+        long? denominator = ObsResponse.Long(video, "fpsDenominator");
+        double? fps =
+            numerator.HasValue && denominator is > 0
+                ? Math.Round((double)numerator.Value / denominator.Value, 2)
+                : null;
+        long? floor = ObsBitratePolicy.FloorKbps(height, fps);
+        if (floor == null)
+        {
+            return;
+        }
+
+        string output =
+            ObsResponse.Long(video, "outputWidth")
+            + "x"
+            + height
+            + " at "
+            + fps?.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + " FPS";
+        if (profile.StreamBitrateKbps < floor)
+        {
+            findings.Add(
+                new ObsFinding(
+                    BitrateLow,
+                    Warning,
+                    "stream",
+                    "OBS streams at "
+                        + profile.StreamBitrateKbps
+                        + " kbps"
+                        + (
+                            profile.RecordingSharesStreamEncoder
+                                ? " and records at the same bitrate"
+                                : string.Empty
+                        )
+                        + ", below the "
+                        + floor
+                        + " kbps floor for "
+                        + output
+                        + ". The game's motion breaks into blocks. Raise Settings > Output > Video Bitrate, or lower the output resolution or FPS."
+                )
+            );
+        }
+
+        if (!profile.RecordingSharesStreamEncoder && profile.RecordingBitrateKbps < floor)
+        {
+            findings.Add(
+                new ObsFinding(
+                    BitrateLow,
+                    Warning,
+                    "recording",
+                    "OBS records at "
+                        + profile.RecordingBitrateKbps
+                        + " kbps, below the "
+                        + floor
+                        + " kbps floor for "
+                        + output
+                        + ". The YouTube uploads would break into blocks. Raise the recording's video bitrate in Settings > Output > Recording."
+                )
+            );
+        }
     }
 
     private static void CheckStreamService(

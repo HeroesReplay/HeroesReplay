@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HeroesClientSDK;
 
 namespace HeroesReplay.Core.Spectating.Screens;
 

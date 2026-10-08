@@ -19,7 +19,7 @@ public static class ObsLiveCommands
     public static Command InspectCommand() =>
         Create(
             "inspect",
-            "Read live OBS without changing it: versions, active profile and scene collection, canvas and FPS, output mode and recording format, scenes, inputs and global audio, stream and record status, stats, the stream service (never the key), and the stream arm. Exit 1 when OBS cannot be read.",
+            "Read live OBS without changing it: versions, active profile and scene collection, canvas and FPS, output mode, recording format, encoders and bitrates, the record directory, scenes, inputs and global audio, stream and record status, stats, the stream service (never the key), and the stream arm. Exit 1 when OBS cannot be read.",
             (json, output) =>
                 Inspect(
                     new ObsWebsocketReadSessionFactory(),
@@ -32,7 +32,7 @@ public static class ObsLiveCommands
     public static Command ValidateCommand() =>
         Create(
             "validate",
-            "Check the collection OBS has loaded against obs/Default.json and this install's settings without changing it: the install's OBS files against obs/bundle.manifest, the websocket requests HeroesReplay sends, profile and collection, scenes, sources and filters, asset paths, Mic/Aux, canvas 1920x1080 and FPS, the recording format (.mp4), and the stream service when OBS:StreamingEnabled. Findings have stable codes. Exit 0 when there is no error finding, 1 otherwise or when OBS cannot be read.",
+            "Check the collection OBS has loaded against obs/Default.json and this install's settings without changing it: the install's OBS files against obs/bundle.manifest, the websocket requests HeroesReplay sends, profile and collection, scenes, sources and filters, where each driven item and the game capture are placed, asset paths, Mic/Aux, canvas 1920x1080 and FPS, the recording format (.mp4), the stream and recording bitrate floor, and the stream service when OBS:StreamingEnabled. Findings have stable codes. Exit 0 when there is no error finding, 1 otherwise or when OBS cannot be read.",
             (json, output) =>
                 Validate(
                     new ObsWebsocketReadSessionFactory(),
@@ -174,6 +174,14 @@ public static class ObsLiveCommands
             output.WriteLine(
                 $"{profile.OutputMode} output: records {profile.RecordingFormat} with {profile.RecordingEncoder}, streams with {profile.StreamEncoder}."
             );
+            output.WriteLine(
+                $"Bitrate: stream {Kbps(profile.StreamBitrateKbps, profile.StreamRateControl)}, recording {(profile.RecordingQuality != null ? profile.RecordingQuality + " quality, " : "")}{Kbps(profile.RecordingBitrateKbps, profile.RecordingRateControl)}."
+            );
+        }
+
+        if (inspection.RecordDirectory != null)
+        {
+            output.WriteLine($"Record directory: {inspection.RecordDirectory}.");
         }
 
         output.WriteLine($"Program scene: {inspection.ProgramScene}.");
@@ -223,6 +231,11 @@ public static class ObsLiveCommands
             output.WriteLine($"Not read: {unread}");
         }
     }
+
+    private static string Kbps(long? kbps, string rateControl) =>
+        kbps == null
+            ? "not in the profile parameters"
+            : kbps + " kbps" + (rateControl != null ? " " + rateControl : "");
 
     private static void WriteArm(ObsStreamArmInfo arm, TextWriter output)
     {

@@ -654,10 +654,12 @@ public class GameManager : IGameManager
         long pending = 0;
         try
         {
+            // A dry run never sends a recording, so none waits for upload (#317).
             pending = PendingUploadSize.Bytes(
                 settings.ContextsDirectory,
                 settings.YouTube?.EntryFileName,
-                settings.YouTube?.EntryFileNameUploaded
+                settings.YouTube?.EntryFileNameUploaded,
+                dryRun: settings.YouTube?.DryRun == true
             );
         }
         catch (Exception e)

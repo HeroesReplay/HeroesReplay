@@ -93,6 +93,7 @@ public class CliResultTests
                 "inputs",
                 "stream",
                 "record",
+                "recordDirectory",
                 "stats",
                 "streamService",
                 "streamArm",

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesClientSDK;
 using HeroesReplay.Core.Spectating.Control;
 
 namespace HeroesReplay.Core.Spectating.Clock;
