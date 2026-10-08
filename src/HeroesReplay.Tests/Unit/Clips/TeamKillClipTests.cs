@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using HeroesReplay.Core.Clips;
 using Xunit;
 
@@ -9,8 +8,9 @@ namespace HeroesReplay.Tests.Unit.Clips;
 public class TeamKillClipTests
 {
     [Fact]
-    public void Select_OneKillerFiveUniqueHeroes_EmitsPentakillAndTeamWipe()
+    public void Select_OneKillerFiveUniqueHeroes_IsOnePentakillClip_NotASecondTeamWipeClip()
     {
+        // #369: replays 65745237 and 65773257 cut the same window twice, once as a team wipe.
         IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
             new[]
             {
@@ -22,26 +22,46 @@ public class TeamKillClipTests
             }
         );
 
-        Assert.Equal(2, clips.Count);
-        TeamKillClip pentakill = clips.Single(clip => clip.Kind == TeamKillClips.PentakillKind);
+        TeamKillClip pentakill = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.PentakillKind, pentakill.Kind);
         Assert.Equal("Li-Ming", pentakill.Hero);
         Assert.Equal(100, pentakill.FirstDeathSecond);
         Assert.Equal(112, pentakill.LastDeathSecond);
         Assert.Equal(88, pentakill.HudStartSecond);
         Assert.Equal(120, pentakill.HudEndSecond);
         Assert.Equal("Li-Ming pentakill (team wipe)", pentakill.Description);
-
-        TeamKillClip wipe = clips.Single(clip => clip.Kind == TeamKillClips.TeamWipeKind);
-        Assert.Equal("Li-Ming", wipe.Hero);
-        Assert.Equal(88, wipe.HudStartSecond);
-        Assert.Equal(120, wipe.HudEndSecond);
-        Assert.Equal("team wipe", wipe.Description);
-        Assert.Equal(TeamKillClips.PentakillKind, clips[0].Kind);
+        Assert.True(pentakill.WipedTeam);
         Assert.Equal(5, pentakill.Kills.Count);
         Assert.Equal("Artanis", pentakill.Kills[0].Victim);
         Assert.Equal(100, pentakill.Kills[0].Second);
         Assert.Equal("E.T.C.", pentakill.Kills[4].Victim);
-        Assert.Equal(pentakill.Kills[4], wipe.Kills[4]);
+    }
+
+    [Fact]
+    public void Select_ReturnsOnlyIndividualPentakills()
+    {
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                // Li-Ming wipes the team on her own.
+                Death(100, "Li-Ming", "Artanis"),
+                Death(102, "Li-Ming", "Butcher"),
+                Death(104, "Li-Ming", "Chromie"),
+                Death(106, "Li-Ming", "Diablo"),
+                Death(108, "Li-Ming", "E.T.C."),
+                // Later the whole team dies again, but three players share the kills.
+                Death(300, "Li-Ming", "Artanis"),
+                Death(301, "Li-Ming", "Butcher"),
+                Death(302, "Valla", "Chromie"),
+                Death(303, "Valla", "Diablo"),
+                Death(304, "Jaina", "E.T.C."),
+            }
+        );
+
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.PentakillKind, clip.Kind);
+        Assert.Equal(100, clip.FirstDeathSecond);
+        Assert.All(clips, item => Assert.Equal(TeamKillClips.PentakillKind, item.Kind));
     }
 
     [Fact]
@@ -95,6 +115,7 @@ public class TeamKillClipTests
         TeamKillClip clip = Assert.Single(clips);
         Assert.Equal(TeamKillClips.PentakillKind, clip.Kind);
         Assert.Equal("Zeratul pentakill", clip.Description);
+        Assert.False(clip.WipedTeam);
     }
 
     [Fact]
@@ -146,10 +167,9 @@ public class TeamKillClipTests
             }
         );
 
-        Assert.Contains(
-            clips,
-            clip => clip.Kind == TeamKillClips.PentakillKind && clip.HudStartSecond == 0
-        );
+        TeamKillClip clip = Assert.Single(clips);
+        Assert.Equal(TeamKillClips.PentakillKind, clip.Kind);
+        Assert.Equal(0, clip.HudStartSecond);
     }
 
     [Fact]

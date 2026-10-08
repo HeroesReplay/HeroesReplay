@@ -27,7 +27,7 @@ Official pages, read these before inventing flags:
 - [Seeking](https://trac.ffmpeg.org/wiki/Seeking)
 - [Concatenate](https://trac.ffmpeg.org/wiki/Concatenate)
 
-The spectator already cuts pentakill clips after a recorded match (`HeroesReplay.Core.Clips.MatchClipExporter`, arguments in `FfmpegArguments.Cut`), with the tools `FfmpegLocator` finds, and writes `Data\Contexts\<id>\clips\<kind>-<hero>-<hudStart>\clip.mp4` plus an index `Data\Contexts\<id>\clips.json`.
+The spectator already cuts pentakill clips after a recorded match (`HeroesReplay.Core.Clips.MatchClipExporter`, arguments in `FfmpegArguments.Cut`), with the tools `FfmpegLocator` finds, and writes `Data\Contexts\<id>\clips\pentakill-<hero>-<hudStart>\clip.mp4` plus an index `Data\Contexts\<id>\clips.json`. Clips are individual pentakills only; a team wipe is never a clip of its own (#369).
 
 `ffprobe` first. In `clips.json`, `fileStart` and `duration` are seconds in the match file. `hudStart` and `hudEnd` are HUD time; do not cut with them.
 

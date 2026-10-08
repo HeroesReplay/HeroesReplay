@@ -67,6 +67,7 @@ public class YouTubePublicationDecisionTests
 
         Assert.Equal(ReplayMediaPriority.Notable, pentakill.Priority);
         Assert.Equal(ReplayMediaPriority.Notable, wipe.Priority);
+        Assert.True(Assert.Single(wipe.NotableEvents).WipedTeam);
         Assert.Equal(ReplayMediaPriority.HighSkill, ranked.Priority);
         Assert.Equal(ReplayMediaPriority.HighSkill, rated.Priority);
         Assert.Equal(ReplayMediaPriority.Ordinary, ordinary.Priority);
@@ -597,9 +598,26 @@ public class YouTubePublicationDecisionTests
         );
     }
 
+    /// <summary>A pentakill whose blows killed the whole team: still one pentakill (#369).</summary>
     private static TeamKillClip Wipe()
     {
-        return new TeamKillClip(TeamKillClips.TeamWipeKind, "Zul'jin", 40, 44, 40, 48, "team wipe");
+        return new TeamKillClip(
+            TeamKillClips.PentakillKind,
+            "Zul'jin",
+            40,
+            44,
+            40,
+            48,
+            "Zul'jin pentakill (team wipe)",
+            new[]
+            {
+                new TeamKillBlow(40, "Artanis"),
+                new TeamKillBlow(41, "Butcher"),
+                new TeamKillBlow(42, "Chromie"),
+                new TeamKillBlow(43, "Diablo"),
+                new TeamKillBlow(44, "E.T.C."),
+            }
+        );
     }
 
     private static List<DateTimeOffset> Recent(int count)

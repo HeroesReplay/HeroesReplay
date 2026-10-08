@@ -318,38 +318,58 @@ public class FullMatchMetadataTests
         Assert.DoesNotContain("team wipe", metadata.Title, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Li-Ming", metadata.Title, StringComparison.Ordinal);
         Assert.Equal("Dragon Shire - Storm League - Diamond 3 - 65389750", metadata.Title);
-        Assert.Contains("Li-Ming pentakill", metadata.Description);
         Assert.Contains("Featured: Johanna", metadata.DescriptionLines);
         Assert.Contains("Pentakill", metadata.Tags);
         Assert.Contains("Team wipe", metadata.Tags);
-        Assert.DoesNotContain("Li-Ming pentakill (team wipe)", metadata.Description);
+        // #369: one highlight for the one pentakill, not a second "team wipe" for the same blows.
+        Assert.Contains("Highlights: Li-Ming pentakill (team wipe)", metadata.DescriptionLines);
+        Assert.DoesNotContain("Li-Ming team wipe", metadata.Description);
     }
 
     [Fact]
-    public void TeamWipeWithoutPentakill_DoesNotClaimPentakill()
+    public void AnOldTeamWipeEvent_IsNotEvidence()
     {
+        // The team-wipe kind is gone (#369): a wipe is only ever a pentakill's fact.
         IReadOnlyList<TeamKillClip> clips = new[]
         {
-            new TeamKillClip(TeamKillClips.TeamWipeKind, "Artanis", 100, 108, 88, 116, "team wipe"),
+            new TeamKillClip("team-wipe", "Artanis", 100, 108, 88, 116, "team wipe"),
         };
         FullMatchMetadataInput input = Ordinary() with { NotableEvents = clips };
 
         FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(input, null);
 
-        Assert.True(metadata.ClaimsTeamWipe);
+        Assert.False(metadata.ClaimsTeamWipe);
         Assert.False(metadata.ClaimsPentakill);
-        Assert.DoesNotContain("team wipe", metadata.Title, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("team wipe", metadata.Description, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("pentakill", metadata.Title, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(
-            "pentakill",
+            "team wipe",
             metadata.Description,
             StringComparison.OrdinalIgnoreCase
         );
-        Assert.DoesNotContain(
-            metadata.Tags,
-            tag => tag.Equals("Pentakill", StringComparison.Ordinal)
+        Assert.DoesNotContain("Highlights:", metadata.Description);
+        Assert.DoesNotContain("Team wipe", metadata.Tags);
+    }
+
+    [Fact]
+    public void APentakillThatDidNotWipeTheTeam_ClaimsNoTeamWipe()
+    {
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(100, "Zeratul", "Artanis"),
+                Death(102, "Zeratul", "Butcher"),
+                Death(104, "Zeratul", "Chromie"),
+                Death(106, "Zeratul", "Diablo"),
+                Death(108, "Zeratul", "Artanis"),
+            }
         );
+        FullMatchMetadataInput input = Ordinary() with { NotableEvents = clips };
+
+        FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(input, null);
+
+        Assert.True(metadata.ClaimsPentakill);
+        Assert.False(metadata.ClaimsTeamWipe);
+        Assert.Contains("Highlights: Zeratul pentakill", metadata.DescriptionLines);
+        Assert.DoesNotContain("Team wipe", metadata.Tags);
     }
 
     [Fact]

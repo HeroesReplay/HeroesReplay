@@ -260,7 +260,7 @@ public class GameManager : IGameManager
                     }
                     catch (Exception e)
                     {
-                        logger.LogWarning(e, "Could not cut team-kill clips.");
+                        logger.LogWarning(e, "Could not cut pentakill clips.");
                     }
                 }
                 else
