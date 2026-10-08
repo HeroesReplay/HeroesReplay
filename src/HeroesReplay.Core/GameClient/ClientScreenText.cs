@@ -4,19 +4,6 @@ namespace HeroesReplay.Core.GameClient;
 
 public static class ClientScreenText
 {
-    public const string GameDataStartup = "Preparing game data";
-
-    public static bool IsGameDataStartup(string text)
-    {
-        return !string.IsNullOrWhiteSpace(text)
-            && text.Contains(GameDataStartup, StringComparison.OrdinalIgnoreCase);
-    }
-
-    public static bool IsGameDataStartup(string primary, string later)
-    {
-        return IsGameDataStartup(primary) || IsGameDataStartup(later);
-    }
-
     public static bool IsLoginForm(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
