@@ -274,6 +274,12 @@ public sealed class UploadOutbox
         return store.ListOpenAsync(cancellationToken);
     }
 
+    /// <summary>Rewrites saved attempts whose session URI still holds the API key (#368).</summary>
+    public Task<int> ScrubSessionKeysAsync(CancellationToken cancellationToken)
+    {
+        return store.ScrubSessionKeysAsync(cancellationToken);
+    }
+
     public async Task<string> SelectRestartMediaAsync(
         string attemptId,
         CancellationToken cancellationToken

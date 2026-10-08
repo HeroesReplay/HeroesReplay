@@ -331,6 +331,48 @@ public class ServiceRoleLogTests
     }
 
     [Fact]
+    public void Provider_HidesTheApiKeyOfAYouTubeUploadUrl()
+    {
+        // #368: the resumable session URI carries the API key as key=.
+        string shaped = "AIza" + new string('Q', 35);
+        string root = TempDir();
+        try
+        {
+            string path;
+            using (
+                var provider = new ServiceRoleLogProvider(
+                    "youtube",
+                    new ServiceLogSettings { Directory = root },
+                    new FakeClock(Start),
+                    pid: 78
+                )
+            )
+            {
+                ILogger logger = provider.CreateLogger("HeroesReplay.Core.YouTube.YouTubeUploader");
+                logger.LogWarning(
+                    "Could not ask {Session} about the upload.",
+                    "https://www.googleapis.com/upload/youtube/v3/videos?part=snippet&key=unit-test-yt-key&uploadType=resumable&upload_id=abc"
+                );
+                logger.LogError(
+                    new InvalidOperationException("PUT ...?upload_id=abc&key=" + shaped + " failed"),
+                    "Upload failed"
+                );
+                path = provider.CurrentPath;
+            }
+
+            string text = File.ReadAllText(path);
+            Assert.DoesNotContain("unit-test-yt-key", text);
+            Assert.DoesNotContain(shaped, text);
+            Assert.Contains("&key=[redacted]&uploadType=resumable&upload_id=abc", text);
+            Assert.Contains("upload_id=abc&key=[redacted] failed", text);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Provider_TakesItsLevelFromLoggingRoleFile()
     {
         string root = TempDir();

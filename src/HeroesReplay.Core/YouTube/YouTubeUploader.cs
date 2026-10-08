@@ -187,6 +187,7 @@ public class YouTubeUploader : IYouTubeUploader
     public async Task ListenAsync()
     {
         LogQuotaPlan();
+        await ScrubSavedSessionKeysAsync().ConfigureAwait(false);
         if (settings.YouTube.DryRun)
         {
             logger.LogInformation(
@@ -693,8 +694,13 @@ public class YouTubeUploader : IYouTubeUploader
         IUploadProgress result;
         try
         {
+            // The saved session has no API key (#368); the send carries the configured one, as
+            // the session start did.
             result = await videosInsertRequest
-                .ResumeAsync(new Uri(session), send.Token)
+                .ResumeAsync(
+                    new Uri(UploadSessionUri.WithKey(session, youtubeService.ApiKey)),
+                    send.Token
+                )
                 .ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -983,7 +989,7 @@ public class YouTubeUploader : IYouTubeUploader
             status = await UploadSessionProbe
                 .ProbeAsync(
                     service.HttpClient,
-                    manifest.SessionUri,
+                    UploadSessionUri.WithKey(manifest.SessionUri, service.ApiKey),
                     recording.Length,
                     body => service.Serializer.Deserialize<Video>(body),
                     token
@@ -1879,6 +1885,35 @@ public class YouTubeUploader : IYouTubeUploader
             reserved,
             next
         );
+    }
+
+    /// <summary>
+    /// Attempts saved before #368 hold the API key in their session URI. Each one is rewritten
+    /// without it when the uploader starts, so a copied or zipped attempt folder does not carry it.
+    /// </summary>
+    private async Task ScrubSavedSessionKeysAsync()
+    {
+        try
+        {
+            var outbox = new UploadOutbox(MediaPolicyAttemptLog.AttemptsRoot(settings));
+            int scrubbed = await outbox
+                .ScrubSessionKeysAsync(cancellationTokenSource.Token)
+                .ConfigureAwait(false);
+            if (scrubbed > 0)
+            {
+                logger.LogInformation(
+                    "Removed the API key from {Count} saved upload sessions.",
+                    scrubbed
+                );
+            }
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not remove the API key from every saved upload session. Each one loses it the next time the uploader reads it."
+            );
+        }
     }
 
     private async Task NoteSessionIfPresentAsync(

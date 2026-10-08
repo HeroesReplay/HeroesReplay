@@ -294,6 +294,8 @@ public static class UploadAttemptMachine
             return UploadAttemptResult.Failure(UploadAttemptReasons.IllegalTransition, current);
         }
 
+        // The key YouTube repeats in the URI is not saved; a send adds it back (#368).
+        sessionUri = UploadSessionUri.WithoutKey(sessionUri);
         if (!UploadAttemptIds.IsSessionUri(sessionUri))
         {
             return UploadAttemptResult.Failure(UploadAttemptReasons.IllegalTransition, current);
