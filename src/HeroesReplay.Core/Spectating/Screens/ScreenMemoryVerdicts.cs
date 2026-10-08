@@ -16,22 +16,6 @@ namespace HeroesReplay.Core.Spectating.Screens;
 /// </summary>
 public static class ScreenMemoryVerdicts
 {
-    /// <summary>
-    /// The game-launch results whose message dialog OCR reads as a version mismatch: the replay's
-    /// build cannot be started or downloaded, or its data build does not match. "The version of
-    /// Heroes of the Storm required to play this game is not available." is
-    /// <c>GameLaunchUnsupportedNoData</c> (result 23): read live on 2.57.0.98348 with a
-    /// 2.57.0.98297 replay on 2026-10-08. The others are the client's other version messages.
-    /// </summary>
-    public static readonly string[] VersionResults =
-    {
-        "GameLaunchBaseBuildMissing",
-        "GameLaunchVersionDownloadFailure",
-        "GameLaunchVersionLaunchError",
-        "GameLaunchDataBuildNumMismatch",
-        "GameLaunchUnsupportedNoData",
-    };
-
     public static bool? For(ScreenState state, ClientScreenSample? sample) =>
         state switch
         {
@@ -40,7 +24,8 @@ public static class ScreenMemoryVerdicts
             ScreenState.MapLoading => sample?.MapLoading,
             ScreenState.EndScreen => sample?.OnAwards,
             ScreenState.GameDataDownload => sample?.OnDownload,
-            ScreenState.VersionMismatch => VersionDialog(sample),
+            ScreenState.VersionMismatch => ClientLaunchFailure.ShowsVersion(sample),
+            ScreenState.RegionUnavailable => RegionVerdict(sample),
             _ => null,
         };
 
@@ -65,20 +50,14 @@ public static class ScreenMemoryVerdicts
             : Describe(sample);
 
     /// <summary>
-    /// True when a message dialog shows a version game-launch result, false on any other known
-    /// screen, null when memory cannot tell.
+    /// The region verdict: a game-launch failure with a region result
+    /// (<see cref="ClientLaunchFailure.RegionResults"/>). Unknown while no region result key is
+    /// known, so shadow mode does not count "false" for a dialog memory cannot name.
     /// </summary>
-    public static bool? VersionDialog(ClientScreenSample? sample)
-    {
-        if (sample is not ClientScreenSample read || !read.Ok)
-        {
-            return null;
-        }
-
-        return read.Screen == ClientScreenKind.Dialog
-            && read.LaunchResult != null
-            && VersionResults.Contains(read.LaunchResult, StringComparer.Ordinal);
-    }
+    private static bool? RegionVerdict(ClientScreenSample? sample) =>
+        ClientLaunchFailure.RegionResults.Count == 0
+            ? null
+            : ClientLaunchFailure.ShowsRegion(sample);
 
     /// <summary>The memory read behind a verdict, for the shadow log.</summary>
     public static string Describe(ClientScreenSample? sample)

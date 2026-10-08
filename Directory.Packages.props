@@ -10,8 +10,8 @@
         match-clock change (AGENTS.md).
     -->
     <PropertyGroup>
-        <HeroesClientSDKVersion>0.4.2</HeroesClientSDKVersion>
-        <HeroesClientSDKSha256>39f72449db8189f1618b81eeef50fefe9585549c40b7d5412f7ba6edb68c9b39</HeroesClientSDKSha256>
+        <HeroesClientSDKVersion>0.4.3</HeroesClientSDKVersion>
+        <HeroesClientSDKSha256>d7473ac40ea27468e40ad720813f5fb3b344d14b1d74a607ac97a696e29a6a3d</HeroesClientSDKSha256>
     </PropertyGroup>
     <ItemGroup>
         <!-- .NET 10 LTS -->

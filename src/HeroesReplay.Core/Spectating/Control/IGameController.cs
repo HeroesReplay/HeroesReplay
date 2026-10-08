@@ -15,6 +15,13 @@ public interface IGameController
     Task<TimeSpan?> TryReadRunningMatchClockAsync();
     Task<bool> IsReplayPresentedAsync(LoadedReplay replay);
     Task<bool> TrySeeEndScreenAsync(bool nearCore);
+
+    /// <summary>
+    /// Shadow mode (#292): read the end screen next to memory from the core-death time on. It
+    /// decides nothing.
+    /// </summary>
+    Task ShadowEndScreenAsync() => Task.CompletedTask;
+
     void SendFocus(int player);
     void SendPanel(Panel panel);
     void ShowSelectedUnit();

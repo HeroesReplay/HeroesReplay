@@ -150,15 +150,34 @@ public class ScreenMemoryVerdictsTests
     }
 
     [Fact]
-    public void For_AnotherMessageDialog_IsNotAVersionMismatch()
+    public void For_AnyOtherGameLaunchFailure_IsTheGenericInvalidClient()
     {
+        // #292 decision: any game-launch failure the client shows is an invalid client, handled
+        // like the version dialog, so it counts as that state too.
         ClientScreenSample other = VersionDialog with
         {
             LaunchResultCode = 2,
             LaunchResult = "GameLaunchReplayOpenFailure",
         };
 
-        Assert.False(ScreenMemoryVerdicts.For(ScreenState.VersionMismatch, other));
+        Assert.True(ScreenMemoryVerdicts.For(ScreenState.VersionMismatch, other));
+    }
+
+    [Fact]
+    public void For_AMessageDialogWithoutAFailureResult_IsNotAVersionMismatch()
+    {
+        ClientScreenSample noResult = VersionDialog with
+        {
+            LaunchResultCode = 0,
+            LaunchResult = null,
+        };
+        ClientScreenSample battleNetError = VersionDialog with
+        {
+            Dialogs = new[] { "CBattlenetErrorDialog" },
+        };
+
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.VersionMismatch, noResult));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.VersionMismatch, battleNetError));
     }
 
     [Fact]
