@@ -870,7 +870,18 @@ public class YouTubeUploader : IYouTubeUploader
 
         SaveLedger();
         RecordWork?.Invoke();
+        SweepRetention();
+    }
+
+    /// <summary>
+    /// The youtube role's retention sweep. In a dry run it also removes the mp4 of each planned
+    /// recording older than <c>Retention:DryRunRecordingMaxAge</c> (#317); with DryRun off that
+    /// part removes nothing.
+    /// </summary>
+    private void SweepRetention()
+    {
         MediaRetention.SweepAndLog(settings, logger);
+        DryRunRecordings.SweepAndLog(settings, logger);
     }
 
     private enum Recovery
@@ -1280,6 +1291,9 @@ public class YouTubeUploader : IYouTubeUploader
             LogPublicationHealth(pending.Count, pending, sentNow > 0);
         }
 
+        // A dry run passes only when the role starts. Its planned recordings age out here too,
+        // when the pass wrote no new plan (#317). With DryRun off this removes nothing.
+        DryRunRecordings.SweepAndLog(settings, logger);
         lastPassHealthy = healthy;
         if (healthy)
         {
@@ -2195,7 +2209,10 @@ public class YouTubeUploader : IYouTubeUploader
         CancellationToken token
     )
     {
-        string receiptPath = Path.Combine(recording.Directory.FullName, "youtube-dry-run.json");
+        string receiptPath = Path.Combine(
+            recording.Directory.FullName,
+            DryRunRecordings.PlanFileName
+        );
         Video video = UploadBody.Build(entry);
         string receipt = JsonSerializer.Serialize(
             new
@@ -2223,7 +2240,7 @@ public class YouTubeUploader : IYouTubeUploader
         );
         waits.Clear(recording.FullName);
         RecordWork?.Invoke();
-        MediaRetention.SweepAndLog(settings, logger);
+        SweepRetention();
     }
 
     private void RememberUploaded(YouTubeEntry entry)

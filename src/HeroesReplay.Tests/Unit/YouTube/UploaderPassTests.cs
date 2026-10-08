@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
 using HeroesReplay.Core.YouTube.Playlists;
@@ -66,6 +67,62 @@ public sealed class UploaderPassTests : IDisposable
 
         Assert.Equal(UploadOutcome.Uploaded, outcome);
         Assert.True(work >= 1);
+    }
+
+    /// <summary>
+    /// #317: the youtube role sweeps a dry-run recording once its plan is written and it is older
+    /// than Retention:DryRunRecordingMaxAge. A young one stays; the plan and entry stay.
+    /// </summary>
+    [Fact]
+    public async Task ADryRunPass_RemovesAPlannedRecordingPastTheMaxAge()
+    {
+        AppSettings settings = Settings(live: false);
+        settings.Retention = new RetentionSettings { DryRunRecordingMaxAge = TimeSpan.FromDays(2) };
+        string recording = await StageAsync(settings, 65581722, "Braxis Holdout");
+        string context = Path.GetDirectoryName(recording);
+        YouTubeUploader uploader = Uploader(settings);
+
+        Assert.Equal(UploadOutcome.Uploaded, await uploader.ProcessRecordingAsync(recording));
+        Assert.True(File.Exists(recording));
+        File.SetLastWriteTimeUtc(recording, DateTime.UtcNow.AddDays(-3));
+        await uploader.RunUploadPassAsync();
+
+        Assert.False(File.Exists(recording));
+        Assert.True(File.Exists(Path.Combine(context, DryRunRecordings.PlanFileName)));
+        Assert.True(File.Exists(Path.Combine(context, "youtube-entry.json")));
+        Assert.Single(log.Lines, line => line.StartsWith("Removed 1 dry-run recording(s)"));
+    }
+
+    /// <summary>
+    /// Production is unchanged: a live pass never removes a recording, even one an earlier dry
+    /// run planned, while the age is set.
+    /// </summary>
+    [Fact]
+    public async Task ALivePass_KeepsARecordingAnEarlierDryRunPlanned()
+    {
+        AppSettings settings = Settings(live: true);
+        settings.Retention = new RetentionSettings { DryRunRecordingMaxAge = TimeSpan.FromDays(2) };
+        string recording = await StageAsync(settings, 65733007, "Alterac Pass");
+        File.WriteAllText(
+            Path.Combine(Path.GetDirectoryName(recording), DryRunRecordings.PlanFileName),
+            "{}"
+        );
+        File.SetLastWriteTimeUtc(recording, DateTime.UtcNow.AddDays(-3));
+        // The insert cap holds the send, so the pass never reaches YouTube.
+        PublicationLedgerStore.Save(
+            root,
+            new PublicationLedger
+            {
+                InsertsThisQuotaDay = settings.ReplayMedia.MaxInsertsPerQuotaDay,
+                QuotaDay = PublicationSchedule.QuotaDayStart(DateTimeOffset.UtcNow),
+            }
+        );
+        YouTubeUploader uploader = Uploader(settings);
+
+        await uploader.RunUploadPassAsync();
+
+        Assert.True(File.Exists(recording));
+        Assert.DoesNotContain(log.Lines, line => line.Contains("dry-run recording"));
     }
 
     [Fact]
