@@ -93,7 +93,11 @@ public class ClientCommand : Command
         int failed = 0;
         foreach (FirewallRuleOutcome outcome in firewall.AllowInboundClients(paths))
         {
-            Console.WriteLine($"{outcome.State}: {outcome.ProgramPath}");
+            Console.WriteLine(
+                string.IsNullOrEmpty(outcome.AllowedBy)
+                    ? $"{outcome.State}: {outcome.ProgramPath}"
+                    : $"{outcome.State}: {outcome.ProgramPath} by {outcome.AllowedBy}"
+            );
             if (
                 outcome.State is FirewallRuleState.Failed or FirewallRuleState.MissingNeedsElevation
             )
