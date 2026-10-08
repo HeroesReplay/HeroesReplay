@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using HeroesClientSDK;
 
 namespace HeroesReplay.Core.Spectating.Screens;
@@ -13,8 +12,6 @@ public enum NextMatchLaunch
 
 public static class ReplayLoadCue
 {
-    public const int MinimumTermLength = 3;
-
     public static bool IsPresented(bool loadingScreen, TimeSpan? hudTimer) =>
         loadingScreen || hudTimer.HasValue;
 
@@ -22,23 +19,40 @@ public static class ReplayLoadCue
     /// Whether the replay is on screen, from memory only: the running match clock, a match
     /// (<see cref="LoadingScreenSample.InMatch"/>), or the map loading screen. A match counts even
     /// when the clock does not read yet, so a replay that is already playing is never mistaken
-    /// for a client stuck before its menu (#249). Null when memory cannot tell, and only then is
-    /// the screen OCR'd for the loading screen text.
+    /// for a client stuck before its menu (#249). When <see cref="LoadingScreen"/> cannot tell
+    /// (no menu yet, as on a previous-patch client that loads the replay without a home screen),
+    /// HeroesClientSDK <see cref="ClientScreen"/> decides the map loading screen from the
+    /// <c>ScreenLoading</c> frame's map panel (#292). Null only when neither can tell; the screen
+    /// is never OCR'd for it.
     /// </summary>
-    public static bool? PresentedInMemory(bool clockRunning, LoadingScreenSample? screen)
+    public static bool? PresentedInMemory(
+        bool clockRunning,
+        LoadingScreenSample? screen,
+        ClientScreenSample? client = null
+    )
     {
         if (clockRunning)
         {
             return true;
         }
 
-        if (screen is not LoadingScreenSample sample)
+        if (screen is LoadingScreenSample sample && (sample.InMatch || sample.MapLoading != null))
         {
-            return null;
+            return sample.InMatch ? true : sample.MapLoading;
         }
 
-        return sample.InMatch ? true : sample.MapLoading;
+        return client?.MapLoading;
     }
+
+    /// <summary>
+    /// The map loading screen from memory: <see cref="LoadingScreen"/> when it can tell (after
+    /// a menu), else HeroesClientSDK <see cref="ClientScreen"/>, which tells the boot splash from
+    /// a map loading screen before any menu too (#292). Null when neither can tell.
+    /// </summary>
+    public static bool? MapLoadingInMemory(
+        LoadingScreenSample? screen,
+        ClientScreenSample? client
+    ) => screen?.MapLoading ?? client?.MapLoading;
 
     public static NextMatchLaunch Classify(
         bool processRunning,
@@ -64,95 +78,4 @@ public static class ReplayLoadCue
 
     public static bool SelectsWaitingScene(NextMatchLaunch launch) =>
         launch == NextMatchLaunch.NotStarted;
-
-    public static bool SeesLoadingScreen(
-        string windowText,
-        string map,
-        string mapAlternative,
-        IEnumerable<string> playerNames,
-        IEnumerable<string> heroNames,
-        IEnumerable<string> loadingScreenText
-    )
-    {
-        if (string.IsNullOrWhiteSpace(windowText))
-        {
-            return false;
-        }
-
-        foreach (
-            string term in Terms(map, mapAlternative, playerNames, heroNames, loadingScreenText)
-        )
-        {
-            if (windowText.Contains(term, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static IEnumerable<string> Terms(
-        string map,
-        string mapAlternative,
-        IEnumerable<string> playerNames,
-        IEnumerable<string> heroNames,
-        IEnumerable<string> loadingScreenText
-    )
-    {
-        foreach (string term in One(map))
-        {
-            yield return term;
-        }
-
-        foreach (string term in One(mapAlternative))
-        {
-            yield return term;
-        }
-
-        foreach (string term in Many(playerNames))
-        {
-            yield return term;
-        }
-
-        foreach (string term in Many(heroNames))
-        {
-            yield return term;
-        }
-
-        foreach (string term in Many(loadingScreenText))
-        {
-            yield return term;
-        }
-    }
-
-    private static IEnumerable<string> One(string term)
-    {
-        if (TryKeep(term, out string kept))
-        {
-            yield return kept;
-        }
-    }
-
-    private static IEnumerable<string> Many(IEnumerable<string> terms)
-    {
-        if (terms == null)
-        {
-            yield break;
-        }
-
-        foreach (string term in terms)
-        {
-            if (TryKeep(term, out string kept))
-            {
-                yield return kept;
-            }
-        }
-    }
-
-    private static bool TryKeep(string term, out string kept)
-    {
-        kept = term?.Trim();
-        return !string.IsNullOrEmpty(kept) && kept.Length >= MinimumTermLength;
-    }
 }

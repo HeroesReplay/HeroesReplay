@@ -608,21 +608,6 @@ public class GameController : IGameController
         }
 
         bool openedFromHome = boot.OpenedFromHome;
-        var searchTerms = context
-            .Current.LoadedReplay.Replay.Players.Select(x => x.Name)
-            .Concat(context.Current.LoadedReplay.Replay.Players.Select(x => x.Character))
-            .Concat(settings.OCR.LoadingScreenText)
-            .Concat(new[] { context.Current.LoadedReplay.Replay.Map })
-            .ToArray();
-
-        // The OCR verdict on the map loading screen: a player, hero, map, or welcome term.
-        bool ShowsSearchTerm(string windowText) =>
-            !string.IsNullOrWhiteSpace(windowText)
-            && searchTerms.Any(word =>
-                !string.IsNullOrWhiteSpace(word)
-                && windowText.Contains(word, StringComparison.OrdinalIgnoreCase)
-            );
-
         bool recoveredLogin = false;
         bool loggedMismatch = false;
         bool loggedPreparing = false;
@@ -898,16 +883,15 @@ public class GameController : IGameController
                 continue;
             }
 
-            // Memory decides the map loading screen. The OCR'd words only count when it cannot.
-            // A match in memory is the replay already playing, with or without a clock read.
+            // Memory alone decides the map loading screen (#292): LoadingScreen after a menu, else
+            // ClientScreen's map panel, which also reads before any menu. The screen is not OCR'd
+            // for it. A match in memory is the replay already playing, with or without a clock.
             LoadingScreenSample? screen = ReadScreenInMemory();
-            bool? memoryLoading = screen?.MapLoading;
+            bool? memoryLoading = ReplayLoadCue.MapLoadingInMemory(screen, ReadClientScreen());
             bool inMatch =
                 screen?.InMatch == true
                 && !ReplayClientRoute.OtherReplayOnClient(replayOnClient, replayPath);
-            bool ocrLoading = ShowsSearchTerm(text);
-            ShadowScreen(ScreenState.MapLoading, ocrLoading, text);
-            bool loading = memoryLoading ?? ocrLoading;
+            bool loading = memoryLoading == true;
             bool timer = await IsMatchClockRunning().ConfigureAwait(false);
             bool ocrLoginForm = ClientScreenText.IsLoginForm(text);
             ShadowScreen(ScreenState.LoginForm, ocrLoginForm, text);
@@ -973,13 +957,6 @@ public class GameController : IGameController
                 continue;
             }
 
-            bool ocrLaterLoading = ShowsSearchTerm(laterText);
-            if (laterText != null)
-            {
-                ShadowScreen(ScreenState.MapLoading, ocrLaterLoading, laterText);
-            }
-
-            bool laterLoading = memoryLoading == null && ocrLaterLoading;
             bool startup = ClientScreenText.IsGameDataStartup(text, laterText);
             ShadowScreen(ScreenState.GameDataStartup, startup, text);
             RunningClientBuild runningBuild = ReadRunningBuild(replayVersion);
@@ -1097,7 +1074,7 @@ public class GameController : IGameController
                 matchingBuild,
                 differentBuild
             );
-            bool replayVisible = loading || laterLoading || timer || inMatch || home;
+            bool replayVisible = loading || timer || inMatch || home;
             if (
                 ClientInterfacePlan.RestartAfterGameData(
                     sawGameDataDownload,
@@ -1156,17 +1133,9 @@ public class GameController : IGameController
                 OpenReplayFromHome(replayPath);
             }
 
-            if (
-                !oweAhliObs
-                && ClientInterfacePlan.MayAcceptReplayScreen(
-                    !differentBuild,
-                    loading || laterLoading
-                )
-            )
+            if (!oweAhliObs && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, loading))
             {
-                ShowGameScene(
-                    memoryLoading == true ? "loading screen in memory" : "loading screen"
-                );
+                ShowGameScene("loading screen in memory");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
@@ -1220,7 +1189,6 @@ public class GameController : IGameController
 
             bool clientBusy =
                 loading
-                || laterLoading
                 || timer
                 || inMatch
                 || home
@@ -1630,12 +1598,6 @@ public class GameController : IGameController
 
     private readonly record struct WordScan(bool Found, string Text);
 
-    private async Task<string> ReadWindowTextAsync()
-    {
-        WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
-        return window.Text;
-    }
-
     private async Task<WindowRead> ReadWindowAsync()
     {
         if (!TryGetGameHandle(out IntPtr handle))
@@ -1969,28 +1931,13 @@ public class GameController : IGameController
             return false;
         }
 
-        // The match clock is memory only. A match or the loading screen in memory decides next;
-        // OCR reads "WELCOME TO" only when memory cannot tell. A match with no clock yet is the
-        // replay on screen, not a client stuck before its menu (#249).
+        // Memory only (#292): the running match clock, a match, or the map loading screen
+        // (LoadingScreen after a menu, else ClientScreen's map panel, before any menu too). A match
+        // with no clock yet is the replay on screen, not a client stuck before its menu (#249).
+        // When memory cannot tell, the replay is not presented yet; the screen is not OCR'd.
         bool clockRunning = (await TryReadRunningMatchClockAsync().ConfigureAwait(false)).HasValue;
         LoadingScreenSample? screen = ReadScreenInMemory();
-        if (ReplayLoadCue.PresentedInMemory(clockRunning, screen) is bool known)
-        {
-            return known;
-        }
-
-        var parsed = replay?.Replay;
-        string text = await ReadWindowTextAsync().ConfigureAwait(false);
-        bool loadingScreen = ReplayLoadCue.SeesLoadingScreen(
-            text,
-            parsed?.Map,
-            parsed?.MapAlternativeName,
-            parsed?.Players?.Select(player => player.Name),
-            parsed?.Players?.Select(player => player.Character),
-            settings.OCR.LoadingScreenText
-        );
-        ShadowScreen(ScreenState.MapLoading, loadingScreen, text);
-        return loadingScreen;
+        return ReplayLoadCue.PresentedInMemory(clockRunning, screen, ReadClientScreen()) ?? false;
     }
 
     public async Task<bool> TrySeeEndScreenAsync(bool nearCore)
