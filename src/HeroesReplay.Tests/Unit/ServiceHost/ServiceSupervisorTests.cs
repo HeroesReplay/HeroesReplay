@@ -1614,6 +1614,58 @@ public class ServiceSupervisorTests
         }
     }
 
+    [Fact]
+    public void Status_ShowsARollbackThatWaitsForOBSWithoutChangingTheExitCode()
+    {
+        string path = TempLock();
+        try
+        {
+            const string Waiting =
+                "A release rollback waits to put back x.bak over HeroesReplay.json.";
+            var text = new StringWriter();
+            int code = ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery { Out = text, ReadObsRestorePending = () => Waiting }
+            );
+
+            Assert.Equal(0, code);
+            Assert.Contains("OBS rollback: waiting. " + Waiting, text.ToString());
+
+            var json = new StringWriter();
+            ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery
+                {
+                    Output = ServiceStatusOutput.Json,
+                    Out = json,
+                    ReadObsRestorePending = () => Waiting,
+                }
+            );
+            using var document = System.Text.Json.JsonDocument.Parse(json.ToString());
+            Assert.Equal(
+                Waiting,
+                document.RootElement.GetProperty("obsRestorePending").GetString()
+            );
+
+            var none = new StringWriter();
+            ServiceSupervisor.Status(
+                path,
+                pid => null,
+                spectator: null,
+                query: new ServiceStatusQuery { Out = none, ReadObsRestorePending = () => null }
+            );
+            Assert.DoesNotContain("OBS rollback", none.ToString());
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
     private static string TempLock() =>
         Path.Combine(Path.GetTempPath(), $"heroesreplay-services-{Guid.NewGuid():N}.json");
 }

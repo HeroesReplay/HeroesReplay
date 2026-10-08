@@ -39,6 +39,9 @@ public sealed class ServiceStatusQuery
     /// <summary>The machine section (#251). Null leaves it out.</summary>
     public Func<MachineHealthReport> ReadMachine { get; set; }
 
+    /// <summary>A release rollback that still waits to put back the OBS collection (#304). Null reads none.</summary>
+    public Func<string> ReadObsRestorePending { get; set; }
+
     public static ServiceStatusOutput ParseOutput(string value) =>
         string.Equals(value, "json", StringComparison.OrdinalIgnoreCase)
             ? ServiceStatusOutput.Json

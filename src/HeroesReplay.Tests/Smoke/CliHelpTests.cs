@@ -122,6 +122,14 @@ public class CliHelpTests
         Assert.Contains(update.Subcommands, c => c.Name == "release-health");
         Assert.Contains(update.Subcommands, c => c.Name == "migrate-stream-arm");
         Assert.Contains(update.Subcommands, c => c.Name == "install-obs");
+        Assert.Contains(update.Subcommands, c => c.Name == "restore-obs");
+        // The exact arguments apply-release.ps1 passes on a rollback (#304).
+        Assert.Empty(
+            root.Parse(
+                "update restore-obs --previous C:\\app.previous --install C:\\app --environment prod"
+            ).Errors
+        );
+        Assert.NotEmpty(root.Parse("update restore-obs --install C:\\app").Errors);
         Assert.Empty(root.Parse("update migrate-stream-arm --previous C:\\app").Errors);
         Assert.NotEmpty(root.Parse("update migrate-stream-arm").Errors);
         Assert.Empty(root.Parse("update install-obs --install C:\\app --environment prod").Errors);
