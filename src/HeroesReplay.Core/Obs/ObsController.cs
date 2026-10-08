@@ -89,16 +89,21 @@ public class ObsController : IObsController
                 ObsCrashSentinel.DefaultDirectory(),
                 () => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
                 logger
-            )
+            ),
+            microphones: new ObsBorrowedMicrophoneSession(this.obs)
         );
     }
 
+    /// <summary>
+    /// Identifies OBS, puts a newer collection template in through the live swap, then mutes
+    /// every microphone (<c>OBS:MuteMicrophones</c>, #314). Throws only when OBS does not identify.
+    /// </summary>
     public void BeginSession()
     {
         ObsCollectionApplyResult patch = PatchInstalledCollection();
         try
         {
-            coordinator.EnsureIdentified();
+            coordinator.BeginSession(() => SwapLiveCollection(patch));
         }
         catch (Exception)
         {
@@ -107,7 +112,6 @@ public class ObsController : IObsController
         }
 
         unavailableThisSession = false;
-        SwapLiveCollection(patch);
     }
 
     private bool SkipWhileUnavailable(string action)

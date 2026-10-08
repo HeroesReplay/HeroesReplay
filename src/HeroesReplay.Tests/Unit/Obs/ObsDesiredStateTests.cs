@@ -176,6 +176,160 @@ public class ObsDesiredStateTests
         };
 
     [Fact]
+    public void BeginSession_MutesAnUnmutedMic_AfterTheCollectionIsReady()
+    {
+        var socket = new FakeSession { IsIdentified = true, IsConnected = true };
+        FakeObs obs = FakeObs.Packaged();
+        obs.Mic = "Mic/Aux";
+        var events = new List<string>();
+        obs.Muting = name => events.Add("mute:" + name);
+        Harness harness = Open(
+            Settings(streaming: false),
+            socket,
+            microphones: obs.OpenMicrophones()
+        );
+
+        harness.Coordinator.BeginSession(() => events.Add("swap"));
+
+        Assert.True(obs.MicMuted);
+        Assert.Equal(new[] { "swap", "mute:Mic/Aux" }, events);
+        // Desktop Audio, the media source, and the browser sources are never muted.
+        Assert.Equal(new[] { "Mic/Aux" }, obs.MutedInputs);
+        Assert.Equal(0, socket.StartStreamCalls);
+    }
+
+    [Fact]
+    public void BeginSession_ObsNotIdentified_ThrowsAndMutesNothing()
+    {
+        FakeObs obs = FakeObs.Packaged();
+        obs.Mic = "Mic/Aux";
+        bool swapped = false;
+        Harness harness = Open(
+            Settings(streaming: false),
+            new FakeSession(),
+            microphones: obs.OpenMicrophones()
+        );
+
+        Assert.Throws<TimeoutException>(() =>
+            harness.Coordinator.BeginSession(() => swapped = true)
+        );
+
+        Assert.False(swapped);
+        Assert.Empty(obs.Requests);
+    }
+
+    [Fact]
+    public void Reconcile_MutesAMicUnmutedSinceTheSessionBegan_RightBeforeStartStream()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        FakeObs obs = FakeObs.Packaged();
+        obs.Mic = "Mic/Aux";
+        obs.Muting = name => socket.Events.Add("mute:" + name);
+        Harness harness = Open(Settings(), socket, microphones: obs.OpenMicrophones());
+        harness.Coordinator.BeginSession();
+        // Someone unmutes it in the OBS mixer between the session start and the stream start.
+        obs.MicMuted = false;
+        socket.Events.Clear();
+
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.True(snapshot.Stream.Succeeded);
+        Assert.Equal(new[] { "scene:" + WaitingScene, "mute:Mic/Aux", "start" }, socket.Events);
+        Assert.True(obs.MicMuted);
+        Assert.Equal(new[] { "Mic/Aux", "Mic/Aux" }, obs.MutedInputs);
+    }
+
+    [Fact]
+    public void Reconcile_AnActiveStream_IsLeftAloneWithoutAMute()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            Streaming = true,
+        };
+        FakeObs obs = FakeObs.Packaged();
+        obs.Mic = "Mic/Aux";
+        Harness harness = Open(Settings(), socket, microphones: obs.OpenMicrophones());
+
+        Assert.True(harness.Coordinator.ReconcileStream().Stream.Succeeded);
+
+        // The session start mutes it; a reconcile that starts nothing sends OBS nothing more.
+        Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Empty(obs.Requests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AMicThatCannotBeMuted_DoesNotStopTheSessionOrTheStream(bool unreadable)
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        FakeObs obs = FakeObs.Packaged();
+        obs.Mic = "Mic/Aux";
+        if (unreadable)
+        {
+            obs.Failures["GetSpecialInputs"] = new InvalidOperationException("socket closed");
+        }
+        else
+        {
+            obs.MuteRefused.Add("Mic/Aux");
+        }
+
+        Harness harness = Open(Settings(), socket, microphones: obs.OpenMicrophones());
+
+        harness.Coordinator.BeginSession();
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.True(snapshot.Stream.Succeeded);
+        Assert.Equal(1, socket.StartStreamCalls);
+        Assert.Null(snapshot.StreamBlockedBy);
+        Assert.False(obs.MicMuted);
+        Assert.Equal(unreadable ? 0 : 2, obs.MutedInputs.Count);
+    }
+
+    [Fact]
+    public void MuteMicrophonesOff_SendsObsNoMicrophoneRequest()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        FakeObs obs = FakeObs.Packaged();
+        obs.Mic = "Mic/Aux";
+        Harness harness = Open(
+            Settings(muteMicrophones: false),
+            socket,
+            microphones: obs.OpenMicrophones()
+        );
+
+        harness.Coordinator.BeginSession();
+        Assert.True(harness.Coordinator.ReconcileStream().Stream.Succeeded);
+
+        Assert.Empty(obs.Requests);
+        Assert.False(obs.MicMuted);
+        Assert.Equal(1, socket.StartStreamCalls);
+    }
+
+    [Fact]
+    public void MuteMicrophones_IsOnByDefault()
+    {
+        Assert.True(new OBSSettings().MuteMicrophones);
+    }
+
+    [Fact]
     public void Reconcile_RepairsStoppedStreamWithoutAnInternetTransition()
     {
         var socket = new FakeSession
@@ -1332,7 +1486,8 @@ public class ObsDesiredStateTests
         ObsRecordingBudget budget = null,
         Action beforeLaunch = null,
         Func<bool> armed = null,
-        Func<ObsValidation> preflight = null
+        Func<ObsValidation> preflight = null,
+        IObsMicrophoneSession microphones = null
     )
     {
         socket ??= new FakeSession();
@@ -1349,7 +1504,8 @@ public class ObsDesiredStateTests
             TimeSpan.FromMilliseconds(20),
             beforeLaunch,
             armed ?? (() => true),
-            preflight
+            preflight,
+            microphones: microphones
         );
         return new Harness
         {
@@ -1409,7 +1565,8 @@ public class ObsDesiredStateTests
         bool enabled = true,
         bool streaming = true,
         string scene = WaitingScene,
-        bool closeOwned = false
+        bool closeOwned = false,
+        bool muteMicrophones = true
     ) =>
         new()
         {
@@ -1420,6 +1577,7 @@ public class ObsDesiredStateTests
             WebSocketPassword = "unit-password",
             WaitingSceneName = scene,
             CloseOwnedOnStop = closeOwned,
+            MuteMicrophones = muteMicrophones,
         };
 
     private static ObsRecordingBudget Fast(int retryCount) =>

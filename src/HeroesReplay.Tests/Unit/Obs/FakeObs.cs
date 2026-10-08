@@ -34,6 +34,21 @@ internal sealed class FakeObs : IObsReadSessionFactory
     public string ProgramScene { get; set; } = "game-scene";
     public string Mic { get; set; }
     public bool MicMuted { get; set; }
+
+    /// <summary>
+    /// Audio input capture sources in the collection (<c>wasapi_input_capture</c>, not a global
+    /// device), by name, with their mute state.
+    /// </summary>
+    public Dictionary<string, bool> MicSources { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Inputs whose SetInputMute OBS refuses.</summary>
+    public HashSet<string> MuteRefused { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Runs with the input name on every SetInputMute, before OBS answers it.</summary>
+    public Action<string> Muting { get; set; }
+
+    /// <summary>Every SetInputMute this fake received, in order.</summary>
+    public List<string> MutedInputs { get; } = new();
     public HashSet<string> MissingRequests { get; } = new(StringComparer.Ordinal);
     public string WebSocketVersion { get; set; } = "5.6.3";
     public bool OmitAvailableRequests { get; set; }
@@ -457,6 +472,16 @@ internal sealed class FakeObs : IObsReadSessionFactory
                 ["unversionedInputKind"] = "wasapi_input_capture",
             };
         }
+
+        foreach (string source in MicSources.Keys)
+        {
+            yield return new JObject
+            {
+                ["inputName"] = source,
+                ["inputKind"] = "wasapi_input_capture",
+                ["unversionedInputKind"] = "wasapi_input_capture",
+            };
+        }
     }
 
     private static string VersionedKind(JObject source) =>
@@ -470,7 +495,10 @@ internal sealed class FakeObs : IObsReadSessionFactory
             );
         if (source == null)
         {
-            if (inputName == DesktopAudio || (inputName != null && inputName == Mic))
+            if (
+                inputName == DesktopAudio
+                || (inputName != null && (inputName == Mic || MicSources.ContainsKey(inputName)))
+            )
             {
                 return new JObject
                 {
@@ -498,6 +526,11 @@ internal sealed class FakeObs : IObsReadSessionFactory
         if (inputName != null && inputName == Mic)
         {
             return answer(MicMuted);
+        }
+
+        if (inputName != null && MicSources.TryGetValue(inputName, out bool muted))
+        {
+            return answer(muted);
         }
 
         throw new ObsRequestException(
@@ -566,6 +599,52 @@ internal sealed class FakeObs : IObsReadSessionFactory
         return new Session(this);
     }
 
+    /// <summary>A session that may also mute an input, as the spectator's microphone mute uses.</summary>
+    public IObsMicrophoneSession OpenMicrophones()
+    {
+        Opened++;
+        return new Session(this);
+    }
+
+    /// <summary>
+    /// SetInputMute to muted. Desktop Audio and the collection's sources answer as OBS would
+    /// (muted), so a mute sent to the wrong input is in <see cref="MutedInputs"/> for a test to see.
+    /// </summary>
+    private void Mute(string inputName)
+    {
+        Requests.Add("SetInputMute");
+        Sent.Add(
+            ("SetInputMute", new JObject { ["inputName"] = inputName, ["inputMuted"] = true })
+        );
+        MutedInputs.Add(inputName);
+        Muting?.Invoke(inputName);
+        if (Failures.TryGetValue("SetInputMute", out Exception failure))
+        {
+            throw failure;
+        }
+
+        if (inputName != null && MuteRefused.Contains(inputName))
+        {
+            throw new ObsRequestException("SetInputMute", 604, "The input refused the mute.");
+        }
+
+        if (inputName != null && inputName == Mic)
+        {
+            MicMuted = true;
+        }
+        else if (inputName != null && MicSources.ContainsKey(inputName))
+        {
+            MicSources[inputName] = true;
+        }
+        else if (
+            inputName != DesktopAudio
+            && !Sources().Any(source => (string)source["name"] == inputName)
+        )
+        {
+            throw new ObsRequestException("SetInputMute", 600, "No source was found.");
+        }
+    }
+
     private string StopRecord()
     {
         Requests.Add("StopRecord");
@@ -582,7 +661,7 @@ internal sealed class FakeObs : IObsReadSessionFactory
         return RecordPath;
     }
 
-    private sealed class Session : IObsPageSession, IObsRecordStopSession
+    private sealed class Session : IObsPageSession, IObsRecordStopSession, IObsMicrophoneSession
     {
         private readonly FakeObs owner;
 
@@ -601,6 +680,8 @@ internal sealed class FakeObs : IObsReadSessionFactory
         }
 
         public string StopRecord() => owner.StopRecord();
+
+        public void Mute(string inputName) => owner.Mute(inputName);
 
         public void Dispose() => owner.Disposed++;
     }
