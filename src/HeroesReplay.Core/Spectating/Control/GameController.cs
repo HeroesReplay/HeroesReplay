@@ -44,8 +44,10 @@ public class GameController : IGameController
     private readonly object controllerLock = new object();
     private readonly StableMatchClock matchClock = new();
     private readonly LoadingScreenMemory loadingScreen = new();
+    private readonly ClientScreenMemory clientScreens = new();
     private readonly ScreenShadow screenShadow;
     private LoadingScreenSample lastScreen;
+    private ClientScreenSample lastClientScreen;
     private string lastClockReason = "no-process";
     private Process cachedProcess;
     private bool replayFileOpened;
@@ -809,13 +811,11 @@ public class GameController : IGameController
             ShadowScreen(
                 ScreenState.VersionMismatch,
                 ClientScreenText.IsVersionMismatch(text),
-                null,
                 text
             );
             ShadowScreen(
                 ScreenState.RegionUnavailable,
                 ClientScreenText.IsRegionUnavailable(text),
-                null,
                 text
             );
             ClientHoldReason hold = ClientHold.Classify(text);
@@ -850,7 +850,7 @@ public class GameController : IGameController
             }
 
             bool awardScreen = MatchEndBanner.EndsLaunchWait(text);
-            ShadowScreen(ScreenState.EndScreen, awardScreen, null, text);
+            ShadowScreen(ScreenState.EndScreen, awardScreen, text);
             if (awardScreen)
             {
                 logger.LogInformation("The client is on the award screen. This replay is over.");
@@ -860,7 +860,6 @@ public class GameController : IGameController
             ShadowScreen(
                 ScreenState.GameDataDownload,
                 ClientScreenText.IsGameDataDownload(text, null),
-                null,
                 text
             );
             if (await HoldForGameDataDownloadAsync(text, null).ConfigureAwait(false))
@@ -876,11 +875,11 @@ public class GameController : IGameController
                 screen?.InMatch == true
                 && !ReplayClientRoute.OtherReplayOnClient(replayOnClient, replayPath);
             bool ocrLoading = ShowsSearchTerm(text);
-            ShadowScreen(ScreenState.MapLoading, ocrLoading, screen, text);
+            ShadowScreen(ScreenState.MapLoading, ocrLoading, text);
             bool loading = memoryLoading ?? ocrLoading;
             bool timer = await IsMatchClockRunning().ConfigureAwait(false);
             bool loginForm = ClientScreenText.IsLoginForm(text);
-            ShadowScreen(ScreenState.LoginForm, loginForm, screen, text);
+            ShadowScreen(ScreenState.LoginForm, loginForm, text);
             // A login form while the build downloads is the newest exe's handoff. Closing it
             // would stop the download.
             if (
@@ -931,7 +930,6 @@ public class GameController : IGameController
                 ShadowScreen(
                     ScreenState.GameDataDownload,
                     ClientScreenText.IsGameDataDownload(text, laterText),
-                    screen,
                     laterText
                 );
             }
@@ -944,12 +942,12 @@ public class GameController : IGameController
             bool ocrLaterLoading = ShowsSearchTerm(laterText);
             if (laterText != null)
             {
-                ShadowScreen(ScreenState.MapLoading, ocrLaterLoading, screen, laterText);
+                ShadowScreen(ScreenState.MapLoading, ocrLaterLoading, laterText);
             }
 
             bool laterLoading = memoryLoading == null && ocrLaterLoading;
             bool startup = ClientScreenText.IsGameDataStartup(text, laterText);
-            ShadowScreen(ScreenState.GameDataStartup, startup, screen, text);
+            ShadowScreen(ScreenState.GameDataStartup, startup, text);
             RunningClientBuild runningBuild = ReadRunningBuild(replayVersion);
             bool differentBuild = runningBuild == RunningClientBuild.Differs;
             bool matchingBuild = runningBuild == RunningClientBuild.Matches;
@@ -1743,22 +1741,17 @@ public class GameController : IGameController
         LoadingScreenSample? screen = ReadScreenInMemory();
         bool home = HomeScreenCue.Sees(screen?.OnMenu, scan.Found, scan.Text);
         bool loginForm = ClientScreenText.IsLoginForm(scan.Text);
-        ShadowScreen(ScreenState.Home, scan.Found && !loginForm, screen, scan.Text);
-        ShadowScreen(ScreenState.LoginForm, loginForm, screen, scan.Text);
+        ShadowScreen(ScreenState.Home, scan.Found && !loginForm, scan.Text);
+        ShadowScreen(ScreenState.LoginForm, loginForm, scan.Text);
         return home;
     }
 
     /// <summary>
-    /// Shadow mode (#292): the memory verdict next to an OCR verdict the caller already has, from
-    /// the same memory read the decision used (null when none was read). It changes no decision
-    /// and never throws into the caller.
+    /// Shadow mode (#292): the memory verdict of the HeroesClientSDK menu screens
+    /// (<see cref="ClientScreenMemory"/>) next to an OCR verdict the caller already has. It
+    /// changes no decision and never throws into the caller.
     /// </summary>
-    private void ShadowScreen(
-        ScreenState state,
-        bool ocr,
-        LoadingScreenSample? screen,
-        string ocrText
-    )
+    private void ShadowScreen(ScreenState state, bool ocr, string ocrText)
     {
         if (settings.OCR?.ShadowEnabled == false)
         {
@@ -1767,6 +1760,7 @@ public class GameController : IGameController
 
         try
         {
+            ClientScreenSample? screen = ReadClientScreen();
             ShadowObservation observed = screenShadow.Observe(
                 state,
                 ocr,
@@ -1855,6 +1849,46 @@ public class GameController : IGameController
         }
     }
 
+    /// <summary>
+    /// The menu screens by the client's own names (login form, home, loading, score, a match),
+    /// logged when they change. Shadow mode only, until a proof lets it decide (#292).
+    /// </summary>
+    private ClientScreenSample? ReadClientScreen()
+    {
+        Process process = GetGameProcess();
+        if (process == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            ClientScreenSample sample = clientScreens.Read(process);
+            if (
+                sample.Screen != lastClientScreen.Screen
+                || sample.Reason != lastClientScreen.Reason
+                || sample.MenuSeen != lastClientScreen.MenuSeen
+            )
+            {
+                logger.LogInformation(
+                    "Client menu screen in memory is {Screen} ({Reason}, menu seen {MenuSeen}): {Shown}.",
+                    sample.Screen,
+                    sample.Reason,
+                    sample.MenuSeen,
+                    ScreenMemoryVerdicts.Describe(sample)
+                );
+                lastClientScreen = sample;
+            }
+
+            return sample;
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not read the client menu screen from memory.");
+            return null;
+        }
+    }
+
     private StableClockSample ReadMatchClockSample()
     {
         Process process = GetGameProcess();
@@ -1905,7 +1939,7 @@ public class GameController : IGameController
             parsed?.Players?.Select(player => player.Character),
             settings.OCR.LoadingScreenText
         );
-        ShadowScreen(ScreenState.MapLoading, loadingScreen, screen, text);
+        ShadowScreen(ScreenState.MapLoading, loadingScreen, text);
         return loadingScreen;
     }
 
@@ -1937,7 +1971,7 @@ public class GameController : IGameController
             OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
             string text = result?.Text ?? string.Empty;
             bool endScreen = MatchEndBanner.IsEnd(text, nearCore);
-            ShadowScreen(ScreenState.EndScreen, endScreen, null, text);
+            ShadowScreen(ScreenState.EndScreen, endScreen, text);
             if (endScreen)
             {
                 logger.LogInformation("End-screen OCR saw: {Text}", text.Replace('\n', ' '));
