@@ -21,6 +21,7 @@ description: >
 3. **Change OBS only through HeroesReplay's own paths**, never by hand on a managed collection. Adding or renaming a source by hand makes the collection custom, and a custom collection stops getting template updates (`obs.collection_custom`).
    - A template change (`obs/Default.json`) reaches a machine through `services start` while OBS is closed, the spectator's live swap at `BeginSession`, or a release's `update install-obs`.
    - Prove it on ASA-SERVER through that path, then check it with `obs validate` and `obs_screenshot`.
+   - On ASA-SERVER (`OBS:StableAssets`, on in dev) the collection points at a verified copy of the build's OBS files in `%LOCALAPPDATA%\HeroesReplay\obs\assets\<bundle-hash>\`, never at a git worktree, so removing a worktree leaves no missing images (#330). An `obs.file_missing` finding for a path in a removed worktree names the fix: close OBS, then run `services start` from a current build. That is a path-only update. Prod keeps `app\obs` (`docs/obs-operations.md`).
 
 ## Which commands change OBS
 
