@@ -606,6 +606,368 @@ public class ServiceSupervisorTests
     private static SwitcherStopResult Switchers(params SwitcherStop[] stopped) =>
         new() { Stopped = stopped };
 
+    /// <summary>
+    /// #381: a `spectate file` started by hand, with no services.json. The stop still asks it to
+    /// exit through the stop file, then closes the game, the idle switcher, and the recording it
+    /// claimed, and services.json is not created.
+    /// </summary>
+    [Fact]
+    public void Stop_WithoutServicesJson_StopsTheHandStartedSpectateAndClosesTheGame()
+    {
+        string path = TempLock();
+        try
+        {
+            var processes = new FakeProcesses(90);
+            var steps = new List<string>();
+            IReadOnlyCollection<int> scanned = null;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.FromSeconds(20));
+            shutdown.FindUnrecordedSpectates = recorded =>
+            {
+                scanned = recorded;
+                return new UnrecordedSpectates { ThisInstall = new[] { HandStarted(90) } };
+            };
+            shutdown.RequestGracefulStop = () =>
+            {
+                steps.Add("stop file");
+                processes.Exit(90);
+            };
+            shutdown.GameRunning = () =>
+            {
+                // The found spectate ran the game: it is closed without asking.
+                steps.Add("game running?");
+                return false;
+            };
+            shutdown.CloseGame = () =>
+            {
+                steps.Add("game");
+                return true;
+            };
+            shutdown.CloseIdleSwitchers = () =>
+            {
+                steps.Add("switchers");
+                return Switchers(new SwitcherStop(40108, SwitcherStopOutcome.Closed));
+            };
+            shutdown.ReadStream = ServiceStreamCheck.NotRunning;
+            shutdown.StopSpectateRecording = () =>
+            {
+                steps.Add("recording");
+                return new OrphanRecordingCheck(OrphanRecordingState.Stopped, "stopped");
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Empty(scanned);
+            Assert.Equal(new[] { "stop file", "game", "switchers", "recording" }, steps);
+            Assert.Empty(processes.Killed);
+            ServiceRoleStop role = Assert.Single(result.Roles);
+            Assert.Equal(
+                ("spectate", 90, ServiceStopOutcome.Graceful),
+                (role.Name, role.Pid, role.Outcome)
+            );
+            Assert.Equal("spectate pid 90: graceful. Not in services.json.", role.Describe());
+            Assert.True(result.GameClosed);
+            Assert.Equal(OrphanRecordingState.Stopped, result.Recording.State);
+            Assert.Equal("Services stopped.", result.Summary);
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_WithoutServicesJson_KillsAHandStartedSpectateLeftAfterTheBudget()
+    {
+        string path = TempLock();
+        try
+        {
+            var processes = new FakeProcesses(91);
+            bool closedGame = false;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.FindUnrecordedSpectates = _ => new UnrecordedSpectates
+            {
+                ThisInstall = new[] { HandStarted(91) },
+            };
+            shutdown.CloseGame = () => closedGame = true;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(new[] { 91 }, processes.Killed);
+            Assert.Equal(ServiceStopOutcome.Killed, Assert.Single(result.Roles).Outcome);
+            Assert.True(closedGame);
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// A hand-started spectate that survives the kill fails the stop like a recorded role, leaves
+    /// OBS alone, and is still not written to services.json: that file is only what
+    /// services start launched.
+    /// </summary>
+    [Fact]
+    public void Stop_HandStartedSpectateStillRunning_FailsWithoutRecordingIt()
+    {
+        string path = TempLock();
+        try
+        {
+            var processes = new FakeProcesses(97);
+            processes.Unkillable.Add(97);
+            int obsReads = 0;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.FindUnrecordedSpectates = _ => new UnrecordedSpectates
+            {
+                ThisInstall = new[] { HandStarted(97) },
+            };
+            shutdown.CloseGame = () => true;
+            shutdown.ReadStream = () =>
+            {
+                obsReads++;
+                return ServiceStreamCheck.NotRunning();
+            };
+            shutdown.StopSpectateRecording = () =>
+            {
+                obsReads++;
+                return new OrphanRecordingCheck(OrphanRecordingState.None, null);
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Equal(0, obsReads);
+            ServiceRoleStop role = Assert.Single(result.Roles);
+            Assert.Equal(ServiceStopOutcome.StillRunning, role.Outcome);
+            Assert.Equal(
+                "spectate pid 97: still running. Not in services.json. Kill failed: Access is denied.",
+                role.Describe()
+            );
+            Assert.Contains("spectate pid 97 is still running.", result.Failures());
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    /// <summary>#381: no services.json and nothing running: exit 0, nothing closed.</summary>
+    [Fact]
+    public void Stop_WithoutServicesJson_NothingRunning_SaysNothingToStop()
+    {
+        string path = TempLock();
+        try
+        {
+            bool closedGame = false;
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.FindUnrecordedSpectates = _ => UnrecordedSpectates.None;
+            shutdown.GameRunning = () => false;
+            shutdown.CloseGame = () => closedGame = true;
+            shutdown.CloseIdleSwitchers = () => Switchers();
+            shutdown.ReadStream = ServiceStreamCheck.NotRunning;
+            shutdown.StopSpectateRecording = () =>
+                new OrphanRecordingCheck(OrphanRecordingState.None, "No recording claim.");
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.False(closedGame);
+            Assert.Empty(result.Roles);
+            Assert.True(result.GameClosed);
+            Assert.Equal("No HeroesReplay services are running. Nothing to stop.", result.Summary);
+            Assert.Equal(
+                "Heroes of the Storm: not running.",
+                ServiceStopResult.DescribeGameNotRunning(result.Switchers)
+            );
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// A spectate that already exited left the game open: with nothing recorded, the stop closes
+    /// it and its idle switcher, and says so.
+    /// </summary>
+    [Fact]
+    public void Stop_WithoutServicesJson_ClosesAGameNoSpectateRuns()
+    {
+        string path = TempLock();
+        try
+        {
+            bool closedGame = false;
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.FindUnrecordedSpectates = _ => UnrecordedSpectates.None;
+            shutdown.GameRunning = () => true;
+            shutdown.CloseGame = () => closedGame = true;
+            shutdown.CloseIdleSwitchers = () => Switchers();
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.True(closedGame);
+            Assert.True(result.GameClosed);
+            Assert.Equal(
+                "No HeroesReplay services are running. Closed what was left running.",
+                result.Summary
+            );
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_WithoutServicesJson_GameThatDoesNotClose_Fails()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
+            shutdown.FindUnrecordedSpectates = _ => UnrecordedSpectates.None;
+            shutdown.GameRunning = () => true;
+            shutdown.CloseGame = () => false;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("Heroes of the Storm is still running.", result.Failures());
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// A spectate from another install is never asked, killed, or recorded, and the game and the
+    /// switchers are left to it (#381).
+    /// </summary>
+    [Fact]
+    public void Stop_LeavesAnotherInstallsSpectateAndItsGameAlone()
+    {
+        string path = TempLock();
+        try
+        {
+            var processes = new FakeProcesses(93);
+            bool touched = false;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.FindUnrecordedSpectates = _ => new UnrecordedSpectates
+            {
+                OtherInstalls = new[] { HandStarted(93, @"C:\heroesreplay\app\heroesreplay.exe") },
+            };
+            shutdown.GameRunning = () => true;
+            shutdown.CloseGame = () => touched = true;
+            shutdown.CloseIdleSwitchers = () =>
+            {
+                touched = true;
+                return Switchers();
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Empty(processes.Killed);
+            Assert.Empty(result.Roles);
+            Assert.False(touched);
+            Assert.Null(result.GameClosed);
+            Assert.Null(result.Switchers);
+            Assert.Equal("heroesreplay", processes.Name(93));
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// A recorded stack and a hand-started spectate from this install: both stop, the scan gets
+    /// the recorded pids so it never lists them twice, and services.json is removed.
+    /// </summary>
+    [Fact]
+    public void Stop_RecordedRolesAndAHandStartedSpectate_StopsBothAndPassesTheRecordedPids()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceLockStore.Save(
+                path,
+                new ServiceLock
+                {
+                    Processes = new List<ServiceProcessRecord>
+                    {
+                        new() { Name = "download", Pid = 95 },
+                    },
+                }
+            );
+            var processes = new FakeProcesses(94, 95);
+            IReadOnlyCollection<int> scanned = null;
+            bool closedGame = false;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.FindUnrecordedSpectates = recorded =>
+            {
+                scanned = recorded;
+                return new UnrecordedSpectates { ThisInstall = new[] { HandStarted(94) } };
+            };
+            shutdown.CloseGame = () => closedGame = true;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(new[] { 95 }, scanned);
+            Assert.Equal(new[] { 95, 94 }, result.Roles.Select(role => role.Pid).ToArray());
+            Assert.True(closedGame);
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Stop_AScanThatThrows_StopsTheRecordedRolesAsBefore()
+    {
+        string path = TempLock();
+        try
+        {
+            SaveRoles(path, 98);
+            var processes = new FakeProcesses(98);
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.FindUnrecordedSpectates = _ =>
+                throw new InvalidOperationException("snapshot failed");
+            shutdown.CloseGame = () => true;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(98, Assert.Single(result.Roles).Pid);
+            Assert.True(result.GameClosed);
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    private static ServiceProcessRecord HandStarted(int pid, string exe = Exe) =>
+        new()
+        {
+            Name = UnrecordedSpectates.Role,
+            Pid = pid,
+            Arguments = @"spectate file --path C:\heroesreplay\Replays",
+            ExecutablePath = exe,
+        };
+
     [Fact]
     public void Status_NotRunning_IsSuccess()
     {
@@ -1855,6 +2217,8 @@ public class ServiceSupervisorTests
                 GracefulWait = gracefulWait,
                 Wait = _ => { },
                 ClearStopFile = () => { },
+                // Never the real process table: a fake pid can be a real process here.
+                Probe = _ => null,
             };
     }
 

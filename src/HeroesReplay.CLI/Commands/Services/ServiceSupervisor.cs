@@ -241,9 +241,10 @@ public static class ServiceSupervisor
         && ServiceProcessPlan.IsHeroesReplay(Path.GetFileName(exePath));
 
     /// <summary>
-    /// Ask every recorded role to exit, kill the ones left after the graceful budget, close the
-    /// game, read the OBS stream state, then stop a recording spectate left running (never the
-    /// stream, #318). Exit code 0 needs all four confirmed. A role that is still running stays in
+    /// Ask every recorded role, and a spectate from this install that <c>services.json</c> does
+    /// not list (#381), to exit, kill the ones left after the graceful budget, close the game,
+    /// read the OBS stream state, then stop a recording spectate left running (never the stream,
+    /// #318). Exit code 0 needs all four confirmed. A recorded role that is still running stays in
     /// the lock so status and a second stop can still find it, and OBS is not opened then.
     /// </summary>
     public static ServiceStopResult Stop(string lockPath, ServiceShutdown shutdown)
@@ -258,6 +259,28 @@ public static class ServiceSupervisor
             .ToList();
         Action<TimeSpan> pause = shutdown.Wait ?? Thread.Sleep;
         ServiceRoleStop supervisor = null;
+
+        // A hand-started spectate from this install is stopped like a role, but it was never in
+        // services.json and is never written there (#381).
+        UnrecordedSpectates unrecorded = FindUnrecordedSpectates(
+            shutdown.FindUnrecordedSpectates,
+            recorded
+        );
+        var handStarted = new HashSet<ServiceProcessRecord>(unrecorded.ThisInstall);
+        recorded.AddRange(unrecorded.ThisInstall);
+        foreach (ServiceProcessRecord record in unrecorded.ThisInstall)
+        {
+            Console.WriteLine(
+                $"  spectate pid {record.Pid} ({record.Arguments}) is not in services.json. It runs this install, so it is stopped like a role."
+            );
+        }
+
+        foreach (ServiceProcessRecord record in unrecorded.OtherInstalls)
+        {
+            Console.WriteLine(
+                $"  spectate pid {record.Pid} ({record.Arguments}) runs another install ({record.ExecutablePath ?? "path unreadable"}). It is left alone."
+            );
+        }
 
         // Until the processes are probed, every recorded role counts as running.
         List<ServiceProcessRecord> survivors = recorded;
@@ -276,6 +299,18 @@ public static class ServiceSupervisor
                 // A restart it began before it saw the stop file is in the lock by now.
                 foreach (ServiceProcessRecord added in Added(recorded, lockPath))
                 {
+                    // The scan saw it before the supervisor recorded it: it is a role after all.
+                    ServiceProcessRecord seen = handStarted.FirstOrDefault(record =>
+                        record.Pid == added.Pid
+                    );
+                    if (seen != null)
+                    {
+                        handStarted.Remove(seen);
+                        recorded.Remove(seen);
+                        living.Remove(seen);
+                        asked.Remove(seen);
+                    }
+
                     recorded.Add(added);
                     if (StillRunning(new[] { added }, shutdown).Count == 1)
                     {
@@ -286,7 +321,6 @@ public static class ServiceSupervisor
             }
 
             RequestStreamShutdown(shutdown.ConfirmStream);
-            bool hadSpectate = recorded.Any(record => record.Name == "spectate");
 
             // The budget ends on the wall clock or on the summed pauses, whichever is first.
             TimeSpan interval = TimeSpan.FromMilliseconds(200);
@@ -345,20 +379,48 @@ public static class ServiceSupervisor
                 }
 
                 killErrors.TryGetValue(record, out string detail);
-                var role = new ServiceRoleStop(
-                    record.Name,
-                    record.Pid,
-                    outcome,
-                    outcome == ServiceStopOutcome.StillRunning ? detail : null
-                );
+                if (outcome != ServiceStopOutcome.StillRunning)
+                {
+                    detail = null;
+                }
+
+                if (handStarted.Contains(record))
+                {
+                    detail = string.IsNullOrEmpty(detail)
+                        ? "Not in services.json."
+                        : "Not in services.json. " + detail;
+                }
+
+                var role = new ServiceRoleStop(record.Name, record.Pid, outcome, detail);
                 roles.Add(role);
                 Console.WriteLine("  " + role.Describe());
             }
 
-            bool? gameClosed = hadSpectate ? CloseGame(shutdown.CloseGame) : null;
-            SwitcherStopResult switchers = hadSpectate
-                ? CloseIdleSwitchers(shutdown.CloseIdleSwitchers)
-                : null;
+            // The game belongs to the stack when it recorded spectate. With no recorded spectate,
+            // it is this install's when its hand-started spectate was found, or when nothing is
+            // recorded at all (a spectate that already exited left it). A spectate from another
+            // install owns it then, so it is left alone (#381).
+            bool spectateRecorded = recorded.Any(record =>
+                record.Name == UnrecordedSpectates.Role && !handStarted.Contains(record)
+            );
+            bool nothingRecorded = recorded.Count == handStarted.Count;
+            bool ownsGame =
+                spectateRecorded
+                || (
+                    unrecorded.OtherInstalls.Count == 0
+                    && (handStarted.Count > 0 || nothingRecorded)
+                );
+            bool gameWasRunning =
+                ownsGame
+                && (spectateRecorded || handStarted.Count > 0 || GameRunning(shutdown.GameRunning));
+            bool? gameClosed = null;
+            SwitcherStopResult switchers = null;
+            if (ownsGame)
+            {
+                gameClosed = gameWasRunning ? CloseGame(shutdown.CloseGame) : true;
+                switchers = CloseIdleSwitchers(shutdown.CloseIdleSwitchers);
+            }
+
             if (gameClosed == true && switchers?.LeftAlone.Count > 0)
             {
                 // A switcher started Heroes again after the game closed: a game is still up.
@@ -367,7 +429,17 @@ public static class ServiceSupervisor
 
             if (gameClosed is bool closed)
             {
-                Console.WriteLine(ServiceStopResult.DescribeGame(closed, switchers));
+                Console.WriteLine(
+                    gameWasRunning || !closed
+                        ? ServiceStopResult.DescribeGame(closed, switchers)
+                        : ServiceStopResult.DescribeGameNotRunning(switchers)
+                );
+            }
+            else if (!spectateRecorded && unrecorded.OtherInstalls.Count > 0)
+            {
+                Console.WriteLine(
+                    "Heroes of the Storm: not checked, because spectate from another install still runs."
+                );
             }
 
             ServiceStreamCheck stream = null;
@@ -411,17 +483,23 @@ public static class ServiceSupervisor
 
             if (result.Succeeded)
             {
-                Console.WriteLine(
-                    recorded.Count == 0
-                        ? "No HeroesReplay services are running."
-                        : "Services stopped."
-                );
+                bool closedSomething =
+                    supervisor != null
+                    || gameWasRunning
+                    || switchers?.Stopped.Count > 0
+                    || recording?.State == OrphanRecordingState.Stopped;
+                result.Summary =
+                    recorded.Count > 0 ? "Services stopped."
+                    : closedSomething
+                        ? "No HeroesReplay services are running. Closed what was left running."
+                    : "No HeroesReplay services are running. Nothing to stop.";
+                Console.WriteLine(result.Summary);
             }
             else
             {
-                Console.Error.WriteLine(
-                    "Services did not stop cleanly. " + string.Join(" ", result.Failures())
-                );
+                result.Summary =
+                    "Services did not stop cleanly. " + string.Join(" ", result.Failures());
+                Console.Error.WriteLine(result.Summary);
             }
 
             return result;
@@ -436,14 +514,18 @@ public static class ServiceSupervisor
                 }
             }
 
-            if (survivors.Count > 0)
+            // services.json keeps only what services start launched, never a hand-started spectate.
+            List<ServiceProcessRecord> recordedSurvivors = survivors
+                .Where(record => !handStarted.Contains(record))
+                .ToList();
+            if (recordedSurvivors.Count > 0)
             {
                 ServiceLockStore.Save(
                     lockPath,
                     new ServiceLock
                     {
                         StartedAt = snapshot?.StartedAt ?? DateTimeOffset.UtcNow,
-                        Processes = survivors.ToList(),
+                        Processes = recordedSurvivors,
                     }
                 );
             }
@@ -504,6 +586,43 @@ public static class ServiceSupervisor
                 && !known.Contains(record.Nonce ?? "pid:" + record.Pid)
             )
             .ToList();
+    }
+
+    /// <summary>None when no step was given or the process table could not be read.</summary>
+    private static UnrecordedSpectates FindUnrecordedSpectates(
+        Func<IReadOnlyCollection<int>, UnrecordedSpectates> find,
+        IEnumerable<ServiceProcessRecord> recorded
+    )
+    {
+        if (find == null)
+        {
+            return UnrecordedSpectates.None;
+        }
+
+        try
+        {
+            return find(recorded.Select(record => record.Pid).ToList()) ?? UnrecordedSpectates.None;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(
+                "Could not look for a spectate that is not in services.json. " + e.Message
+            );
+            return UnrecordedSpectates.None;
+        }
+    }
+
+    /// <summary>True unless the step says no game runs. A step that throws counts as running.</summary>
+    private static bool GameRunning(Func<bool> gameRunning)
+    {
+        try
+        {
+            return gameRunning?.Invoke() ?? true;
+        }
+        catch (Exception)
+        {
+            return true;
+        }
     }
 
     private static bool? CloseGame(Func<bool> closeGame)
