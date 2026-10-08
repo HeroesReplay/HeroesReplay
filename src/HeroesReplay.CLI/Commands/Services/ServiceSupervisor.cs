@@ -956,7 +956,7 @@ public static class ServiceSupervisor
         return message;
     }
 
-    private static string CurrentVersion()
+    internal static string CurrentVersion()
     {
         Assembly assembly = typeof(ServiceSupervisor).Assembly;
         string informational = assembly

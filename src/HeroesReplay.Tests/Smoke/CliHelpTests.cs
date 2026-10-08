@@ -210,6 +210,27 @@ public class CliHelpTests
     }
 
     [Fact]
+    public async Task ServicesEnsureHelp_ParsesAndExitsZero()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("services ensure --help").Errors);
+        Assert.Empty(root.Parse("services ensure --roles download,youtube --supervise").Errors);
+        Assert.Empty(root.Parse("services ensure --output json").Errors);
+        Assert.Empty(root.Parse("services ensure -o text --roles download").Errors);
+        Assert.NotEmpty(root.Parse("services ensure --output yaml").Errors);
+        Command ensure = root
+            .Subcommands.Single(c => c.Name == "services")
+            .Subcommands.Single(c => c.Name == "ensure");
+        Assert.Contains("service.ensure_noop", ensure.Description);
+        Assert.Contains("service.ensure_mismatch", ensure.Description);
+        Assert.Contains("Never stops a running role", ensure.Description);
+        Assert.Equal(
+            0,
+            await new CommandLineService().InvokeAsync(new[] { "services", "ensure", "--help" })
+        );
+    }
+
+    [Fact]
     public void ServicesInstallTask_Parses()
     {
         var root = new HeroesReplayCommand();
