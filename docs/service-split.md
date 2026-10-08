@@ -64,6 +64,7 @@ Twitch, the downloader, and YouTube do not need the game. They can be separate W
 7. Optional later: Windows services or containers for Twitch, the downloader, and YouTube. Not for the spectator.
 8. Done (#149): continuous role health. See below.
 9. Done (#153): durable per-role logs and an opt-in supervisor with a bounded restart policy. See below. Windows service installation is a later slice of #130.
+10. Done (#306): `services ensure`, which starts only the missing roles and never stops a running one. See [Ensure](#ensure).
 
 ## Role health
 
@@ -128,5 +129,23 @@ Each role that `services start` or the supervisor launched writes its own log fi
 
   A file from a build before #283 has no `processStartedAt`. It counts when the live pid started no later than the file's `startedAt`, because a reused pid starts only after the supervisor exited. `services status` says how it decided, for example `Supervisor: running (pid 14420, seen via supervisor.json; mutex not visible from this session)`, `running (pid 14420, seen via its mutex)`, or `not running (pid 14420 left supervisor.json; no process has pid 14420)`. Other reasons are a stale `updatedAt` and a reused pid. `services stop`, `services start` (with or without `--supervise`), `services supervise`, and the release hand-off use the same check, so `services stop` over SSH waits for the supervisor to exit as it does at the desktop, and a start over SSH does not become a second supervisor (#293).
 - **Status fields.** `services status` reads the file: `supervisor` (`running`, `seenVia` (`mutex` or `supervisor.json`), `detail`, `pid`, `supervised`, `backoffSeconds`, `budget`, `budgetWindowSeconds`, `staleRestartAfterSeconds`, `logPath`) and, per role, `restarts` (`count`, `lastRestartAt`, `lastReason`, `lastFailure`, `nextRestartAt`, `budgetUsed`, `budgetLimit`, `budgetWindowSeconds`, `budgetExhausted`, `exhaustedAt`). A failed role the supervisor will restart says when in its cause.
+
+## Ensure
+
+`services start` is strict: it exits 1 when any role runs. `services ensure [--roles r1,r2] [--supervise] [--output text|json]` (#306) is the idempotent form for agents and scripts: make sure the requested roles (default all four) run from this install. It reads the stack with the `services status` rules (`ServiceHealthClassifier`, plus `supervisor.json`) and decides in `ServiceEnsurePlan`; it never stops or kills a role that was running.
+
+| Code | Exit | When |
+| --- | --- | --- |
+| `service.ensure_noop` | 0 | Every requested role is up (ready or degraded) from this install, and a supervisor runs when `--supervise` asked for one. Nothing is started. A degraded role is left alone; its `causeCode` shows in the report. |
+| `service.ensure_started` | 0 | The requested roles that are down (failed, exited after Ctrl+C, or not in `services.json`) were started in plan order through the `services start` launch (`ServiceSupervisor.Restart`: prerequisites, arguments, a new nonce, the ready file and first heartbeat). Each new record replaces the role's old one in `services.json` as soon as it has a pid; the other records stay. With `--supervise` and no supervisor anywhere, the mutex is claimed before anything starts and this console becomes the supervisor once the report is printed. |
+| `service.ensure_mismatch` | 1 | A live role (requested or not) runs from another install path or another version. Builds are not mixed. |
+| `service.ensure_stop_pending` | 1 | `services.stop` is down, or a stop arrived while a role was starting (that role stays in `services.json`, so `services stop` stops it). |
+| `service.ensure_budget_exhausted` | 1 | A requested role used its supervisor restart budget. It stays down until `services stop` and `services start --supervise`. |
+| `service.ensure_stale` | 1 | A requested role is alive but its heartbeat is stale. Ensure does not stop it; a supervisor kills and restarts it after `StaleRestartAfter`. |
+| `service.ensure_supervisor_running` | 1 | A requested role is down while a supervisor runs in this session or another (`ServiceSupervisorGate` check, #293). The supervisor owns restarts, so ensure does not race it: the report says whether the supervisor restarts that role and when, or that it does not supervise it. |
+| `service.ensure_start_failed` | 1 | A start failed. The roles this ensure started are killed again and `services.json` gets their earlier records back, so a failed ensure leaves the stack as it found it. Roles that were running are not touched. |
+| `service.ensure_busy` | 1 | Another ensure holds `%LOCALAPPDATA%\HeroesReplay\services.ensure.lock` (one at a time across sessions, so two ensures do not start the same role twice). |
+
+The checks run in that order (stop, mismatch, budget, stale, supervisor), and a refusal starts nothing. Starting spectate patches the OBS collection first, as `services start` does; any start also starts the Aspire dashboard when it is not up. `--output json` prints the `services status` envelope: `schemaVersion` (1), `ok`, `code`, `message`, `remediation`, `environment`, `checkedAt`, `stopRequested`, `supervise`, `supervisorRunning`, `supervisorAttached`, `requested`, `started`, and `roles[]` (`role`, `state` before the ensure, `causeCode`, `action` `running`/`start`/`started`/`start_failed`/`blocked`, `pid`, `version`, `executablePath`, `detail`). The launch lines go to stderr in JSON mode, so stdout is only the report.
 
 Do not start Twitch ingest as part of this split.
