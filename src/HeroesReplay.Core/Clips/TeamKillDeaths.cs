@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.YouTube.Metadata;
 
 namespace HeroesReplay.Core.Clips;
 
@@ -20,12 +20,14 @@ public static class TeamKillDeaths
         }
 
         var indexOf = new Dictionary<Player, int>();
+        var names = new Dictionary<Player, string>();
         for (int index = 0; index < replay.Players.Length; index++)
         {
             Player player = replay.Players[index];
             if (player != null && !indexOf.ContainsKey(player))
             {
                 indexOf[player] = index;
+                names[player] = HeroName(replay, player, heroes);
             }
         }
 
@@ -37,7 +39,7 @@ public static class TeamKillDeaths
                 continue;
             }
 
-            string victim = HeroName(player, heroes);
+            string victim = names[player];
             if (victim == null)
             {
                 continue;
@@ -50,8 +52,10 @@ public static class TeamKillDeaths
                     continue;
                 }
 
-                string killerName = HeroName(killer, heroes);
-                if (killerName == null || !indexOf.TryGetValue(killer, out int killerKey))
+                if (
+                    !indexOf.TryGetValue(killer, out int killerKey)
+                    || names[killer] is not string killerName
+                )
                 {
                     continue;
                 }
@@ -99,28 +103,16 @@ public static class TeamKillDeaths
         return true;
     }
 
-    private static string HeroName(Player player, IReadOnlyList<Hero> heroes)
+    /// <summary>
+    /// The hero the player played (<see cref="PlayedHero"/>), else the player's name. The lobby
+    /// hero is not the played hero in ARAM (#348).
+    /// </summary>
+    private static string HeroName(Replay replay, Player player, IReadOnlyList<Hero> heroes)
     {
-        if (player == null)
+        string hero = PlayedHero.Name(heroes, replay, player);
+        if (hero != null)
         {
-            return null;
-        }
-
-        if (heroes != null && heroes.Count > 0)
-        {
-            Hero match =
-                HeroDraft.Find(heroes, player.HeroAttributeId)
-                ?? HeroDraft.Find(heroes, player.HeroId)
-                ?? HeroDraft.Find(heroes, player.Character);
-            if (!string.IsNullOrWhiteSpace(match?.Name))
-            {
-                return match.Name.Trim();
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(player.Character))
-        {
-            return player.Character.Trim();
+            return hero;
         }
 
         return string.IsNullOrWhiteSpace(player.Name) ? null : player.Name.Trim();

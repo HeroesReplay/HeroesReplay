@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.TwitchExtension;
@@ -14,11 +16,21 @@ public class ExtensionPayloadBuilder : IExtensionPayloadsBuilder
 
     private readonly ILogger<ExtensionPayloadBuilder> logger;
     private readonly AppSettings settings;
+    private readonly IGameData gameData;
 
-    public ExtensionPayloadBuilder(ILogger<ExtensionPayloadBuilder> logger, AppSettings settings)
+    /// <summary>
+    /// <paramref name="gameData"/> is the hero catalog that names the hero each player played
+    /// (#348). Without it the lobby attribute id is sent outside ARAM, and none in ARAM.
+    /// </summary>
+    public ExtensionPayloadBuilder(
+        ILogger<ExtensionPayloadBuilder> logger,
+        AppSettings settings,
+        IGameData gameData = null
+    )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        this.gameData = gameData;
     }
 
     public ExtensionGame CreatePayloads(Replay replay)
@@ -61,6 +73,7 @@ public class ExtensionPayloadBuilder : IExtensionPayloadsBuilder
             }
         }
 
+        IReadOnlyList<Hero> heroes = gameData?.Heroes;
         var roster = new List<ExtensionPlayer>(selected.Count);
         var rosterPlayers = new List<Player>(selected.Count);
         foreach (Player player in selected)
@@ -89,8 +102,8 @@ public class ExtensionPayloadBuilder : IExtensionPayloadsBuilder
                     ai ? 0 : player.BattleTag,
                     region,
                     player.Team,
-                    Limit(HeroName(player), 64, "hero"),
-                    Limit(player.HeroAttributeId, 64, "hero_attribute"),
+                    Limit(HeroName(replay, player), 64, "hero"),
+                    Limit(PlayedHero.AttributeId(heroes, replay, player), 64, "hero_attribute"),
                     ai
                 )
             );
@@ -208,14 +221,18 @@ public class ExtensionPayloadBuilder : IExtensionPayloadsBuilder
         }
     }
 
-    private static string HeroName(Player player)
+    /// <summary>
+    /// The replay's character name: the hero played in every mode, in the uploader's game language.
+    /// The lobby attribute id is the fallback only outside ARAM, where it is the hero played.
+    /// </summary>
+    private static string HeroName(Replay replay, Player player)
     {
         if (!string.IsNullOrEmpty(player.Character))
         {
             return player.Character;
         }
 
-        return player.HeroAttributeId;
+        return PlayedHero.LobbyHeroIsPlayed(replay) ? player.HeroAttributeId : null;
     }
 
     private string Limit(string value, int max, string field)

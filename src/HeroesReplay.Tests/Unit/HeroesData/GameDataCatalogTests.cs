@@ -128,6 +128,8 @@ public class GameDataCatalogTests
             Assert.Equal("Xal'atath", xalatath.Name);
             Assert.Equal("HeroXalatath", xalatath.UnitId);
             Assert.Equal("HXAL", xalatath.AttributeId);
+            Assert.Equal(new[] { "XalatathVoidMinion" }, xalatath.HeroUnitIds);
+            Assert.Empty(johanna.HeroUnitIds);
             Assert.Equal("Ranged Assassin", xalatath.Role);
             Assert.Equal(
                 new DateTime(2026, 9, 28, 0, 0, 0, DateTimeKind.Utc),

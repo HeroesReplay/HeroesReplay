@@ -33,6 +33,28 @@ public class ReplayMediaRosterTests
     }
 
     [Fact]
+    public void Roster_Aram_NamesTheHeroSpawnedNotTheLobbyHero()
+    {
+        // #348, replay 65773257: player 6 played Nazeebo, and the lobby attribute id was Zagara's.
+        Player toadhog = Player("Nazeebo", "Zaga", team: 1);
+        toadhog.HeroUnits = new List<Heroes.ReplayParser.Unit>
+        {
+            new() { Name = "HeroWitchDoctor", PlayerControlledBy = toadhog },
+        };
+        LoadedReplay loaded = Loaded(toadhog);
+        loaded.Replay.GameMode = GameMode.ARAM;
+        IReadOnlyList<Hero> catalog = Catalog
+            .Append(new Hero("Zagara", "HeroZagara", "Zagara", "Zaga", role: "Ranged Assassin"))
+            .ToList();
+
+        IReadOnlyList<ReplayMediaPlayer> roster = ReplayMediaFacts
+            .From(loaded, false, false, false, catalog)
+            .Roster;
+
+        Assert.Equal("Nazeebo", Assert.Single(roster).Hero);
+    }
+
+    [Fact]
     public void Roster_KeepsTheReplayNameWhenTheCatalogHasNoMatch()
     {
         LoadedReplay loaded = Loaded(Player("Héros inconnu", "Zzzz", team: 0));

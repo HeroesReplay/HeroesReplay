@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Shared;
@@ -134,6 +135,66 @@ public class TeamKillDeathTests
         Assert.Equal("Tychus", deaths[0].KillerHero);
         Assert.Contains(deaths, death => death.VictimHero == "Diablo");
         Assert.Contains(deaths, death => death.VictimHero == "Lúcio");
+    }
+
+    [Fact]
+    public void FromReplay_Aram_NamesTheHeroesSpawnedNotTheLobbyHeroes()
+    {
+        // #348, replay 65745237: player 3 played Valla, and the lobby attribute id was Thrall's.
+        var killerUnit = new ReplayUnit { Name = "HeroDemonHunter" };
+        Player killer = Hero("Valla", 0, killerUnit);
+        killer.HeroId = "Thrall";
+        killer.HeroAttributeId = "Thra";
+        var players = new List<Player> { killer };
+        players.Add(AramVictim("Valla", "HeroDemonHunter", "ORPH", killer, killerUnit, 590));
+        players.Add(AramVictim("Garrosh", "HeroGarrosh", "Murk", killer, killerUnit, 591));
+        players.Add(AramVictim("Qhira", "HeroNexusHunter", "VALE", killer, killerUnit, 592));
+        players.Add(AramVictim("Artanis", "HeroArtanis", "STUK", killer, killerUnit, 593));
+        players.Add(AramVictim("Brightwing", "HeroFaerieDragon", "Vari", killer, killerUnit, 594));
+        Replay replay = ReplayOf(players);
+        replay.GameMode = GameMode.ARAM;
+        var heroes = new List<Hero>
+        {
+            new Hero("Valla", "HeroDemonHunter", "Valla", "Demo"),
+            new Hero("Thrall", "HeroThrall", "Thrall", "Thra"),
+            new Hero("Orphea", "HeroOrphea", "Orphea", "ORPH"),
+            new Hero("Garrosh", "HeroGarrosh", "Garrosh", "Garr"),
+            new Hero("Murky", "HeroMurky", "Murky", "Murk"),
+            new Hero("Qhira", "HeroNexusHunter", "Qhira", "NXHU"),
+            new Hero("Valeera", "HeroValeera", "Valeera", "VALE"),
+            new Hero("Artanis", "HeroArtanis", "Artanis", "Arts"),
+            new Hero("Stukov", "HeroStukov", "Stukov", "STUK"),
+            new Hero("Brightwing", "HeroFaerieDragon", "Brightwing", "Faer"),
+            new Hero("Varian", "HeroVarian", "Varian", "Vari"),
+        };
+
+        IReadOnlyList<TeamKillDeath> deaths = TeamKillDeaths.FromReplay(replay, heroes);
+        TeamKillClip clip = Assert.Single(
+            TeamKillClips.Select(deaths),
+            item => item.Kind == TeamKillClips.PentakillKind
+        );
+
+        Assert.Equal("Valla", clip.Hero);
+        Assert.All(deaths, death => Assert.Equal("Valla", death.KillerHero));
+        Assert.Equal(
+            new[] { "Valla", "Garrosh", "Qhira", "Artanis", "Brightwing" },
+            deaths.Select(death => death.VictimHero)
+        );
+    }
+
+    private static Player AramVictim(
+        string character,
+        string unit,
+        string lobbyAttributeId,
+        Player killer,
+        ReplayUnit killerUnit,
+        int second
+    )
+    {
+        Player player = Dead(character, killer, killerUnit, second);
+        player.HeroUnits[0].Name = unit;
+        player.HeroAttributeId = lobbyAttributeId;
+        return player;
     }
 
     private static Replay Match(out Player killer, out ReplayUnit killerUnit)

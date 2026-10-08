@@ -210,8 +210,8 @@ public class CompositionsCommand : Command
     }
 
     /// <summary>
-    /// Each player as the catalog's English hero name. The replay's character name is localized,
-    /// so the attribute id is matched first.
+    /// Each player as the catalog's English name of the hero played (<see cref="PlayedHero"/>).
+    /// The replay's character name is localized, and the lobby hero is not the hero played in ARAM.
     /// </summary>
     private static List<ReplayMediaPlayer> Roster(Replay replay, IReadOnlyList<Hero> catalog)
     {
@@ -223,15 +223,11 @@ public class CompositionsCommand : Command
                 continue;
             }
 
-            Hero hero =
-                HeroDraft.Find(catalog, player.HeroAttributeId)
-                ?? HeroDraft.Find(catalog, player.HeroId)
-                ?? HeroDraft.Find(catalog, player.Character);
             roster.Add(
                 new ReplayMediaPlayer
                 {
                     Team = player.Team,
-                    Hero = hero?.Name ?? player.Character ?? player.HeroAttributeId,
+                    Hero = PlayedHero.Name(catalog, replay, player),
                     IsAi = player.PlayerType == PlayerType.Computer,
                     Talents = ReplayMediaFacts.Talents(player),
                 }

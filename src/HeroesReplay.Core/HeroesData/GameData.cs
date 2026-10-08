@@ -117,7 +117,10 @@ public class GameData : IGameData
                         Plain(hero.ExpandedRole),
                         ReleaseDay(hero.ReleaseDate),
                         hero.IsMelee,
-                        Ratings(hero.Ratings)
+                        Ratings(hero.Ratings),
+                        hero.HeroUnits == null
+                            ? Array.Empty<string>()
+                            : hero.HeroUnits.Keys.ToArray()
                     )
                 );
             }
