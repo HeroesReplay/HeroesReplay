@@ -80,7 +80,7 @@ public class ObsLiveCommandsTests : IDisposable
         string text = output.ToString();
         Assert.Equal(0, exit);
         Assert.Contains("Canvas 1920x1080, output 1280x720", text);
-        Assert.Contains("Simple output: records mp4 with qsv_h264", text);
+        Assert.Contains("Simple output: records fragmented_mp4 with qsv_h264", text);
         Assert.Contains("Stream service: Twitch, key set.", text);
         Assert.Contains(
             "Bitrate: stream 6000 kbps CBR, recording Stream quality, 6000 kbps CBR.",
@@ -104,8 +104,11 @@ public class ObsLiveCommandsTests : IDisposable
 
         using JsonDocument document = JsonDocument.Parse(output.ToString());
         Assert.Equal(
-            "mp4",
+            "fragmented_mp4",
             document.RootElement.GetProperty("profile").GetProperty("recordingFormat").GetString()
+        );
+        Assert.True(
+            document.RootElement.GetProperty("profile").GetProperty("recordsCrashSafe").GetBoolean()
         );
         Assert.Equal(
             6000,

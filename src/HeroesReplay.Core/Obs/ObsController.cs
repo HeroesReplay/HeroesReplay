@@ -313,18 +313,37 @@ public class ObsController : IObsController
             ShouldRecord,
             CurrentReplayId,
             reason,
-            () => SetRecordDirectoryForCurrentReplay()
+            () => PrepareRecordingOutput()
         );
     }
 
-    private void SetRecordDirectoryForCurrentReplay()
+    /// <summary>
+    /// Right before StartRecord, while no recording is active: the replay's context folder and
+    /// the recording format (#310). Either one that fails is logged, and the recording starts.
+    /// </summary>
+    private void PrepareRecordingOutput()
     {
-        string directory = context.Current?.Directory?.FullName;
-        if (!ShouldRecord() || string.IsNullOrWhiteSpace(directory))
+        if (!ShouldRecord())
         {
             return;
         }
 
+        string directory = context.Current?.Directory?.FullName;
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            SetRecordDirectory(directory);
+        }
+
+        ObsRecordingFormat.Apply(
+            new ObsBorrowedRecordFormatSession(obs),
+            settings.OBS?.RecordingFormat,
+            logger,
+            CurrentReplayId
+        );
+    }
+
+    private void SetRecordDirectory(string directory)
+    {
         try
         {
             obs.SetRecordDirectory(directory);

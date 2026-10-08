@@ -674,6 +674,126 @@ public class ObsValidatorTests : IDisposable
         );
     }
 
+    /// <summary>
+    /// #310: plain MP4 is what both machines' profiles held. A crash, a power loss, or a killed
+    /// obs-ffmpeg-mux loses that file, so it is a warning, never an error: the spectator sets
+    /// OBS:RecordingFormat before each recording.
+    /// </summary>
+    [Theory]
+    [InlineData("Simple", "SimpleOutput", "mp4")]
+    [InlineData("Simple", "SimpleOutput", "hybrid_mp4")]
+    [InlineData("Advanced", "AdvOut", "mp4")]
+    [InlineData("Advanced", "AdvOut", "hybrid_mp4")]
+    public void AProfileFormatThatIsNotCrashSafe_IsAWarning(
+        string mode,
+        string category,
+        string format
+    )
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.ProfileParameters[("Output", "Mode")] = mode;
+        obs.ProfileParameters[(category, "RecFormat2")] = format;
+        OBSSettings settings = FakeObs.Settings();
+        settings.RecordingEnabled = true;
+
+        ObsValidation validation = Validate(obs, settings);
+
+        ObsFinding finding = Single(validation, ObsValidator.RecordingNotCrashSafe);
+        Assert.Equal(ObsValidator.Warning, finding.Severity);
+        Assert.Equal(format, finding.Subject);
+        Assert.Contains("#310", finding.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "The spectator sets OBS:RecordingFormat (fragmented_mp4) before each recording",
+            finding.Message,
+            StringComparison.Ordinal
+        );
+        Assert.DoesNotContain(
+            validation.Findings,
+            found => found.Code == ObsValidator.RecordingFormat
+        );
+        Assert.True(validation.Ok, Describe(validation));
+    }
+
+    [Fact]
+    public void ACrashSafeProfile_HasNoRecordingFinding()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+
+        Assert.True(
+            ObsProfileInfo.Read(obs.Open(null, null)).RecordsCrashSafe,
+            "FakeObs answers as the packaged basic.ini sets it."
+        );
+        Assert.DoesNotContain(
+            Validate(obs).Findings,
+            finding =>
+                finding.Code
+                    is ObsValidator.RecordingNotCrashSafe
+                        or ObsValidator.RecordingFormat
+                        or ObsValidator.RecordingFormatInvalid
+        );
+    }
+
+    [Fact]
+    public void AnMkvProfile_IsOnlyTheRecordingFormatFinding()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.ProfileParameters[("SimpleOutput", "RecFormat2")] = "mkv";
+
+        ObsValidation validation = Validate(obs);
+
+        Single(validation, ObsValidator.RecordingFormat);
+        Assert.DoesNotContain(
+            validation.Findings,
+            finding => finding.Code == ObsValidator.RecordingNotCrashSafe
+        );
+    }
+
+    [Fact]
+    public void AConfiguredFormatThatIsNotCrashSafe_SaysToChangeTheSetting()
+    {
+        FakeObs obs = FakeObs.Installed(data);
+        obs.ProfileParameters[("SimpleOutput", "RecFormat2")] = "mp4";
+        OBSSettings settings = FakeObs.Settings();
+        settings.RecordingFormat = "mp4";
+
+        ObsFinding finding = Single(Validate(obs, settings), ObsValidator.RecordingNotCrashSafe);
+
+        Assert.Contains(
+            "OBS:RecordingFormat is mp4, which the spectator sets before each recording. Set it to fragmented_mp4.",
+            finding.Message,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Theory]
+    [InlineData("mov")]
+    [InlineData("hybrid_mov")]
+    public void AnInvalidRecordingFormatSetting_IsAnError(string configured)
+    {
+        OBSSettings settings = FakeObs.Settings();
+        settings.RecordingFormat = configured;
+
+        ObsValidation validation = Validate(FakeObs.Installed(data), settings);
+
+        Assert.False(validation.Ok);
+        ObsFinding finding = Single(validation, ObsValidator.RecordingFormatInvalid);
+        Assert.Equal(ObsValidator.Error, finding.Severity);
+        Assert.Equal("OBS:RecordingFormat", finding.Subject);
+        Assert.Contains("'" + configured + "'", finding.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "mp4, hybrid_mp4, fragmented_mp4, mkv",
+            finding.Message,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public void TheSpectatorsProfileRequests_AreRequired()
+    {
+        Assert.Contains("GetProfileParameter", ObsValidator.RequiredRequests);
+        Assert.Contains("SetProfileParameter", ObsValidator.RequiredRequests);
+    }
+
     [Fact]
     public void AnUnreadableProfile_IsAWarning()
     {
