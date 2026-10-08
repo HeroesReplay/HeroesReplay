@@ -29,6 +29,33 @@ public class RequestDownloadRetryTests
         Assert.Equal(RequestDownloadVerdict.Retry, RequestDownloadRetry.Classify(null));
     }
 
+    /// <summary>#361: only a 403 that says the replay was deleted is permanent.</summary>
+    [Theory]
+    [InlineData(403, "replay_deleted", RequestDownloadVerdict.Fail)]
+    [InlineData(403, "REPLAY_DELETED", RequestDownloadVerdict.Fail)]
+    [InlineData(403, "endpoint_not_in_plan", RequestDownloadVerdict.Retry)]
+    [InlineData(403, null, RequestDownloadVerdict.Retry)]
+    [InlineData(401, "replay_deleted", RequestDownloadVerdict.Retry)]
+    [InlineData(429, "replay_deleted", RequestDownloadVerdict.Retry)]
+    [InlineData(404, "replay_not_found", RequestDownloadVerdict.Fail)]
+    public void Classify_A403IsPermanentOnlyWhenTheReplayWasDeleted(
+        int status,
+        string errorCode,
+        RequestDownloadVerdict expected
+    )
+    {
+        Assert.Equal(expected, RequestDownloadRetry.Classify(status, errorCode));
+    }
+
+    [Theory]
+    [InlineData(403, "replay_deleted", "HTTP 403 replay_deleted")]
+    [InlineData(404, null, "HTTP 404")]
+    [InlineData(403, " ", "HTTP 403")]
+    public void Describe_NamesTheStatusAndTheCode(int status, string errorCode, string expected)
+    {
+        Assert.Equal(expected, RequestDownloadRetry.Describe(status, errorCode));
+    }
+
     [Theory]
     [InlineData(0, 1)]
     [InlineData(1, 1)]

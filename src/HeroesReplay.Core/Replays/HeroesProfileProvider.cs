@@ -19,6 +19,7 @@ using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch.Rewards;
+using HeroesReplay.HeroesProfile.Client;
 using Microsoft.Extensions.Logging;
 using Microsoft.Kiota.Abstractions;
 
@@ -387,8 +388,9 @@ public class HeroesProfileProvider : IReplayProvider
     /// <summary>
     /// The first due request's replay, on disk before the request leaves
     /// <c>Data\requests.json</c> (#351). A download that can succeed later keeps the request
-    /// queued with a backoff. One that never can (Heroes Profile answers 404 or 410, or the
-    /// replay is below the supported patch line) fails the request and records a cancel that
+    /// queued with a backoff. One that never can (Heroes Profile answers 404 or 410, or 403
+    /// <c>replay_deleted</c>, or the replay is below the supported patch line) fails the request
+    /// and records a cancel that
     /// <c>twitch connect</c> sends. A stop leaves the request as it was.
     /// </summary>
     private async Task<RequestFetch> FetchRequestAsync()
@@ -498,17 +500,19 @@ public class HeroesProfileProvider : IReplayProvider
                     e is ApiException api && api.ResponseStatusCode > 0
                         ? api.ResponseStatusCode
                         : null;
-                if (RequestDownloadRetry.Classify(status) == RequestDownloadVerdict.Fail)
+                // The body's error.code tells a deleted replay from a key problem (#361).
+                string errorCode = (e as HeroesProfileApiException)?.ErrorCode;
+                if (RequestDownloadRetry.Classify(status, errorCode) == RequestDownloadVerdict.Fail)
                 {
                     await FailRequestAsync(
                             item,
-                            $"Heroes Profile no longer has the replay file (HTTP {status})"
+                            $"Heroes Profile no longer has the replay file ({RequestDownloadRetry.Describe(status.Value, errorCode)})"
                         )
                         .ConfigureAwait(false);
                     return RequestFetch.Skipped;
                 }
 
-                await RetryLaterAsync(item, e, status, now).ConfigureAwait(false);
+                await RetryLaterAsync(item, e, status, errorCode, now).ConfigureAwait(false);
                 // Heroes Profile answered with a status: not an outage (#346).
                 return status != null
                     ? RequestFetch.Skipped
@@ -575,11 +579,12 @@ public class HeroesProfileProvider : IReplayProvider
         RewardQueueItem item,
         Exception error,
         int? status,
+        string errorCode,
         DateTimeOffset now
     )
     {
         string reason = status is int code
-            ? $"HTTP {code}"
+            ? RequestDownloadRetry.Describe(code, errorCode)
             : $"{error.GetType().Name}: {error.Message}";
         RequestDownload download = await requestQueue
             .RetryDownloadLaterAsync(item, reason, now)
