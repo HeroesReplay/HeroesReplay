@@ -90,6 +90,35 @@ public class ObsInspectorTests : IDisposable
     }
 
     [Fact]
+    public void Inspect_ReportsTheBitratesAndTheRecordDirectory()
+    {
+        FakeObs simple = FakeObs.Installed(data);
+        FakeObs advanced = FakeObs.Installed(data);
+        advanced.ProfileParameters[("Output", "Mode")] = "Advanced";
+        advanced.ProfileParameters[("AdvOut", "RecType")] = "FFmpeg";
+        advanced.ProfileParameters[("AdvOut", "FFExtension")] = "mp4";
+        advanced.ProfileParameters[("AdvOut", "FFVBitrate")] = "8000";
+
+        ObsInspection inspection = Inspect(simple);
+        ObsProfileInfo custom = Inspect(advanced).Profile;
+
+        ObsProfileInfo profile = inspection.Profile;
+        Assert.Equal(6000, profile.StreamBitrateKbps);
+        Assert.Equal("CBR", profile.StreamRateControl);
+        Assert.Equal("Stream", profile.RecordingQuality);
+        Assert.Equal(6000, profile.RecordingBitrateKbps);
+        Assert.True(profile.RecordingSharesStreamEncoder);
+        Assert.Equal(@"C:\heroesreplay\Data\Contexts\65820711", inspection.RecordDirectory);
+        Assert.Contains("GetRecordDirectory", simple.Requests);
+        Assert.Empty(inspection.Unread);
+
+        // Advanced output keeps the stream bitrate in streamEncoder.json, out of reach.
+        Assert.Null(custom.StreamBitrateKbps);
+        Assert.Equal(8000, custom.RecordingBitrateKbps);
+        Assert.False(custom.RecordingSharesStreamEncoder);
+    }
+
+    [Fact]
     public void Inspect_WrongProfile_IsReportedNotFailed()
     {
         FakeObs obs = FakeObs.Installed(data);
