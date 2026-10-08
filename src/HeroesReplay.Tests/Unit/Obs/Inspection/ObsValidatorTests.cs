@@ -4,6 +4,7 @@ using System.Linq;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Tests.Unit.Support;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -24,7 +25,7 @@ public class ObsValidatorTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(data, recursive: true);
+        TestTemp.Delete(data);
     }
 
     [Fact]

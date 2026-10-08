@@ -389,11 +389,17 @@ public class ServiceSupervisorTests
         string path = Path.Combine(Path.GetTempPath(), $"heroesreplay-stop-{Guid.NewGuid():N}");
         try
         {
-            using var idle = ServiceStopFile.Link(CancellationToken.None, path);
+            using var idle = ServiceStopFile.Link(
+                CancellationToken.None,
+                path,
+                TimeSpan.FromMilliseconds(10)
+            );
             Assert.False(idle.Token.WaitHandle.WaitOne(300));
 
             ServiceStopFile.Request(path);
-            Assert.True(idle.Token.WaitHandle.WaitOne(2000));
+            // The watcher runs on the thread pool, which a busy machine can starve for a while:
+            // wait as long as it takes a working watcher, and fail only a dead one (#331).
+            Assert.True(idle.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(15)));
         }
         finally
         {

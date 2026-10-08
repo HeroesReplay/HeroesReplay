@@ -162,7 +162,8 @@ public class ServiceHeartbeatTests
             heartbeat.Start(CancellationToken.None);
             DateTimeOffset first = Read("download", "beat5", root).HeartbeatAt.Value;
 
-            DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+            // The timer runs on the thread pool; only a dead timer takes this long (#331).
+            DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(15);
             DateTimeOffset? later = first;
             while (later <= first && DateTimeOffset.UtcNow < deadline)
             {

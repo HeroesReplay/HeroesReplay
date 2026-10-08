@@ -8,6 +8,7 @@ using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -33,7 +34,7 @@ public class ObsBundleManifestTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(root, recursive: true);
+        TestTemp.Delete(root);
     }
 
     [Fact]

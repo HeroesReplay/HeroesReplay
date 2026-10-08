@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Obs;
@@ -565,30 +563,5 @@ internal sealed class FakeObs : IObsReadSessionFactory
         }
 
         public void Dispose() => owner.Disposed++;
-    }
-}
-
-internal static class TinyPng
-{
-    /// <summary>A noisy PNG, so its base64 is far longer than 100 characters.</summary>
-    public static byte[] Create(int width, int height)
-    {
-        using var bitmap = new Bitmap(width, height);
-        var random = new Random(7);
-        for (int x = 0; x < width; x++)
-        {
-            for (int y = 0; y < height; y++)
-            {
-                bitmap.SetPixel(
-                    x,
-                    y,
-                    Color.FromArgb(random.Next(256), random.Next(256), random.Next(256))
-                );
-            }
-        }
-
-        using var stream = new MemoryStream();
-        bitmap.Save(stream, ImageFormat.Png);
-        return stream.ToArray();
     }
 }
