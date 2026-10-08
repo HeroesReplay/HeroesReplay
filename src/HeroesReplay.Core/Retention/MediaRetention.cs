@@ -234,9 +234,11 @@ public static class MediaRetention
     }
 
     /// <summary>
-    /// The reason a recording without an entry goes. Retention never deletes a recording that
-    /// has an entry and waits for its insert: that one is eligible, and only the spectator's
-    /// pending-bytes guard (it stops recording) keeps the disk in check (#250).
+    /// The reason a recording without an entry goes. The sweep never deletes a recording that
+    /// has an entry and waits for its insert: that one is eligible, and the spectator's
+    /// pending-bytes guard (it stops ordinary recordings) keeps the disk in check (#250). When
+    /// that guard trips, <see cref="StaleOrdinaryRecordings"/> clears the ones the uploader can
+    /// never publish (#279).
     /// </summary>
     public static string NoEntryWarning(string path) =>
         "Removed recording that was never uploaded: "
@@ -303,7 +305,7 @@ public static class MediaRetention
         }
     }
 
-    private static void DeleteFile(string path, RetentionSweep result, string warning)
+    internal static void DeleteFile(string path, RetentionSweep result, string warning)
     {
         try
         {

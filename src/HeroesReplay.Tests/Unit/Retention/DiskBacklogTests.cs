@@ -75,6 +75,95 @@ public class DiskBacklogTests
         Assert.Equal(DiskBacklog.PendingBytesHigh, stop.Reason);
     }
 
+    /// <summary>
+    /// #279: the pending-bytes gates hold back ordinary recordings only. A request with pending
+    /// bytes at either watermark is a warning, and it is still recorded.
+    /// </summary>
+    [Fact]
+    public void PendingBytes_DoNotStopARequest()
+    {
+        DiskBacklogDecision warn = DiskBacklog.Evaluate(
+            new DiskBacklogInput
+            {
+                FreeBytes = 100,
+                PendingUploadBytes = WarnPending,
+                Requested = true,
+            },
+            Settings()
+        );
+        DiskBacklogDecision high = DiskBacklog.Evaluate(
+            new DiskBacklogInput
+            {
+                FreeBytes = 100,
+                PendingUploadBytes = StopPending * 10,
+                Requested = true,
+            },
+            Settings()
+        );
+
+        Assert.Equal(DiskPressure.Warning, warn.Pressure);
+        Assert.Equal(DiskBacklog.PendingBytesWarning, warn.Reason);
+        Assert.Equal(DiskPressure.Warning, high.Pressure);
+        Assert.Equal(DiskBacklog.PendingBytesHigh, high.Reason);
+        Assert.Equal(DiskBacklog.PendingBytesGate, high.Gate);
+        Assert.True(high.Requested);
+    }
+
+    [Fact]
+    public void LowFreeBytes_StopsARequest()
+    {
+        DiskBacklogDecision decision = DiskBacklog.Evaluate(
+            new DiskBacklogInput
+            {
+                FreeBytes = StopFree,
+                PendingUploadBytes = StopPending,
+                Requested = true,
+            },
+            Settings()
+        );
+
+        Assert.Equal(DiskPressure.SkipRecording, decision.Pressure);
+        Assert.Equal(DiskBacklog.FreeBytesLow, decision.Reason);
+        Assert.Equal(DiskBacklog.FreeSpaceGate, decision.Gate);
+        Assert.True(decision.Requested);
+    }
+
+    [Fact]
+    public void FreeSpaceWarning_WinsOverARequestsPendingBytes()
+    {
+        DiskBacklogDecision decision = DiskBacklog.Evaluate(
+            new DiskBacklogInput
+            {
+                FreeBytes = WarnFree,
+                PendingUploadBytes = StopPending,
+                Requested = true,
+            },
+            Settings()
+        );
+
+        Assert.Equal(DiskPressure.Warning, decision.Pressure);
+        Assert.Equal(DiskBacklog.FreeBytesWarning, decision.Reason);
+        Assert.Equal(DiskBacklog.FreeSpaceGate, decision.Gate);
+    }
+
+    [Fact]
+    public void Gate_NamesTheWatermarkBehindTheReason()
+    {
+        Assert.Null(
+            DiskBacklog.Evaluate(new DiskBacklogInput { FreeBytes = 100 }, Settings()).Gate
+        );
+        Assert.Equal(
+            DiskBacklog.PendingBytesGate,
+            DiskBacklog
+                .Evaluate(
+                    new DiskBacklogInput { FreeBytes = 100, PendingUploadBytes = StopPending },
+                    Settings()
+                )
+                .Gate
+        );
+        Assert.Equal(DiskBacklog.CheckGate, DiskBacklog.Evaluate(null, Settings()).Gate);
+    }
+
     [Fact]
     public void LowFreeBytes_WinsOverAPendingWarning()
     {

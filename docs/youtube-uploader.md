@@ -93,6 +93,18 @@ The mode says what is worth recording. The recording cap (`ReplayMedia:CapRecord
 
 With the production settings that is 4 a day over 3 days, so about 12 videos in flight and about 4 ordinary recordings a day. Notable and high-skill replays are capped like ordinary ones; only a request goes past the cap. A capped replay is still spectated and streamed, without an mp4. Before the cap, production recorded about 25 replays a day while 4 a day could go public, and the rest waited on disk until they were too old to publish (#250).
 
+### The disk gates
+
+After the cap, the spectator checks the disk (`Disk`, #279). The log line names the gate and says whether the replay is a request.
+
+| Gate | Settings | Holds back |
+| --- | --- | --- |
+| `free-space` | `WarnWhenFreeBytesBelow`, `StopWhenFreeBytesBelow` | Every recording, a request too. |
+| `pending-bytes` | `WarnWhenPendingBytesAtLeast`, `StopWhenPendingBytesAtLeast` (bytes of recordings still waiting for their `videos.insert`) | Every replay that is not a request. A request is recorded while the free-space gate allows it. |
+| `disk-check` | Invalid watermarks, or a reading that makes no sense | Every recording. |
+
+Most pending bytes are ordinary recordings waiting for a publish time. When the `pending-bytes` stop watermark trips, the spectator first deletes the ordinary recordings that can never be published, then measures the disk again. A recording goes only when the uploader would delete it as stale itself: YouTube is live with a public listing, its stored media decision is an eligible `Ordinary` replay (not a request, notable, or high-skill), its game is older than `OrdinaryCandidateMaxAge`, it holds no slot in `Data\publication-reservations.txt`, no send has started, and it is not the replay about to launch. Each deletion logs `Removed recording that was eligible but never uploaded ... (reason: stale ...)`.
+
 A replay that is spectated again after a session that did not finish (a crash, a stop, a load timeout) decides its publication again from the new session. It used to reuse the first session's `incomplete`, so the second recording got no entry and retention deleted it. A recording whose publication is withheld (expired during the match, already published, already in the outbox) is deleted when the session ends, with a warning that names the reason, instead of waiting for retention.
 
 Every mode still requires OBS `RecordingEnabled` (true in production). Both ReplayId rewards, `ReplayId` and `ReplayId + YouTube`, are recorded and uploaded as requests (#165). A map, rank, or random reward with no `RecordAndUpload` is spectate-only and is not a publication.

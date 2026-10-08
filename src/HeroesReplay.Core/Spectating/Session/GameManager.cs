@@ -127,7 +127,7 @@ public class GameManager : IGameManager
 
         try
         {
-            SkipRecordingUnderDiskPressure(loadedReplay);
+            SkipRecordingUnderDiskPressure(loadedReplay, preLaunch);
             using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.spectate");
             HeroesReplayTelemetry.TagReplay(
                 activity,
@@ -492,16 +492,50 @@ public class GameManager : IGameManager
         gameController.Kill();
     }
 
-    private void SkipRecordingUnderDiskPressure(LoadedReplay loadedReplay)
+    /// <summary>
+    /// The free-space gate holds back every recording. The pending-bytes gates hold back only
+    /// replays that are not requests, so a viewer request is recorded while the disk has room.
+    /// When the pending-bytes gate trips, ordinary recordings that can never be published are
+    /// cleared first (#279).
+    /// </summary>
+    private void SkipRecordingUnderDiskPressure(
+        LoadedReplay loadedReplay,
+        MediaPolicySnapshot snapshot
+    )
     {
-        DiskBacklogDecision decision = SpectateAdmission.Evaluate(MeasureDisk(), settings.Disk);
-        if (SpectateAdmission.MayRecord(decision))
+        bool requested = snapshot?.Requested == true;
+        DiskAdmission admission = SpectateAdmission.Admit(
+            requested,
+            settings.Disk,
+            MeasureDisk,
+            () => ClearStaleOrdinaryRecordings(loadedReplay)
+        );
+        DiskBacklogDecision decision = admission.Decision;
+        string free = Gigabytes(admission.Measured?.FreeBytes);
+        string pending = Gigabytes(admission.Measured?.PendingUploadBytes);
+        if (admission.MayRecord)
         {
-            if (decision.Pressure == DiskPressure.Warning)
+            if (requested && decision.Reason == DiskBacklog.PendingBytesHigh)
             {
                 logger.LogWarning(
-                    "Disk is in warning ({Reason}). Spectate and recording continue.",
-                    decision.Reason
+                    "Disk {Reason} ({Gate} gate: {PendingGigabytes} GB waiting for upload, {FreeGigabytes} GB free). Replay {ReplayId} is a request: the pending-bytes gate holds back only recordings that are not requests, so the disk does not stop this one.",
+                    decision.Reason,
+                    decision.Gate,
+                    pending,
+                    free,
+                    loadedReplay?.ReplayId
+                );
+            }
+            else if (decision.Pressure == DiskPressure.Warning)
+            {
+                logger.LogWarning(
+                    "Disk is in warning ({Reason}, {Gate} gate: {FreeGigabytes} GB free, {PendingGigabytes} GB waiting for upload). Replay {ReplayId} ({Kind}): spectate and recording continue.",
+                    decision.Reason,
+                    decision.Gate,
+                    free,
+                    pending,
+                    loadedReplay?.ReplayId,
+                    RequestKind(requested, snapshot)
                 );
             }
 
@@ -514,10 +548,90 @@ public class GameManager : IGameManager
         }
 
         logger.LogWarning(
-            "Disk {Reason}. Replay {ReplayId} is spectated without a recording. Recordings already on disk stay.",
+            "Disk {Reason} ({Gate} gate: {FreeGigabytes} GB free, {PendingGigabytes} GB waiting for upload). Replay {ReplayId} ({Kind}) is spectated without a recording. Recordings that can still be published stay.",
             decision.Reason,
-            loadedReplay?.ReplayId
+            decision.Gate,
+            free,
+            pending,
+            loadedReplay?.ReplayId,
+            RequestKind(requested, snapshot)
         );
+    }
+
+    private static string RequestKind(bool requested, MediaPolicySnapshot snapshot) =>
+        requested
+            ? "a request"
+            : "not a request, priority " + (snapshot?.Decision?.Priority.ToString() ?? "unknown");
+
+    private static string Gigabytes(long? bytes)
+    {
+        if (bytes is not long value || value == long.MaxValue)
+        {
+            return "unknown";
+        }
+
+        return (value / (1024d * 1024 * 1024)).ToString(
+            "0.0",
+            System.Globalization.CultureInfo.InvariantCulture
+        );
+    }
+
+    /// <summary>
+    /// The pending-bytes gate tripped. Ordinary recordings past OrdinaryCandidateMaxAge go first:
+    /// the uploader would delete them unuploaded anyway (#279).
+    /// </summary>
+    private RetentionSweep ClearStaleOrdinaryRecordings(LoadedReplay loadedReplay)
+    {
+        RetentionSweep cleared;
+        try
+        {
+            cleared = StaleOrdinaryRecordings.Clear(
+                settings,
+                DateTimeOffset.UtcNow,
+                loadedReplay?.ReplayId
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "The pending-bytes gate tripped, and stale ordinary recordings could not be cleared. Spectate continues."
+            );
+            return null;
+        }
+
+        if (cleared.DeletedFiles > 0)
+        {
+            logger.LogInformation(
+                "The pending-bytes gate tripped before replay {ReplayId}. Cleared {Files} ordinary recording(s) ({Megabytes} MB) older than ReplayMedia:OrdinaryCandidateMaxAge {MaxAge}: the uploader could never publish them.",
+                loadedReplay?.ReplayId,
+                cleared.DeletedFiles,
+                cleared.FreedBytes / (1024 * 1024),
+                settings.ReplayMedia?.OrdinaryCandidateMaxAge
+            );
+        }
+        else
+        {
+            logger.LogInformation(
+                "The pending-bytes gate tripped before replay {ReplayId}. No waiting ordinary recording could be cleared as past ReplayMedia:OrdinaryCandidateMaxAge.",
+                loadedReplay?.ReplayId
+            );
+        }
+
+        foreach (string warning in cleared.Warnings)
+        {
+            logger.LogWarning("{RetentionWarning}", warning);
+        }
+
+        foreach (string busy in cleared.InUse)
+        {
+            logger.LogInformation(
+                "{Path} is still open in another process. It is not cleared now.",
+                busy
+            );
+        }
+
+        return cleared;
     }
 
     private DiskBacklogInput MeasureDisk()
