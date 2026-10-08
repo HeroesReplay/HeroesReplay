@@ -122,6 +122,41 @@ public class ServiceSupervisionTests
         );
     }
 
+    [Fact]
+    public void ARoleDegradedByItsDependencyProbe_IsNeverRestarted_SoAnOutageIsNoRestartLoop()
+    {
+        // #305: a rejected key or an outage keeps the role up and degraded for as long as it lasts.
+        using var stack = new FakeStack(("download", 100), ("youtube", 101));
+        stack.Dependency = record =>
+            record.Name == "download"
+                ? new ServiceRoleDependency
+                {
+                    Name = "Heroes Profile API",
+                    State = ServiceDependencyStates.Unreachable,
+                    Code = "download.heroesprofile_unreachable",
+                    Cause = "Heroes Profile did not answer within 10s.",
+                    Remediation = "Nothing to do for a short outage.",
+                    CheckedAt = stack.Clock.Now,
+                    Since = Start,
+                }
+                : null;
+        ServiceSupervision supervision = stack.Supervision();
+        Assert.True(supervision.Begin());
+
+        stack.Ticks(supervision, 3600);
+
+        Assert.Empty(stack.Launches);
+        Assert.Empty(stack.Killed);
+        Assert.Equal(0, supervision.Ledger("download").Count);
+        Assert.DoesNotContain(stack.Log.Entries, entry => entry.Level >= LogLevel.Warning);
+        ServiceRoleHealth download = stack
+            .Status(running: true)
+            .Roles.Single(role => role.Role == "download");
+        Assert.Equal(ServiceRoleState.Degraded, download.State);
+        Assert.Equal("download.heroesprofile_unreachable", download.CauseCode);
+        Assert.Equal("Nothing to do for a short outage.", download.Remediation);
+    }
+
     /// <summary>Crashes <paramref name="role"/> until its restart budget is used up.</summary>
     private static void Exhaust(FakeStack stack, ServiceSupervision supervision, string role)
     {
@@ -495,6 +530,9 @@ public class ServiceSupervisionTests
         public bool CancelLaunches { get; set; }
         public bool FailLaunches { get; set; }
         public Action<string> OnLaunch { get; set; }
+
+        /// <summary>The dependency probe each live role reports in its heartbeat (#305).</summary>
+        public Func<ServiceProcessRecord, ServiceRoleDependency> Dependency { get; set; }
         public List<(string Role, int Pid, DateTimeOffset At)> Launches { get; } = new();
         public List<int> Killed { get; } = new();
         public List<DateTimeOffset> KilledAt { get; } = new();
@@ -636,6 +674,7 @@ public class ServiceSupervisionTests
                 HeartbeatAt = beat,
                 HeartbeatIntervalSeconds = 15,
                 LastSuccessfulWorkAt = beat,
+                Dependency = Dependency?.Invoke(record),
             };
         }
 

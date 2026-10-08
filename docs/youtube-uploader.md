@@ -201,6 +201,14 @@ When a scheduled video is still not public after that grace, the library pass lo
 
 Both clear on their own once the cause is gone. A dry run and a private listing are never degraded for publishing.
 
+The role also probes its upload consent (#305, `docs/service-split.md` Dependency probes): before it reports ready and then every 10 minutes (2 while it fails), it refreshes the stored upload token at Google's token endpoint. That is not a YouTube Data API call, so it spends neither the 10,000-unit pool nor the upload bucket, and the store is not written. Not in a dry run.
+
+- `youtube.oauth_invalid`: Google refused the stored refresh token (`invalid_grant`: revoked, expired after 7 days for an OAuth app in Testing, or a changed `client_secrets.json`). Grant the consent again at the machine: stop the stack, delete `%APPDATA%\Google.Apis.Auth\Google.Apis.Auth.OAuth2.Responses.TokenResponse-{ChannelId}`, run `heroesreplay youtube uploader` by hand and sign in, then start the stack.
+- `youtube.oauth_missing`: no upload consent is stored for the channel (the uploader would wait for a browser sign-in nobody sees), or `client_secrets.json` is missing.
+- `youtube.oauth_unreachable`: the token endpoint did not answer. Clears when a probe passes.
+
+The supervisor does not restart the role for any of them; recordings wait on disk.
+
 Without a concern, the role is `degraded` when it did no healthy work for 30 minutes (`No successful upload pass ...`). Healthy work is a successful upload (each one, so a long pass of large uploads keeps the role ready), a dry-run receipt, a library pass that ran or skipped for a routine reason (not due, another process has it, the day's units are spent, a quota pause), and an upload pass where every recording was sent or correctly waits (the upload bucket, the insert cap, `publication-full`, its entry not written yet), including a pass with nothing pending. Between passes the minute poll keeps that state. A pass with a failed send, an unreadable entry, or an interrupted upload that waits for an operator is not work. Before this, the work was recorded only after a whole pass and the library pass, so a startup pass that uploaded 13 videos over an hour left `lastSuccessfulWorkAt` null and the role degraded.
 
 A dry run plans in `Data\publication-reservations-dry-run.txt`, so its times never take a live slot. `youtube-dry-run.json` records the plan: the insert privacy, the desired privacy, `PublishAtUtc`, the schedule result and its reason (for example `granted` and `interval`, or `refused` and `publication-full`), `SelfDeclaredMadeForKids`, and the category. A dry run never deletes a recording.
