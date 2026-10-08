@@ -55,6 +55,14 @@ public class YouTubeSettings
     public TimeSpan LibraryWriteSpacing { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// New playlists (<c>playlists.insert</c>) one library pass may create. YouTube throttles
+    /// how many playlists a channel creates in a period, whatever quota is left, so creates are
+    /// spread over passes. Filing into playlists that already exist comes first and is not
+    /// limited by this. 0 creates none.
+    /// </summary>
+    public int LibraryMaxNewPlaylistsPerPass { get; set; } = 3;
+
+    /// <summary>
     /// Pool units the library pass may spend in one Pacific quota day. Uploads have their own
     /// bucket (<see cref="DailyUploadCalls"/>) and are not limited by this number.
     /// </summary>
