@@ -294,9 +294,130 @@ public class RecordingOwnershipTests
         }
     }
 
+    /// <summary>#318: the claim services stop reads is written before StartRecord is sent.</summary>
+    [Fact]
+    public void Claim_WrittenBeforeTheStart_AndDeletedWhenObsFinalizes()
+    {
+        using var temp = new TempClaim();
+        var at = new DateTimeOffset(2026, 10, 8, 12, 33, 26, TimeSpan.Zero);
+        var socket = new FakeObsSocket { RecordingAfterStart = true, StopPath = "owned.mp4" };
+        bool claimedBeforeStart = false;
+        socket.OnStart = () => claimedBeforeStart = temp.Store.TryLoad() != null;
+        var session = new RecordingSession(
+            NullLogger.Instance,
+            socket,
+            FastBudget(0),
+            temp.Store,
+            () => at
+        );
+
+        Assert.True(session.StartRecording(Record, Noop, 65820711, "unit").Owned);
+        RecordingClaim claim = temp.Store.TryLoad();
+
+        Assert.True(claimedBeforeStart);
+        Assert.Equal(65820711, claim.ReplayId);
+        Assert.Equal(at, claim.StartedAt);
+        Assert.Equal(Environment.ProcessId, claim.ProcessId);
+        Assert.True(session.StopRecording(Noop, 65820711).Finalized);
+        Assert.Null(temp.Store.TryLoad());
+        Assert.False(File.Exists(temp.Store.FilePath));
+    }
+
+    [Fact]
+    public void Claim_StopTimeout_IsKeptForServicesStop()
+    {
+        using var temp = new TempClaim();
+        var socket = new FakeObsSocket { RecordingAfterStart = true, KeepRecordingOnStop = true };
+        var session = new RecordingSession(NullLogger.Instance, socket, FastBudget(0), temp.Store);
+
+        Assert.True(session.StartRecording(Record, Noop, 7, "unit").Owned);
+        Assert.Equal(ObsOutputFailure.Timeout, session.StopRecording(Noop, 7).Failure);
+
+        Assert.Equal(7, temp.Store.TryLoad()?.ReplayId);
+    }
+
+    [Fact]
+    public void Claim_UnconfirmedStart_IsKept()
+    {
+        using var temp = new TempClaim();
+        var socket = new FakeObsSocket();
+        var session = new RecordingSession(NullLogger.Instance, socket, FastBudget(0), temp.Store);
+
+        ObsRecordingResult started = session.StartRecording(Record, Noop, 7, "unit");
+
+        Assert.Equal(ObsOutputFailure.NotConfirmed, started.Failure);
+        Assert.Equal(7, temp.Store.TryLoad()?.ReplayId);
+    }
+
+    [Fact]
+    public void Claim_StoppedWithoutAPath_IsDeleted()
+    {
+        using var temp = new TempClaim();
+        var socket = new FakeObsSocket
+        {
+            RecordingAfterStart = true,
+            OnStop = self => self.Raise(ObsRecordSignal.Stopped(null)),
+        };
+        var session = new RecordingSession(NullLogger.Instance, socket, FastBudget(0), temp.Store);
+
+        Assert.True(session.StartRecording(Record, Noop, 7, "unit").Owned);
+        Assert.Equal(ObsOutputFailure.NotConfirmed, session.StopRecording(Noop, 7).Failure);
+
+        Assert.Null(temp.Store.TryLoad());
+    }
+
+    [Fact]
+    public void Claim_NotRequested_WritesNothing()
+    {
+        using var temp = new TempClaim();
+        var socket = new FakeObsSocket { RecordingAfterStart = true };
+        var session = new RecordingSession(NullLogger.Instance, socket, FastBudget(0), temp.Store);
+
+        ObsRecordingResult started = session.StartRecording(() => false, Noop, 7, "unit");
+
+        Assert.Equal(ObsOutputFailure.NotRequested, started.Failure);
+        Assert.Equal(0, socket.StartCalls);
+        Assert.False(File.Exists(temp.Store.FilePath));
+    }
+
+    [Fact]
+    public void ClaimStore_UnreadableFile_IsMovedAsideAndReadsAsNoClaim()
+    {
+        using var temp = new TempClaim();
+        File.WriteAllText(temp.Store.FilePath, "{ not json");
+
+        Assert.Null(temp.Store.TryLoad());
+        Assert.False(File.Exists(temp.Store.FilePath));
+        temp.Store.Clear();
+    }
+
     private static bool Record() => true;
 
     private static void Noop() { }
+
+    private sealed class TempClaim : IDisposable
+    {
+        private readonly string directory = Path.Combine(
+            Path.GetTempPath(),
+            "hr-claim-" + Guid.NewGuid().ToString("n")
+        );
+
+        public TempClaim()
+        {
+            Directory.CreateDirectory(directory);
+            Store = new RecordingClaimStore(Path.Combine(directory, "obs-recording.json"));
+        }
+
+        public RecordingClaimStore Store { get; }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
 
     private static RecordingSession Session(FakeObsSocket socket, ObsRecordingBudget budget = null)
     {
@@ -324,6 +445,7 @@ public class RecordingOwnershipTests
         public string StopPath { get; set; }
         public Exception StartError { get; set; }
         public Action<FakeObsSocket> OnStop { get; set; }
+        public Action OnStart { get; set; }
         public int StartCalls { get; private set; }
         public int StopCalls { get; private set; }
 
@@ -336,6 +458,7 @@ public class RecordingOwnershipTests
         public void StartRecord()
         {
             StartCalls++;
+            OnStart?.Invoke();
             if (StartError != null)
             {
                 throw StartError;

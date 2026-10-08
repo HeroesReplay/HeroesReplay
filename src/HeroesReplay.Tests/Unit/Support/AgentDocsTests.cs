@@ -74,6 +74,173 @@ public class AgentDocsTests
         Assert.Contains("## JSON output contract", skill, StringComparison.Ordinal);
     }
 
+    /// <summary>The command reference (#313 F9) has one entry per command that runs, and no other.</summary>
+    [Fact]
+    public void CommandReference_HasAnEntryForEveryCommandThatRuns()
+    {
+        List<string> commands = CommandReference
+            .Runnable(new HeroesReplayCommand())
+            .Select(command => command.Path)
+            .ToList();
+        List<string> entries = CommandReference.Facts.Select(fact => fact.Path).ToList();
+
+        Assert.Equal(entries.Count, entries.Distinct(StringComparer.Ordinal).Count());
+        List<string> missing = commands.Except(entries, StringComparer.Ordinal).ToList();
+        List<string> stale = entries.Except(commands, StringComparer.Ordinal).ToList();
+        Assert.True(
+            missing.Count == 0,
+            "CommandReference.Facts has no entry for: " + string.Join(", ", missing)
+        );
+        Assert.True(
+            stale.Count == 0,
+            "CommandReference.Facts names commands that do not exist: " + string.Join(", ", stale)
+        );
+        Assert.All(
+            CommandReference.Facts,
+            fact =>
+            {
+                Assert.False(string.IsNullOrWhiteSpace(fact.Before), fact.Path + " has no Before.");
+                Assert.False(
+                    string.IsNullOrWhiteSpace(fact.Changes),
+                    fact.Path + " has no Changes."
+                );
+                Assert.False(string.IsNullOrWhiteSpace(fact.Exit), fact.Path + " has no Exit.");
+            }
+        );
+    }
+
+    /// <summary>
+    /// Every string constant in the CLI and Core that looks like a stable code
+    /// (<c>area.reason</c> or <c>check.target.reason</c>) is listed under some command.
+    /// </summary>
+    [Fact]
+    public void CommandReference_NamesEveryStableCode()
+    {
+        var code = new Regex(
+            @"^(check|client|config|deps|download|obs|service|spectate|twitch|youtube)\.[a-z0-9_]+(\.[a-z0-9_]+)?$"
+        );
+        IEnumerable<string> constants = new[]
+        {
+            typeof(HeroesReplayCommand).Assembly,
+            typeof(ObsValidator).Assembly,
+        }
+            .SelectMany(assembly => assembly.GetTypes())
+            .SelectMany(type =>
+                type.GetFields(
+                    System.Reflection.BindingFlags.Public
+                        | System.Reflection.BindingFlags.NonPublic
+                        | System.Reflection.BindingFlags.Static
+                )
+            )
+            .Where(field => field.IsLiteral && field.FieldType == typeof(string))
+            .Select(field => (string)field.GetRawConstantValue())
+            .Where(value => value != null && code.IsMatch(value))
+            .Distinct(StringComparer.Ordinal);
+        var listed = CommandReference
+            .Facts.SelectMany(fact => fact.Codes ?? [])
+            .ToHashSet(StringComparer.Ordinal);
+
+        List<string> missing = constants.Where(value => !listed.Contains(value)).Order().ToList();
+
+        Assert.True(
+            missing.Count == 0,
+            "These stable codes are in no CommandReference.Facts entry: "
+                + string.Join(", ", missing)
+        );
+    }
+
+    /// <summary>
+    /// The checked-in reference is what <see cref="CommandReference.Render"/> makes from the code.
+    /// Set HEROESREPLAY_WRITE_COMMAND_REFERENCE=1 to rewrite it.
+    /// </summary>
+    [Fact]
+    public void CommandReference_IsCurrent()
+    {
+        string path = Path.Combine(Root, CommandReference.RelativePath);
+        string expected = CommandReference.Render(new HeroesReplayCommand());
+        if (Environment.GetEnvironmentVariable(CommandReference.WriteVariable) == "1")
+        {
+            File.WriteAllText(path, expected);
+        }
+
+        Assert.True(File.Exists(path), path + " is missing.");
+        string actual = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.True(
+            string.Equals(expected, actual, StringComparison.Ordinal),
+            CommandReference.RelativePath
+                + " is stale. Run `dotnet test heroes-replay.slnx --filter CommandReference` with "
+                + CommandReference.WriteVariable
+                + "=1 and commit the file."
+        );
+        string skill = File.ReadAllText(Path.Combine(Skills, "heroes-replay-cli", "SKILL.md"));
+        Assert.Contains("commands.md", skill, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// G2 (#313): Grok 1.0.46 scans <c>.agents/skills</c> itself, beside <c>.grok/skills</c>, so
+    /// there is no mirror. A copy under <c>.grok</c> would shadow the real skill when it goes stale.
+    /// </summary>
+    [Fact]
+    public void Grok_ReadsAgentsSkills_SoThereIsNoGrokMirror()
+    {
+        Assert.False(
+            Directory.Exists(Path.Combine(Root, ".grok", "skills")),
+            ".grok/skills exists. Grok reads .agents/skills directly; a mirror goes stale and shadows it."
+        );
+        Assert.False(
+            Directory.Exists(Path.Combine(Root, ".grok", "commands")),
+            ".grok/commands exists. Put skills in .agents/skills."
+        );
+        Assert.True(
+            File.Exists(Path.Combine(Root, ".grok", "config.toml")),
+            ".grok/config.toml (the MCP server) is missing."
+        );
+        Assert.Contains(
+            "Grok reads `.agents/skills` itself",
+            File.ReadAllText(Path.Combine(Root, "AGENTS.md")),
+            StringComparison.Ordinal
+        );
+    }
+
+    /// <summary>
+    /// Names Grok and Claude Code both accept (lowercase letters, digits, and hyphens, 2 to 64
+    /// characters), and a SKILL.md under Grok's 25,000-token inline cap (about 100 KB).
+    /// </summary>
+    [Fact]
+    public void Skills_HaveNamesAndSizesGrokAccepts()
+    {
+        var name = new Regex("^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$");
+        foreach (string folder in Directory.GetDirectories(Skills))
+        {
+            Assert.Matches(name, Path.GetFileName(folder));
+            long size = new FileInfo(Path.Combine(folder, "SKILL.md")).Length;
+            Assert.True(size <= 100_000, folder + "/SKILL.md is " + size + " bytes.");
+        }
+    }
+
+    /// <summary>G4/G5 (#313): the OBS guidance is split into the generic reference, the safety rules, and the code.</summary>
+    [Fact]
+    public void ObsSkills_AreSplitAndPointAtEachOther()
+    {
+        string docs = File.ReadAllText(Path.Combine(Skills, "obs-docs", "SKILL.md"));
+        string operations = File.ReadAllText(Path.Combine(Skills, "heroes-replay-obs", "SKILL.md"));
+        string code = File.ReadAllText(Path.Combine(Skills, "obs-websocket-v5", "SKILL.md"));
+
+        Assert.Contains("docs/obs-operations.md", operations, StringComparison.Ordinal);
+        Assert.Contains("obs-docs", operations, StringComparison.Ordinal);
+        Assert.Contains("obs-websocket-v5", operations, StringComparison.Ordinal);
+        Assert.Contains("heroes-replay-obs", docs, StringComparison.Ordinal);
+        Assert.Contains("heroes-replay-obs", code, StringComparison.Ordinal);
+        Assert.Contains("obs-docs", code, StringComparison.Ordinal);
+        // Nothing third-party is copied in: media-os was evaluated, not vendored.
+        Assert.Contains("media-os", docs, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "media-os",
+            File.ReadAllText(Path.Combine(Skills, "vendored.json")),
+            StringComparison.Ordinal
+        );
+    }
+
     [Fact]
     public void FfmpegDocs_PointToThePinnedDefinition()
     {

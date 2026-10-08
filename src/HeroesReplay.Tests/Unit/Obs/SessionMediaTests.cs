@@ -21,7 +21,12 @@ public class SessionMediaTests
     [Fact]
     public void ShouldRecord_OffUnlessRequested()
     {
-        var obs = new OBSSettings { RecordingEnabled = false, RecordRequestedReplays = true };
+        var obs = new OBSSettings
+        {
+            Enabled = true,
+            RecordingEnabled = false,
+            RecordRequestedReplays = true,
+        };
         var auto = new LoadedReplay();
         var requested = new LoadedReplay
         {
@@ -38,14 +43,63 @@ public class SessionMediaTests
     [Fact]
     public void ShouldRecord_GlobalOnRecordsAll()
     {
-        var obs = new OBSSettings { RecordingEnabled = true, RecordRequestedReplays = false };
+        var obs = new OBSSettings
+        {
+            Enabled = true,
+            RecordingEnabled = true,
+            RecordRequestedReplays = false,
+        };
         Assert.True(SessionMedia.ShouldRecord(obs, new LoadedReplay()));
+    }
+
+    /// <summary>#318: OBS:Enabled=false sends OBS nothing, so no recording, whatever else is on.</summary>
+    [Fact]
+    public void ShouldRecord_ObsDisabled_RecordsNothing()
+    {
+        var obs = new OBSSettings
+        {
+            Enabled = false,
+            RecordingEnabled = true,
+            RecordRequestedReplays = true,
+        };
+        var policyApproved = new LoadedReplay { ReplayId = 65820711, PolicyAllowsRecording = true };
+        LoadedReplay requested = ReplayIdLoaded(recordAndUpload: true);
+
+        Assert.False(SessionMedia.ShouldRecord(obs, new LoadedReplay()));
+        Assert.False(SessionMedia.ShouldRecord(obs, policyApproved));
+        Assert.False(SessionMedia.ShouldRecord(obs, requested));
+        Assert.False(SessionMedia.ShouldRecord(null, policyApproved));
+        obs.Enabled = true;
+        Assert.True(SessionMedia.ShouldRecord(obs, policyApproved));
+        Assert.True(SessionMedia.ShouldRecord(obs, requested));
+    }
+
+    [Fact]
+    public void RecordingNeedsObs_OnlyWhenARecordingSwitchIsOnWithObsOff()
+    {
+        Assert.True(
+            SessionMedia.RecordingNeedsObs(
+                new OBSSettings { Enabled = false, RecordingEnabled = true }
+            )
+        );
+        Assert.True(
+            SessionMedia.RecordingNeedsObs(
+                new OBSSettings { Enabled = false, RecordRequestedReplays = true }
+            )
+        );
+        Assert.False(SessionMedia.RecordingNeedsObs(new OBSSettings { Enabled = false }));
+        Assert.False(
+            SessionMedia.RecordingNeedsObs(
+                new OBSSettings { Enabled = true, RecordingEnabled = true }
+            )
+        );
+        Assert.False(SessionMedia.RecordingNeedsObs(null));
     }
 
     [Fact]
     public void AlreadyOnYouTube_DoesNotRecordOrWriteAnotherEntry()
     {
-        var obs = new OBSSettings { RecordingEnabled = true };
+        var obs = new OBSSettings { Enabled = true, RecordingEnabled = true };
         var youtube = new YouTubeSettings { Enabled = true };
         var replay = new LoadedReplay { ReplayId = 65389750, AlreadyOnYouTube = true };
 
@@ -74,7 +128,12 @@ public class SessionMediaTests
     public void ReplayId_PlainReward_AlsoRecordsAndWritesEntry()
     {
         // #165: both ReplayId rewards are uploaded. The plain reward keeps its flag.
-        var obs = new OBSSettings { RecordingEnabled = false, RecordRequestedReplays = true };
+        var obs = new OBSSettings
+        {
+            Enabled = true,
+            RecordingEnabled = false,
+            RecordRequestedReplays = true,
+        };
         var youtube = new YouTubeSettings { Enabled = false, UploadRequestedReplays = true };
         var replay = ReplayIdLoaded(recordAndUpload: false);
 
@@ -87,7 +146,12 @@ public class SessionMediaTests
     [Fact]
     public void ReplayId_WithRecordAndUpload_RecordsAndWritesEntry()
     {
-        var obs = new OBSSettings { RecordingEnabled = false, RecordRequestedReplays = true };
+        var obs = new OBSSettings
+        {
+            Enabled = true,
+            RecordingEnabled = false,
+            RecordRequestedReplays = true,
+        };
         var youtube = new YouTubeSettings { Enabled = false, UploadRequestedReplays = true };
         var replay = ReplayIdLoaded(recordAndUpload: true);
 
@@ -98,7 +162,7 @@ public class SessionMediaTests
     [Fact]
     public void PolicyRefusal_BlocksAnOwnedRecordingAndTheYouTubeEntry()
     {
-        var obs = new OBSSettings { RecordingEnabled = true };
+        var obs = new OBSSettings { Enabled = true, RecordingEnabled = true };
         var youtube = new YouTubeSettings { Enabled = true };
         var replay = new LoadedReplay
         {
@@ -122,9 +186,17 @@ public class SessionMediaTests
         };
 
         Assert.False(
-            SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = false }, replay)
+            SessionMedia.ShouldRecord(
+                new OBSSettings { Enabled = true, RecordingEnabled = false },
+                replay
+            )
         );
-        Assert.True(SessionMedia.ShouldRecord(new OBSSettings { RecordingEnabled = true }, replay));
+        Assert.True(
+            SessionMedia.ShouldRecord(
+                new OBSSettings { Enabled = true, RecordingEnabled = true },
+                replay
+            )
+        );
         Assert.False(
             SessionMedia.ShouldWriteYouTubeEntry(new YouTubeSettings { Enabled = false }, replay)
         );
