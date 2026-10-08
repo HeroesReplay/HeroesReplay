@@ -10,13 +10,15 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.CLI.Commands.HeroesProfile.Commands;
 
 /// <summary>
 /// Downloads the newest replays of one map into a folder of its own, named the way the cache
 /// names them, so <c>calculators units</c> and <c>calculators report</c> can study that map. It
-/// never writes into the spectate queue.
+/// never writes into the spectate queue. A download Heroes Profile refuses is skipped and the
+/// next listed replay is tried (#346); the summary names each skip and why.
 /// </summary>
 public class SampleCommand : Command
 {
@@ -33,7 +35,8 @@ public class SampleCommand : Command
         };
         Option<int> count = new("--count")
         {
-            Description = "Replays to download, 1 to 20. Default 2.",
+            Description =
+                "Replays to download, 1 to 20. Default 2. A replay whose download fails is skipped and the next listed one is tried.",
             DefaultValueFactory = _ => 2,
         };
         Option<GameType> gameType = new("--game-type")
@@ -96,15 +99,15 @@ public class SampleCommand : Command
         IEnumerable<HeroesProfileReplay> listed = await heroesProfile
             .GetReplaysByFilters(gameType, gameRank: null, gameMap: map)
             .ConfigureAwait(false);
-        List<HeroesProfileReplay> picked = (listed ?? Enumerable.Empty<HeroesProfileReplay>())
+        // Every listed replay of the map, newest first: a skipped download moves on to the next.
+        List<HeroesProfileReplay> candidates = (listed ?? Enumerable.Empty<HeroesProfileReplay>())
             .Where(replay =>
                 replay.Downloadable != false
                 && string.Equals(replay.Map, map, StringComparison.OrdinalIgnoreCase)
             )
             .OrderByDescending(replay => replay.Id)
-            .Take(count)
             .ToList();
-        if (picked.Count == 0)
+        if (candidates.Count == 0)
         {
             Console.Error.WriteLine(
                 $"Heroes Profile listed no downloadable {gameType} replay of {map}."
@@ -116,36 +119,42 @@ public class SampleCommand : Command
         Directory.CreateDirectory(folder);
         string separator = settings.StormReplay?.Seperator ?? "_";
         string extension = settings.StormReplay?.FileExtension ?? ".StormReplay";
-        foreach (HeroesProfileReplay replay in picked)
+        var sample = new SampleDownload(
+            heroesProfile,
+            scope.ServiceProvider.GetRequiredService<ILogger<SampleCommand>>(),
+            Console.Out
+        );
+        SampleOutcome outcome = await sample
+            .RunAsync(
+                candidates,
+                count,
+                folder,
+                replay =>
+                    string.Join(
+                        separator,
+                        replay.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        replay.GameType,
+                        replay.Rank ?? "Unknown",
+                        replay.Map,
+                        replay.Fingerprint,
+                        extension
+                    ),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        foreach (string line in outcome.Summary(folder))
         {
-            string name = string.Join(
-                separator,
-                replay.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                replay.GameType,
-                replay.Rank ?? "Unknown",
-                replay.Map,
-                replay.Fingerprint,
-                extension
-            );
-            string path = Path.Combine(folder, name);
-            if (File.Exists(path))
-            {
-                Console.WriteLine($"Have {name}.");
-                continue;
-            }
-
-            await using (FileStream file = File.Create(path + ".tmp"))
-            {
-                await heroesProfile
-                    .DownloadReplayAsync(replay.Id, file, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            File.Move(path + ".tmp", path, overwrite: true);
-            Console.WriteLine($"Downloaded {name} ({replay.GameVersion}).");
+            Console.WriteLine(line);
         }
 
-        return 0;
+        if (outcome.ExitCode != 0)
+        {
+            Console.Error.WriteLine(
+                $"None of the {candidates.Count} listed {gameType} replays of {map} could be downloaded."
+            );
+        }
+
+        return outcome.ExitCode;
     }
 
     /// <summary>The maps and modes in the newest listing pages, so a misspelt or rotated-out map is plain.</summary>

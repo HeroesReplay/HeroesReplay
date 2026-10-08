@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
@@ -14,6 +15,7 @@ using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Twitch;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Kiota.Abstractions;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Replays;
@@ -239,6 +241,78 @@ public class HeroesProfileProviderDownloadTests
 
             Assert.Equal(65580001, Assert.Single(service.Downloaded));
             Assert.Equal(new[] { 65580000, 65580002 }, service.Listed);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// #346: a download Heroes Profile answers with an HTTP status (after the pipeline's retries)
+    /// is a logged skip, not an outage, and the next call takes the replay after it.
+    /// </summary>
+    [Fact]
+    public async Task DownloadNextAsync_SkipsAReplayWhoseDownloadHeroesProfileRefuses()
+    {
+        string root = NewRoot();
+        var service = new ListedDownloads(
+            newest: 65590000,
+            listPage: minId => Builds((minId + 1, Current))
+        )
+        {
+            Refuse = id =>
+                id == 65580001
+                    ? new ApiException("Too Many Requests") { ResponseStatusCode = 429 }
+                    : null,
+        };
+        var logger = new ListLogger();
+
+        try
+        {
+            HeroesProfileProvider provider = Standard(root, service, logger);
+
+            Assert.False(await provider.DownloadNextAsync());
+
+            Assert.Empty(Directory.GetFiles(Path.Combine(root, "Standard")));
+            LogLine skip = Assert.Single(
+                logger.Lines,
+                line => line.Message.StartsWith("Skipped replay", StringComparison.Ordinal)
+            );
+            Assert.Equal(65580001, skip.Values["ReplayId"]);
+            Assert.Equal(429, skip.Values["Status"]);
+
+            Assert.True(await provider.DownloadNextAsync());
+
+            Assert.Equal(new[] { 65580001, 65580002 }, service.Downloaded);
+            string file = Assert.Single(Directory.GetFiles(Path.Combine(root, "Standard")));
+            Assert.StartsWith("65580002_", Path.GetFileName(file), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>No answer from Heroes Profile is still a failure for the role's outage count.</summary>
+    [Fact]
+    public async Task DownloadNextAsync_ANetworkFailureStillThrows()
+    {
+        string root = NewRoot();
+        var service = new ListedDownloads(
+            newest: 65590000,
+            listPage: minId => Builds((minId + 1, Current))
+        )
+        {
+            Refuse = _ => new HttpRequestException("No such host is known."),
+        };
+
+        try
+        {
+            HeroesProfileProvider provider = Standard(root, service);
+
+            await Assert.ThrowsAsync<HttpRequestException>(() => provider.DownloadNextAsync());
+            Assert.Empty(Directory.GetFiles(Path.Combine(root, "Standard")));
         }
         finally
         {
@@ -648,7 +722,11 @@ public class HeroesProfileProviderDownloadTests
             this.listPage = listPage;
         }
 
+        /// <summary>Every download asked for, including one <see cref="Refuse"/> fails.</summary>
         public List<int> Downloaded { get; } = new();
+
+        /// <summary>The error a replay's download throws, or null to write it.</summary>
+        public Func<int, Exception> Refuse { get; init; } = _ => null;
 
         public async Task DownloadReplayAsync(
             int replayId,
@@ -657,6 +735,11 @@ public class HeroesProfileProviderDownloadTests
         )
         {
             Downloaded.Add(replayId);
+            if (Refuse(replayId) is Exception refused)
+            {
+                throw refused;
+            }
+
             await destination.WriteAsync(new byte[] { 1 }, cancellationToken);
         }
 
