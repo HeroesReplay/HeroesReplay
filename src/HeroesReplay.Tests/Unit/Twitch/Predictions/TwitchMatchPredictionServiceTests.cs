@@ -13,6 +13,7 @@ using TwitchLib.Api.Core.Enums;
 using TwitchLib.Api.Core.Interfaces;
 using TwitchLib.Api.Helix;
 using TwitchLib.Api.Interfaces;
+using TwitchLib.Client.Interfaces;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Twitch.Predictions;
@@ -132,11 +133,146 @@ public class TwitchMatchPredictionServiceTests
         Assert.Equal(1, http.CreateCount);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ResolveReplay_ResolvedByTwitch_PostsTheVerdictToChatWhenTheBotIsOn(
+        bool chatBot
+    )
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "hr-pred-chat-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        PredictionLedger
+            .Load(PredictionLedger.PathFor(directory))
+            .Upsert(
+                new PredictionLedgerEntry
+                {
+                    SessionKey = "10:1",
+                    ReplayId = 10,
+                    Attempt = 1,
+                    PredictionId = PredictionId,
+                    BlueOutcomeId = BlueOutcomeId,
+                    RedOutcomeId = RedOutcomeId,
+                    BroadcasterId = BroadcasterId,
+                    Title = "Cursed Hollow: who wins?",
+                    Map = "Cursed Hollow",
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    State = PredictionLedgerState.Open,
+                }
+            );
+        var http = new RecordingHttpHandler { ResolvedBody = ResolvedBlue() };
+        var chat = ChatRecorder.Create();
+        var settings = new AppSettings
+        {
+            Location = new LocationSettings { DataDirectory = directory },
+            Twitch = new TwitchSettings
+            {
+                EnablePredictions = true,
+                EnableChatBot = chatBot,
+                DryRunMode = false,
+                Channel = "saltysadism",
+                PredictionWindow = TimeSpan.FromMinutes(2),
+            },
+            Capture = new CaptureSettings { Method = CaptureMethod.BitBlt },
+        };
+        var service = new TwitchMatchPredictionService(
+            NullLogger<TwitchMatchPredictionService>.Instance,
+            settings,
+            FakeTwitchApi.Create(http),
+            new PredictionReportWriter(NullLogger<PredictionReportWriter>.Instance, settings),
+            chat
+        );
+
+        string saved;
+        try
+        {
+            await service.ResolveReplayAsync(10, 0, CancellationToken.None);
+            saved = File.ReadAllText(
+                Path.Combine(directory, PredictionReportWriter.SavedReportFileName)
+            );
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, true);
+            }
+            catch (IOException) { }
+        }
+
+        PredictionReport report = System.Text.Json.JsonSerializer.Deserialize<PredictionReport>(
+            saved
+        );
+        List<(string Channel, string Message)> sent = ((ChatRecorder)(object)chat).Sent;
+        Assert.Contains("\"RESOLVED\"", http.EndPredictionBody, StringComparison.Ordinal);
+        Assert.Equal("Cursed Hollow", report.Map);
+        Assert.Equal(PredictionVerdictKind.Upset, PredictionVerdict.Kind(report));
+        Assert.False(string.IsNullOrWhiteSpace(report.Verdict));
+        if (chatBot)
+        {
+            (string channel, string message) = Assert.Single(sent);
+            Assert.Equal("saltysadism", channel);
+            Assert.Equal(report.Verdict, message);
+            Assert.True(message.Length <= PredictionVerdict.ChatLimit);
+        }
+        else
+        {
+            Assert.Empty(sent);
+        }
+    }
+
+    private static string ResolvedBlue() =>
+        "{\"data\":[{"
+        + "\"id\":\""
+        + PredictionId
+        + "\",\"broadcaster_id\":\""
+        + BroadcasterId
+        + "\",\"title\":\"Cursed Hollow: who wins?\",\"status\":\"RESOLVED\","
+        + "\"winning_outcome_id\":\""
+        + BlueOutcomeId
+        + "\",\"outcomes\":["
+        + "{\"id\":\""
+        + BlueOutcomeId
+        + "\",\"title\":\"Blue\",\"users\":2,\"channel_points\":1500,\"top_predictors\":["
+        + "{\"user_id\":\"1\",\"user_name\":\"Ana\",\"user_login\":\"ana\",\"channel_points_used\":1000,\"channel_points_won\":4000}]},"
+        + "{\"id\":\""
+        + RedOutcomeId
+        + "\",\"title\":\"Red\",\"users\":5,\"channel_points\":4500,\"top_predictors\":["
+        + "{\"user_id\":\"3\",\"user_name\":\"Cy\",\"user_login\":\"cy\",\"channel_points_used\":3000,\"channel_points_won\":0}]}"
+        + "]}]}";
+
+    private class ChatRecorder : DispatchProxy
+    {
+        public List<(string Channel, string Message)> Sent { get; } = new();
+
+        public static ITwitchClient Create() => DispatchProxy.Create<ITwitchClient, ChatRecorder>();
+
+        protected override object Invoke(MethodInfo targetMethod, object[] args)
+        {
+            if (
+                targetMethod.Name == nameof(ITwitchClient.SendMessage)
+                && args.Length == 3
+                && args[0] is string channel
+            )
+            {
+                Sent.Add((channel, (string)args[1]));
+            }
+
+            return targetMethod.ReturnType.IsValueType && targetMethod.ReturnType != typeof(void)
+                ? Activator.CreateInstance(targetMethod.ReturnType)
+                : null;
+        }
+    }
+
     private sealed class RecordingHttpHandler : IHttpCallHandler
     {
         public string EndPredictionBody { get; private set; }
         public int CreateCount { get; private set; }
         public string LockedTitle { get; set; } = "Cursed Hollow: who wins?";
+        public string ResolvedBody { get; set; }
 
         public Task<KeyValuePair<int, string>> GeneralRequestAsync(
             string url,
@@ -188,7 +324,9 @@ public class TwitchMatchPredictionServiceTests
             if (url.Contains("/predictions", StringComparison.Ordinal) && method == "PATCH")
             {
                 EndPredictionBody = payload;
-                return Task.FromResult(new KeyValuePair<int, string>(200, "{\"data\":[]}"));
+                return Task.FromResult(
+                    new KeyValuePair<int, string>(200, ResolvedBody ?? "{\"data\":[]}")
+                );
             }
 
             if (url.Contains("/predictions", StringComparison.Ordinal) && method == "POST")
