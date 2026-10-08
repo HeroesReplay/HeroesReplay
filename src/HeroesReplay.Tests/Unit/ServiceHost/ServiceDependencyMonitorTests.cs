@@ -183,6 +183,30 @@ public class ServiceDependencyMonitorTests
         Assert.All(recorded, result => Assert.Equal(ServiceDependencyStates.Ok, result.State));
     }
 
+    /// <summary>#358: the downloader pauses its replay list on what the probe finds.</summary>
+    [Fact]
+    public async Task Watch_HandsEachResultToTheObserver()
+    {
+        var probe = new FakeProbe(Rejected(), Ok());
+        var observed = new TaskCompletionSource<ServiceDependencyResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var monitor = new ServiceDependencyMonitor(
+            probe,
+            new ServiceHealthSettings(),
+            time: new InstantDelays(),
+            serviceRole: true
+        );
+
+        await monitor.FirstAsync(CancellationToken.None);
+        using (monitor.Watch(CancellationToken.None, result => observed.TrySetResult(result)))
+        {
+            ServiceDependencyResult first = await observed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.Equal(ServiceDependencyStates.Ok, first.State);
+        }
+    }
+
     [Fact]
     public void TheWaitIsShorterAfterAFailure_AndNeverUnderAMinute()
     {

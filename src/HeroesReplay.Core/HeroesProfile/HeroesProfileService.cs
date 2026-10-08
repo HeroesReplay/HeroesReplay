@@ -14,6 +14,7 @@ using HeroesReplay.HeroesProfile.Client;
 using HeroesReplay.HeroesProfile.Client.Replays;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Kiota.Abstractions;
 using Polly;
 
 namespace HeroesReplay.Core.HeroesProfile;
@@ -176,12 +177,23 @@ public class HeroesProfileService : IHeroesProfileService
             var playable = FilterListed(rows).Where(replay => replay.Id > minId).ToList();
             return new ReplayListing(playable, rows.Count > 0, highest, page?.NextAfter);
         }
+        // A refused key is not transient. The caller pauses the listing and logs it once per
+        // change (ReplayListBackoff, #358), so this is not an error line per call.
+        catch (ApiException e) when (e.ResponseStatusCode is 401 or 403)
+        {
+            logger.LogDebug(
+                "Heroes Profile refused the replay list after {MinReplayId} (HTTP {Status}).",
+                minId,
+                e.ResponseStatusCode
+            );
+            return ReplayListing.Rejected(e.ResponseStatusCode);
+        }
         catch (Exception e)
         {
             logger.LogError(e, "Could not get replays from HeroesProfile Replays.");
         }
 
-        return ReplayListing.Empty;
+        return ReplayListing.Unanswered;
     }
 
     public async Task<IReadOnlyList<HeroesProfileReplay>> ListAfterAsync(
