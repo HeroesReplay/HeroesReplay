@@ -1,6 +1,8 @@
 using System;
 using System.CommandLine;
+using System.CommandLine.Help;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.CLI;
 using HeroesReplay.CLI.Commands;
@@ -31,6 +33,60 @@ public class CliExitCodeTests
         Assert.Equal(0, code);
         Assert.False(string.IsNullOrWhiteSpace(output));
         Assert.DoesNotContain("administrator", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Every command path in the tree, from the root's subcommands down.</summary>
+    public static TheoryData<string> EveryCommand() => new(CommandPaths());
+
+    private static string[] CommandPaths()
+    {
+        var paths = new System.Collections.Generic.List<string>();
+        void Walk(Command command, string path)
+        {
+            foreach (Command sub in command.Subcommands)
+            {
+                string next = path.Length == 0 ? sub.Name : path + " " + sub.Name;
+                paths.Add(next);
+                Walk(sub, next);
+            }
+        }
+
+        Walk(new HeroesReplayCommand(), string.Empty);
+        return paths.ToArray();
+    }
+
+    [Fact]
+    public void EveryCommand_CoversTheWholeTree()
+    {
+        string[] paths = CommandPaths();
+
+        Assert.True(paths.Length >= 60, "Only " + paths.Length + " command paths were found.");
+        Assert.Equal(paths.Length, paths.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains("client firewall", paths);
+        Assert.Contains("services stop", paths);
+        Assert.Contains("obs validate", paths);
+    }
+
+    /// <summary>
+    /// Discovery never runs a command (#132, epic #130 F5): <c>--help</c> on every command,
+    /// including <c>client firewall</c>, the one step that needs an elevated shell, resolves to the
+    /// help action, prints help, and exits 0 without a word about administrator rights.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(EveryCommand))]
+    public async Task EveryCommandHelp_ExitsZeroWithoutRunningIt(string path)
+    {
+        string line = path + " --help";
+        ParseResult parse = new HeroesReplayCommand().Parse(line);
+        Assert.Empty(parse.Errors);
+        Assert.IsType<HelpAction>(parse.Action);
+
+        (int code, string output, string error) = await InvokeAsync(line);
+
+        Assert.Equal(0, code);
+        Assert.Contains(path.Split(' ')[^1], output, StringComparison.Ordinal);
+        Assert.DoesNotContain("administrator", error, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("elevated", error, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
