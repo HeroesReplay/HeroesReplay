@@ -2,13 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using Heroes.ReplayParser.MPQFiles;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.TwitchExtension;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using static Heroes.ReplayParser.Unit;
+using ReplayUnit = Heroes.ReplayParser.Unit;
 
 namespace HeroesReplay.Tests.Unit.TwitchExtension;
 
@@ -101,6 +106,36 @@ public class ExtensionPayloadBuilderTests
         ExtensionGame game = Build(replay);
 
         Assert.Equal(64, game.Map.Length);
+    }
+
+    [Fact]
+    public void CreatePayloads_Aram_SendsTheSpawnedHerosAttributeNotTheLobbyHeros()
+    {
+        // #348, replay 65745237: player 3 played Valla, and the lobby attribute id was Thrall's.
+        Player neko = Human("Neko", 100, 1, team: 0, "Valla", "Thra");
+        neko.HeroUnits = new List<ReplayUnit>
+        {
+            new() { Name = "HeroDemonHunter", PlayerControlledBy = neko },
+        };
+        Player unparsed = Human("Kim", 101, 1, team: 1, "Валла", "Zaga");
+        Replay replay = Replay(neko, unparsed);
+        replay.GameMode = GameMode.ARAM;
+        var data = new CatalogData(
+            new Hero("Valla", "HeroDemonHunter", "Valla", "Demo"),
+            new Hero("Thrall", "HeroThrall", "Thrall", "Thra"),
+            new Hero("Zagara", "HeroZagara", "Zagara", "Zaga")
+        );
+
+        ExtensionGame game = new ExtensionPayloadBuilder(
+            NullLogger<ExtensionPayloadBuilder>.Instance,
+            Settings(enabled: true),
+            data
+        ).CreatePayloads(replay);
+
+        Assert.Equal("Valla", game.Players[0].Hero);
+        Assert.Equal("Demo", game.Players[0].HeroAttribute);
+        Assert.Equal("Валла", game.Players[1].Hero);
+        Assert.Null(game.Players[1].HeroAttribute);
     }
 
     [Fact]
@@ -227,5 +262,29 @@ public class ExtensionPayloadBuilderTests
     private static TrackerEventStructure Blob(string text)
     {
         return new TrackerEventStructure { blob = Encoding.UTF8.GetBytes(text) };
+    }
+
+    private sealed class CatalogData : IGameData
+    {
+        public CatalogData(params Hero[] heroes)
+        {
+            Heroes = heroes;
+        }
+
+        public IReadOnlyDictionary<string, UnitGroup> UnitGroups => null;
+
+        public IReadOnlyList<Hero> Heroes { get; }
+
+        public IReadOnlyCollection<string> CoreUnits => null;
+
+        public IReadOnlyCollection<string> BossUnits => null;
+
+        public IReadOnlyCollection<string> VehicleUnits => null;
+
+        public IReadOnlyList<Map> Maps => null;
+
+        public UnitGroup GetUnitGroup(string unitName) => default;
+
+        public Task LoadDataAsync() => Task.CompletedTask;
     }
 }

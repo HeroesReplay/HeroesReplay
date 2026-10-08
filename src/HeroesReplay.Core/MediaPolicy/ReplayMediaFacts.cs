@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Clips;
+using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.YouTube.Metadata;
 
 namespace HeroesReplay.Core.MediaPolicy;
 
@@ -117,6 +117,11 @@ public static class ReplayMediaFacts
         return replay == null ? null : replay.GameMode.ToString();
     }
 
+    /// <summary>
+    /// Each player with the catalog's English name of the hero played (<see cref="PlayedHero"/>).
+    /// The replay's character name is in the uploader's game language, and the lobby hero is not the
+    /// hero played in ARAM (#348).
+    /// </summary>
     private static IReadOnlyList<ReplayMediaPlayer> Roster(
         Replay replay,
         IReadOnlyList<Hero> heroes
@@ -139,7 +144,7 @@ public static class ReplayMediaFacts
                 new ReplayMediaPlayer
                 {
                     Team = player.Team,
-                    Hero = Hero(player, heroes),
+                    Hero = PlayedHero.Name(heroes, replay, player),
                     Name = FirstText(player.Name),
                     BattleTag = player.BattleTag,
                     IsAi = player.PlayerType == PlayerType.Computer,
@@ -172,38 +177,6 @@ public static class ReplayMediaFacts
         }
 
         return talents;
-    }
-
-    /// <summary>
-    /// The catalog's English name, matched by attribute id first. The replay's character name is in
-    /// the uploader's game language, so a French or Korean replay would otherwise miss draft notes,
-    /// composition labels, and English titles.
-    /// </summary>
-    private static string Hero(Player player, IReadOnlyList<Hero> heroes)
-    {
-        if (heroes != null && heroes.Count > 0)
-        {
-            Hero match =
-                HeroDraft.Find(heroes, player.HeroAttributeId)
-                ?? HeroDraft.Find(heroes, player.HeroId)
-                ?? HeroDraft.Find(heroes, player.Character);
-            if (!string.IsNullOrWhiteSpace(match?.Name))
-            {
-                return match.Name.Trim();
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(player.Character))
-        {
-            return player.Character.Trim();
-        }
-
-        if (!string.IsNullOrWhiteSpace(player.HeroAttributeId))
-        {
-            return player.HeroAttributeId.Trim();
-        }
-
-        return null;
     }
 
     private static string FirstText(params string[] values)
