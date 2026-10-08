@@ -63,7 +63,7 @@ public static class CommandReference
             "spectate file",
             "Not elevated. Heroes of the Storm installed; a current-patch replay needs Battle.net signed in. OBS is optional. On ASA-SERVER only to prove a change (AGENTS.md phases). "
                 + LiveAsk,
-            "Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\\Contexts\\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. Starts the Aspire dashboard when OTLP :4317 is down.",
+            "Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\\Contexts\\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.",
             "0 after the queue has played. 1 on a parse error (`--player` not a BattleTag, a `--file` that does not exist) or when the engine stops on an unexpected error."
         ),
         new(
@@ -317,7 +317,7 @@ public static class CommandReference
         new(
             "services stop",
             LiveAsk,
-            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when its duration matches the claim (#318). Never stops an OBS stream.",
+            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.",
             "0 when every role and the supervisor exited, the game closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked."
         ),
         new(
@@ -415,19 +415,20 @@ public static class CommandReference
             "obs plan",
             "None. Reads files only (no websocket), so it is safe while OBS runs.",
             "Nothing. Compares the live collection with the install's `obs/Default.json` and the template it was last written from.",
-            "0 when nothing conflicts, 1 on a conflict or when the collection or the template cannot be read.",
-            CodesIn(typeof(ObsPlanCodes))
+            "0 when nothing conflicts, 1 on a conflict or when the settings, the collection, or the template cannot be read.",
+            [.. CodesIn(typeof(ObsPlanCodes)), ObsLiveRead.SettingsUnreadable]
         ),
         new(
             "obs backup",
             "None. Reads the live collection only, so it is safe while OBS runs.",
             "Copies the live collection into `%LOCALAPPDATA%\\HeroesReplay\\obs\\backups` (the newest 10 are kept), unless `--list`.",
-            "0 when backed up or listed, 1 when there is no collection or the copy failed.",
+            "0 when backed up or listed, 1 when the settings cannot be read, there is no collection, or the copy failed.",
             [
                 ObsBackupCodes.BackedUp,
                 ObsBackupCodes.Listed,
                 ObsBackupCodes.CollectionMissing,
                 ObsBackupCodes.Failed,
+                ObsLiveRead.SettingsUnreadable,
             ]
         ),
         new(
@@ -443,6 +444,7 @@ public static class CommandReference
                 ObsBackupCodes.BackupOther,
                 ObsBackupCodes.BackupInvalid,
                 ObsBackupCodes.Failed,
+                ObsLiveRead.SettingsUnreadable,
             ]
         ),
         new(

@@ -687,8 +687,7 @@ public class ServicesCommand : Command
                         CloseGame = StopSpectatedGame,
                         ConfirmStream = ObsServiceStop.DelegateToSpectator,
                         ReadStream = ServiceStreamProbe.Read,
-                        StopSpectateRecording = () =>
-                            ServiceRecordingProbe.StopLeftRecording(ProcessNameOrNull),
+                        StopSpectateRecording = ServiceRecordingProbe.StopLeftRecording,
                         StopSupervisor = StopSupervisor,
                     }
                 );

@@ -10,7 +10,7 @@ Spectate one .StormReplay file, or each file in a directory, then exit.
 
 - **Options:** `--file` (`-f`), `--player`
 - **Before:** Not elevated. Heroes of the Storm installed; a current-patch replay needs Battle.net signed in. OBS is optional. On ASA-SERVER only to prove a change (AGENTS.md phases). On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
-- **Changes:** Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\Contexts\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. Starts the Aspire dashboard when OTLP :4317 is down.
+- **Changes:** Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\Contexts\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.
 - **Exit:** 0 after the queue has played. 1 on a parse error (`--player` not a BattleTag, a `--file` that does not exist) or when the engine stops on an unexpected error.
 
 ## `spectate heroesprofile`
@@ -368,7 +368,7 @@ Make sure the requested roles run from this install: start only the ones that ar
 Ask the recorded processes to shut down, kill any still running after 20 seconds, close Heroes of the Storm, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game closed, OBS is not streaming, and no recording spectate started is still running.
 
 - **Before:** On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
-- **Changes:** Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when its duration matches the claim (#318). Never stops an OBS stream.
+- **Changes:** Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.
 - **Exit:** 0 when every role and the supervisor exited, the game closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked.
 
 ## `services status`
@@ -471,8 +471,8 @@ Show what an update would change in the live OBS scene collection, without chang
 - **Options:** `--install`, `--previous`, `--environment`, `--output` (`-o`)
 - **Before:** None. Reads files only (no websocket), so it is safe while OBS runs.
 - **Changes:** Nothing. Compares the live collection with the install's `obs/Default.json` and the template it was last written from.
-- **Exit:** 0 when nothing conflicts, 1 on a conflict or when the collection or the template cannot be read.
-- **Codes:** `obs.plan_in_sync`, `obs.plan_changes`, `obs.plan_conflict`, `obs.plan_base_unknown`, `obs.collection_custom`, `obs.collection_missing`, `obs.collection_unreadable`, `obs.template_missing`
+- **Exit:** 0 when nothing conflicts, 1 on a conflict or when the settings, the collection, or the template cannot be read.
+- **Codes:** `obs.plan_in_sync`, `obs.plan_changes`, `obs.plan_conflict`, `obs.plan_base_unknown`, `obs.collection_custom`, `obs.collection_missing`, `obs.collection_unreadable`, `obs.template_missing`, `obs.settings_unreadable`
 
 ## `obs backup`
 
@@ -481,8 +481,8 @@ Copy the live OBS scene collection (OBS:SceneCollectionName) into %LOCALAPPDATA%
 - **Options:** `--list`, `--output` (`-o`)
 - **Before:** None. Reads the live collection only, so it is safe while OBS runs.
 - **Changes:** Copies the live collection into `%LOCALAPPDATA%\HeroesReplay\obs\backups` (the newest 10 are kept), unless `--list`.
-- **Exit:** 0 when backed up or listed, 1 when there is no collection or the copy failed.
-- **Codes:** `obs.backed_up`, `obs.backups_listed`, `obs.collection_missing`, `obs.restore_failed`
+- **Exit:** 0 when backed up or listed, 1 when the settings cannot be read, there is no collection, or the copy failed.
+- **Codes:** `obs.backed_up`, `obs.backups_listed`, `obs.collection_missing`, `obs.restore_failed`, `obs.settings_unreadable`
 
 ## `obs restore`
 
@@ -492,7 +492,7 @@ Write a backup of the live OBS scene collection back over it, byte for byte, whi
 - **Before:** OBS closed (refused while it runs). A backup of this collection. On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
 - **Changes:** Backs up the current collection, then writes the backup over it atomically and clears a waiting release rollback. `managed-collections.json` is not changed.
 - **Exit:** 0 when restored or already the same, 1 when nothing was restored.
-- **Codes:** `obs.restored`, `obs.already_restored`, `obs.restore_obs_running`, `obs.backup_missing`, `obs.backup_other_file`, `obs.backup_invalid`, `obs.restore_failed`
+- **Codes:** `obs.restored`, `obs.already_restored`, `obs.restore_obs_running`, `obs.backup_missing`, `obs.backup_other_file`, `obs.backup_invalid`, `obs.restore_failed`, `obs.settings_unreadable`
 
 ## `update check`
 

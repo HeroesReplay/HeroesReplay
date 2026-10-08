@@ -3,8 +3,10 @@ using System.CommandLine;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Commands.Obs;
@@ -36,14 +38,9 @@ public static class ObsPlanCommand
             Description =
                 "appsettings overlay to read (HEROES_REPLAY_ENV). Default: the HEROES_REPLAY_ENV variable.",
         };
-        var format = new Option<string>("--output")
-        {
-            Description =
-                "text (default) or json. JSON is a stable envelope: schemaVersion, ok, code, update, summary, differences.",
-            DefaultValueFactory = _ => "text",
-        };
-        format.AcceptOnlyFromAmong("text", "json");
-        format.Aliases.Add("-o");
+        Option<string> format = CliOutput.CreateOption(
+            "JSON: schemaVersion, ok, code, message, collection, template, base, update, summary, differences."
+        );
         command.Options.Add(install);
         command.Options.Add(previous);
         command.Options.Add(environment);
@@ -57,12 +54,9 @@ public static class ObsPlanCommand
                         parseResult.GetValue(install),
                         parseResult.GetValue(previous),
                         parseResult.GetValue(environment),
-                        string.Equals(
-                            parseResult.GetValue(format),
-                            "json",
-                            StringComparison.OrdinalIgnoreCase
-                        ),
-                        Console.Out
+                        CliOutput.Format(parseResult, format),
+                        CliOutput.Out(parseResult),
+                        CliOutput.Error(parseResult)
                     )
                 );
             }
@@ -74,9 +68,34 @@ public static class ObsPlanCommand
         string install,
         string previous,
         string environment,
-        bool json,
-        TextWriter output
+        CliOutputFormat format,
+        TextWriter output,
+        TextWriter error
     )
+    {
+        ObsCollectionPlanResult plan = Plan(install, previous, environment);
+        if (format == CliOutputFormat.Json)
+        {
+            return CliOutput.WriteJson(plan, output);
+        }
+
+        if (plan.Code == ObsLiveRead.SettingsUnreadable)
+        {
+            error.WriteLine(plan.Message);
+        }
+        else
+        {
+            WriteText(plan, output);
+        }
+
+        return CliOutput.ExitCode(plan);
+    }
+
+    /// <summary>
+    /// The plan for <paramref name="install"/>, or <see cref="ObsLiveRead.SettingsUnreadable"/>
+    /// when its settings cannot be read.
+    /// </summary>
+    private static ObsCollectionPlanResult Plan(string install, string previous, string environment)
     {
         string directory = string.IsNullOrWhiteSpace(install)
             ? AppContext.BaseDirectory
@@ -94,13 +113,17 @@ public static class ObsPlanCommand
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"The settings in {directory} could not be read. {e.Message}");
-            return 1;
+            return new ObsCollectionPlanResult
+            {
+                Ok = false,
+                Code = ObsLiveRead.SettingsUnreadable,
+                Message = $"The settings in {directory} could not be read. {e.Message}",
+            };
         }
 
         string template = ObsCollectionPaths.FindCollection(directory);
         ObsManagedFiles managed = ObsManagedFiles.ForThisUser();
-        ObsCollectionPlanResult plan = ObsCollectionPlan.Build(
+        return ObsCollectionPlan.Build(
             new ObsCollectionPlanRequest
             {
                 TemplatePath = template,
@@ -124,16 +147,6 @@ public static class ObsPlanCommand
                 Runtime = ObsRuntimeValues.From(obs),
             }
         );
-        if (json)
-        {
-            output.WriteLine(plan.ToJson());
-        }
-        else
-        {
-            WriteText(plan, output);
-        }
-
-        return plan.Ok ? 0 : 1;
     }
 
     public static void WriteText(ObsCollectionPlanResult plan, TextWriter output)
