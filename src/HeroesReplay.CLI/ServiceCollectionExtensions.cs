@@ -386,8 +386,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IRedemptionStatusClient, HelixRedemptionStatus>()
             .AddSingleton<IRedemptionCanceller, RedemptionCanceller>()
             .AddSingleton<RedemptionFulfiller>()
-            .AddSingleton<PredictionReportWriter>()
-            .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>()
+            .AddMatchPredictionServices()
             .AddSingleton<StatusPredictionWatcher>()
             .AddSingleton<ITwitchRewardsManager, TwitchRewardsManager>()
             .AddSingleton<IGameData, GameData>()
@@ -422,6 +421,18 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IHeroesProfileResume>(_ => new HeroesProfileResume(
                 HeroesProfileResume.SharedPath
             ));
+    }
+
+    /// <summary>
+    /// The Helix prediction service and what it needs. <c>twitch connect</c> and
+    /// <c>twitch predictions test</c> both register it here, so the test command cannot miss a
+    /// dependency the live host has (#297).
+    /// </summary>
+    public static IServiceCollection AddMatchPredictionServices(this IServiceCollection services)
+    {
+        return services
+            .AddSingleton<PredictionReportWriter>()
+            .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>();
     }
 
     public static IServiceCollection AddSpectateServices(

@@ -33,13 +33,7 @@ public class DownloadCommand : Command
     protected async Task CommandAsync(CancellationToken cancellationToken)
     {
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
-        using ServiceProvider provider = new ServiceCollection()
-            .AddTwitchServices(stop.Token, "heroesreplay-download")
-            .AddSingleton<ReplayLoader>()
-            .AddSingleton<IReplayLoader>(sp => sp.GetRequiredService<ReplayLoader>())
-            .AddSingleton<ReplayHelper>()
-            .AddSingleton<IReplayHelper>(sp => sp.GetRequiredService<ReplayHelper>())
-            .AddSingleton<HeroesProfileProvider>()
+        using ServiceProvider provider = AddServices(new ServiceCollection(), stop.Token)
             .BuildHeroesReplayProvider();
         using Activity ready = HeroesReplayTelemetry.StartSpan("heroesreplay.service.ready");
         using IServiceScope scope = provider.CreateScope();
@@ -120,4 +114,17 @@ public class DownloadCommand : Command
             }
         }
     }
+
+    /// <summary>The services this command resolves: the Twitch services and the downloader.</summary>
+    public static IServiceCollection AddServices(
+        IServiceCollection services,
+        CancellationToken cancellationToken
+    ) =>
+        services
+            .AddTwitchServices(cancellationToken, "heroesreplay-download")
+            .AddSingleton<ReplayLoader>()
+            .AddSingleton<IReplayLoader>(sp => sp.GetRequiredService<ReplayLoader>())
+            .AddSingleton<ReplayHelper>()
+            .AddSingleton<IReplayHelper>(sp => sp.GetRequiredService<ReplayHelper>())
+            .AddSingleton<HeroesProfileProvider>();
 }
