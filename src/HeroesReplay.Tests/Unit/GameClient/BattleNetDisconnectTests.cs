@@ -51,6 +51,6 @@ public class BattleNetDisconnectTests
         Assert.False(ClientScreenText.IsLoginForm(partial));
         Assert.True(BattleNetDisconnect.IsShown(partial, loginInMemory: null));
         Assert.False(BattleNetDisconnect.IsShown(partial, loginInMemory: true));
-        Assert.True(LoginFormCue.Sees(loginInMemory: true, partial));
+        Assert.True(LoginFormCue.Sees(loginInMemory: true));
     }
 }
