@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using HeroesReplay.CLI.Commands.Services;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Status;
 using Xunit;
@@ -570,7 +571,7 @@ public class ServiceHealthClassifierTests
                 pid => null,
                 new ServiceStatusQuery
                 {
-                    Output = ServiceStatusOutput.Json,
+                    Output = CliOutputFormat.Json,
                     Time = new FixedClock(Now),
                     ReadHeartbeat = record =>
                         Beat(TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5), "download", "n12"),

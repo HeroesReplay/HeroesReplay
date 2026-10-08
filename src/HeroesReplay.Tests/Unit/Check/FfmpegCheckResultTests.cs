@@ -17,27 +17,35 @@ public class FfmpegCheckResultTests
         Assert.Equal("ffmpeg", result.Name);
         Assert.True(result.Ok);
         Assert.Equal("ffmpeg: path: ffmpeg version 9.0.2", result.Detail);
+        Assert.Equal(CheckCodes.FfmpegOk, result.Code);
     }
 
     [Fact]
     public void AnotherVersion_PassesAsAWarning()
     {
         CheckCommand.CheckResult result = CheckCommand.ToCheckResult(
-            new FfmpegCheckReport(true, true, "ffmpeg: Not the pinned 9.0.2")
+            new FfmpegCheckReport(true, true, "ffmpeg: Not the pinned 9.0.2", FfmpegCheck.NotPinned)
         );
 
         Assert.True(result.Ok);
         Assert.StartsWith(CheckCommand.WarningPrefix, result.Detail);
+        Assert.Equal("check.ffmpeg.not_pinned", result.Code);
+        Assert.Equal(CheckEntry.Warn, CheckEntry.From(result).Status);
     }
 
-    [Fact]
-    public void AMissingTool_Fails()
+    [Theory]
+    [InlineData(FfmpegCheck.Missing, "check.ffmpeg.missing")]
+    [InlineData(FfmpegCheck.NotRunnable, "check.ffmpeg.not_runnable")]
+    [InlineData(FfmpegCheck.NoLibx264, "check.ffmpeg.libx264_missing")]
+    public void AnUnusableTool_Fails(string reason, string code)
     {
         CheckCommand.CheckResult result = CheckCommand.ToCheckResult(
-            new FfmpegCheckReport(false, false, "ffprobe: not found")
+            new FfmpegCheckReport(false, false, "ffprobe: not found", reason)
         );
 
         Assert.False(result.Ok);
         Assert.Equal("ffprobe: not found", result.Detail);
+        Assert.Equal(code, result.Code);
+        Assert.Contains(code, CheckCodes.All);
     }
 }

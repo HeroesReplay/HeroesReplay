@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Status;
 
 namespace HeroesReplay.Core.ServiceHost;
@@ -203,17 +203,9 @@ public sealed record ServiceSpectatorSummary
 /// The <c>services status</c> result envelope. <see cref="Ok"/> is false when any role is
 /// failed, stale, or degraded. <see cref="Code"/> is the worst role's code.
 /// </summary>
-public sealed record ServiceStatusReport
+public sealed record ServiceStatusReport : ICliResult
 {
-    public const int CurrentSchemaVersion = 1;
-
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
+    public const int CurrentSchemaVersion = CliJson.SchemaVersion;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
     public bool Ok { get; init; }
@@ -236,8 +228,8 @@ public sealed record ServiceStatusReport
     [JsonIgnore]
     public int ExitCode => Ok ? 0 : 1;
 
-    public string ToJson() => JsonSerializer.Serialize(this, Json);
+    public string ToJson() => CliJson.Serialize(this);
 
     public static ServiceStatusReport FromJson(string json) =>
-        JsonSerializer.Deserialize<ServiceStatusReport>(json, Json);
+        JsonSerializer.Deserialize<ServiceStatusReport>(json, CliJson.Options);
 }

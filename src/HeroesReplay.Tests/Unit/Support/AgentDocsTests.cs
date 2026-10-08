@@ -6,7 +6,13 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using HeroesReplay.CLI.Commands;
+using HeroesReplay.CLI.Commands.Check;
+using HeroesReplay.CLI.Commands.Client;
+using HeroesReplay.CLI.Commands.Deps;
+using HeroesReplay.CLI.Commands.Obs;
 using HeroesReplay.Core.Dependencies;
+using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Inspection;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Support;
@@ -35,6 +41,37 @@ public class AgentDocsTests
             missing.Count == 0,
             "The heroes-replay-cli skill does not name: " + string.Join(", ", missing)
         );
+    }
+
+    /// <summary>The JSON output contract (#311): every stable code a converted command prints.</summary>
+    [Fact]
+    public void CliSkill_NamesEveryJsonOutputCode()
+    {
+        string skill = File.ReadAllText(Path.Combine(Skills, "heroes-replay-cli", "SKILL.md"));
+        string[] codes =
+        [
+            .. CheckCodes.All,
+            ObsCommand.IngestReady,
+            ObsCommand.StreamingDisabled,
+            ObsStreamArm.NotArmedReason,
+            ObsLiveRead.SettingsUnreadable,
+            ClientCommand.PresetOk,
+            ClientCommand.PresetMismatch,
+            ClientCommand.StatusError,
+            DepsCommand.Installed,
+            DepsCommand.AlreadyInstalled,
+            DepsCommand.Failed,
+        ];
+
+        List<string> missing = codes
+            .Where(code => !skill.Contains("`" + code + "`", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(
+            missing.Count == 0,
+            "The heroes-replay-cli skill does not document: " + string.Join(", ", missing)
+        );
+        Assert.Contains("## JSON output contract", skill, StringComparison.Ordinal);
     }
 
     [Fact]

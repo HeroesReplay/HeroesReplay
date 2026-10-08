@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using HeroesReplay.CLI.OpenTelemetry;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.ServiceHost.Logs;
@@ -556,7 +557,7 @@ public static class ServiceSupervisor
         );
         report = report with { Machine = ReadMachine(query.ReadMachine) };
         TextWriter output = query.Out ?? Console.Out;
-        if (query.Output == ServiceStatusOutput.Json)
+        if (query.Output == CliOutputFormat.Json)
         {
             output.WriteLine(report.ToJson());
         }

@@ -137,11 +137,15 @@ public static class ServiceCollectionExtensions
         IConfigurationRoot configuration = GetConfiguration();
         AppSettings settings = BindSettings(configuration);
 
+        // Logs go to stderr: stdout carries the result (check --output json) or, under
+        // heroesreplay mcp, the JSON-RPC stream the check_* tools answer on.
         return services
             .AddHeroesReplayOpenTelemetry(configuration, "heroesreplay-check")
             .AddMemoryCache()
             .AddLogging(builder =>
-                builder.AddConfiguration(configuration.GetSection("Logging")).AddConsole()
+                builder
+                    .AddConfiguration(configuration.GetSection("Logging"))
+                    .AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace)
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)

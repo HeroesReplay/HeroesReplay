@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HeroesReplay.Core.Shared;
 using Newtonsoft.Json.Linq;
 
 namespace HeroesReplay.Core.Obs.Inspection;
@@ -10,9 +11,9 @@ namespace HeroesReplay.Core.Obs.Inspection;
 /// <see cref="IObsReadSession"/>. <see cref="Ok"/> is false only when OBS could not be read
 /// at all; a request that failed is named in <see cref="Unread"/>.
 /// </summary>
-public sealed record ObsInspection
+public sealed record ObsInspection : ICliResult
 {
-    public int SchemaVersion => 1;
+    public int SchemaVersion => CliJson.SchemaVersion;
     public bool Ok { get; init; }
 
     /// <summary>Stable failure code, such as <c>obs.unreachable</c>. Null when <see cref="Ok"/>.</summary>
