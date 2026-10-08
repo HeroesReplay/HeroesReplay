@@ -134,7 +134,7 @@ The map loading screen is memory first too (`LoadingScreenMemory` in HeroesClien
 
 ## Environments
 
-The environment variable and its appsettings overlay decide behavior. Code never compares the machine name: Twitch ingest follows `OBS:StreamingEnabled`, and the YouTube title marker, privacy, and publication budgets follow `YouTube:TitlePrefix` and `YouTube:PrivacyStatus`. The hostnames below only tell an agent which box it is on.
+The environment variable and its appsettings overlay decide behavior. `heroesreplay config effective [--section name]` prints each effective key and the layer that set it (base, secrets, overlay, `HEROES_REPLAY_` variables), with every secret redacted. Code never compares the machine name: Twitch ingest follows `OBS:StreamingEnabled`, and the YouTube title marker, privacy, and publication budgets follow `YouTube:TitlePrefix` and `YouTube:PrivacyStatus`. The hostnames below only tell an agent which box it is on.
 
 Ingest also needs a machine-local arm, `%LOCALAPPDATA%\HeroesReplay\stream-armed` (`heroesreplay obs arm` / `obs disarm` / `obs status`). It is not in the repo or the release zip, and no setting can move it, so the overlay alone cannot start production ingest. The live box is armed. ASA-SERVER may be armed for a stream proof: its OBS streams to a developer Twitch account, not `saltysadism`, and `appsettings.dev.json` leaves `OBS:StreamingEnabled` false, so it streams only in a run that sets `HEROES_REPLAY_OBS__StreamingEnabled=true`. Recording does not need the arm.
 

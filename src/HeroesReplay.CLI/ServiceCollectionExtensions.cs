@@ -649,18 +649,25 @@ public static class ServiceCollectionExtensions
         });
     }
 
-    private static IConfigurationRoot GetConfiguration()
+    private static IConfigurationRoot GetConfiguration() =>
+        BuildConfiguration(
+            DefaultBasePath(),
+            Environment.GetEnvironmentVariable(EnvironmentVariable)
+        );
+
+    /// <summary>The variable that names the appsettings overlay (<c>dev</c>, <c>prod</c>).</summary>
+    public const string EnvironmentVariable = "HEROES_REPLAY_ENV";
+
+    /// <summary>
+    /// Where the commands read <c>appsettings.json</c>: the current directory when it has one,
+    /// otherwise this exe's folder.
+    /// </summary>
+    public static string DefaultBasePath()
     {
         string basePath = Directory.GetCurrentDirectory();
-        if (!File.Exists(Path.Combine(basePath, "appsettings.json")))
-        {
-            basePath = AppContext.BaseDirectory;
-        }
-
-        return BuildConfiguration(
-            basePath,
-            Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV")
-        );
+        return File.Exists(Path.Combine(basePath, "appsettings.json"))
+            ? basePath
+            : AppContext.BaseDirectory;
     }
 
     /// <summary>

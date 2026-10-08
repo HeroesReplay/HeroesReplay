@@ -2,7 +2,7 @@
 name: heroes-replay-cli
 description: >
   heroesreplay CLI: spectate, services, heroesprofile, calculators, check, client, otel, twitch,
-  youtube, obs, update, deps, mcp, secrets, op://.
+  youtube, obs, update, deps, config, mcp, secrets, op://.
   Use when adding or changing commands, validating integrations, running the exe,
   or /heroes-replay-cli.
 ---
@@ -41,6 +41,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `calculators compositions --directory <path> [--output report.md\|report.csv]` | Read every `.StormReplay` in the folder (top level, one file at a time, no events) against the heroes-data2 catalog under `Location:DataDirectory`. Prints one line per replay (each team's draft note and composition labels, and the title slot), then each composition label and draft note per team and per game, with `Named` when the game share is under `YouTube:Titles:Compositions:MaxFrequency`. `.md` adds a row per replay with both rosters; `.csv` writes the frequency table. Read-only. Use it to retune `YouTube:Titles:Compositions` and its `Frequencies` on a fresh corpus (issue #140). |
 | `check` | Runs config, heroesprofile, obs, twitch, client, ffmpeg, battlenet, and connectivity; continues on failure; exit 1 if any fail (a `[WARN]` passes) |
 | `check config` | Bind settings; print which secrets are present (never print values) |
+| `config effective [--section name] [--environment env] [--install dir] [--output text\|json] [--redact]` | Every effective key with its value, the layer that won, and the lower sources it overrides, plus the overlay order and the environment name (`--environment`, else `HEROES_REPLAY_ENV`). Layers, lowest first: `base` (`appsettings.json`), `secrets` (`appsettings.secrets.json`), `overlay` (`appsettings.{env}.json`), `environment` (`HEROES_REPLAY_` variables). Built exactly as the roles build it (`BuildConfiguration`); `--install` defaults to the current directory when it has `appsettings.json`, else the exe's folder. Secrets are always redacted, and `--redact` changes nothing (it is accepted for the #130 spelling): every key `appsettings.secrets.json` sets (even when a later layer overrides it) and every key whose last named segment contains Key, Token, Secret, Password, Credential, or ConnectionString shows `(set)` or `(empty)`; any `op://` value shows `(op:// reference)` and is never resolved; other values still pass the role-log token rules. `set HEROES_REPLAY_…` lines in `start-live.cmd` apply only to what that launcher starts, so run it in the same environment as the roles. JSON: `schemaVersion`, `ok`, `code` (null, `config.base_missing`, `config.unreadable`, `config.section_not_found`), `environment`, `environmentSource`, `basePath`, `layers` (`order`, `layer`, `source`, `present`, `keys`), `redactedCount`, `settings` (`key`, `value`, `redacted`, `layer`, `source`, `overrides`). Exit 1 on any code. |
 | `check heroesprofile` | Kiota `GET /replays` max_replay_id with Bearer key |
 | `check obs` | obs-websocket 5 Identify + `GetVersion`, verify scene files, and fail when the active profile or scene collection is not `OBS:ProfileName` / `OBS:SceneCollectionName` |
 | `check twitch` | Helix `GetUsers` for configured channel, `GetPredictions` when predictions are enabled, and the token scopes. Fails when predictions are enabled and `GetPredictions` fails |
@@ -93,14 +94,14 @@ Skill `op-service-account`. Clone to `C:\heroesreplay\HeroesReplay`. `pwsh -File
 
 ## Config load
 
-`GetConfiguration` uses the current directory if `appsettings.json` is there, otherwise `AppContext.BaseDirectory` (exe output). `check` must work from the repo root.
+`GetConfiguration` uses the current directory if `appsettings.json` is there, otherwise `AppContext.BaseDirectory` (exe output). `check` must work from the repo root. To see which layer set a key (for example `OBS:StreamingEnabled`, `Release:Enabled`, or `TwitchExtension:Enabled`), run `heroesreplay config effective --section <name>`; it never prints a secret value.
 
 ## Tests vs CLI
 
 | Filter | What |
 | --- | --- |
 | default / `Category=Unit` | Everything under `src/HeroesReplay.Tests/Unit` (one folder per Core slice) |
-| `Category=Smoke` | Parse `--help`; asserts root, `check` (with `ffmpeg`), `client`, `otel`, `services`, `heroesprofile`, `twitch`, `calculators`, `youtube`, `obs`, `update`, and `deps` subcommands exist. Exit codes: `spectate --help` and `spectate file --help` exit 0 without elevation; an invalid `--player` or a missing `--file` exits 1. `calculators compositions` exits 1 for a missing folder or an `--output` that is not `.md` or `.csv`, and reports the bundled replay against a test catalog |
+| `Category=Smoke` | Parse `--help`; asserts root, `check` (with `ffmpeg`), `client`, `otel`, `services`, `heroesprofile`, `twitch`, `calculators`, `youtube`, `obs`, `update`, `deps`, and `config` subcommands exist; `config effective --help` exits 0. Exit codes: `spectate --help` and `spectate file --help` exit 0 without elevation; an invalid `--player` or a missing `--file` exits 1. `calculators compositions` exits 1 for a missing folder or an `--output` that is not `.md` or `.csv`, and reports the bundled replay against a test catalog |
 | `Category=Integration` | Live Heroes Profile v1 list/download (needs `op` or env key), YouTube dry-run upload, medium-integrity process launch |
 
 After changing a check target, run that CLI command, not only unit tests.

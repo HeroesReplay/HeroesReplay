@@ -25,6 +25,37 @@ public class CliHelpTests
         Assert.Contains(root.Subcommands, c => c.Name == "update");
         Assert.Contains(root.Subcommands, c => c.Name == "obs");
         Assert.Contains(root.Subcommands, c => c.Name == "deps");
+        Assert.Contains(root.Subcommands, c => c.Name == "config");
+    }
+
+    [Fact]
+    public async Task ConfigEffectiveHelp_ExitsZero_AndParsesItsOptions()
+    {
+        Assert.Equal(
+            0,
+            await new CommandLineService().InvokeAsync(new[] { "config", "effective", "--help" })
+        );
+        var root = new HeroesReplayCommand();
+        foreach (
+            string line in new[]
+            {
+                "config --help",
+                "config effective",
+                "config effective --redact",
+                "config effective --section OBS -o json",
+                "config effective --environment prod --install C:\\heroesreplay\\app --output text",
+            }
+        )
+        {
+            Assert.Empty(root.Parse(line).Errors);
+        }
+
+        Assert.NotEmpty(root.Parse("config effective --output yaml").Errors);
+        Command effective = root
+            .Subcommands.Single(c => c.Name == "config")
+            .Subcommands.Single(c => c.Name == "effective");
+        Assert.Contains("(set)", effective.Description);
+        Assert.Contains("op://", effective.Description);
     }
 
     [Fact]
