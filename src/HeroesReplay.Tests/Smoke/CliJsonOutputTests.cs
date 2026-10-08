@@ -34,6 +34,7 @@ public class CliJsonOutputTests
             "obs status",
             "obs inspect",
             "obs validate",
+            "obs bundle",
             "client status",
             "deps install",
             "services status"

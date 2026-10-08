@@ -12,7 +12,7 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 
 | State | Owner | What HeroesReplay does |
 | --- | --- | --- |
-| Packaged assets (`obs/` in the release: images, HTML, video) | Release | Published with each release, listed in `obs/bundle.manifest`, and checked by `tools/verify-release.ps1`. |
+| Packaged assets (`obs/` in the release: images, HTML, video) | Release | Published with each release and listed in `obs/bundle.manifest`, with each file's size and SHA-256 and the scene and source contract. See [The bundle manifest](#the-bundle-manifest). |
 | Scene collection (`%APPDATA%\obs-studio\basic\scenes\<name>.json`) | Application, unless the operator customizes it | Installed from `obs/Default.json` and kept in step with each release. A custom collection is never overwritten. See [Updating the collection](#updating-the-collection). |
 | Generated pages (`Data\queue.html`, `Data\prediction-report.html`) | Runtime data | Written by the roles when the queue changes or a prediction opens or resolves. `heroesreplay obs pages` renders both with the current build and reloads the browser sources that show them. |
 | Profile (`%APPDATA%\obs-studio\basic\profiles\<name>\basic.ini`) | The machine | `obs/Default/basic.ini` is written only when the machine has no profile of that name. An existing profile is never replaced. |
@@ -20,6 +20,25 @@ How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, 
 | Global audio devices | The machine | The collection has Desktop Audio only. Mic/Aux should be Disabled (`obs.mic_enabled` is an error). |
 | Stream service and key (`service.json`) | Operator secret | Never packaged, copied, logged, or returned by a tool. The tools report only the service type, the named service (`Twitch`), and whether a key is set. |
 | Twitch ingest arm (`%LOCALAPPDATA%\HeroesReplay\stream-armed`) | The machine | Ingest needs this arm and `OBS:StreamingEnabled`. `heroesreplay obs arm` / `disarm` / `status`. The live box is armed. ASA-SERVER is armed only for a stream proof; its OBS streams to a developer Twitch account. |
+
+## The bundle manifest
+
+The release's `obs` folder carries `obs\bundle.manifest`, schema 2 JSON (`ObsCollectionBundle`):
+
+- `schemaVersion` 2, `collection` (`Default.json`), and `collectionSha256`;
+- `assets`: every packaged OBS file's `path`, `size`, and `sha256`;
+- `contract`: the `scenes`, the `sources` with their `kind`, and the scene `items` that `ObsContract` names, from the packaged `appsettings.json` and prod overlay.
+
+In the repository the same file is the plain list of asset paths the build publishes. `tools/package-release.ps1` copies it into the publish folder and runs the published `heroesreplay obs bundle --install <publish> --write`, so the hashes are of the bytes in the zip. `--write` refuses a source checkout.
+
+| Where | What happens on a mismatch |
+| --- | --- |
+| `tools/verify-release.ps1` (CI and `release.yml`) | Checks every size and SHA-256, `collectionSha256`, and the contract against the packaged `Default.json`, in PowerShell and with the packaged `obs bundle`. A tampered or truncated zip fails the check. |
+| `update install-obs` (run by `apply-release.ps1`) | Checks the install's `obs` folder before it writes anything. A mismatch is `obs.bundle_invalid`: exit 1, and neither the collection nor the profile is written. |
+| `obs validate`, `obs_validate`, the spectator's preflight | A changed or missing file, or a contract name `Default.json` lacks, is `obs.bundle_invalid` (error), one finding per file. |
+| `heroesreplay obs bundle [--install dir] [--output json]` | The same check without OBS. Exit 1 on `obs.bundle_invalid`. |
+
+Backward compatible for one release: the plain list (a source checkout) is checked for presence only. A folder with no manifest (a release packaged before schema 2) installs with a warning note, and `obs validate` reports `obs.bundle_unverified` (warning).
 
 ## Launching OBS
 
@@ -63,6 +82,8 @@ HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` 
 | `obs.stream_key_missing` | error when `OBS:StreamingEnabled` (stops the stream) | Settings > Stream: Twitch and its key. |
 | `obs.mic_enabled` / `obs.mic_muted` | error / warning | Settings > Audio > Mic/Auxiliary Audio: Disabled. |
 | `obs.request_unavailable` | error (stops the stream) | Update OBS to 30.0 or later. |
+| `obs.bundle_invalid` | error | An install file differs from `obs/bundle.manifest` (size or SHA-256), or `Default.json` lacks a contract name. Install the release again. |
+| `obs.bundle_unverified` | warning | The install has no `obs/bundle.manifest` (packaged before schema 2). The next release brings one. |
 | `obs.fps_low` | warning | Settings > Video: 30 or 60 FPS. |
 | `obs.stream_service_unexpected` | warning | Settings > Stream: Twitch. |
 | `obs.filter_stale` | warning | An old `Scroll` filter on the match report source. Right-click the source > Filters, and disable or remove it. With loop off it moves the page out of its frame and the scene looks blank (transparent). |

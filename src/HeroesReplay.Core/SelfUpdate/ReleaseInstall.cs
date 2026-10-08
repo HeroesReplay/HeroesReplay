@@ -164,8 +164,13 @@ public static class ReleaseInstall
     /// and while OBS is running the replacement waits until HeroesReplay finds OBS closed. The
     /// profile (<c>basic.ini</c>) is machine-owned: the packaged one is only a template, written when
     /// this machine has no profile of that name and OBS is closed. <c>service.json</c> (the stream
-    /// key) is never copied. Returns one line per decision for the update log.
+    /// key) is never copied. Returns one line per decision for the update log. First the install's
+    /// <c>obs</c> folder is checked against <c>obs/bundle.manifest</c>
+    /// (<see cref="ObsCollectionBundle"/>).
     /// </summary>
+    /// <exception cref="ObsBundleInvalidException">
+    /// A packaged OBS file does not match the manifest. Nothing was written.
+    /// </exception>
     public static IReadOnlyList<string> InstallObsFiles(ReleaseObsInstall request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -178,7 +183,21 @@ public static class ReleaseInstall
             return notes;
         }
 
-        string scene = Path.Combine(request.InstallDirectory, "obs", "Default.json");
+        // The staged OBS files must be the ones the release packaged before anything is written.
+        // A folder with no manifest (a release packaged before schema 2) installs with a warning.
+        string obsDirectory = Path.Combine(request.InstallDirectory, "obs");
+        if (Directory.Exists(obsDirectory))
+        {
+            ObsBundleCheck bundle = ObsCollectionBundle.Verify(obsDirectory);
+            if (!bundle.Ok)
+            {
+                throw new ObsBundleInvalidException(bundle);
+            }
+
+            notes.Add("OBS bundle: " + bundle.Describe());
+        }
+
+        string scene = Path.Combine(obsDirectory, "Default.json");
         if (File.Exists(scene))
         {
             ObsCollectionApplyResult collection = ObsCollectionPatcher.Apply(

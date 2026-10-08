@@ -623,6 +623,8 @@ public static class ServiceSupervisor
                 output.WriteLine($"{"", 20}Fix: {role.Remediation}");
             }
 
+            WriteDependencyText(output, role.Dependency, report.CheckedAt);
+
             if (role.Restarts is ServiceRoleRestartStatus restarts)
             {
                 string last = restarts.LastRestartAt is DateTimeOffset at
@@ -743,6 +745,29 @@ public static class ServiceSupervisor
         {
             output.WriteLine($"  WARN {warning}");
         }
+    }
+
+    /// <summary>"Probe: Heroes Profile API ok, checked 2m ago." (#305)</summary>
+    private static void WriteDependencyText(
+        TextWriter output,
+        ServiceRoleDependency dependency,
+        DateTimeOffset now
+    )
+    {
+        if (dependency == null || string.IsNullOrWhiteSpace(dependency.Name))
+        {
+            return;
+        }
+
+        string checkedAgo = dependency.CheckedAt is DateTimeOffset at
+            ? $", checked {ServiceHealthClassifier.Describe(now - at)} ago"
+            : string.Empty;
+        string detail = ServiceDependencyStates.IsFailure(dependency.State)
+            ? string.Empty
+            : " " + dependency.Cause;
+        output.WriteLine(
+            $"{"", 20}Probe: {dependency.Name} {dependency.State}{checkedAgo}.{detail}".TrimEnd()
+        );
     }
 
     private static void WriteLogText(TextWriter output, ServiceRoleHealth role)

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text.Json;
+using HeroesReplay.CLI.Commands.Obs;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
@@ -126,6 +127,18 @@ public class CliResultTests
                 "findings",
             ],
             Names(CliJson.Serialize(validation))
+        );
+    }
+
+    [Fact]
+    public void ObsBundle_KeepsItsFields()
+    {
+        var report = new ObsBundleReport(1, true, null, "manifest", "obs", 3, [], "ok");
+
+        Assert.IsAssignableFrom<ICliResult>(report);
+        Assert.Equal(
+            ["schemaVersion", "ok", "code", "format", "manifest", "files", "problems", "message"],
+            Names(CliJson.Serialize(report))
         );
     }
 
