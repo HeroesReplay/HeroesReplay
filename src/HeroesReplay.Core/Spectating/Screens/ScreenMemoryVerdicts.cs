@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using HeroesClientSDK;
+using HeroesReplay.Core.GameClient;
 
 namespace HeroesReplay.Core.Spectating.Screens;
 
@@ -8,8 +9,10 @@ namespace HeroesReplay.Core.Spectating.Screens;
 /// What client memory says about each <see cref="ScreenState"/>, for shadow mode: the
 /// HeroesClientSDK menu screens (<see cref="ClientScreen"/>), read by the client's own
 /// screen, dialog and frame class names. Home, the login form, the map loading screen, the game
-/// data DOWNLOADING dialog, the version dialogs and the MVP screen come from memory; the other
-/// states are null (memory cannot tell them yet).
+/// data DOWNLOADING dialog, the version dialogs and the MVP screen come from memory. "Preparing
+/// game data" is a native Win32 dialog, not client UI, so its verdict comes from the client's
+/// windows (<see cref="GameDataProgressWindow"/>). The other states are null (neither can tell
+/// them yet).
 /// </summary>
 public static class ScreenMemoryVerdicts
 {
@@ -40,6 +43,26 @@ public static class ScreenMemoryVerdicts
             ScreenState.VersionMismatch => VersionDialog(sample),
             _ => null,
         };
+
+    /// <summary>
+    /// The verdict for <paramref name="state"/> from memory, or from the client's windows for
+    /// "Preparing game data" (<see cref="ScreenState.GameDataStartup"/>).
+    /// </summary>
+    public static bool? For(
+        ScreenState state,
+        ClientScreenSample? sample,
+        GameDataWindowSample? window
+    ) => state == ScreenState.GameDataStartup ? window?.Shown : For(state, sample);
+
+    /// <summary>The read behind <see cref="For(ScreenState, ClientScreenSample?, GameDataWindowSample?)"/>, for the shadow log.</summary>
+    public static string Describe(
+        ScreenState state,
+        ClientScreenSample? sample,
+        GameDataWindowSample? window
+    ) =>
+        state == ScreenState.GameDataStartup
+            ? "windows: " + (window?.Reason ?? "not read")
+            : Describe(sample);
 
     /// <summary>
     /// True when a message dialog shows a version game-launch result, false on any other known

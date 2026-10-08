@@ -45,6 +45,7 @@ public class GameController : IGameController
     private readonly MatchClock matchClock = new();
     private readonly LoadingScreen loadingScreen = new();
     private readonly ClientScreen clientScreens = new();
+    private readonly IClientWindows clientWindows = new Win32ClientWindows();
     private readonly ScreenShadow screenShadow;
     private LoadingScreenSample lastScreen;
     private ClientScreenSample lastClientScreen;
@@ -1764,12 +1765,16 @@ public class GameController : IGameController
         try
         {
             ClientScreenSample? screen = ReadClientScreen();
+            GameDataWindowSample? window =
+                state == ScreenState.GameDataStartup
+                    ? GameDataProgressWindow.Read(clientWindows, GetGameProcess()?.Id)
+                    : null;
             ShadowObservation observed = screenShadow.Observe(
                 state,
                 ocr,
-                ScreenMemoryVerdicts.For(state, screen),
+                ScreenMemoryVerdicts.For(state, screen, window),
                 ocrText,
-                ScreenMemoryVerdicts.Describe(screen)
+                ScreenMemoryVerdicts.Describe(state, screen, window)
             );
             if (observed.SaveFrame)
             {
