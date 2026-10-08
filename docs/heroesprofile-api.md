@@ -43,4 +43,12 @@ Auth header: `X-HP-Twitch-Key` (an uploader key from https://www.heroesprofile.c
 | Check the key | `GET uploader/whoami` |
 | One full game so far | `POST uploader/snapshot` |
 
-`heroesreplay check twitch-extension` calls whoami when the extension is enabled. The key URI is `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password`. Snapshots use phases `lobby`, `in_game`, and `ended`, paced by the match clock. The server applies `delay_seconds` from whoami before viewers see the update.
+`heroesreplay check twitch-extension` calls whoami when the extension is enabled. The key URI is `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password`, and `tools/fill-secrets-from-op.ps1` writes it once that item exists. Snapshots use phases `lobby`, `in_game`, and `ended`, paced by the match clock. The server applies `delay_seconds` from whoami before viewers see the update.
+
+To check a key before turning the extension on, enable it for the check process only:
+
+```powershell
+$env:HEROES_REPLAY_TwitchExtension__Enabled = 'true'; heroesreplay check twitch-extension; Remove-Item Env:HEROES_REPLAY_TwitchExtension__Enabled
+```
+
+A rejected key fails with the server's message (HTTP 401: "This uploader key is not valid."). An accepted key passes and prints `entitlement.active`. Set `TwitchExtension:Enabled` true in `appsettings.prod.json` only after it prints `entitlement.active=True`.
