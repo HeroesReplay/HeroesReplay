@@ -21,6 +21,8 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 
 ## Commands
 
+Per command, what must be true first, what it changes, what each exit code means, and the stable codes it prints: [`commands.md`](commands.md) in this folder. It is generated from the command tree and `CommandReference.Facts` (`src/HeroesReplay.CLI/Commands/CommandReference.cs`), and `AgentDocsTests` fails when a command or code has no entry or the file is stale. The table below is the long description.
+
 | Command | Behavior |
 | --- | --- |
 | `spectate file [--file path] [--player Name#1234]` | Play one `.StormReplay` or each file in a directory, then exit. `--file` defaults to `Location:ReplaySource`. `--player` follows the player with that BattleTag while their hero is alive (the normal camera when that BattleTag did not play). A `--player` that is not a BattleTag, or a `--file` path that does not exist, is a parse error (exit 1). Exits 1 when the engine stops on an unexpected error. Starts the Aspire dashboard when OTLP :4317 is down; dashboard failure does not fail the replay. With clips on (`OBS:RecordingEnabled`), logs one error at start when ffmpeg or ffprobe cannot be found (`check ffmpeg`, `deps install`); the replay still plays. |

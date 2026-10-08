@@ -1,6 +1,6 @@
 # OBS operations
 
-How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, and what each machine owns. This is the one place for the OBS operating model. `obs/README.md` describes the packaged collection itself. The `obs-websocket-v5` skill covers the code, and the `heroes-replay-cli` skill lists every command.
+How HeroesReplay installs, updates, checks, and drives OBS Studio on a machine, and what each machine owns. This is the one place for the OBS operating model. `obs/README.md` describes the packaged collection itself. The `obs-websocket-v5` skill covers the code, the `heroes-replay-cli` skill lists every command, `heroes-replay-obs` is the agent's safety checklist for both machines, and `obs-docs` is the generic OBS and obs-websocket reference.
 
 ## Requirements
 
