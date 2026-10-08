@@ -550,27 +550,31 @@ public class CheckCommand : Command
 
             ITwitchExtensionService extension =
                 provider.GetRequiredService<ITwitchExtensionService>();
-            ExtensionWhoAmI who = await extension.WhoAmIAsync(cancellationToken);
-            if (!who.Reachable)
-            {
-                return new CheckResult(
-                    "twitch-extension",
-                    false,
-                    who.Message ?? "uploader/whoami failed."
-                );
-            }
-
-            string channel = who.TwitchDisplayName ?? who.TwitchLogin ?? "unknown";
-            return new CheckResult(
-                "twitch-extension",
-                true,
-                $"Connected to {channel}. entitlement.active={who.EntitlementActive}. player_linked={who.PlayerLinked}."
-            );
+            return TwitchExtensionWhoAmI(await extension.WhoAmIAsync(cancellationToken));
         }
         catch (Exception e)
         {
             return Fail("twitch-extension", e);
         }
+    }
+
+    public static CheckResult TwitchExtensionWhoAmI(ExtensionWhoAmI who)
+    {
+        if (who == null || !who.Reachable)
+        {
+            return new CheckResult(
+                "twitch-extension",
+                false,
+                who?.Message ?? "uploader/whoami failed."
+            );
+        }
+
+        string channel = who.TwitchDisplayName ?? who.TwitchLogin ?? "unknown";
+        return new CheckResult(
+            "twitch-extension",
+            true,
+            $"Connected to {channel}. entitlement.active={who.EntitlementActive}. player_linked={who.PlayerLinked}."
+        );
     }
 
     public static CheckResult TwitchExtensionDisabled(bool enabled)
