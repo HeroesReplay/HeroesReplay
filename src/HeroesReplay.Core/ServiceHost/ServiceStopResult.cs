@@ -116,20 +116,23 @@ public sealed record ServiceStreamCheck(ServiceStreamState State, string Detail)
 }
 
 /// <summary>
-/// The outcome of <c>services stop</c>. It succeeds only when every recorded role exited, the game
-/// closed (when spectate was recorded), OBS is confirmed not streaming, and no recording spectate
-/// started is left running.
+/// The outcome of <c>services stop</c>. It succeeds only when every recorded role (and a
+/// hand-started spectate from this install, #381) exited, the game closed when the stop owns it,
+/// OBS is confirmed not streaming, and no recording spectate started is left running.
 /// </summary>
 public sealed class ServiceStopResult
 {
     public IReadOnlyList<ServiceRoleStop> Roles { get; init; } = Array.Empty<ServiceRoleStop>();
 
-    /// <summary>Null when the game was not checked: spectate was not recorded.</summary>
+    /// <summary>
+    /// Null when the game was not checked: roles were recorded without spectate, or a spectate
+    /// from another install runs it (#381).
+    /// </summary>
     public bool? GameClosed { get; init; }
 
     /// <summary>
     /// The HeroesSwitcher_x64 processes closed after the game (#359). Null when they were not
-    /// checked: spectate was not recorded, or no step was given.
+    /// checked (as for <see cref="GameClosed"/>), or no step was given.
     /// </summary>
     public SwitcherStopResult Switchers { get; init; }
 
@@ -144,6 +147,9 @@ public sealed class ServiceStopResult
 
     /// <summary>Null when no supervisor was running.</summary>
     public ServiceRoleStop Supervisor { get; init; }
+
+    /// <summary>The last line the stop printed, for example "Nothing to stop." (#381).</summary>
+    public string Summary { get; set; }
 
     public bool RolesExited => Roles.All(role => role.Exited);
 
@@ -166,6 +172,17 @@ public sealed class ServiceStopResult
         string game = closed
             ? "Heroes of the Storm: closed."
             : "Heroes of the Storm: still running.";
+        string more = switchers?.Describe();
+        return string.IsNullOrEmpty(more) ? game : game + " " + more;
+    }
+
+    /// <summary>
+    /// The <c>Heroes of the Storm:</c> line when no game was running to close: no spectate was
+    /// recorded or found (#381). Each idle switcher closed is still named.
+    /// </summary>
+    public static string DescribeGameNotRunning(SwitcherStopResult switchers)
+    {
+        const string game = "Heroes of the Storm: not running.";
         string more = switchers?.Describe();
         return string.IsNullOrEmpty(more) ? game : game + " " + more;
     }

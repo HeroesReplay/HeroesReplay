@@ -669,7 +669,7 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "stop",
-            "Ask the recorded processes to shut down, kill any still running after 20 seconds, close Heroes of the Storm and any HeroesSwitcher left without it, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game and those switchers closed, OBS is not streaming, and no recording spectate started is still running."
+            "Ask the recorded processes, and a spectate from this install that is not recorded, to shut down, kill any still running after 20 seconds, close Heroes of the Storm and any HeroesSwitcher left without it, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game and those switchers closed, OBS is not streaming, and no recording spectate started is still running."
         );
         command.SetAction(
             (parseResult, cancellationToken) =>
@@ -685,6 +685,15 @@ public class ServicesCommand : Command
                         GracefulWait = ServiceShutdown.DefaultGracefulWait,
                         Wait = Thread.Sleep,
                         ClearStopFile = () => ServiceStopFile.Clear(),
+                        FindUnrecordedSpectates = recorded =>
+                            UnrecordedSpectates.Find(
+                                ProcessTable.Snapshot(),
+                                ProcessCommandLine.TryRead,
+                                Environment.ProcessPath,
+                                Environment.ProcessId,
+                                recorded
+                            ),
+                        GameRunning = () => NamedProcess.IsRunning(GameProcessName),
                         CloseGame = StopSpectatedGame,
                         CloseIdleSwitchers = new HeroesSwitcherShutdown().CloseIdle,
                         ConfirmStream = ObsServiceStop.DelegateToSpectator,
