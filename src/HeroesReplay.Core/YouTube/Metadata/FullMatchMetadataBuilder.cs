@@ -124,7 +124,7 @@ public static class FullMatchMetadataBuilder
 
         TeamKillClip[] events = ReplayMediaEvidence.Accepted(input.NotableEvents);
         bool pentakill = ReplayMediaEvidence.HasKind(events, TeamKillClips.PentakillKind);
-        bool teamWipe = ReplayMediaEvidence.HasKind(events, TeamKillClips.TeamWipeKind);
+        bool teamWipe = ReplayMediaEvidence.AnyWipedTeam(events);
         int? mmr = RoundedMmr(input.AverageMmr);
         string describedWhen = DateLabel(input.GameDateUtc);
         string winner = options.IncludeSpoilers ? Clean(input.Winner, 80) : null;
@@ -367,7 +367,7 @@ public static class FullMatchMetadataBuilder
         for (int i = 0; i < limit; i++)
         {
             TeamKillClip clip = events[i];
-            string kind = clip.Kind == TeamKillClips.PentakillKind ? "pentakill" : "team wipe";
+            string kind = clip.WipedTeam ? "pentakill (team wipe)" : "pentakill";
             string hero = Clean(clip.Hero, 40);
             parts.Add(hero == null ? kind : hero + " " + kind);
         }

@@ -386,7 +386,7 @@ public class ReplayMediaPolicyTests
     public void PublicationRequestedOnly_RejectsNotableButSelectedStillRecords()
     {
         ReplayMediaDecision decision = Decide(
-            Sample(events: new[] { Wipe("Artanis", 12) }),
+            Sample(events: new[] { Pentakill("Artanis", 12) }),
             Settings(
                 recording: ReplayRecordingMode.Selected,
                 publication: ReplayPublicationMode.RequestedOnly
@@ -741,15 +741,36 @@ public class ReplayMediaPolicyTests
         ReplayMediaDecision decision = Decide(Sample(events: clips, rank: "Bronze", mmr: 1000));
 
         Assert.Equal(ReplayMediaPriority.Notable, decision.Priority);
-        Assert.Equal(2, decision.NotableEvents.Count);
-        Assert.Equal(TeamKillClips.PentakillKind, decision.NotableEvents[0].Kind);
-        Assert.Equal("Li-Ming", decision.NotableEvents[0].Hero);
-        Assert.Equal(TeamKillClips.TeamWipeKind, decision.NotableEvents[1].Kind);
+        // #369: the team wipe is the same pentakill, one event, still scored for the wipe.
+        TeamKillClip pentakill = Assert.Single(decision.NotableEvents);
+        Assert.Equal(TeamKillClips.PentakillKind, pentakill.Kind);
+        Assert.Equal("Li-Ming", pentakill.Hero);
+        Assert.True(pentakill.WipedTeam);
         Assert.Equal(
             ReplayMediaPolicy.PentakillScore + ReplayMediaPolicy.TeamWipeScore,
             decision.Score.NotableStrength
         );
         Assert.Equal(ReplayMediaReason.RecordedNotable, decision.RecordingReason);
+    }
+
+    [Fact]
+    public void APentakillThatDidNotWipeTheTeam_ScoresThePentakillOnly()
+    {
+        IReadOnlyList<TeamKillClip> clips = TeamKillClips.Select(
+            new[]
+            {
+                Death(100, "Zeratul", "Artanis"),
+                Death(102, "Zeratul", "Butcher"),
+                Death(104, "Zeratul", "Chromie"),
+                Death(106, "Zeratul", "Diablo"),
+                Death(108, "Zeratul", "Artanis"),
+            }
+        );
+
+        ReplayMediaDecision decision = Decide(Sample(events: clips, rank: "Bronze", mmr: 1000));
+
+        Assert.False(Assert.Single(decision.NotableEvents).WipedTeam);
+        Assert.Equal(ReplayMediaPolicy.PentakillScore, decision.Score.NotableStrength);
     }
 
     [Fact]
@@ -759,7 +780,8 @@ public class ReplayMediaPolicyTests
             Sample(
                 events: new List<TeamKillClip>
                 {
-                    Wipe("Zeratul", 50),
+                    // The team-wipe kind no longer exists (#369); an old one is not evidence.
+                    new TeamKillClip("team-wipe", "Zeratul", 50, 54, 50, 58, "team wipe"),
                     new TeamKillClip("Pentakill", "Nova", 1, 2, 1, 2, "pentakill"),
                     new TeamKillClip("highlight", "Nova", 0, 1, 0, 1, "pentakill"),
                     Pentakill("Li-Ming", 10),
@@ -767,11 +789,11 @@ public class ReplayMediaPolicyTests
             )
         );
 
-        Assert.Equal(2, decision.NotableEvents.Count);
-        Assert.Equal(TeamKillClips.PentakillKind, decision.NotableEvents[0].Kind);
-        Assert.Equal("Li-Ming", decision.NotableEvents[0].Hero);
-        Assert.Equal(10, decision.NotableEvents[0].HudStartSecond);
-        Assert.Equal(TeamKillClips.TeamWipeKind, decision.NotableEvents[1].Kind);
+        TeamKillClip kept = Assert.Single(decision.NotableEvents);
+        Assert.Equal(TeamKillClips.PentakillKind, kept.Kind);
+        Assert.Equal("Li-Ming", kept.Hero);
+        Assert.Equal(10, kept.HudStartSecond);
+        Assert.Equal(ReplayMediaPolicy.PentakillScore, decision.Score.NotableStrength);
         Assert.Equal(ReplayMediaPriority.Notable, decision.Priority);
     }
 
@@ -781,7 +803,7 @@ public class ReplayMediaPolicyTests
         var events = new List<TeamKillClip> { Pentakill("Li-Ming", 10) };
         ReplayMediaDecision decision = Decide(Sample(events: events));
         events.Clear();
-        events.Add(Wipe("Nova", 1));
+        events.Add(Pentakill("Nova", 1));
 
         TeamKillClip kept = Assert.Single(decision.NotableEvents);
         Assert.Equal("Li-Ming", kept.Hero);
@@ -1322,19 +1344,6 @@ public class ReplayMediaPolicyTests
             second,
             second + 8,
             hero + " pentakill"
-        );
-    }
-
-    private static TeamKillClip Wipe(string hero, int second)
-    {
-        return new TeamKillClip(
-            TeamKillClips.TeamWipeKind,
-            hero,
-            second,
-            second + 4,
-            second,
-            second + 8,
-            "team wipe"
         );
     }
 

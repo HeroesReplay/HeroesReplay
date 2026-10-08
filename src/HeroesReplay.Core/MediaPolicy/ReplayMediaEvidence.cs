@@ -7,8 +7,9 @@ using HeroesReplay.Core.Obs;
 namespace HeroesReplay.Core.MediaPolicy;
 
 /// <summary>
-/// Pentakills and team wipes are clips <see cref="TeamKillClips"/> already built from
-/// <see cref="KillStreaks"/>. Unknown kinds are not evidence.
+/// Pentakills are clips <see cref="TeamKillClips"/> already built from <see cref="KillStreaks"/>.
+/// A team wipe is one of them (<see cref="TeamKillClip.WipedTeam"/>), not an event of its own
+/// (#369). Unknown kinds are not evidence.
 /// </summary>
 public static class ReplayMediaEvidence
 {
@@ -22,7 +23,7 @@ public static class ReplayMediaEvidence
         var kept = new List<TeamKillClip>(events.Count);
         foreach (TeamKillClip clip in events)
         {
-            if (clip.Kind == TeamKillClips.PentakillKind || clip.Kind == TeamKillClips.TeamWipeKind)
+            if (clip.Kind == TeamKillClips.PentakillKind)
             {
                 kept.Add(clip);
             }
@@ -30,6 +31,25 @@ public static class ReplayMediaEvidence
 
         kept.Sort(Compare);
         return kept.ToArray();
+    }
+
+    /// <summary>A pentakill in <paramref name="events"/> killed the whole enemy team.</summary>
+    public static bool AnyWipedTeam(IReadOnlyList<TeamKillClip> events)
+    {
+        if (events == null)
+        {
+            return false;
+        }
+
+        foreach (TeamKillClip clip in events)
+        {
+            if (clip.Kind == TeamKillClips.PentakillKind && clip.WipedTeam)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static bool HasKind(IReadOnlyList<TeamKillClip> events, string kind)

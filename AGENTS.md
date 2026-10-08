@@ -27,7 +27,7 @@ The client memory readers live in their own repo and package, [HeroesClientSDK](
 | `TwitchExtension` | Heroes Profile Twitch extension payloads |
 | `Obs` (`Collection`, `Inspection`, `Recording`, `Pages`) | OBS websocket control, the stream arm, report scenes. `Collection`: the scene collection and profile files OBS reads. `Inspection`: the read-only reads behind `obs inspect`, `obs validate`, and the MCP tools. `Recording`: the match recording and its HUD clock. `Pages`: `obs pages` |
 | `YouTube` (`Metadata`, `Publication`, `Playlists`, `Search`, `Outbox`, `Quota`) | Upload, titles and descriptions, publication budget, playlists, duplicate lookup, quota units |
-| `MediaPolicy`, `Clips`, `Retention` | What gets recorded and uploaded, pentakill detection and clips (`FfmpegLocator`, `check ffmpeg`), disk cleanup |
+| `MediaPolicy`, `Clips`, `Retention` | What gets recorded and uploaded, pentakill detection and clips (`FfmpegLocator`, `check ffmpeg`), disk cleanup. Clips are individual pentakills only (`TeamKillClips.Select`): one player's five killing blows, each within 12 s of the last. A pentakill that wipes the team is one clip (`WipedTeam` only adds to the media score and the tags); a wipe shared across players is never a clip (#369) |
 | `Dependencies` | The pinned external tools (`dependencies.json`, embedded: ffmpeg and ffprobe) and `deps install`: download, size and SHA-256 check, staged install into `Dependencies:Directory` |
 | `Connectivity`, `ServiceHost` (`Logs`), `SelfUpdate`, `Status` | Outage handling, the four service processes and their role logs, release updates, `status.json` |
 | `Telemetry` | `HeroesReplayTelemetry` (traces and metrics) and `ReplaySessionFile`, which joins one replay's traces across processes |
