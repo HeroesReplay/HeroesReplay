@@ -12,6 +12,7 @@ description: >
 - Solution: repo-root `heroes-replay.slnx` only (no `.sln`).
 - TFM: `net10.0-windows10.0.19041.0` for CLI, Core, Tests. `HeroesReplay.HeroesProfile.Client` is `net10.0` (Kiota, no Windows APIs).
 - Versions: `Directory.Packages.props`. SDK features: `Directory.Build.props`.
+- Sources: `nuget.config`. nuget.org for everything except `HeroesClientSDK` (the memory match clock), which comes from the gitignored `.packages` folder: `tools/restore-sdk-package.ps1` downloads the SDK's GitHub Release asset (no credentials) and checks the SHA-256 pinned next to `HeroesClientSDKVersion` in `Directory.Packages.props`. CI, the bootstrap, and the build (when the file is missing) run it. It is an exact pin; bumping it is a match-clock change (AGENTS.md).
 - Format: local tool `csharpier` 1.3.x. Config `.csharpierrc.json`.
 
 ## Commands

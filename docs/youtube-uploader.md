@@ -93,6 +93,18 @@ The mode says what is worth recording. The recording cap (`ReplayMedia:CapRecord
 
 With the production settings that is 4 a day over 3 days, so about 12 videos in flight and about 4 ordinary recordings a day. Notable and high-skill replays are capped like ordinary ones; only a request goes past the cap. A capped replay is still spectated and streamed, without an mp4. Before the cap, production recorded about 25 replays a day while 4 a day could go public, and the rest waited on disk until they were too old to publish (#250).
 
+### The disk gates
+
+After the cap, the spectator checks the disk (`Disk`, #279). The log line names the gate and says whether the replay is a request.
+
+| Gate | Settings | Holds back |
+| --- | --- | --- |
+| `free-space` | `WarnWhenFreeBytesBelow`, `StopWhenFreeBytesBelow` | Every recording, a request too. |
+| `pending-bytes` | `WarnWhenPendingBytesAtLeast`, `StopWhenPendingBytesAtLeast` (bytes of recordings still waiting for their `videos.insert`) | Every replay that is not a request. A request is recorded while the free-space gate allows it. |
+| `disk-check` | Invalid watermarks, or a reading that makes no sense | Every recording. |
+
+Most pending bytes are ordinary recordings waiting for a publish time. When the `pending-bytes` stop watermark trips, the spectator first deletes the ordinary recordings that can never be published, then measures the disk again. A recording goes only when the uploader would delete it as stale itself: YouTube is live with a public listing, its stored media decision is an eligible `Ordinary` replay (not a request, notable, or high-skill), its game is older than `OrdinaryCandidateMaxAge`, it holds no slot in `Data\publication-reservations.txt`, no send has started, and it is not the replay about to launch. Each deletion logs `Removed recording that was eligible but never uploaded ... (reason: stale ...)`.
+
 A replay that is spectated again after a session that did not finish (a crash, a stop, a load timeout) decides its publication again from the new session. It used to reuse the first session's `incomplete`, so the second recording got no entry and retention deleted it. A recording whose publication is withheld (expired during the match, already published, already in the outbox) is deleted when the session ends, with a warning that names the reason, instead of waiting for retention.
 
 Every mode still requires OBS `RecordingEnabled` (true in production). Both ReplayId rewards, `ReplayId` and `ReplayId + YouTube`, are recorded and uploaded as requests (#165). A map, rank, or random reward with no `RecordAndUpload` is spectate-only and is not a publication.
@@ -189,6 +201,14 @@ When a scheduled video is still not public after that grace, the library pass lo
 
 Both clear on their own once the cause is gone. A dry run and a private listing are never degraded for publishing.
 
+The role also probes its upload consent (#305, `docs/service-split.md` Dependency probes): before it reports ready and then every 10 minutes (2 while it fails), it refreshes the stored upload token at Google's token endpoint. That is not a YouTube Data API call, so it spends neither the 10,000-unit pool nor the upload bucket, and the store is not written. Not in a dry run.
+
+- `youtube.oauth_invalid`: Google refused the stored refresh token (`invalid_grant`: revoked, expired after 7 days for an OAuth app in Testing, or a changed `client_secrets.json`). Grant the consent again at the machine: stop the stack, delete `%APPDATA%\Google.Apis.Auth\Google.Apis.Auth.OAuth2.Responses.TokenResponse-{ChannelId}`, run `heroesreplay youtube uploader` by hand and sign in, then start the stack.
+- `youtube.oauth_missing`: no upload consent is stored for the channel (the uploader would wait for a browser sign-in nobody sees), or `client_secrets.json` is missing.
+- `youtube.oauth_unreachable`: the token endpoint did not answer. Clears when a probe passes.
+
+The supervisor does not restart the role for any of them; recordings wait on disk.
+
 Without a concern, the role is `degraded` when it did no healthy work for 30 minutes (`No successful upload pass ...`). Healthy work is a successful upload (each one, so a long pass of large uploads keeps the role ready), a dry-run receipt, a library pass that ran or skipped for a routine reason (not due, another process has it, the day's units are spent, a quota pause), and an upload pass where every recording was sent or correctly waits (the upload bucket, the insert cap, `publication-full`, its entry not written yet), including a pass with nothing pending. Between passes the minute poll keeps that state. A pass with a failed send, an unreadable entry, or an interrupted upload that waits for an operator is not work. Before this, the work was recorded only after a whole pass and the library pass, so a startup pass that uploaded 13 videos over an hour left `lastSuccessfulWorkAt` null and the role degraded.
 
 A dry run plans in `Data\publication-reservations-dry-run.txt`, so its times never take a live slot. `youtube-dry-run.json` records the plan: the insert privacy, the desired privacy, `PublishAtUtc`, the schedule result and its reason (for example `granted` and `interval`, or `refused` and `publication-full`), `SelfDeclaredMadeForKids`, and the category. A dry run never deletes a recording.
@@ -284,7 +304,28 @@ To retune, download a fresh corpus into a scratch folder (not `Data\Standard`), 
 
 A hero is featured when its name is in `RecentHeroes`, or when the catalog `releaseDate` is within `RecentHeroDays` (60) of the match. `RecentHeroDays` of 0 or less uses the name list only. The newest release date wins. A name on the list is still featured when the local catalog does not have that hero yet. Xal'atath is on the list. The description adds `Featuring: Xal'atath` when the title does. Clips are unchanged.
 
-The description starts with `Twitch: https://twitch.tv/saltysadism`, then `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the pentakill or team wipe as a highlight, and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 6.
+### Statistics hooks
+
+A title can also name a Heroes Profile statistic about the heroes in the match (issue #272). It is off everywhere (`YouTube:Titles:StatHooks:Enabled` false in the base, dev, and prod files) until it is proven. With it on, the download role keeps the statistics, and spectate reads them when it writes `youtube-entry.json`.
+
+A hook takes the draft note's slot, just before the replay id, so it is the first part dropped at 100 characters. A draft note wins the slot: a match with a draft note gets no hook. There is at most one hook, and it never has a number in it. The first kind, in this order, with a match that clears its thresholds wins; within a kind the strongest match wins.
+
+| Hook | Example | When (each threshold is a setting) |
+| --- | --- | --- |
+| Counter | `Valla counters Alexstrasza` | Opposite teams. A has at least 250 games against B (`CounterMinGames`) and wins at least 57% (`CounterMinWinRate`). That rate is at least 4 points (`CounterMinEdge`) over what their overall rates predict, `50 + (A - 50) - (B - 50)`, and the low end of its 95% Wilson interval is over both 50% and that prediction. Xal'atath beats Valla 65.3% of the time, but she wins 65.9% of all her games, so 65.7% is expected and there is no counter. |
+| Duo | `Valla + Whitemane duo` | Same team, at least 300 games together (`DuoMinGames`), at least 56% (`DuoMinWinRate`), and the low end of the 95% interval at least 52% (`DuoMinLowerBound`). |
+| Best map | `Braxis Holdout - Genji's best map - ...` | This map is the hero's highest win rate among its maps with at least 150 games (`MapMinGames`), at least 3 points (`MapMinDelta`) over the hero's overall rate. |
+| Slips the ban | `Qhira slips the ban` | Banned in at least 40% (`BanMinRate`) of this map's games, with at least 150 games played on it (`BanMinGames`). |
+| Worst map | `Cursed Hollow - Valla's worst map - ...` | The reverse of best map. |
+| Underdog or powerhouse | `Underdog Medivh`, `Patch powerhouse Mal'Ganis` | Among the 3 (`ExtremesCount`) lowest or highest win rates of the patch, counting heroes with at least 500 games (`ExtremesMinGames`). |
+
+A hero the title already names, as `X focus` or `Ft. X`, is skipped, and so is any pair with that hero. Heroes are matched to the statistics by the heroes-data2 `AttributeId`, which is Heroes Profile's `attribute_id`. Each kind has its own switch: `Counters`, `Duos`, `BestMap`, `SlipsTheBan`, `WorstMap`, `PatchExtremes`.
+
+The numbers go on a `Stats:` line in the description, for example `Stats: Valla and Whitemane won 56.7% of 577 games together (Storm League, patch 2.57).` Heroes Profile's terms require the attribution on the same screen as its data, so whenever a hook is used the second description line, right after the Twitch link and inside what YouTube shows before "more", is `Data provided by Heroes Profile: https://www.heroesprofile.com/`. The `Stats:` label is not one the library pass reads (`Map:`, `Mode:`, `Rank:`, `Build:`, `Draft:`, `Featured:`), and a hook is never a bare number, so `TryReadTitleId` and the playlist filing read a hooked title the same way.
+
+The statistics are one file per major patch and game type, `Data\HeroesProfile\hero-stats\2.57-sl.json`, keyed by `attribute_id`: each hero's wins and games on every map (and its ban rate there), against each enemy hero, and with each ally. The download role writes it, never spectate. While hooks are on it checks every `HeroesProfileApi:HeroStats:CheckInterval` (1 h) and fetches the newest major patch again when the file is older than `RefreshInterval` (24 h), for each `GameTypes` entry (Storm League). Files of patches older than the newest two are deleted. Spectate uses the file for the replay's own patch and game type only when it is younger than `MaxAge` (72 h); a missing, unreadable, or stale file leaves the title as before. `heroesreplay heroesprofile hero-stats` fetches it once by hand. The calls and their limits are in `docs/heroesprofile-api.md`.
+
+The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, the pentakill or team wipe as a highlight, and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 7 (6 had no statistics hook).
 
 Every `videos.insert`, full match or clip, is built by `UploadBody` with the `snippet,status` parts:
 

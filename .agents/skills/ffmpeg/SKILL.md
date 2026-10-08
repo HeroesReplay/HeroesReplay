@@ -1,14 +1,25 @@
 ---
 name: ffmpeg
 description: >
-  ffmpeg and ffprobe 9.0.2 CLI on ASA-SERVER: probe a recording, cut a time range
-  out of a 1920x1080 match, and concatenate those clips.
-  Use when cutting pentakill clips from OBS match recordings, or /ffmpeg.
+  ffmpeg and ffprobe 9.0.2, pinned in src/HeroesReplay.Core/Dependencies/dependencies.json and
+  installed by `heroesreplay deps install`: probe a recording, cut a time range out of a
+  1920x1080 match, and concatenate those clips.
+  Use when cutting pentakill clips from OBS match recordings, installing or checking ffmpeg, or /ffmpeg.
 ---
 
 # ffmpeg
 
-Installed on ASA-SERVER as the current stable release, **9.0.2** (Gyan full build, `C:\ffmpeg\bin`, on the user PATH). Confirm with `ffmpeg -version`. A line that does not start with `ffmpeg version 9.0.2` is the wrong binary. Do not install a winget or chocolatey build over it.
+## The pinned build
+
+The one definition is `src/HeroesReplay.Core/Dependencies/dependencies.json`, embedded in the exe: ffmpeg **9.0.2**, the GyanD/codexffmpeg release asset `ffmpeg-9.0.2-essentials_build.zip` (a permanent GitHub release URL), its size, and its SHA-256. The essentials build has libx264 and aac, which the clip cut uses. Nothing else names a download URL or a hash.
+
+- `heroesreplay deps install [--dir <tools>]` downloads that zip, checks size and SHA-256, and extracts only `ffmpeg.exe` and `ffprobe.exe` into `<tools>\ffmpeg` (default `Dependencies:Directory`, `C:\heroesreplay\tools`, so `C:\heroesreplay\tools\ffmpeg`). It writes `installed.json` there and does nothing on a rerun while that build is in place. The files are staged in `<tools>\.staging` and renamed into place, so an exe is never half-written, and a failed run keeps the previous files. `apply-release.ps1` runs it with the new build after every release install; a failure only warns and never blocks or rolls back the release.
+- `heroesreplay check ffmpeg` (also part of `check`) prints each tool's path, where it came from, and its `-version` line. It fails when a tool is missing, does not run, or ffmpeg cannot encode libx264. A working build that is not 9.0.2 is `[WARN]` and exits 0: clips still cut, and `deps install` puts the pinned build in a folder searched before `C:\ffmpeg\bin` and PATH.
+- With clips on (`OBS:RecordingEnabled`), spectate logs one error at start when either tool cannot be found.
+
+Clips find the tools with `FfmpegLocator`, first match wins: `Clips:FfmpegDirectory` (empty by default), then the `deps install` folder, then `C:\ffmpeg\bin`, then PATH. ASA-SERVER also has the hand-installed 9.0.2 full build at `C:\ffmpeg\bin` (on the user PATH); leave it, and do not install a winget or chocolatey build over it. A `-version` line that does not start with `ffmpeg version 9.0.2` is not the pinned build.
+
+To move to a new build: download the new asset once, `Get-FileHash -Algorithm SHA256` it, and change `version`, `url`, `size`, and `sha256` in `dependencies.json` together. Update the version named here, in `AGENTS.md`, and in the `heroes-replay-cli` skill (`AgentDocsTests` checks them). Machines pick it up on the next release install.
 
 Official pages, read these before inventing flags:
 
@@ -16,7 +27,7 @@ Official pages, read these before inventing flags:
 - [Seeking](https://trac.ffmpeg.org/wiki/Seeking)
 - [Concatenate](https://trac.ffmpeg.org/wiki/Concatenate)
 
-The spectator already cuts pentakill clips after a recorded match (`HeroesReplay.Core.Clips.MatchClipExporter`, arguments in `FfmpegArguments.Cut`). It uses `C:\ffmpeg\bin\ffmpeg.exe` when present, otherwise `ffmpeg` on PATH, and writes `Data\Contexts\<id>\clips\<kind>-<hero>-<hudStart>\clip.mp4` plus an index `Data\Contexts\<id>\clips.json`.
+The spectator already cuts pentakill clips after a recorded match (`HeroesReplay.Core.Clips.MatchClipExporter`, arguments in `FfmpegArguments.Cut`), with the tools `FfmpegLocator` finds, and writes `Data\Contexts\<id>\clips\<kind>-<hero>-<hudStart>\clip.mp4` plus an index `Data\Contexts\<id>\clips.json`.
 
 `ffprobe` first. In `clips.json`, `fileStart` and `duration` are seconds in the match file. `hudStart` and `hudEnd` are HUD time; do not cut with them.
 

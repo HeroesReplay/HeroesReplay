@@ -37,10 +37,12 @@ public sealed record ObsValidation
 }
 
 /// <summary>
-/// Read-only checks of the collection OBS has loaded: the requests HeroesReplay sends, the
+/// Read-only checks of the collection OBS has loaded, and of the install's OBS files against
+/// <c>obs/bundle.manifest</c> (<see cref="ObsCollectionBundle"/>): the requests HeroesReplay sends, the
 /// active profile and collection (<see cref="ObsSelection"/>), the scenes and sources it drives
-/// (<see cref="ObsContract"/>), source kinds and scene-item placement against
-/// <c>obs/Default.json</c>, local asset paths after <see cref="ObsCollectionPaths.RewriteValue"/>,
+/// (<see cref="ObsContract"/>), source kinds and that each contract item is in its scene (not
+/// its transform) against <c>obs/Default.json</c>, local asset paths after
+/// <see cref="ObsCollectionPaths.RewriteValue"/>,
 /// the Mic/Aux global input, the canvas and FPS, the recording format, the stream service when
 /// this install streams, and the filters the packaged sources have. <c>obs validate</c>,
 /// <c>obs_validate</c>, and the spectator's preflight before its first StartStream run it.
@@ -52,6 +54,7 @@ public static class ObsValidator
 
     public const string BundleMissing = "obs.bundle_missing";
     public const string BundleInvalid = "obs.bundle_invalid";
+    public const string BundleUnverified = "obs.bundle_unverified";
     public const string AssetMissing = "obs.asset_missing";
     public const string RequestUnavailable = "obs.request_unavailable";
     public const string SceneMissing = "obs.scene_missing";
@@ -229,6 +232,7 @@ public static class ObsValidator
         }
 
         string assetRoot = Path.GetDirectoryName(path);
+        CheckBundle(assetRoot, findings);
         try
         {
             string json = File.ReadAllText(path);
@@ -263,6 +267,48 @@ public static class ObsValidator
                 )
             );
             return new Packaged(path, assetRoot, null, null);
+        }
+    }
+
+    /// <summary>
+    /// The install's OBS files against <c>obs/bundle.manifest</c>: a file whose size or SHA-256
+    /// differs, or a contract name the packaged collection lacks, is <see cref="BundleInvalid"/>.
+    /// The plain list in a source checkout is checked for presence only. No manifest is
+    /// <see cref="BundleUnverified"/>.
+    /// </summary>
+    private static void CheckBundle(string obsDirectory, List<ObsFinding> findings)
+    {
+        ObsBundleCheck bundle = ObsCollectionBundle.Verify(obsDirectory);
+        foreach (ObsBundleProblem problem in bundle.Problems)
+        {
+            findings.Add(
+                new ObsFinding(
+                    BundleInvalid,
+                    Error,
+                    problem.Path,
+                    "obs/"
+                        + problem.Path
+                        + " "
+                        + problem.Reason
+                        + ". This install's OBS files are not the ones obs/"
+                        + ObsCollectionBundle.FileName
+                        + " lists. Install the release again."
+                )
+            );
+        }
+
+        if (bundle.Format == ObsBundleFormat.Missing)
+        {
+            findings.Add(
+                new ObsFinding(
+                    BundleUnverified,
+                    Warning,
+                    ObsCollectionBundle.FileName,
+                    "obs/"
+                        + ObsCollectionBundle.FileName
+                        + " is missing, so this install's OBS files were not checked against their sizes and SHA-256. A release packaged before the versioned manifest has none; the next release brings it."
+                )
+            );
         }
     }
 

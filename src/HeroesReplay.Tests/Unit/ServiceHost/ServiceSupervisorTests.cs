@@ -1417,7 +1417,7 @@ public class ServiceSupervisorTests
                     Out = output,
                     Time = new FixedClock(new DateTimeOffset(2026, 10, 2, 9, 0, 0, TimeSpan.Zero)),
                     LogDirectory = logs,
-                    SupervisorRunning = () => true,
+                    SupervisorLiveness = () => ServiceSupervisorLiveness.ByMutex,
                     ReadSupervisor = () =>
                         new ServiceSupervisorState
                         {

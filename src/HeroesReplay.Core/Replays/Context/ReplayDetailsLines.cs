@@ -4,7 +4,7 @@ using System.Linq;
 namespace HeroesReplay.Core.Replays.Context;
 
 /// <summary>
-/// The lines of the OBS replay details file: requestor, game type, bans, then the patch.
+/// The lines of the OBS replay details file: requestor, game type, bans, region, then the patch.
 /// A line that is switched off or has no value is left out.
 /// </summary>
 public static class ReplayDetailsLines
@@ -38,6 +38,12 @@ public static class ReplayDetailsLines
             lines.AddRange(Bans(teamBans));
         }
 
+        string region = Region(loaded);
+        if (writer.Region && region != null)
+        {
+            lines.Add($"Region: {region}");
+        }
+
         string patch = Patch(loaded);
         if (writer.Patch && patch != null)
         {
@@ -58,6 +64,32 @@ public static class ReplayDetailsLines
 
         return string.IsNullOrWhiteSpace(version) ? null : version.Trim();
     }
+
+    /// <summary>
+    /// The replay's region (NA, EU, KR, CN): the first player in the replay file with a known
+    /// Battle.net region, or the Heroes Profile region when the file names none.
+    /// </summary>
+    public static string Region(LoadedReplay loaded)
+    {
+        string region = loaded
+            ?.Replay?.Players?.Select(player => RegionName(player?.BattleNetRegionId))
+            .FirstOrDefault(name => name != null);
+
+        return region ?? RegionName(loaded?.HeroesProfileReplay?.Region);
+    }
+
+    /// <summary>
+    /// Battle.net region ids: 1 NA, 2 EU, 3 KR, 5 CN. Anything else (an AI's 0, the PTR's 98) is unknown.
+    /// </summary>
+    public static string RegionName(int? id) =>
+        id switch
+        {
+            1 => "NA",
+            2 => "EU",
+            3 => "KR",
+            5 => "CN",
+            _ => null,
+        };
 
     private static IEnumerable<string> Bans(
         IReadOnlyDictionary<int, IReadOnlyCollection<string>> teamBans

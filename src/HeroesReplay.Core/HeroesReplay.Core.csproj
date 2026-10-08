@@ -8,6 +8,7 @@
 
     <ItemGroup>
         <PackageReference Include="Google.Apis.YouTube.v3" />
+        <PackageReference Include="HeroesClientSDK" />
         <PackageReference Include="Heroes.Element" />
         <PackageReference Include="Heroes.ReplayParser" />
         <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
@@ -30,5 +31,13 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="heroesreplay.tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The pinned external tools (ffmpeg). deps install and check ffmpeg read it from the assembly. -->
+        <EmbeddedResource
+            Include="Dependencies\dependencies.json"
+            LogicalName="HeroesReplay.Core.Dependencies.dependencies.json"
+        />
     </ItemGroup>
 </Project>

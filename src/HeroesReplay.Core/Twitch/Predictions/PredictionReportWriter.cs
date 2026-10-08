@@ -71,36 +71,59 @@ public sealed class PredictionReportWriter
         }
     }
 
-    public void TryWrite(Prediction prediction)
+    /// <summary>
+    /// Builds the report for a resolved <paramref name="prediction"/>, updates the streaks and
+    /// the verdict memory, and writes the page. Returns the report (with its verdict) even when
+    /// the page could not be written; null when no report could be built.
+    /// </summary>
+    public PredictionReport TryWrite(Prediction prediction, string map)
     {
         if (prediction == null || string.IsNullOrWhiteSpace(ReportPath))
         {
-            return;
+            return null;
         }
 
+        PredictionReport report;
         try
         {
             string streakPath = Path.Combine(settings.Location.DataDirectory, StreakFileName);
             PredictionStreakBook streaks = PredictionStreakBook.Load(streakPath);
-            PredictionReport report = PredictionReportBuilder.FromPrediction(prediction, streaks);
+            report = PredictionReportBuilder.FromPrediction(
+                prediction,
+                streaks,
+                map,
+                Random.Shared
+            );
             if (report == null)
             {
-                return;
+                return null;
             }
 
             streaks.Save(streakPath);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not build the prediction report.");
+            return null;
+        }
+
+        try
+        {
             Write(report);
             logger.LogInformation(
-                "Prediction report {Path}: {Winners} winners, {Losers} losers (top predictors only).",
+                "Prediction report {Path}: {Winners} winners, {Losers} losers (top predictors only). Verdict: {Verdict}",
                 ReportPath,
                 report.Winners.Count,
-                report.Losers.Count
+                report.Losers.Count,
+                report.Verdict
             );
         }
         catch (Exception e)
         {
             logger.LogWarning(e, "Could not write the prediction report.");
         }
+
+        return report;
     }
 
     private void Write(PredictionReport report)

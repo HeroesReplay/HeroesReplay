@@ -86,6 +86,57 @@ public static class ProcessTable
     }
 
     /// <summary>
+    /// The running process with <paramref name="pid"/>, or null when there is none. Only that
+    /// process is opened for its image path and start time, so this is cheaper than
+    /// <see cref="Snapshot"/> for one pid. The start time tells a reused pid apart.
+    /// </summary>
+    public static ProcessTableEntry Find(int pid)
+    {
+        if (pid <= 0)
+        {
+            return null;
+        }
+
+        IntPtr snapshot = CreateToolhelp32Snapshot(SnapProcess, 0);
+        if (snapshot == InvalidHandle || snapshot == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            var entry = new ProcessEntry32 { dwSize = (uint)Marshal.SizeOf<ProcessEntry32>() };
+            if (!Process32First(snapshot, ref entry))
+            {
+                return null;
+            }
+
+            do
+            {
+                if ((int)entry.th32ProcessID != pid)
+                {
+                    continue;
+                }
+
+                ReadDetails(pid, out string imagePath, out DateTimeOffset? startTime);
+                return new ProcessTableEntry(
+                    pid,
+                    (int)entry.th32ParentProcessID,
+                    entry.szExeFile,
+                    imagePath,
+                    startTime
+                );
+            } while (Process32Next(snapshot, ref entry));
+        }
+        finally
+        {
+            CloseHandle(snapshot);
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Terminates <paramref name="entry"/> only while its pid still has the start time the
     /// snapshot saw, so a reused pid is never killed.
     /// </summary>

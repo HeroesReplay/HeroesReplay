@@ -26,3 +26,15 @@ OBS lists a profile by `[General] Name` in its `basic.ini` and a collection by t
 ## Paths
 
 `Default.json` names assets relative to this `obs` folder (`Ranks/bronze.png`, `countdown/index.html`). `obs/bundle.manifest` is the list the release zip publishes next to `heroesreplay.exe` (`C:\heroesreplay\app\obs` after extract). HeroesReplay points the live collection at that folder, and at `Location:DataDirectory` for the generated pages (`queue.html`, `prediction-report.html`), when OBS is not running.
+
+## Bundle manifest
+
+In this repository `bundle.manifest` is a plain list: one path per line, relative to this folder. The build publishes exactly those files. Add a new asset to it, or the release does not carry it.
+
+The release zip's `obs\bundle.manifest` is schema 2 JSON, written by `tools/package-release.ps1` (`heroesreplay obs bundle --write` on the publish folder):
+
+- `schemaVersion` (2), `collection` (`Default.json`) and `collectionSha256`;
+- `assets`: each published file's `path`, `size`, and `sha256` (upper-case hex, as `Get-FileHash` prints it);
+- `contract`: the `scenes`, the `sources` with their `kind`, and the scene `items` HeroesReplay drives (`ObsContract`, from the packaged `appsettings.json` and prod overlay).
+
+`tools/verify-release.ps1` checks every hash and the contract in CI. `update install-obs` refuses a bundle that no longer matches (`obs.bundle_invalid`, nothing written), `obs validate` reports it, and `heroesreplay obs bundle` checks an install without OBS. The plain list is still read (presence only), and an install with no manifest installs and validates with a warning (`obs.bundle_unverified`). See [`docs/obs-operations.md`](../docs/obs-operations.md).

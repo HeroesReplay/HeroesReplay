@@ -5,15 +5,17 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesClientSDK;
 using HeroesReplay.CLI.OpenTelemetry;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Shared;
-using HeroesReplay.Core.Spectating.Clock;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.TwitchExtension;
@@ -28,7 +30,7 @@ public class CheckCommand : Command
     public CheckCommand()
         : base(
             "check",
-            "Validate configuration and connectivity to Heroes Profile, OBS, Twitch, and the internet."
+            "Validate configuration, connectivity to Heroes Profile, OBS, Twitch, and the internet, and the ffmpeg tools clips use."
         )
     {
         Subcommands.Add(
@@ -90,6 +92,13 @@ public class CheckCommand : Command
                 CheckBattleNetAsync
             )
         );
+        Subcommands.Add(
+            Build(
+                "ffmpeg",
+                "Resolve ffmpeg and ffprobe (Clips:FfmpegDirectory, the deps install folder, C:\\ffmpeg\\bin, PATH) and report each path and -version line. Fails when one is missing, does not run, or ffmpeg cannot encode libx264; a working build that is not the pinned version is a warning.",
+                CheckFfmpegAsync
+            )
+        );
 
         SetAction(
             async (parseResult, cancellationToken) =>
@@ -126,6 +135,7 @@ public class CheckCommand : Command
             await CheckObsAsync(cancellationToken),
             await CheckTwitchAsync(cancellationToken),
             await CheckClientAsync(cancellationToken),
+            await CheckFfmpegAsync(cancellationToken),
             await CheckBattleNetAsync(cancellationToken),
             await CheckConnectivityAsync(cancellationToken),
         };
@@ -540,27 +550,31 @@ public class CheckCommand : Command
 
             ITwitchExtensionService extension =
                 provider.GetRequiredService<ITwitchExtensionService>();
-            ExtensionWhoAmI who = await extension.WhoAmIAsync(cancellationToken);
-            if (!who.Reachable)
-            {
-                return new CheckResult(
-                    "twitch-extension",
-                    false,
-                    who.Message ?? "uploader/whoami failed."
-                );
-            }
-
-            string channel = who.TwitchDisplayName ?? who.TwitchLogin ?? "unknown";
-            return new CheckResult(
-                "twitch-extension",
-                true,
-                $"Connected to {channel}. entitlement.active={who.EntitlementActive}. player_linked={who.PlayerLinked}."
-            );
+            return TwitchExtensionWhoAmI(await extension.WhoAmIAsync(cancellationToken));
         }
         catch (Exception e)
         {
             return Fail("twitch-extension", e);
         }
+    }
+
+    public static CheckResult TwitchExtensionWhoAmI(ExtensionWhoAmI who)
+    {
+        if (who == null || !who.Reachable)
+        {
+            return new CheckResult(
+                "twitch-extension",
+                false,
+                who?.Message ?? "uploader/whoami failed."
+            );
+        }
+
+        string channel = who.TwitchDisplayName ?? who.TwitchLogin ?? "unknown";
+        return new CheckResult(
+            "twitch-extension",
+            true,
+            $"Connected to {channel}. entitlement.active={who.EntitlementActive}. player_linked={who.PlayerLinked}."
+        );
     }
 
     public static CheckResult TwitchExtensionDisabled(bool enabled)
@@ -599,6 +613,40 @@ public class CheckCommand : Command
         }
     }
 
+    public static async Task<CheckResult> CheckFfmpegAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            (ClipSettings clips, DependencySettings dependencies) =
+                ServiceCollectionExtensions.LoadToolSettings();
+            FfmpegLocator locator = FfmpegLocator.From(clips, dependencies);
+            var tools = new List<FfmpegToolStatus>();
+            foreach (string tool in FfmpegLocator.Tools)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                tools.Add(
+                    await FfmpegCheck.ProbeAsync(locator.Resolve(tool)).ConfigureAwait(false)
+                );
+            }
+
+            return ToCheckResult(
+                FfmpegCheck.Evaluate(
+                    DependencyManifest.Ffmpeg.Version,
+                    tools,
+                    locator.DescribeSearch()
+                )
+            );
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return Fail("ffmpeg", e);
+        }
+    }
+
+    /// <summary>A warning passes (exit 0) and prints as <c>[WARN]</c>.</summary>
+    public static CheckResult ToCheckResult(FfmpegCheckReport report) =>
+        new("ffmpeg", report.Ok, report.Warning ? WarningPrefix + report.Detail : report.Detail);
+
     public static async Task<CheckResult> CheckBattleNetAsync(CancellationToken cancellationToken)
     {
         try
@@ -621,9 +669,15 @@ public class CheckCommand : Command
             .BuildHeroesReplayProvider();
     }
 
+    /// <summary>A passing result whose detail starts with this prints as <c>[WARN]</c>.</summary>
+    public const string WarningPrefix = "Warning: ";
+
     private static void Write(CheckResult result)
     {
-        string status = result.Ok ? "OK" : "FAIL";
+        string status =
+            !result.Ok ? "FAIL"
+            : result.Detail?.StartsWith(WarningPrefix, StringComparison.Ordinal) == true ? "WARN"
+            : "OK";
         Console.WriteLine($"[{status}] {result.Name}: {result.Detail}");
     }
 

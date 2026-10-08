@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +11,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.YouTube;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube;
@@ -90,6 +94,74 @@ public class ReplaySessionUploadTests
         Assert.True(receiptWritten);
         Assert.Equal(replayTrace, log.ReceiptTrace);
         Assert.NotEqual(ambient.TraceId, log.ReceiptTrace);
+    }
+
+    [Fact]
+    public void JoinKnownReplaySessions_JoinsEachSessionOnce()
+    {
+        // The idle loop calls this every 2 seconds. A span per known session on every call
+        // filled the production dashboard (395 sessions, about 200 spans a second, 2026-10-08).
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "heroesreplay-session-join-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        string sessionPath = Path.Combine(directory, "replay-sessions.txt");
+        var traces = new HashSet<ActivityTraceId>();
+        var joined = new ConcurrentBag<ActivityTraceId>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == HeroesReplayTelemetry.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (activity.OperationName == "heroesreplay.session.joined")
+                {
+                    joined.Add(activity.TraceId);
+                }
+            },
+        };
+        ActivitySource.AddActivityListener(listener);
+        try
+        {
+            Publish(sessionPath, 525001, traces);
+            Publish(sessionPath, 525002, traces);
+            var uploader = new YouTubeUploader(
+                NullLogger<YouTubeUploader>.Instance,
+                new AppSettings
+                {
+                    YouTube = new YouTubeSettings { DryRun = true },
+                    Location = new LocationSettings { DataDirectory = directory },
+                },
+                new CancellationTokenSource()
+            )
+            {
+                ReplaySessionFilePath = sessionPath,
+            };
+
+            uploader.JoinKnownReplaySessions();
+            uploader.JoinKnownReplaySessions();
+            uploader.JoinKnownReplaySessions();
+            Assert.Equal(2, joined.Count(traces.Contains));
+
+            Publish(sessionPath, 525003, traces);
+            uploader.JoinKnownReplaySessions();
+            uploader.JoinKnownReplaySessions();
+            Assert.Equal(3, joined.Count(traces.Contains));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static void Publish(string path, int replayId, HashSet<ActivityTraceId> traces)
+    {
+        using Activity session = HeroesReplayTelemetry.BeginReplaySession(replayId);
+        Assert.NotNull(session);
+        traces.Add(session.TraceId);
+        ReplaySessionFile.Publish(session, replayId, path);
     }
 
     private static ActivityListener Listen()

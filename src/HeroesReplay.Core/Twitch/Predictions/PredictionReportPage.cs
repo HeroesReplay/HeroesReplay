@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 
@@ -16,6 +17,7 @@ public static class PredictionReportPage
         );
         html.Append("main{padding:48px 64px;} h1{font-size:48px;margin:0 0 8px;}");
         html.Append("p{color:#9aa7b5;margin:0 0 28px;}");
+        html.Append("p.verdict{color:#d9c8ff;font-size:30px;font-style:italic;margin:0 0 12px;}");
         html.Append(".cols{display:flex;gap:32px;} section{flex:1;}");
         html.Append("h2{font-size:28px;margin:0 0 12px;}");
         html.Append("table{width:100%;border-collapse:collapse;}");
@@ -26,7 +28,15 @@ public static class PredictionReportPage
         html.Append("</style></head><body><main>");
         html.Append("<h1>");
         html.Append(Encode(string.IsNullOrWhiteSpace(report?.Title) ? "Prediction" : report.Title));
-        html.Append("</h1><p>");
+        html.Append("</h1>");
+        if (!string.IsNullOrWhiteSpace(report?.Verdict))
+        {
+            html.Append("<p class=\"verdict\">");
+            html.Append(Encode(report.Verdict));
+            html.Append("</p>");
+        }
+
+        html.Append("<p>");
         if (string.IsNullOrWhiteSpace(report?.WinningOutcome))
         {
             html.Append("Voting is open.");
@@ -34,7 +44,10 @@ public static class PredictionReportPage
         else
         {
             html.Append(Encode(report.WinningOutcome));
-            html.Append(" won. Twitch only returns the top predictors, not every viewer.");
+            html.Append(" won.");
+            AppendSide(html, report.WinningOutcome, report.WinnerVoters, report.WinnerPoints);
+            AppendSide(html, report.LosingOutcome, report.LoserVoters, report.LoserPoints);
+            html.Append(" Twitch only returns the top predictors, not every viewer.");
         }
 
         html.Append("</p><div class=\"cols\">");
@@ -78,6 +91,22 @@ public static class PredictionReportPage
         }
 
         html.Append("</tbody></table></section>");
+    }
+
+    private static void AppendSide(StringBuilder html, string outcome, int voters, int points)
+    {
+        if (string.IsNullOrWhiteSpace(outcome) || (voters <= 0 && points <= 0))
+        {
+            return;
+        }
+
+        html.Append(' ');
+        html.Append(Encode(outcome));
+        html.Append(": ");
+        html.Append(voters.ToString("N0", CultureInfo.InvariantCulture));
+        html.Append(voters == 1 ? " viewer, " : " viewers, ");
+        html.Append(points.ToString("N0", CultureInfo.InvariantCulture));
+        html.Append(" points.");
     }
 
     private static string Encode(string value) => WebUtility.HtmlEncode(value ?? string.Empty);

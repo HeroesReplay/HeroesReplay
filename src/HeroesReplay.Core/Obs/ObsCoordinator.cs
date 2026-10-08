@@ -32,6 +32,11 @@ internal sealed class ObsCoordinator
     private readonly TimeSpan startupIdentifyTimeout;
     private readonly Func<DateTimeOffset> now;
     private readonly ObsCrashSentinel sentinel;
+
+    // The watchdog reconciles the stream while the spectator switches scenes on its own thread.
+    private readonly object stateGate = new();
+    private volatile ObsRuntimeSnapshot state;
+    private string sceneRequested;
     private DateTimeOffset? startupDeadline;
     private DateTimeOffset launchedAt;
     private bool recordingDesired;
@@ -83,9 +88,42 @@ internal sealed class ObsCoordinator
         this.sentinel = sentinel;
     }
 
-    public ObsRuntimeSnapshot State { get; private set; }
+    public ObsRuntimeSnapshot State => state;
 
     public bool IsIdentified => socket.IsIdentified;
+
+    /// <summary>
+    /// Puts <paramref name="scene"/> on the program output. Once OBS accepts it, it is both the
+    /// scene the spectator asked for and the scene on air in <see cref="State"/>, so status.json
+    /// follows each switch rather than the scene the session started on (#282). A refused scene
+    /// throws and leaves <see cref="State"/> as it was.
+    /// </summary>
+    public void SelectScene(string scene)
+    {
+        socket.SelectProgramScene(scene);
+        if (!SceneSelected(scene))
+        {
+            // No reconcile has run yet (streaming is off, or it is still to come): read the
+            // rest of OBS once so the scene has a snapshot to live in.
+            Remember(null, scene);
+        }
+    }
+
+    /// <summary>False when there is no <see cref="State"/> yet to show the scene.</summary>
+    private bool SceneSelected(string scene)
+    {
+        lock (stateGate)
+        {
+            sceneRequested = scene;
+            if (state == null)
+            {
+                return false;
+            }
+
+            state = state with { SceneDesired = scene, SceneActual = scene };
+            return true;
+        }
+    }
 
     public bool StreamIsDesired() => ObsDesired.StreamIsDesired(settings.OBS);
 
@@ -237,6 +275,7 @@ internal sealed class ObsCoordinator
         try
         {
             socket.SelectProgramScene(scene);
+            SceneSelected(scene);
         }
         catch (Exception e)
         {
@@ -517,19 +556,27 @@ internal sealed class ObsCoordinator
 
     private ObsRuntimeSnapshot Remember(ObsStreamResult stream, string sceneActual)
     {
-        State = ObsDesired.Capture(
-            settings.OBS,
-            ReadRunning(),
-            process.IsOwned,
-            lastLaunch,
-            socket.IsIdentified,
-            sceneActual,
-            stream != null && stream.Succeeded && stream.Active ? true : ReadStreamActive(),
-            recordingDesired,
-            ReadRecording(),
-            stream
-        );
-        return State;
+        bool running = ReadRunning();
+        bool streamActive =
+            stream != null && stream.Succeeded && stream.Active ? true : ReadStreamActive();
+        bool recordingActive = ReadRecording();
+        lock (stateGate)
+        {
+            state = ObsDesired.Capture(
+                settings.OBS,
+                running,
+                process.IsOwned,
+                lastLaunch,
+                socket.IsIdentified,
+                sceneActual,
+                streamActive,
+                recordingDesired,
+                recordingActive,
+                stream,
+                sceneRequested
+            );
+            return state;
+        }
     }
 
     private bool ReadRunning()

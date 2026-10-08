@@ -2,6 +2,7 @@ using System.CommandLine;
 using HeroesReplay.CLI.Commands.Calculators;
 using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
+using HeroesReplay.CLI.Commands.Deps;
 using HeroesReplay.CLI.Commands.HeroesProfile;
 using HeroesReplay.CLI.Commands.Mcp;
 using HeroesReplay.CLI.Commands.Obs;
@@ -31,5 +32,6 @@ public class HeroesReplayCommand : RootCommand
         Subcommands.Add(new ServicesCommand());
         Subcommands.Add(new ObsCommand());
         Subcommands.Add(new UpdateCommand());
+        Subcommands.Add(new DepsCommand());
     }
 }

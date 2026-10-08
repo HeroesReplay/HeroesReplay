@@ -8,8 +8,10 @@ using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Calculators;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.GameClient.Firewall;
 using HeroesReplay.Core.HeroesData;
@@ -199,6 +201,20 @@ public static class ServiceCollectionExtensions
         GetConfiguration().GetSection("MachineHealth").Get<MachineHealthSettings>()
         ?? new MachineHealthSettings();
 
+    /// <summary>
+    /// The effective <c>Clips</c> and <c>Dependencies</c> sections, for <c>deps install</c> and
+    /// <c>check ffmpeg</c>. No secret is resolved.
+    /// </summary>
+    public static (ClipSettings Clips, DependencySettings Dependencies) LoadToolSettings()
+    {
+        IConfigurationRoot configuration = GetConfiguration();
+        return (
+            configuration.GetSection("Clips").Get<ClipSettings>() ?? new ClipSettings(),
+            configuration.GetSection("Dependencies").Get<DependencySettings>()
+                ?? new DependencySettings()
+        );
+    }
+
     /// <summary>The effective <c>ServiceRestart</c> section. No secret is resolved.</summary>
     public static ServiceRestartSettings LoadServiceRestartSettings() =>
         GetConfiguration().GetSection("ServiceRestart").Get<ServiceRestartSettings>()
@@ -370,8 +386,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IRedemptionStatusClient, HelixRedemptionStatus>()
             .AddSingleton<IRedemptionCanceller, RedemptionCanceller>()
             .AddSingleton<RedemptionFulfiller>()
-            .AddSingleton<PredictionReportWriter>()
-            .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>()
+            .AddMatchPredictionServices()
             .AddSingleton<StatusPredictionWatcher>()
             .AddSingleton<ITwitchRewardsManager, TwitchRewardsManager>()
             .AddSingleton<IGameData, GameData>()
@@ -406,6 +421,18 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IHeroesProfileResume>(_ => new HeroesProfileResume(
                 HeroesProfileResume.SharedPath
             ));
+    }
+
+    /// <summary>
+    /// The Helix prediction service and what it needs. <c>twitch connect</c> and
+    /// <c>twitch predictions test</c> both register it here, so the test command cannot miss a
+    /// dependency the live host has (#297).
+    /// </summary>
+    public static IServiceCollection AddMatchPredictionServices(this IServiceCollection services)
+    {
+        return services
+            .AddSingleton<PredictionReportWriter>()
+            .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>();
     }
 
     public static IServiceCollection AddSpectateServices(
@@ -625,6 +652,37 @@ public static class ServiceCollectionExtensions
         return services
             .AddHeroesProfileKiotaClient()
             .AddSingleton<IHeroesProfileService, HeroesProfileService>();
+    }
+
+    /// <summary>
+    /// The hero statistics refresh behind YouTube title hooks. Its own Heroes Profile client and
+    /// <c>HttpClient</c> carry no retry handler, so a 429 waits for <c>Retry-After</c> instead
+    /// of being retried every second.
+    /// </summary>
+    public static IServiceCollection AddHeroStatsRefresh(this IServiceCollection services)
+    {
+        services.AddHttpClient(
+            HeroStatsApi.HttpClientName,
+            client => client.Timeout = HeroesProfileHttp.AttemptTimeout
+        );
+        return services.AddSingleton(sp =>
+        {
+            AppSettings settings = sp.GetRequiredService<AppSettings>();
+            HeroesProfileApiSettings api = settings.HeroesProfileApi;
+            HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
+                .CreateClient(HeroStatsApi.HttpClientName);
+            HeroesProfileClient client = HeroesProfileClientFactory.Create(
+                api?.ApiKey,
+                httpClient,
+                api?.ExternalV1BaseUri
+            );
+            return new HeroStatsRefresh(
+                new HeroStatsApi(client),
+                new HeroStatsStore(settings.Location.DataDirectory),
+                api?.HeroStats ?? new HeroStatsSettings(),
+                sp.GetRequiredService<ILogger<HeroStatsRefresh>>()
+            );
+        });
     }
 
     private static IServiceCollection AddHeroesProfileKiotaClient(this IServiceCollection services)

@@ -154,6 +154,36 @@ public class ReplayMediaPolicyTests
         Assert.Equal(ReplayMediaReason.Expired, decision.PublicationReason);
     }
 
+    /// <summary>#280: the downloader's media window is the rule behind the expired refusal.</summary>
+    [Fact]
+    public void IsPastWindow_FollowsTheExpiredRefusal()
+    {
+        DateTime boundary = GameDate.AddDays(3);
+        DateTime late = boundary.AddTicks(1);
+        ReplayMediaPolicySettings off = Settings(
+            recording: ReplayRecordingMode.Disabled,
+            publication: ReplayPublicationMode.Disabled
+        );
+
+        Assert.False(ReplayMediaPolicy.IsPastWindow(Sample(), Settings(), boundary));
+        Assert.True(ReplayMediaPolicy.IsPastWindow(Sample(), Settings(), late));
+        Assert.Equal(ReplayMediaReason.Expired, Decide(now: late).RecordingReason);
+        Assert.True(ReplayMediaPolicy.IsPastWindow(Sample(), off, late));
+        Assert.False(ReplayMediaPolicy.IsPastWindow(Sample(rank: "Master"), Settings(), late));
+    }
+
+    [Fact]
+    public void IsPastWindow_IsFalseWhenTheWindowCannotBeJudged()
+    {
+        DateTime late = GameDate.AddDays(30);
+
+        Assert.False(
+            ReplayMediaPolicy.IsPastWindow(Sample(includeGameDate: false), Settings(), late)
+        );
+        Assert.False(ReplayMediaPolicy.IsPastWindow(Sample(), settings: null, late));
+        Assert.False(ReplayMediaPolicy.IsPastWindow(input: null, Settings(), late));
+    }
+
     [Fact]
     public void RequestedExpiry_IsLongerThanOrdinary()
     {

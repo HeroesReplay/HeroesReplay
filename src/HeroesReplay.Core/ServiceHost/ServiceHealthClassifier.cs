@@ -120,6 +120,7 @@ public static class ServiceHealthClassifier
             LastOutcome = heartbeat?.LastOutcome,
             LaunchingSince = heartbeat?.LaunchingSince,
             SessionOutcomes = heartbeat?.SessionOutcomes,
+            Dependency = heartbeat?.Dependency,
         };
 
         if (record == null)
@@ -208,6 +209,31 @@ public static class ServiceHealthClassifier
             ) with
             {
                 CauseCode = ServiceHealthCodes.SpectateLaunchStalled,
+            };
+        }
+
+        // A dependency the role's own probe found rejected or unreachable (#305). Degraded, not
+        // failed: the supervisor leaves it alone, so an outage or a bad key is no restart loop.
+        ServiceRoleDependency dependency = heartbeat.Dependency;
+        if (
+            dependency != null
+            && ServiceDependencyStates.IsFailure(dependency.State)
+            && !string.IsNullOrWhiteSpace(dependency.Code)
+        )
+        {
+            TimeSpan? failingFor = Age(now, dependency.Since);
+            string since =
+                failingFor == null ? string.Empty : $" For {Describe(failingFor.Value)}.";
+            return With(
+                health,
+                ServiceRoleState.Degraded,
+                dependency.Cause + since + LastError(heartbeat, now) + stopping,
+                string.IsNullOrWhiteSpace(dependency.Remediation)
+                    ? $"Read the {role} log. The role keeps running and clears this itself once its probe passes."
+                    : dependency.Remediation
+            ) with
+            {
+                CauseCode = dependency.Code,
             };
         }
 
@@ -316,14 +342,17 @@ public static class ServiceHealthClassifier
     /// Adds the supervisor: whether it runs, and each role's restarts and budget. A failed role
     /// whose budget is exhausted reports <c>service.restart_budget_exhausted</c>, and so does the
     /// envelope. A failed role the running supervisor will restart says when.
+    /// <paramref name="liveness"/> is <see cref="ServiceSupervisorFile.Check"/>: whether it runs,
+    /// and whether the mutex or <c>supervisor.json</c> decided.
     /// </summary>
     public static ServiceStatusReport WithSupervisor(
         ServiceStatusReport report,
         ServiceSupervisorState state,
-        bool running,
+        ServiceSupervisorLiveness liveness,
         DateTimeOffset now
     )
     {
+        bool running = liveness?.Running == true;
         if (report == null || (state == null && !running))
         {
             return report;
@@ -414,6 +443,8 @@ public static class ServiceHealthClassifier
             Supervisor = new ServiceSupervisorSummary
             {
                 Running = running,
+                SeenVia = liveness?.SeenVia,
+                Detail = liveness?.Detail,
                 Pid = state?.Pid,
                 StartedAt = state?.StartedAt,
                 UpdatedAt = state?.UpdatedAt,

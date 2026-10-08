@@ -114,6 +114,12 @@ public sealed record ServiceRoleHealth
     /// <summary>Spectate: replay sessions this process ended, by outcome.</summary>
     public IReadOnlyDictionary<string, int> SessionOutcomes { get; init; }
 
+    /// <summary>
+    /// The role's last check of its live dependency (#305): name, state, code, cause,
+    /// remediation, <c>checkedAt</c>, <c>since</c>. Null when the role wrote none.
+    /// </summary>
+    public ServiceRoleDependency Dependency { get; init; }
+
     /// <summary>The role's newest log file, or the file it writes today when there is none yet.</summary>
     public string LogPath { get; init; }
 
@@ -146,6 +152,15 @@ public sealed record ServiceRoleRestartStatus
 public sealed record ServiceSupervisorSummary
 {
     public bool Running { get; init; }
+
+    /// <summary>
+    /// How <see cref="Running"/> was decided: <c>mutex</c>, or <c>supervisor.json</c> when this
+    /// session cannot see the mutex (an SSH logon). Null when neither showed a supervisor.
+    /// </summary>
+    public string SeenVia { get; init; }
+
+    /// <summary>Why <c>supervisor.json</c> did or did not count. Null when the mutex decided.</summary>
+    public string Detail { get; init; }
     public int? Pid { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
     public DateTimeOffset? UpdatedAt { get; init; }

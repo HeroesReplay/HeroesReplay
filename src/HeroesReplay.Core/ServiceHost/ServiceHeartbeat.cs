@@ -58,18 +58,26 @@ public sealed class ServiceHeartbeat : IDisposable
     /// Report ready for the role <c>services start</c> launched this process as, then keep the
     /// heartbeat fresh until disposal. Null when no service nonce was given.
     /// </summary>
+    /// <param name="role">The role name.</param>
+    /// <param name="settings">The heartbeat interval.</param>
+    /// <param name="stop">The role's stop.</param>
+    /// <param name="dependency">
+    /// The first dependency probe (#305), so the ready file already says when the role starts
+    /// degraded. Null writes none.
+    /// </param>
     public static ServiceHeartbeat StartFromEnvironment(
         string role,
         ServiceHealthSettings settings,
-        CancellationToken stop
+        CancellationToken stop,
+        ServiceDependencyResult dependency = null
     )
     {
-        string nonce = Environment.GetEnvironmentVariable(ServiceReadyFile.NonceVariable);
-        if (!ServiceReadyFile.IsSafeNonce(nonce))
+        if (!LaunchedAsServiceRole)
         {
             return null;
         }
 
+        string nonce = Environment.GetEnvironmentVariable(ServiceReadyFile.NonceVariable);
         string version = Environment.GetEnvironmentVariable(ServiceReadyFile.VersionVariable);
         var heartbeat = new ServiceHeartbeat(
             new ServiceReadyReport
@@ -86,9 +94,59 @@ public sealed class ServiceHeartbeat : IDisposable
             },
             (settings ?? new ServiceHealthSettings()).Interval
         );
+        if (dependency != null)
+        {
+            heartbeat.Dependency(dependency);
+        }
+
         heartbeat.Start(stop);
         heartbeat.Install();
         return heartbeat;
+    }
+
+    /// <summary>
+    /// <c>services start</c> or the supervisor launched this process as a role: it has a service
+    /// nonce, so it writes a heartbeat.
+    /// </summary>
+    public static bool LaunchedAsServiceRole =>
+        ServiceReadyFile.IsSafeNonce(
+            Environment.GetEnvironmentVariable(ServiceReadyFile.NonceVariable)
+        );
+
+    /// <summary>The role's last dependency probe (#305). No-op outside a service role.</summary>
+    public static void RecordDependency(ServiceDependencyResult result) =>
+        Volatile.Read(ref current)?.Dependency(result);
+
+    /// <summary>
+    /// Writes the last dependency probe. <see cref="ServiceRoleDependency.Since"/> keeps the first
+    /// time of the same state and code in a row.
+    /// </summary>
+    public void Dependency(ServiceDependencyResult result)
+    {
+        if (result == null)
+        {
+            return;
+        }
+
+        lock (gate)
+        {
+            DateTimeOffset now = time.GetUtcNow();
+            ServiceRoleDependency previous = report.Dependency;
+            bool same =
+                previous != null
+                && string.Equals(previous.State, result.State, StringComparison.Ordinal)
+                && string.Equals(previous.Code, result.Code, StringComparison.Ordinal);
+            report.Dependency = new ServiceRoleDependency
+            {
+                Name = result.Dependency,
+                State = result.State,
+                Code = result.Code,
+                Cause = Redact(result.Cause),
+                Remediation = result.Remediation,
+                CheckedAt = now,
+                Since = same && previous.Since is DateTimeOffset since ? since : now,
+            };
+        }
     }
 
     /// <summary>Makes this the heartbeat that <see cref="RecordWork"/> and <see cref="RecordError"/> reach.</summary>
@@ -305,6 +363,7 @@ public sealed class ServiceHeartbeat : IDisposable
                             Cause = report.Concern.Cause,
                             Since = report.Concern.Since,
                         },
+                Dependency = report.Dependency?.Copy(),
             };
         }
     }
