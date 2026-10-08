@@ -35,18 +35,44 @@ public class ScreenMemoryVerdictsTests
         "ScreenForegroundHero"
     );
 
-    // The boot splash (mask 0x20), before any menu.
+    // Battle.net "launch Hero", the first seconds: AUTHENTICATION "Connecting..." over the
+    // login screen (a shown CLoginDialog).
+    private static readonly ClientScreenSample Authenticating = new(
+        ClientScreenKind.Authenticating,
+        new[] { "ScreenBackgroundHero", "ScreenLoginUnified" },
+        MenuSeen: true,
+        "screens",
+        Current,
+        false,
+        Dialogs: new[] { "CLoginDialog" }
+    );
+
+    // The boot splash (mask 0x20): the loading screen's map panel is hidden.
     private static readonly ClientScreenSample Boot = Sample(
-        ClientScreenKind.Loading,
+        ClientScreenKind.Splash,
         menuSeen: false,
         "ScreenLoading"
     );
 
-    // A replay opened from home: the map loading screen.
+    // A replay's map loading screen: the loading screen's map panel is shown.
     private static readonly ClientScreenSample MapLoading = Sample(
-        ClientScreenKind.Loading,
+        ClientScreenKind.MapLoading,
         menuSeen: true,
         "ScreenLoading"
+    );
+
+    // 2.57.0.98348, 2026-10-08 16:50, HeroesSwitcher with a 2.57.0.98297 replay: "The version of Heroes of
+    // the Storm required to play this game is not available." in a CStandardDialog.
+    private static readonly ClientScreenSample VersionDialog = new(
+        ClientScreenKind.Dialog,
+        new[] { "ScreenBackgroundHero", "ScreenLoginUnified" },
+        MenuSeen: true,
+        "screens",
+        Current,
+        false,
+        Dialogs: new[] { "CStandardDialog" },
+        LaunchResultCode: 23,
+        LaunchResult: "GameLaunchUnsupportedNoData"
     );
 
     private static readonly ClientScreenSample Match = new(
@@ -54,6 +80,15 @@ public class ScreenMemoryVerdictsTests
         new string[0],
         MenuSeen: true,
         "match",
+        Current
+    );
+
+    // The MVP screen at the end of a replay: CEndOfGameAwardsPanel shown.
+    private static readonly ClientScreenSample Awards = new(
+        ClientScreenKind.Awards,
+        new string[0],
+        MenuSeen: true,
+        "awards",
         Current
     );
 
@@ -71,6 +106,8 @@ public class ScreenMemoryVerdictsTests
         Assert.True(ScreenMemoryVerdicts.For(ScreenState.Home, Home));
         Assert.False(ScreenMemoryVerdicts.For(ScreenState.LoginForm, Home));
         Assert.False(ScreenMemoryVerdicts.For(ScreenState.MapLoading, Home));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.VersionMismatch, Home));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.EndScreen, Home));
     }
 
     [Fact]
@@ -82,17 +119,75 @@ public class ScreenMemoryVerdictsTests
     }
 
     [Fact]
-    public void For_MapLoadingAfterAMenu_IsMapLoading()
+    public void For_Authenticating_IsNeitherTheLoginFormNorHome()
+    {
+        // OCR reads "AUTHENTICATION Connecting..." as neither; 0.2.0 called it the login form.
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.LoginForm, Authenticating));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.Home, Authenticating));
+    }
+
+    [Fact]
+    public void For_MapLoading_IsMapLoading()
     {
         Assert.True(ScreenMemoryVerdicts.For(ScreenState.MapLoading, MapLoading));
         Assert.False(ScreenMemoryVerdicts.For(ScreenState.Home, MapLoading));
     }
 
     [Fact]
-    public void For_BootSplash_IsNotHomeButCannotTellMapLoading()
+    public void For_BootSplash_IsNeitherHomeNorMapLoading()
     {
         Assert.False(ScreenMemoryVerdicts.For(ScreenState.Home, Boot));
-        Assert.Null(ScreenMemoryVerdicts.For(ScreenState.MapLoading, Boot));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.MapLoading, Boot));
+    }
+
+    [Fact]
+    public void For_TheVersionDialog_IsAVersionMismatchAndNotTheLoginForm()
+    {
+        Assert.True(ScreenMemoryVerdicts.For(ScreenState.VersionMismatch, VersionDialog));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.LoginForm, VersionDialog));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.Home, VersionDialog));
+    }
+
+    [Fact]
+    public void For_AnotherMessageDialog_IsNotAVersionMismatch()
+    {
+        ClientScreenSample other = VersionDialog with
+        {
+            LaunchResultCode = 2,
+            LaunchResult = "GameLaunchReplayOpenFailure",
+        };
+
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.VersionMismatch, other));
+    }
+
+    [Fact]
+    public void For_TheDownloadDialog_IsTheGameDataDownloadAndNotHome()
+    {
+        // 2.57.0.98348 handing a 2.57.0.98304 replay to its build (2026-10-08 15:39): DOWNLOADING
+        // "All data files must be fully downloaded..." in a CProgressBarDialog. LoadingScreen
+        // read it as a menu, so the old home rule opened the replay on it.
+        var download = new ClientScreenSample(
+            ClientScreenKind.Download,
+            new string[0],
+            MenuSeen: false,
+            "no-screen",
+            Current,
+            false,
+            Dialogs: new[] { "CProgressBarDialog" },
+            LaunchResultCode: 0,
+            LaunchState: 6
+        );
+
+        Assert.True(ScreenMemoryVerdicts.For(ScreenState.GameDataDownload, download));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.Home, download));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.GameDataDownload, Home));
+    }
+
+    [Fact]
+    public void For_TheMvpScreen_IsTheEndScreen()
+    {
+        Assert.True(ScreenMemoryVerdicts.For(ScreenState.EndScreen, Awards));
+        Assert.False(ScreenMemoryVerdicts.For(ScreenState.EndScreen, Match));
     }
 
     [Fact]
@@ -106,7 +201,16 @@ public class ScreenMemoryVerdictsTests
     [Fact]
     public void For_UnknownOrNoSample_CannotTell()
     {
-        foreach (ScreenState state in new[] { ScreenState.Home, ScreenState.LoginForm })
+        foreach (
+            ScreenState state in new[]
+            {
+                ScreenState.Home,
+                ScreenState.LoginForm,
+                ScreenState.MapLoading,
+                ScreenState.VersionMismatch,
+                ScreenState.EndScreen,
+            }
+        )
         {
             Assert.Null(ScreenMemoryVerdicts.For(state, Unknown));
             Assert.Null(ScreenMemoryVerdicts.For(state, null));
@@ -114,11 +218,8 @@ public class ScreenMemoryVerdictsTests
     }
 
     [Theory]
-    [InlineData(ScreenState.GameDataDownload)]
     [InlineData(ScreenState.GameDataStartup)]
-    [InlineData(ScreenState.VersionMismatch)]
     [InlineData(ScreenState.RegionUnavailable)]
-    [InlineData(ScreenState.EndScreen)]
     public void For_StatesMemoryDoesNotReadYet_CannotTell(ScreenState state)
     {
         foreach (
@@ -126,9 +227,12 @@ public class ScreenMemoryVerdictsTests
             {
                 Home,
                 Login,
+                Authenticating,
                 Boot,
                 MapLoading,
+                VersionDialog,
                 Match,
+                Awards,
                 Unknown,
                 null,
             }
@@ -139,11 +243,15 @@ public class ScreenMemoryVerdictsTests
     }
 
     [Fact]
-    public void Describe_NamesTheScreenReasonShownScreensAndMenuSeen()
+    public void Describe_NamesTheScreenReasonShownScreensMenuSeenDialogsAndLaunchResult()
     {
         Assert.Equal(
             "Login, screens, shown [BackgroundHero,LoginUnified,HeroCutscene,NavigationHero,ForegroundHero], menu seen True",
             ScreenMemoryVerdicts.Describe(Login)
+        );
+        Assert.Equal(
+            "Dialog, screens, shown [BackgroundHero,LoginUnified], menu seen True, dialogs [CStandardDialog], launch result 23 GameLaunchUnsupportedNoData",
+            ScreenMemoryVerdicts.Describe(VersionDialog)
         );
         Assert.Equal("not read", ScreenMemoryVerdicts.Describe(null));
     }

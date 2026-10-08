@@ -1733,13 +1733,16 @@ public class GameController : IGameController
         );
 
     /// <summary>
-    /// Home is memory first (<see cref="HomeScreenCue"/>). OCR's words decide only when memory
-    /// cannot tell, and its text still vetoes a login form. Shadow mode sees the same memory read.
+    /// Home is memory first (<see cref="HomeScreenCue"/>): the client's own home screen
+    /// (<see cref="ClientScreen"/>) when it can tell, else a menu in <see cref="LoadingScreen"/>.
+    /// OCR's words decide only when memory cannot tell, and its text still vetoes a login form.
+    /// Shadow mode sees the same memory read.
     /// </summary>
     private bool SeesHome(WordScan scan)
     {
         LoadingScreenSample? screen = ReadScreenInMemory();
-        bool home = HomeScreenCue.Sees(screen?.OnMenu, scan.Found, scan.Text);
+        ClientScreenSample? client = ReadClientScreen();
+        bool home = HomeScreenCue.Sees(client?.OnHome, screen?.OnMenu, scan.Found, scan.Text);
         bool loginForm = ClientScreenText.IsLoginForm(scan.Text);
         ShadowScreen(ScreenState.Home, scan.Found && !loginForm, scan.Text);
         ShadowScreen(ScreenState.LoginForm, loginForm, scan.Text);
