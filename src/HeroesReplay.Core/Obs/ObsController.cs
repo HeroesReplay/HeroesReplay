@@ -395,7 +395,7 @@ public class ObsController : IObsController
                 try
                 {
                     EnsureConnected();
-                    obs.SetCurrentProgramScene(settings.OBS.GameSceneName);
+                    coordinator.SelectScene(settings.OBS.GameSceneName);
                     logger.LogInformation("Set scene to: {Scene}", settings.OBS.GameSceneName);
                     return true;
                 }
@@ -435,7 +435,7 @@ public class ObsController : IObsController
                 try
                 {
                     EnsureConnected();
-                    obs.SetCurrentProgramScene(settings.OBS.WaitingSceneName);
+                    coordinator.SelectScene(settings.OBS.WaitingSceneName);
                     logger.LogInformation($"Set scene to: {settings.OBS.WaitingSceneName}");
                     return true;
                 }
@@ -507,7 +507,7 @@ public class ObsController : IObsController
     {
         try
         {
-            obs.SetCurrentProgramScene(source.SceneName);
+            coordinator.SelectScene(source.SceneName);
             logger.LogInformation($"set scene to: {source.SceneName}");
             if (source.DisplayTime > TimeSpan.Zero)
             {

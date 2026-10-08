@@ -26,6 +26,8 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     private string lastWrittenDetail;
     private bool? lastWrittenOnline;
     private string lastWrittenBlocked;
+    private string lastWrittenSceneDesired;
+    private string lastWrittenSceneActual;
     private volatile bool keepStreamThroughRestart;
 
     public ConnectivityWatchdog(
@@ -146,16 +148,23 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         string detail = snapshot.Describe();
         ObsRuntimeSnapshot obs = obsController?.ReadObsState();
         string blocked = obs?.StreamBlockedBy;
+        // A scene switch is written too, so status.json follows the scene on air (#282).
+        string sceneDesired = obs?.SceneDesired;
+        string sceneActual = obs?.SceneActual;
         if (
             changed != null
             || lastWrittenOnline != IsOnline
             || lastWrittenDetail != detail
             || lastWrittenBlocked != blocked
+            || lastWrittenSceneDesired != sceneDesired
+            || lastWrittenSceneActual != sceneActual
         )
         {
             lastWrittenOnline = IsOnline;
             lastWrittenDetail = detail;
             lastWrittenBlocked = blocked;
+            lastWrittenSceneDesired = sceneDesired;
+            lastWrittenSceneActual = sceneActual;
             statusStore.Patch(status =>
             {
                 status.ConnectivityOnline = IsOnline;
