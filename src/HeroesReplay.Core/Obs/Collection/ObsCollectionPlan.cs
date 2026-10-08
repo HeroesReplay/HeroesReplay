@@ -39,6 +39,12 @@ public sealed record ObsCollectionPlanRequest
     public ObsRuntimeValues Runtime { get; init; }
 
     public DateTime UtcNow { get; init; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Where the dry run makes its throwaway copies (a <c>heroesreplay-obs-plan-*</c> folder it
+    /// deletes). The user's temp folder when empty; a test passes its own (#331).
+    /// </summary>
+    public string SandboxRoot { get; init; }
 }
 
 /// <summary>What <c>update install-obs</c> would do with the live collection now.</summary>
@@ -156,6 +162,9 @@ public static class ObsPlanCodes
 /// </summary>
 public static class ObsCollectionPlan
 {
+    /// <summary>The dry run's throwaway folder: <c>&lt;SandboxRoot&gt;\heroesreplay-obs-plan-&lt;guid&gt;</c>.</summary>
+    public const string SandboxPrefix = "heroesreplay-obs-plan-";
+
     public static ObsCollectionPlanResult Build(ObsCollectionPlanRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -316,8 +325,10 @@ public static class ObsCollectionPlan
     )
     {
         string sandbox = Path.Combine(
-            Path.GetTempPath(),
-            "heroesreplay-obs-plan-" + Guid.NewGuid().ToString("N")
+            string.IsNullOrWhiteSpace(request.SandboxRoot)
+                ? Path.GetTempPath()
+                : request.SandboxRoot,
+            SandboxPrefix + Guid.NewGuid().ToString("N")
         );
         try
         {

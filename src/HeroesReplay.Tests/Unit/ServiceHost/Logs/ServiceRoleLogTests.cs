@@ -390,7 +390,7 @@ public class ServiceRoleLogTests
         Assert.Equal(50, settings.MaxFiles);
         Assert.Equal(
             Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), // isolation: path text only
                 "HeroesReplay",
                 "logs"
             ),

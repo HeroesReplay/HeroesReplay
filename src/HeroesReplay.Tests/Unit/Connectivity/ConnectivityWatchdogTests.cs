@@ -246,7 +246,8 @@ public class ConnectivityWatchdogTests
     public async Task RunAsync_DoesNotPollTwitchWhenStreamingDisabled()
     {
         using Fixture fixture = CreateFixture(streamingEnabled: false);
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cts = new CancellationTokenSource();
+        fixture.Probe.StopAtFirstProbe = cts;
         await fixture.Watchdog.RunAsync(cts.Token);
         Assert.Equal(0, fixture.Probe.TwitchCalls);
         Assert.Equal(1, fixture.Probe.InternetCalls);
@@ -257,7 +258,8 @@ public class ConnectivityWatchdogTests
     public async Task RunAsync_ProbesTwitchWhenStreamingEnabled()
     {
         using Fixture fixture = CreateFixture(streamingEnabled: true);
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cts = new CancellationTokenSource();
+        fixture.Probe.StopAtFirstProbe = cts;
         await fixture.Watchdog.RunAsync(cts.Token);
         Assert.True(fixture.Probe.TwitchCalls >= 1);
         Assert.True(fixture.Probe.InternetCalls >= 1);
@@ -269,7 +271,8 @@ public class ConnectivityWatchdogTests
     {
         using Fixture fixture = CreateFixture(streamingEnabled: true);
         fixture.Obs.Streaming = true;
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cts = new CancellationTokenSource();
+        fixture.Probe.StopAtFirstProbe = cts;
 
         await fixture.Watchdog.RunAsync(cts.Token);
 
@@ -284,7 +287,8 @@ public class ConnectivityWatchdogTests
         using Fixture fixture = CreateFixture(streamingEnabled: true, waitingScene: "waiting");
         fixture.Obs.Streaming = true;
         fixture.Watchdog.KeepStreamThroughRestart(true);
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cts = new CancellationTokenSource();
+        fixture.Probe.StopAtFirstProbe = cts;
 
         await fixture.Watchdog.RunAsync(cts.Token);
 
@@ -299,7 +303,8 @@ public class ConnectivityWatchdogTests
         using Fixture fixture = CreateFixture(streamingEnabled: true);
         fixture.Obs.Streaming = true;
         fixture.Watchdog.KeepStreamThroughRestart(true);
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cts = new CancellationTokenSource();
+        fixture.Probe.StopAtFirstProbe = cts;
 
         await fixture.Watchdog.RunAsync(cts.Token);
 
@@ -314,7 +319,8 @@ public class ConnectivityWatchdogTests
         fixture.Obs.Streaming = true;
         fixture.Watchdog.KeepStreamThroughRestart(true);
         fixture.Watchdog.KeepStreamThroughRestart(false);
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cts = new CancellationTokenSource();
+        fixture.Probe.StopAtFirstProbe = cts;
 
         await fixture.Watchdog.RunAsync(cts.Token);
 
@@ -539,9 +545,17 @@ public class ConnectivityWatchdogTests
         public int TwitchCalls { get; private set; }
         public int HeroesProfileCalls { get; private set; }
 
+        /// <summary>
+        /// Cancelled at the first internet probe, so <c>RunAsync</c> finishes that round and then
+        /// stops. A token that cancelled itself after 200 ms could fire before a busy machine
+        /// ran the first probe at all (#331).
+        /// </summary>
+        public CancellationTokenSource StopAtFirstProbe { get; set; }
+
         public Task<bool> ProbeInternetAsync(CancellationToken cancellationToken)
         {
             InternetCalls++;
+            StopAtFirstProbe?.Cancel();
             return Task.FromResult(Internet);
         }
 

@@ -58,6 +58,8 @@ dotnet test heroes-replay.slnx -p:TestCategory=Smoke
 pwsh -File tools/verify.ps1
 ```
 
+Unit tests run in parallel worktrees on one machine, and on ASA-SERVER next to a running stack (#331). A unit test uses a temp folder of its own (`Path.GetTempPath()` plus a GUID), never opens `%LOCALAPPDATA%\HeroesReplay` or `C:\heroesreplay`, never searches the shared temp folder, and waits for a signal or an injected clock or wait, not a fixed delay. A cross-process file lock takes its mutex name from the file (`FileMutexName`), so a test's temp file never shares the stack's lock. `TestIsolationTests` fails on the folder, temp-search, and static-mutex patterns.
+
 `tools/verify.ps1` is the git hook: pre-commit, and pre-push when the update is `develop`. It builds (unused usings and unused private members are errors in `.editorconfig`) and runs `Category=Unit` only. `UnusedSourceTests` fails when a Core or CLI type is not reachable from startup, tests, or the reward/chat handler scan. `HEROESREPLAY_SKIP_VERIFY=1` or `--no-verify` skips the hook. Kiota `Generated/` is not part of that unused-code check.
 
 Secrets: skill `op-service-account`. On a new clone, set user env `OP_SERVICE_ACCOUNT` then `pwsh -File tools/fill-secrets-from-op.ps1`. Never commit or print resolved tokens.

@@ -5,6 +5,7 @@ using System.Text;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs.Collection;
@@ -45,7 +46,7 @@ public sealed class ObsCollectionRollbackTests : IDisposable
         );
     }
 
-    public void Dispose() => Directory.Delete(root, recursive: true);
+    public void Dispose() => TestTemp.Delete(root);
 
     private string AppData => Path.Combine(root, "appdata");
 
