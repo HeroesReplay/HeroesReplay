@@ -351,7 +351,17 @@ public static class ServiceEnsurePlan
         IEnumerable<ServiceRoleHealth> extra = null
     )
     {
-        List<ServiceEnsureRole> all = roles.ToList();
+        // A refusal starts nothing, so a down role is blocked too, never "start".
+        List<ServiceEnsureRole> all = roles
+            .Select(role =>
+                role.Action == ServiceEnsureActions.Start
+                    ? role with
+                    {
+                        Action = ServiceEnsureActions.Blocked,
+                    }
+                    : role
+            )
+            .ToList();
         foreach (ServiceRoleHealth role in extra ?? Enumerable.Empty<ServiceRoleHealth>())
         {
             if (!all.Any(item => string.Equals(item.Role, role.Role, StringComparison.Ordinal)))

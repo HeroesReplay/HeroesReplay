@@ -129,6 +129,12 @@ public class ServiceEnsureTests
             report.Roles,
             role => role.Role == "download" && role.Action == ServiceEnsureActions.Blocked
         );
+        // The down role it would have started is blocked too: a refusal starts nothing.
+        Assert.Equal(
+            ServiceEnsureActions.Blocked,
+            report.Roles.Single(role => role.Role == "youtube").Action
+        );
+        Assert.Empty(ServiceEnsurePlan.ToStart(report));
         Assert.Empty(stack.Launches);
         Assert.Empty(stack.Killed);
     }
