@@ -27,6 +27,8 @@ public class ObsCommand : Command
         Subcommands.Add(ObsLiveCommands.ValidateCommand());
         Subcommands.Add(ObsBundleCommand.Create());
         Subcommands.Add(ObsPlanCommand.Create());
+        Subcommands.Add(ObsBackupCommands.BackupCommand());
+        Subcommands.Add(ObsBackupCommands.RestoreCommand());
     }
 
     private static Command PagesCommand()

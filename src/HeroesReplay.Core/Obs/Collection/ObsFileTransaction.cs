@@ -84,6 +84,24 @@ public static class ObsFileTransaction
         return backup;
     }
 
+    /// <summary>
+    /// Copies <paramref name="path"/> into the backup folder, as a write does first, without
+    /// changing it. Null when the file does not exist.
+    /// </summary>
+    public static string Snapshot(string path, string backupDirectory, DateTime utcNow)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(backupDirectory);
+        string full = Path.GetFullPath(path);
+        return File.Exists(full) ? Backup(full, backupDirectory, utcNow) : null;
+    }
+
+    /// <summary>True when <paramref name="backup"/> is named as a backup of <paramref name="path"/>.</summary>
+    public static bool IsBackupOf(string backup, string path) =>
+        BackupTime(backup) != null
+        && Path.GetFileName(backup)
+            .StartsWith(BackupKey(Path.GetFullPath(path)) + ".", StringComparison.Ordinal);
+
     /// <summary>The backups of <paramref name="path"/>, newest first.</summary>
     public static string[] Backups(string backupDirectory, string path)
     {
