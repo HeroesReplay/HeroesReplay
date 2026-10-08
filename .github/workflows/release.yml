@@ -40,9 +40,24 @@ jobs:
       - name: Verify release zip
         shell: pwsh
         run: pwsh -NoProfile -File tools/verify-release.ps1 -ZipPath heroesreplay-win-x64.zip -Version 'v${{ steps.gitversion.outputs.semVer }}'
+      # The release tag must point at the master commit this run built (#339). GitHub ignores
+      # target_commitish when the tag already exists, so refuse a tag that sits anywhere else.
+      - name: Check the release tag
+        shell: pwsh
+        env:
+          TAG: v${{ steps.gitversion.outputs.semVer }}
+        run: |
+          if (git tag --list $env:TAG) {
+            $commit = git rev-list -n 1 $env:TAG
+            if ($commit -ne $env:GITHUB_SHA) {
+              throw "Tag $env:TAG already points at $commit, not at $env:GITHUB_SHA, the master commit this run built."
+            }
+          }
+      # Without target_commitish, GitHub creates a new tag on the default branch (develop).
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.gitversion.outputs.semVer }}
+          target_commitish: ${{ github.sha }}
           name: v${{ steps.gitversion.outputs.semVer }}
           files: heroesreplay-win-x64.zip
           fail_on_unmatched_files: true

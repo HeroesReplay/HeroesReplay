@@ -54,6 +54,41 @@ public class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Release_TagsTheMasterCommitItBuilt()
+    {
+        // #339: GitHub creates a missing tag on the default branch (develop) unless the release
+        // names a commit, so every release was tagged on a develop commit it never shipped.
+        string release = ReadRepoFile(".github", "workflows", "release.yml");
+        const string Action = "softprops/action-gh-release";
+        const string TagName = "v${{ steps.gitversion.outputs.semVer }}";
+        int upload = release.IndexOf(Action, StringComparison.Ordinal);
+        Assert.True(upload > 0, "release.yml does not publish with " + Action);
+        Assert.Equal(upload, release.LastIndexOf(Action, StringComparison.Ordinal));
+
+        string publish = release[upload..];
+        Assert.Contains("tag_name: " + TagName, publish, StringComparison.Ordinal);
+        Assert.Contains("target_commitish: ${{ github.sha }}", publish, StringComparison.Ordinal);
+
+        // The build is that same commit: the checkout takes the pushed sha, not another ref.
+        Assert.DoesNotMatch(@"(?m)^\s+ref:", release);
+
+        // GitHub ignores target_commitish when the tag exists, so the run refuses a tag with
+        // that name on any other commit before it publishes.
+        int guard = release.IndexOf("git rev-list -n 1 $env:TAG", StringComparison.Ordinal);
+        Assert.True(guard > 0 && guard < upload, "release.yml does not check the tag first.");
+        Assert.Contains("TAG: " + TagName, release, StringComparison.Ordinal);
+        Assert.Contains("$commit -ne $env:GITHUB_SHA", release, StringComparison.Ordinal);
+        Assert.DoesNotContain("continue-on-error", release, StringComparison.Ordinal);
+
+        // Nothing else creates or moves a tag or a release.
+        Assert.DoesNotMatch(@"git tag\s+(?!--list\b)", release);
+        foreach (string other in new[] { "gh release", "git push", "create-release", "/releases" })
+        {
+            Assert.DoesNotContain(other, release, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void BothWorkflows_FetchThePinnedSdkPackageBeforeAnythingRestores()
     {
         // HeroesClientSDK (the memory match clock) restores from the .packages folder, filled
