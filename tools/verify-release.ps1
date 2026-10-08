@@ -23,7 +23,8 @@ $temp = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Path]::GetT
 $extract = Join-Path $temp ('heroesreplay-verify-' + [System.IO.Path]::GetRandomFileName())
 $failures = [System.Collections.Generic.List[string]]::new()
 
-# ReleaseInstall (heroesreplay.exe at the root, version.txt), ReleaseUpdateGate and
+# ReleaseInstall (heroesreplay.exe at the root, version.txt), the memory match clock and screen
+# state (HeroesClientSDK.dll, the GitHub Packages package from nuget.config), ReleaseUpdateGate and
 # apply-release.ps1 (apply-release.ps1, appsettings.json for MinReplayId), the prod overlay,
 # client configure (AhliObs), update install-obs (Default.json, Default\basic.ini), and the MCP
 # discovery file (.mcp.json, which starts the read-only `heroesreplay mcp`).
@@ -32,6 +33,7 @@ $required = [System.Collections.Generic.List[string]]::new()
     'heroesreplay.exe',
     'heroesreplay.dll',
     'heroesreplay.runtimeconfig.json',
+    'HeroesClientSDK.dll',
     'appsettings.json',
     'appsettings.prod.json',
     'apply-release.ps1',

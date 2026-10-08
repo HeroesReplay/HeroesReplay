@@ -3,10 +3,14 @@
 # gitignored secrets from 1Password. Scene paths in Default.json are relative to obs\.
 # heroesreplay rewrites the live collection to this folder when OBS is closed. Pass the
 # names when OBS:ProfileName or OBS:SceneCollectionName is not HeroesReplay on this machine.
+# It also stores a GitHub Packages credential for HeroesClientSDK (tools/github-packages-login.ps1):
+# `gh auth token` when gh is logged in with read:packages, or -GitHubPackagesOpReference, an
+# op:// reference to a read:packages PAT in 1Password.
 # See AGENTS.md and .agents/skills/op-service-account/SKILL.md.
 param(
     [string]$ProfileName = 'HeroesReplay',
-    [string]$SceneCollectionName = 'HeroesReplay'
+    [string]$SceneCollectionName = 'HeroesReplay',
+    [string]$GitHubPackagesOpReference = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,6 +86,19 @@ Write-Host 'Twitch ingest also needs this machine armed: heroesreplay obs arm (t
 $fill = Join-Path $root 'tools\fill-secrets-from-op.ps1'
 if (Test-Path $fill) {
     & $fill
+}
+
+# HeroesClientSDK restores from GitHub Packages, which needs a read:packages token (nuget.config).
+# The credential goes into the user-level NuGet config, never the repo.
+$packages = Join-Path $root 'tools\github-packages-login.ps1'
+if (Test-Path $packages) {
+    try {
+        & $packages -OpReference $GitHubPackagesOpReference
+    }
+    catch {
+        Write-Warning "GitHub Packages not set up: $($_.Exception.Message)"
+        Write-Warning 'dotnet restore cannot get HeroesClientSDK until it is. Then run: pwsh -File tools/github-packages-login.ps1'
+    }
 }
 
 $hooks = Join-Path $root 'tools\install-git-hooks.ps1'

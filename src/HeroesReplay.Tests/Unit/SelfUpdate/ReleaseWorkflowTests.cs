@@ -54,6 +54,43 @@ public class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void BothWorkflows_AuthenticateGitHubPackagesBeforeTheBuild()
+    {
+        // HeroesClientSDK (the memory match clock) restores from GitHub Packages, which needs a
+        // token even for a public package. Without it, release.yml cannot build master.
+        string config = ReadRepoFile("nuget.config");
+        Assert.Contains(
+            "https://nuget.pkg.github.com/HeroesReplay/index.json",
+            config,
+            StringComparison.Ordinal
+        );
+        Assert.Contains(
+            "<package pattern=\"HeroesClientSDK\" />",
+            config,
+            StringComparison.Ordinal
+        );
+        Assert.DoesNotContain("packageSourceCredentials", config, StringComparison.Ordinal);
+
+        foreach (string workflow in new[] { "ci.yml", "release.yml" })
+        {
+            string text = ReadRepoFile(".github", "workflows", workflow);
+            int auth = text.IndexOf("dotnet nuget update source github", StringComparison.Ordinal);
+            int build = text.IndexOf("dotnet build heroes-replay.slnx", StringComparison.Ordinal);
+
+            Assert.Contains("packages: read", text, StringComparison.Ordinal);
+            Assert.Contains(
+                "--password ${{ secrets.GITHUB_TOKEN }}",
+                text,
+                StringComparison.Ordinal
+            );
+            Assert.True(
+                auth > 0 && build > auth,
+                workflow + " does not authenticate before the build."
+            );
+        }
+    }
+
+    [Fact]
     public void Scripts_KeepSecretsOutAndCheckTheObsBundle()
     {
         string package = ReadRepoFile("tools", "package-release.ps1");
@@ -69,6 +106,7 @@ public class ReleaseWorkflowTests
         );
 
         Assert.Contains("obs\\bundle.manifest", verify, StringComparison.Ordinal);
+        Assert.Contains("'HeroesClientSDK.dll'", verify, StringComparison.Ordinal);
         Assert.Contains("'--help'", verify, StringComparison.Ordinal);
         foreach (
             string secret in new[]

@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using HeroesClientSDK;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Spectating.Clock;

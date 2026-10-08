@@ -45,7 +45,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- <command>
 | `check client` | Windowed 1080p + AhliObs in Documents\Heroes of the Storm |
 | `check battlenet` | Capture the Battle.net window and report the Play or Update button |
 | `check connectivity` | Probe 1.1.1.1, Twitch, and Heroes Profile. Does not start an OBS stream. |
-| `check timer` | Read-only scan of `HeroesOfTheStorm_x64` for a ticking match clock |
+| `check timer` | Read-only scan of `HeroesOfTheStorm_x64` for a ticking match clock (HeroesClientSDK `StableMatchClock`, the spectator's own clock) |
 | `check twitch-extension` | Report `TwitchExtension:Enabled`, or call uploader/whoami when the extension is on |
 | `client configure` | Write Variables.txt and copy AhliObs `.StormInterface`. Quit HotS first (it overwrites Variables on exit). Spectate applies this automatically if the game is not running. Windowed 1080p is required. Capture is `PrintWindow` by default (`Capture:Method`); `BitBlt` is used only when configured. |
 | `client status` | Report preset mismatches |
