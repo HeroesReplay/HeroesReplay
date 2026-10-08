@@ -98,10 +98,17 @@ public static class ObsPlanCommand
             return 1;
         }
 
+        string template = ObsCollectionPaths.FindCollection(directory);
+        ObsManagedFiles managed = ObsManagedFiles.ForThisUser();
         ObsCollectionPlanResult plan = ObsCollectionPlan.Build(
             new ObsCollectionPlanRequest
             {
-                TemplatePath = ObsCollectionPaths.FindCollection(directory),
+                TemplatePath = template,
+                // OBS:StableAssets: the copy an update would make and point at (#330).
+                AssetRoot =
+                    obs.StableAssets && template != null
+                        ? ObsAssetStore.For(managed).Planned(Path.GetDirectoryName(template))
+                        : null,
                 PreviousTemplatePath = string.IsNullOrWhiteSpace(previous)
                     ? null
                     : ObsCollectionPaths.FindCollection(Path.GetFullPath(previous)),
@@ -111,7 +118,7 @@ public static class ObsPlanCommand
                 ),
                 CollectionName = ObsNames.SceneCollection(obs),
                 DataDirectory = dataDirectory,
-                Managed = ObsManagedFiles.ForThisUser(),
+                Managed = managed,
                 ObsIsRunning = NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
                 LiveCollectionSwap = obs.LiveCollectionSwap,
                 Runtime = ObsRuntimeValues.From(obs),

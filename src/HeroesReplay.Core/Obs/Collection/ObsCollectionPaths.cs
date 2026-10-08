@@ -14,6 +14,18 @@ public static class ObsCollectionPaths
     private const string CheckoutPrefix = "C:/heroesreplay/HeroesReplay/obs";
     private const string DataPrefix = "C:/heroesreplay/Data";
 
+    /// <summary>A path with a <c>worktrees\&lt;name&gt;\</c> folder in it (forward slashes).</summary>
+    private static readonly Regex WorktreeFolder = new(
+        @"/worktrees/[^/]+/",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled
+    );
+
+    /// <summary>A file in a git worktree's packaged <c>obs</c> folder (forward slashes).</summary>
+    private static readonly Regex WorktreeObsAsset = new(
+        @"^.*/worktrees/[^/]+/obs/(?<relative>.+)$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled
+    );
+
     private static readonly Regex LocalReference = new Regex(
         @"(?:(?:src|href)\s*=\s*[""'](?<path>[^""']+)[""']|imageURL\s*=\s*[""'](?<path>[^""']+)[""']|url\(\s*[""']?(?<path>[^""')]+)[""']?\s*\))",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled
@@ -349,7 +361,31 @@ public static class ObsCollectionPaths
         return kinds;
     }
 
-    public static string Rewrite(string json, string assetRoot, string dataDirectory)
+    /// <summary>
+    /// True for a folder inside a git worktree (<c>...\.claude\worktrees\&lt;name&gt;\</c>,
+    /// <c>...\worktrees\&lt;name&gt;\</c>). Agents and release candidates build there, and the
+    /// folder is deleted with the worktree, so OBS must never be pointed at it (#330).
+    /// </summary>
+    public static bool IsEphemeral(string path) =>
+        !string.IsNullOrWhiteSpace(path)
+        && WorktreeFolder.IsMatch(path.Replace('\\', '/').TrimEnd('/') + "/");
+
+    public static string Rewrite(string json, string assetRoot, string dataDirectory) =>
+        Rewrite(json, assetRoot, dataDirectory, null);
+
+    /// <summary>
+    /// Points the collection's asset paths at <paramref name="assetRoot"/> and its data paths at
+    /// <paramref name="dataDirectory"/>. Besides relative paths and the checkout's
+    /// <c>obs</c> folder, an asset path under a git worktree's <c>obs</c> folder, or under one of
+    /// <paramref name="movedFrom"/> (a folder, or <c>folder\*</c> for any folder in it), is
+    /// moved too (#330).
+    /// </summary>
+    public static string Rewrite(
+        string json,
+        string assetRoot,
+        string dataDirectory,
+        IReadOnlyList<string> movedFrom
+    )
     {
         if (string.IsNullOrEmpty(json))
         {
@@ -364,7 +400,13 @@ public static class ObsCollectionPaths
                 (name, element) =>
                 {
                     string logical = element.GetString();
-                    string updated = RewriteValue(name, logical, assetRoot, dataDirectory);
+                    string updated = RewriteValue(
+                        name,
+                        logical,
+                        assetRoot,
+                        dataDirectory,
+                        movedFrom
+                    );
                     if (string.Equals(updated, logical, StringComparison.Ordinal))
                     {
                         return;
@@ -397,7 +439,8 @@ public static class ObsCollectionPaths
         string propertyName,
         string value,
         string assetRoot,
-        string dataDirectory
+        string dataDirectory,
+        IReadOnlyList<string> movedFrom = null
     )
     {
         if (!TrySplitLocal(value, out string path, out string query, out bool fileUrl))
@@ -406,7 +449,11 @@ public static class ObsCollectionPaths
         }
 
         string absolute = null;
-        if (TryCheckoutRelative(path, out string fromCheckout) || IsRelativeAsset(path))
+        if (
+            TryCheckoutRelative(path, out string fromCheckout)
+            || TryMovedRelative(path, movedFrom, out fromCheckout)
+            || IsRelativeAsset(path)
+        )
         {
             if (string.IsNullOrWhiteSpace(assetRoot))
             {
@@ -700,6 +747,57 @@ public static class ObsCollectionPaths
 
         relative = normalized.Substring(CheckoutPrefix.Length).TrimStart('/');
         return relative.Length > 0 && IsRelativeAsset(relative);
+    }
+
+    /// <summary>
+    /// An asset path under a git worktree's <c>obs</c> folder, or under one of
+    /// <paramref name="movedFrom"/>: the path inside it, when that is a packaged asset.
+    /// </summary>
+    private static bool TryMovedRelative(
+        string path,
+        IReadOnlyList<string> movedFrom,
+        out string relative
+    )
+    {
+        relative = null;
+        string normalized = path.Replace('\\', '/');
+        Match worktree = WorktreeObsAsset.Match(normalized);
+        if (worktree.Success)
+        {
+            relative = worktree.Groups["relative"].Value;
+        }
+
+        foreach (string root in movedFrom ?? [])
+        {
+            if (relative != null || string.IsNullOrWhiteSpace(root))
+            {
+                break;
+            }
+
+            string prefix = root.Replace('\\', '/').TrimEnd('/');
+            bool anyChild = prefix.EndsWith("/*", StringComparison.Ordinal);
+            prefix = (anyChild ? prefix[..^2] : prefix) + "/";
+            if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string rest = normalized[prefix.Length..];
+            if (anyChild)
+            {
+                int slash = rest.IndexOf('/');
+                rest = slash > 0 ? rest[(slash + 1)..] : string.Empty;
+            }
+
+            relative = rest.Length > 0 ? rest : null;
+        }
+
+        if (relative != null && !IsRelativeAsset(relative))
+        {
+            relative = null;
+        }
+
+        return relative != null;
     }
 
     private static bool TryDataRelative(string path, out string relative)

@@ -39,6 +39,13 @@ public sealed record ObsCollectionPlanRequest
     public ObsRuntimeValues Runtime { get; init; }
 
     public DateTime UtcNow { get; init; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// The folder an update would point the assets at: with <c>OBS:StableAssets</c>, the stable
+    /// copy (<see cref="ObsAssetStore.Planned"/>), which the plan does not make. Null: the
+    /// template's folder.
+    /// </summary>
+    public string AssetRoot { get; init; }
 }
 
 /// <summary>What <c>update install-obs</c> would do with the live collection now.</summary>
@@ -220,17 +227,18 @@ public static class ObsCollectionPlan
 
         string live = ReadText(collection);
         (string baseTemplate, string baseName) = Base(request, record, template, templateHash);
-        string assetRoot = Path.GetDirectoryName(Path.GetFullPath(request.TemplatePath));
+        (string assetRoot, IReadOnlyList<string> movedFrom) = Assets(request);
         ObsCollectionDiffResult diff;
         try
         {
             diff = ObsCollectionDiff.Compare(
-                Normalize(baseTemplate, assetRoot, request.DataDirectory),
-                Normalize(template, assetRoot, request.DataDirectory),
+                Normalize(baseTemplate, assetRoot, request.DataDirectory, movedFrom),
+                Normalize(template, assetRoot, request.DataDirectory, movedFrom),
                 Normalize(
                     live ?? throw new IOException("It could not be read."),
                     assetRoot,
-                    request.DataDirectory
+                    request.DataDirectory,
+                    movedFrom
                 ),
                 request.Runtime
             );
@@ -356,6 +364,10 @@ public static class ObsCollectionPlan
                     Release = true,
                     PreviousTemplatePath = request.PreviousTemplatePath,
                     UtcNow = request.UtcNow,
+                    // The copy the update would use, named but not made; the real store's
+                    // copies are recognised as older asset folders.
+                    AssetRoot = Assets(request).Root,
+                    AssetStore = ObsAssetStore.For(request.Managed),
                 }
             );
             string action =
@@ -458,8 +470,31 @@ public static class ObsCollectionPlan
             _ => "unattributed",
         };
 
-    private static string Normalize(string json, string assetRoot, string dataDirectory) =>
-        json == null ? null : ObsCollectionPaths.Rewrite(json, assetRoot, dataDirectory);
+    private static string Normalize(
+        string json,
+        string assetRoot,
+        string dataDirectory,
+        IReadOnlyList<string> movedFrom
+    ) =>
+        json == null ? null : ObsCollectionPaths.Rewrite(json, assetRoot, dataDirectory, movedFrom);
+
+    /// <summary>The asset root an update would use, and the folders its path update moves from.</summary>
+    private static (string Root, IReadOnlyList<string> MovedFrom) Assets(
+        ObsCollectionPlanRequest request
+    )
+    {
+        string install = Path.GetDirectoryName(Path.GetFullPath(request.TemplatePath));
+        string root = string.IsNullOrWhiteSpace(request.AssetRoot)
+            ? install
+            : Path.GetFullPath(request.AssetRoot);
+        var movedFrom = new List<string> { ObsAssetStore.For(request.Managed).AnyCopy };
+        if (!ObsManagedFiles.SamePath(root, install))
+        {
+            movedFrom.Add(install);
+        }
+
+        return (root, movedFrom);
+    }
 
     private static string ReadText(string path)
     {
