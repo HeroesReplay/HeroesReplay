@@ -152,4 +152,4 @@ See [AGENTS.md](AGENTS.md). Repo skills live in [`.agents/skills/`](.agents/skil
 
 ## License
 
-MIT. Copyright (c) Patrick Magee.
+All rights reserved. The source is published for reference only; see [LICENSE](LICENSE).
