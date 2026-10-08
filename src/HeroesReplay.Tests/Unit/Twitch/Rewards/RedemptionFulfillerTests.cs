@@ -167,13 +167,100 @@ public sealed class RedemptionFulfillerTests : IDisposable
         Assert.Equal(expected, HelixRedemptionStatus.Classify(code));
     }
 
-    private void Append(int replayId, Guid redemption)
+    /// <summary>
+    /// #351: the download role records a cancel for a request whose replay can never be
+    /// downloaded. twitch connect sends it once, through the redemption canceller.
+    /// </summary>
+    [Fact]
+    public async Task UnplayableRequest_IsCancelledOnTwitchOnce()
+    {
+        Append(65625279, Redemption, RedemptionEnd.Cancel);
+        var twitch = new ScriptedTwitch(RedemptionUpdate.Updated);
+        RedemptionFulfiller fulfiller = Fulfiller(twitch);
+
+        Assert.Equal(1, await fulfiller.SendPendingAsync(CancellationToken.None));
+        Assert.Equal(0, await fulfiller.SendPendingAsync(CancellationToken.None));
+
+        (string Broadcaster, Guid RewardId, Guid RedemptionId, string Status) call = Assert.Single(
+            twitch.Calls
+        );
+        Assert.Equal("123456", call.Broadcaster);
+        Assert.Equal(Reward, call.RewardId);
+        Assert.Equal(Redemption, call.RedemptionId);
+        Assert.Equal(RewardRedemptionStatus.Canceled, call.Status);
+        Assert.Contains(
+            Redemption.ToString("D") + " canceled 65625279",
+            File.ReadAllText(Path.Combine(root, RedemptionFulfiller.SentFileName))
+        );
+    }
+
+    [Fact]
+    public async Task CancelNetworkFailure_IsRetriedAndARefusalIsNot()
+    {
+        Guid refused = Guid.NewGuid();
+        Append(65625279, Redemption, RedemptionEnd.Cancel);
+        Append(65625280, refused, RedemptionEnd.Cancel);
+        var twitch = new ScriptedTwitch(RedemptionUpdate.Retry);
+        twitch.Results[refused] = RedemptionUpdate.Refused;
+        RedemptionFulfiller fulfiller = Fulfiller(twitch);
+
+        Assert.Equal(0, await fulfiller.SendPendingAsync(CancellationToken.None));
+        twitch.Results[Redemption] = RedemptionUpdate.Updated;
+        Assert.Equal(1, await fulfiller.SendPendingAsync(CancellationToken.None));
+        Assert.Equal(0, await fulfiller.SendPendingAsync(CancellationToken.None));
+
+        Assert.Equal(3, twitch.Calls.Count);
+        Assert.Single(twitch.Calls, call => call.RedemptionId == refused);
+        Assert.All(
+            twitch.Calls,
+            call => Assert.Equal(RewardRedemptionStatus.Canceled, call.Status)
+        );
+    }
+
+    /// <summary>A played and verified match is never refunded, whichever line came first.</summary>
+    [Fact]
+    public async Task VerifiedRedemption_IsNeverCancelled()
+    {
+        Append(65625279, Redemption, RedemptionEnd.Cancel);
+        Append(65625279, Redemption, RedemptionEnd.Fulfill);
+        var twitch = new ScriptedTwitch(RedemptionUpdate.Updated);
+
+        Assert.Equal(1, await Fulfiller(twitch).SendPendingAsync(CancellationToken.None));
+
+        (string Broadcaster, Guid RewardId, Guid RedemptionId, string Status) call = Assert.Single(
+            twitch.Calls
+        );
+        Assert.Equal(RewardRedemptionStatus.Fulfilled, call.Status);
+    }
+
+    [Fact]
+    public void Recorded_FulfilWinsOverCancelAndAnOlderBuildSkipsTheCancelWord()
+    {
+        string path = Path.Combine(root, RedemptionDispositionLog.FileName);
+        Guid other = Guid.NewGuid();
+
+        Assert.Equal(RedemptionEnd.None, RedemptionDispositionLog.Recorded(path, Redemption));
+        Append(65625279, Redemption, RedemptionEnd.Cancel);
+        Append(65625280, other, RedemptionEnd.Cancel);
+        Append(65625280, other, RedemptionEnd.Fulfill);
+
+        Assert.Equal(RedemptionEnd.Cancel, RedemptionDispositionLog.Recorded(path, Redemption));
+        Assert.Equal(RedemptionEnd.Fulfill, RedemptionDispositionLog.Recorded(path, other));
+        Assert.Equal(RedemptionEnd.None, RedemptionDispositionLog.Recorded(path, Guid.Empty));
+        Assert.StartsWith(
+            "65625279 Cancel " + Redemption.ToString("D"),
+            File.ReadAllLines(path)[0],
+            StringComparison.Ordinal
+        );
+    }
+
+    private void Append(int replayId, Guid redemption, RedemptionEnd end = RedemptionEnd.Fulfill)
     {
         RedemptionDispositionLog.Append(
             Path.Combine(root, RedemptionDispositionLog.FileName),
             replayId,
             Request(redemption),
-            RedemptionEnd.Fulfill
+            end
         );
     }
 
@@ -188,15 +275,39 @@ public sealed class RedemptionFulfillerTests : IDisposable
             ReplayId = 65625279,
         };
 
-    private RedemptionFulfiller Fulfiller(IRedemptionStatusClient twitch) =>
+    /// <summary>The dev box (requests off, Twitch:DryRunMode) never cancels or fulfils (#146).</summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task DryRunOrRequestsOff_SendsNothing(bool requests, bool dryRun)
+    {
+        Append(65625279, Redemption, RedemptionEnd.Cancel);
+        Append(65625280, Guid.NewGuid(), RedemptionEnd.Fulfill);
+        var twitch = new ScriptedTwitch(RedemptionUpdate.Updated);
+        RedemptionFulfiller fulfiller = Fulfiller(
+            twitch,
+            new TwitchSettings { EnableRequests = requests, DryRunMode = dryRun }
+        );
+
+        await fulfiller.RunAsync(CancellationToken.None);
+
+        Assert.Empty(twitch.Calls);
+        Assert.False(File.Exists(Path.Combine(root, RedemptionFulfiller.SentFileName)));
+    }
+
+    private RedemptionFulfiller Fulfiller(
+        IRedemptionStatusClient twitch,
+        TwitchSettings settings = null
+    ) =>
         new(
             NullLogger<RedemptionFulfiller>.Instance,
             new AppSettings
             {
                 Location = new LocationSettings { DataDirectory = root },
-                Twitch = new TwitchSettings { EnableRequests = true },
+                Twitch = settings ?? new TwitchSettings { EnableRequests = true },
             },
-            twitch
+            twitch,
+            new RedemptionCanceller(twitch)
         );
 
     private sealed class ScriptedTwitch : IRedemptionStatusClient

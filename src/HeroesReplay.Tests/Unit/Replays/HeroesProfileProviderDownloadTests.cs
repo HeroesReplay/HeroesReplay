@@ -643,7 +643,7 @@ public class HeroesProfileProviderDownloadTests
 
     private sealed class OneRequest : IRequestQueue
     {
-        public Task<RewardQueueItem> DequeueItemAsync() =>
+        public Task<RewardQueueItem> PeekDownloadAsync(DateTimeOffset now) =>
             Task.FromResult(
                 new RewardQueueItem
                 {
@@ -657,6 +657,25 @@ public class HeroesProfileProviderDownloadTests
                     },
                 }
             );
+
+        public Task<RequestCompletion> CompleteDownloadAsync(RewardQueueItem item, Action publish)
+        {
+            publish?.Invoke();
+            return Task.FromResult(RequestCompletion.Completed);
+        }
+
+        public Task<RequestDownload> RetryDownloadLaterAsync(
+            RewardQueueItem item,
+            string error,
+            DateTimeOffset now
+        ) => Task.FromResult(new RequestDownload { Attempts = 1, LastError = error });
+
+        public Task<bool> FailDownloadAsync(
+            RewardQueueItem item,
+            string reason,
+            bool refundRequested,
+            DateTimeOffset now
+        ) => Task.FromResult(true);
 
         public Task<RewardResponse> EnqueueItemAsync(RewardRequest request) =>
             throw new NotSupportedException();
