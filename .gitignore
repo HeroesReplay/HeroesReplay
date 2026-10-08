@@ -366,3 +366,6 @@ testdata/replays/
 
 # Tooling
 .csharpiercache/
+
+# HeroesClientSDK release asset (tools/restore-sdk-package.ps1)
+/.packages/

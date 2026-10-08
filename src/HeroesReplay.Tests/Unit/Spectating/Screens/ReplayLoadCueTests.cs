@@ -1,4 +1,5 @@
 using System;
+using HeroesClientSDK;
 using HeroesReplay.Core.Spectating.Screens;
 using Xunit;
 

@@ -18,6 +18,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      # HeroesClientSDK restores from .packages (nuget.config): the GitHub Release asset, no
+      # credentials, checked against the SHA-256 pinned in Directory.Packages.props.
+      - name: Fetch HeroesClientSDK
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/restore-sdk-package.ps1
       - uses: gittools/actions/gitversion/setup@v4.7.0
         with:
           versionSpec: 6.8.x
