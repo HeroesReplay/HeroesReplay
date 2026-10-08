@@ -1,4 +1,7 @@
 using System;
+using System.Net;
+using Google;
+using Google.Apis.Requests;
 using HeroesReplay.Core.YouTube.Publication;
 
 namespace HeroesReplay.Core.YouTube.Quota;
@@ -35,34 +38,63 @@ public static class YouTubeListQuota
         bool rateLimited = false;
         for (Exception current = exception; current != null; current = current.InnerException)
         {
-            string text = current.Message;
-            if (string.IsNullOrWhiteSpace(text))
+            if (current is GoogleApiException google)
             {
-                continue;
+                // The reasons sit in the error body, not always in the message
+                // (production 2026-10-08: playlists.insert, 429, Reason[RATE_LIMIT_EXCEEDED]).
+                foreach (SingleError error in google.Error?.Errors ?? [])
+                {
+                    switch (ClassifyText(error?.Reason))
+                    {
+                        case YouTubeQuotaRefusal.DailyQuota:
+                            return YouTubeQuotaRefusal.DailyQuota;
+                        case YouTubeQuotaRefusal.RateLimited:
+                            rateLimited = true;
+                            break;
+                    }
+                }
+
+                rateLimited |= google.HttpStatusCode == HttpStatusCode.TooManyRequests;
             }
 
-            bool limitText = text.Contains("Quota exceeded", StringComparison.OrdinalIgnoreCase);
-            if (
-                text.Contains("quotaExceeded", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("dailyLimitExceeded", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("uploadLimitExceeded", StringComparison.OrdinalIgnoreCase)
-                || (limitText && text.Contains("per day", StringComparison.OrdinalIgnoreCase))
-            )
+            switch (ClassifyText(current.Message))
             {
-                return YouTubeQuotaRefusal.DailyQuota;
-            }
-
-            if (
-                limitText
-                || text.Contains("rateLimitExceeded", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("TooManyRequests", StringComparison.OrdinalIgnoreCase)
-            )
-            {
-                rateLimited = true;
+                case YouTubeQuotaRefusal.DailyQuota:
+                    return YouTubeQuotaRefusal.DailyQuota;
+                case YouTubeQuotaRefusal.RateLimited:
+                    rateLimited = true;
+                    break;
             }
         }
 
         return rateLimited ? YouTubeQuotaRefusal.RateLimited : YouTubeQuotaRefusal.None;
+    }
+
+    private static YouTubeQuotaRefusal ClassifyText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return YouTubeQuotaRefusal.None;
+        }
+
+        bool limitText = text.Contains("Quota exceeded", StringComparison.OrdinalIgnoreCase);
+        if (
+            text.Contains("quotaExceeded", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("dailyLimitExceeded", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("uploadLimitExceeded", StringComparison.OrdinalIgnoreCase)
+            || (limitText && text.Contains("per day", StringComparison.OrdinalIgnoreCase))
+        )
+        {
+            return YouTubeQuotaRefusal.DailyQuota;
+        }
+
+        return
+            limitText
+            || text.Contains("rateLimitExceeded", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("RATE_LIMIT_EXCEEDED", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("TooManyRequests", StringComparison.OrdinalIgnoreCase)
+            ? YouTubeQuotaRefusal.RateLimited
+            : YouTubeQuotaRefusal.None;
     }
 
     /// <summary>True only for the day's quota. A rate limit is not exhaustion.</summary>

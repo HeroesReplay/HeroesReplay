@@ -181,6 +181,90 @@ public class TwitchExtensionServiceTests
         Assert.Empty(handler.Captured);
     }
 
+    [Fact]
+    public async Task WhoAmI_RejectedKeyReportsTheStatusAndServerMessage()
+    {
+        var handler = new ScriptedHandler(
+            Json(
+                HttpStatusCode.Unauthorized,
+                "{\"message\":\"This uploader key is not valid. Create a new one at heroesprofile.com/Api/Account.\"}"
+            )
+        );
+
+        ExtensionWhoAmI who = await Service(handler, " uploader-key ").WhoAmIAsync();
+
+        Assert.False(who.Reachable);
+        Assert.Equal(401, who.StatusCode);
+        Assert.False(who.EntitlementActive);
+        Assert.Equal(
+            "This uploader key is not valid. Create a new one at heroesprofile.com/Api/Account.",
+            who.Message
+        );
+        Captured request = Assert.Single(handler.Captured);
+        Assert.Equal(HttpMethod.Get, request.Method);
+        Assert.Equal("https://www.heroesprofile.com/api/twitch/v1/uploader/whoami", request.Url);
+        Assert.Equal("uploader-key", request.Key);
+        Assert.Null(request.Body);
+    }
+
+    [Fact]
+    public async Task WhoAmI_InactiveEntitlementIsReachableButNotActive()
+    {
+        var handler = new ScriptedHandler(
+            Json(
+                HttpStatusCode.OK,
+                "{\"twitch_login\":\"saltysadism\",\"player_linked\":true,\"entitlement\":{\"active\":false}}"
+            )
+        );
+
+        ExtensionWhoAmI who = await Service(handler, "uploader-key").WhoAmIAsync();
+
+        Assert.True(who.Reachable);
+        Assert.Equal("saltysadism", who.TwitchLogin);
+        Assert.Null(who.TwitchDisplayName);
+        Assert.True(who.PlayerLinked);
+        Assert.False(who.EntitlementActive);
+    }
+
+    [Theory]
+    [InlineData(402)]
+    [InlineData(422)]
+    public async Task PostSnapshot_StopsWithoutRetryOnRefusal(int status)
+    {
+        var handler = new ScriptedHandler(
+            Json((HttpStatusCode)status, "{\"message\":\"No active entitlement.\"}")
+        );
+
+        ExtensionPostOutcome outcome = await Service(handler, "uploader-key")
+            .PostSnapshotAsync(
+                "game-1",
+                1,
+                ExtensionSnapshotSelector.Select(Game(), ExtensionSnapshotSelector.Lobby, null)
+            );
+
+        Assert.Equal(ExtensionPostOutcome.Stopped, outcome);
+        Captured request = Assert.Single(handler.Captured);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Contains("\"phase\":\"lobby\"", request.Body);
+        Assert.Contains("\"seq\":1", request.Body);
+    }
+
+    [Fact]
+    public async Task PostSnapshot_MissingKeyStopsWithoutCallingHeroesProfile()
+    {
+        var handler = new ScriptedHandler();
+
+        ExtensionPostOutcome outcome = await Service(handler, apiKey: "  ")
+            .PostSnapshotAsync(
+                "game-1",
+                1,
+                ExtensionSnapshotSelector.Select(Game(), ExtensionSnapshotSelector.Lobby, null)
+            );
+
+        Assert.Equal(ExtensionPostOutcome.Stopped, outcome);
+        Assert.Empty(handler.Captured);
+    }
+
     private static TwitchExtensionService Service(ScriptedHandler handler, string apiKey)
     {
         return new TwitchExtensionService(
@@ -239,6 +323,7 @@ public class TwitchExtensionServiceTests
                     : await request.Content.ReadAsStringAsync(cancellationToken);
             Captured.Add(
                 new Captured(
+                    request.Method,
                     request.RequestUri?.ToString(),
                     request.Headers.TryGetValues(
                         TwitchExtensionService.UploaderKeyHeader,
@@ -253,7 +338,7 @@ public class TwitchExtensionServiceTests
         }
     }
 
-    private sealed record Captured(string Url, string Key, string Body);
+    private sealed record Captured(HttpMethod Method, string Url, string Key, string Body);
 }
 
 [Trait(TestCategories.Category, TestCategories.Unit)]
@@ -316,6 +401,113 @@ public class TalentNotifierTests
         Assert.Single(extension.Posts);
     }
 
+    [Theory]
+    [InlineData("missing section")]
+    [InlineData("default interval")]
+    [InlineData("zero interval")]
+    public async Task Send_HoldsChangesForEightSecondsAndSkipsUnchangedSnapshots(string settings)
+    {
+        var extension = new RecordingExtension();
+        TalentNotifier notifier = Notifier(
+            extension,
+            settings switch
+            {
+                "default interval" => new HeroesProfileTwitchExtensionSettings(),
+                "zero interval" => new HeroesProfileTwitchExtensionSettings
+                {
+                    MinInterval = TimeSpan.Zero,
+                },
+                _ => null,
+            }
+        );
+        notifier.ClearSession();
+
+        await notifier.SendCurrentTalentsAsync(TimeSpan.Zero, clockLive: false);
+        await notifier.SendCurrentTalentsAsync(TimeSpan.FromSeconds(30), clockLive: false);
+        await notifier.SendCurrentTalentsAsync(TimeSpan.FromMinutes(2), clockLive: true);
+        await notifier.EndGameAsync();
+        await notifier.EndGameAsync();
+
+        Assert.Equal(new[] { "lobby", "ended" }, extension.Posts.Select(p => p.Snapshot.Phase));
+        Assert.Equal(new[] { 1, 2 }, extension.Posts.Select(p => p.Seq));
+    }
+
+    [Fact]
+    public async Task Send_PostsTheMatchClockTalentsOnceTheIntervalHasPassed()
+    {
+        var extension = new RecordingExtension();
+        TalentNotifier notifier = Notifier(
+            extension,
+            new HeroesProfileTwitchExtensionSettings { MinInterval = TimeSpan.FromMilliseconds(10) }
+        );
+        notifier.ClearSession();
+
+        await notifier.SendCurrentTalentsAsync(TimeSpan.Zero, clockLive: false);
+        await Task.Delay(50);
+        await notifier.SendCurrentTalentsAsync(TimeSpan.FromSeconds(30), clockLive: true);
+        await Task.Delay(50);
+        await notifier.SendCurrentTalentsAsync(TimeSpan.FromSeconds(50), clockLive: true);
+        await Task.Delay(50);
+        await notifier.SendCurrentTalentsAsync(TimeSpan.FromMinutes(2), clockLive: true);
+
+        Assert.Equal(
+            new[] { "lobby", "in_game", "in_game" },
+            extension.Posts.Select(p => p.Snapshot.Phase)
+        );
+        Assert.Empty(extension.Posts[1].Snapshot.Players[0].Talents);
+        Assert.Equal("Abathur", extension.Posts[1].Snapshot.Players[0].Hero);
+        Assert.Equal(new[] { "A" }, extension.Posts[2].Snapshot.Players[0].Talents);
+        Assert.Equal(new[] { 1, 2, 3 }, extension.Posts.Select(p => p.Seq));
+        Assert.Single(extension.Posts.Select(p => p.GameId).Distinct());
+    }
+
+    [Fact]
+    public async Task Send_RetriesAFailedSnapshotWithTheSameSeq()
+    {
+        var extension = new RecordingExtension { Next = ExtensionPostOutcome.Failed };
+        TalentNotifier notifier = Notifier(extension, new HeroesProfileTwitchExtensionSettings());
+        notifier.ClearSession();
+
+        await notifier.SendCurrentTalentsAsync(TimeSpan.Zero, clockLive: false);
+        extension.Next = ExtensionPostOutcome.Sent;
+        await notifier.SendCurrentTalentsAsync(TimeSpan.Zero, clockLive: false);
+        await notifier.SendCurrentTalentsAsync(TimeSpan.Zero, clockLive: false);
+
+        Assert.Equal(2, extension.Posts.Count);
+        Assert.All(extension.Posts, post => Assert.Equal(1, post.Seq));
+    }
+
+    [Fact]
+    public async Task ClearSession_StartsANewGameIdAfterAStop()
+    {
+        var extension = new RecordingExtension { Next = ExtensionPostOutcome.Stopped };
+        TalentNotifier notifier = Notifier(extension, new HeroesProfileTwitchExtensionSettings());
+        notifier.ClearSession();
+
+        await notifier.SendCurrentTalentsAsync(TimeSpan.Zero, clockLive: false);
+        await notifier.EndGameAsync();
+        extension.Next = ExtensionPostOutcome.Sent;
+        notifier.ClearSession();
+        await notifier.SendCurrentTalentsAsync(TimeSpan.Zero, clockLive: false);
+
+        Assert.Equal(2, extension.Posts.Count);
+        Assert.NotEqual(extension.Posts[0].GameId, extension.Posts[1].GameId);
+        Assert.Equal(1, extension.Posts[1].Seq);
+    }
+
+    private static TalentNotifier Notifier(
+        RecordingExtension extension,
+        HeroesProfileTwitchExtensionSettings extensionSettings
+    )
+    {
+        return new TalentNotifier(
+            NullLogger<TalentNotifier>.Instance,
+            new FixedContext(Game()),
+            extension,
+            new AppSettings { TwitchExtension = extensionSettings }
+        );
+    }
+
     private static ExtensionGame Game()
     {
         return new ExtensionGame
@@ -326,7 +518,7 @@ public class TalentNotifierTests
             Players = new[] { new ExtensionPlayer("Sam", 100, 1, 0, "Abathur", "Abat", false) },
             Talents = new[]
             {
-                new ExtensionTalentPick(TimeSpan.FromMinutes(1), 0, "A"),
+                new ExtensionTalentPick(TimeSpan.FromSeconds(40), 0, "A"),
                 new ExtensionTalentPick(TimeSpan.FromMinutes(20), 0, "Late"),
             },
         };

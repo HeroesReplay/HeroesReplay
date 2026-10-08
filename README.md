@@ -31,7 +31,7 @@ Catalog: `Maps:Catalog` in `appsettings.json` (`Playable`, `RankedRotation`, `Ty
 
 - Windows 10/11 (WinRT OCR, **PrintWindow** capture, process control). The client must be **windowed 1080p** (`heroesreplay client configure`). Fullscreen D3D11 is not supported.
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- A GitHub token with `read:packages` for the restore. HeroesClientSDK comes from GitHub Packages (`nuget.config`), which needs a token even for a public package. With the GitHub CLI: `gh auth refresh -h github.com -s read:packages`, then `pwsh -File tools/github-packages-login.ps1`, which stores the credential in the user-level NuGet config, never in the repo.
+- PowerShell 7 (`pwsh`). The build fetches HeroesClientSDK, the memory match clock package, from its public GitHub Release with `tools/restore-sdk-package.ps1` (no credentials; the SHA-256 is pinned in `Directory.Packages.props`).
 - Heroes of the Storm + Battle.net
 - Optional: OBS Studio 30.0+ (obs-websocket 5.3+, for `SetRecordDirectory`) with **Tools → WebSocket Server Settings** enabled (port **4455**). `heroesreplay obs validate` checks the running OBS offers every request in `ObsValidator.RequiredRequests`
 - Optional: Twitch app credentials, Heroes Profile API key (Bearer).
@@ -41,7 +41,7 @@ Catalog: `Maps:Catalog` in `appsettings.json` (`Playable`, `RankedRotation`, `Ty
 ```powershell
 git clone https://github.com/HeroesReplay/HeroesReplay.git
 cd HeroesReplay
-pwsh -File tools/github-packages-login.ps1   # once per machine: GitHub Packages credential
+pwsh -File tools/restore-sdk-package.ps1   # HeroesClientSDK into .packages (the build also does this)
 dotnet tool restore
 dotnet build heroes-replay.slnx
 dotnet test heroes-replay.slnx
@@ -142,7 +142,7 @@ OBS password:
 | `src/HeroesReplay.Core` | Feature slices: analysis, spectating, game client, OBS, Twitch, YouTube, service host |
 | `src/HeroesReplay.HeroesProfile.Client` | Kiota client for the Heroes Profile v1 API ([docs/heroesprofile-api.md](docs/heroesprofile-api.md)) |
 | `src/HeroesReplay.Tests` | xUnit |
-| [HeroesClientSDK](https://github.com/HeroesReplay/HeroesClientSDK) (package) | The memory match clock and screen state (`StableMatchClock`, `LoadingScreenMemory`). From GitHub Packages, exact version in `Directory.Packages.props` |
+| [HeroesClientSDK](https://github.com/HeroesReplay/HeroesClientSDK) (package) | The memory match clock and screen state (`StableMatchClock`, `LoadingScreenMemory`). From the SDK's GitHub Release into `.packages`; exact version and SHA-256 in `Directory.Packages.props` |
 
 The solution file is **`heroes-replay.slnx`** (XML). Do not add a parallel `.sln`.
 

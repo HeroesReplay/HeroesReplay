@@ -8,7 +8,7 @@ Windows-only automated spectator for Heroes of the Storm `.StormReplay` files: p
 
 Solution: `heroes-replay.slnx` (.NET 10 LTS). Projects: `HeroesReplay.CLI`, `HeroesReplay.Core`, `HeroesReplay.HeroesProfile.Client` (Kiota v1), `HeroesReplay.Tests`. There is no AutoSpectator project. Regenerate the Heroes Profile client with `tools/generate-heroesprofile-client.ps1`; do not csharpier `Generated/`.
 
-The client memory readers live in their own repo and package, [HeroesClientSDK](https://github.com/HeroesReplay/HeroesClientSDK) (namespace `HeroesClientSDK`, #274): `StableMatchClock`, `LoadingScreenMemory`, their samples, `ClockTelemetry`, and the per-build patterns. Change them there, with their tests, then tag `vX.Y.Z` on its `main`; `publish.yml` pushes that version to GitHub Packages. Bump it here by editing the exact pin `<PackageVersion Include="HeroesClientSDK" Version="[X.Y.Z]" />` in `Directory.Packages.props`. A bump is a match-clock change: it needs the short live proof on ASA-SERVER (`check timer`, plus a current-patch and a previous-patch replay reaching `MM:SS`) before `master`. `nuget.config` maps only `HeroesClientSDK` to the `github` source (GitHub Packages), which needs a `read:packages` token even though the package is public: CI uses `GITHUB_TOKEN` (`packages: read`), and a workstation runs `pwsh -File tools/github-packages-login.ps1` once (`gh auth token` with `read:packages`, from `gh auth refresh -h github.com -s read:packages`), which writes the credential to the user-level NuGet config. Never put a token in the repo's `nuget.config`. The stream PC needs nothing: the release zip carries `HeroesClientSDK.dll`.
+The client memory readers live in their own repo and package, [HeroesClientSDK](https://github.com/HeroesReplay/HeroesClientSDK) (namespace `HeroesClientSDK`, #274): `StableMatchClock`, `LoadingScreenMemory`, their samples, `ClockTelemetry`, and the per-build patterns. Change them there, with their tests, then tag `vX.Y.Z` on its `main`; `publish.yml` attaches `HeroesClientSDK.X.Y.Z.nupkg` to the GitHub Release of that tag (and also pushes it to GitHub Packages). HeroesReplay restores it without credentials: `nuget.config` maps only `HeroesClientSDK` to the gitignored `.packages` folder, and `tools/restore-sdk-package.ps1` downloads the release asset into it and refuses a file whose SHA-256 differs from the pin. `ci.yml` and `release.yml` run that script before anything restores, `bootstrap-workstation.ps1` runs it, and the build runs it when the file is missing (`Directory.Build.targets`). To bump, set `HeroesClientSDKVersion` and `HeroesClientSDKSha256` together in `Directory.Packages.props` (the SHA-256 of the release asset; `PackageVersion` is the exact pin `[$(HeroesClientSDKVersion)]`). A bump is a match-clock change: it needs the short live proof on ASA-SERVER (`check timer`, plus a current-patch and a previous-patch replay reaching `MM:SS`) before `master`. The stream PC needs nothing: the release zip carries `HeroesClientSDK.dll`.
 
 ### Source layout: feature slices
 
@@ -21,7 +21,7 @@ The client memory readers live in their own repo and package, [HeroesClientSDK](
 | `GameClient` (`Firewall`) | Launching the right Heroes build, Battle.net, HeroesSwitcher, the client's own dialogs, `Variables.txt`, client and process settings. `Firewall`: the inbound rule for each client exe |
 | `Replays` (`Context`) | Replay providers and loaders, `LoadedReplay`, the spectate queue and queue pick, the per-replay context folder |
 | `Requests` | Twitch request queue, leases, played ids, reward request models |
-| `HeroesProfile` | Heroes Profile API, replay listing, patch index, rank enrichment |
+| `HeroesProfile` | Heroes Profile API, replay listing, patch index, rank enrichment, the hero statistics behind YouTube title hooks (`HeroStatsRefresh`, `HeroStatsStore`) |
 | `HeroesData` | heroes-data2 hero and unit catalog |
 | `Twitch` (`Predictions`, `Rewards`, `RedeemedRewards`, `ChatMessages`) | Chat bot, predictions and their ledger, channel-point rewards |
 | `TwitchExtension` | Heroes Profile Twitch extension payloads |
@@ -189,7 +189,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 
 Detect with `hostname`. If `DESKTOP-8SJEK72`, ask before stopping `heroesreplay` / HotS / OBS, and do not start a Twitch stream from a test build. If `ASA-SERVER`, do not SSH to Unraid (`Tower` / 192.168.1.102), do not bind the host 3090/iGPU, and do not reboot Tower.
 
-New machine: clone into `C:\heroesreplay\HeroesReplay`, give `gh` the `read:packages` scope (`gh auth refresh -h github.com -s read:packages`), then `pwsh -File tools/bootstrap-workstation.ps1` (skill `op-service-account`). It also stores the GitHub Packages credential for HeroesClientSDK (`tools/github-packages-login.ps1`; `-GitHubPackagesOpReference` takes an `op://` reference to a `read:packages` PAT instead).
+New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/bootstrap-workstation.ps1` (skill `op-service-account`). It also fetches the pinned HeroesClientSDK package into `.packages` (`tools/restore-sdk-package.ps1`, no credentials).
 
 ## Hard rules
 
@@ -202,7 +202,7 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, give `gh` the `read:pack
 - Cache the Heroes of the Storm HWND after launch; do not `GetProcessesByName` on every keystroke.
 - `spectate file` plays the queue **once**. Heroes Profile provider loops.
 - Never commit `appsettings.secrets.json`, user `*.StormReplay` dumps, or large `*.mp4`.
-- Package versions live in `Directory.Packages.props`. Do not pin .NET 11 / CommandLine 3 prereleases. `HeroesClientSDK` is an exact pin (`[X.Y.Z]`) from GitHub Packages; never a floating range.
+- Package versions live in `Directory.Packages.props`. Do not pin .NET 11 / CommandLine 3 prereleases. `HeroesClientSDK` is an exact pin (`[$(HeroesClientSDKVersion)]`) with its SHA-256 beside it, restored from `.packages`; never a floating range.
 - Heroes Profile HTTP retries use `Microsoft.Extensions.Http.Resilience` on the Kiota `HttpClient`. Other retries use `Microsoft.Extensions.Resilience` pipelines. Replay cache is `IMemoryCache`. Do not add a direct Polly package reference.
 
 ## Verification

@@ -54,39 +54,51 @@ public class ReleaseWorkflowTests
     }
 
     [Fact]
-    public void BothWorkflows_AuthenticateGitHubPackagesBeforeTheBuild()
+    public void BothWorkflows_FetchThePinnedSdkPackageBeforeAnythingRestores()
     {
-        // HeroesClientSDK (the memory match clock) restores from GitHub Packages, which needs a
-        // token even for a public package. Without it, release.yml cannot build master.
+        // HeroesClientSDK (the memory match clock) restores from the .packages folder, filled
+        // from the public GitHub Release asset with no credentials and checked against the
+        // SHA-256 pinned next to its version. Without it, release.yml cannot build master.
         string config = ReadRepoFile("nuget.config");
-        Assert.Contains(
-            "https://nuget.pkg.github.com/HeroesReplay/index.json",
-            config,
-            StringComparison.Ordinal
-        );
+        Assert.Contains("value=\".packages\"", config, StringComparison.Ordinal);
         Assert.Contains(
             "<package pattern=\"HeroesClientSDK\" />",
             config,
             StringComparison.Ordinal
         );
+        Assert.DoesNotContain("nuget.pkg.github.com", config, StringComparison.Ordinal);
         Assert.DoesNotContain("packageSourceCredentials", config, StringComparison.Ordinal);
+
+        string props = ReadRepoFile("Directory.Packages.props");
+        Assert.Matches(@"<HeroesClientSDKVersion>\d+\.\d+\.\d+</HeroesClientSDKVersion>", props);
+        Assert.Matches(@"<HeroesClientSDKSha256>[0-9a-f]{64}</HeroesClientSDKSha256>", props);
+        Assert.Contains(
+            "<PackageVersion Include=\"HeroesClientSDK\" Version=\"[$(HeroesClientSDKVersion)]\" />",
+            props,
+            StringComparison.Ordinal
+        );
+
+        string script = ReadRepoFile("tools", "restore-sdk-package.ps1");
+        Assert.Contains(
+            "https://github.com/HeroesReplay/HeroesClientSDK/releases/download/v$version/$name",
+            script,
+            StringComparison.Ordinal
+        );
+        Assert.Contains("HeroesClientSDKSha256", script, StringComparison.Ordinal);
+        Assert.Contains("restore-sdk-package.ps1", ReadRepoFile("Directory.Build.targets"));
 
         foreach (string workflow in new[] { "ci.yml", "release.yml" })
         {
             string text = ReadRepoFile(".github", "workflows", workflow);
-            int auth = text.IndexOf("dotnet nuget update source github", StringComparison.Ordinal);
+            int fetch = text.IndexOf("tools/restore-sdk-package.ps1", StringComparison.Ordinal);
+            int tools = text.IndexOf("gittools/actions", StringComparison.Ordinal);
             int build = text.IndexOf("dotnet build heroes-replay.slnx", StringComparison.Ordinal);
 
-            Assert.Contains("packages: read", text, StringComparison.Ordinal);
-            Assert.Contains(
-                "--password ${{ secrets.GITHUB_TOKEN }}",
-                text,
-                StringComparison.Ordinal
-            );
-            Assert.True(
-                auth > 0 && build > auth,
-                workflow + " does not authenticate before the build."
-            );
+            Assert.True(fetch > 0, workflow + " does not run tools/restore-sdk-package.ps1.");
+            Assert.True(build > fetch, workflow + " builds before it fetches HeroesClientSDK.");
+            Assert.True(tools < 0 || tools > fetch, workflow + " restores tools before the fetch.");
+            Assert.DoesNotContain("packages: read", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("nuget update source", text, StringComparison.Ordinal);
         }
     }
 

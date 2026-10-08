@@ -42,7 +42,8 @@ function Read-Op([string]$uri) {
     return $v
 }
 
-# Canonical shape only. Do not round-trip leftover keys (AWS, extension, GitHub).
+# Canonical shape only. Do not round-trip leftover keys (AWS, the old form-API
+# extension fields, GitHub).
 # YouTube Uploader item uuid xrstilaqn2jygtuwwde346ozwm
 $j = [ordered]@{
     Twitch = [ordered]@{
@@ -58,6 +59,21 @@ $j = [ordered]@{
     YouTube = [ordered]@{
         ApiKey = Read-Op 'op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/API Key'
     }
+}
+
+# Heroes Profile Twitch extension uploader key (issue 49), sent as X-HP-Twitch-Key.
+# It is not the v1 Bearer key. Optional: written only once the item exists, so the
+# other secrets still fill while it is missing. TwitchExtension:Enabled stays false
+# until `heroesreplay check twitch-extension` reports entitlement.active=True.
+$uploaderItem = 'Heroes Profile Twitch Uploader Key'
+$items = op item list --vault 'Heroes Replay' --format json | ConvertFrom-Json
+if (@($items | Where-Object { $_.title -eq $uploaderItem }).Count -gt 0) {
+    $j.TwitchExtension = [ordered]@{
+        ApiKey = Read-Op "op://Heroes Replay/$uploaderItem/password"
+    }
+}
+else {
+    Write-Warning "1Password item '$uploaderItem' is missing; TwitchExtension:ApiKey is not written."
 }
 
 $j | ConvertTo-Json -Depth 8 | Set-Content $dest -Encoding utf8
@@ -90,5 +106,5 @@ Copy-Item -Force $clientSecretsPath (Join-Path $secretsDir 'client_secrets.json'
 Copy-Item -Force $dest (Join-Path $secretsDir 'appsettings.secrets.json')
 
 Write-Host "wrote $dest"
-Write-Host ("HeroesProfileApi.ApiKey len={0} Twitch.AccessToken len={1} ClientId len={2} YouTube.ApiKey len={3} client_secrets client_id len={4}" -f `
-    $j.HeroesProfileApi.ApiKey.Length, $j.Twitch.AccessToken.Length, $j.Twitch.ClientId.Length, $j.YouTube.ApiKey.Length, $ytClientId.Length)
+Write-Host ("HeroesProfileApi.ApiKey len={0} Twitch.AccessToken len={1} ClientId len={2} YouTube.ApiKey len={3} client_secrets client_id len={4} TwitchExtension.ApiKey len={5}" -f `
+    $j.HeroesProfileApi.ApiKey.Length, $j.Twitch.AccessToken.Length, $j.Twitch.ClientId.Length, $j.YouTube.ApiKey.Length, $ytClientId.Length, $(if ($j.Contains('TwitchExtension')) { $j.TwitchExtension.ApiKey.Length } else { 0 }))

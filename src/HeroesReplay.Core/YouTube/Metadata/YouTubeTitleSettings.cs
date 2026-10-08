@@ -51,4 +51,7 @@ public class YouTubeTitleSettings
 
     /// <summary>Team-composition labels such as double soak or dive (<c>YouTube:Titles:Compositions</c>).</summary>
     public TeamCompositionSettings Compositions { get; set; } = new TeamCompositionSettings();
+
+    /// <summary>Heroes Profile statistics hooks (<c>YouTube:Titles:StatHooks</c>). Off by default.</summary>
+    public StatHookSettings StatHooks { get; set; } = new StatHookSettings();
 }

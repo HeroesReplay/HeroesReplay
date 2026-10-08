@@ -17,8 +17,6 @@ concurrency:
 
 permissions:
   contents: read
-  # HeroesClientSDK comes from GitHub Packages (nuget.config).
-  packages: read
 
 jobs:
   build-and-test:
@@ -34,10 +32,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      # GitHub Packages needs a token for a NuGet restore, even for a public package. This
-      # changes only the runner's copy of nuget.config.
-      - name: Authenticate GitHub Packages
-        run: dotnet nuget update source github --configfile nuget.config --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text
+      # HeroesClientSDK restores from .packages (nuget.config): the GitHub Release asset, no
+      # credentials, checked against the SHA-256 pinned in Directory.Packages.props.
+      - name: Fetch HeroesClientSDK
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/restore-sdk-package.ps1
       - name: Restore tools
         run: dotnet tool restore
       - name: Format (CSharpier)

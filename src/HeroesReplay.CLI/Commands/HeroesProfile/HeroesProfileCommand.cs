@@ -9,6 +9,7 @@ public class HeroesProfileCommand : Command
         : base("heroesprofile", "Heroes Profile downloader. Separate from the spectator process.")
     {
         Subcommands.Add(new DownloadCommand());
+        Subcommands.Add(new HeroStatsCommand());
         Subcommands.Add(new PatchIndexCommand());
         Subcommands.Add(new SampleCommand());
     }
