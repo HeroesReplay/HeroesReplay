@@ -47,7 +47,7 @@ OBS files: after the copy, the new exe runs `update install-obs`, which reads `O
 
 Stream arm migration: before the files are replaced, the staged exe runs `update migrate-stream-arm --previous C:\heroesreplay\app`. It reads the effective settings of the install being replaced (`appsettings.json`, secrets, `appsettings.{HEROES_REPLAY_ENV or prod}.json`, `HEROES_REPLAY_` variables). When `OBS:StreamingEnabled` is true there and the machine is not armed, it arms the machine once, so the update that introduces the arm keeps production live. It never arms when `OBS:StreamingEnabled` is false. It writes `%LOCALAPPDATA%\HeroesReplay\stream-arm.migrated` and never runs again, so a later `obs disarm` survives updates.
 
-`apply-release.ps1` runs in a minimized window (never hidden; open it from the taskbar to watch the update). It also appends what it did (OBS files kept or copied, the arm decision, the health verdict, a rollback) to `%LOCALAPPDATA%\HeroesReplay\logs\apply-release.log`.
+`apply-release.ps1` runs in a minimized window (never hidden; open it from the taskbar to watch the update). It also appends what it did (OBS files kept or copied, the arm decision, the health verdict, a rollback) to `%LOCALAPPDATA%\HeroesReplay\logs\apply-release.log`, and stops that log when it ends, even in a window left open with `-NoExit`. When another window still holds `apply-release.log`, the update writes `apply-release-<tag>.log` in the same folder instead; its path is the window's first line and is added to a `skipped-releases.txt` line (#281).
 
 `heroesreplay update check` prints the installed version and the latest tag. It does not download or restart.
 

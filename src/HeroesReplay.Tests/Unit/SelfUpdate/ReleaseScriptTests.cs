@@ -1,6 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.ServiceHost;
 using Xunit;
@@ -251,6 +254,174 @@ public class ReleaseScriptTests
         );
         Assert.DoesNotContain("stream-armed'", script);
         Assert.Contains("Start-Transcript", script);
+    }
+
+    [Fact]
+    public void ApplyRelease_StartsTheLogBeforeAnyExitAndStopsItInAFinally()
+    {
+        string script = File.ReadAllText(FindScript());
+        Match start = Regex.Match(script, @"(?m)^Start-UpdateLog\r?\ntry \{");
+        MatchCollection exits = Regex.Matches(script, @"(?m)^\s*exit\s+\d");
+        int refuse = script.IndexOf("Refusing to replace a source build", StringComparison.Ordinal);
+        int stop = script.LastIndexOf("finally {", StringComparison.Ordinal);
+
+        Assert.True(start.Success, "The update log does not start right before the main try.");
+        Assert.True(refuse > start.Index && refuse < stop);
+        Assert.NotEmpty(exits);
+        Assert.All(
+            exits,
+            exit =>
+                Assert.True(
+                    exit.Index > start.Index && exit.Index < stop,
+                    "An exit outside the try would leave the log open: " + exit.Value
+                )
+        );
+        Assert.Contains("Stop-UpdateLog", script.Substring(stop));
+        Assert.Contains("Stop-Transcript", script);
+        Assert.Contains("'apply-release-' + ", script);
+        Assert.Contains("Update log: $fallback", script);
+    }
+
+    [Fact]
+    public void ApplyRelease_WritesAFallbackLogWhenAnotherWindowHoldsTheLog()
+    {
+        // #281: a hand run with -NoExit kept its transcript on apply-release.log, and Windows
+        // PowerShell 5.1 started each later update's transcript without an error but wrote nothing.
+        using var sandbox = new ScriptSandbox();
+        string fallback = Path.Combine(sandbox.Logs, "apply-release-v0.0.0-test.log");
+        using var holder = new FileStream(
+            sandbox.MainLog,
+            FileMode.Append,
+            FileAccess.Write,
+            FileShare.Read
+        );
+
+        (int code, string output) = sandbox.Run(fallback);
+
+        Assert.Equal(0, code);
+        Assert.Equal(
+            "Update log: " + fallback,
+            output.Split('\n', StringSplitOptions.RemoveEmptyEntries)[0].Trim()
+        );
+        Assert.Equal(0, holder.Length);
+        string log = File.ReadAllText(fallback);
+        Assert.Contains("apply-release.log could not be written", log);
+        Assert.Contains("Refusing to replace a source build", log);
+        // The session goes on after the script, as a -NoExit window does, and the log is free.
+        Assert.Contains("log released", output);
+    }
+
+    [Fact]
+    public void ApplyRelease_WritesTheMainLogAndReleasesItWhenTheScriptEnds()
+    {
+        using var sandbox = new ScriptSandbox();
+
+        (int code, string output) = sandbox.Run(sandbox.MainLog);
+
+        Assert.Equal(0, code);
+        Assert.Contains("Refusing to replace a source build", File.ReadAllText(sandbox.MainLog));
+        Assert.DoesNotContain("Update log:", output);
+        Assert.Single(Directory.GetFiles(sandbox.Logs, "apply-release*.log"));
+        Assert.Contains("log released", output);
+    }
+
+    /// <summary>
+    /// Runs apply-release.ps1 under Windows PowerShell 5.1, the host the spectator starts it with,
+    /// with LOCALAPPDATA in a temp folder and an InstallDir under \worktrees\, so the script
+    /// refuses right after its log starts and touches nothing else. The harness then opens the log
+    /// exclusively in the same session.
+    /// </summary>
+    private sealed class ScriptSandbox : IDisposable
+    {
+        private const string Harness = """
+            param([string]$Script, [string]$Root, [string]$Log)
+            try {
+                & $Script -InstallDir (Join-Path $Root 'worktrees\app') -StagingDir (Join-Path $Root 'staging') -Version 'v0.0.0-test'
+            }
+            catch {
+                Write-Host "refused: $($_.Exception.Message)"
+            }
+
+            try {
+                [System.IO.File]::Open($Log, 'Open', 'ReadWrite', 'None').Dispose()
+                Write-Host 'log released'
+            }
+            catch {
+                Write-Host "log still held: $($_.Exception.Message)"
+            }
+            """;
+
+        private readonly string root = Path.Combine(
+            Path.GetTempPath(),
+            "hr-apply-release-" + Path.GetRandomFileName()
+        );
+
+        public ScriptSandbox()
+        {
+            Logs = Path.Combine(root, "LocalAppData", "HeroesReplay", "logs");
+            Directory.CreateDirectory(Logs);
+            File.WriteAllText(Path.Combine(root, "harness.ps1"), Harness);
+        }
+
+        public string Logs { get; }
+
+        public string MainLog => Path.Combine(Logs, "apply-release.log");
+
+        public (int Code, string Output) Run(string log)
+        {
+            var start = new ProcessStartInfo(
+                Path.Combine(
+                    Environment.SystemDirectory,
+                    "WindowsPowerShell",
+                    "v1.0",
+                    "powershell.exe"
+                )
+            )
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            foreach (
+                string argument in new[]
+                {
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    Path.Combine(root, "harness.ps1"),
+                    "-Script",
+                    FindScript(),
+                    "-Root",
+                    root,
+                    "-Log",
+                    log,
+                }
+            )
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            start.Environment["LOCALAPPDATA"] = Path.Combine(root, "LocalAppData");
+            using Process process = Process.Start(start);
+            Task<string> output = process.StandardOutput.ReadToEndAsync();
+            Task<string> error = process.StandardError.ReadToEndAsync();
+            Assert.True(process.WaitForExit(60_000), "powershell.exe did not exit.");
+            process.WaitForExit();
+            return (process.ExitCode, output.Result + error.Result);
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
     }
 
     [Fact]
