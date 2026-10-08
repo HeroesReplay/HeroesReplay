@@ -59,6 +59,47 @@ public sealed class ServiceReadyReport
     /// role degraded with this code and cause. Null when the role has no concern.
     /// </summary>
     public ServiceRoleConcern Concern { get; set; }
+
+    /// <summary>
+    /// The last check of the role's live dependency (#305): the Heroes Profile API, YouTube
+    /// OAuth, the OBS websocket, or the Twitch token. A rejected or unreachable dependency makes
+    /// the role degraded with its code, never failed. Null in files from older roles, and in a
+    /// role whose probes are off.
+    /// </summary>
+    public ServiceRoleDependency Dependency { get; set; }
+}
+
+/// <summary>The last dependency probe, as the role writes it in its heartbeat.</summary>
+public sealed class ServiceRoleDependency
+{
+    /// <summary>What was checked: "Heroes Profile API".</summary>
+    public string Name { get; set; }
+
+    /// <summary><see cref="ServiceDependencyStates"/>: ok, rejected, unreachable, skipped, unused.</summary>
+    public string State { get; set; }
+
+    /// <summary>Stable cause code when it failed, such as <c>download.heroesprofile_rejected</c>.</summary>
+    public string Code { get; set; }
+    public string Cause { get; set; }
+
+    /// <summary>The fix, when it failed.</summary>
+    public string Remediation { get; set; }
+    public DateTimeOffset? CheckedAt { get; set; }
+
+    /// <summary>When this state and code were first seen in a row.</summary>
+    public DateTimeOffset? Since { get; set; }
+
+    public ServiceRoleDependency Copy() =>
+        new()
+        {
+            Name = Name,
+            State = State,
+            Code = Code,
+            Cause = Cause,
+            Remediation = Remediation,
+            CheckedAt = CheckedAt,
+            Since = Since,
+        };
 }
 
 public sealed class ServiceRoleError

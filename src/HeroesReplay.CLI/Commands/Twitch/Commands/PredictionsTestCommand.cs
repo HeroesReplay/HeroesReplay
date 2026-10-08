@@ -41,9 +41,7 @@ public class PredictionsTestCommand : Command
     private static async Task CommandAsync(string outcome, CancellationToken cancellationToken)
     {
         TryParseOutcome(outcome, out int? team);
-        using ServiceProvider provider = new ServiceCollection()
-            .AddCheckServices(cancellationToken)
-            .AddSingleton<IMatchPredictionService, TwitchMatchPredictionService>()
+        using ServiceProvider provider = AddServices(new ServiceCollection(), cancellationToken)
             .BuildHeroesReplayProvider(
                 new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
             );
@@ -51,6 +49,16 @@ public class PredictionsTestCommand : Command
             provider.GetRequiredService<IMatchPredictionService>();
         await predictions.TestAsync(team, cancellationToken);
     }
+
+    /// <summary>
+    /// The services this command resolves: the check services and the prediction service,
+    /// registered as <c>twitch connect</c> registers it. No chat client is registered, so the
+    /// verdict goes to the report page only.
+    /// </summary>
+    public static IServiceCollection AddServices(
+        IServiceCollection services,
+        CancellationToken cancellationToken
+    ) => services.AddCheckServices(cancellationToken).AddMatchPredictionServices();
 
     /// <summary>Blue is team 0, Red is team 1, and cancel is no team.</summary>
     public static bool TryParseOutcome(string outcome, out int? team)

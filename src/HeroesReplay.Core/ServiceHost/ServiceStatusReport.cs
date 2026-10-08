@@ -114,6 +114,12 @@ public sealed record ServiceRoleHealth
     /// <summary>Spectate: replay sessions this process ended, by outcome.</summary>
     public IReadOnlyDictionary<string, int> SessionOutcomes { get; init; }
 
+    /// <summary>
+    /// The role's last check of its live dependency (#305): name, state, code, cause,
+    /// remediation, <c>checkedAt</c>, <c>since</c>. Null when the role wrote none.
+    /// </summary>
+    public ServiceRoleDependency Dependency { get; init; }
+
     /// <summary>The role's newest log file, or the file it writes today when there is none yet.</summary>
     public string LogPath { get; init; }
 
