@@ -215,32 +215,16 @@ public class HeroesProfileService : IHeroesProfileService
             .ToList();
     }
 
-    public async Task DownloadReplayAsync(
+    /// <summary>
+    /// An error answer throws <see cref="HeroesProfileApiException"/> with the status and the
+    /// body's <c>error.code</c>, so a request can tell a deleted replay (403
+    /// <c>replay_deleted</c>) from a key problem (#361).
+    /// </summary>
+    public Task DownloadReplayAsync(
         int replayId,
         Stream destination,
         CancellationToken cancellationToken
-    )
-    {
-        if (destination == null)
-        {
-            throw new ArgumentNullException(nameof(destination));
-        }
-
-        using Stream network = await kiotaClient
-            .Download.Replay.GetAsync(
-                config => config.QueryParameters.ReplayID = replayId,
-                cancellationToken
-            )
-            .ConfigureAwait(false);
-        if (network == null)
-        {
-            throw new InvalidOperationException(
-                $"Heroes Profile v1 download returned no content for replay {replayId}."
-            );
-        }
-
-        await network.CopyToAsync(destination, cancellationToken).ConfigureAwait(false);
-    }
+    ) => kiotaClient.DownloadReplayAsync(replayId, destination, cancellationToken);
 
     public async Task EnrichRankAsync(
         HeroesProfileReplay replay,

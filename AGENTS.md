@@ -159,7 +159,7 @@ On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\He
 - ARAM: Silver City, Lost Cavern, Industrial District, Braxis Outpost.
 - ReplayId rewards: the current patch line (`MinimumGameVersion` and every newer build, including each `2.57.*` iteration). The build's exe does not have to be installed: an older build is downloaded through HeroesSwitcher when the replay plays. A build Blizzard no longer serves ends `BuildNotInstalled` and the redemption stays unfulfilled while the replay is held.
 - Spectator keys: `1`–`0` observe player. Do not send `C` (follow player camera) or Shift+Z ultra zoom.
-- Twitch: chat and EventSub redemptions reconnect with backoff; Helix predictions; channel-point rewards queue `Data\requests.json`. Reward prompts must say recent patch ReplayIds. A request leaves the queue only once its replay is in `Data\Requests`. A failed download retries with backoff and is never refunded; only a gone file (Heroes Profile 404 or 410) or a client below the patch line fails it, and `twitch connect` then cancels the redemption (points returned). The download role never calls Twitch (#351).
+- Twitch: chat and EventSub redemptions reconnect with backoff; Helix predictions; channel-point rewards queue `Data\requests.json`. Reward prompts must say recent patch ReplayIds. A request leaves the queue only once its replay is in `Data\Requests`. A failed download retries with backoff and is never refunded; only a gone file (Heroes Profile 404 or 410, or 403 `replay_deleted`, #361) or a client below the patch line fails it, and `twitch connect` then cancels the redemption (points returned). The download role never calls Twitch (#351).
 
 ### Calculators
 

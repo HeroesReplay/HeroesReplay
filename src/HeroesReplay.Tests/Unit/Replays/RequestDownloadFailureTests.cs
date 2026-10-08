@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
@@ -14,6 +16,7 @@ using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating;
 using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.Twitch.Rewards;
+using HeroesReplay.HeroesProfile.Client;
 using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Kiota.Abstractions;
@@ -250,6 +253,105 @@ public sealed class RequestDownloadFailureTests : IDisposable
         Assert.False(await provider.DownloadNextAsync());
         Assert.Single(service.Downloaded);
         Assert.Single(Dispositions());
+    }
+
+    /// <summary>
+    /// #361: Heroes Profile answers a replay it deleted with 403 and <c>replay_deleted</c>. The
+    /// body travels from the Heroes Profile client (over a fake HTTP handler, no network) to the
+    /// classifier: the request fails for good and a cancel returns the points.
+    /// </summary>
+    [Fact]
+    public async Task ReplayDeleted_FailsTheRequestAndRecordsACancel()
+    {
+        RequestQueue queue = await QueueWith(Requested, Redemption);
+        HeroesProfileProvider provider = Provider(queue);
+        service.Script.Enqueue(
+            (destination, token) =>
+                HeroesProfileOver(Forbidden(ReplayDeletedBody))
+                    .DownloadReplayAsync(Requested, destination, token)
+        );
+
+        Assert.False(await provider.DownloadNextAsync());
+
+        Assert.Empty(Queued());
+        Assert.Empty(Directory.GetFiles(Path.Combine(root, "Requests")));
+        RewardQueueItem failed = Assert.Single(Failed());
+        Assert.Equal(Redemption, failed.Request.RedemptionId);
+        Assert.True(failed.Download.RefundRequested);
+        Assert.Equal(
+            "Heroes Profile no longer has the replay file (HTTP 403 replay_deleted)",
+            failed.Download.FailureReason
+        );
+        RedemptionDispositionLine cancel = Assert.Single(Dispositions());
+        Assert.Equal(RedemptionEnd.Cancel, cancel.End);
+        Assert.Equal(Redemption, cancel.RedemptionId);
+        string board = Board();
+        Assert.Contains("Could not play", board);
+        Assert.Contains("refund requested", board);
+
+        // Nothing is left to try, and the cancel is recorded once.
+        Assert.False(await provider.DownloadNextAsync());
+        Assert.Single(service.Downloaded);
+        Assert.Single(Dispositions());
+    }
+
+    /// <summary>
+    /// #361: any other 403 can be a key or plan problem, which can be fixed. The request stays
+    /// queued with its backoff, and its points are not returned.
+    /// </summary>
+    [Theory]
+    [InlineData(
+        """{"error":{"code":"endpoint_not_in_plan","message":"Not in your plan.","endpoint":"replay_download"}}""",
+        "HTTP 403 endpoint_not_in_plan"
+    )]
+    [InlineData("""{"message":"Forbidden"}""", "HTTP 403")]
+    [InlineData("<html><body>403 Forbidden</body></html>", "HTTP 403")]
+    [InlineData("", "HTTP 403")]
+    public async Task OtherForbidden_StaysQueuedAndIsNotRefunded(string body, string lastError)
+    {
+        RequestQueue queue = await QueueWith(Requested, Redemption);
+        HeroesProfileProvider provider = Provider(queue);
+        service.Script.Enqueue(
+            (destination, token) =>
+                HeroesProfileOver(Forbidden(body))
+                    .DownloadReplayAsync(Requested, destination, token)
+        );
+
+        Assert.False(await provider.DownloadNextAsync());
+
+        RewardQueueItem queued = Assert.Single(Queued());
+        Assert.Equal(1, queued.Download.Attempts);
+        Assert.Equal(lastError, queued.Download.LastError);
+        Assert.Equal(now + RequestDownloadRetry.FirstDelay, queued.Download.NextAttemptAt);
+        Assert.Null(queued.Download.FailedAt);
+        Assert.Empty(Directory.GetFiles(Path.Combine(root, "Requests")));
+        Assert.Empty(Dispositions());
+        Assert.Empty(Failed());
+    }
+
+    private const string ReplayDeletedBody =
+        """{"error":{"code":"replay_deleted","message":"That replay is no longer stored.","endpoint":"replay_download"}}""";
+
+    private static HttpResponseMessage Forbidden(string body) =>
+        new(HttpStatusCode.Forbidden)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        };
+
+    /// <summary>The Heroes Profile client over a handler that gives every call this answer.</summary>
+    private static HeroesProfileClient HeroesProfileOver(HttpResponseMessage answer) =>
+        HeroesProfileClientFactory.Create(
+            "test-key",
+            new HttpClient(new OneAnswer(answer)),
+            new Uri("https://www.heroesprofile.com/api/external/v1/")
+        );
+
+    private sealed class OneAnswer(HttpResponseMessage answer) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        ) => Task.FromResult(answer);
     }
 
     [Fact]

@@ -44,9 +44,10 @@ public enum RequestDownloadVerdict
 
 /// <summary>
 /// When a requested replay's download is given up (#351). Only an answer that says the file is
-/// gone fails a request: Heroes Profile's 404 or 410. Anything else (a 429, a 5xx, another
-/// status, a timeout, a network or disk error) can succeed later, so the request stays queued
-/// and its points are never refunded for it.
+/// gone fails a request: Heroes Profile's 404 or 410, or a 403 whose body's <c>error.code</c> is
+/// <c>replay_deleted</c> (#361). Anything else (a 429, a 5xx, any other 403, another status, a
+/// timeout, a network or disk error) can succeed later, so the request stays queued and its
+/// points are never refunded for it.
 /// </summary>
 public static class RequestDownloadRetry
 {
@@ -55,11 +56,34 @@ public static class RequestDownloadRetry
     public static readonly TimeSpan MaxDelay = TimeSpan.FromMinutes(30);
 
     /// <summary>
+    /// The <c>error.code</c> of Heroes Profile's 403 for a replay it deleted: "That replay is no
+    /// longer stored."
+    /// </summary>
+    public const string ReplayDeletedCode = "replay_deleted";
+
+    /// <summary>
     /// <paramref name="httpStatus"/> is the status Heroes Profile answered the download with
     /// after the HTTP pipeline's own retries, or null when it did not answer.
+    /// <paramref name="errorCode"/> is the body's <c>error.code</c>, or null. A 403 is a key or plan
+    /// problem unless that code says the replay was deleted.
     /// </summary>
-    public static RequestDownloadVerdict Classify(int? httpStatus) =>
-        httpStatus is 404 or 410 ? RequestDownloadVerdict.Fail : RequestDownloadVerdict.Retry;
+    public static RequestDownloadVerdict Classify(int? httpStatus, string errorCode = null) =>
+        httpStatus is 404 or 410
+        || (
+            httpStatus == 403
+            && string.Equals(errorCode, ReplayDeletedCode, StringComparison.OrdinalIgnoreCase)
+        )
+            ? RequestDownloadVerdict.Fail
+            : RequestDownloadVerdict.Retry;
+
+    /// <summary>
+    /// The answer in a reason a person reads: <c>HTTP 403 replay_deleted</c>, or <c>HTTP 404</c>
+    /// when the body had no code.
+    /// </summary>
+    public static string Describe(int httpStatus, string errorCode) =>
+        string.IsNullOrWhiteSpace(errorCode)
+            ? $"HTTP {httpStatus}"
+            : $"HTTP {httpStatus} {errorCode}";
 
     /// <summary>The wait after the <paramref name="attempts"/>th failed attempt: 1, 2, 4, 8, 16, then 30 min.</summary>
     public static TimeSpan Delay(int attempts)
