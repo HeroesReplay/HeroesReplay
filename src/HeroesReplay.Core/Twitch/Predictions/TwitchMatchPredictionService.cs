@@ -13,6 +13,7 @@ using TwitchLib.Api.Core.Exceptions;
 using TwitchLib.Api.Helix.Models.Predictions;
 using TwitchLib.Api.Helix.Models.Predictions.CreatePrediction;
 using TwitchLib.Api.Interfaces;
+using TwitchLib.Client.Interfaces;
 using CreateOutcome = TwitchLib.Api.Helix.Models.Predictions.CreatePrediction.Outcome;
 
 namespace HeroesReplay.Core.Twitch.Predictions;
@@ -24,6 +25,10 @@ public class TwitchMatchPredictionService : IMatchPredictionService
     private readonly ITwitchAPI api;
     private readonly PredictionReportWriter reports;
     private readonly PredictionLedger ledger;
+
+    // The chat client `twitch connect` joined. Null where no chat is registered
+    // (`twitch predictions test`); the verdict then goes to the report page only.
+    private readonly ITwitchClient chat;
     private string cachedChannelId;
     private int? currentReplayId;
 
@@ -31,13 +36,15 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         ILogger<TwitchMatchPredictionService> logger,
         AppSettings settings,
         ITwitchAPI api,
-        PredictionReportWriter reports
+        PredictionReportWriter reports,
+        ITwitchClient chat = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.api = api ?? throw new ArgumentNullException(nameof(api));
         this.reports = reports ?? throw new ArgumentNullException(nameof(reports));
+        this.chat = chat;
         ledger = PredictionLedger.Load(PredictionLedger.PathFor(settings.Location?.DataDirectory));
     }
 
@@ -342,7 +349,9 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 MarkSettled(entry, remoteState);
                 if (remoteState == PredictionRemoteState.Resolved)
                 {
-                    reports.TryWrite(match);
+                    // Found settled at startup: the page is caught up, but chat is not told about
+                    // a game that ended before this process was watching.
+                    reports.TryWrite(match, entry.Map);
                 }
             }
         }
@@ -631,13 +640,35 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             MarkSettled(entry, remote);
             if (remote == PredictionRemoteState.Resolved)
             {
-                reports.TryWrite(settled);
+                AnnounceVerdict(reports.TryWrite(settled, entry.Map));
             }
 
             return;
         }
 
         KeepPending(entry, "Twitch did not confirm the prediction ended");
+    }
+
+    private void AnnounceVerdict(PredictionReport report)
+    {
+        if (
+            chat == null
+            || string.IsNullOrWhiteSpace(report?.Verdict)
+            || !settings.Twitch.EnableChatBot
+            || string.IsNullOrWhiteSpace(settings.Twitch.Channel)
+        )
+        {
+            return;
+        }
+
+        try
+        {
+            chat.SendMessage(settings.Twitch.Channel, report.Verdict, settings.Twitch.DryRunMode);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not post the prediction verdict to chat.");
+        }
     }
 
     private void ApplyFailure(

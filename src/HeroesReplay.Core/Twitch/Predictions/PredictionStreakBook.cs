@@ -13,6 +13,12 @@ public sealed class PredictionStreakBook
 
     public Dictionary<string, int> Streaks { get; set; } = new Dictionary<string, int>();
 
+    /// <summary>
+    /// The <see cref="PredictionVerdict"/> templates used last, newest first, so the next verdict
+    /// avoids them.
+    /// </summary>
+    public List<string> RecentVerdicts { get; set; } = new List<string>();
+
     public static PredictionStreakBook Load(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
@@ -32,6 +38,7 @@ public sealed class PredictionStreakBook
             }
 
             book.Streaks ??= new Dictionary<string, int>();
+            book.RecentVerdicts ??= new List<string>();
             return book;
         }
         catch (JsonException)
@@ -74,6 +81,32 @@ public sealed class PredictionStreakBook
         if (!string.IsNullOrWhiteSpace(predictionId))
         {
             LastPredictionId = predictionId;
+        }
+    }
+
+    public void RememberVerdict(IEnumerable<string> templates)
+    {
+        if (templates == null)
+        {
+            return;
+        }
+
+        RecentVerdicts ??= new List<string>();
+        foreach (string template in templates)
+        {
+            if (string.IsNullOrWhiteSpace(template))
+            {
+                continue;
+            }
+
+            RecentVerdicts.Remove(template);
+            RecentVerdicts.Insert(0, template);
+        }
+
+        int keep = PredictionVerdict.RecentToAvoid;
+        if (RecentVerdicts.Count > keep)
+        {
+            RecentVerdicts.RemoveRange(keep, RecentVerdicts.Count - keep);
         }
     }
 }
