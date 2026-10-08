@@ -58,7 +58,10 @@ public sealed class UploadAttemptManifest
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public UploadAttemptPolicy Policy { get; init; }
 
-    /// <summary>Resumable upload URI. Present only after a send has started.</summary>
+    /// <summary>
+    /// Resumable upload URI. Present only after a send has started. Saved without the API key
+    /// (<see cref="UploadSessionUri"/>, #368).
+    /// </summary>
     [JsonPropertyName(SessionUriProperty)]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string SessionUri { get; init; }
@@ -101,6 +104,34 @@ public sealed class UploadAttemptManifest
             Policy = policy,
             SessionUri = SessionUri,
         };
+    }
+
+    private UploadAttemptManifest WithSessionUri(string sessionUri)
+    {
+        return new UploadAttemptManifest
+        {
+            Schema = Schema,
+            AttemptId = AttemptId,
+            ReplayId = ReplayId,
+            State = State,
+            MediaPath = MediaPath,
+            MediaSize = MediaSize,
+            MediaHash = MediaHash,
+            VideoId = VideoId,
+            Revision = Revision,
+            UpdatedAtUtc = UpdatedAtUtc,
+            ReceiptKind = ReceiptKind,
+            Policy = Policy,
+            SessionUri = sessionUri,
+        };
+    }
+
+    /// <summary>This manifest with the API key taken out of its session URI (#368).</summary>
+    public UploadAttemptManifest WithoutSessionKey()
+    {
+        return UploadSessionUri.HasKey(SessionUri)
+            ? WithSessionUri(UploadSessionUri.WithoutKey(SessionUri))
+            : this;
     }
 }
 

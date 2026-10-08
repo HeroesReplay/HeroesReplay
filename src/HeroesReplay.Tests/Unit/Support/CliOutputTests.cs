@@ -95,9 +95,38 @@ public class CliOutputTests
     [InlineData("PASS oauth:abcdef123", "PASS oauth: [redacted]")]
     [InlineData("Check the v1 Bearer key.", "Check the v1 Bearer key.")]
     [InlineData("OBS password: set (12 chars)", "OBS password: set (12 chars)")]
+    [InlineData(
+        "PUT https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&key=unit-test-yt-key&upload_id=abc",
+        "PUT https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&key=[redacted]&upload_id=abc"
+    )]
     public void Redaction_MasksTokenShapedValues(string text, string expected)
     {
         Assert.Equal(expected, new CliRedaction().Redact(text));
+    }
+
+    [Fact]
+    public void Redaction_MasksAGoogleApiKeyItWasNotTold_AndTheYouTubeKeyItWas()
+    {
+        // Built at run time so the source holds nothing shaped like a real key.
+        string shaped = "AIza" + new string('Q', 35);
+        var redaction = new CliRedaction();
+        redaction.Remember(
+            new AppSettings
+            {
+                YouTube = new HeroesReplay.Core.YouTube.YouTubeSettings
+                {
+                    ApiKey = "unit-test-yt-key",
+                },
+            }
+        );
+
+        string text = redaction.Redact(
+            "{\"key\": \"" + shaped + "\", \"session\": \"x?upload_id=abc&key%3Dunit-test-yt-key\"}"
+        );
+
+        Assert.DoesNotContain(shaped, text);
+        Assert.DoesNotContain("unit-test-yt-key", text);
+        Assert.Contains("upload_id=abc", text);
     }
 
     [Fact]

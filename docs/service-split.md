@@ -116,7 +116,7 @@ Each role that `services start` or the supervisor launched writes its own log fi
 
 - One line per entry: local time with its offset, level (`INF`, `WRN`, `ERR`, `CRT`), category, event id when there is one, and the message. Exception lines follow, indented four spaces, so every line at column 0 starts an entry.
 - Each process that opens the file writes a header, `--- <role> pid <n> version <v> ---`. A restarted role appends to the day's file under a new header.
-- Tokens are redacted with the rules that #149 applies to `lastError` (`ServiceLogRedaction`): `access_token=`, `api_token=`, `api_key=`, `token=`, `key=`, `secret=`, `password=`, `Bearer …`, and `oauth:…`. An entry is capped at 32 KB.
+- Tokens are redacted with the rules that #149 applies to `lastError` (`ServiceLogRedaction`): `access_token=`, `api_token=`, `api_key=`, `token=`, `key=` (the API key in a YouTube upload URL, #368), `secret=`, `password=`, `Bearer …`, `oauth:…`, and any Google API key (`AIza` and 35 more characters). An entry is capped at 32 KB.
 - A new file starts at local midnight, and when the day's file reaches `ServiceLogs:MaxFileSizeMegabytes` (20): `<role>-<date>.1.log`, `.2.log`. Each time a file opens, the role deletes its own files older than `RetainedDays` (14, today included) and keeps at most `MaxFilesPerRole` (50). Pid files and other logs in the folder are not touched. `ServiceLogs:Directory` moves the folder; `Enabled: false` turns the files off.
 - The level is `Logging:RoleFile` (Information, with `System` and `Microsoft` at Warning).
 - The file is opened for shared reading: `Get-Content -Tail 50 -Wait` works while the role writes.
