@@ -5,7 +5,7 @@ namespace HeroesReplay.Core.Spectating.Screens;
 
 /// <summary>
 /// What client memory says about each <see cref="ScreenState"/>, for shadow mode: the
-/// HeroesClientSDK menu screens (<see cref="ClientScreenMemory"/>), read by the client's own
+/// HeroesClientSDK menu screens (<see cref="ClientScreen"/>), read by the client's own
 /// screen names. Home, the login form and the map loading screen come from memory; the other
 /// states are null (memory cannot tell them yet) until a newer SDK reads them.
 /// </summary>
@@ -14,8 +14,8 @@ public static class ScreenMemoryVerdicts
     public static bool? For(ScreenState state, ClientScreenSample? sample) =>
         state switch
         {
-            ScreenState.Home => sample?.Home,
-            ScreenState.LoginForm => sample?.LoginForm,
+            ScreenState.Home => sample?.OnHome,
+            ScreenState.LoginForm => sample?.OnLogin,
             ScreenState.MapLoading => sample?.MapLoading,
             _ => null,
         };

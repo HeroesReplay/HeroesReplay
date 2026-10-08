@@ -52,18 +52,17 @@ public class ScreenMemoryVerdictsTests
     private static readonly ClientScreenSample Match = new(
         ClientScreenKind.Match,
         new string[0],
+        MenuSeen: true,
         "match",
-        Current,
-        false,
-        MenuSeen: true
+        Current
     );
 
     private static readonly ClientScreenSample Unknown = new(
         ClientScreenKind.Unknown,
         new string[0],
+        MenuSeen: false,
         "unsupported-build",
-        Current,
-        false
+        Current
     );
 
     [Fact]
@@ -77,7 +76,7 @@ public class ScreenMemoryVerdictsTests
     [Fact]
     public void For_LoginForm_IsTheLoginFormAndNotHome()
     {
-        // LoadingScreenMemory read this form as a menu, so home needed OCR to veto it.
+        // LoadingScreen read this form as a menu, so home needed OCR to veto it.
         Assert.False(ScreenMemoryVerdicts.For(ScreenState.Home, Login));
         Assert.True(ScreenMemoryVerdicts.For(ScreenState.LoginForm, Login));
     }
@@ -153,5 +152,5 @@ public class ScreenMemoryVerdictsTests
         ClientScreenKind kind,
         bool menuSeen,
         params string[] shown
-    ) => new(kind, shown, "screens", Current, false, menuSeen);
+    ) => new(kind, shown, menuSeen, "screens", Current);
 }
