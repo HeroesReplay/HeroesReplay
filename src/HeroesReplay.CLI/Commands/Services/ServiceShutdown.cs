@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Recording;
@@ -20,6 +21,19 @@ public sealed class ServiceShutdown
     public TimeSpan GracefulWait { get; set; } = DefaultGracefulWait;
     public Action<TimeSpan> Wait { get; set; }
     public Action ClearStopFile { get; set; }
+
+    /// <summary>
+    /// Finds the spectate processes <c>services.json</c> does not list, given the recorded pids
+    /// (#381). Read once, before the stop request. Those from this install are stopped like a
+    /// recorded role but never written to <c>services.json</c>.
+    /// </summary>
+    public Func<IReadOnlyCollection<int>, UnrecordedSpectates> FindUnrecordedSpectates { get; set; }
+
+    /// <summary>
+    /// True while a Heroes of the Storm process runs. Read only when no spectate was recorded or
+    /// found, so a stop with nothing to close says so instead of "closed". Null counts as running.
+    /// </summary>
+    public Func<bool> GameRunning { get; set; }
 
     /// <summary>Closes Heroes of the Storm. True when no game process is left.</summary>
     public Func<bool> CloseGame { get; set; }
