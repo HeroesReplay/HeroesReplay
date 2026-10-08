@@ -10,6 +10,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Telemetry;
+using HeroesReplay.HeroesProfile.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -43,11 +44,24 @@ public class DownloadCommand : Command
         ILogger<DownloadCommand> logger = scope.ServiceProvider.GetRequiredService<
             ILogger<DownloadCommand>
         >();
+        AppSettings settings = scope.ServiceProvider.GetRequiredService<AppSettings>();
+        // One Heroes Profile call before ready, then on an interval (#305).
+        var probes = new ServiceDependencyMonitor(
+            new HeroesProfileApiProbe(
+                scope.ServiceProvider.GetRequiredService<HeroesProfileClient>(),
+                settings.HeroesProfileApi
+            ),
+            settings.ServiceHealth,
+            scope.ServiceProvider.GetRequiredService<ILogger<ServiceDependencyMonitor>>()
+        );
+        ServiceDependencyResult dependency = await probes.FirstAsync(stop.Token);
         using ServiceHeartbeat heartbeat = ServiceHeartbeat.StartFromEnvironment(
             "download",
-            scope.ServiceProvider.GetRequiredService<AppSettings>().ServiceHealth,
-            stop.Token
+            settings.ServiceHealth,
+            stop.Token,
+            dependency
         );
+        using IDisposable probing = probes.Watch(stop.Token);
         Task heroStats = StartHeroStats(scope.ServiceProvider, stop.Token);
         int failures = 0;
         while (!stop.Token.IsCancellationRequested)

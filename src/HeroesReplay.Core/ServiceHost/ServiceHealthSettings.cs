@@ -50,6 +50,66 @@ public sealed class ServiceHealthSettings
     /// <summary>An upload pass: the uploader's pending drain, or its one-minute poll.</summary>
     public TimeSpan YouTubeWorkThreshold { get; set; } = TimeSpan.FromMinutes(30);
 
+    public static readonly TimeSpan DefaultDependencyProbeInterval = TimeSpan.FromMinutes(10);
+    public static readonly TimeSpan DefaultDependencyRetryInterval = TimeSpan.FromMinutes(2);
+    public static readonly TimeSpan DefaultDependencyProbeTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>No probe repeats faster than this, whatever the settings say.</summary>
+    public static readonly TimeSpan MinimumDependencyProbeInterval = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Each role checks its live dependency once before it reports ready and then every
+    /// <see cref="DependencyProbeInterval"/> (#305). False turns every probe off.
+    /// </summary>
+    public bool DependencyProbes { get; set; } = true;
+
+    /// <summary>The time between probes while the dependency is ok. At least one minute.</summary>
+    public TimeSpan DependencyProbeInterval { get; set; } = DefaultDependencyProbeInterval;
+
+    /// <summary>
+    /// The time between probes while the dependency fails, so a fixed key or an outage that ends
+    /// clears the degraded state sooner. At least one minute.
+    /// </summary>
+    public TimeSpan DependencyRetryInterval { get; set; } = DefaultDependencyRetryInterval;
+
+    /// <summary>How long one probe may take before it counts as unreachable. 1 to 60 seconds.</summary>
+    public TimeSpan DependencyProbeTimeout { get; set; } = DefaultDependencyProbeTimeout;
+
+    /// <summary>
+    /// Spectate's probe: identify on the OBS websocket with Get requests only, while OBS runs.
+    /// Off until the AGENTS.md short live proof has run with it on.
+    /// </summary>
+    public bool SpectateObsProbe { get; set; }
+
+    /// <summary>The wait before the next probe: shorter after a failure, never under a minute.</summary>
+    public TimeSpan NextDependencyProbe(bool failed)
+    {
+        TimeSpan configured = failed ? DependencyRetryInterval : DependencyProbeInterval;
+        TimeSpan fallback = failed
+            ? DefaultDependencyRetryInterval
+            : DefaultDependencyProbeInterval;
+        TimeSpan wait = configured > TimeSpan.Zero ? configured : fallback;
+        return wait < MinimumDependencyProbeInterval ? MinimumDependencyProbeInterval : wait;
+    }
+
+    /// <summary>The bound on one probe, between 1 and 60 seconds.</summary>
+    public TimeSpan DependencyProbeBound()
+    {
+        if (DependencyProbeTimeout <= TimeSpan.Zero)
+        {
+            return DefaultDependencyProbeTimeout;
+        }
+
+        if (DependencyProbeTimeout < TimeSpan.FromSeconds(1))
+        {
+            return TimeSpan.FromSeconds(1);
+        }
+
+        return DependencyProbeTimeout > TimeSpan.FromSeconds(60)
+            ? TimeSpan.FromSeconds(60)
+            : DependencyProbeTimeout;
+    }
+
     public TimeSpan Interval =>
         HeartbeatInterval > TimeSpan.Zero ? HeartbeatInterval : DefaultHeartbeatInterval;
 
