@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HeroesClientSDK;
 using HeroesReplay.Core.GameClient;
 using Xunit;
 
@@ -15,6 +16,49 @@ public class ReplayClientRouteTests
         "2.55.17.98025",
         "2.57.0.98285",
     };
+
+    [Fact]
+    public void RunningBuild_ComparesTheDetectedVersionWithTheReplays()
+    {
+        // HeroesClientSDK HeroesClientProcess.DetectedVersion of the running exe (HeroesClientSDK#12).
+        var running = new HeroesClientVersion(2, 57, 0, 98348);
+
+        Assert.Equal(
+            RunningClientBuild.Matches,
+            ReplayClientRoute.RunningBuild(running, "2.57.0.98348")
+        );
+        Assert.Equal(
+            RunningClientBuild.Matches,
+            ReplayClientRoute.RunningBuild(running, " 2, 57, 0, 98348 ")
+        );
+        Assert.Equal(
+            RunningClientBuild.Differs,
+            ReplayClientRoute.RunningBuild(running, "2.57.0.98304")
+        );
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void RunningBuild_UnknownReplayVersion_IsUnreadable(string replayVersion)
+    {
+        Assert.Equal(
+            RunningClientBuild.Unreadable,
+            ReplayClientRoute.RunningBuild(new HeroesClientVersion(2, 57, 0, 98348), replayVersion)
+        );
+    }
+
+    [Fact]
+    public void RunningBuild_AnExeWithoutAVersion_IsUnreadable()
+    {
+        // The SDK never throws: a client that is not attached, or an exe without a readable
+        // file version, has no detected version.
+        Assert.Equal(
+            RunningClientBuild.Unreadable,
+            ReplayClientRoute.RunningBuild(null, "2.57.0.98348")
+        );
+    }
 
     [Fact]
     public void Classify_NewestInstalledBuildIsTheCurrentPatch()
