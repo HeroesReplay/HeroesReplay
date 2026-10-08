@@ -1,15 +1,13 @@
 using System;
-using System.Collections.Generic;
 
 namespace HeroesReplay.Core.Spectating.Screens;
 
 /// <summary>
-/// Screen text the spectator reads with OCR: the home screen. The map loading screen and the
-/// match clock are memory only (#292).
+/// What the spectator still reads with OCR, and shadow mode. The home screen, the map loading
+/// screen and the match clock are memory only (#292).
 /// </summary>
 public class OCRSettings
 {
-    public IEnumerable<string> HomeScreenText { get; set; }
     public TimeSpan CheckSleepDuration { get; set; }
 
     /// <summary>

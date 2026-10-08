@@ -218,7 +218,10 @@ public class GameController : IGameController
         return boot.OpenedFromHome || boot.Auth == ReplayLaunchAuth.AlreadyInMatch;
     }
 
-    public async Task<bool> OpenReplayFromHomeScreenAsync(string replayPath)
+    public Task<bool> OpenReplayFromHomeScreenAsync(string replayPath) =>
+        Task.FromResult(OpenReplayFromHomeScreen(replayPath));
+
+    private bool OpenReplayFromHomeScreen(string replayPath)
     {
         // While Blizzard fetches the replay's build, the menu on screen is the newest exe's
         // handoff. Opening the file again there would start the switch over.
@@ -227,7 +230,7 @@ public class GameController : IGameController
             return false;
         }
 
-        if (!IsLaunched() || !await IsHomeScreen().ConfigureAwait(false))
+        if (!IsLaunched() || !IsHomeScreen())
         {
             return false;
         }
@@ -361,7 +364,7 @@ public class GameController : IGameController
                 .ConfigureAwait(false);
             otherReplay =
                 presented && ReplayClientRoute.OtherReplayOnClient(replayOnClient, replayPath);
-            home = !presented && await IsHomeScreen().ConfigureAwait(false);
+            home = !presented && IsHomeScreen();
         }
 
         ReplayLaunchAuth auth = ReplayClientRoute.Decide(
@@ -526,7 +529,7 @@ public class GameController : IGameController
         }
 
         await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
-        if (IsLaunched() && await IsHomeScreen().ConfigureAwait(false))
+        if (IsLaunched() && IsHomeScreen())
         {
             OpenReplayFromHome(replayPath);
             return new ReplayBoot(auth, true);
@@ -933,31 +936,15 @@ public class GameController : IGameController
                 continue;
             }
 
-            string laterText = null;
-            bool home = false;
-            if (!openedFromHome && !loading && !timer && !inMatch && IsGameProcessRunning())
-            {
-                WordScan homeScan = await ScanPrimaryAsync(settings.OCR.HomeScreenText)
-                    .ConfigureAwait(false);
-                laterText = homeScan.Text;
-                home = SeesHome(homeScan);
-            }
-
-            if (laterText != null)
-            {
-                ShadowScreen(
-                    ScreenState.GameDataDownload,
-                    ClientScreenText.IsGameDataDownload(text, laterText),
-                    laterText
-                );
-            }
-
-            if (await HoldForGameDataDownloadAsync(text, laterText).ConfigureAwait(false))
-            {
-                continue;
-            }
-
-            bool startup = ClientScreenText.IsGameDataStartup(text, laterText);
+            // Home from memory only (#292); the window is not OCR'd for the menu's words.
+            bool home =
+                !openedFromHome
+                && !loading
+                && !timer
+                && !inMatch
+                && IsGameProcessRunning()
+                && SeesHome();
+            bool startup = ClientScreenText.IsGameDataStartup(text);
             ShadowScreen(ScreenState.GameDataStartup, startup, text);
             RunningClientBuild runningBuild = ReadRunningBuild(replayVersion);
             bool differentBuild = runningBuild == RunningClientBuild.Differs;
@@ -1078,7 +1065,7 @@ public class GameController : IGameController
             if (
                 ClientInterfacePlan.RestartAfterGameData(
                     sawGameDataDownload,
-                    downloadVisible: ClientScreenText.IsGameDataDownload(text, laterText),
+                    downloadVisible: ClientScreenText.IsGameDataDownload(text),
                     startup,
                     replayVisible,
                     dataRestarts,
@@ -1172,8 +1159,7 @@ public class GameController : IGameController
             }
 
             TimeSpan blankFor = blankTiming ? DateTimeOffset.UtcNow - blankSince : TimeSpan.Zero;
-            bool startupOrDownload =
-                startup || ClientScreenText.IsGameDataDownload(text, laterText);
+            bool startupOrDownload = startup || ClientScreenText.IsGameDataDownload(text);
             bool gameDataStillStarting = ClientRelaunch.KeepsWaitingForGameData(
                 startup,
                 sawGameDataStartup,
@@ -1596,8 +1582,6 @@ public class GameController : IGameController
 
     private readonly record struct WindowRead(string Text, int Width, int Height);
 
-    private readonly record struct WordScan(bool Found, string Text);
-
     private async Task<WindowRead> ReadWindowAsync()
     {
         if (!TryGetGameHandle(out IntPtr handle))
@@ -1729,20 +1713,15 @@ public class GameController : IGameController
         );
 
     /// <summary>
-    /// Home is memory first (<see cref="HomeScreenCue"/>): the client's own home screen
+    /// Home from memory only (<see cref="HomeScreenCue"/>, #292): the client's own home screen
     /// (<see cref="ClientScreen"/>) when it can tell, else a menu in <see cref="LoadingScreen"/>.
-    /// OCR's words decide only when memory cannot tell, and its text still vetoes a login form.
-    /// Shadow mode sees the same memory read.
+    /// The window is not OCR'd for it.
     /// </summary>
-    private bool SeesHome(WordScan scan)
+    private bool SeesHome()
     {
         LoadingScreenSample? screen = ReadScreenInMemory();
         ClientScreenSample? client = ReadClientScreen();
-        bool home = HomeScreenCue.Sees(client?.OnHome, screen?.OnMenu, scan.Found, scan.Text);
-        bool loginForm = ClientScreenText.IsLoginForm(scan.Text);
-        ShadowScreen(ScreenState.Home, scan.Found && !loginForm, scan.Text);
-        ShadowScreen(ScreenState.LoginForm, loginForm, scan.Text);
-        return home;
+        return HomeScreenCue.Sees(client?.OnHome, screen?.OnMenu);
     }
 
     /// <summary>
@@ -2041,16 +2020,7 @@ public class GameController : IGameController
         }
     }
 
-    private async Task<bool> IsHomeScreen()
-    {
-        if (!IsGameProcessRunning())
-        {
-            return false;
-        }
-
-        WordScan scan = await ScanPrimaryAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
-        return SeesHome(scan);
-    }
+    private bool IsHomeScreen() => IsGameProcessRunning() && SeesHome();
 
     private bool IsGameProcessRunning()
     {
@@ -2080,54 +2050,6 @@ public class GameController : IGameController
 
     private async Task<bool> IsMatchClockRunning() =>
         IsLaunched() && (await TryReadRunningMatchClockAsync().ConfigureAwait(false)) != null;
-
-    private async Task<WordScan> ScanPrimaryAsync(IEnumerable<string> words)
-    {
-        if (!TryGetGameHandle(out IntPtr handle))
-        {
-            return new WordScan(false, string.Empty);
-        }
-
-        using Bitmap frame = capture.Capture(handle);
-        if (frame == null)
-        {
-            return new WordScan(false, string.Empty);
-        }
-
-        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
-            .ConfigureAwait(false);
-        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-        string recognized = result?.Text ?? string.Empty;
-        logger.LogInformation(
-            "Window OCR ({Width}x{Height}): {Text}",
-            frame.Width,
-            frame.Height,
-            string.IsNullOrWhiteSpace(recognized) ? "(empty)" : recognized
-        );
-
-        if (words != null)
-        {
-            foreach (string word in words)
-            {
-                if (
-                    !string.IsNullOrWhiteSpace(word)
-                    && recognized.Contains(word, StringComparison.OrdinalIgnoreCase)
-                )
-                {
-                    logger.LogInformation("{Word} has been found.", word);
-                    return new WordScan(true, recognized);
-                }
-            }
-        }
-
-        if (settings.Capture.SaveCaptureFailureCondition)
-        {
-            Directory.CreateDirectory(settings.CapturesPath);
-            frame.Save(Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
-        }
-
-        return new WordScan(false, recognized);
-    }
 
     public void SendFocus(int index)
     {
