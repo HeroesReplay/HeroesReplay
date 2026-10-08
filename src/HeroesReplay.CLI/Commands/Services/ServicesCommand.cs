@@ -743,6 +743,8 @@ public class ServicesCommand : Command
                                 freshFor: ServiceSupervisorFile.FreshFor(health)
                             ),
                         ReadMachine = ReadMachineHealth,
+                        ReadObsRestorePending = () =>
+                            ObsCollectionRollback.DescribePending(ObsManagedFiles.ForThisUser()),
                     }
                 );
                 return Task.FromResult(code);

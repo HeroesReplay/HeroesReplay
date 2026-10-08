@@ -110,6 +110,53 @@ public class ObsFileTransactionTests
         }
     }
 
+    [Fact]
+    public void Write_Bytes_PutsThemBackExactly()
+    {
+        string root = TempRoot();
+        try
+        {
+            string file = Path.Combine(root, "scenes", "HeroesReplay.json");
+            byte[] bom = [0xEF, 0xBB, 0xBF, (byte)'{', (byte)'}', (byte)'\r', (byte)'\n'];
+
+            ObsFileTransaction.Write(file, bom, Backups(root), Now);
+
+            Assert.Equal(bom, File.ReadAllBytes(file));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BackupsSince_ListsTheBackupsFromThatTimeOn_OldestFirst()
+    {
+        string root = TempRoot();
+        try
+        {
+            string file = Path.Combine(root, "scenes", "HeroesReplay.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(file));
+            File.WriteAllText(file, "v0");
+            string before = ObsFileTransaction.Write(file, "v1", Backups(root), Now.AddHours(-1));
+            // A sub-millisecond start still finds a write in the same millisecond.
+            DateTime since = Now.AddTicks(4321);
+            string first = ObsFileTransaction.Write(file, "v2", Backups(root), since);
+            string second = ObsFileTransaction.Write(file, "v3", Backups(root), Now.AddMinutes(5));
+
+            string[] found = ObsFileTransaction.BackupsSince(Backups(root), file, since);
+
+            Assert.Equal(new[] { first, second }, found);
+            Assert.Equal("v1", File.ReadAllText(found[0]));
+            Assert.Equal(Now.AddHours(-1), ObsFileTransaction.BackupTime(before));
+            Assert.Null(ObsFileTransaction.BackupTime(file));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string Backups(string root) => Path.Combine(root, "backups");
 
     private static string TempRoot()

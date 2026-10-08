@@ -123,6 +123,21 @@ public static class ObsCollectionPatcher
         }
 
         var target = new Target(update, templateFull, destinationFull, template, templateNames);
+
+        // A release rollback that waited for OBS comes first, when this is the install it restored.
+        ObsCollectionApplyResult restored = ObsCollectionRollback.CompletePending(
+            update.Managed,
+            destinationFull,
+            target.Hash,
+            templateNames,
+            update.ObsIsRunning,
+            update.UtcNow
+        );
+        if (restored != null)
+        {
+            return restored;
+        }
+
         if (!File.Exists(destinationFull))
         {
             return update.ObsIsRunning
@@ -257,9 +272,29 @@ public static class ObsCollectionPatcher
     {
         public string AssetRoot => Path.GetDirectoryName(TemplatePath);
 
-        public string Hash { get; } =
-            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Template)));
+        public string Hash { get; } = Sha256(Template);
     }
+
+    /// <summary>
+    /// The hash a template is recorded under in <see cref="ObsManagedFiles"/>, or null when the
+    /// file is missing or cannot be read.
+    /// </summary>
+    public static string TemplateHash(string templatePath)
+    {
+        try
+        {
+            return !string.IsNullOrWhiteSpace(templatePath) && File.Exists(templatePath)
+                ? Sha256(File.ReadAllText(templatePath))
+                : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static string Sha256(string template) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(template)));
 
     private static ObsCollectionApplyResult Install(Target target, string message)
     {
@@ -310,6 +345,9 @@ public static class ObsCollectionPatcher
             replacement.DestinationPath,
             new ObsManagedCollection(replacement.TemplateSha256, replacement.Names, utcNow)
         );
+
+        // The latest write wins: a rollback that waited for this file is done or superseded.
+        managed.ClearPendingRestore(replacement.DestinationPath);
         return backup;
     }
 
