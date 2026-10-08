@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.OpenTelemetry;
 
@@ -30,13 +31,19 @@ public static class AspireDashboardHost
     public const int UiPort = 18888;
     public const int OtlpGrpcPort = 4317;
     public const int OtlpHttpPort = 4318;
+
+    /// <summary>
+    /// The arguments after <c>--</c> go to the dashboard itself. It keeps 2,000 traces in memory
+    /// instead of its default 10,000, because it runs for days on the stream PC.
+    /// </summary>
     public const string RunArguments =
         "dashboard run --allow-anonymous --non-interactive --nologo --frontend-url "
         + UiUrl
         + " --otlp-grpc-url "
         + OtlpGrpcEndpoint
         + " --otlp-http-url "
-        + OtlpHttpEndpoint;
+        + OtlpHttpEndpoint
+        + " -- --Dashboard:TelemetryLimits:MaxTraceCount=2000";
 
     public static readonly TimeSpan StartupBudget = TimeSpan.FromSeconds(30);
 
@@ -376,26 +383,50 @@ public static class AspireDashboardHost
 
     public static bool IsDashboardLauncher(string processName)
     {
-        if (string.IsNullOrWhiteSpace(processName))
-        {
-            return false;
-        }
-
-        string name = processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-            ? processName[..^4]
-            : processName;
+        string name = WithoutExe(processName);
         return name.Equals("dotnet", StringComparison.OrdinalIgnoreCase)
             || name.Equals("aspire", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <c>aspire</c> on PATH is the dotnet tool shim <c>aspire.cmd</c>, so the recorded pid can be
+    /// cmd.exe. It counts only while the Aspire CLI is its child, so a reused pid is never killed.
+    /// Before this, <c>otel down</c> refused the stream PC's dashboard ("Pid 17228 is cmd").
+    /// </summary>
+    public static bool IsDashboardLauncher(string processName, IEnumerable<string> childNames)
+    {
+        if (IsDashboardLauncher(processName))
+        {
+            return true;
+        }
+
+        return WithoutExe(processName).Equals("cmd", StringComparison.OrdinalIgnoreCase)
+            && childNames != null
+            && childNames.Any(IsDashboardLauncher);
+    }
+
+    private static string WithoutExe(string processName)
+    {
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return string.Empty;
+        }
+
+        return processName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? processName[..^4]
+            : processName;
     }
 
     public static int StopRecorded(
         string pidText,
         Func<int, string> processName,
+        Func<int, IEnumerable<string>> childNames,
         Action<int> kill,
         Action<string> log
     )
     {
         ArgumentNullException.ThrowIfNull(processName);
+        ArgumentNullException.ThrowIfNull(childNames);
         ArgumentNullException.ThrowIfNull(kill);
         ArgumentNullException.ThrowIfNull(log);
         if (!int.TryParse(pidText?.Trim(), out int pid) || pid <= 0)
@@ -421,7 +452,7 @@ public static class AspireDashboardHost
             return 0;
         }
 
-        if (!IsDashboardLauncher(name))
+        if (!IsDashboardLauncher(name, childNames(pid)))
         {
             log($"Pid {pid} is {name}, not the Aspire CLI. Leaving it running.");
             return 1;
@@ -455,7 +486,13 @@ public static class AspireDashboardHost
             }
 
             string text = File.ReadAllText(PidPath);
-            int code = StopRecorded(text, ProcessNameOrNull, KillTree, Console.WriteLine);
+            int code = StopRecorded(
+                text,
+                ProcessNameOrNull,
+                ChildNames,
+                KillTree,
+                Console.WriteLine
+            );
             if (code == 0)
             {
                 TryDelete(PidPath);
@@ -767,6 +804,9 @@ public static class AspireDashboardHost
             return null;
         }
     }
+
+    private static IEnumerable<string> ChildNames(int pid) =>
+        ProcessTable.Snapshot().Where(entry => entry.ParentPid == pid).Select(entry => entry.Name);
 
     private static void KillTree(int pid)
     {

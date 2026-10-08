@@ -29,6 +29,21 @@ public class AspireDashboardHostTests
     }
 
     [Fact]
+    public void RunArguments_PassTheTraceLimitToTheDashboard()
+    {
+        // The stream PC's dashboard held 8.5 GB with the default 10,000 traces (2026-10-08).
+        string run = AspireDashboardHost.RunArguments;
+        int separator = run.IndexOf(" -- ", StringComparison.Ordinal);
+
+        Assert.True(separator > 0);
+        Assert.Contains(
+            "--Dashboard:TelemetryLimits:MaxTraceCount=2000",
+            run[separator..],
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
     public void Ensure_WhenOtlpIsListening_DoesNotStartAProcess()
     {
         int starts = 0;
@@ -287,22 +302,79 @@ public class AspireDashboardHostTests
     {
         var killed = new List<int>();
         var lines = new List<string>();
-        int code = AspireDashboardHost.StopRecorded("15", pid => "dotnet", killed.Add, lines.Add);
+        int code = AspireDashboardHost.StopRecorded(
+            "15",
+            pid => "dotnet",
+            NoChildren,
+            killed.Add,
+            lines.Add
+        );
 
         Assert.Equal(0, code);
         Assert.Equal(new[] { 15 }, killed);
         Assert.Contains(lines, line => line.Contains("Stopped Aspire dashboard pid 15"));
 
         killed.Clear();
-        int left = AspireDashboardHost.StopRecorded("15", pid => "notepad", killed.Add, lines.Add);
+        int left = AspireDashboardHost.StopRecorded(
+            "15",
+            pid => "notepad",
+            NoChildren,
+            killed.Add,
+            lines.Add
+        );
         Assert.Equal(1, left);
         Assert.Empty(killed);
 
-        int empty = AspireDashboardHost.StopRecorded("", pid => "dotnet", killed.Add, lines.Add);
+        int empty = AspireDashboardHost.StopRecorded(
+            "",
+            pid => "dotnet",
+            NoChildren,
+            killed.Add,
+            lines.Add
+        );
         Assert.Equal(0, empty);
-        int gone = AspireDashboardHost.StopRecorded("15", pid => null, killed.Add, lines.Add);
+        int gone = AspireDashboardHost.StopRecorded(
+            "15",
+            pid => null,
+            NoChildren,
+            killed.Add,
+            lines.Add
+        );
         Assert.Equal(0, gone);
     }
+
+    [Fact]
+    public void StopRecorded_KillsTheCmdShimOnlyWhileTheAspireCliIsItsChild()
+    {
+        // The stream PC recorded cmd.exe: `aspire` on PATH is the dotnet tool shim aspire.cmd.
+        var killed = new List<int>();
+        var lines = new List<string>();
+        int shim = AspireDashboardHost.StopRecorded(
+            "17228",
+            pid => "cmd",
+            pid => new[] { "conhost.exe", "aspire.exe" },
+            killed.Add,
+            lines.Add
+        );
+
+        Assert.Equal(0, shim);
+        Assert.Equal(new[] { 17228 }, killed);
+
+        killed.Clear();
+        int reused = AspireDashboardHost.StopRecorded(
+            "17228",
+            pid => "cmd",
+            pid => new[] { "conhost.exe", "heroesreplay.exe" },
+            killed.Add,
+            lines.Add
+        );
+
+        Assert.Equal(1, reused);
+        Assert.Empty(killed);
+        Assert.Contains(lines, line => line.Contains("Pid 17228 is cmd, not the Aspire CLI"));
+    }
+
+    private static IEnumerable<string> NoChildren(int pid) => Array.Empty<string>();
 
     [Fact]
     public void IsPortListening_SeesALoopbackListener()

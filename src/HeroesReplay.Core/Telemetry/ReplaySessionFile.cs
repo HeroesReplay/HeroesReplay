@@ -10,6 +10,13 @@ public static class ReplaySessionFile
 {
     private static readonly Mutex Gate = new(false, @"Local\HeroesReplay.ReplaySessions");
 
+    /// <summary>
+    /// The newest sessions kept. Every downloaded or spectated replay adds one and nothing removed
+    /// them: production had 395 after a week, and the uploader reads them every few seconds. 500
+    /// is more than a week of replays, past the 3-day upload window.
+    /// </summary>
+    public const int MaxSessions = 500;
+
     public static string SharedPath =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -84,6 +91,11 @@ public static class ReplaySessionFile
             }
 
             kept.Add(line);
+            if (kept.Count > MaxSessions)
+            {
+                kept.RemoveRange(0, kept.Count - MaxSessions);
+            }
+
             File.WriteAllLines(file, kept);
         });
     }
@@ -115,14 +127,12 @@ public static class ReplaySessionFile
     public static List<int> ReadIds(string path = null)
     {
         var ids = new List<int>();
+        var seen = new HashSet<int>();
         WithGate(() =>
         {
             foreach (string line in ReadLines(path ?? SharedPath))
             {
-                if (
-                    HeroesReplayTelemetry.TryParseSession(line, out int id, out _)
-                    && !ids.Contains(id)
-                )
+                if (HeroesReplayTelemetry.TryParseSession(line, out int id, out _) && seen.Add(id))
                 {
                     ids.Add(id);
                 }
