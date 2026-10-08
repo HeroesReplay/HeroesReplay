@@ -39,8 +39,9 @@ public sealed record ObsValidation
 /// <summary>
 /// Read-only checks of the collection OBS has loaded: the requests HeroesReplay sends, the
 /// active profile and collection (<see cref="ObsSelection"/>), the scenes and sources it drives
-/// (<see cref="ObsContract"/>), source kinds and scene-item placement against
-/// <c>obs/Default.json</c>, local asset paths after <see cref="ObsCollectionPaths.RewriteValue"/>,
+/// (<see cref="ObsContract"/>), source kinds and that each contract item is in its scene (not
+/// its transform) against <c>obs/Default.json</c>, local asset paths after
+/// <see cref="ObsCollectionPaths.RewriteValue"/>,
 /// the Mic/Aux global input, the canvas and FPS, the recording format, the stream service when
 /// this install streams, and the filters the packaged sources have. <c>obs validate</c>,
 /// <c>obs_validate</c>, and the spectator's preflight before its first StartStream run it.
