@@ -1,0 +1,14 @@
+{
+  "$comment": "The one pinned definition of every external tool HeroesReplay runs. `heroesreplay deps install` downloads each archive, checks size and SHA-256, and extracts only `files` into Dependencies:Directory\\<name>. `heroesreplay check ffmpeg` compares the -version line with `version`. To move to a new build: download the asset once, compute its SHA-256 (Get-FileHash -Algorithm SHA256), and change version, url, size, and sha256 together.",
+  "tools": [
+    {
+      "name": "ffmpeg",
+      "version": "9.0.2",
+      "source": "GyanD/codexffmpeg release 9.0.2, essentials build (libx264, aac)",
+      "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip",
+      "size": 114768076,
+      "sha256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
+      "files": ["ffmpeg.exe", "ffprobe.exe"]
+    }
+  ]
+}

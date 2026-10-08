@@ -25,7 +25,8 @@ public static class MatchClipExporter
         YouTubeSettings youtube,
         string entryFileName,
         ILogger logger,
-        IReadOnlyList<Hero> heroes = null
+        IReadOnlyList<Hero> heroes = null,
+        FfmpegLocator ffmpeg = null
     )
     {
         if (
@@ -50,7 +51,8 @@ public static class MatchClipExporter
                 clock,
                 youtube,
                 entryFileName,
-                logger
+                logger,
+                ffmpeg
             )
             .ConfigureAwait(false);
     }
@@ -65,13 +67,16 @@ public static class MatchClipExporter
         RecordingClock clock,
         YouTubeSettings youtube,
         string entryFileName,
-        ILogger logger
+        ILogger logger,
+        FfmpegLocator ffmpeg = null
     )
     {
         if (clips == null || clips.Count == 0)
         {
             return;
         }
+
+        ffmpeg ??= FfmpegLocator.From(null, null);
 
         string match = RecordingOwnership.SelectFinalizedFile(recordingPath, contextDirectory);
         if (string.IsNullOrWhiteSpace(match))
@@ -97,7 +102,7 @@ public static class MatchClipExporter
         string probeError = null;
         for (int attempt = 1; attempt <= 5; attempt++)
         {
-            (recordingSeconds, probeError) = ProbeDurationSeconds(match);
+            (recordingSeconds, probeError) = ProbeDurationSeconds(ffmpeg, match);
             if (recordingSeconds != null || !RetryDurationProbe(probeError))
             {
                 break;
@@ -168,7 +173,7 @@ public static class MatchClipExporter
                 continue;
             }
 
-            bool cut = await CutAsync(match, output, start, duration).ConfigureAwait(false);
+            bool cut = await CutAsync(ffmpeg, match, output, start, duration).ConfigureAwait(false);
             if (!cut)
             {
                 logger?.LogWarning("ffmpeg did not cut {Path}.", output);
@@ -363,9 +368,12 @@ public static class MatchClipExporter
             || error.Contains("ffprobe did not start", StringComparison.OrdinalIgnoreCase)
         );
 
-    private static (double? Seconds, string Error) ProbeDurationSeconds(string path)
+    private static (double? Seconds, string Error) ProbeDurationSeconds(
+        FfmpegLocator ffmpeg,
+        string path
+    )
     {
-        string ffprobe = FfmpegLocator.Find("ffprobe");
+        string ffprobe = ffmpeg.Find(FfmpegLocator.Ffprobe);
         var startInfo = new ProcessStartInfo
         {
             FileName = ffprobe,
@@ -418,6 +426,7 @@ public static class MatchClipExporter
     }
 
     private static async Task<bool> CutAsync(
+        FfmpegLocator ffmpeg,
         string input,
         string output,
         double start,
@@ -426,7 +435,7 @@ public static class MatchClipExporter
     {
         var startInfo = new ProcessStartInfo
         {
-            FileName = FfmpegLocator.Find("ffmpeg"),
+            FileName = ffmpeg.Find(FfmpegLocator.Ffmpeg),
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardError = true,

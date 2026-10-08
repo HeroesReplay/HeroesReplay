@@ -147,6 +147,39 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void ApplyRelease_InstallsTheClipToolsBeforeTheStartAndOnlyWarns()
+    {
+        string script = File.ReadAllText(FindScript());
+        int rewrite = script.IndexOf(
+            "@('update', 'launcher', '--install', $InstallDir, '--environment', $environment)",
+            StringComparison.Ordinal
+        );
+        int tools = script.IndexOf(
+            "Install-ClipTools (Join-Path $InstallDir 'heroesreplay.exe')",
+            StringComparison.Ordinal
+        );
+        int since = script.IndexOf(
+            "$since = (Get-Date).ToUniversalTime().ToString('o')",
+            StringComparison.Ordinal
+        );
+        int start = script.IndexOf("function Install-ClipTools", StringComparison.Ordinal);
+        int end = script.IndexOf("function Invoke-ReleaseHealth", StringComparison.Ordinal);
+        string install = script.Substring(start, end - start);
+
+        Assert.True(
+            rewrite > 0 && tools > rewrite && since > tools,
+            "The new build installs ffmpeg after its files are in and before the stack starts."
+        );
+        Assert.Contains("@('deps', 'install')", install);
+        Assert.Contains("WARNING", install);
+        // A failed install never blocks, skips, or rolls back the release.
+        Assert.DoesNotMatch(@"(?m)^\s*exit\b", install);
+        Assert.DoesNotContain("throw", install);
+        Assert.DoesNotContain("Restore-PreviousInstall", install);
+        Assert.DoesNotContain("Add-SkippedRelease", install);
+    }
+
+    [Fact]
     public void ApplyRelease_SkipListMatchesTheGateAndRestartsSupervisedWhenItWas()
     {
         string script = File.ReadAllText(FindScript());

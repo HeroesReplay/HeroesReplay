@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using HeroesReplay.CLI.Commands;
+using HeroesReplay.Core.Dependencies;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Support;
@@ -34,6 +35,33 @@ public class AgentDocsTests
             missing.Count == 0,
             "The heroes-replay-cli skill does not name: " + string.Join(", ", missing)
         );
+    }
+
+    [Fact]
+    public void FfmpegDocs_PointToThePinnedDefinition()
+    {
+        const string pin = "src/HeroesReplay.Core/Dependencies/dependencies.json";
+        Assert.True(File.Exists(Path.Combine(Root, pin)), pin + " is missing.");
+        string version = DependencyManifest.Ffmpeg.Version;
+        foreach (
+            string doc in new[]
+            {
+                "AGENTS.md",
+                Path.Combine(".agents", "skills", "ffmpeg", "SKILL.md"),
+                Path.Combine(".agents", "skills", "heroes-replay-cli", "SKILL.md"),
+            }
+        )
+        {
+            string text = File.ReadAllText(Path.Combine(Root, doc));
+            Assert.True(
+                text.Contains(pin, StringComparison.Ordinal),
+                doc + " does not name " + pin
+            );
+            Assert.True(
+                text.Contains(version, StringComparison.Ordinal),
+                doc + " does not name the pinned ffmpeg " + version
+            );
+        }
     }
 
     [Fact]
