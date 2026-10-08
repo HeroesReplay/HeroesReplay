@@ -16,11 +16,16 @@ public static class RecordingDiscard
 
     public static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(1);
 
+    /// <param name="wait">
+    /// The pause between attempts; <see cref="Task.Delay(TimeSpan)"/> when null. A test passes
+    /// one that lets go of the file, so it does not race a timer (#331).
+    /// </param>
     public static async Task<bool> DeleteAsync(
         string path,
         ILogger logger,
         int attempts = Attempts,
-        TimeSpan? retryDelay = null
+        TimeSpan? retryDelay = null,
+        Func<TimeSpan, Task> wait = null
     )
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -29,6 +34,7 @@ public static class RecordingDiscard
         }
 
         TimeSpan delay = retryDelay ?? RetryDelay;
+        wait ??= Task.Delay;
         for (int attempt = 1; ; attempt++)
         {
             try
@@ -52,7 +58,7 @@ public static class RecordingDiscard
             }
             catch (IOException) when (attempt < attempts)
             {
-                await Task.Delay(delay).ConfigureAwait(false);
+                await wait(delay).ConfigureAwait(false);
             }
             catch (Exception e)
             {

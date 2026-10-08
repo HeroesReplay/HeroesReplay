@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Spectating.Control;
 
@@ -13,7 +14,9 @@ namespace HeroesReplay.Core.Spectating.Control;
 /// </summary>
 public sealed class ObserverPanelRequests : IObserverPanelRequests
 {
-    private static readonly Mutex ProcessLock = new(false, @"Local\HeroesReplay.PanelRequests");
+    /// <summary>The lock on <see cref="DefaultPath"/> that twitch and spectate share.</summary>
+    public const string SharedMutexName = @"Local\HeroesReplay.PanelRequests";
+
     private static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
@@ -22,6 +25,7 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
 
     private readonly AppSettings settings;
     private readonly string filePath;
+    private readonly Mutex processLock;
 
     public ObserverPanelRequests(AppSettings settings)
         : this(settings, DefaultPath()) { }
@@ -30,7 +34,12 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
+        // One lock per file: a test's temp file no longer waits on the running stack (#331).
+        processLock = new Mutex(false, MutexNameFor(filePath));
     }
+
+    public static string MutexNameFor(string filePath) =>
+        FileMutexName.For(SharedMutexName, DefaultPath(), filePath);
 
     public static string DefaultPath() =>
         Path.Combine(
@@ -217,11 +226,11 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
         return false;
     }
 
-    private static void Acquire()
+    private void Acquire()
     {
         try
         {
-            if (!ProcessLock.WaitOne(TimeSpan.FromSeconds(5)))
+            if (!processLock.WaitOne(TimeSpan.FromSeconds(5)))
             {
                 throw new TimeoutException("Could not lock panel-requests.json.");
             }
@@ -229,11 +238,11 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
         catch (AbandonedMutexException) { }
     }
 
-    private static void Release()
+    private void Release()
     {
         try
         {
-            ProcessLock.ReleaseMutex();
+            processLock.ReleaseMutex();
         }
         catch (ApplicationException) { }
     }

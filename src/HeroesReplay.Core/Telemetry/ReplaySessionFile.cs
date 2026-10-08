@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Telemetry;
 
 public static class ReplaySessionFile
 {
-    private static readonly Mutex Gate = new(false, @"Local\HeroesReplay.ReplaySessions");
+    /// <summary>The lock on <see cref="SharedPath"/> that every role shares.</summary>
+    public const string SharedMutexName = @"Local\HeroesReplay.ReplaySessions";
 
     /// <summary>
     /// The newest sessions kept. Every downloaded or spectated replay adds one and nothing removed
@@ -62,42 +64,45 @@ public static class ReplaySessionFile
         }
 
         string file = path ?? SharedPath;
-        WithGate(() =>
-        {
-            string directory = Path.GetDirectoryName(file);
-            if (!string.IsNullOrEmpty(directory))
+        WithGate(
+            file,
+            () =>
             {
-                Directory.CreateDirectory(directory);
-            }
-
-            var kept = new List<string>();
-            if (File.Exists(file))
-            {
-                foreach (string existing in ReadLines(file))
+                string directory = Path.GetDirectoryName(file);
+                if (!string.IsNullOrEmpty(directory))
                 {
-                    if (
-                        HeroesReplayTelemetry.TryParseSession(existing, out int id, out _)
-                        && id == replayId
-                    )
-                    {
-                        continue;
-                    }
+                    Directory.CreateDirectory(directory);
+                }
 
-                    if (!string.IsNullOrWhiteSpace(existing))
+                var kept = new List<string>();
+                if (File.Exists(file))
+                {
+                    foreach (string existing in ReadLines(file))
                     {
-                        kept.Add(existing.Trim());
+                        if (
+                            HeroesReplayTelemetry.TryParseSession(existing, out int id, out _)
+                            && id == replayId
+                        )
+                        {
+                            continue;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(existing))
+                        {
+                            kept.Add(existing.Trim());
+                        }
                     }
                 }
-            }
 
-            kept.Add(line);
-            if (kept.Count > MaxSessions)
-            {
-                kept.RemoveRange(0, kept.Count - MaxSessions);
-            }
+                kept.Add(line);
+                if (kept.Count > MaxSessions)
+                {
+                    kept.RemoveRange(0, kept.Count - MaxSessions);
+                }
 
-            File.WriteAllLines(file, kept);
-        });
+                File.WriteAllLines(file, kept);
+            }
+        );
     }
 
     public static string TryRead(int replayId, string path = null)
@@ -108,19 +113,23 @@ public static class ReplaySessionFile
         }
 
         string found = null;
-        WithGate(() =>
-        {
-            foreach (string line in ReadLines(path ?? SharedPath))
+        string file = path ?? SharedPath;
+        WithGate(
+            file,
+            () =>
             {
-                if (
-                    HeroesReplayTelemetry.TryParseSession(line, out int id, out _)
-                    && id == replayId
-                )
+                foreach (string line in ReadLines(file))
                 {
-                    found = line.Trim();
+                    if (
+                        HeroesReplayTelemetry.TryParseSession(line, out int id, out _)
+                        && id == replayId
+                    )
+                    {
+                        found = line.Trim();
+                    }
                 }
             }
-        });
+        );
         return found;
     }
 
@@ -128,16 +137,23 @@ public static class ReplaySessionFile
     {
         var ids = new List<int>();
         var seen = new HashSet<int>();
-        WithGate(() =>
-        {
-            foreach (string line in ReadLines(path ?? SharedPath))
+        string file = path ?? SharedPath;
+        WithGate(
+            file,
+            () =>
             {
-                if (HeroesReplayTelemetry.TryParseSession(line, out int id, out _) && seen.Add(id))
+                foreach (string line in ReadLines(file))
                 {
-                    ids.Add(id);
+                    if (
+                        HeroesReplayTelemetry.TryParseSession(line, out int id, out _)
+                        && seen.Add(id)
+                    )
+                    {
+                        ids.Add(id);
+                    }
                 }
             }
-        });
+        );
         return ids;
     }
 
@@ -173,14 +189,22 @@ public static class ReplaySessionFile
         }
     }
 
-    private static void WithGate(Action action)
+    /// <summary>
+    /// The shared file keeps <see cref="SharedMutexName"/>; any other file (a test's temp file)
+    /// has a lock of its own, so it never waits on the running stack (#331).
+    /// </summary>
+    public static string MutexNameFor(string path) =>
+        FileMutexName.For(SharedMutexName, SharedPath, path);
+
+    private static void WithGate(string file, Action action)
     {
+        using var gate = new Mutex(false, MutexNameFor(file));
         bool held = false;
         try
         {
             try
             {
-                held = Gate.WaitOne(TimeSpan.FromSeconds(5));
+                held = gate.WaitOne(TimeSpan.FromSeconds(5));
             }
             catch (AbandonedMutexException)
             {
@@ -193,7 +217,7 @@ public static class ReplaySessionFile
         {
             if (held)
             {
-                Gate.ReleaseMutex();
+                gate.ReleaseMutex();
             }
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Obs.Recording;
@@ -18,18 +19,26 @@ public class RecordingDiscardTests
         string path = Path.Combine(Path.GetTempPath(), $"discard-{Guid.NewGuid():N}.mp4");
         await File.WriteAllTextAsync(path, "recording");
         var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
-        Task release = Task.Delay(200).ContinueWith(_ => held.Dispose());
+        var waits = new List<TimeSpan>();
 
+        // OBS lets go of the file during the first pause. A timer that released it after 200 ms
+        // raced 20 x 50 ms of retries on a busy machine (#331).
         bool deleted = await RecordingDiscard.DeleteAsync(
             path,
             NullLogger.Instance,
             attempts: 20,
-            retryDelay: TimeSpan.FromMilliseconds(50)
+            retryDelay: TimeSpan.FromMilliseconds(50),
+            wait: delay =>
+            {
+                waits.Add(delay);
+                held.Dispose();
+                return Task.CompletedTask;
+            }
         );
-        await release;
 
         Assert.True(deleted);
         Assert.False(File.Exists(path));
+        Assert.Equal(new[] { TimeSpan.FromMilliseconds(50) }, waits);
     }
 
     [Fact]

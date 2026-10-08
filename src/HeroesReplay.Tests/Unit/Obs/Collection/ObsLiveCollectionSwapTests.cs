@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs.Collection;
@@ -23,7 +24,7 @@ public sealed class ObsLiveCollectionSwapTests : IDisposable
         File.WriteAllText(MainFile, Collection("HeroesReplay", "old-layout"));
     }
 
-    public void Dispose() => Directory.Delete(root, recursive: true);
+    public void Dispose() => TestTemp.Delete(root);
 
     [Fact]
     public void Run_SwitchesThroughTheSpare_AndLeavesTheNewLayoutUnderTheMainName()

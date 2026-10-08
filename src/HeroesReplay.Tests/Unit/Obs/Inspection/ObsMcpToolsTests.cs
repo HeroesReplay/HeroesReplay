@@ -6,6 +6,7 @@ using System.Text.Json;
 using HeroesReplay.CLI.Commands.Mcp;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Tests.Unit.Support;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -29,7 +30,7 @@ public class ObsMcpToolsTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(data, recursive: true);
+        TestTemp.Delete(data);
     }
 
     [Fact]
