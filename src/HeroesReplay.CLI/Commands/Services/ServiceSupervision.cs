@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -27,6 +28,7 @@ public sealed class ServiceSupervision
     );
     private readonly List<string> supervised = new();
     private DateTimeOffset startedAt;
+    private DateTimeOffset? processStartedAt;
     private DateTimeOffset? savedAt;
     private bool stopping;
 
@@ -65,6 +67,9 @@ public sealed class ServiceSupervision
     public Action<TimeSpan> Wait { get; init; }
     public ILogger Logger { get; init; } = NullLogger.Instance;
     public int Pid { get; init; } = Environment.ProcessId;
+
+    /// <summary>The start time of <see cref="Pid"/>. Null reads it from the process table once.</summary>
+    public DateTimeOffset? ProcessStartedAt { get; init; }
     public string ExecutablePath { get; init; }
     public string Version { get; init; }
 
@@ -114,6 +119,8 @@ public sealed class ServiceSupervision
     public bool Begin()
     {
         startedAt = Time.GetUtcNow();
+        // A session that cannot see the mutex (SSH) tells this pid from a reused one by it (#283).
+        processStartedAt = ProcessStartedAt ?? ProcessTable.Find(Pid)?.StartTime;
         ServiceLock snapshot = ServiceLockStore.TryLoad(LockPath);
         supervised.Clear();
         ledgers.Clear();
@@ -282,6 +289,9 @@ public sealed class ServiceSupervision
         }
 
         DeleteHeartbeat?.Invoke(previous);
+        // The ready wait can take 45 s. Written now, the file stays fresh through it for a
+        // session that cannot see the mutex (ServiceSupervisorFile.FreshFor).
+        Save(force: true);
         ServiceLaunch launch;
         try
         {
@@ -464,6 +474,7 @@ public sealed class ServiceSupervision
                 new ServiceSupervisorState
                 {
                     Pid = Pid,
+                    ProcessStartedAt = processStartedAt,
                     ExecutablePath = ExecutablePath,
                     Version = Version,
                     StartedAt = startedAt,

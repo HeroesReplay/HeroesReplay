@@ -182,7 +182,7 @@ public static class PendingYouTubeUpload
         return waiting;
     }
 
-    private static YouTubeEntry ReadEntry(string path)
+    internal static YouTubeEntry ReadEntry(string path)
     {
         try
         {

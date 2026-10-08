@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.Obs;
@@ -137,6 +138,66 @@ public class ConnectivityWatchdogTests
         Assert.Contains("stream desired=True", ObsStatus.Describe(status));
         Assert.Contains("active=False", ObsStatus.Describe(status));
         Assert.Equal(0, fixture.Obs.StartCalls);
+    }
+
+    [Fact]
+    public void Apply_GameSceneMidSession_RewritesStatusJsonAndServicesStatusShowsIt()
+    {
+        // Production 2026-10-08 (#282): game-scene was on air 22 minutes into a replay while
+        // status.json and `services status` still said waiting-screen.
+        using Fixture fixture = CreateFixture(
+            streamingEnabled: true,
+            waitingScene: "waiting-screen"
+        );
+        fixture.Obs.Streaming = true;
+        fixture.Obs.State = new ObsRuntimeSnapshot
+        {
+            ProcessRunning = true,
+            WebsocketIdentified = true,
+            SceneDesired = "waiting-screen",
+            SceneActual = "waiting-screen",
+            StreamDesired = true,
+            StreamActive = true,
+            Stream = ObsStreamResult.ConfirmedActive(),
+        };
+        fixture.Watchdog.Apply(OkSnapshot());
+        SpectatorStatus waiting = new SpectatorStatusStore(fixture.Path).TryReadShared();
+        Assert.Equal("waiting-screen", waiting.ObsSceneDesired);
+        Assert.Equal("waiting-screen", waiting.ObsSceneActual);
+
+        // Connectivity, its detail, and the stream block stay the same: only the scene changes.
+        fixture.Obs.SwapToGameScene();
+        fixture.Watchdog.Apply(OkSnapshot());
+
+        SpectatorStatus onAir = new SpectatorStatusStore(fixture.Path).TryReadShared();
+        Assert.Equal("game-scene", onAir.ObsSceneDesired);
+        Assert.Equal("game-scene", onAir.ObsSceneActual);
+        Assert.Equal(true, onAir.ObsStreamActive);
+        Assert.Equal(0, fixture.Obs.StartCalls);
+
+        var text = new StringWriter();
+        ServiceSupervisor.Status(
+            fixture.Path + ".services.json",
+            pid => null,
+            onAir,
+            query: new ServiceStatusQuery { Out = text }
+        );
+        Assert.Contains(" scene=game-scene ", text.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("waiting-screen", text.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Apply_SameSceneDoesNotRewriteStatusJson()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: false);
+        fixture.Obs.SwapToGameScene();
+        fixture.Watchdog.Apply(OkSnapshot());
+        Assert.True(File.Exists(fixture.Path));
+        File.Delete(fixture.Path);
+
+        fixture.Watchdog.Apply(OkSnapshot());
+
+        Assert.False(File.Exists(fixture.Path));
     }
 
     [Fact]
@@ -514,7 +575,13 @@ public class ConnectivityWatchdogTests
         public Task CycleReportAsync(CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 
-        public void SwapToGameScene() { }
+        /// <summary>Like <see cref="ObsController"/>: an accepted scene is the desired and the actual one.</summary>
+        public void SwapToGameScene() =>
+            State = (State ?? new ObsRuntimeSnapshot()) with
+            {
+                SceneDesired = "game-scene",
+                SceneActual = "game-scene",
+            };
 
         public void UpdateReplayInfoVisibility(TimeSpan matchTime) { }
 

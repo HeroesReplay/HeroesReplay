@@ -146,7 +146,11 @@ public sealed record ObsRuntimeSnapshot
     public ObsLaunchDecision Launch { get; init; }
     public bool WebsocketDesired { get; init; }
     public bool WebsocketIdentified { get; init; }
+
+    /// <summary>The scene the spectator last asked OBS for (#282).</summary>
     public string SceneDesired { get; init; }
+
+    /// <summary>The program scene: the last one OBS accepted, or the one it last reported.</summary>
     public string SceneActual { get; init; }
     public bool StreamDesired { get; init; }
     public bool StreamActive { get; init; }
@@ -166,6 +170,11 @@ public static class ObsDesired
     public static bool StreamIsDesired(OBSSettings obs) =>
         obs is { Enabled: true } && SessionMedia.ShouldStream(obs);
 
+    /// <summary>
+    /// <paramref name="sceneRequested"/> is the scene this process last put on the program
+    /// output. Until it asks for one, a desired stream wants the waiting scene, which is where
+    /// the stream starts.
+    /// </summary>
     public static ObsRuntimeSnapshot Capture(
         OBSSettings obs,
         bool processRunning,
@@ -176,7 +185,8 @@ public static class ObsDesired
         bool streamActive,
         bool recordingDesired,
         bool recordingActive,
-        ObsStreamResult stream
+        ObsStreamResult stream,
+        string sceneRequested = null
     )
     {
         bool enabled = obs?.Enabled == true;
@@ -189,7 +199,7 @@ public static class ObsDesired
             Launch = launch,
             WebsocketDesired = enabled,
             WebsocketIdentified = identified,
-            SceneDesired = streamDesired ? obs.WaitingSceneName : null,
+            SceneDesired = sceneRequested ?? (streamDesired ? obs.WaitingSceneName : null),
             SceneActual = sceneActual,
             StreamDesired = streamDesired,
             StreamActive = streamActive,

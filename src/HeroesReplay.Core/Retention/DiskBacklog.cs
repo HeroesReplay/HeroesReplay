@@ -26,6 +26,13 @@ public sealed class DiskBacklogInput
     public long FreeBytes { get; init; }
 
     public long PendingUploadBytes { get; init; }
+
+    /// <summary>
+    /// The replay is a viewer request (media policy priority <c>Requested</c>). The pending-bytes
+    /// gates hold back ordinary recordings only, so only the free-space gate can stop a request's
+    /// recording (#279).
+    /// </summary>
+    public bool Requested { get; init; }
 }
 
 public sealed class DiskBacklogDecision
@@ -33,6 +40,24 @@ public sealed class DiskBacklogDecision
     public DiskPressure Pressure { get; init; }
 
     public string Reason { get; init; }
+
+    /// <summary>Whether the replay was evaluated as a viewer request.</summary>
+    public bool Requested { get; init; }
+
+    /// <summary>
+    /// The gate behind <see cref="Reason"/>: <see cref="DiskBacklog.FreeSpaceGate"/>,
+    /// <see cref="DiskBacklog.PendingBytesGate"/>, or <see cref="DiskBacklog.CheckGate"/> when
+    /// the disk could not be judged. Null within budget.
+    /// </summary>
+    public string Gate =>
+        Reason switch
+        {
+            DiskBacklog.FreeBytesWarning or DiskBacklog.FreeBytesLow => DiskBacklog.FreeSpaceGate,
+            DiskBacklog.PendingBytesWarning or DiskBacklog.PendingBytesHigh =>
+                DiskBacklog.PendingBytesGate,
+            DiskBacklog.ConfigurationInvalid or DiskBacklog.MalformedInput => DiskBacklog.CheckGate,
+            _ => null,
+        };
 }
 
 /// <summary>
@@ -48,16 +73,21 @@ public static class DiskBacklog
     public const string ConfigurationInvalid = "configuration-invalid";
     public const string MalformedInput = "malformed-input";
 
+    public const string FreeSpaceGate = "free-space";
+    public const string PendingBytesGate = "pending-bytes";
+    public const string CheckGate = "disk-check";
+
     public static DiskBacklogDecision Evaluate(DiskBacklogInput input, DiskBacklogSettings settings)
     {
+        bool requested = input?.Requested == true;
         if (settings == null || !ThresholdsValid(settings))
         {
-            return Stop(ConfigurationInvalid);
+            return Stop(ConfigurationInvalid, requested);
         }
 
         if (input == null || input.FreeBytes < 0 || input.PendingUploadBytes < 0)
         {
-            return Stop(MalformedInput);
+            return Stop(MalformedInput, requested);
         }
 
         bool freeStop =
@@ -68,12 +98,15 @@ public static class DiskBacklog
             && input.PendingUploadBytes >= settings.StopWhenPendingBytesAtLeast;
         if (freeStop)
         {
-            return Stop(FreeBytesLow);
+            return Stop(FreeBytesLow, requested);
         }
 
-        if (pendingStop)
+        // Most pending bytes are ordinary recordings waiting for a publish time, and many of them
+        // are deleted unuploaded once they pass OrdinaryCandidateMaxAge. They hold back another
+        // ordinary recording, never a viewer's request while the disk has real room (#279).
+        if (pendingStop && !requested)
         {
-            return Stop(PendingBytesHigh);
+            return Stop(PendingBytesHigh, requested);
         }
 
         bool freeWarn =
@@ -84,23 +117,25 @@ public static class DiskBacklog
             && input.PendingUploadBytes >= settings.WarnWhenPendingBytesAtLeast;
         if (freeWarn)
         {
-            return new DiskBacklogDecision
-            {
-                Pressure = DiskPressure.Warning,
-                Reason = FreeBytesWarning,
-            };
+            return Warn(FreeBytesWarning, requested);
+        }
+
+        if (pendingStop)
+        {
+            return Warn(PendingBytesHigh, requested);
         }
 
         if (pendingWarn)
         {
-            return new DiskBacklogDecision
-            {
-                Pressure = DiskPressure.Warning,
-                Reason = PendingBytesWarning,
-            };
+            return Warn(PendingBytesWarning, requested);
         }
 
-        return new DiskBacklogDecision { Pressure = DiskPressure.Normal, Reason = WithinBudget };
+        return new DiskBacklogDecision
+        {
+            Pressure = DiskPressure.Normal,
+            Reason = WithinBudget,
+            Requested = requested,
+        };
     }
 
     private static bool ThresholdsValid(DiskBacklogSettings settings)
@@ -136,8 +171,23 @@ public static class DiskBacklog
         return true;
     }
 
-    private static DiskBacklogDecision Stop(string reason)
+    private static DiskBacklogDecision Warn(string reason, bool requested)
     {
-        return new DiskBacklogDecision { Pressure = DiskPressure.SkipRecording, Reason = reason };
+        return new DiskBacklogDecision
+        {
+            Pressure = DiskPressure.Warning,
+            Reason = reason,
+            Requested = requested,
+        };
+    }
+
+    private static DiskBacklogDecision Stop(string reason, bool requested)
+    {
+        return new DiskBacklogDecision
+        {
+            Pressure = DiskPressure.SkipRecording,
+            Reason = reason,
+            Requested = requested,
+        };
     }
 }

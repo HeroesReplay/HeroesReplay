@@ -36,6 +36,12 @@ public sealed class MediaPolicySnapshot
 
     /// <summary>This launch may record: the decision records and the current settings agree.</summary>
     public bool AllowsRecording => Decision?.Record == true && RecordingWithheld == null;
+
+    /// <summary>
+    /// The decision classed the replay as a viewer request (priority <c>Requested</c>). The disk's
+    /// pending-bytes gates do not hold its recording back; only the free-space gate does (#279).
+    /// </summary>
+    public bool Requested => Decision?.Priority == ReplayMediaPriority.Requested;
 }
 
 public sealed class MediaPolicyAttemptLog

@@ -234,6 +234,84 @@ public class ObsDesiredStateTests
     }
 
     [Fact]
+    public void SelectScene_GameSceneMidSession_IsTheDesiredAndTheActualScene()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        Harness harness = Open(Settings(), socket);
+        ObsRuntimeSnapshot started = harness.Coordinator.ReconcileStream();
+        Assert.Equal(WaitingScene, started.SceneDesired);
+        Assert.Equal(WaitingScene, started.SceneActual);
+
+        harness.Coordinator.SelectScene("game-scene");
+
+        ObsRuntimeSnapshot onAir = harness.Coordinator.State;
+        Assert.Equal("game-scene", socket.ProgramScene);
+        Assert.Equal("game-scene", onAir.SceneDesired);
+        Assert.Equal("game-scene", onAir.SceneActual);
+        Assert.True(onAir.StreamActive);
+        Assert.True(onAir.Stream.Succeeded);
+
+        // The watchdog's next reconcile finds the stream live and keeps the spectator's scene.
+        ObsRuntimeSnapshot again = harness.Coordinator.ReconcileStream();
+        Assert.Equal(1, socket.StartStreamCalls);
+        Assert.Equal("game-scene", again.SceneDesired);
+        Assert.Equal("game-scene", again.SceneActual);
+
+        var status = new SpectatorStatus();
+        ObsStatus.Copy(status, again);
+        Assert.Equal("game-scene", status.ObsSceneDesired);
+        Assert.Equal("game-scene", status.ObsSceneActual);
+        Assert.Contains(" scene=game-scene ", ObsStatus.Describe(status), StringComparison.Ordinal);
+
+        harness.Coordinator.SelectScene(WaitingScene);
+        Assert.Equal(WaitingScene, harness.Coordinator.State.SceneDesired);
+        Assert.Equal(WaitingScene, harness.Coordinator.State.SceneActual);
+    }
+
+    [Fact]
+    public void SelectScene_RefusedByObs_LeavesTheStateAsItWas()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        Harness harness = Open(Settings(), socket);
+        ObsRuntimeSnapshot started = harness.Coordinator.ReconcileStream();
+        socket.SelectError = new InvalidOperationException("No scene named game-scene.");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            harness.Coordinator.SelectScene("game-scene")
+        );
+
+        Assert.Same(started, harness.Coordinator.State);
+        Assert.Equal(WaitingScene, harness.Coordinator.State.SceneActual);
+    }
+
+    [Fact]
+    public void SelectScene_WithStreamingOff_StillReportsTheScene()
+    {
+        var socket = new FakeSession { IsIdentified = true, IsConnected = true };
+        Harness harness = Open(Settings(streaming: false), socket);
+        Assert.Null(harness.Coordinator.State);
+
+        harness.Coordinator.SelectScene("game-scene");
+
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.State;
+        Assert.False(snapshot.StreamDesired);
+        Assert.True(snapshot.WebsocketIdentified);
+        Assert.Equal("game-scene", snapshot.SceneDesired);
+        Assert.Equal("game-scene", snapshot.SceneActual);
+        Assert.Equal(0, socket.StartStreamCalls);
+    }
+
+    [Fact]
     public void Reconcile_StreamingDisabled_DoesNotStart()
     {
         var socket = new FakeSession { IsIdentified = true, IsConnected = true };

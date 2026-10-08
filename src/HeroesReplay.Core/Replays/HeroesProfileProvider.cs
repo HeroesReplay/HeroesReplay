@@ -9,6 +9,8 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
@@ -31,6 +33,8 @@ public class HeroesProfileProvider : IReplayProvider
     private int? heldBackId;
     private int minReplayId;
     private Func<IReadOnlyList<string>> installedVersionSource;
+    private Func<string, Replay> headerSource = ReplayHeader.Load;
+    private readonly Dictionary<int, ReplayMediaPolicyInput> mediaFacts = new();
 
     public bool ContinuesWhenEmpty => true;
 
@@ -116,6 +120,11 @@ public class HeroesProfileProvider : IReplayProvider
         installedVersionSource = source;
     }
 
+    internal void UseReplayHeaders(Func<string, Replay> source)
+    {
+        headerSource = source ?? ReplayHeader.Load;
+    }
+
     /// <summary>
     /// Download the next Storm League replay or a queued reward replay.
     /// Does not load or spectate the file. Used by the downloader process.
@@ -153,10 +162,13 @@ public class HeroesProfileProvider : IReplayProvider
             }
         }
 
-        if (UnspectatedOnDisk() >= CachedReplayLimit)
+        WaitingReplays waiting = UnspectatedOnDisk();
+        if (waiting.Fresh >= CachedReplayLimit)
         {
             logger.LogInformation(
-                "{Count} replays are already waiting to be spectated. Not downloading another.",
+                "{Waiting} replays waiting to be spectated ({Fresh} fresh, limit {Limit}). Not downloading another.",
+                waiting.Waiting,
+                waiting.Fresh,
                 CachedReplayLimit
             );
             return false;
@@ -169,6 +181,19 @@ public class HeroesProfileProvider : IReplayProvider
         }
 
         await heroesProfileService.EnrichRankAsync(replay, provider.Token).ConfigureAwait(false);
+        // A replay already past its window would never count toward the limit, so it keeps the
+        // old cap on every waiting replay. Otherwise expired downloads would never stop.
+        if (waiting.Waiting >= CachedReplayLimit && IsPastMediaWindow(replay))
+        {
+            logger.LogInformation(
+                "Replay {ReplayId} is past its media window and {Waiting} replays are waiting (limit {Limit}). Not downloading it.",
+                replay.Id,
+                waiting.Waiting,
+                CachedReplayLimit
+            );
+            return false;
+        }
+
         FileInfo fileInfo = GetFileInfo(StandardDirectory, replay);
         if (!fileInfo.Exists)
         {
@@ -177,6 +202,18 @@ public class HeroesProfileProvider : IReplayProvider
 
         return true;
     }
+
+    private bool IsPastMediaWindow(HeroesProfileReplay replay) =>
+        ReplayMediaPolicy.IsPastWindow(
+            ReplayMediaFacts.From(
+                new LoadedReplay { ReplayId = replay.Id, HeroesProfileReplay = replay },
+                alreadyPublished: false,
+                alreadyScheduled: false,
+                inOutbox: false
+            ),
+            settings.ReplayMedia,
+            DateTime.UtcNow
+        );
 
     public void Requeue(LoadedReplay replay)
     {
@@ -709,23 +746,85 @@ public class HeroesProfileProvider : IReplayProvider
         return true;
     }
 
-    private int UnspectatedOnDisk()
+    private WaitingReplays UnspectatedOnDisk()
     {
         if (!StandardDirectory.Exists)
         {
-            return 0;
+            return default;
         }
 
         var onDisk = new List<int>();
+        var files = new Dictionary<int, FileInfo>();
         foreach (FileInfo file in StandardDirectory.GetFiles(settings.StormReplay.WildCard))
         {
             if (replayHelper.TryGetReplayId(file.Name, out int id))
             {
                 onDisk.Add(id);
+                files.TryAdd(id, file);
             }
         }
 
-        return SpectateQueue.CountWaiting(onDisk, ReadNotWaitingIds(), CachedReplayLimit);
+        DateTime now = DateTime.UtcNow;
+        WaitingReplays waiting = SpectateQueue.CountWaiting(
+            onDisk,
+            ReadNotWaitingIds(),
+            id => IsInsideMediaWindow(id, files[id], now)
+        );
+        foreach (int gone in mediaFacts.Keys.Where(id => !files.ContainsKey(id)).ToList())
+        {
+            mediaFacts.Remove(gone);
+        }
+
+        return waiting;
+    }
+
+    /// <summary>
+    /// The media policy's game-date window, the rule behind <c>records False (expired)</c>
+    /// (#280). A replay whose game date cannot be read counts as inside the window, as every
+    /// waiting replay did before.
+    /// </summary>
+    private bool IsInsideMediaWindow(int replayId, FileInfo file, DateTime utcNow)
+    {
+        if (!mediaFacts.TryGetValue(replayId, out ReplayMediaPolicyInput facts))
+        {
+            facts = ReadMediaFacts(replayId, file);
+            mediaFacts[replayId] = facts;
+        }
+
+        return !ReplayMediaPolicy.IsPastWindow(facts, settings.ReplayMedia, utcNow);
+    }
+
+    /// <summary>The facts spectate would judge, read once per file: a file does not change.</summary>
+    private ReplayMediaPolicyInput ReadMediaFacts(int replayId, FileInfo file)
+    {
+        Replay header = headerSource(file.FullName);
+        if (header == null || header.Timestamp == default)
+        {
+            logger.LogWarning(
+                "Could not read the game date of waiting replay {ReplayId}. It counts toward the download limit.",
+                replayId
+            );
+        }
+
+        return ReplayMediaFacts.From(
+            new LoadedReplay
+            {
+                ReplayId = replayId,
+                FileInfo = file,
+                Replay = header,
+                HeroesProfileReplay = new HeroesProfileReplay
+                {
+                    Id = replayId,
+                    Rank = RankImage.RankFromCacheFileName(
+                        file.Name,
+                        settings.StormReplay.Seperator
+                    ),
+                },
+            },
+            alreadyPublished: false,
+            alreadyScheduled: false,
+            inOutbox: false
+        );
     }
 
     private List<int> ReadNotWaitingIds()

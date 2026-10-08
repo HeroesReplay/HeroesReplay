@@ -10,6 +10,7 @@ using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
@@ -934,6 +935,75 @@ public class ReplayMediaObservationTests
         Assert.Equal(ReplayMediaPriority.Requested, snapshot.Decision.Priority);
         Assert.Equal(ReplayMediaReason.RecordedAll, snapshot.Decision.RecordingReason);
         Assert.NotEqual(ReplayMediaReason.SpectateOnly, snapshot.Decision.PublicationReason);
+    }
+
+    /// <summary>
+    /// #279: replay 65673338, a ReplayId redemption, was classed Requested and allowed by the
+    /// recording cap, then lost its recording to the pending-bytes gate with 287 GB free. The
+    /// pre-launch snapshot is what the disk gate reads: a request is held back only when free
+    /// space is genuinely low, and an ordinary replay is still held back by pending bytes.
+    /// </summary>
+    [Fact]
+    public async Task ReplayIdRequest_IsHeldBackByTheDiskOnlyWhenFreeSpaceIsLow()
+    {
+        const long gigabyte = 1024L * 1024 * 1024;
+        using var requestAttempts = new TempAttempts();
+        using var ordinaryAttempts = new TempAttempts();
+        ReplayMediaPolicySettings settings = Settings(
+            ReplayRecordingMode.Selected,
+            ReplayPublicationMode.AllEligible
+        );
+
+        MediaPolicySnapshot request = await Log(requestAttempts)
+            .RecordPreLaunchAsync(
+                Loaded(RecordRequest(upload: false)),
+                settings,
+                Now,
+                CancellationToken.None
+            );
+        MediaPolicySnapshot ordinary = await Log(ordinaryAttempts)
+            .RecordPreLaunchAsync(Loaded(), settings, Now, CancellationToken.None);
+        DiskAdmission requestWithRoom = SpectateAdmission.Admit(
+            request.Requested,
+            SpectateAdmission.DefaultWatermarks(),
+            () =>
+                new DiskBacklogInput
+                {
+                    FreeBytes = 287 * gigabyte,
+                    PendingUploadBytes = 61 * gigabyte,
+                }
+        );
+        DiskAdmission requestOnALowDisk = SpectateAdmission.Admit(
+            request.Requested,
+            SpectateAdmission.DefaultWatermarks(),
+            () =>
+                new DiskBacklogInput
+                {
+                    FreeBytes = SpectateAdmission.StopFreeBytes,
+                    PendingUploadBytes = 61 * gigabyte,
+                }
+        );
+        DiskAdmission ordinaryWithRoom = SpectateAdmission.Admit(
+            ordinary.Requested,
+            SpectateAdmission.DefaultWatermarks(),
+            () =>
+                new DiskBacklogInput
+                {
+                    FreeBytes = 287 * gigabyte,
+                    PendingUploadBytes = 61 * gigabyte,
+                }
+        );
+
+        Assert.True(request.AllowsRecording);
+        Assert.True(request.Requested);
+        Assert.Equal(ReplayMediaPriority.Ordinary, ordinary.Decision.Priority);
+        Assert.False(ordinary.Requested);
+        Assert.True(requestWithRoom.MayRecord);
+        Assert.Equal(DiskBacklog.PendingBytesHigh, requestWithRoom.Decision.Reason);
+        Assert.False(requestOnALowDisk.MayRecord);
+        Assert.Equal(DiskBacklog.FreeSpaceGate, requestOnALowDisk.Decision.Gate);
+        Assert.False(ordinaryWithRoom.MayRecord);
+        Assert.Equal(DiskBacklog.PendingBytesGate, ordinaryWithRoom.Decision.Gate);
     }
 
     [Fact]

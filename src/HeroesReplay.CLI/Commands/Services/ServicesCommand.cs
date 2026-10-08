@@ -195,26 +195,14 @@ public class ServicesCommand : Command
                 }
 
                 bool supervised = parseResult.GetValue(supervise);
-                ServiceSupervisorMutex claim = null;
-                if (supervised)
+                // Refuses while a supervisor runs in this session or another (#293).
+                if (!SupervisorGate().TryStart(supervised, out ServiceSupervisorMutex claim))
                 {
-                    claim = ServiceSupervisorMutex.TryAcquire();
-                    if (claim == null)
-                    {
-                        Console.Error.WriteLine(SupervisorRunningMessage());
-                        return Task.FromResult(1);
-                    }
-                }
-                else if (ServiceSupervisorFile.IsRunning())
-                {
-                    Console.Error.WriteLine(SupervisorRunningMessage());
                     return Task.FromResult(1);
                 }
 
                 using (claim)
                 {
-                    // No other supervisor runs here, so any state file is a dead one's.
-                    ServiceSupervisorFile.Delete(ServiceSupervisorFile.DefaultPath);
                     string exe = Environment.ProcessPath;
                     int code;
                     using (var startup = new ConsoleCapture())
@@ -270,15 +258,15 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "supervise",
-            "Supervise the roles `services start` recorded, in the foreground: restart failed roles with backoff (10s, 30s, 2m, 5m), kill and restart roles whose heartbeat is 2 minutes old, at most 5 restarts per role in 30 minutes (ServiceRestart), then leave the role down (service.restart_budget_exhausted). One supervisor at a time. `services stop` ends it; Ctrl+C leaves the roles running unsupervised."
+            "Supervise the roles `services start` recorded, in the foreground: restart failed roles with backoff (10s, 30s, 2m, 5m), kill and restart roles whose heartbeat is 2 minutes old, at most 5 restarts per role in 30 minutes (ServiceRestart), then leave the role down (service.restart_budget_exhausted). One supervisor at a time, across logon sessions (an SSH session sees the desktop's through supervisor.json). `services stop` ends it; Ctrl+C leaves the roles running unsupervised."
         );
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
-                using ServiceSupervisorMutex claim = ServiceSupervisorMutex.TryAcquire();
+                // Refuses while a supervisor runs in this session or another (#293).
+                using ServiceSupervisorMutex claim = SupervisorGate().TryClaim();
                 if (claim == null)
                 {
-                    Console.Error.WriteLine(SupervisorRunningMessage());
                     return Task.FromResult(1);
                 }
 
@@ -398,11 +386,17 @@ public class ServicesCommand : Command
         return handshake;
     }
 
-    private static string SupervisorRunningMessage()
-    {
-        int? pid = ServiceSupervisorFile.TryLoad(ServiceSupervisorFile.DefaultPath)?.Pid;
-        return $"A supervisor is already running{(pid > 0 ? $" (pid {pid})" : "")}. Run `heroesreplay services stop` first; it stops the roles and the supervisor.";
-    }
+    /// <summary>
+    /// The single-supervisor check, with <c>supervisor.json</c> as fresh as <c>services status</c>
+    /// requires it.
+    /// </summary>
+    private static ServiceSupervisorGate SupervisorGate() =>
+        new()
+        {
+            FreshFor = ServiceSupervisorFile.FreshFor(
+                ServiceCollectionExtensions.LoadServiceHealthSettings()
+            ),
+        };
 
     /// <summary>
     /// After the stop file is down: wait for the supervisor to see it and exit, then kill it if it
@@ -532,6 +526,8 @@ public class ServicesCommand : Command
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
+                ServiceHealthSettings health =
+                    ServiceCollectionExtensions.LoadServiceHealthSettings();
                 int code = ServiceSupervisor.Status(
                     ServiceLockStore.DefaultPath,
                     ProcessNameOrNull,
@@ -540,7 +536,7 @@ public class ServicesCommand : Command
                     new ServiceStatusQuery
                     {
                         Output = ServiceStatusQuery.ParseOutput(parseResult.GetValue(output)),
-                        Settings = ServiceCollectionExtensions.LoadServiceHealthSettings(),
+                        Settings = health,
                         StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
                         Environment = Environment.GetEnvironmentVariable("HEROES_REPLAY_ENV"),
                         LogDirectory = ServiceCollectionExtensions
@@ -548,7 +544,10 @@ public class ServicesCommand : Command
                             .ResolvedDirectory,
                         ReadSupervisor = () =>
                             ServiceSupervisorFile.TryLoad(ServiceSupervisorFile.DefaultPath),
-                        SupervisorRunning = () => ServiceSupervisorFile.IsRunning(),
+                        SupervisorLiveness = () =>
+                            ServiceSupervisorFile.Check(
+                                freshFor: ServiceSupervisorFile.FreshFor(health)
+                            ),
                         ReadMachine = ReadMachineHealth,
                     }
                 );

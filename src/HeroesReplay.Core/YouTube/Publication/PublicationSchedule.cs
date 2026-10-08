@@ -300,16 +300,29 @@ public static class PublicationSchedule
             return PublicationDecision.Granted("private-listing");
         }
 
-        if (
-            send.Criteria == ReplayMediaPriority.Ordinary
-            && send.RecordedAtUtc != null
-            && now - send.RecordedAtUtc.Value > settings.OrdinaryCandidateMaxAge
-        )
+        if (PastOrdinaryAge(settings, send, now))
         {
             return PublicationDecision.Refused("stale");
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// An ordinary replay whose game is older than
+    /// <see cref="ReplayMediaPolicySettings.OrdinaryCandidateMaxAge"/>. On a public listing it is
+    /// never sent: the uploader marks it terminal and deletes its recording.
+    /// </summary>
+    public static bool PastOrdinaryAge(
+        ReplayMediaPolicySettings settings,
+        PublicationSendFacts facts,
+        DateTimeOffset now
+    )
+    {
+        return settings != null
+            && facts?.Criteria == ReplayMediaPriority.Ordinary
+            && facts.RecordedAtUtc != null
+            && now - facts.RecordedAtUtc.Value > settings.OrdinaryCandidateMaxAge;
     }
 
     /// <summary>The pacing rule a video at <paramref name="at"/> breaks, or null.</summary>

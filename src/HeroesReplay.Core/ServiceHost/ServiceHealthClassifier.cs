@@ -316,14 +316,17 @@ public static class ServiceHealthClassifier
     /// Adds the supervisor: whether it runs, and each role's restarts and budget. A failed role
     /// whose budget is exhausted reports <c>service.restart_budget_exhausted</c>, and so does the
     /// envelope. A failed role the running supervisor will restart says when.
+    /// <paramref name="liveness"/> is <see cref="ServiceSupervisorFile.Check"/>: whether it runs,
+    /// and whether the mutex or <c>supervisor.json</c> decided.
     /// </summary>
     public static ServiceStatusReport WithSupervisor(
         ServiceStatusReport report,
         ServiceSupervisorState state,
-        bool running,
+        ServiceSupervisorLiveness liveness,
         DateTimeOffset now
     )
     {
+        bool running = liveness?.Running == true;
         if (report == null || (state == null && !running))
         {
             return report;
@@ -414,6 +417,8 @@ public static class ServiceHealthClassifier
             Supervisor = new ServiceSupervisorSummary
             {
                 Running = running,
+                SeenVia = liveness?.SeenVia,
+                Detail = liveness?.Detail,
                 Pid = state?.Pid,
                 StartedAt = state?.StartedAt,
                 UpdatedAt = state?.UpdatedAt,

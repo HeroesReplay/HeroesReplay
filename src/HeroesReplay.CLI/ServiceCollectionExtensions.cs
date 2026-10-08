@@ -8,8 +8,10 @@ using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Calculators;
+using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.GameClient.Firewall;
 using HeroesReplay.Core.HeroesData;
@@ -198,6 +200,20 @@ public static class ServiceCollectionExtensions
     public static MachineHealthSettings LoadMachineHealthSettings() =>
         GetConfiguration().GetSection("MachineHealth").Get<MachineHealthSettings>()
         ?? new MachineHealthSettings();
+
+    /// <summary>
+    /// The effective <c>Clips</c> and <c>Dependencies</c> sections, for <c>deps install</c> and
+    /// <c>check ffmpeg</c>. No secret is resolved.
+    /// </summary>
+    public static (ClipSettings Clips, DependencySettings Dependencies) LoadToolSettings()
+    {
+        IConfigurationRoot configuration = GetConfiguration();
+        return (
+            configuration.GetSection("Clips").Get<ClipSettings>() ?? new ClipSettings(),
+            configuration.GetSection("Dependencies").Get<DependencySettings>()
+                ?? new DependencySettings()
+        );
+    }
 
     /// <summary>The effective <c>ServiceRestart</c> section. No secret is resolved.</summary>
     public static ServiceRestartSettings LoadServiceRestartSettings() =>
