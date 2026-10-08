@@ -315,7 +315,7 @@ public static class ReplayMediaPolicy
             || (
                 priority == ReplayMediaPriority.Requested && settings.RequestsBypassPatchRequirement
             );
-        bool expired = expires.HasValue && now > expires.Value;
+        bool expired = IsPast(expires, now);
         bool openPool =
             settings.PublicationMode == ReplayPublicationMode.Curated
             || settings.PublicationMode == ReplayPublicationMode.AllEligible;
@@ -350,6 +350,25 @@ public static class ReplayMediaPolicy
             Array.Empty<string>()
         );
     }
+
+    /// <summary>
+    /// True when the replay is past its media window: the game date plus the candidate max age
+    /// for its priority has passed, the rule that makes <see cref="Evaluate"/> refuse it as
+    /// <see cref="ReplayMediaReason.Expired"/>. False inside the window, and when the window
+    /// cannot be judged (no game date, invalid settings).
+    /// </summary>
+    public static bool IsPastWindow(
+        ReplayMediaPolicyInput input,
+        ReplayMediaPolicySettings settings,
+        DateTime utcNow
+    )
+    {
+        ReplayMediaDecision decision = Evaluate(input, settings, utcNow);
+        return IsPast(decision.CandidateExpiresAtUtc, decision.EvaluatedAtUtc);
+    }
+
+    private static bool IsPast(DateTime? expires, DateTime now) =>
+        expires.HasValue && now > expires.Value;
 
     private static ReplayMediaDecision Reject(
         ReplayMediaPolicySettings settings,
