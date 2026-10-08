@@ -86,22 +86,6 @@ public static class ClientLaunchFailure
 
         return false;
     }
-
-    /// <summary>
-    /// True when a failure shows a region result, false on any other known screen, null when
-    /// memory cannot tell.
-    /// </summary>
-    public static bool? ShowsRegion(ClientScreenSample? sample) =>
-        Known(sample) ? Read(sample) is LaunchFailure failure && failure.IsRegion : null;
-
-    /// <summary>
-    /// True when a failure shows a result that is not about the region (the version dialog and
-    /// every other launch failure), false on any other known screen, null when memory cannot tell.
-    /// </summary>
-    public static bool? ShowsVersion(ClientScreenSample? sample) =>
-        Known(sample) ? Read(sample) is LaunchFailure failure && !failure.IsRegion : null;
-
-    private static bool Known(ClientScreenSample? sample) => sample?.Ok == true;
 }
 
 /// <summary>A game-launch failure: the client's result code and its message key.</summary>

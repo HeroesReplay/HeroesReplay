@@ -72,7 +72,6 @@ public class ClientLaunchFailureTests
         };
 
         Assert.Equal(ClientHoldReason.VersionMismatch, ClientLaunchFailure.Classify(sample));
-        Assert.True(ClientLaunchFailure.ShowsVersion(sample));
     }
 
     [Fact]
@@ -138,24 +137,5 @@ public class ClientLaunchFailureTests
         Assert.Null(ClientLaunchFailure.Read(null));
         Assert.Equal(ClientHoldReason.None, ClientLaunchFailure.Classify(Home));
         Assert.Equal(ClientHoldReason.None, ClientLaunchFailure.Classify(null));
-    }
-
-    [Fact]
-    public void ShowsVersion_IsFalseOnOtherScreensAndUnknownWhenMemoryCannotTell()
-    {
-        Assert.True(ClientLaunchFailure.ShowsVersion(NotAvailable));
-        Assert.False(ClientLaunchFailure.ShowsVersion(Home));
-        Assert.Null(
-            ClientLaunchFailure.ShowsVersion(
-                new ClientScreenSample(
-                    ClientScreenKind.Unknown,
-                    new string[0],
-                    MenuSeen: false,
-                    "starting"
-                )
-            )
-        );
-        Assert.Null(ClientLaunchFailure.ShowsVersion(null));
-        Assert.False(ClientLaunchFailure.ShowsRegion(NotAvailable));
     }
 }

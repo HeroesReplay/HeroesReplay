@@ -54,7 +54,6 @@ public class Spectator : ISpectator
     private DateTimeOffset lastAdvancedHudAt;
 
     private DateTimeOffset nextEndScreenProbe;
-    private DateTimeOffset nextEndScreenShadow;
     private DateTimeOffset lastClockMissLog;
 
     private bool endScreenSeen;
@@ -174,7 +173,6 @@ public class Spectator : ISpectator
         lastAdvancedHud = TimeSpan.MinValue;
         lastAdvancedHudAt = default;
         nextEndScreenProbe = default;
-        nextEndScreenShadow = default;
         endScreenSeen = false;
         hungChecks = 0;
         missingProcessChecks = 0;
@@ -389,7 +387,6 @@ public class Spectator : ISpectator
                 }
 
                 TryEndAfterCore(clockRead);
-                await ShadowEndScreenAfterCoreAsync().ConfigureAwait(false);
 
                 PublishStatus();
 
@@ -487,32 +484,6 @@ public class Spectator : ISpectator
                 Timer
             );
         }
-    }
-
-    private static readonly TimeSpan EndScreenShadowInterval = TimeSpan.FromSeconds(4);
-
-    /// <summary>
-    /// Shadow mode (#292): from the replay's core-death time until the session ends, the end
-    /// screen is OCR'd every <see cref="EndScreenShadowInterval"/> next to memory's MVP read, so
-    /// the MVP screen gets OCR and memory pairs. The regular probe waits for a 20 s clock stall,
-    /// which the core-time hold usually ends first. Nothing here changes the session.
-    /// </summary>
-    private async Task ShadowEndScreenAfterCoreAsync()
-    {
-        if (
-            !EndScreenShadow.Due(
-                endScreenStarted != null,
-                CancelSessionSource.IsCancellationRequested,
-                DateTimeOffset.UtcNow,
-                nextEndScreenShadow
-            )
-        )
-        {
-            return;
-        }
-
-        nextEndScreenShadow = DateTimeOffset.UtcNow + EndScreenShadowInterval;
-        await controller.ShadowEndScreenAsync().ConfigureAwait(false);
     }
 
     private void TryEndAfterCore(bool clockRead)
