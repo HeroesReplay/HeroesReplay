@@ -356,12 +356,21 @@ public class ServiceSupervisionTests
     public void Mutex_AllowsOneSupervisorAtATime()
     {
         string name = @"Local\HeroesReplay.ServiceSupervisor.Test." + Guid.NewGuid().ToString("N");
-        Assert.False(ServiceSupervisorFile.IsRunning(name));
+        // No state file: a supervisor running on this machine must not answer for the test mutex.
+        string state = Path.Combine(
+            Path.GetTempPath(),
+            $"heroesreplay-supervisor-{name[6..]}.json"
+        );
+        Assert.False(ServiceSupervisorFile.IsRunning(name, state));
 
         using (ServiceSupervisorMutex first = ServiceSupervisorMutex.TryAcquire(name))
         {
             Assert.NotNull(first);
-            Assert.True(ServiceSupervisorFile.IsRunning(name));
+            Assert.True(ServiceSupervisorFile.IsRunning(name, state));
+            Assert.Same(
+                ServiceSupervisorLiveness.ByMutex,
+                ServiceSupervisorFile.Check(name, state)
+            );
 
             // A second supervisor is another process, so another thread here.
             ServiceSupervisorMutex second = null;
@@ -371,7 +380,7 @@ public class ServiceSupervisionTests
             Assert.Null(second);
         }
 
-        Assert.False(ServiceSupervisorFile.IsRunning(name));
+        Assert.False(ServiceSupervisorFile.IsRunning(name, state));
         ServiceSupervisorMutex after = null;
         var again = new Thread(() =>
         {
@@ -570,7 +579,7 @@ public class ServiceSupervisionTests
             return ServiceHealthClassifier.WithSupervisor(
                 report,
                 ServiceSupervisorFile.TryLoad(StatePath),
-                running,
+                running ? ServiceSupervisorLiveness.ByMutex : ServiceSupervisorLiveness.None,
                 Clock.Now
             );
         }

@@ -31,8 +31,10 @@ public sealed class ServiceStatusQuery
     /// <summary><c>supervisor.json</c>. Null reads no supervisor.</summary>
     public Func<ServiceSupervisorState> ReadSupervisor { get; set; }
 
-    /// <summary>True while a supervisor holds its mutex.</summary>
-    public Func<bool> SupervisorRunning { get; set; }
+    /// <summary>
+    /// Whether a supervisor runs, and how that was decided (<see cref="ServiceSupervisorFile.Check"/>).
+    /// </summary>
+    public Func<ServiceSupervisorLiveness> SupervisorLiveness { get; set; }
 
     /// <summary>The machine section (#251). Null leaves it out.</summary>
     public Func<MachineHealthReport> ReadMachine { get; set; }
