@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Shared;
@@ -18,7 +19,8 @@ public static class YouTubeEntryWriter
         YouTubeSettings youtube,
         bool isCompleteRecording,
         CancellationToken cancellationToken,
-        IReadOnlyList<Hero> heroCatalog = null
+        IReadOnlyList<Hero> heroCatalog = null,
+        HeroStatsSnapshot heroStats = null
     )
     {
         if (!SessionMedia.ShouldWriteYouTubeEntry(youtube, loaded))
@@ -35,7 +37,8 @@ public static class YouTubeEntryWriter
             loaded,
             youtube,
             isCompleteRecording,
-            heroCatalog
+            heroCatalog,
+            heroStats
         );
         Directory.CreateDirectory(directory);
         string path = Path.Combine(directory, fileName);

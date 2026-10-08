@@ -66,7 +66,7 @@ Name: `Heroes Replay` (id `fk7tudovwzuaa64lvomn6rxwtq`). Quote `op://` URIs that
 | YouTube OAuth client secret | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Client Secret` |
 | YouTube GCP project id | `op://Heroes Replay/xrstilaqn2jygtuwwde346ozwm/Project ID` |
 
-`appsettings.secrets.example.json` also names `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password` for `TwitchExtension:ApiKey`. That item is not in the vault, so the reference does not resolve, and `fill-secrets-from-op.ps1` does not write it. The Twitch extension is off (`TwitchExtension:Enabled` false) until that key exists.
+`appsettings.secrets.example.json` also names `op://Heroes Replay/Heroes Profile Twitch Uploader Key/password` for `TwitchExtension:ApiKey` (the Heroes Profile Twitch uploader key from heroesprofile.com/Api/Account, not the v1 Bearer key). `fill-secrets-from-op.ps1` writes it only when a Password item with that exact title is in the vault, and warns otherwise; the other secrets still fill. The item is not in the vault yet (checked 2026-10-08). The Twitch extension stays off (`TwitchExtension:Enabled` false) until `heroesreplay check twitch-extension`, run with `HEROES_REPLAY_TwitchExtension__Enabled=true` for that one process, reports `entitlement.active=True`.
 
 Other items in the vault (`Heroes Profile` and `TikTok` logins, `Salty Sadism - Live` / `PreLive`, the service-account token item) are not read by HeroesReplay. Use the item UUID instead of the name when a title has `(` or would be ambiguous.
 

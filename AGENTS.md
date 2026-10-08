@@ -21,7 +21,7 @@ The client memory readers live in their own repo and package, [HeroesClientSDK](
 | `GameClient` (`Firewall`) | Launching the right Heroes build, Battle.net, HeroesSwitcher, the client's own dialogs, `Variables.txt`, client and process settings. `Firewall`: the inbound rule for each client exe |
 | `Replays` (`Context`) | Replay providers and loaders, `LoadedReplay`, the spectate queue and queue pick, the per-replay context folder |
 | `Requests` | Twitch request queue, leases, played ids, reward request models |
-| `HeroesProfile` | Heroes Profile API, replay listing, patch index, rank enrichment |
+| `HeroesProfile` | Heroes Profile API, replay listing, patch index, rank enrichment, the hero statistics behind YouTube title hooks (`HeroStatsRefresh`, `HeroStatsStore`) |
 | `HeroesData` | heroes-data2 hero and unit catalog |
 | `Twitch` (`Predictions`, `Rewards`, `RedeemedRewards`, `ChatMessages`) | Chat bot, predictions and their ledger, channel-point rewards |
 | `TwitchExtension` | Heroes Profile Twitch extension payloads |
