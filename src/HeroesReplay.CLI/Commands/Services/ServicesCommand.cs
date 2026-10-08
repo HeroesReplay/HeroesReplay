@@ -687,8 +687,7 @@ public class ServicesCommand : Command
                         CloseGame = StopSpectatedGame,
                         ConfirmStream = ObsServiceStop.DelegateToSpectator,
                         ReadStream = ServiceStreamProbe.Read,
-                        StopSpectateRecording = () =>
-                            ServiceRecordingProbe.StopLeftRecording(ProcessNameOrNull),
+                        StopSpectateRecording = ServiceRecordingProbe.StopLeftRecording,
                         StopSupervisor = StopSupervisor,
                     }
                 );
@@ -908,6 +907,7 @@ public class ServicesCommand : Command
                 Process.GetProcessesByName("obs64").Length > 0,
                 ObsNames.SceneCollection(obs),
                 ObsManagedFiles.ForThisUser(),
+                obs?.StableAssets == true,
                 ObsRuntimeValues.From(obs)
             );
             if (result.Drift || result.Wrote || result.Deferred)

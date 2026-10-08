@@ -80,6 +80,9 @@ public class ObsController : IObsController
                         arm.IsArmed(),
                         arm.FilePath
                     )
+                    {
+                        AssetStoreRoot = ObsAssetStore.For(ObsManagedFiles.ForThisUser()).Root,
+                    }
                 ),
             settings.OBS?.StartupIdentifyTimeout,
             sentinel: new ObsCrashSentinel(
@@ -129,6 +132,7 @@ public class ObsController : IObsController
                 obsRunning,
                 ObsNames.SceneCollection(settings.OBS),
                 ObsManagedFiles.ForThisUser(),
+                settings.OBS?.StableAssets == true,
                 ObsRuntimeValues.From(settings.OBS)
             );
             if (result.Drift)

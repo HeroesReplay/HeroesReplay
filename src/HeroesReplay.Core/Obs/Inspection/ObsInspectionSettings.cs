@@ -14,4 +14,12 @@ public sealed record ObsInspectionSettings(
     string DataDirectory,
     bool Armed,
     string ArmFile
-);
+)
+{
+    /// <summary>
+    /// <see cref="ObsAssetStore.Root"/> for this user. With <c>OBS:StableAssets</c>, the asset
+    /// paths are expected in this install's copy there (#330). Null: the install's <c>obs</c>
+    /// folder only.
+    /// </summary>
+    public string AssetStoreRoot { get; init; }
+}

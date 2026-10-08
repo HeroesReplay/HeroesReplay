@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Obs.Collection;
 
@@ -39,6 +38,19 @@ public sealed record ObsCollectionPlanRequest
     public ObsRuntimeValues Runtime { get; init; }
 
     public DateTime UtcNow { get; init; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// The folder an update would point the assets at: with <c>OBS:StableAssets</c>, the stable
+    /// copy (<see cref="ObsAssetStore.Planned"/>), which the plan does not make. Null: the
+    /// template's folder.
+    /// </summary>
+    public string AssetRoot { get; init; }
+
+    /// <summary>
+    /// Where the dry run makes its throwaway copies (a <c>heroesreplay-obs-plan-*</c> folder it
+    /// deletes). The user's temp folder when empty; a test passes its own (#331).
+    /// </summary>
+    public string SandboxRoot { get; init; }
 }
 
 /// <summary>What <c>update install-obs</c> would do with the live collection now.</summary>
@@ -63,10 +75,11 @@ public sealed record ObsPlanUpdate
 /// <summary>
 /// The <c>obs plan</c> result envelope (#307). <see cref="Ok"/> is false only when the update
 /// cannot be planned (no template, an unreadable live collection) or a value has a conflict.
+/// It is written by the shared <see cref="CliJson"/> serializer (#311) with the fields it had.
 /// </summary>
-public sealed record ObsCollectionPlanResult
+public sealed record ObsCollectionPlanResult : ICliResult
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = CliJson.SchemaVersion;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
@@ -105,18 +118,10 @@ public sealed record ObsCollectionPlanResult
 
     public IReadOnlyList<ObsCollectionDifference> Differences { get; init; } = [];
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
-
-    public string ToJson() => JsonSerializer.Serialize(this, Json);
+    public string ToJson() => CliJson.Serialize(this);
 
     public static ObsCollectionPlanResult FromJson(string json) =>
-        JsonSerializer.Deserialize<ObsCollectionPlanResult>(json, Json);
+        JsonSerializer.Deserialize<ObsCollectionPlanResult>(json, CliJson.Options);
 }
 
 /// <summary>The stable <c>code</c> of an <c>obs plan</c>.</summary>
@@ -157,6 +162,9 @@ public static class ObsPlanCodes
 /// </summary>
 public static class ObsCollectionPlan
 {
+    /// <summary>The dry run's throwaway folder: <c>&lt;SandboxRoot&gt;\heroesreplay-obs-plan-&lt;guid&gt;</c>.</summary>
+    public const string SandboxPrefix = "heroesreplay-obs-plan-";
+
     public static ObsCollectionPlanResult Build(ObsCollectionPlanRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -228,17 +236,23 @@ public static class ObsCollectionPlan
             request.Managed
         );
         (string baseTemplate, string baseName) = (found.Text, found.Source);
-        string assetRoot = Path.GetDirectoryName(Path.GetFullPath(request.TemplatePath));
+        (string assetRoot, IReadOnlyList<string> movedFrom) = Assets(request);
         ObsCollectionDiffResult diff;
         try
         {
             diff = ObsCollectionDiff.Compare(
-                ObsCollectionMerge.Normalize(baseTemplate, assetRoot, request.DataDirectory),
-                ObsCollectionMerge.Normalize(template, assetRoot, request.DataDirectory),
+                ObsCollectionMerge.Normalize(
+                    baseTemplate,
+                    assetRoot,
+                    request.DataDirectory,
+                    movedFrom
+                ),
+                ObsCollectionMerge.Normalize(template, assetRoot, request.DataDirectory, movedFrom),
                 ObsCollectionMerge.Normalize(
                     live ?? throw new IOException("It could not be read."),
                     assetRoot,
-                    request.DataDirectory
+                    request.DataDirectory,
+                    movedFrom
                 ),
                 request.Runtime
             );
@@ -289,8 +303,10 @@ public static class ObsCollectionPlan
     )
     {
         string sandbox = Path.Combine(
-            Path.GetTempPath(),
-            "heroesreplay-obs-plan-" + Guid.NewGuid().ToString("N")
+            string.IsNullOrWhiteSpace(request.SandboxRoot)
+                ? Path.GetTempPath()
+                : request.SandboxRoot,
+            SandboxPrefix + Guid.NewGuid().ToString("N")
         );
         try
         {
@@ -336,6 +352,10 @@ public static class ObsCollectionPlan
                     PreviousTemplatePath = request.PreviousTemplatePath,
                     Runtime = request.Runtime,
                     UtcNow = request.UtcNow,
+                    // The copy the update would use, named but not made; the real store's
+                    // copies are recognised as older asset folders.
+                    AssetRoot = Assets(request).Root,
+                    AssetStore = ObsAssetStore.For(request.Managed),
                 }
             );
             string action =
@@ -440,6 +460,24 @@ public static class ObsCollectionPlan
             ObsDiffKind.Conflict => "conflict",
             _ => "unattributed",
         };
+
+    /// <summary>The asset root an update would use, and the folders its path update moves from.</summary>
+    private static (string Root, IReadOnlyList<string> MovedFrom) Assets(
+        ObsCollectionPlanRequest request
+    )
+    {
+        string install = Path.GetDirectoryName(Path.GetFullPath(request.TemplatePath));
+        string root = string.IsNullOrWhiteSpace(request.AssetRoot)
+            ? install
+            : Path.GetFullPath(request.AssetRoot);
+        var movedFrom = new List<string> { ObsAssetStore.For(request.Managed).AnyCopy };
+        if (!ObsManagedFiles.SamePath(root, install))
+        {
+            movedFrom.Add(install);
+        }
+
+        return (root, movedFrom);
+    }
 
     private static string ReadText(string path)
     {

@@ -45,6 +45,15 @@ public class OBSSettings
     public bool LiveCollectionSwap { get; set; } = true;
 
     /// <summary>
+    /// When true, the managed collection points at a verified copy of this install's OBS files
+    /// under <c>%LOCALAPPDATA%\HeroesReplay\obs\assets\&lt;bundle-hash&gt;</c>, not at the
+    /// install's own <c>obs</c> folder, so removing a build's folder (a git worktree) leaves no
+    /// missing images (#330). On in <c>appsettings.dev.json</c>. Off by default and in prod: a
+    /// release updates <c>app\obs</c> in place, and OBS reloads a changed asset from there.
+    /// </summary>
+    public bool StableAssets { get; set; }
+
+    /// <summary>
     /// When true, shutdown may close an OBS process this coordinator launched.
     /// A process that was already running is never closed. Default false.
     /// </summary>

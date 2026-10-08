@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 using static HeroesReplay.Tests.Unit.Obs.Collection.ObsCollectionFixture;
 
@@ -21,9 +22,10 @@ public sealed class ObsCollectionPlanTests : IDisposable
     public ObsCollectionPlanTests()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Live));
+        Directory.CreateDirectory(Sandbox);
     }
 
-    public void Dispose() => Directory.Delete(root, recursive: true);
+    public void Dispose() => TestTemp.Delete(root);
 
     private string Live =>
         Path.Combine(root, "appdata", "obs-studio", "basic", "scenes", "HeroesReplay.json");
@@ -31,6 +33,9 @@ public sealed class ObsCollectionPlanTests : IDisposable
     private string Install => Path.Combine(root, "app");
 
     private string Previous => Path.Combine(root, "app.previous");
+
+    /// <summary>Where this test's dry runs make their copies, instead of the shared temp folder.</summary>
+    private string Sandbox => Path.Combine(root, "sandbox");
 
     private ObsManagedFiles Managed => new(Path.Combine(root, "managed"));
 
@@ -54,10 +59,11 @@ public sealed class ObsCollectionPlanTests : IDisposable
         Dictionary<string, byte[]> after = Snapshot();
         Assert.Equal(before.Keys.Order(), after.Keys.Order());
         Assert.All(before, file => Assert.Equal(file.Value, after[file.Key]));
-        Assert.DoesNotContain(
-            Directory.GetDirectories(Path.GetTempPath(), "heroesreplay-obs-plan-*"),
-            folder => Directory.GetCreationTimeUtc(folder) > DateTime.UtcNow.AddMinutes(-1)
-        );
+        // The dry run's copies went into this test's own sandbox root and are gone. It used to
+        // look for any recent heroesreplay-obs-plan-* in the shared temp folder, which another
+        // test process's plan could be using at that moment (#331).
+        Assert.True(Directory.Exists(Sandbox));
+        Assert.Empty(Directory.GetFileSystemEntries(Sandbox));
     }
 
     [Fact]
@@ -299,6 +305,7 @@ public sealed class ObsCollectionPlanTests : IDisposable
                 DataDirectory = @"C:\heroesreplay\Data",
                 Managed = Managed,
                 ObsIsRunning = obsIsRunning,
+                SandboxRoot = Sandbox,
             }
         );
 

@@ -58,15 +58,27 @@ public static class ServiceStopFile
         }
     }
 
-    public static ServiceStopLink Link(CancellationToken console, string path = null)
+    /// <summary>How often a linked token looks for the stop file.</summary>
+    public static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
+
+    public static ServiceStopLink Link(
+        CancellationToken console,
+        string path = null,
+        TimeSpan? pollInterval = null
+    )
     {
         string file = path ?? DefaultPath;
         var linked = CancellationTokenSource.CreateLinkedTokenSource(console);
-        _ = Task.Run(() => WatchAsync(linked, file));
+        TimeSpan interval = pollInterval ?? PollInterval;
+        _ = Task.Run(() => WatchAsync(linked, file, interval));
         return new ServiceStopLink(linked);
     }
 
-    private static async Task WatchAsync(CancellationTokenSource linked, string path)
+    private static async Task WatchAsync(
+        CancellationTokenSource linked,
+        string path,
+        TimeSpan interval
+    )
     {
         try
         {
@@ -78,8 +90,7 @@ public static class ServiceStopFile
                     return;
                 }
 
-                await Task.Delay(TimeSpan.FromMilliseconds(200), linked.Token)
-                    .ConfigureAwait(false);
+                await Task.Delay(interval, linked.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) { }

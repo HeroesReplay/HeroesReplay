@@ -63,7 +63,7 @@ public static class CommandReference
             "spectate file",
             "Not elevated. Heroes of the Storm installed; a current-patch replay needs Battle.net signed in. OBS is optional. On ASA-SERVER only to prove a change (AGENTS.md phases). "
                 + LiveAsk,
-            "Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\\Contexts\\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. Starts the Aspire dashboard when OTLP :4317 is down.",
+            "Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\\Contexts\\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.",
             "0 after the queue has played. 1 on a parse error (`--player` not a BattleTag, a `--file` that does not exist) or when the engine stops on an unexpected error."
         ),
         new(
@@ -279,7 +279,7 @@ public static class CommandReference
         new(
             "heroesprofile download",
             "`HeroesProfileApi:ApiKey`.",
-            "Downloads Storm League replays into `Data\\Standard` and requested ones into `Data\\Requests`; keeps the hero statistics current while `YouTube:Titles:StatHooks:Enabled`. Does not launch the game.",
+            "Downloads Storm League replays into `Data\\Standard` and requested ones into `Data\\Requests`; keeps the hero statistics current while `YouTube:Titles:StatHooks:Enabled`. A Standard replay whose download Heroes Profile refuses with an HTTP status is skipped (replay id and status logged), not counted as an outage. Does not launch the game.",
             Blocks
         ),
         new(
@@ -297,8 +297,8 @@ public static class CommandReference
         new(
             "heroesprofile sample",
             "`HeroesProfileApi:ApiKey`; `--output` must not be a spectate queue folder.",
-            "Downloads the newest replays of `--map` into `--output`.",
-            "0 when replays were downloaded, 1 when `--count` is out of 1 to 20, `--output` is a queue folder, or nothing was listed."
+            "Downloads the newest listed replays of `--map` into `--output` until `--count` are there or the listing runs out. A download that still fails after the Heroes Profile retries (a 429 waits for `Retry-After`) is skipped: its replay id and HTTP status are logged, its partial file is deleted, and the summary lists each skip with its reason.",
+            "0 when at least one listed replay is in `--output` (downloaded or already there), even with skips. 1 when `--count` is out of 1 to 20, `--output` is a queue folder, nothing was listed, or every listed replay was skipped."
         ),
         new(
             "services start",
@@ -317,7 +317,7 @@ public static class CommandReference
         new(
             "services stop",
             LiveAsk,
-            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when its duration matches the claim (#318). Never stops an OBS stream.",
+            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.",
             "0 when every role and the supervisor exited, the game closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked."
         ),
         new(
@@ -398,7 +398,7 @@ public static class CommandReference
         ),
         new(
             "obs validate",
-            "OBS running with its WebSocket server. Safe on the live box; over SSH, `C:\\heroesreplay` paths read as missing (skill `heroes-replay-obs`).",
+            "OBS running with its WebSocket server. Safe on the live box. Over SSH a path through the `C:\\heroesreplay` junction is checked at the junction's target, and one it cannot check is `obs.file_unverifiable`, a warning (skill `heroes-replay-obs`).",
             "Nothing. Get requests only.",
             "0 when no finding is an error, 1 otherwise or when OBS cannot be read.",
             [
@@ -415,27 +415,28 @@ public static class CommandReference
             "obs plan",
             "None. Reads files only (no websocket), so it is safe while OBS runs.",
             "Nothing. Compares the live collection with the install's `obs/Default.json` and the template it was last written from.",
-            "0 when nothing conflicts, 1 on a conflict or when the collection or the template cannot be read.",
-            CodesIn(typeof(ObsPlanCodes))
+            "0 when nothing conflicts, 1 on a conflict or when the settings, the collection, or the template cannot be read.",
+            [.. CodesIn(typeof(ObsPlanCodes)), ObsLiveRead.SettingsUnreadable]
         ),
         new(
             "obs apply",
             "None without `--backup` (reads files only, also while OBS runs). With `--backup`: OBS closed (refused while it runs), no release rollback waiting. "
                 + LiveAsk,
-            "Nothing without `--backup`. With it: backs up the live collection, writes the three-way merge (the template's changes, the operator's overrides, additions and removals kept) atomically, saves the template in `%LOCALAPPDATA%\\HeroesReplay\\obs\\templates`, and records it in `managed-collections.json` and `apply-undo.json` (`obs restore` of that backup puts the record back).",
-            "0 when merged, in sync, or ready (without `--backup`); 1 when refused (conflict, unknown base, OBS running, a waiting rollback, an unverified merge) or the collection or template cannot be read.",
-            CodesIn(typeof(ObsApplyCodes))
+            "Nothing without `--backup`. With it: makes the stable asset copy when `OBS:StableAssets` is on, backs up the live collection, writes the three-way merge (the template's changes, the operator's overrides, additions and removals kept) atomically, saves the template in `%LOCALAPPDATA%\\HeroesReplay\\obs\\templates`, and records it in `managed-collections.json` and `apply-undo.json` (`obs restore` of that backup puts the record back).",
+            "0 when merged, in sync, or ready (without `--backup`); 1 when refused (conflict, unknown base, OBS running, a waiting rollback, an unverified merge, a worktree asset folder) or the settings, the collection, or the template cannot be read.",
+            [.. CodesIn(typeof(ObsApplyCodes)), ObsLiveRead.SettingsUnreadable]
         ),
         new(
             "obs backup",
             "None. Reads the live collection only, so it is safe while OBS runs.",
             "Copies the live collection into `%LOCALAPPDATA%\\HeroesReplay\\obs\\backups` (the newest 10 are kept), unless `--list`.",
-            "0 when backed up or listed, 1 when there is no collection or the copy failed.",
+            "0 when backed up or listed, 1 when the settings cannot be read, there is no collection, or the copy failed.",
             [
                 ObsBackupCodes.BackedUp,
                 ObsBackupCodes.Listed,
                 ObsBackupCodes.CollectionMissing,
                 ObsBackupCodes.Failed,
+                ObsLiveRead.SettingsUnreadable,
             ]
         ),
         new(
@@ -451,6 +452,7 @@ public static class CommandReference
                 ObsBackupCodes.BackupOther,
                 ObsBackupCodes.BackupInvalid,
                 ObsBackupCodes.Failed,
+                ObsLiveRead.SettingsUnreadable,
             ]
         ),
         new(

@@ -68,9 +68,13 @@ public class ObsReadSessionTests
         Assert.Equal(ObsUnavailableException.Unreachable, error.Code);
         Assert.Contains("ws://127.0.0.1:" + port, error.Message, StringComparison.Ordinal);
         Assert.Contains("WebSocket Server Settings", error.Message, StringComparison.Ordinal);
+        // Windows retries a refused loopback connect for about 2 s, and parallel test runs pushed
+        // this past 3 s on ASA-SERVER. The bound still fails a session that waits for a whole
+        // request timeout or a startup grace after the identify gave up (#331).
         Assert.True(
             clock.Elapsed
-                < ObsWebsocketReadSessionFactory.IdentifyTimeout + TimeSpan.FromSeconds(2),
+                < ObsWebsocketReadSessionFactory.IdentifyTimeout
+                    + ObsWebsocketReadSessionFactory.RequestTimeout,
             clock.Elapsed.ToString()
         );
     }

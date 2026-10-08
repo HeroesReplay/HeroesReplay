@@ -3,8 +3,10 @@ using System.CommandLine;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Commands.Obs;
@@ -41,14 +43,9 @@ public static class ObsApplyCommand
             Description =
                 "appsettings overlay to read (HEROES_REPLAY_ENV). Default: the HEROES_REPLAY_ENV variable.",
         };
-        var format = new Option<string>("--output")
-        {
-            Description =
-                "text (default) or json: schemaVersion, ok, code, message, base, written, backup, taken, kept, differences, blocking.",
-            DefaultValueFactory = _ => "text",
-        };
-        format.AcceptOnlyFromAmong("text", "json");
-        format.Aliases.Add("-o");
+        Option<string> format = CliOutput.CreateOption(
+            "JSON: schemaVersion, ok, code, message, base, written, backup, taken, kept, differences, blocking."
+        );
         command.Options.Add(backup);
         command.Options.Add(install);
         command.Options.Add(previous);
@@ -58,30 +55,36 @@ public static class ObsApplyCommand
             (parseResult, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return Task.FromResult(
-                    Run(
-                        parseResult.GetValue(backup),
-                        parseResult.GetValue(install),
-                        parseResult.GetValue(previous),
-                        parseResult.GetValue(environment),
-                        string.Equals(
-                            parseResult.GetValue(format),
-                            "json",
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                    )
+                ObsApplyResult result = Apply(
+                    parseResult.GetValue(backup),
+                    parseResult.GetValue(install),
+                    parseResult.GetValue(previous),
+                    parseResult.GetValue(environment)
                 );
+                if (CliOutput.Format(parseResult, format) == CliOutputFormat.Json)
+                {
+                    return Task.FromResult(CliOutput.WriteJson(result, CliOutput.Out(parseResult)));
+                }
+
+                WriteText(
+                    result,
+                    result.Ok ? CliOutput.Out(parseResult) : CliOutput.Error(parseResult)
+                );
+                return Task.FromResult(CliOutput.ExitCode(result));
             }
         );
         return command;
     }
 
-    private static int Run(
+    /// <summary>
+    /// The merge for <paramref name="install"/>, or <see cref="ObsLiveRead.SettingsUnreadable"/>
+    /// when its settings cannot be read.
+    /// </summary>
+    private static ObsApplyResult Apply(
         bool write,
         string install,
         string previous,
-        string environment,
-        bool json
+        string environment
     )
     {
         string directory = string.IsNullOrWhiteSpace(install)
@@ -100,11 +103,15 @@ public static class ObsApplyCommand
         }
         catch (Exception e)
         {
-            Console.Error.WriteLine($"The settings in {directory} could not be read. {e.Message}");
-            return 1;
+            return new ObsApplyResult
+            {
+                Ok = false,
+                Code = ObsLiveRead.SettingsUnreadable,
+                Message = $"The settings in {directory} could not be read. {e.Message}",
+            };
         }
 
-        ObsApplyResult result = ObsCollectionApply.Run(
+        return ObsCollectionApply.Run(
             new ObsApplyRequest
             {
                 TemplatePath = ObsCollectionPaths.FindCollection(directory),
@@ -120,18 +127,9 @@ public static class ObsApplyCommand
                 ObsIsRunning = NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
                 Write = write,
                 Runtime = ObsRuntimeValues.From(obs),
+                StableAssets = obs.StableAssets,
             }
         );
-        if (json)
-        {
-            Console.WriteLine(result.ToJson());
-        }
-        else
-        {
-            WriteText(result, result.Ok ? Console.Out : Console.Error);
-        }
-
-        return result.Ok ? 0 : 1;
     }
 
     private static void WriteText(ObsApplyResult result, TextWriter output)

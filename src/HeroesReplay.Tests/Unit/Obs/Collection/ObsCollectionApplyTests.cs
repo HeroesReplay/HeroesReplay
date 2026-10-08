@@ -237,6 +237,95 @@ public sealed class ObsCollectionApplyTests : IDisposable
         Assert.Equal(0, json.GetProperty("blocking").GetArrayLength());
     }
 
+    /// <summary>#330: with OBS:StableAssets the merge points at the verified copy, made before the write.</summary>
+    [Fact]
+    public void Apply_WithStableAssets_MakesTheCopy_AndPointsTheMergeAtIt()
+    {
+        string obs = StableAssetsFixture.Install(root, "stable-app", versioned: false);
+        string install = Path.GetDirectoryName(obs);
+        string old = File.ReadAllText(TemplateOf(install));
+        File.WriteAllText(
+            TemplateOf(install),
+            old.Replace("\"is_local_file\":true", "\"is_local_file\":true,\"width\":800")
+        );
+        Managed.SaveTemplate(old, Now);
+        Managed.Save(
+            Live,
+            new ObsManagedCollection(
+                ObsCollectionPatcher.HashOf(old),
+                ObsCollectionPaths.SourceNames(old).Order(StringComparer.Ordinal).ToList(),
+                Now
+            )
+        );
+        File.WriteAllText(
+            Live,
+            ObsCollectionPaths.Rewrite(
+                old.Replace(
+                    "\"sources\":[",
+                    "\"sources\":[" + Webcam + ",",
+                    StringComparison.Ordinal
+                ),
+                obs,
+                @"C:\heroesreplay\Data"
+            )
+        );
+
+        ObsApplyResult result = ObsCollectionApply.Run(
+            new ObsApplyRequest
+            {
+                TemplatePath = TemplateOf(install),
+                CollectionPath = Live,
+                DataDirectory = @"C:\heroesreplay\Data",
+                Managed = Managed,
+                Write = true,
+                StableAssets = true,
+                UtcNow = Now,
+            }
+        );
+
+        Assert.True(result.Ok, result.Message);
+        Assert.Equal("stored", result.Base);
+        string copy = ObsAssetStore.For(Managed).Planned(obs);
+        Assert.True(File.Exists(Path.Combine(copy, "Ranks", "gold.png")));
+        Assert.StartsWith(
+            StableAssetsFixture.Forward(copy),
+            StableAssetsFixture.Setting(Live, "gold-image", "file"),
+            StringComparison.OrdinalIgnoreCase
+        );
+        Assert.Contains("\"width\": 800", File.ReadAllText(Live), StringComparison.Ordinal);
+        Assert.Contains("my-webcam", File.ReadAllText(Live), StringComparison.Ordinal);
+    }
+
+    /// <summary>#330: OBS is never pointed at a folder inside a git worktree.</summary>
+    [Fact]
+    public void Apply_RefusesToPointObsAtAWorktree()
+    {
+        string install = Path.Combine(root, ".claude", "worktrees", "agent-x", "app");
+        WriteTemplate(Previous, Layout(css: "body{}"));
+        WriteTemplate(install, Layout(css: "body{margin:0}"));
+        string before = Layout(css: "body{}", extraSources: [Webcam]);
+        File.WriteAllText(Live, before);
+        RecordLiveFrom(Previous);
+
+        ObsApplyResult result = ObsCollectionApply.Run(
+            new ObsApplyRequest
+            {
+                TemplatePath = TemplateOf(install),
+                PreviousTemplatePath = TemplateOf(Previous),
+                CollectionPath = Live,
+                DataDirectory = @"C:\heroesreplay\Data",
+                Managed = Managed,
+                Write = true,
+                UtcNow = Now,
+            }
+        );
+
+        Assert.False(result.Ok);
+        Assert.Equal(ObsApplyCodes.Failed, result.Code);
+        Assert.Contains("git worktree", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(Live));
+    }
+
     [Fact]
     public void TemplateStore_KeepsTheNewest_AndEveryRecordedOne_AndRefusesAChangedCopy()
     {

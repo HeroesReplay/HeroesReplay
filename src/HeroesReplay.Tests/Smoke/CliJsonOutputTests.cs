@@ -35,6 +35,11 @@ public class CliJsonOutputTests
             "obs inspect",
             "obs validate",
             "obs bundle",
+            "obs plan",
+            "obs backup",
+            "obs backup --list",
+            "obs restore scenes-HeroesReplay.json.20261008T140000000Z.bak",
+            "config effective",
             "client status",
             "deps install",
             "services status",
@@ -100,6 +105,137 @@ public class CliJsonOutputTests
         Assert.DoesNotContain("[OK]", output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ConfigEffective_PrintsOneDocument_WithSecretsRedacted()
+    {
+        string install = Path.Combine(
+            Path.GetTempPath(),
+            "hr-config-json-" + Path.GetRandomFileName()
+        );
+        Directory.CreateDirectory(install);
+        const string token = "smoke-access-token-0123456789";
+        File.WriteAllText(
+            Path.Combine(install, "appsettings.json"),
+            "{ \"OBS\": { \"ProfileName\": \"HeroesReplay\" }, \"Twitch\": { \"AccessToken\": \""
+                + token
+                + "\" } }"
+        );
+        try
+        {
+            (int code, string output, _) = await InvokeAsync(
+                "config",
+                "effective",
+                "--install",
+                install,
+                "--section",
+                "OBS",
+                "--output",
+                "json"
+            );
+
+            JsonElement root = OwnFields(output, code);
+            Assert.True(root.GetProperty("ok").GetBoolean());
+            Assert.Equal(JsonValueKind.Null, root.GetProperty("code").ValueKind);
+            Assert.Contains(
+                root.GetProperty("settings").EnumerateArray(),
+                setting =>
+                    setting.GetProperty("key").GetString() == "OBS:ProfileName"
+                    && setting.GetProperty("value").GetString() == "HeroesReplay"
+            );
+
+            (int all, string everything, _) = await InvokeAsync(
+                "config",
+                "effective",
+                "--install",
+                install,
+                "-o",
+                "json"
+            );
+            Assert.Equal(0, all);
+            Assert.DoesNotContain(token, everything, StringComparison.Ordinal);
+            Assert.Contains("(set)", everything, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(install, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ConfigEffective_AnUnknownSection_IsNotOk()
+    {
+        string install = Path.Combine(
+            Path.GetTempPath(),
+            "hr-config-json-" + Path.GetRandomFileName()
+        );
+        Directory.CreateDirectory(install);
+        File.WriteAllText(Path.Combine(install, "appsettings.json"), "{ \"OBS\": {} }");
+        try
+        {
+            (int code, string output, _) = await InvokeAsync(
+                "config",
+                "effective",
+                "--install",
+                install,
+                "--section",
+                "NoSuchSection",
+                "--output",
+                "json"
+            );
+
+            JsonElement root = OwnFields(output, code);
+            Assert.Equal(1, code);
+            Assert.Equal("config.section_not_found", root.GetProperty("code").GetString());
+        }
+        finally
+        {
+            Directory.Delete(install, recursive: true);
+        }
+    }
+
+    /// <summary>Read-only: it lists the backups and copies nothing.</summary>
+    [Fact]
+    public async Task ObsBackupList_PrintsOneDocument()
+    {
+        (int code, string output, _) = await InvokeAsync("obs backup --list --output json");
+
+        JsonElement root = OwnFields(output, code);
+        Assert.Contains(
+            root.GetProperty("code").GetString(),
+            new[] { "obs.backups_listed", "obs.settings_unreadable" }
+        );
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("backups").ValueKind);
+    }
+
+    /// <summary>Read-only: files only, and the update's dry run works on copies in a temp folder.</summary>
+    [Fact]
+    public async Task ObsPlan_PrintsOneDocument()
+    {
+        (int code, string output, _) = await InvokeAsync("obs plan --output json");
+
+        JsonElement root = OwnFields(output, code);
+        Assert.StartsWith("obs.", root.GetProperty("code").GetString(), StringComparison.Ordinal);
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("differences").ValueKind);
+    }
+
+    /// <summary>
+    /// A result that came before the shared envelope: the whole of stdout is one JSON document
+    /// that starts with <c>schemaVersion</c>, <c>ok</c>, <c>code</c>, and <c>message</c>, and the
+    /// exit code is 0 exactly when <c>ok</c>.
+    /// </summary>
+    private static JsonElement OwnFields(string output, int code)
+    {
+        using JsonDocument document = JsonDocument.Parse(output);
+        JsonElement root = document.RootElement.Clone();
+        Assert.Equal(
+            ["schemaVersion", "ok", "code", "message"],
+            root.EnumerateObject().Take(4).Select(property => property.Name)
+        );
+        Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(root.GetProperty("ok").GetBoolean() ? 0 : 1, code);
+        return root;
+    }
+
     /// <summary>The whole of stdout is one JSON document that starts with the shared fields.</summary>
     private static JsonElement Envelope(string output)
     {
@@ -113,12 +249,17 @@ public class CliJsonOutputTests
         return root;
     }
 
-    private static async Task<(int Code, string Output, string Error)> InvokeAsync(string line)
+    private static Task<(int Code, string Output, string Error)> InvokeAsync(string line) =>
+        InvokeAsync(line.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    private static async Task<(int Code, string Output, string Error)> InvokeAsync(
+        params string[] args
+    )
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
         int code = await new CommandLineService().InvokeAsync(
-            line.Split(' ', StringSplitOptions.RemoveEmptyEntries),
+            args,
             new InvocationConfiguration { Output = output, Error = error }
         );
         return (code, output.ToString(), error.ToString());

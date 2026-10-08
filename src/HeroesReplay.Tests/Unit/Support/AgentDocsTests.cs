@@ -10,8 +10,10 @@ using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
 using HeroesReplay.CLI.Commands.Deps;
 using HeroesReplay.CLI.Commands.Obs;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using Xunit;
 
@@ -61,6 +63,9 @@ public class AgentDocsTests
             DepsCommand.Installed,
             DepsCommand.AlreadyInstalled,
             DepsCommand.Failed,
+            .. CommandReference.CodesIn(typeof(ObsPlanCodes)),
+            .. CommandReference.CodesIn(typeof(ObsBackupCodes)),
+            .. CommandReference.CodesIn(typeof(ConfigurationProvenance)),
         ];
 
         List<string> missing = codes
@@ -281,6 +286,41 @@ public class AgentDocsTests
             Assert.Equal(Path.GetFileName(folder), name.Groups[1].Value);
             Assert.Matches(new Regex(@"^description:\s*\S", RegexOptions.Multiline), text);
         }
+    }
+
+    /// <summary>
+    /// A Windows path written through an escaping layer loses its backslashes: <c>C:\heroesreplay\app</c>
+    /// once landed in the CLI skill as <c>C:heroesreplay</c>, a BEL character, and <c>pp</c>. No doc
+    /// keeps a control character or a drive letter that is not followed by a separator.
+    /// </summary>
+    [Fact]
+    public void Docs_KeepTheirWindowsPathSeparators()
+    {
+        var control = new Regex(@"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]");
+        var driveWithoutSeparator = new Regex(@"(?<![A-Za-z])[A-Z]:(?![\\/])[A-Za-z]");
+        IEnumerable<string> docs = Directory
+            .EnumerateFiles(Skills, "*.md", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(Path.Combine(Root, "docs"), "*.md"))
+            .Append(Path.Combine(Root, "AGENTS.md"));
+
+        var broken = new List<string>();
+        foreach (string doc in docs)
+        {
+            string[] lines = File.ReadAllLines(doc);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (control.IsMatch(lines[i]) || driveWithoutSeparator.IsMatch(lines[i]))
+                {
+                    broken.Add(Path.GetRelativePath(Root, doc) + ":" + (i + 1));
+                }
+            }
+        }
+
+        Assert.True(
+            broken.Count == 0,
+            "A Windows path lost its separators, or a control character is in: "
+                + string.Join(", ", broken)
+        );
     }
 
     [Fact]

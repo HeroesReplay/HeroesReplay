@@ -16,6 +16,7 @@ using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
+using Microsoft.Kiota.Abstractions;
 
 namespace HeroesReplay.Core.Replays;
 
@@ -197,7 +198,22 @@ public class HeroesProfileProvider : IReplayProvider
         FileInfo fileInfo = GetFileInfo(StandardDirectory, replay);
         if (!fileInfo.Exists)
         {
-            await DownloadReplayAsync(replay, fileInfo).ConfigureAwait(false);
+            try
+            {
+                await DownloadReplayAsync(replay, fileInfo).ConfigureAwait(false);
+            }
+            // Heroes Profile answered (after the HTTP pipeline's retries), so this is not an
+            // outage. The listing cursor is already past this replay, so the next call lists the
+            // one after it (#346).
+            catch (ApiException e) when (e.ResponseStatusCode > 0)
+            {
+                logger.LogWarning(
+                    "Skipped replay {ReplayId}: Heroes Profile answered its download with HTTP {Status}. The listing continues after it.",
+                    replay.Id,
+                    e.ResponseStatusCode
+                );
+                return false;
+            }
         }
 
         return true;

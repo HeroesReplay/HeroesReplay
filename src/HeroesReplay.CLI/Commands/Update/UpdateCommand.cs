@@ -321,6 +321,7 @@ public class UpdateCommand : Command
                         ProfileName = ObsNames.Profile(obs),
                         CollectionName = ObsNames.SceneCollection(obs),
                         PreviousInstall = previous,
+                        StableAssets = obs?.StableAssets == true,
                         Runtime = ObsRuntimeValues.From(obs),
                     }
                 )

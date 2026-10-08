@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Obs.Collection;
 
@@ -32,6 +31,15 @@ public sealed record ObsApplyRequest
 
     /// <summary>Values the spectator sets per replay: neither compared nor merged.</summary>
     public ObsRuntimeValues Runtime { get; init; }
+
+    /// <summary>
+    /// <c>OBS:StableAssets</c>: the assets point at the verified copy an update uses
+    /// (<see cref="ObsAssetStore"/>, #330), made before the merge is written.
+    /// </summary>
+    public bool StableAssets { get; init; }
+
+    /// <summary>Where stable copies are kept; <see cref="ObsAssetStore.For"/> of <see cref="Managed"/> when null.</summary>
+    public ObsAssetStore AssetStore { get; init; }
 
     public DateTime UtcNow { get; init; } = DateTime.UtcNow;
 }
@@ -76,18 +84,10 @@ public static class ObsApplyCodes
     public const string TemplateMissing = ObsPlanCodes.TemplateMissing;
 }
 
-/// <summary>The <c>obs apply</c> result envelope.</summary>
-public sealed record ObsApplyResult
+/// <summary>The <c>obs apply</c> result envelope, written by the shared <see cref="CliJson"/> serializer (#311).</summary>
+public sealed record ObsApplyResult : ICliResult
 {
-    public const int CurrentSchemaVersion = 1;
-
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
+    public const int CurrentSchemaVersion = CliJson.SchemaVersion;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
@@ -130,7 +130,7 @@ public sealed record ObsApplyResult
     /// <summary>The differences that refused the merge.</summary>
     public IReadOnlyList<ObsCollectionDifference> Blocking { get; init; } = [];
 
-    public string ToJson() => JsonSerializer.Serialize(this, Json);
+    public string ToJson() => CliJson.Serialize(this);
 }
 
 /// <summary>
@@ -232,7 +232,18 @@ public static class ObsCollectionApply
         }
 
         string live = ReadText(collection);
-        string assetRoot = Path.GetDirectoryName(Path.GetFullPath(request.TemplatePath));
+
+        // The assets point where an update points them: the stable copy with OBS:StableAssets
+        // (named here, made only before a write), else the install's obs folder (#330).
+        string install = Path.GetDirectoryName(Path.GetFullPath(request.TemplatePath));
+        ObsAssetStore store = request.AssetStore ?? ObsAssetStore.For(managed);
+        string assetRoot = request.StableAssets ? store.Planned(install) ?? install : install;
+        var movedFrom = new List<string> { store.AnyCopy };
+        if (!ObsManagedFiles.SamePath(assetRoot, install))
+        {
+            movedFrom.Add(install);
+        }
+
         ObsCollectionBase found = ObsCollectionMerge.FindBase(
             record,
             template,
@@ -244,12 +255,18 @@ public static class ObsCollectionApply
         try
         {
             merge = ObsCollectionMerge.Merge(
-                ObsCollectionMerge.Normalize(found.Text, assetRoot, request.DataDirectory),
-                ObsCollectionMerge.Normalize(template, assetRoot, request.DataDirectory),
+                ObsCollectionMerge.Normalize(
+                    found.Text,
+                    assetRoot,
+                    request.DataDirectory,
+                    movedFrom
+                ),
+                ObsCollectionMerge.Normalize(template, assetRoot, request.DataDirectory, movedFrom),
                 ObsCollectionMerge.Normalize(
                     live ?? throw new IOException("It could not be read."),
                     assetRoot,
-                    request.DataDirectory
+                    request.DataDirectory,
+                    movedFrom
                 ),
                 request.Runtime,
                 ObsMergeScope.KeepOperatorChanges
@@ -278,7 +295,12 @@ public static class ObsCollectionApply
             merge = merge with
             {
                 Outcome = ObsMergeOutcome.Merged,
-                Merged = ObsCollectionMerge.Normalize(live, assetRoot, request.DataDirectory),
+                Merged = ObsCollectionMerge.Normalize(
+                    live,
+                    assetRoot,
+                    request.DataDirectory,
+                    movedFrom
+                ),
             };
         }
 
@@ -333,6 +355,12 @@ public static class ObsCollectionApply
         string what =
             $"takes {merge.Taken} template change(s) and keeps {merge.Kept} of the operator's"
             + (write ? string.Empty : " (the file already has them; only its record changes)");
+        string worktree =
+            write && ObsCollectionPaths.IsEphemeral(assetRoot)
+                ? "Refusing to point OBS at "
+                    + assetRoot
+                    + ": it is inside a git worktree, which is removed with it (#330). Turn on OBS:StableAssets, or run it from a stable install."
+                : null;
         if (!request.Write)
         {
             return result with
@@ -343,8 +371,36 @@ public static class ObsCollectionApply
                     "The merge "
                     + what
                     + ". Nothing was written: run it with --backup, with OBS closed, to write it."
-                    + (request.ObsIsRunning ? " OBS is running now." : string.Empty),
+                    + (request.ObsIsRunning ? " OBS is running now." : string.Empty)
+                    + (worktree == null ? string.Empty : " It would be refused: " + worktree),
             };
+        }
+
+        if (worktree != null)
+        {
+            return result with
+            {
+                Code = ObsApplyCodes.Failed,
+                Message = worktree + " Nothing was written.",
+            };
+        }
+
+        if (write && request.StableAssets)
+        {
+            // The merge points at the stable copy: make and check it before OBS can load the file.
+            ObsAssetCopy copy = store.Ensure(install, request.UtcNow);
+            if (!copy.Ok || !ObsManagedFiles.SamePath(copy.AssetRoot, assetRoot))
+            {
+                return result with
+                {
+                    Code = ObsApplyCodes.Failed,
+                    Message =
+                        copy.Message
+                        + " The merge points at "
+                        + assetRoot
+                        + ", so nothing was written.",
+                };
+            }
         }
 
         string backup;

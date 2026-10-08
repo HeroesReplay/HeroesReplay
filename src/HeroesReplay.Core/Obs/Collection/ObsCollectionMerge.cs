@@ -144,9 +144,17 @@ public static class ObsCollectionMerge
             : new ObsCollectionBase(stored, "stored");
     }
 
-    /// <summary>A collection with this install's asset and data paths, as every comparison and write uses it.</summary>
-    public static string Normalize(string json, string assetRoot, string dataDirectory) =>
-        json == null ? null : ObsCollectionPaths.Rewrite(json, assetRoot, dataDirectory);
+    /// <summary>
+    /// A collection with this install's asset and data paths, as every comparison and write uses
+    /// it. <paramref name="movedFrom"/>: older asset folders whose paths move too (#330).
+    /// </summary>
+    public static string Normalize(
+        string json,
+        string assetRoot,
+        string dataDirectory,
+        IReadOnlyList<string> movedFrom = null
+    ) =>
+        json == null ? null : ObsCollectionPaths.Rewrite(json, assetRoot, dataDirectory, movedFrom);
 
     /// <param name="baseJson">The template the live collection was last written from, or null when not known.</param>
     /// <param name="templateJson">The template to merge in.</param>

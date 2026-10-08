@@ -66,6 +66,7 @@ public static class ObsValidator
     public const string BitrateLow = "obs.bitrate_low";
     public const string CollectionCustom = "obs.collection_custom";
     public const string FileMissing = "obs.file_missing";
+    public const string FileUnverifiable = "obs.file_unverifiable";
     public const string RuntimeFileMissing = "obs.runtime_file_missing";
     public const string PathStale = "obs.path_stale";
     public const string UrlInvalid = "obs.url_invalid";
@@ -146,9 +147,21 @@ public static class ObsValidator
             DataDirectory = settings?.DataDirectory,
         };
 
-    public static ObsValidation Validate(IObsReadSession session, ObsInspectionSettings settings)
+    public static ObsValidation Validate(IObsReadSession session, ObsInspectionSettings settings) =>
+        Validate(session, settings, ObsFileSystem.Instance);
+
+    /// <summary>
+    /// Validates the collection <paramref name="session"/> reads, checking its local paths on
+    /// <paramref name="files"/>.
+    /// </summary>
+    public static ObsValidation Validate(
+        IObsReadSession session,
+        ObsInspectionSettings settings,
+        IObsFileSystem files
+    )
     {
         ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(files);
         var findings = new List<ObsFinding>();
         Packaged packaged = ReadPackaged(settings?.InstallDirectory, findings);
 
@@ -185,7 +198,8 @@ public static class ObsValidator
             global,
             findings
         );
-        CheckPaths(session, inputs, global, packaged.AssetRoot, settings?.DataDirectory, findings);
+        ExpectedAssets assets = ExpectedAssets.For(settings, packaged.AssetRoot);
+        CheckPaths(session, inputs, global, assets, settings?.DataDirectory, files, findings);
         CheckMicrophone(session, global, findings);
         JObject video = session.Get("GetVideoSettings");
         CheckVideo(video, findings);
@@ -205,12 +219,34 @@ public static class ObsValidator
             Code = firstError?.Code,
             Endpoint = settings?.Obs?.WebSocketEndpoint,
             PackagedCollection = packaged.Path,
-            AssetRoot = packaged.AssetRoot,
+            AssetRoot = assets.Root,
             DataDirectory = settings?.DataDirectory,
             Errors = ordered.Count(finding => finding.Severity == Error),
             Warnings = ordered.Count(finding => finding.Severity == Warning),
             Findings = ordered,
         };
+    }
+
+    /// <summary>
+    /// The folder the collection's asset paths should name, and the older asset folders an
+    /// update moves them from: the install's <c>obs</c> folder, or with <c>OBS:StableAssets</c>
+    /// its stable copy (#330).
+    /// </summary>
+    private sealed record ExpectedAssets(string Root, IReadOnlyList<string> MovedFrom)
+    {
+        public static ExpectedAssets For(ObsInspectionSettings settings, string install)
+        {
+            if (install == null || string.IsNullOrWhiteSpace(settings?.AssetStoreRoot))
+            {
+                return new ExpectedAssets(install, null);
+            }
+
+            var store = new ObsAssetStore(settings.AssetStoreRoot);
+            string planned = settings.Obs?.StableAssets == true ? store.Planned(install) : null;
+            return planned == null
+                ? new ExpectedAssets(install, [store.AnyCopy])
+                : new ExpectedAssets(planned, [store.AnyCopy, install]);
+        }
     }
 
     private sealed record Packaged(
@@ -681,8 +717,9 @@ public static class ObsValidator
         IObsReadSession session,
         IReadOnlyList<JObject> inputs,
         IReadOnlyDictionary<string, string> global,
-        string assetRoot,
+        ExpectedAssets assets,
         string dataDirectory,
+        IObsFileSystem files,
         List<ObsFinding> findings
     )
     {
@@ -714,9 +751,10 @@ public static class ObsValidator
                     name,
                     property,
                     value,
-                    assetRoot,
+                    assets.Root,
                     dataDirectory,
-                    path => File.Exists(path) || Directory.Exists(path)
+                    files,
+                    assets.MovedFrom
                 );
                 if (finding != null)
                 {
@@ -769,9 +807,11 @@ public static class ObsValidator
 
     /// <summary>
     /// A web URL must parse. A local path must exist; when <see cref="ObsCollectionPaths.RewriteValue"/>
-    /// would point it somewhere else for this install, it is stale. A missing file under
+    /// would point it at another file for this install, it is stale. A missing file under
     /// <c>Location:DataDirectory</c> is only a warning, because HeroesReplay writes it while it
-    /// spectates. Null when the reference is fine.
+    /// spectates. A path is checked through its junctions and links (<see cref="ObsPathCheck"/>):
+    /// one this session cannot check is <see cref="FileUnverifiable"/>, a warning, not a missing
+    /// file (#335). Null when the reference is fine.
     /// </summary>
     internal static ObsFinding CheckReference(
         string input,
@@ -779,7 +819,8 @@ public static class ObsValidator
         string value,
         string assetRoot,
         string dataDirectory,
-        Func<string, bool> exists
+        IObsFileSystem files,
+        IReadOnlyList<string> movedFrom = null
     )
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -807,13 +848,30 @@ public static class ObsValidator
                 );
         }
 
+        ArgumentNullException.ThrowIfNull(files);
         string local = LocalPath(trimmed);
         string expected = LocalPath(
-            ObsCollectionPaths.RewriteValue(property, trimmed, assetRoot, dataDirectory)
+            ObsCollectionPaths.RewriteValue(property, trimmed, assetRoot, dataDirectory, movedFrom)
         );
-        bool stale = !string.Equals(local, expected, StringComparison.OrdinalIgnoreCase);
         bool rooted = Path.IsPathFullyQualified(local);
-        if (rooted && exists(local))
+        ObsPathCheck found = rooted
+            ? ObsPathCheck.Of(local, files)
+            : new ObsPathCheck(ObsPathState.Missing, local);
+        bool renamed = !SamePath(local, expected);
+        ObsPathCheck copy =
+            renamed && Path.IsPathFullyQualified(expected)
+                ? ObsPathCheck.Of(expected, files)
+                : null;
+
+        // A path through a junction to this install's own copy is the same file, not stale.
+        bool stale =
+            renamed
+            && !(
+                found.State == ObsPathState.Exists
+                && copy?.State == ObsPathState.Exists
+                && SamePath(found.Resolved, copy.Resolved)
+            );
+        if (found.State == ObsPathState.Exists)
         {
             return stale
                 ? new ObsFinding(
@@ -831,26 +889,90 @@ public static class ObsValidator
                 : null;
         }
 
-        bool runtime = rooted && IsUnder(local, dataDirectory);
+        if (found.State == ObsPathState.Unverifiable)
+        {
+            return new ObsFinding(
+                FileUnverifiable,
+                Warning,
+                subject,
+                "Source '"
+                    + input
+                    + "' loads "
+                    + local
+                    + ", which this session could not check. "
+                    + Unverifiable(found)
+                    + " A network logon such as SSH may not traverse a junction that the desktop session follows, so OBS may still load the file. Run obs validate in the desktop session to check it."
+            );
+        }
+
+        bool runtime =
+            rooted && (IsUnder(local, dataDirectory) || IsUnder(found.Resolved, dataDirectory));
+        string through =
+            found.Link == null
+                ? string.Empty
+                : " (checked as " + found.Resolved + " through the link " + found.Link + ")";
         string fix =
             stale
                 ? " This install expects "
                     + expected
                     + (
-                        Path.IsPathFullyQualified(expected) && exists(expected)
-                            ? ", which exists"
-                            : ", which is also missing"
+                        copy?.State == ObsPathState.Exists ? ", which exists"
+                        : copy?.State == ObsPathState.Unverifiable
+                            ? ", which this session could not check either"
+                        : ", which is also missing"
                     )
                     + ". services start rewrites the collection paths while OBS is closed."
             : runtime ? " HeroesReplay writes it under Location:DataDirectory while it spectates."
             : string.Empty;
+        if (rooted && ObsCollectionPaths.IsEphemeral(local))
+        {
+            // #330: a build ran from a git worktree, wrote its own paths, and the worktree is gone.
+            fix +=
+                " It was in a git worktree, which is removed with its branch. Fix: close OBS and run `heroesreplay services start` from a current build;"
+                + " it moves the managed collection's paths without replacing it. With OBS:StableAssets (on in dev) it first copies the OBS files to "
+                + @"%LOCALAPPDATA%\HeroesReplay\obs\assets, so removing a worktree cannot break them again.";
+        }
         return new ObsFinding(
             runtime ? RuntimeFileMissing : FileMissing,
             runtime ? Warning : Error,
             subject,
-            "Source '" + input + "' loads " + local + ", which does not exist." + fix
+            "Source '" + input + "' loads " + local + ", which does not exist" + through + "." + fix
         );
     }
+
+    /// <summary>Why <paramref name="found"/> could not be checked, naming the link on the way.</summary>
+    private static string Unverifiable(ObsPathCheck found)
+    {
+        string reason = found.Reason?.Trim();
+        string why = string.IsNullOrEmpty(reason)
+            ? string.Empty
+            : " " + reason + (reason.EndsWith('.') ? string.Empty : ".");
+        if (found.Link == null)
+        {
+            return "The file system would not say whether it exists." + why;
+        }
+
+        return (
+                found.Target == null
+                    ? "It goes through "
+                        + found.Link
+                        + ", a junction or symbolic link whose target this session cannot read."
+                    : "It goes through "
+                        + found.Link
+                        + ", a junction or symbolic link to "
+                        + found.Target
+                        + ", and "
+                        + found.Resolved
+                        + " could not be checked there."
+            ) + why;
+    }
+
+    private static bool SamePath(string left, string right) =>
+        string.Equals(
+            left?.TrimEnd(Path.DirectorySeparatorChar),
+            right?.TrimEnd(Path.DirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase
+        );
 
     private static void CheckMicrophone(
         IObsReadSession session,

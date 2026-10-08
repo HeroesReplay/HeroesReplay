@@ -29,7 +29,7 @@ internal sealed class RecordingSession
 
     /// <summary>
     /// <paramref name="claims"/> is where the recording this process starts is claimed for
-    /// <c>services stop</c> (#318). Null writes no claim.
+    /// <c>services stop</c> (#318) and the next spectate's start (#342). Null writes no claim.
     /// </summary>
     public RecordingSession(
         ILogger logger,
@@ -721,7 +721,8 @@ internal sealed class RecordingSession
 
     /// <summary>
     /// Records that this process asked OBS to record. A failed or unconfirmed start keeps the
-    /// claim: OBS may still be recording, and services stop checks it against OBS before it acts.
+    /// claim: OBS may still be recording, and services stop or the next spectate checks it against
+    /// OBS before it acts.
     /// </summary>
     private void Claim(int? replayId)
     {
@@ -732,20 +733,13 @@ internal sealed class RecordingSession
 
         try
         {
-            claims.Save(
-                new RecordingClaim
-                {
-                    ReplayId = replayId,
-                    StartedAt = now(),
-                    ProcessId = Environment.ProcessId,
-                }
-            );
+            claims.Save(RecordingClaim.ForThisProcess(replayId, now()));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(
                 e,
-                "Could not write the OBS recording claim {Path}. If spectate is killed before replay {ReplayId} ends, services stop will not find this recording.",
+                "Could not write the OBS recording claim {Path}. If spectate is killed before replay {ReplayId} ends, neither services stop nor the next spectate will find this recording.",
                 claims.FilePath,
                 replayId
             );
@@ -767,7 +761,7 @@ internal sealed class RecordingSession
         {
             logger.LogWarning(
                 e,
-                "Could not delete the OBS recording claim {Path}. services stop checks it against OBS and deletes it.",
+                "Could not delete the OBS recording claim {Path}. services stop or the next spectate checks it against OBS and deletes it.",
                 claims.FilePath
             );
         }

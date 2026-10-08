@@ -18,6 +18,7 @@ using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays;
@@ -278,7 +279,10 @@ public static class ServiceCollectionExtensions
             configuration.GetSection("Location").Get<LocationSettings>()?.DataDirectory,
             arm.IsArmed(),
             arm.FilePath
-        );
+        )
+        {
+            AssetStoreRoot = ObsAssetStore.For(ObsManagedFiles.ForThisUser()).Root,
+        };
     }
 
     public static AppSettings BindSettings(IConfiguration configuration)
@@ -510,6 +514,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<RecordingClock>()
             .AddSingleton<IGameFirewall, NetshGameFirewall>()
             .AddSingleton<BattleNetAgentReaper>()
+            .AddSingleton<OrphanRecordingOnStart>()
             .AddSingleton<IReplayOpener, MediumIntegrityReplayOpener>()
             .AddSingleton(serviceProvider => new MediaPolicyAttemptLog(
                 MediaPolicyAttemptLog.AttemptsRoot(settings),
@@ -603,8 +608,8 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// The hero statistics refresh behind YouTube title hooks. Its own Heroes Profile client and
-    /// <c>HttpClient</c> carry no retry handler, so a 429 waits for <c>Retry-After</c> instead
-    /// of being retried every second.
+    /// <c>HttpClient</c> carry no retry handler, so the refresh decides each wait itself
+    /// (<c>Retry-After</c> on a 429, at most 5 times) instead of the replay pipeline's 10 retries.
     /// </summary>
     public static IServiceCollection AddHeroStatsRefresh(this IServiceCollection services)
     {

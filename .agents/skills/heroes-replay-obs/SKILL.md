@@ -21,6 +21,7 @@ description: >
 3. **Change OBS only through HeroesReplay's own paths**, never by hand on a managed collection. Adding or renaming a source by hand makes the collection custom (`obs.collection_custom`). A release still merges template changes into a custom collection where the operator only added scenes, sources, filters, or settings (#307); a changed or removed managed value, or a conflict, stops template updates until someone runs `obs apply --backup` with OBS closed.
    - A template change (`obs/Default.json`) reaches a machine through `services start` while OBS is closed, the spectator's live swap at `BeginSession`, or a release's `update install-obs`.
    - Prove it on ASA-SERVER through that path, then check it with `obs validate` and `obs_screenshot`.
+   - On ASA-SERVER (`OBS:StableAssets`, on in dev) the collection points at a verified copy of the build's OBS files in `%LOCALAPPDATA%\HeroesReplay\obs\assets\<bundle-hash>\`, never at a git worktree, so removing a worktree leaves no missing images (#330). An `obs.file_missing` finding for a path in a removed worktree names the fix: close OBS, then run `services start` from a current build. That is a path-only update. Prod keeps `app\obs` (`docs/obs-operations.md`).
 
 ## Which commands change OBS
 
@@ -34,8 +35,8 @@ description: >
 | `obs restore` | Writes a backup over the live collection, only while OBS is closed (it refuses otherwise). The backup `obs apply` took also puts its record back. | Dev. Live: only with the owner, in a scheduled downtime. |
 | `obs arm` / `obs disarm` | Write or delete the machine's ingest arm, `%LOCALAPPDATA%\HeroesReplay\stream-armed`. OBS itself is not touched. | Live: never without the owner. Dev: only for a stream proof. |
 | `services start` | Updates the collection's paths, replaces a managed collection with a new template, or merges a new template into a custom one where the operator only added, only while OBS is closed | Dev. Live: only in a scheduled downtime. |
-| The spectator (`spectate`, `services start` roles) | Starts OBS when needed, changes scenes, starts and stops the recording, starts the stream when allowed, and live-swaps a new template between replays | Dev for proofs. Live: it is the production stack. |
-| `services stop` | Never stops a stream. It checks that OBS is closed or not streaming, and fails otherwise. Then it sends `StopRecord` for a recording spectate claimed (`obs-recording.json`) and left running, when the recording's duration matches the claim (#318). | Dev. Live: only in a scheduled downtime. |
+| The spectator (`spectate`, `services start` roles) | Starts OBS when needed, changes scenes, starts and stops the recording, starts the stream when allowed, and live-swaps a new template between replays. When it starts, it sends `StopRecord` for a recording a dead spectate claimed and left running, as `services stop` does (#342). | Dev for proofs. Live: it is the production stack. |
+| `services stop` | Never stops a stream. It checks that OBS is closed or not streaming, and fails otherwise. Then it sends `StopRecord` for a recording spectate claimed (`obs-recording.json`) and left running, when the claiming spectate is dead (pid and start time) and the recording's duration matches the claim (#318). | Dev. Live: only in a scheduled downtime. |
 | `update install-obs`, `update migrate-stream-arm` | Write `%APPDATA%\obs-studio` and `%LOCALAPPDATA%\HeroesReplay` | Only from `apply-release.ps1`, never by hand on a dev box |
 | obs-mcp (royshil) | Everything, including `StartStream` and `RemoveInput`. It returns the stream key. | Dev only, registered per machine. Never in the repo, the release zip, or the live box. |
 
@@ -65,7 +66,8 @@ heroesreplay obs inspect --output json
 ```
 
 - Both are read-only.
-- Over SSH, `C:\heroesreplay` is a junction that a network logon cannot traverse. Every collection asset under `C:\heroesreplay\app\obs` therefore reports `obs.file_missing`, and every data file reports `obs.runtime_file_missing`, even though OBS (in the interactive session) loads them. Check such a path through `C:\SaltySadism\...` before believing it.
+- Over SSH, `C:\heroesreplay` is a junction to `C:\SaltySadism` that a network logon cannot traverse ("untrusted mount point"). Since #335, `obs validate` reads the junction itself without following it and checks the same file under its target, so the collection assets and data files that exist pass, and `obs.file_missing` or `obs.runtime_file_missing` there means the file is missing at the target too (the message names the path it checked). A build before #335 reports every one of them as missing; check such a path through `C:\SaltySadism\...` before believing it.
+- `obs.file_unverifiable` (a warning) means this session could not check the path at all: a junction or symbolic link on the way that it can neither traverse nor read, named in the message. OBS, in the desktop session, may still load the file. Check it from the desktop session or through the link's target.
 - Every other finding is real.
 
 ## Secrets and the profile

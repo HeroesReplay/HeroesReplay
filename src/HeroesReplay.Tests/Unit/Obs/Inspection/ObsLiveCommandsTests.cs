@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using HeroesReplay.CLI.Commands.Obs;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs.Inspection;
@@ -22,7 +23,7 @@ public class ObsLiveCommandsTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(data, recursive: true);
+        TestTemp.Delete(data);
     }
 
     [Fact]

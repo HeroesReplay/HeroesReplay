@@ -15,7 +15,7 @@ public class ObsStreamArmTests
 
         Assert.Equal(
             Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), // isolation: path text only
                 "HeroesReplay",
                 "stream-armed"
             ),

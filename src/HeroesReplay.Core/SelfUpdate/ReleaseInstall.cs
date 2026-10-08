@@ -226,6 +226,7 @@ public static class ReleaseInstall
                     PreviousTemplatePath = previousTemplate,
                     Runtime = request.Runtime,
                     UtcNow = request.UtcNow,
+                    StableAssets = request.StableAssets,
                 }
             );
             notes.Add("OBS collection: " + collection.Message);
@@ -345,4 +346,7 @@ public sealed record ReleaseObsInstall
     public ObsRuntimeValues Runtime { get; init; }
 
     public DateTime UtcNow { get; init; } = DateTime.UtcNow;
+
+    /// <summary>The new install's <c>OBS:StableAssets</c> (<see cref="ObsCollectionUpdate.StableAssets"/>).</summary>
+    public bool StableAssets { get; init; }
 }

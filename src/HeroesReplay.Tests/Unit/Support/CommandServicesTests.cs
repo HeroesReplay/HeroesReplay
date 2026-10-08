@@ -12,6 +12,7 @@ using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.GameClient.Firewall;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Spectating.Reports;
 using HeroesReplay.Core.Twitch;
@@ -132,7 +133,12 @@ public class CommandServicesTests
             ),
             "spectate heroesprofile" => (
                 new ServiceCollection().AddSpectateServices(token, typeof(ReplayCacheProvider)),
-                new[] { typeof(BattleNetAgentReaper), typeof(IEngine) }
+                new[]
+                {
+                    typeof(BattleNetAgentReaper),
+                    typeof(OrphanRecordingOnStart),
+                    typeof(IEngine),
+                }
             ),
             // An existing file, so the provider queues that path and reads no replay folder.
             "spectate file" => (
@@ -145,7 +151,12 @@ public class CommandServicesTests
                         PlayOnce = true,
                     }
                 ),
-                new[] { typeof(BattleNetAgentReaper), typeof(IEngine) }
+                new[]
+                {
+                    typeof(BattleNetAgentReaper),
+                    typeof(OrphanRecordingOnStart),
+                    typeof(IEngine),
+                }
             ),
             _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
         };
