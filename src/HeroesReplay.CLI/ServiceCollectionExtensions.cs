@@ -537,6 +537,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<OBSWebsocket>()
             .AddSingleton<IObsController, ObsController>()
             .AddSingleton<IReleaseUpdateGate, ReleaseUpdateGate>()
+            .AddSingleton<SpectateMemoryLog>()
             .AddSingleton<IEngine, Engine>()
             .AddSingleton<SpectatorStatusStore>()
             .AddConnectivityServices()

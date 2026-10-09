@@ -185,10 +185,51 @@ public class SpectateMatchProgressTests
         }
     }
 
+    [Fact]
+    public async Task EachSessionEnd_LogsSpectatesOwnMemory()
+    {
+        string root = TempDir();
+        var clock = new FakeClock(Start);
+        try
+        {
+            using ServiceHeartbeat heartbeat = StartHeartbeat(root, clock);
+            var game = new ScriptedGame(
+                (MatchOutcome.VerifiedCompleted, true),
+                (MatchOutcome.LoadTimedOut, false)
+            );
+            var ended = new List<string>();
+            var reads = new Queue<long>(new long[] { 484, 999 });
+            var logger = new SessionLogger(ended);
+            var memory = new SpectateMemoryLog(
+                new ServiceHealthSettings(),
+                () => new SpectateMemorySample { PrivateBytes = reads.Dequeue() << 20 },
+                logger
+            );
+
+            await Run(root, game, heartbeat, memory, 101, 102);
+
+            Assert.Equal(2, ended.Count);
+            Assert.Contains("session 1 (replay 101, VerifiedCompleted): 484 MB private", ended[0]);
+            Assert.Contains("session 2 (replay 102, LoadTimedOut): 999 MB private", ended[1]);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static Task Run(
+        string root,
+        ScriptedGame game,
+        ServiceHeartbeat heartbeat,
+        params int[] replayIds
+    ) => Run(root, game, heartbeat, null, replayIds);
+
     private static async Task Run(
         string root,
         ScriptedGame game,
         ServiceHeartbeat heartbeat,
+        SpectateMemoryLog memory,
         params int[] replayIds
     )
     {
@@ -209,10 +250,27 @@ public class SpectateMatchProgressTests
             new IdleResume(),
             new StubLoader(),
             new NoRelease(),
-            heartbeat
+            heartbeat,
+            memory
         );
 
         Assert.True(await engine.RunAsync());
+    }
+
+    private sealed class SessionLogger(List<string> lines) : Microsoft.Extensions.Logging.ILogger
+    {
+        public IDisposable BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            Microsoft.Extensions.Logging.EventId eventId,
+            TState state,
+            Exception exception,
+            Func<TState, Exception, string> formatter
+        ) => lines.Add(formatter(state, exception));
     }
 
     private static ServiceHeartbeat StartHeartbeat(string root, FakeClock clock)

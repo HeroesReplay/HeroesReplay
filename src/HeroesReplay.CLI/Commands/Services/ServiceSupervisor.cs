@@ -985,6 +985,20 @@ public static class ServiceSupervisor
         {
             output.WriteLine($"  WARN {warning}");
         }
+
+        // Above the memory or commit limit only, whoever owns them (#399). Report only.
+        IReadOnlyList<MachineProcessMemory> top =
+            machine.TopConsumers ?? Array.Empty<MachineProcessMemory>();
+        if (top.Count > 0)
+        {
+            output.WriteLine(
+                $"  Top {top.Count} processes by commit (private bytes), report only:"
+            );
+            foreach (MachineProcessMemory process in top)
+            {
+                output.WriteLine($"    {MachineHealth.DescribeProcess(process)}");
+            }
+        }
     }
 
     /// <summary>"Probe: Heroes Profile API ok, checked 2m ago." (#305)</summary>
