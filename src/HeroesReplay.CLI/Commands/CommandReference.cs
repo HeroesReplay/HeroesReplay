@@ -8,6 +8,7 @@ using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
 using HeroesReplay.CLI.Commands.Deps;
 using HeroesReplay.CLI.Commands.Obs;
+using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
@@ -319,7 +320,7 @@ public static class CommandReference
         new(
             "services stop",
             LiveAsk,
-            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. A `spectate` from this install that `services.json` does not list (a hand-started `spectate file`, found by its command line) is stopped like a role but never recorded, and with no services recorded the game is closed too; a spectate from another install is never touched, and the game is left to it (#381). Then closes each `HeroesSwitcher_x64` that has no Heroes child (`CloseMainWindow`, then a kill after 5 s) and leaves one whose Heroes child still runs; the `Heroes of the Storm:` line names each switcher (#359). Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.",
+            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. A role process from this install that `services.json` does not list, found by its command line, is stopped like a role but never recorded: a hand-started `spectate file` (#381), or any role (`spectate`, `twitch connect`, `heroesprofile download`, `youtube uploader`) running next to a dead pid in `services.json` (#397). With no services recorded the game is closed too; a role from another install is never touched, and while its spectate runs the game is left to it. Then closes each `HeroesSwitcher_x64` that has no Heroes child (`CloseMainWindow`, then a kill after 5 s) and leaves one whose Heroes child still runs; the `Heroes of the Storm:` line names each switcher (#359). Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.",
             "0 when every role and the supervisor exited, the game and every `HeroesSwitcher_x64` without a Heroes child closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked."
         ),
         new(
@@ -345,9 +346,13 @@ public static class CommandReference
         new(
             "services supervise",
             "Roles recorded by `services start`; no other supervisor in any session.",
-            "Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`).",
+            "Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397).",
             "Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised). 1 when a supervisor already runs.",
-            [ServiceHealthCodes.RestartBudgetExhausted]
+            [
+                ServiceHealthCodes.RestartBudgetExhausted,
+                ServiceSupervision.RoleAdoptedCode,
+                ServiceSupervision.UntrackedRoleKilledCode,
+            ]
         ),
         new(
             "services install-task",

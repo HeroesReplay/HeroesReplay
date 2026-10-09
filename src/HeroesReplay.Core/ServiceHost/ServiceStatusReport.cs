@@ -146,6 +146,13 @@ public sealed record ServiceRoleRestartStatus
     public long BudgetWindowSeconds { get; init; }
     public bool BudgetExhausted { get; init; }
     public DateTimeOffset? ExhaustedAt { get; init; }
+
+    /// <summary>
+    /// Times a restart took over a live, untracked process of the role instead of starting one
+    /// (#397), and the last time it did.
+    /// </summary>
+    public int Adopted { get; init; }
+    public DateTimeOffset? LastAdoptedAt { get; init; }
 }
 
 /// <summary>The supervisor next to the roles: whether it runs, and its rules.</summary>

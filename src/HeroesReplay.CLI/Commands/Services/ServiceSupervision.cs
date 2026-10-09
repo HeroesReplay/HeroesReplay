@@ -23,6 +23,18 @@ namespace HeroesReplay.CLI.Commands.Services;
 /// </summary>
 public sealed class ServiceSupervision
 {
+    /// <summary>
+    /// Supervisor log: a due restart found the role already running from this install, untracked
+    /// (a child whose launcher gave up on it), and took that process over (#397).
+    /// </summary>
+    public const string RoleAdoptedCode = "service.role_adopted";
+
+    /// <summary>
+    /// Supervisor log: an untracked process of the role, with no heartbeat the supervisor can
+    /// watch, was killed before the role restarted, so the role never runs twice (#397).
+    /// </summary>
+    public const string UntrackedRoleKilledCode = "service.untracked_role_killed";
+
     private readonly Dictionary<string, ServiceRoleRestarts> ledgers = new(
         StringComparer.OrdinalIgnoreCase
     );
@@ -48,11 +60,31 @@ public sealed class ServiceSupervision
     public Func<bool> StopRequested { get; init; }
 
     /// <summary>
-    /// Starts a role again. The callback sees the record as soon as the process has a pid, so a
-    /// stop that arrives during the ready wait can still find it in the lock.
+    /// Starts a role again. The request's callback sees the record as soon as the process has a
+    /// pid, so a stop that arrives during the ready wait can still find it in the lock.
     /// </summary>
-    public Func<string, Action<ServiceProcessRecord>, ServiceLaunch> Launch { get; init; }
+    public Func<ServiceLaunchRequest, ServiceLaunch> Launch { get; init; }
     public Action<int> Kill { get; init; }
+
+    /// <summary>
+    /// The live processes of a role that run this install's command but are not in
+    /// <c>services.json</c>, each with the heartbeat it writes (#397). The second argument is
+    /// every pid the lock tracks. A restart takes one over instead of starting a second process,
+    /// and stops the ones it cannot watch. Null finds none.
+    /// </summary>
+    public Func<
+        string,
+        IReadOnlyCollection<int>,
+        IReadOnlyList<UntrackedRoleProcess>
+    > FindUntracked { get; init; }
+
+    /// <summary>
+    /// The commit charge, percent of the commit limit (<c>MachineHealth</c>). Above
+    /// <see cref="ServiceRestartSettings.SlowReadyCommitPercent"/> a restart waits
+    /// <see cref="ServiceRestartSettings.SlowReadyWait"/> for the role to get ready (#397). Null
+    /// reads none.
+    /// </summary>
+    public Func<double?> CommitPercent { get; init; }
 
     /// <summary>Closes Heroes of the Storm before spectate starts again.</summary>
     public Func<bool> CloseGame { get; init; }
@@ -275,6 +307,13 @@ public sealed class ServiceSupervision
     private bool Restart(string role, ServiceProcessRecord previous, ServiceRoleRestarts ledger)
     {
         DateTimeOffset at = Time.GetUtcNow();
+        // A process of this role may already run untracked: a child whose launcher gave up on
+        // it, as on the stream PC on 2026-10-09 (#397). Take it over instead of starting a second.
+        if (AdoptUntracked(role, ledger, at))
+        {
+            return true;
+        }
+
         Logger.LogInformation(
             "Restarting {Role} ({Reason}): restart {Attempt} of {Budget} in {Window}.",
             role,
@@ -289,14 +328,18 @@ public sealed class ServiceSupervision
         }
 
         DeleteHeartbeat?.Invoke(previous);
-        // The ready wait can take 45 s. Written now, the file stays fresh through it for a
-        // session that cannot see the mutex (ServiceSupervisorFile.FreshFor).
+        TimeSpan readyWait = ReadyWait(role);
+        // The ready wait can take minutes. Written now and on each pause of the wait, the file
+        // stays fresh through it for a session that cannot see the mutex
+        // (ServiceSupervisorFile.FreshFor).
         Save(force: true);
         ServiceLaunch launch;
         try
         {
             launch =
-                Launch?.Invoke(role, Record)
+                Launch?.Invoke(
+                    new ServiceLaunchRequest(role, readyWait, Record, () => Save(force: false))
+                )
                 ?? new ServiceLaunch(null, false, false, "No launcher was given.");
         }
         catch (Exception e)
@@ -333,15 +376,194 @@ public sealed class ServiceSupervision
                 ? $"{role} did not get ready."
                 : launch.Failure;
             ServiceRestartPolicy.Restarted(ledger, at, launch.Record?.Nonce, failure);
-            Logger.LogWarning(
-                "Restart of {Role} failed: {Failure} It counts against the budget.",
-                role,
-                failure
-            );
+            if (launch.StillRunning && launch.Record != null)
+            {
+                // It would not stop: services.json keeps it, so it is never left unsupervised.
+                Record(launch.Record);
+                Logger.LogWarning(
+                    "Restart of {Role} failed: {Failure} Pid {Pid} could not be stopped, so services.json keeps it and the supervisor watches it like any role. It counts against the budget.",
+                    role,
+                    failure,
+                    launch.Record.Pid
+                );
+            }
+            else
+            {
+                // services.json keeps the role without a pid, never a dead one (#397).
+                RecordDown(role, previous, ledger.Nonce);
+                Logger.LogWarning(
+                    "Restart of {Role} failed: {Failure} No process of it was left running. It counts against the budget.",
+                    role,
+                    failure
+                );
+            }
         }
 
         return true;
     }
+
+    /// <summary>
+    /// Before a restart starts <paramref name="role"/>: a live process of it from this install
+    /// that <c>services.json</c> does not track is taken over when it writes a heartbeat the
+    /// supervisor can watch, and killed when it does not, so the role never runs twice and no
+    /// role process runs unsupervised (#397). True when one was taken over; nothing is started
+    /// then, so no budget is used.
+    /// </summary>
+    private bool AdoptUntracked(string role, ServiceRoleRestarts ledger, DateTimeOffset at)
+    {
+        if (FindUntracked == null)
+        {
+            return false;
+        }
+
+        IReadOnlyList<UntrackedRoleProcess> found;
+        try
+        {
+            found = FindUntracked(role, TrackedPids()) ?? Array.Empty<UntrackedRoleProcess>();
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning(
+                "Could not look for a {Role} process services.json does not track: {Message}",
+                role,
+                e.Message
+            );
+            return false;
+        }
+
+        UntrackedRoleProcess adopted = found
+            .Where(item => item?.Process != null && item.Adoptable)
+            .OrderByDescending(item => item.Heartbeat.HeartbeatAt ?? DateTimeOffset.MinValue)
+            .FirstOrDefault();
+        foreach (UntrackedRoleProcess other in found)
+        {
+            if (other?.Process == null || ReferenceEquals(other, adopted))
+            {
+                continue;
+            }
+
+            Logger.LogWarning(
+                "{Role} pid {Pid} runs this install's `{Arguments}` (started {StartedAt:O}) but services.json does not track it, and {Why}. Killing it before the restart, so the role never runs twice [{Code}].",
+                role,
+                other.Process.Pid,
+                other.Process.Arguments,
+                other.Process.StartedAt,
+                adopted == null
+                    ? "it writes no heartbeat the supervisor can watch"
+                    : $"pid {adopted.Process.Pid} is the one taken over",
+                UntrackedRoleKilledCode
+            );
+            KillUntracked(role, other.Process.Pid);
+        }
+
+        if (adopted == null)
+        {
+            return false;
+        }
+
+        ServiceProcessRecord record = adopted.Adopt();
+        Record(record);
+        ServiceRestartPolicy.Adopted(ledger, at, record.Nonce, record.Pid);
+        string age = adopted.Heartbeat.HeartbeatAt is DateTimeOffset beat
+            ? ServiceHealthClassifier.Describe(at - beat) + " ago"
+            : "never";
+        Logger.LogWarning(
+            "{Role} pid {Pid} already runs this install's `{Arguments}` (started {StartedAt:O}, last heartbeat {Age}), but services.json did not track it. Took it over instead of starting a second process [{Code}]. No restart budget was used.",
+            role,
+            record.Pid,
+            record.Arguments,
+            record.StartedAt,
+            age,
+            RoleAdoptedCode
+        );
+        return true;
+    }
+
+    private void KillUntracked(string role, int pid)
+    {
+        try
+        {
+            if (Kill == null)
+            {
+                throw new InvalidOperationException("No kill step was given.");
+            }
+
+            Kill(pid);
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning("Could not kill {Role} pid {Pid}: {Message}", role, pid, e.Message);
+        }
+    }
+
+    /// <summary>Every pid the lock tracks, and this supervisor's own.</summary>
+    private IReadOnlyCollection<int> TrackedPids()
+    {
+        var pids = new HashSet<int> { Pid };
+        foreach (
+            ServiceProcessRecord record in ServiceLockStore.TryLoad(LockPath)?.Processes
+                ?? new List<ServiceProcessRecord>()
+        )
+        {
+            if (record?.Pid > 0)
+            {
+                pids.Add(record.Pid);
+            }
+        }
+
+        return pids;
+    }
+
+    /// <summary>
+    /// The ready wait for this restart: <see cref="ServiceRestartSettings.ReadyWait"/>, or the
+    /// longer <see cref="ServiceRestartSettings.SlowReadyWait"/> while the commit charge is above
+    /// <see cref="ServiceRestartSettings.SlowReadyCommitPercent"/>, logged (#397).
+    /// </summary>
+    private TimeSpan ReadyWait(string role)
+    {
+        double? commit = null;
+        try
+        {
+            commit = CommitPercent?.Invoke();
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning("Could not read the commit charge: {Message}", e.Message);
+        }
+
+        TimeSpan wait = Settings.ReadyWaitFor(commit);
+        if (wait > Settings.ReadyWait)
+        {
+            Logger.LogWarning(
+                "The commit charge is {Commit:0.#}% of the limit, above {Limit:0.#}%, so this restart waits up to {Wait} for {Role} to get ready instead of {Normal}. A slow start on a machine short of memory is not a failed one.",
+                commit,
+                Settings.SlowReadyCommitPercent,
+                ServiceHealthClassifier.Describe(wait),
+                role,
+                ServiceHealthClassifier.Describe(Settings.ReadyWait)
+            );
+        }
+
+        return wait;
+    }
+
+    /// <summary>
+    /// After a restart that left no process: the role stays in the lock without a pid, so
+    /// <c>services.json</c> never names a dead process as the role's (#397), and the role is
+    /// still expected, failed, and restarted after its backoff.
+    /// </summary>
+    private void RecordDown(string role, ServiceProcessRecord previous, string nonce) =>
+        Record(
+            new ServiceProcessRecord
+            {
+                Name = previous?.Name ?? role,
+                Pid = 0,
+                Arguments = previous?.Arguments ?? ServiceProcessPlan.ArgumentsFor(role),
+                ExecutablePath = previous?.ExecutablePath ?? ExecutablePath,
+                Nonce = nonce,
+                Version = previous?.Version ?? Version,
+            }
+        );
 
     private void KillStale(string role, ServiceProcessRecord record, ServiceRoleHealth health)
     {
@@ -503,10 +725,14 @@ public sealed class ServiceSupervision
         }
     }
 
+    /// <summary>
+    /// The role's record. One without a pid is a role whose last restart left no process
+    /// (<see cref="RecordDown"/>): still supervised, and failed.
+    /// </summary>
     private static ServiceProcessRecord Find(ServiceLock snapshot, string role) =>
         snapshot?.Processes?.FirstOrDefault(record =>
             record != null
-            && record.Pid > 0
+            && record.Pid >= 0
             && string.Equals(record.Name, role, StringComparison.OrdinalIgnoreCase)
         );
 }

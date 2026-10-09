@@ -310,6 +310,27 @@ public class ServiceEnsureTests
     }
 
     [Fact]
+    public void AFailedStartWhoseChildWouldNotStop_KeepsItInServicesJson()
+    {
+        // #397: a role process that is still alive is never left untracked.
+        using var stack = new FakeStack(("download", 100));
+        stack.Crash(100);
+        stack.StubbornRole = "download";
+
+        ServiceEnsureReport report = stack.Run(new[] { "download" });
+
+        Assert.Equal(ServiceEnsureCodes.StartFailed, report.Code);
+        int child = stack.Launches.Single().Pid;
+        Assert.Equal(
+            child,
+            ServiceLockStore
+                .TryLoad(stack.LockPath)
+                .Processes.Single(record => record.Name == "download")
+                .Pid
+        );
+    }
+
+    [Fact]
     public void AStopDuringAStart_LeavesTheRecordForServicesStop()
     {
         using var stack = new FakeStack(("download", 100));
@@ -416,6 +437,9 @@ public class ServiceEnsureTests
         public string LockPath { get; }
         public bool StopRequested { get; set; }
         public string FailRole { get; set; }
+
+        /// <summary>This role does not get ready, and its child would not stop.</summary>
+        public string StubbornRole { get; set; }
         public string CancelRole { get; set; }
         public ServiceSupervisorState Supervisor { get; set; }
         public ServiceSupervisorLiveness SupervisorRunning { get; set; } =
@@ -475,6 +499,18 @@ public class ServiceEnsureTests
             {
                 // ServiceSupervisor.Restart stops a role that did not get ready.
                 return new ServiceLaunch(record, false, false, $"{role} failed: ready timed out.");
+            }
+
+            if (role == StubbornRole)
+            {
+                alive.Add(record.Pid);
+                return new ServiceLaunch(
+                    record,
+                    false,
+                    false,
+                    $"{role} failed: ready timed out.",
+                    StillRunning: true
+                );
             }
 
             alive.Add(record.Pid);

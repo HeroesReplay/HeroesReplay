@@ -57,6 +57,14 @@ public sealed class ServiceRoleRestarts
     public DateTimeOffset? NextRestartAt { get; set; }
     public bool Exhausted { get; set; }
     public DateTimeOffset? ExhaustedAt { get; set; }
+
+    /// <summary>
+    /// Times a restart found this role already running from this install, untracked, and took
+    /// that process over instead of starting a second one (#397). Not counted in the budget.
+    /// </summary>
+    public int Adopted { get; set; }
+    public DateTimeOffset? LastAdoptedAt { get; set; }
+    public int? LastAdoptedPid { get; set; }
 }
 
 /// <summary>
@@ -190,6 +198,31 @@ public static class ServiceRestartPolicy
             ledger.DownReason = null;
             ledger.DownCause = null;
         }
+    }
+
+    /// <summary>
+    /// A due restart found the role already running, untracked, and took over pid
+    /// <paramref name="pid"/> instead of starting it (#397). The role is up, so this is a
+    /// success: it clears the down state and the last failure. Nothing was started, so it uses
+    /// no budget.
+    /// </summary>
+    public static void Adopted(ServiceRoleRestarts ledger, DateTimeOffset at, string nonce, int pid)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        ledger.Adopted++;
+        ledger.LastAdoptedAt = at;
+        ledger.LastAdoptedPid = pid;
+        ledger.LastFailure = null;
+        if (!string.IsNullOrWhiteSpace(nonce))
+        {
+            ledger.Nonce = nonce;
+        }
+
+        ledger.DownSince = null;
+        ledger.DownReason = null;
+        ledger.DownCause = null;
+        ledger.StaleSince = null;
+        ledger.NextRestartAt = null;
     }
 
     private static ServiceRestartAction Exhaust(ServiceRoleRestarts ledger, DateTimeOffset now)

@@ -38,6 +38,51 @@ public class ServiceHealthClassifierTests
     }
 
     [Fact]
+    public void ARecordWithoutAPid_IsFailed_AndStoppedOnceAStopIsRequested()
+    {
+        // #397: the supervisor keeps a role whose restart left no process without a pid.
+        var lockFile = new ServiceLock
+        {
+            StartedAt = Now,
+            Processes = new List<ServiceProcessRecord>
+            {
+                new()
+                {
+                    Name = "spectate",
+                    Pid = 0,
+                    Arguments = "spectate heroesprofile",
+                    Nonce = "n1",
+                },
+            },
+        };
+
+        ServiceStatusReport report = ServiceHealthClassifier.Build(
+            lockFile,
+            pid => "heroesreplay",
+            _ => null,
+            _ => null,
+            stopRequested: false,
+            Now,
+            Defaults
+        );
+        ServiceRoleHealth spectate = report.Roles.Single(role => role.Role == "spectate");
+        Assert.Equal(ServiceRoleState.Failed, spectate.State);
+        Assert.True(spectate.Expected);
+        Assert.False(spectate.Running);
+        Assert.Null(spectate.Pid);
+        Assert.Equal(
+            "No spectate process is running: its last restart did not leave one.",
+            spectate.Cause
+        );
+        Assert.Equal(1, report.ExitCode);
+
+        ServiceRoleHealth stopping = ServiceHealthClassifier
+            .Build(lockFile, pid => "heroesreplay", _ => null, _ => null, true, Now, Defaults)
+            .Roles.Single(role => role.Role == "spectate");
+        Assert.Equal(ServiceRoleState.Stopped, stopping.State);
+    }
+
+    [Fact]
     public void FreshHeartbeatAndRecentWork_IsReady()
     {
         ServiceRoleHealth health = Classify(

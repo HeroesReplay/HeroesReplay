@@ -12,7 +12,7 @@ namespace HeroesReplay.Tests.Unit.ServiceHost;
 /// this install, and which it must leave alone.
 /// </summary>
 [Trait(TestCategories.Category, TestCategories.Unit)]
-public class UnrecordedSpectatesTests
+public class UnrecordedRolesTests
 {
     private const string Install =
         @"C:\heroesreplay\HeroesReplay\src\HeroesReplay.CLI\bin\Release\heroesreplay.exe";
@@ -35,7 +35,7 @@ public class UnrecordedSpectatesTests
             [103] = "heroesreplay spectate file",
         };
 
-        UnrecordedSpectates found = UnrecordedSpectates.Find(
+        UnrecordedRoles found = UnrecordedRoles.Find(
             table,
             pid => lines.GetValueOrDefault(pid),
             Install,
@@ -76,7 +76,7 @@ public class UnrecordedSpectatesTests
             [109] = "dotnet heroesreplay.dll spectate file",
         };
 
-        UnrecordedSpectates found = UnrecordedSpectates.Find(
+        UnrecordedRoles found = UnrecordedRoles.Find(
             table,
             pid => lines.GetValueOrDefault(pid),
             Install,
@@ -84,16 +84,70 @@ public class UnrecordedSpectatesTests
             recordedPids: new[] { 104 }
         );
 
-        // 100 is the stop itself, 104 is recorded, 105 and 106 are not spectate, 107 and 109 are
+        // 100 is the stop itself, 104 is recorded, 105 and 106 are not roles, 107 and 109 are
         // not heroesreplay, and 108's command line could not be read.
         Assert.Empty(found.ThisInstall);
         Assert.Empty(found.OtherInstalls);
     }
 
     [Fact]
+    public void Find_CountsEveryRoleByItsExactCommand_NotOnlySpectate()
+    {
+        // #397: the stream PC's services.json named a dead pid while the role ran untracked.
+        var table = new[]
+        {
+            Entry(201, "heroesreplay.exe", Install),
+            Entry(202, "heroesreplay.exe", Install),
+            Entry(203, "heroesreplay.exe", Install),
+            Entry(204, "heroesreplay.exe", Install),
+            Entry(205, "heroesreplay.exe", OtherInstall),
+            Entry(206, "heroesreplay.exe", OtherInstall),
+        };
+        var lines = new Dictionary<int, string>
+        {
+            [201] = $"\"{Install}\" twitch connect",
+            [202] = $"\"{Install}\" HeroesProfile Download",
+            [203] = $"\"{Install}\" youtube uploader",
+            [204] = $"\"{Install}\" heroesprofile download --once",
+            [205] = $"\"{OtherInstall}\" heroesprofile download",
+            [206] = $"\"{OtherInstall}\" spectate heroesprofile",
+        };
+
+        UnrecordedRoles found = UnrecordedRoles.Find(
+            table,
+            pid => lines.GetValueOrDefault(pid),
+            Install,
+            selfPid: 1,
+            recordedPids: Array.Empty<int>()
+        );
+
+        Assert.Equal(
+            new[] { ("twitch", 201), ("download", 202), ("youtube", 203) },
+            found.ThisInstall.Select(record => (record.Name, record.Pid))
+        );
+        // Another install's roles are reported, never stopped. Only its spectate keeps the game.
+        Assert.Equal(
+            new[] { ("download", 205), ("spectate", 206) },
+            found.OtherInstalls.Select(record => (record.Name, record.Pid))
+        );
+        Assert.True(found.OtherInstallSpectates);
+        Assert.False(
+            UnrecordedRoles
+                .Find(
+                    new[] { Entry(205, "heroesreplay.exe", OtherInstall) },
+                    pid => lines.GetValueOrDefault(pid),
+                    Install,
+                    selfPid: 1,
+                    recordedPids: null
+                )
+                .OtherInstallSpectates
+        );
+    }
+
+    [Fact]
     public void Find_ComparesTheInstallPathCaseInsensitively()
     {
-        UnrecordedSpectates found = UnrecordedSpectates.Find(
+        UnrecordedRoles found = UnrecordedRoles.Find(
             new[] { Entry(110, "HEROESREPLAY.EXE", Install.ToUpperInvariant()) },
             _ => "heroesreplay.exe Spectate file",
             Install,
