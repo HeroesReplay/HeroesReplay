@@ -13,6 +13,7 @@ using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Status;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -1822,57 +1823,64 @@ public class ObsDesiredStateTests
     }
 
     [Fact]
-    public void EnsureIdentified_OwnLaunch_ClearsStaleSentinelsFirst()
+    public void EnsureIdentified_OwnLaunch_GoesThroughTheDetachedLauncher()
     {
+        // #409: spectate's own launch is the shared detached launch: inside the gate, after the
+        // stale crash sentinel, through cmd /c start, and spectate owns the new obs64.
         string directory = NewSentinelDirectory();
         try
         {
             string stale = Path.Combine(directory, "run_81b110f2-0000-0000-0000-000000000000");
             File.WriteAllText(stale, "");
+            string gate = LaunchGateProbe.NewName();
+            var table = new FakeProcessTable();
+            var starter = new FakeProcessStarter();
+            bool gateHeld = false;
+            bool sentinelLeft = true;
+            DateTimeOffset launchedAt = new(2026, 10, 7, 14, 4, 56, TimeSpan.Zero);
+            starter.OnRun = start =>
+            {
+                gateHeld = LaunchGateProbe.HeldElsewhere(gate);
+                sentinelLeft = File.Exists(stale);
+                table.Add(
+                    FakeProcessTable.Entry(
+                        7001,
+                        FakeProcessStarter.CmdPid,
+                        FakeProcessTable.Obs,
+                        launchedAt.AddSeconds(1)
+                    )
+                );
+                return new ProcessRun(FakeProcessStarter.CmdPid, true, 0);
+            };
+            var launcher = new ObsLauncher(
+                starter,
+                table,
+                new ObsCrashSentinel(directory, table.HasObs, NullLogger.Instance),
+                NullLogger.Instance
+            )
+            {
+                GateName = gate,
+                ExecutableExists = _ => true,
+                Now = () => launchedAt,
+                Wait = _ => { },
+            };
+            var process = new WindowsObsProcess(launcher, table, _ => true, table.HasObs);
             var socket = new FakeSession { IdentifyOnConnect = true };
-            var process = new FakeProcess { Exists = true, StartSucceeds = true };
-            bool sentinelAtStart = true;
-            process.OnStart = () => sentinelAtStart = File.Exists(stale);
-            StartupHarness harness = OpenStartup(
-                socket,
-                process,
-                TimeSpan.FromSeconds(60),
-                new ObsCrashSentinel(directory, () => process.Running, NullLogger.Instance)
-            );
+            StartupHarness harness = OpenStartup(socket, process, TimeSpan.FromSeconds(60));
 
             harness.Coordinator.EnsureIdentified();
 
-            Assert.Equal(1, process.LaunchCalls);
-            Assert.False(sentinelAtStart);
-            Assert.False(File.Exists(stale));
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void EnsureIdentified_ObsAlreadyRunning_LeavesTheSentinel()
-    {
-        string directory = NewSentinelDirectory();
-        try
-        {
-            string live = Path.Combine(directory, "run_b0c325dc-0000-0000-0000-000000000000");
-            File.WriteAllText(live, "");
-            var socket = new FakeSession { IdentifyOnConnect = true };
-            var process = new FakeProcess { Exists = true, Running = true };
-            StartupHarness harness = OpenStartup(
-                socket,
-                process,
-                TimeSpan.FromSeconds(60),
-                new ObsCrashSentinel(directory, () => process.Running, NullLogger.Instance)
+            ProcessStartInfo start = Assert.Single(starter.Starts);
+            Assert.Equal(Path.Combine(Environment.SystemDirectory, "cmd.exe"), start.FileName);
+            Assert.StartsWith("/d /c start \"\" /D ", start.Arguments);
+            Assert.EndsWith(
+                "obs64.exe\" --profile \"HeroesReplay\" --collection \"HeroesReplay\"",
+                start.Arguments
             );
-
-            harness.Coordinator.EnsureIdentified();
-
-            Assert.Equal(0, process.LaunchCalls);
-            Assert.True(File.Exists(live));
+            Assert.True(gateHeld);
+            Assert.False(sentinelLeft);
+            Assert.True(process.IsOwned);
+            Assert.True(socket.IsIdentified);
         }
         finally
         {
@@ -2445,9 +2453,8 @@ public class ObsDesiredStateTests
     /// </summary>
     private static StartupHarness OpenStartup(
         FakeSession socket,
-        FakeProcess process,
-        TimeSpan startup,
-        ObsCrashSentinel sentinel = null
+        IObsProcess process,
+        TimeSpan startup
     )
     {
         var harness = new StartupHarness();
@@ -2467,8 +2474,7 @@ public class ObsDesiredStateTests
             },
             TimeSpan.FromSeconds(10),
             startupIdentifyTimeout: startup,
-            now: () => clock,
-            sentinel: sentinel
+            now: () => clock
         );
         harness.Since = () => clock - start;
         return harness;
@@ -2607,9 +2613,6 @@ public class ObsDesiredStateTests
 
         public ObsLaunchDecision LastStart { get; private set; }
 
-        /// <summary>Runs when the fake start is called, before it reports OBS running.</summary>
-        public Action OnStart { get; set; }
-
         public bool IsOwned => Owned;
 
         public bool IsRunning() => Running;
@@ -2625,7 +2628,6 @@ public class ObsDesiredStateTests
         {
             LaunchCalls++;
             LastStart = decision;
-            OnStart?.Invoke();
             if (StartSucceeds)
             {
                 Running = true;

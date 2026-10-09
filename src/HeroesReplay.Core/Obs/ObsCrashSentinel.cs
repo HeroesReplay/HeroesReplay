@@ -33,8 +33,9 @@ public sealed class ObsCrashSentinel
 
     /// <summary>
     /// This user's sentinel folder, with "OBS runs" read from the process table: the one sentinel
-    /// every HeroesReplay OBS launch clears before it starts OBS, spectate's (<c>ObsCoordinator</c>)
-    /// and the supervisor's OBS watchdog (#398, #407).
+    /// every HeroesReplay OBS launch clears before it starts OBS. <see cref="ObsLauncher"/> does
+    /// it inside the launch gate, for spectate's launch and the supervisor's OBS watchdog (#398,
+    /// #407, #409).
     /// </summary>
     public static ObsCrashSentinel ForThisUser(ILogger logger) =>
         new(

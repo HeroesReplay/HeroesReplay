@@ -302,6 +302,9 @@ public class ServicesCommand : Command
             .GetServices<ILoggerProvider>()
             .OfType<ServiceRoleLogProvider>()
             .FirstOrDefault();
+        ILogger<ServiceSupervision> logger = provider.GetRequiredService<
+            ILogger<ServiceSupervision>
+        >();
         var supervision = new ServiceSupervision
         {
             Settings = settings,
@@ -319,7 +322,8 @@ public class ServicesCommand : Command
                     request.ReadyTimeout,
                     request.Waiting
                 ),
-            Kill = Kill,
+            // The stale, stalled, and untracked kills spare OBS and log it here (#409).
+            Kill = pid => KillRole(pid, logger),
             FindUntracked = (role, tracked) =>
                 UntrackedRoleProcesses.Find(
                     role,
@@ -334,7 +338,7 @@ public class ServicesCommand : Command
             CloseGame = StopSpectatedGame,
             SpectateDown = () => MakeObsSafe(settings.SpectateDownObs),
             Wait = pause => cancellationToken.WaitHandle.WaitOne(pause),
-            Logger = provider.GetRequiredService<ILogger<ServiceSupervision>>(),
+            Logger = logger,
             ExecutablePath = exe,
             Version = ServiceReadyFile.CurrentVersion(),
             LogPath = () => log?.CurrentPath,
@@ -393,8 +397,8 @@ public class ServicesCommand : Command
             Close = WindowsObsWatchdogPorts.Close,
             WaitForExit = WindowsObsWatchdogPorts.WaitForExit,
             Kill = WindowsObsWatchdogPorts.Kill,
-            Start = WindowsObsWatchdogPorts.Start,
-            RemoveStaleSentinels = () => WindowsObsWatchdogPorts.RemoveStaleSentinels(logger),
+            // Spectate's launcher too: the gate, the crash sentinel, a detached start (#409).
+            Launcher = ObsLauncher.ForThisUser(logger),
             Logger = logger,
         };
     }
@@ -1188,10 +1192,23 @@ public class ServicesCommand : Command
         return left.Length == 0;
     }
 
-    private static void Kill(int pid)
+    private static void Kill(int pid) => KillRole(pid, null);
+
+    /// <summary>
+    /// Kills a role's process tree, but leaves any obs64 in it running, so a forced stop or the
+    /// supervisor's kill never takes the stream down (#409, <see cref="RoleProcessTree"/>). The
+    /// spared OBS is one warning in <paramref name="logger"/>, else one line on stderr.
+    /// </summary>
+    private static void KillRole(int pid, ILogger logger)
     {
+        // The handle keeps the pid from being reused until the wait below is over.
         using Process process = Process.GetProcessById(pid);
-        process.Kill(entireProcessTree: true);
+        RoleTreeKill kill = new RoleProcessTree(WindowsProcessTable.Instance, logger).Kill(pid);
+        if (logger == null && RoleProcessTree.Describe(pid, kill) is string spared)
+        {
+            Console.Error.WriteLine(spared);
+        }
+
         process.WaitForExit(5000);
     }
 }
