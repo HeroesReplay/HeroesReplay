@@ -304,6 +304,17 @@ public class ObsWatchdogTests
             "running, pid 252, websocket answered 12s ago, stream Inactive; restarts 0 of 4 in 30m.",
             watchdog.State.Describe(Start.AddSeconds(12))
         );
+
+        // Not watching shows why, not a budget (ASA-SERVER showed "off; restarts 0 of 0 in 0s").
+        Assert.Equal("off.", new ObsWatchdogState().Describe(Start));
+        var off = new FakeObs { Enabled = false };
+        ObsWatchdog idle = off.Watchdog();
+        idle.Tick(Start, false);
+        Assert.Equal("off. ServiceRestart:ObsWatchdog is false.", idle.State.Describe(Start));
+        var undesired = new FakeObs { Desired = false };
+        ObsWatchdog unarmed = undesired.Watchdog();
+        unarmed.Tick(Start, false);
+        Assert.Equal("not_desired. not armed", unarmed.State.Describe(Start));
     }
 
     [Fact]

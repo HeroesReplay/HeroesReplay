@@ -141,6 +141,19 @@ public sealed class ObsWatchdogState
     /// </summary>
     public string Describe(DateTimeOffset now)
     {
+        if (
+            State
+                is ObsWatchdogStates.Off
+                    or ObsWatchdogStates.NotDesired
+                    or ObsWatchdogStates.Stopping
+            || Budget <= 0
+        )
+        {
+            // Not watching: no budget to show (#398: "off; restarts 0 of 0 in 0s" on ASA-SERVER).
+            string why = string.IsNullOrWhiteSpace(Reason) ? string.Empty : " " + Reason;
+            return $"{State}.{why}";
+        }
+
         string window = Span(TimeSpan.FromSeconds(BudgetWindowSeconds));
         int used = Recent?.Count(at => now - at < TimeSpan.FromSeconds(BudgetWindowSeconds)) ?? 0;
         string restarts = Exhausted
@@ -600,7 +613,7 @@ public sealed class ObsWatchdog
             if (first && State.LastRestartAt is DateTimeOffset started && probedPid != null)
             {
                 Logger.LogInformation(
-                    "OBS pid {Pid} answered its websocket {After} after the watchdog's last start. Stream: {Stream}.",
+                    "OBS pid {Pid} answered its websocket {After} after the watchdog acted (a hung OBS's close wait included). Stream: {Stream}.",
                     probedPid,
                     Describe(now - started),
                     stream.State
