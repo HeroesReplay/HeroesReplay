@@ -801,7 +801,7 @@ public static class ServiceSupervisor
             output.WriteLine("  A stop request is pending (services.stop).");
         }
 
-        WriteSupervisorText(output, report.Supervisor);
+        WriteSupervisorText(output, report.Supervisor, report.CheckedAt);
         foreach (ServiceRoleHealth role in report.Roles)
         {
             string state = role.State.ToString().ToLowerInvariant();
@@ -887,7 +887,11 @@ public static class ServiceSupervisor
         }
     }
 
-    private static void WriteSupervisorText(TextWriter output, ServiceSupervisorSummary supervisor)
+    private static void WriteSupervisorText(
+        TextWriter output,
+        ServiceSupervisorSummary supervisor,
+        DateTimeOffset now
+    )
     {
         if (supervisor == null)
         {
@@ -920,6 +924,11 @@ public static class ServiceSupervisor
         if (!string.IsNullOrWhiteSpace(supervisor.LogPath))
         {
             output.WriteLine($"{"", 20}Log: {supervisor.LogPath}");
+        }
+
+        if (supervisor.Obs != null)
+        {
+            output.WriteLine($"  OBS watchdog: {supervisor.Obs.Describe(now)}");
         }
     }
 

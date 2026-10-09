@@ -5,8 +5,10 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using HeroesReplay.CLI.Commands.Services;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.ServiceHost;
@@ -195,6 +197,87 @@ public class ServiceSupervisionTests
         Assert.Equal(ServiceRestartPolicy.StaleReason, ledger.LastReason);
         Assert.Contains(stack.Log.Entries, entry => entry.Message.Contains("is stale"));
     }
+
+    [Fact]
+    public void TheObsWatchdog_StartsAMissingObs_AndWritesItsStateToSupervisorJson()
+    {
+        // #398: OBS is gone and streaming is desired: the supervisor starts it.
+        using var stack = new FakeStack(("download", 100));
+        var starts = new List<DateTimeOffset>();
+        ObsProcessInfo obs = null;
+        ObsWatchdog watchdog = Watchdog(
+            stack,
+            () => obs,
+            at =>
+            {
+                starts.Add(at);
+                obs = new ObsProcessInfo(252, at);
+            }
+        );
+        ServiceSupervision supervision = stack.Supervision(obs: watchdog);
+        supervision.Begin();
+
+        Assert.True(supervision.Tick());
+
+        Assert.Equal(new[] { Start }, starts);
+        ServiceSupervisorState state = ServiceSupervisorFile.TryLoad(stack.StatePath);
+        Assert.Equal(1, state.Obs.Restarts);
+        Assert.Equal(ObsWatchdogState.ProcessMissingCode, state.Obs.LastCause);
+        // The next pass reads the new OBS's websocket; services status shows the watchdog.
+        stack.Ticks(supervision, 1);
+        ServiceStatusReport report = stack.Status(running: true);
+        Assert.Equal(1, report.Supervisor.Obs.Restarts);
+        Assert.Contains("\"obs\":", report.ToJson());
+        var text = new StringWriter();
+        ServiceSupervisor.WriteStatusText(text, report, null);
+        Assert.Contains(
+            "  OBS watchdog: running, pid 252, websocket answered 0s ago, stream Inactive; restarts 1 of 4 in 30m, last 1s ago (obs.process_missing).",
+            text.ToString()
+        );
+    }
+
+    [Fact]
+    public void AStopRequest_NeverLetsTheObsWatchdogStartObs()
+    {
+        // #398: services stop must not trigger an OBS start or restart.
+        using var stack = new FakeStack(("download", 100));
+        var starts = new List<DateTimeOffset>();
+        ObsWatchdog watchdog = Watchdog(stack, () => null, starts.Add);
+        ServiceSupervision supervision = stack.Supervision(obs: watchdog);
+        supervision.Begin();
+        stack.StopRequested = true;
+
+        Assert.False(supervision.Tick());
+        stack.Clock.Now += TimeSpan.FromMinutes(10);
+        Assert.False(supervision.Tick());
+
+        Assert.Empty(starts);
+        Assert.Equal(
+            ObsWatchdogStates.Stopping,
+            ServiceSupervisorFile.TryLoad(stack.StatePath).Obs.State
+        );
+    }
+
+    private static ObsWatchdog Watchdog(
+        FakeStack stack,
+        Func<ObsProcessInfo> find,
+        Action<DateTimeOffset> start
+    ) =>
+        new()
+        {
+            Rules = new ServiceRestartSettings { ObsWatchdog = true }.ObsRules(
+                new OBSSettings { ExecutablePath = @"C:\obs\obs64.exe" }
+            ),
+            WatchingSince = Start,
+            Desired = () => ObsWatchdogDesire.Yes,
+            FindObs = find,
+            Probe = () => ObsWatchdogProbe.Answered(new JObject { ["outputActive"] = false }),
+            Start = (path, arguments) =>
+            {
+                start(stack.Clock.Now);
+                return null;
+            },
+        };
 
     [Fact]
     public void StopRequest_EndsTheLoopBeforeAnyRestart()
@@ -970,12 +1053,14 @@ public class ServiceSupervisionTests
         public ServiceSupervision Supervision(
             Action<TimeSpan> wait = null,
             Func<bool> closeGame = null,
-            Func<string> spectateDown = null
+            Func<string> spectateDown = null,
+            ObsWatchdog obs = null
         ) =>
             new()
             {
                 LockPath = LockPath,
                 StatePath = StatePath,
+                Obs = obs,
                 Time = Clock,
                 ProcessNameOrNull = pid => alive.Contains(pid) ? "heroesreplay" : null,
                 Probe = _ => null,

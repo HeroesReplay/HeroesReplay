@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.ServiceHost;
@@ -37,6 +38,9 @@ public sealed class ServiceSupervisorState
     public long StaleRestartAfterSeconds { get; set; }
     public List<string> Supervised { get; set; } = new();
     public List<ServiceRoleRestarts> Roles { get; set; } = new();
+
+    /// <summary>The OBS watchdog (#398): its state, restarts, and last cause. Null in older files.</summary>
+    public ObsWatchdogState Obs { get; set; }
 }
 
 public static class ServiceSupervisorFile

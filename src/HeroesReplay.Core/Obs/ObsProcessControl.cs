@@ -58,6 +58,18 @@ internal sealed class WindowsObsProcess : IObsProcess
                 };
         }
 
+        // The supervisor's OBS watchdog launches through the same gate (#398): never two OBS.
+        using ObsLaunchGate gate = ObsLaunchGate.Enter(ObsLaunchGate.DefaultWait);
+        if (IsRunning())
+        {
+            return decision with
+            {
+                Kind = ObsLaunchKind.AlreadyRunning,
+                Started = false,
+                Detail = "OBS started meanwhile (the supervisor's OBS watchdog). It is not owned.",
+            };
+        }
+
         string directory = Path.GetDirectoryName(decision.ExecutablePath);
         owned = Process.Start(
             new ProcessStartInfo

@@ -502,6 +502,7 @@ public static class ServiceHealthClassifier
                 Budget = state?.Budget ?? 0,
                 BudgetWindowSeconds = state?.BudgetWindowSeconds ?? 0,
                 StaleRestartAfterSeconds = state?.StaleRestartAfterSeconds ?? 0,
+                Obs = state?.Obs,
             },
         };
     }

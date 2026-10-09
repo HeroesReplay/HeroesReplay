@@ -342,8 +342,61 @@ public class ServicesCommand : Command
                 ServiceCollectionExtensions.LoadMachineHealthSettings(),
                 provider.GetRequiredService<ILogger<MachineHealthLog>>()
             ),
+            Obs = CreateObsWatchdog(settings, provider.GetRequiredService<ILogger<ObsWatchdog>>()),
         };
         return supervision.Run(cancellationToken);
+    }
+
+    /// <summary>
+    /// The supervisor's OBS watchdog (#398) on the real process table, a short read-only
+    /// websocket session, and a start detached from the supervisor. It watches only while
+    /// streaming is desired: <c>OBS:Enabled</c>, <c>OBS:StreamingEnabled</c>, and this machine's
+    /// stream arm, read on every pass.
+    /// </summary>
+    private static ObsWatchdog CreateObsWatchdog(ServiceRestartSettings restart, ILogger logger)
+    {
+        OBSSettings obs = ServiceCollectionExtensions.LoadAppSettings().OBS ?? new OBSSettings();
+        var arm = new ObsStreamArm();
+        return new ObsWatchdog
+        {
+            Rules = restart.ObsRules(obs),
+            WatchingSince = DateTimeOffset.UtcNow,
+            Desired = () =>
+            {
+                if (!obs.Enabled)
+                {
+                    return ObsWatchdogDesire.No("OBS:Enabled is false.");
+                }
+
+                if (!SessionMedia.ShouldStream(obs))
+                {
+                    return ObsWatchdogDesire.No("OBS:StreamingEnabled is false.");
+                }
+
+                return arm.IsArmed()
+                    ? ObsWatchdogDesire.Yes
+                    : ObsWatchdogDesire.No(
+                        "this machine is not armed for the stream (`heroesreplay obs arm`)."
+                    );
+            },
+            CannotControl = WindowsObsWatchdogPorts.CannotControl,
+            FindObs = WindowsObsWatchdogPorts.FindObs,
+            Probe = () =>
+                WindowsObsWatchdogPorts.Probe(obs.WebSocketEndpoint, obs.WebSocketPassword),
+            SpectatorSeesLiveStream = () =>
+                new SpectatorStatusStore().TryReadShared() is { SnapshotStale: false } status
+                && string.Equals(
+                    status.ObsStreamState,
+                    nameof(ObsStreamState.Live),
+                    StringComparison.Ordinal
+                ),
+            Close = WindowsObsWatchdogPorts.Close,
+            WaitForExit = WindowsObsWatchdogPorts.WaitForExit,
+            Kill = WindowsObsWatchdogPorts.Kill,
+            Start = WindowsObsWatchdogPorts.Start,
+            RemoveStaleSentinels = () => WindowsObsWatchdogPorts.RemoveStaleSentinels(logger),
+            Logger = logger,
+        };
     }
 
     /// <summary>

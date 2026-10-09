@@ -346,12 +346,15 @@ public static class CommandReference
         new(
             "services supervise",
             "Roles recorded by `services start`; no other supervisor in any session.",
-            "Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397).",
+            "Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397). With `ServiceRestart:ObsWatchdog` (prod) and streaming desired (`OBS:StreamingEnabled` and the machine arm), it starts OBS when obs64 is gone and restarts it (CloseMainWindow, then a kill) when its websocket has not answered for `OBS:HungAfter` (3 min) and the stream is not live; it never passes `--startstreaming`, never kills OBS while its stream bytes advance, and does nothing once `services stop` is under way (#398).",
             "Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised). 1 when a supervisor already runs.",
             [
                 ServiceHealthCodes.RestartBudgetExhausted,
                 ServiceSupervision.RoleAdoptedCode,
                 ServiceSupervision.UntrackedRoleKilledCode,
+                ObsWatchdogState.ProcessMissingCode,
+                ObsWatchdogState.WebsocketHungCode,
+                ObsWatchdogState.ExhaustedCode,
             ]
         ),
         new(
