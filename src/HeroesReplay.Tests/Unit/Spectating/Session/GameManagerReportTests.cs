@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.MediaPolicy;
@@ -290,6 +291,32 @@ public class GameManagerReportTests
         Assert.Equal(1, fixture.Obs.WaitingScenes);
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void TheNextLaunch_WaitsWhileTheDesiredStreamIsDown(bool live, bool held)
+    {
+        // #396: the stream can drop during the report, after the next replay was preloaded.
+        using var fixture = new Fixture(live ? StreamState.Live : StreamState.Down);
+
+        Assert.Equal(held, fixture.Manager.HoldsNextLaunch(fixture.Next));
+    }
+
+    [Fact]
+    public void WithoutAStreamHold_TheNextLaunchNeverWaits()
+    {
+        using var fixture = new Fixture();
+
+        Assert.False(fixture.Manager.HoldsNextLaunch(fixture.Next));
+    }
+
+    private enum StreamState
+    {
+        None,
+        Live,
+        Down,
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly string root = Path.Combine(
@@ -297,7 +324,7 @@ public class GameManagerReportTests
             "hr-report-" + Path.GetRandomFileName()
         );
 
-        public Fixture()
+        public Fixture(StreamState stream = StreamState.None)
         {
             Directory.CreateDirectory(root);
             string nextPath = Path.Combine(root, "202.StormReplay");
@@ -328,11 +355,45 @@ public class GameManagerReportTests
                 NullLogger<GameManager>.Instance,
                 new MediaPolicyAttemptLog(Path.Combine(root, "attempts"), logger: null),
                 new NoGameData(),
-                new CancellationTokenProvider(Stop.Token)
+                new CancellationTokenProvider(Stop.Token),
+                stream == StreamState.None ? null : Hold(stream == StreamState.Live)
             );
         }
 
         public CancellationTokenSource Stop { get; } = new();
+
+        /// <summary>A stream hold on a box that streams, with the client of the last match still closing.</summary>
+        private StreamHold Hold(bool live)
+        {
+            Obs.Health = live
+                ? ObsStreamHealth.Next(
+                    null,
+                    new ObsStreamSample(true, false, 1000),
+                    DateTimeOffset.UtcNow
+                )
+                : ObsStreamHealth.Next(
+                    null,
+                    new ObsStreamSample(true, true, 1000),
+                    DateTimeOffset.UtcNow
+                );
+            return new StreamHold(
+                NullLogger.Instance,
+                new AppSettings
+                {
+                    OBS = new OBSSettings
+                    {
+                        Enabled = true,
+                        StreamingEnabled = true,
+                        WaitingSceneName = "Waiting",
+                    },
+                },
+                Obs,
+                new OnlineWatchdog(),
+                Status,
+                () => true,
+                () => true
+            );
+        }
 
         public ClosedGame Game { get; } = new();
 
@@ -427,10 +488,34 @@ public class GameManagerReportTests
 
         public ObsStreamResult StopStreaming() => throw new NotSupportedException();
 
+        public ObsStreamHealth Health { get; set; }
+
         public ObsStreamHealth ReadStreamHealth() =>
-            ObsStreamHealth.Unknown(null, "test", DateTimeOffset.UtcNow);
+            Health ?? ObsStreamHealth.Unknown(null, "test", DateTimeOffset.UtcNow);
+
+        public ObsStreamHealth CheckStreamHealth() => ReadStreamHealth();
 
         public ObsRuntimeSnapshot ReadObsState() => throw new NotSupportedException();
+    }
+
+    private sealed class OnlineWatchdog : IConnectivityWatchdog
+    {
+        public bool IsOnline => true;
+
+        public ConnectivitySnapshot Last { get; } = new();
+
+        public event EventHandler<ConnectivityChangedEventArgs> Changed
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<ConnectivitySnapshot> ProbeAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(Last);
+
+        public bool Apply(ConnectivitySnapshot snapshot) => false;
+
+        public Task RunAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     /// <summary>The finished match's client is already closed.</summary>
