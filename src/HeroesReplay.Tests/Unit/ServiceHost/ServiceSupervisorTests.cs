@@ -8,6 +8,7 @@ using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Shared;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.ServiceHost;
@@ -621,10 +622,10 @@ public class ServiceSupervisorTests
             var steps = new List<string>();
             IReadOnlyCollection<int> scanned = null;
             ServiceShutdown shutdown = processes.Shutdown(TimeSpan.FromSeconds(20));
-            shutdown.FindUnrecordedSpectates = recorded =>
+            shutdown.FindUnrecordedRoles = recorded =>
             {
                 scanned = recorded;
-                return new UnrecordedSpectates { ThisInstall = new[] { HandStarted(90) } };
+                return new UnrecordedRoles { ThisInstall = new[] { HandStarted(90) } };
             };
             shutdown.RequestGracefulStop = () =>
             {
@@ -686,7 +687,7 @@ public class ServiceSupervisorTests
             var processes = new FakeProcesses(91);
             bool closedGame = false;
             ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
-            shutdown.FindUnrecordedSpectates = _ => new UnrecordedSpectates
+            shutdown.FindUnrecordedRoles = _ => new UnrecordedRoles
             {
                 ThisInstall = new[] { HandStarted(91) },
             };
@@ -721,7 +722,7 @@ public class ServiceSupervisorTests
             processes.Unkillable.Add(97);
             int obsReads = 0;
             ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
-            shutdown.FindUnrecordedSpectates = _ => new UnrecordedSpectates
+            shutdown.FindUnrecordedRoles = _ => new UnrecordedRoles
             {
                 ThisInstall = new[] { HandStarted(97) },
             };
@@ -765,7 +766,7 @@ public class ServiceSupervisorTests
         {
             bool closedGame = false;
             ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
-            shutdown.FindUnrecordedSpectates = _ => UnrecordedSpectates.None;
+            shutdown.FindUnrecordedRoles = _ => UnrecordedRoles.None;
             shutdown.GameRunning = () => false;
             shutdown.CloseGame = () => closedGame = true;
             shutdown.CloseIdleSwitchers = () => Switchers();
@@ -804,7 +805,7 @@ public class ServiceSupervisorTests
         {
             bool closedGame = false;
             ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
-            shutdown.FindUnrecordedSpectates = _ => UnrecordedSpectates.None;
+            shutdown.FindUnrecordedRoles = _ => UnrecordedRoles.None;
             shutdown.GameRunning = () => true;
             shutdown.CloseGame = () => closedGame = true;
             shutdown.CloseIdleSwitchers = () => Switchers();
@@ -832,7 +833,7 @@ public class ServiceSupervisorTests
         try
         {
             ServiceShutdown shutdown = new FakeProcesses().Shutdown(TimeSpan.Zero);
-            shutdown.FindUnrecordedSpectates = _ => UnrecordedSpectates.None;
+            shutdown.FindUnrecordedRoles = _ => UnrecordedRoles.None;
             shutdown.GameRunning = () => true;
             shutdown.CloseGame = () => false;
 
@@ -860,7 +861,7 @@ public class ServiceSupervisorTests
             var processes = new FakeProcesses(93);
             bool touched = false;
             ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
-            shutdown.FindUnrecordedSpectates = _ => new UnrecordedSpectates
+            shutdown.FindUnrecordedRoles = _ => new UnrecordedRoles
             {
                 OtherInstalls = new[] { HandStarted(93, @"C:\heroesreplay\app\heroesreplay.exe") },
             };
@@ -913,10 +914,10 @@ public class ServiceSupervisorTests
             IReadOnlyCollection<int> scanned = null;
             bool closedGame = false;
             ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
-            shutdown.FindUnrecordedSpectates = recorded =>
+            shutdown.FindUnrecordedRoles = recorded =>
             {
                 scanned = recorded;
-                return new UnrecordedSpectates { ThisInstall = new[] { HandStarted(94) } };
+                return new UnrecordedRoles { ThisInstall = new[] { HandStarted(94) } };
             };
             shutdown.CloseGame = () => closedGame = true;
 
@@ -934,6 +935,156 @@ public class ServiceSupervisorTests
         }
     }
 
+    /// <summary>
+    /// #397, the stream PC on 2026-10-09: services.json still named spectate's dead pid 16380
+    /// while the spectate a lost restart started, pid 21960, kept playing. The stop found only
+    /// the dead pid. It now stops the untracked spectate too and closes the game it ran.
+    /// </summary>
+    [Fact]
+    public void Stop_ServicesJsonWithADeadSpectatePid_StopsTheUntrackedSpectateThatRuns()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceLockStore.Save(
+                path,
+                new ServiceLock
+                {
+                    Processes = new List<ServiceProcessRecord>
+                    {
+                        new() { Name = "spectate", Pid = 16380 },
+                        new() { Name = "twitch", Pid = 101 },
+                        new() { Name = "download", Pid = 102 },
+                        new() { Name = "youtube", Pid = 103 },
+                    },
+                }
+            );
+            var processes = new FakeProcesses(101, 102, 103, 21960);
+            var table = new[] { 101, 102, 103, 21960, 4242 }
+                .Select(pid => new ProcessTableEntry(pid, 1, "heroesreplay.exe", Exe, null))
+                .ToList();
+            var lines = new Dictionary<int, string>
+            {
+                [101] = $"\"{Exe}\" twitch connect",
+                [102] = $"\"{Exe}\" heroesprofile download",
+                [103] = $"\"{Exe}\" youtube uploader",
+                [21960] = $"\"{Exe}\" spectate heroesprofile",
+                [4242] = $"\"{Exe}\" services stop",
+            };
+            IReadOnlyCollection<int> scanned = null;
+            int closedGame = 0;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.FromSeconds(20));
+            shutdown.FindUnrecordedRoles = recorded =>
+            {
+                scanned = recorded;
+                return UnrecordedRoles.Find(
+                    table,
+                    pid => lines.GetValueOrDefault(pid),
+                    Exe,
+                    selfPid: 4242,
+                    recorded
+                );
+            };
+            shutdown.RequestGracefulStop = () =>
+            {
+                foreach (int pid in new[] { 101, 102, 103, 21960 })
+                {
+                    processes.Exit(pid);
+                }
+            };
+            shutdown.CloseGame = () =>
+            {
+                closedGame++;
+                return true;
+            };
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(new[] { 16380, 101, 102, 103 }, scanned);
+            Assert.Equal(
+                new[]
+                {
+                    "spectate pid 16380: already exited.",
+                    "twitch pid 101: graceful.",
+                    "download pid 102: graceful.",
+                    "youtube pid 103: graceful.",
+                    "spectate pid 21960: graceful. Not in services.json.",
+                },
+                result.Roles.Select(role => role.Describe())
+            );
+            Assert.Equal(1, closedGame);
+            Assert.Empty(processes.Killed);
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// #397: an untracked download, uploader, or Twitch role of this install is stopped like a
+    /// role, and never written to services.json. It does not drive the game, so the game is
+    /// left alone when no spectate is involved.
+    /// </summary>
+    [Fact]
+    public void Stop_AnUntrackedNonSpectateRole_IsStoppedToo_AndLeavesTheGameAlone()
+    {
+        string path = TempLock();
+        try
+        {
+            ServiceLockStore.Save(
+                path,
+                new ServiceLock
+                {
+                    Processes = new List<ServiceProcessRecord>
+                    {
+                        new() { Name = "download", Pid = 95 },
+                    },
+                }
+            );
+            var processes = new FakeProcesses(95, 96);
+            processes.Unkillable.Add(96);
+            bool closedGame = false;
+            ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
+            shutdown.FindUnrecordedRoles = _ => new UnrecordedRoles
+            {
+                ThisInstall = new[]
+                {
+                    new ServiceProcessRecord
+                    {
+                        Name = "download",
+                        Pid = 96,
+                        Arguments = "heroesprofile download",
+                        ExecutablePath = Exe,
+                    },
+                },
+            };
+            shutdown.CloseGame = () => closedGame = true;
+
+            ServiceStopResult result = ServiceSupervisor.Stop(path, shutdown);
+
+            // It would not die: the stop fails and says so, and services.json still does not list it.
+            Assert.Equal(1, result.ExitCode);
+            Assert.Equal(
+                new[]
+                {
+                    "download pid 95: killed.",
+                    "download pid 96: still running. Not in services.json. Kill failed: Access is denied.",
+                },
+                result.Roles.Select(role => role.Describe())
+            );
+            Assert.False(closedGame);
+            Assert.Null(result.GameClosed);
+            Assert.Null(ServiceLockStore.TryLoad(path));
+        }
+        finally
+        {
+            ServiceLockStore.Delete(path);
+        }
+    }
+
     [Fact]
     public void Stop_AScanThatThrows_StopsTheRecordedRolesAsBefore()
     {
@@ -943,7 +1094,7 @@ public class ServiceSupervisorTests
             SaveRoles(path, 98);
             var processes = new FakeProcesses(98);
             ServiceShutdown shutdown = processes.Shutdown(TimeSpan.Zero);
-            shutdown.FindUnrecordedSpectates = _ =>
+            shutdown.FindUnrecordedRoles = _ =>
                 throw new InvalidOperationException("snapshot failed");
             shutdown.CloseGame = () => true;
 
@@ -962,7 +1113,7 @@ public class ServiceSupervisorTests
     private static ServiceProcessRecord HandStarted(int pid, string exe = Exe) =>
         new()
         {
-            Name = UnrecordedSpectates.Role,
+            Name = UnrecordedRoles.Role,
             Pid = pid,
             Arguments = @"spectate file --path C:\heroesreplay\Replays",
             ExecutablePath = exe,

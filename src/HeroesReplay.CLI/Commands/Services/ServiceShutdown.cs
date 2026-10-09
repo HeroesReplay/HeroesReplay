@@ -27,7 +27,7 @@ public sealed class ServiceShutdown
     /// (#381). Read once, before the stop request. Those from this install are stopped like a
     /// recorded role but never written to <c>services.json</c>.
     /// </summary>
-    public Func<IReadOnlyCollection<int>, UnrecordedSpectates> FindUnrecordedSpectates { get; set; }
+    public Func<IReadOnlyCollection<int>, UnrecordedRoles> FindUnrecordedRoles { get; set; }
 
     /// <summary>
     /// True while a Heroes of the Storm process runs. Read only when no spectate was recorded or
