@@ -33,6 +33,7 @@ public class Engine : IEngine
     private readonly IReplayLoader replayLoader;
     private readonly IReleaseUpdateGate releaseUpdate;
     private readonly Action<bool, string> recordSession;
+    private readonly SpectateMemoryLog memoryLog;
     private readonly Dictionary<int, int> frontAttempts = new();
     private LoadedReplay preparedNext;
 
@@ -46,7 +47,8 @@ public class Engine : IEngine
         IConnectivityWatchdog connectivityWatchdog,
         IReplayResume replayResume,
         IReplayLoader replayLoader,
-        IReleaseUpdateGate releaseUpdate
+        IReleaseUpdateGate releaseUpdate,
+        SpectateMemoryLog memoryLog = null
     )
         : this(
             logger,
@@ -59,12 +61,14 @@ public class Engine : IEngine
             replayResume,
             replayLoader,
             releaseUpdate,
-            heartbeat: null
+            heartbeat: null,
+            memoryLog
         ) { }
 
     /// <summary>
     /// <paramref name="heartbeat"/> receives each session's match progress. Null sends it to the
     /// role's installed heartbeat (<see cref="ServiceHeartbeat.RecordSession"/>).
+    /// <paramref name="memoryLog"/> logs spectate's own memory at each session end (#399).
     /// </summary>
     internal Engine(
         ILogger<Engine> logger,
@@ -77,7 +81,8 @@ public class Engine : IEngine
         IReplayResume replayResume,
         IReplayLoader replayLoader,
         IReleaseUpdateGate releaseUpdate,
-        ServiceHeartbeat heartbeat
+        ServiceHeartbeat heartbeat,
+        SpectateMemoryLog memoryLog = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -95,6 +100,7 @@ public class Engine : IEngine
         this.releaseUpdate =
             releaseUpdate ?? throw new ArgumentNullException(nameof(releaseUpdate));
         recordSession = heartbeat == null ? ServiceHeartbeat.RecordSession : heartbeat.Session;
+        this.memoryLog = memoryLog;
     }
 
     public async Task<bool> RunAsync()
@@ -250,6 +256,7 @@ public class Engine : IEngine
             catch (Exception) when (!consoleTokenProvider.Token.IsCancellationRequested)
             {
                 recordSession(false, ReplaySession.ErrorOutcome);
+                memoryLog?.SessionEnded(loadedReplay.ReplayId, ReplaySession.ErrorOutcome);
                 throw;
             }
 
@@ -259,6 +266,7 @@ public class Engine : IEngine
                 ReplaySession.MadeMatchProgress(session, gameManager.LastMatchClockSeen),
                 gameManager.LastOutcome.ToString()
             );
+            memoryLog?.SessionEnded(loadedReplay.ReplayId, gameManager.LastOutcome.ToString());
             if (ReplaySession.StaysQueued(session))
             {
                 int attempt = NextFrontAttempt(loadedReplay);

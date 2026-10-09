@@ -41,6 +41,32 @@ public sealed class ServiceHealthSettings
     public TimeSpan SpectateLaunchStallThreshold { get; set; } =
         DefaultSpectateLaunchStallThreshold;
 
+    public const long DefaultSpectatePrivateBytesWarn = 2L * 1024 * 1024 * 1024;
+    public const int DefaultSpectateMemoryGrowthSessions = 5;
+
+    /// <summary>
+    /// Spectate's private bytes at a replay session end above this log a warning (#399). It is
+    /// not a restart and does not change the role's state. Zero or less means the default, 2 GB.
+    /// </summary>
+    public long SpectatePrivateBytesWarn { get; set; } = DefaultSpectatePrivateBytesWarn;
+
+    /// <summary>
+    /// Spectate's private bytes that rose at this many replay session ends in a row, by at least
+    /// <see cref="SpectateMemoryTrend.MinimumGrowthBytes"/> in all, log a warning (#399). It is
+    /// not a restart. Zero or less means the default, 5.
+    /// </summary>
+    public int SpectateMemoryGrowthSessions { get; set; } = DefaultSpectateMemoryGrowthSessions;
+
+    /// <summary><see cref="SpectatePrivateBytesWarn"/>, or its default when that is zero or less.</summary>
+    public long SpectatePrivateBytesCeiling() =>
+        SpectatePrivateBytesWarn > 0 ? SpectatePrivateBytesWarn : DefaultSpectatePrivateBytesWarn;
+
+    /// <summary><see cref="SpectateMemoryGrowthSessions"/>, or its default when that is zero or less.</summary>
+    public int SpectateMemoryGrowthRun() =>
+        SpectateMemoryGrowthSessions > 0
+            ? SpectateMemoryGrowthSessions
+            : DefaultSpectateMemoryGrowthSessions;
+
     /// <summary>A Twitch reconcile: one pass of the prediction watcher, about every second.</summary>
     public TimeSpan TwitchWorkThreshold { get; set; } = TimeSpan.FromMinutes(5);
 

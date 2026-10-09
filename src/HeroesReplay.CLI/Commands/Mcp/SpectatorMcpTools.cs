@@ -6,17 +6,23 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
 
 namespace HeroesReplay.CLI.Commands.Mcp;
 
-/// <summary><see cref="SpectatorMcpTools.GetSpectatorStatus"/>: the snapshot, where it is, and the game process.</summary>
+/// <summary>
+/// <see cref="SpectatorMcpTools.GetSpectatorStatus"/>: the snapshot, where it is, the game
+/// process, and the machine as <c>services status</c> reads it (memory, commit, and above their
+/// limits the processes holding the most commit, #399).
+/// </summary>
 public sealed record SpectatorStatusResult(
     SpectatorStatus Status,
     string StatusFile,
-    GameProcessInfo GameProcess
+    GameProcessInfo GameProcess,
+    MachineHealthReport Machine
 );
 
 /// <summary>The Heroes of the Storm processes by name, or the error that stopped the lookup.</summary>
@@ -60,11 +66,11 @@ public sealed class SpectatorMcpTools
             UseStructuredContent = true
         ),
         Description(
-            "Live spectator snapshot: phase, timer, replay, focus, OBS session, and whether the snapshot is stale."
+            "Live spectator snapshot: phase, timer, replay, focus, OBS session, and whether the snapshot is stale. Also the machine: memory, commit charge, and, above their limits, the processes holding the most commit (report only)."
         )
     ]
     public SpectatorStatusResult GetSpectatorStatus() =>
-        new(statusStore.Read(), statusStore.FilePath, ProbeGameProcess());
+        new(statusStore.Read(), statusStore.FilePath, ProbeGameProcess(), ReadMachine());
 
     [
         McpServerTool(
@@ -157,6 +163,25 @@ public sealed class SpectatorMcpTools
     ]
     public Task<CheckCommand.CheckResult> CheckBattleNet(CancellationToken cancellationToken) =>
         CheckCommand.RunTargetAsync("battlenet", cancellationToken);
+
+    // Read-only, the same read as services status: no process is stopped or changed.
+    private static MachineHealthReport ReadMachine()
+    {
+        try
+        {
+            MachineHealthSettings settings =
+                ServiceCollectionExtensions.LoadMachineHealthSettings();
+            return MachineHealth.Evaluate(MachineHealthProbe.Read(settings), settings);
+        }
+        catch (Exception e)
+        {
+            return new MachineHealthReport
+            {
+                Ok = false,
+                Warnings = new[] { "The machine could not be read: " + e.Message },
+            };
+        }
+    }
 
     private static GameProcessInfo ProbeGameProcess()
     {
