@@ -37,11 +37,42 @@ public sealed record ObsLaunchDecision
         + ObsNames.Pick(collectionName)
         + "\"";
 
-    public static string ResolveExecutable(string configured)
+    /// <summary>
+    /// <c>OBS:ExecutablePath</c> when it is set; else <c>bin\64bit\obs64.exe</c> under the folder
+    /// the OBS installer wrote to the registry (<c>HKLM\SOFTWARE\OBS Studio</c>, #398) when that
+    /// file exists; else the default Program Files install.
+    /// </summary>
+    public static string ResolveExecutable(string configured) =>
+        ResolveExecutable(configured, ObsInstallLocation.FromRegistry, System.IO.File.Exists);
+
+    public static string ResolveExecutable(
+        string configured,
+        Func<string> installDirectory,
+        Func<string, bool> exists
+    )
     {
         if (!string.IsNullOrWhiteSpace(configured))
         {
             return configured;
+        }
+
+        string installed = null;
+        try
+        {
+            installed = installDirectory?.Invoke();
+        }
+        catch (Exception)
+        {
+            // An unreadable registry falls back to the default install.
+        }
+
+        if (!string.IsNullOrWhiteSpace(installed))
+        {
+            string candidate = System.IO.Path.Combine(installed, "bin", "64bit", "obs64.exe");
+            if (exists?.Invoke(candidate) == true)
+            {
+                return candidate;
+            }
         }
 
         return System.IO.Path.Combine(

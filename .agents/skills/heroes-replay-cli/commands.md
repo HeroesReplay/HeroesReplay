@@ -388,9 +388,9 @@ Classify each role as ready, degraded, stale, stopped, or failed from its heartb
 Supervise the roles `services start` recorded, in the foreground: restart failed roles with backoff (10s, 30s, 2m, 5m), kill and restart roles whose heartbeat is 2 minutes old, at most 5 restarts per role in 30 minutes (ServiceRestart), then leave the role down (service.restart_budget_exhausted). One supervisor at a time, across logon sessions (an SSH session sees the desktop's through supervisor.json). `services stop` ends it; Ctrl+C leaves the roles running unsupervised.
 
 - **Before:** Roles recorded by `services start`; no other supervisor in any session.
-- **Changes:** Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397).
+- **Changes:** Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397). With `ServiceRestart:ObsWatchdog` (prod) and streaming desired (`OBS:StreamingEnabled` and the machine arm), it starts OBS when obs64 is gone and restarts it (CloseMainWindow, then a kill) when its websocket has not answered for `OBS:HungAfter` (3 min) and the stream is not live; it never passes `--startstreaming`, never kills OBS while its stream bytes advance, and does nothing once `services stop` is under way (#398).
 - **Exit:** Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised). 1 when a supervisor already runs.
-- **Codes:** `service.restart_budget_exhausted`, `service.role_adopted`, `service.untracked_role_killed`
+- **Codes:** `service.restart_budget_exhausted`, `service.role_adopted`, `service.untracked_role_killed`, `obs.process_missing`, `obs.websocket_hung`, `obs.watchdog_exhausted`
 
 ## `services install-task`
 

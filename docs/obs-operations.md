@@ -43,12 +43,40 @@ Backward compatible for one release: the plain list (a source checkout) is check
 
 ## Launching OBS
 
-HeroesReplay starts OBS only when the spectator needs the websocket and `obs64` is not running (`ObsCoordinator`, `ObsLaunchDecision`). Nothing else launches it: `services start`, `update install-obs`, `apply-release.ps1`, and the logon task only check for it.
+HeroesReplay starts OBS in two places: the spectator, when it needs the websocket and `obs64` is not running (`ObsCoordinator`, `ObsLaunchDecision`), and the supervisor's OBS watchdog, while streaming is desired ([The OBS watchdog](#the-obs-watchdog-398)). Both check and launch inside one cross-process gate (`ObsLaunchGate`, `Local\HeroesReplay.ObsLaunch`), so they never start two. A second OBS would stop on its "already running" dialog. Nothing else launches it: `services start`, `update install-obs`, `apply-release.ps1`, and the logon task only check for it.
+
+- **Executable:** `OBS:ExecutablePath` when set. Otherwise `bin\64bit\obs64.exe` under the folder the OBS installer wrote to `HKLM\SOFTWARE\OBS Studio` (`ObsInstallLocation`), when that file exists. Otherwise the default `C:\Program Files\obs-studio\bin\64bit\obs64.exe`.
 
 - **Arguments:** `--profile "<OBS:ProfileName>" --collection "<OBS:SceneCollectionName>"`, nothing else. OBS 32 has no flag that skips its crash dialog (`--disable-shutdown-check` does not exist in 32.2.2). `--disable-updater` and `--disable-missing-files-check` are not passed: neither dialog stops the websocket, and `obs validate` reports missing assets.
 - **Crash sentinel:** OBS 32 writes `%APPDATA%\obs-studio\.sentinel\run_<uuid>` when it starts and deletes it on a clean exit. A `run_*` file left by a crash, a power loss, or a kill makes the next start wait on the "OBS Studio Crash Detected" dialog for a person, and the websocket does not start (seen on ASA-SERVER with OBS 32.2.2). Right before HeroesReplay launches OBS, and only when no `obs64` process runs, `ObsCrashSentinel` deletes every `run_*` file there and logs each one (Information, file name and when it was written). A running OBS's sentinel is never touched. Portable OBS installs are not handled. An OBS the operator starts some other way (a startup shortcut) still shows the dialog after an unclean exit.
 - **Startup grace:** after HeroesReplay starts OBS, the identify is retried (10 s attempts, 2 s apart) until `OBS:StartupIdentifyTimeout` (default 60 s) or until that OBS exits. An OBS that was already running gets one attempt.
 - **No OBS is not a lost replay:** when `BeginSession` still cannot identify OBS, spectate logs a warning and plays the replay without OBS (clock and hero selection go on). That session has no scene change, recording, or report scenes, and the next replay tries OBS again.
+
+## The OBS watchdog (#398)
+
+The stream depends on OBS, so the supervisor (`services start --supervise`, `services supervise`) watches it. On 2026-10-09 the live box's OBS websocket timed out for 46 minutes (`Request timed out`, `did not identify in time`) while the machine was near commit exhaustion, and its stream sat reconnecting (#395). Nothing restarted OBS, and a crashed OBS would not have been started again either.
+
+- **Scope.** All of these must hold, read on every supervisor pass:
+  - `ServiceRestart:ObsWatchdog` is on (true in `appsettings.prod.json`, false in the base settings and dev).
+  - `OBS:Enabled` and `OBS:StreamingEnabled` are true.
+  - The machine is armed (`stream-armed`).
+
+  The dev box is never watched unless a stream proof sets those. A supervisor in session 0 (a service or an SSH logon) starts and stops nothing, because the OBS it started would not be visible. The logon task `HeroesReplay-live` runs it on the desktop.
+- **OBS gone.** No `obs64` process: the watchdog starts OBS at once. It deletes the stale crash sentinel first ([Launching OBS](#launching-obs)) and passes `--profile` and `--collection` only. It never passes `--startstreaming`: spectate's guarded `ReconcileStream` starts the stream once OBS answers. The start goes through `cmd /c start`, so OBS is not a child of the supervisor, and a kill of the supervisor's process tree never takes OBS with it. Each start is one WRN in the supervisor log, `obs.process_missing`.
+- **OBS hung.** OBS counts as hung when its websocket has not identified or answered for `OBS:HungAfter` (3 min) and its stream is not live (the bytes do not advance, or the status cannot be read). The clock starts at the latest of: OBS's own start, its last answer, and when the supervisor began watching. The watchdog's probe is its own short read-only session every `ServiceRestart:ObsWatchdogInterval` (30 s): identify, then `GetStreamStatus` (`ObsStreamHealth`, #395), then disconnect, the same client as the MCP tools. It never touches spectate's connection. A rejected password counts as an answer, because OBS is alive. With no endpoint configured, OBS is never taken for hung. When hung:
+  1. `CloseMainWindow`.
+  2. A kill (process tree) if OBS is still there after `ServiceRestart:ObsCloseWait` (15 s).
+  3. A start as above, with code `obs.websocket_hung`.
+
+  If OBS will not exit, no second one is started.
+- **Never while the stream is live.** OBS is not touched while its stream bytes advance: when the last read says `Live`, or when spectate's fresh `status.json` says `obsStreamState: Live` (spectate reads it over its own connection).
+- **Backoff and budget.** The first start is at once. The next ones wait 1, 2, 5, then 10 min after the previous one (`ServiceRestart:ObsBackoff`). After `ObsBudget` (4) starts in `BudgetWindow` (30 min) the watchdog stops trying, with one ERR, `obs.watchdog_exhausted`. It starts again when the supervisor restarts (Ctrl+C in its console, then `services supervise`).
+- **`services stop`.** The watchdog does nothing once the stop file is down, and the supervisor then exits. A stop never starts or restarts OBS. `services stop` still never kills OBS.
+- **Status.** `supervisor.json` has `obs`, with these fields:
+  - `state`: one of `off`, `not_desired`, `suppressed`, `stopping`, `running`, `waiting`, `missing`, `hung`, `restarting`, `exhausted`.
+  - `pid`, `lastAnswerAt`, `stream`, `restarts`, `recent`, `lastCause`, `lastDetail`, `nextAttemptAt`, `exhausted`.
+
+  `services status` prints it as `OBS watchdog: running, pid 252, websocket answered 12s ago, stream Live; restarts 0 of 4 in 30m.`. JSON has it at `supervisor.obs`. It does not change a role's state or the exit code. Spectate's stream hold (#396) can read `state` (`restarting`, `missing`) to wait while the watchdog works.
 
 ## Updating the collection
 
@@ -251,6 +279,7 @@ Prod gets the change only through a proven release. Its first recording after th
   - **The scene during a start.** Every start, plain or a restart, shows `OBS:WaitingSceneName` for `StartStream`, then puts the scene the spectator last asked for (the match, a report) back right after it, confirmed or not, since a recording takes the program output too. A scene the spectator chose during the start is kept. On 2026-10-09 at 11:03:02 the start after the manual `StopStream` left `waiting-screen` on air for the last 21 minutes of a match, because spectate sets `game-scene` only on its own events.
   - **Reported.** `status.json` has `obsStreamState`, `obsStreamReconnecting`, and `obsStreamStuckSince`; `obsStreamActive` is true only while `Live`. `services status` prints `state=` and `since=` on the spectator line, `obs status` prints the state spectate last wrote, and `obs inspect` returns `reconnecting`.
 - **Spectate down for good.** When spectate uses its restart budget, the supervisor makes a live stream safe (`ServiceRestart:SpectateDownObs`). The default, `WaitingScene`, shows `OBS:WaitingSceneName`. `StopStream` stops the stream, and `None` leaves it. An output stuck reconnecting counts: it can go back on air.
+- **OBS gone or hung.** The supervisor's OBS watchdog starts a missing OBS and restarts one whose websocket hangs, while streaming is desired ([The OBS watchdog](#the-obs-watchdog-398)). `services stop` never triggers it and never kills OBS.
 - **`OBS:Enabled=false`.** Spectate sends OBS nothing: no scenes, no report scenes, and no recording, whatever `OBS:RecordingEnabled` and `OBS:RecordRequestedReplays` say. Spectate logs that once when a recording switch is on (#318).
 - **Recordings end with the session.** Every session end stops the recording that spectate started, including a graceful `services stop` mid-match, with or without an OBS session. The stream is never stopped there.
 - **`services stop`.** It succeeds only when OBS is closed or reports the stream inactive; an output stuck reconnecting is still up (#395). While OBS runs with a websocket that doesn't answer, the stream may still be live, so the stop fails. On an install that doesn't stream, this isn't checked. After that it stops the recording that a killed or stuck spectate left running (#318). Spectate claims each recording in `%LOCALAPPDATA%\HeroesReplay\obs-recording.json` (`replayId`, `startedAt`, `processId`, `processStartedAt`) until OBS finalizes it. A claim whose spectate still runs is left to it: the pid is alive and started when `processStartedAt` says (within 2 s, from `ProcessTable`), so a reused pid doesn't count. Otherwise the stop reads `GetRecordStatus` and sends `StopRecord` only when the active recording started when the claim says (within 2 minutes, or a tenth of the claim's age when that is longer). A recording that someone started later keeps running. It never sends `StopStream`. A claimed recording that OBS refuses to stop, or that can't be checked because the websocket doesn't answer, fails the stop.

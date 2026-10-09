@@ -66,6 +66,55 @@ public sealed class ServiceRestartSettings
     /// <summary>Commit charge, percent of the commit limit, above which the slow wait applies.</summary>
     public double SlowReadyCommitPercent { get; set; } = DefaultSlowReadyCommitPercent;
 
+    /// <summary>
+    /// The supervisor watches OBS (#398): it starts OBS when the process is gone and restarts it
+    /// when its websocket hangs, only while streaming is desired here (<c>OBS:Enabled</c>,
+    /// <c>OBS:StreamingEnabled</c>, and the machine's stream arm). Off by default and in dev; on
+    /// in prod.
+    /// </summary>
+    public bool ObsWatchdog { get; set; }
+
+    /// <summary>
+    /// The wait before OBS start n + 1 inside <see cref="BudgetWindow"/>: the first start is at
+    /// once, then 1, 2, 5, 10 min (the last repeats). Null or empty means those.
+    /// </summary>
+    public List<TimeSpan> ObsBackoff { get; set; }
+
+    /// <summary>OBS starts and restarts allowed inside <see cref="BudgetWindow"/>. Default 4.</summary>
+    public int ObsBudget { get; set; } = ObsWatchdogRules.DefaultBudget;
+
+    /// <summary>How long a hung OBS gets to close after <c>CloseMainWindow</c> before it is killed.</summary>
+    public TimeSpan ObsCloseWait { get; set; } = ObsWatchdogRules.DefaultCloseWait;
+
+    /// <summary>How often the watchdog asks OBS's websocket for the stream status. Default 30 s.</summary>
+    public TimeSpan ObsWatchdogInterval { get; set; } = ObsWatchdogRules.DefaultProbeInterval;
+
+    /// <summary>The OBS watchdog's rules, with <see cref="OBSSettings.HungAfter"/> and the launch.</summary>
+    public ObsWatchdogRules ObsRules(OBSSettings obs) =>
+        new()
+        {
+            Enabled = ObsWatchdog,
+            HungAfter =
+                obs?.HungAfter > TimeSpan.Zero ? obs.HungAfter : ObsWatchdogRules.DefaultHungAfter,
+            Backoff = ObsBackoff?.Where(delay => delay > TimeSpan.Zero).ToList()
+                is { Count: > 0 } delays
+                ? delays
+                : ObsWatchdogRules.DefaultBackoff,
+            Budget = ObsBudget > 0 ? ObsBudget : ObsWatchdogRules.DefaultBudget,
+            Window = Window,
+            CloseWait =
+                ObsCloseWait > TimeSpan.Zero ? ObsCloseWait : ObsWatchdogRules.DefaultCloseWait,
+            ProbeInterval =
+                ObsWatchdogInterval > TimeSpan.Zero
+                    ? ObsWatchdogInterval
+                    : ObsWatchdogRules.DefaultProbeInterval,
+            ExecutablePath = ObsLaunchDecision.ResolveExecutable(obs?.ExecutablePath),
+            Arguments = ObsLaunchDecision.ArgumentsFor(
+                ObsNames.Profile(obs),
+                ObsNames.SceneCollection(obs)
+            ),
+        };
+
     public TimeSpan ReadyWait => ReadyTimeout > TimeSpan.Zero ? ReadyTimeout : DefaultReadyTimeout;
 
     /// <summary>Never shorter than <see cref="ReadyWait"/>.</summary>

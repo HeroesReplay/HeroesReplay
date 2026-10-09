@@ -92,6 +92,13 @@ public class OBSSettings
     /// </summary>
     public TimeSpan StartupIdentifyTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// The supervisor's OBS watchdog (#398, <c>ServiceRestart:ObsWatchdog</c>) treats a running
+    /// OBS as hung when its websocket has not identified or answered for this long and its stream
+    /// is not live (the bytes do not advance, or the status cannot be read). Default 3 minutes.
+    /// </summary>
+    public TimeSpan HungAfter { get; set; } = TimeSpan.FromMinutes(3);
+
     public bool RecordRequestedReplays { get; set; }
     public string InfoFileName { get; set; }
     public string WebSocketEndpoint { get; set; }

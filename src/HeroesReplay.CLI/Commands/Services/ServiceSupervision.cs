@@ -17,9 +17,10 @@ namespace HeroesReplay.CLI.Commands.Services;
 /// then applies <see cref="ServiceRestartPolicy"/>: a failed role restarts after its backoff
 /// through the <c>services start</c> launch, a role stale past the limit is killed and then
 /// restarts the same way, and a role with no budget left stays down with one error. A stop
-/// request ends the loop before any restart. It never opens OBS or the game; restarting
-/// spectate only closes a game the dead spectator left behind, and when spectate stays down for
-/// good <see cref="SpectateDown"/> makes a live stream safe.
+/// request ends the loop before any restart. It never opens the game; restarting spectate only
+/// closes a game the dead spectator left behind, and when spectate stays down for good
+/// <see cref="SpectateDown"/> makes a live stream safe. OBS is started or restarted only by
+/// <see cref="Obs"/>, the OBS watchdog, while streaming is desired (#398).
 /// </summary>
 public sealed class ServiceSupervision
 {
@@ -111,6 +112,13 @@ public sealed class ServiceSupervision
     /// <summary>The hourly machine line (#251). Null logs none.</summary>
     public MachineHealthLog MachineHealth { get; init; }
 
+    /// <summary>
+    /// The OBS watchdog (#398): starts OBS when it is gone and restarts it when its websocket
+    /// hangs, only while streaming is desired. It runs on every pass before the roles, and never
+    /// once a stop is requested. Null watches nothing.
+    /// </summary>
+    public ObsWatchdog Obs { get; init; }
+
     public IReadOnlyList<string> Supervised => supervised;
 
     public ServiceRoleRestarts Ledger(string role) =>
@@ -184,6 +192,12 @@ public sealed class ServiceSupervision
             ServiceHealthClassifier.Describe(Settings.Window),
             ServiceHealthClassifier.Describe(Settings.StaleLimit)
         );
+        if (Obs != null)
+        {
+            // Written before the watchdog closes a hung OBS, so other sessions see `restarting`.
+            Obs.Changed ??= () => Save(force: true);
+        }
+
         Save(force: true);
         return true;
     }
@@ -215,7 +229,7 @@ public sealed class ServiceSupervision
             now,
             Health
         );
-        bool changed = false;
+        bool changed = TickObs(now);
         foreach (string role in supervised)
         {
             ServiceProcessRecord record = Find(snapshot, role);
@@ -280,6 +294,22 @@ public sealed class ServiceSupervision
         Save(changed);
         MachineHealth?.Tick(now);
         return true;
+    }
+
+    /// <summary>One OBS watchdog pass. True when its state or restarts changed, so the file is saved.</summary>
+    private bool TickObs(DateTimeOffset now)
+    {
+        if (Obs == null)
+        {
+            return false;
+        }
+
+        string before = Obs.State.State;
+        int restarts = Obs.State.Restarts;
+        ObsWatchdogAction action = Obs.Tick(now, stopRequested: false);
+        return action != ObsWatchdogAction.None
+            || before != Obs.State.State
+            || restarts != Obs.State.Restarts;
     }
 
     /// <summary>
@@ -671,6 +701,8 @@ public sealed class ServiceSupervision
         if (!stopping)
         {
             stopping = true;
+            // services stop never makes the watchdog start or restart OBS (#398).
+            Obs?.Tick(Time.GetUtcNow(), stopRequested: true);
             Logger.LogInformation(
                 "A stop was requested (services.stop). The supervisor restarts nothing more and exits."
             );
@@ -711,6 +743,7 @@ public sealed class ServiceSupervision
                     StaleRestartAfterSeconds = (long)Settings.StaleLimit.TotalSeconds,
                     Supervised = supervised.ToList(),
                     Roles = supervised.Select(role => ledgers[role]).ToList(),
+                    Obs = Obs?.State,
                 }
             );
             savedAt = now;

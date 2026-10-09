@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Status;
 
@@ -178,6 +179,9 @@ public sealed record ServiceSupervisorSummary
     public int Budget { get; init; }
     public long BudgetWindowSeconds { get; init; }
     public long StaleRestartAfterSeconds { get; init; }
+
+    /// <summary>The OBS watchdog (#398) from <c>supervisor.json</c>. Null when it wrote none.</summary>
+    public ObsWatchdogState Obs { get; init; }
 }
 
 /// <summary>The spectator's own status file, summarised next to the roles.</summary>
