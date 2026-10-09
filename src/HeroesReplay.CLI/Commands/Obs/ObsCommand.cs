@@ -10,6 +10,7 @@ using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Pages;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Status;
 
 namespace HeroesReplay.CLI.Commands.Obs;
 
@@ -168,10 +169,10 @@ public class ObsCommand : Command
     {
         var command = new Command(
             "status",
-            "Print the stream arm, OBS:StreamingEnabled, and the expected OBS profile and scene collection. Does not connect to OBS."
+            "Print the stream arm, OBS:StreamingEnabled, the expected OBS profile and scene collection, and the stream state spectate last wrote to status.json (Live, Reconnecting, Stalled, Inactive, Unknown). Does not connect to OBS."
         );
         Option<string> output = CliOutput.CreateOption(
-            "JSON: schemaVersion, ok, code (obs.ingest_ready, obs.stream_not_armed, obs.streaming_disabled, obs.settings_unreadable), message, environment, details (streamArm, profile, sceneCollection)."
+            "JSON: schemaVersion, ok, code (obs.ingest_ready, obs.stream_not_armed, obs.streaming_disabled, obs.settings_unreadable), message, environment, details (streamArm, profile, sceneCollection, stream: the state, active, reconnecting, stuckSince and updatedAt from status.json, null without one)."
         );
         command.Options.Add(output);
         command.SetAction(
@@ -182,7 +183,8 @@ public class ObsCommand : Command
                 CliResult<ObsStatusDetails> status = ReadStatus(
                     arm.IsArmed(),
                     arm.FilePath,
-                    ServiceCollectionExtensions.LoadObsSettings
+                    ServiceCollectionExtensions.LoadObsSettings,
+                    () => new SpectatorStatusStore().TryReadShared()
                 );
                 TextWriter stdout = CliOutput.Out(parseResult);
                 return Task.FromResult(
@@ -248,9 +250,11 @@ public class ObsCommand : Command
     public static CliResult<ObsStatusDetails> ReadStatus(
         bool armed,
         string armFile,
-        Func<OBSSettings> load
+        Func<OBSSettings> load,
+        Func<SpectatorStatus> spectator = null
     )
     {
+        ObsStatusStream stream = ObsStatusStream.From(ReadSpectator(spectator));
         OBSSettings obs;
         try
         {
@@ -267,7 +271,8 @@ public class ObsCommand : Command
                 Details = new ObsStatusDetails(
                     new ObsStreamArmInfo(armed, armFile, false, false, null),
                     null,
-                    null
+                    null,
+                    stream
                 ),
             };
         }
@@ -288,7 +293,8 @@ public class ObsCommand : Command
             Details = new ObsStatusDetails(
                 new ObsStreamArmInfo(armed, armFile, streaming, mayStart, blocked),
                 ObsNames.Profile(obs),
-                ObsNames.SceneCollection(obs)
+                ObsNames.SceneCollection(obs),
+                stream
             ),
         };
     }
@@ -313,13 +319,71 @@ public class ObsCommand : Command
             $"OBS scene collection: {status.Details.SceneCollection} (OBS:SceneCollectionName)"
         );
         output.WriteLine(status.Message);
+        output.WriteLine(ObsStatusStream.Describe(status.Details.Stream));
         return 0;
+    }
+
+    private static SpectatorStatus ReadSpectator(Func<SpectatorStatus> spectator)
+    {
+        try
+        {
+            return spectator?.Invoke();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 }
 
-/// <summary><c>obs status --output json</c> details: the arm, and the profile and collection HeroesReplay expects.</summary>
+/// <summary>
+/// <c>obs status --output json</c> details: the arm, the profile and collection HeroesReplay
+/// expects, and the stream state spectate last wrote to status.json (null without one).
+/// </summary>
 public sealed record ObsStatusDetails(
     ObsStreamArmInfo StreamArm,
     string Profile,
-    string SceneCollection
+    string SceneCollection,
+    ObsStatusStream Stream = null
 );
+
+/// <summary>
+/// The stream state from status.json (#395), as spectate last read it from OBS: <c>Live</c>,
+/// <c>Reconnecting</c>, <c>Stalled</c>, <c>Inactive</c>, or <c>Unknown</c>. <c>obs status</c>
+/// does not connect to OBS, so this is the spectator's view, with when it was written.
+/// </summary>
+public sealed record ObsStatusStream(
+    string State,
+    bool? Active,
+    bool? Reconnecting,
+    DateTimeOffset? StuckSince,
+    DateTimeOffset UpdatedAt,
+    bool Stale
+)
+{
+    public static ObsStatusStream From(SpectatorStatus status) =>
+        status?.ObsStreamDesired == null
+            ? null
+            : new ObsStatusStream(
+                status.ObsStreamState,
+                status.ObsStreamActive,
+                status.ObsStreamReconnecting,
+                status.ObsStreamStuckSince,
+                status.UpdatedAt,
+                status.SnapshotStale
+            );
+
+    public static string Describe(ObsStatusStream stream)
+    {
+        if (stream == null)
+        {
+            return "Stream (status.json): no spectator status.";
+        }
+
+        string since = stream.StuckSince is DateTimeOffset stuck
+            ? $" since {stuck.ToUniversalTime():yyyy-MM-dd HH:mm:ss}Z"
+            : string.Empty;
+        string stale = stream.Stale ? ", stale" : string.Empty;
+        return $"Stream (status.json, written {stream.UpdatedAt.ToUniversalTime():yyyy-MM-dd HH:mm:ss}Z{stale}): {stream.State ?? "not read"}{since}.";
+    }
+}

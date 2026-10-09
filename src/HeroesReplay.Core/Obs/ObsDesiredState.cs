@@ -153,7 +153,12 @@ public sealed record ObsRuntimeSnapshot
     /// <summary>The program scene: the last one OBS accepted, or the one it last reported.</summary>
     public string SceneActual { get; init; }
     public bool StreamDesired { get; init; }
+
+    /// <summary>True only while <see cref="StreamHealth"/> is <see cref="ObsStreamState.Live"/> (#395).</summary>
     public bool StreamActive { get; init; }
+
+    /// <summary>The last GetStreamStatus read: live, reconnecting, stalled, inactive, or unknown (#395).</summary>
+    public ObsStreamHealth StreamHealth { get; init; }
     public bool RecordingDesired { get; init; }
     public bool RecordingActive { get; init; }
     public ObsStreamResult Stream { get; init; }
@@ -186,7 +191,8 @@ public static class ObsDesired
         bool recordingDesired,
         bool recordingActive,
         ObsStreamResult stream,
-        string sceneRequested = null
+        string sceneRequested = null,
+        ObsStreamHealth streamHealth = null
     )
     {
         bool enabled = obs?.Enabled == true;
@@ -203,6 +209,7 @@ public static class ObsDesired
             SceneActual = sceneActual,
             StreamDesired = streamDesired,
             StreamActive = streamActive,
+            StreamHealth = streamHealth,
             RecordingDesired = recordingDesired,
             RecordingActive = recordingActive,
             Stream = stream,
@@ -305,6 +312,10 @@ public static class ObsStatus
         }
 
         string detail = snapshot.Stream?.Detail ?? snapshot.Launch?.Detail;
+        ObsStreamHealth health = snapshot.StreamHealth;
+        string streamState = health?.State.ToString();
+        bool? reconnecting = health == null ? null : health.State == ObsStreamState.Reconnecting;
+        DateTimeOffset? stuckSince = health?.StuckSince;
         bool changed =
             status.ObsProcessRunning != snapshot.ProcessRunning
             || status.ObsWebsocketIdentified != snapshot.WebsocketIdentified
@@ -316,6 +327,9 @@ public static class ObsStatus
             || !string.Equals(status.ObsSceneActual, snapshot.SceneActual, StringComparison.Ordinal)
             || status.ObsStreamDesired != snapshot.StreamDesired
             || status.ObsStreamActive != snapshot.StreamActive
+            || !string.Equals(status.ObsStreamState, streamState, StringComparison.Ordinal)
+            || status.ObsStreamReconnecting != reconnecting
+            || status.ObsStreamStuckSince != stuckSince
             || !string.Equals(
                 status.ObsStreamBlockedBy,
                 snapshot.StreamBlockedBy,
@@ -328,6 +342,9 @@ public static class ObsStatus
         status.ObsSceneActual = snapshot.SceneActual;
         status.ObsStreamDesired = snapshot.StreamDesired;
         status.ObsStreamActive = snapshot.StreamActive;
+        status.ObsStreamState = streamState;
+        status.ObsStreamReconnecting = reconnecting;
+        status.ObsStreamStuckSince = stuckSince;
         status.ObsStreamBlockedBy = snapshot.StreamBlockedBy;
         status.ObsDetail = detail;
         return changed;
@@ -374,6 +391,16 @@ public static class ObsStatus
             + status.ObsStreamDesired
             + " active="
             + status.ObsStreamActive
+            + (
+                string.IsNullOrWhiteSpace(status.ObsStreamState)
+                    ? string.Empty
+                    : " state=" + status.ObsStreamState
+            )
+            + (
+                status.ObsStreamStuckSince is DateTimeOffset stuck
+                    ? " since=" + stuck.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+                    : string.Empty
+            )
             + (
                 string.IsNullOrWhiteSpace(status.ObsStreamBlockedBy)
                     ? string.Empty

@@ -42,7 +42,12 @@ internal interface IObsRecordSocket
     bool IsRecording();
     void StartRecord();
     string StopRecord();
+
+    /// <summary>GetStreamStatus <c>outputActive</c>: the output runs, live or not (#395).</summary>
     bool IsStreamActive();
+
+    /// <summary>GetStreamStatus: active, reconnecting, and bytes sent, for <see cref="ObsStreamHealth"/>.</summary>
+    ObsStreamSample ReadStream();
     void StartStream();
     void StopStream();
     event EventHandler<ObsRecordSignal> RecordSignal;
@@ -94,6 +99,14 @@ internal sealed class ObsWebsocketRecordSocket : IObsSession
     {
         OutputStatus status = obs.GetStreamStatus();
         return status != null && status.IsActive;
+    }
+
+    public ObsStreamSample ReadStream()
+    {
+        OutputStatus status =
+            obs.GetStreamStatus()
+            ?? throw new InvalidOperationException("GetStreamStatus returned no status.");
+        return new ObsStreamSample(status.IsActive, status.IsReconnecting, status.BytesSent);
     }
 
     public void StartStream() => obs.StartStream();

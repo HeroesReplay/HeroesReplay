@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HeroesReplay.Core.GameClient;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Shared;
 
@@ -98,6 +99,24 @@ public sealed record ServiceStreamCheck(ServiceStreamState State, string Detail)
 
     public static ServiceStreamCheck Unknown(string detail) =>
         new(ServiceStreamState.Unknown, detail);
+
+    /// <summary>
+    /// From the stream's health (#395). An output that is active but reconnecting or frozen is
+    /// still up: OBS may put it back on air, so it does not confirm the stop either.
+    /// </summary>
+    public static ServiceStreamCheck From(ObsStreamHealth health) =>
+        health?.State switch
+        {
+            ObsStreamState.Inactive => Inactive(),
+            ObsStreamState.Live => Active(),
+            ObsStreamState.Reconnecting or ObsStreamState.Stalled => new(
+                ServiceStreamState.Active,
+                "OBS reported the stream output still active, "
+                    + health.State.ToString().ToLowerInvariant()
+                    + "."
+            ),
+            _ => Unknown(health?.Detail ?? "GetStreamStatus returned no status."),
+        };
 
     public string Describe()
     {

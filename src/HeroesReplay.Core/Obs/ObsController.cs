@@ -377,7 +377,7 @@ public class ObsController : IObsController
 
     private int? CurrentReplayId => context.Current?.LoadedReplay?.ReplayId;
 
-    public bool IsStreaming() => coordinator.IsStreaming();
+    public ObsStreamHealth ReadStreamHealth() => coordinator.ReadStreamHealth();
 
     public void UpdateReplayInfoVisibility(TimeSpan matchTime)
     {

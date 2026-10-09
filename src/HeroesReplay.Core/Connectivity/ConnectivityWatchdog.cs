@@ -202,12 +202,13 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
 
         bool probeTwitch = SessionMedia.ShouldStream(settings.OBS);
         logger.LogInformation(
-            "Connectivity watchdog probing {Host} every {Interval}. The Heroes Profile website is not probed. TwitchWebsite={TwitchWebsite}. StreamingEnabled={StreamingEnabled}. NativeReconnectOwnsShortOutages={NativeReconnect}.",
+            "Connectivity watchdog probing {Host} every {Interval}. The Heroes Profile website is not probed. TwitchWebsite={TwitchWebsite}. StreamingEnabled={StreamingEnabled}. NativeReconnectOwnsShortOutages={NativeReconnect}. StreamStuckAfter={StreamStuckAfter}.",
             Settings.InternetHost,
             ProbeInterval(),
             probeTwitch ? Settings.TwitchUri : "skipped",
             probeTwitch,
-            true
+            true,
+            settings.OBS?.StreamStuckAfter
         );
 
         try
@@ -349,6 +350,12 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
         }
     }
 
+    /// <summary>
+    /// While online, a desired stream that is not live goes to the OBS coordinator's reconcile:
+    /// an inactive output is started, and one stuck reconnecting or frozen past
+    /// <c>OBS:StreamStuckAfter</c> is restarted (#395). An active output alone is not live. The
+    /// coordinator logs what it did, at most one warning per attempt, so nothing is logged here.
+    /// </summary>
     private void ReconcileDesiredStream()
     {
         if (obsController == null || !IsOnline || !IngestAllowed())
@@ -358,12 +365,12 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
 
         try
         {
-            if (obsController.IsStreaming())
+            if (obsController.ReadStreamHealth()?.IsLive == true)
             {
                 return;
             }
 
-            LogStream(obsController.StartStreaming(), "reconcile");
+            obsController.StartStreaming();
         }
         catch (Exception e)
         {

@@ -38,7 +38,22 @@ public sealed class SpectatorStatus
     public string ObsSceneDesired { get; set; }
     public string ObsSceneActual { get; set; }
     public bool? ObsStreamDesired { get; set; }
+
+    /// <summary>True only while <see cref="ObsStreamState"/> is <c>Live</c> (#395).</summary>
     public bool? ObsStreamActive { get; set; }
+
+    /// <summary>
+    /// The stream's health from GetStreamStatus (#395): <c>Live</c>, <c>Reconnecting</c>,
+    /// <c>Stalled</c> (active, not reconnecting, bytes frozen), <c>Inactive</c>, or
+    /// <c>Unknown</c> (OBS not read). Null before the first read.
+    /// </summary>
+    public string ObsStreamState { get; set; }
+
+    /// <summary>OBS reports the stream output active and reconnecting.</summary>
+    public bool? ObsStreamReconnecting { get; set; }
+
+    /// <summary>When the stream became <c>Reconnecting</c> or <c>Stalled</c>; null otherwise.</summary>
+    public DateTimeOffset? ObsStreamStuckSince { get; set; }
 
     /// <summary>
     /// Why a desired stream was not started: <c>obs.stream_not_armed</c> (OBS:StreamingEnabled

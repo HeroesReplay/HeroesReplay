@@ -1,9 +1,11 @@
+using System;
 using System.IO;
 using System.Text.Json;
 using HeroesReplay.CLI.Commands.Obs;
 using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Status;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Obs;
@@ -55,6 +57,63 @@ public class ObsStatusJsonTests
         Assert.Equal("obs.settings_unreadable", status.Code);
         Assert.Contains("bad json", status.Message);
         Assert.Equal(1, CliOutput.ExitCode(status));
+    }
+
+    [Fact]
+    public void TheStreamState_IsWhatSpectateLastWroteToStatusJson()
+    {
+        // #395: obs status does not connect to OBS, so it shows the spectator's view.
+        var written = new DateTimeOffset(2026, 10, 9, 10, 55, 0, TimeSpan.Zero);
+        var stuck = new DateTimeOffset(2026, 10, 9, 5, 51, 48, TimeSpan.Zero);
+        var spectator = new SpectatorStatus
+        {
+            UpdatedAt = written,
+            ObsStreamDesired = true,
+            ObsStreamActive = false,
+            ObsStreamState = "Reconnecting",
+            ObsStreamReconnecting = true,
+            ObsStreamStuckSince = stuck,
+        };
+
+        CliResult<ObsStatusDetails> status = ObsCommand.ReadStatus(
+            true,
+            ArmFile,
+            () => new OBSSettings { StreamingEnabled = true },
+            () => spectator
+        );
+        var output = new StringWriter();
+        CliOutput.WriteJson(status, output);
+
+        ObsStatusStream stream = status.Details.Stream;
+        Assert.Equal("Reconnecting", stream.State);
+        Assert.Equal(false, stream.Active);
+        Assert.Equal(true, stream.Reconnecting);
+        Assert.Equal(stuck, stream.StuckSince);
+        Assert.Equal(
+            "Stream (status.json, written 2026-10-09 10:55:00Z): Reconnecting since 2026-10-09 05:51:48Z.",
+            ObsStatusStream.Describe(stream)
+        );
+        using JsonDocument json = JsonDocument.Parse(output.ToString());
+        JsonElement details = json.RootElement.GetProperty("details").GetProperty("stream");
+        Assert.Equal("Reconnecting", details.GetProperty("state").GetString());
+        Assert.True(details.GetProperty("reconnecting").GetBoolean());
+    }
+
+    [Fact]
+    public void WithoutAStatusJson_TheStreamIsNull()
+    {
+        CliResult<ObsStatusDetails> status = ObsCommand.ReadStatus(
+            true,
+            ArmFile,
+            () => new OBSSettings { StreamingEnabled = true },
+            () => null
+        );
+
+        Assert.Null(status.Details.Stream);
+        Assert.Equal(
+            "Stream (status.json): no spectator status.",
+            ObsStatusStream.Describe(status.Details.Stream)
+        );
     }
 
     [Fact]
