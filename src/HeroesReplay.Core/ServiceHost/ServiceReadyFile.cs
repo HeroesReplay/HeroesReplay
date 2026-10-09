@@ -54,6 +54,17 @@ public sealed class ServiceReadyReport
     public DateTimeOffset? LaunchingSince { get; set; }
 
     /// <summary>
+    /// Spectate only: when it began holding the next replay because the desired stream is not
+    /// live (#396). Null outside a hold. A hold is not spectate failure: <c>services status</c>
+    /// reports spectate ready with <c>spectate.stream_hold</c>, never degraded for the missing
+    /// match progress.
+    /// </summary>
+    public DateTimeOffset? StreamHoldSince { get; set; }
+
+    /// <summary>Spectate only: why it holds, such as <c>Reconnecting</c> and OBS's detail.</summary>
+    public string StreamHoldReason { get; set; }
+
+    /// <summary>
     /// A problem the role found in its own work while it still runs (the uploader blocked by
     /// quota with a backlog, nothing published for a day). <c>services status</c> reports the
     /// role degraded with this code and cause. Null when the role has no concern.

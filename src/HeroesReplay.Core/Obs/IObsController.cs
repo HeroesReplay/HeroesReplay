@@ -23,5 +23,13 @@ public interface IObsController
     /// is on air; an output that is active but reconnecting or frozen is not.
     /// </summary>
     ObsStreamHealth ReadStreamHealth();
+
+    /// <summary>
+    /// Like <see cref="ReadStreamHealth"/>, for a decision between replays (#396): when the
+    /// replay's session already ended and OBS runs, the websocket identifies first, so a live
+    /// stream is not read as <see cref="ObsStreamState.Unknown"/>. OBS is never launched, and
+    /// nothing is started or stopped.
+    /// </summary>
+    ObsStreamHealth CheckStreamHealth() => ReadStreamHealth();
     ObsRuntimeSnapshot ReadObsState();
 }

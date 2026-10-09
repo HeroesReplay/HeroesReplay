@@ -301,6 +301,28 @@ internal sealed class ObsCoordinator
     }
 
     /// <summary>
+    /// The stream's health for a decision between replays (#396). The replay's session ended, so
+    /// the websocket may be closed: when OBS runs, it identifies first (one attempt, no launch),
+    /// and the connection stays for the next session. Never throws, starts, or stops anything.
+    /// </summary>
+    public ObsStreamHealth CheckStreamHealth()
+    {
+        if (!socket.IsIdentified && ReadRunning())
+        {
+            try
+            {
+                socket.Connect(Endpoint(), Password(), identifyTimeout);
+            }
+            catch (Exception e)
+            {
+                logger.LogDebug(e, "OBS websocket did not identify for the stream check.");
+            }
+        }
+
+        return ReadStreamHealth();
+    }
+
+    /// <summary>
     /// Keeps a desired stream live (#395). A live stream is left alone. An inactive one gets the
     /// guarded start: the waiting scene, the profile and collection check, the preflight, the
     /// microphone mute, then StartStream. One that stays reconnecting, or active with frozen bytes,
