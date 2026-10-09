@@ -264,6 +264,51 @@ public static class ServiceReadyFile
         return report;
     }
 
+    /// <summary>
+    /// The ready file pid <paramref name="pid"/> wrote as <paramref name="role"/>, newest
+    /// heartbeat first, or null. The supervisor reads it to take over a role process it does
+    /// not track: the file's name is the nonce it watches the process by (#397). A file whose
+    /// nonce does not match its name is skipped.
+    /// </summary>
+    public static ServiceReadyReport FindByPid(int pid, string role, string directory = null)
+    {
+        string folder = directory ?? DefaultDirectory;
+        if (pid <= 0 || !Directory.Exists(folder))
+        {
+            return null;
+        }
+
+        ServiceReadyReport newest = null;
+        foreach (string path in Directory.EnumerateFiles(folder, "*.json"))
+        {
+            string nonce = Path.GetFileNameWithoutExtension(path);
+            if (!IsSafeNonce(nonce))
+            {
+                continue;
+            }
+
+            ServiceReadyReport report = TryRead(
+                new ServiceProcessRecord { Name = role, Nonce = nonce },
+                folder
+            );
+            if (
+                report?.Pid != pid
+                || string.IsNullOrWhiteSpace(report.Role)
+                || !string.Equals(report.Role, role, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                continue;
+            }
+
+            if (newest == null || report.HeartbeatAt > newest.HeartbeatAt)
+            {
+                newest = report;
+            }
+        }
+
+        return newest;
+    }
+
     public static void Delete(string nonce, string directory = null)
     {
         if (!IsSafeNonce(nonce))

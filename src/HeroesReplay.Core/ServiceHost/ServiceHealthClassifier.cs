@@ -133,15 +133,35 @@ public static class ServiceHealthClassifier
             );
         }
 
-        if (!running)
+        if (!running || record.Pid <= 0)
         {
             if (stopRequested || heartbeat?.Readiness == ServiceReadiness.Stopping)
             {
                 return With(
-                    health,
+                    health with
+                    {
+                        Running = false,
+                    },
                     ServiceRoleState.Stopped,
-                    $"pid {pid} exited after a stop request.",
+                    record.Pid <= 0
+                        ? "Not running, and a stop was requested."
+                        : $"pid {pid} exited after a stop request.",
                     "Run `heroesreplay services start` to start the stack again."
+                );
+            }
+
+            if (record.Pid <= 0)
+            {
+                // The supervisor keeps the role without a pid when a restart left no process, so
+                // services.json never names a dead one (#397).
+                return With(
+                    health with
+                    {
+                        Running = false,
+                    },
+                    ServiceRoleState.Failed,
+                    $"No {role} process is running: its last restart did not leave one.",
+                    $"Read the {role} log and the supervisor log, then " + RestartStack
                 );
             }
 
@@ -391,6 +411,8 @@ public static class ServiceHealthClassifier
                     BudgetWindowSeconds = state.BudgetWindowSeconds,
                     BudgetExhausted = ledger.Exhausted,
                     ExhaustedAt = ledger.ExhaustedAt,
+                    Adopted = ledger.Adopted,
+                    LastAdoptedAt = ledger.LastAdoptedAt,
                 },
             };
             string log = string.IsNullOrWhiteSpace(role.LogPath)

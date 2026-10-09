@@ -311,8 +311,26 @@ public class ServicesCommand : Command
             ReadHeartbeat = record => ServiceReadyFile.TryRead(record),
             DeleteHeartbeat = record => ServiceReadyFile.Delete(record?.Nonce),
             StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
-            Launch = (role, started) => LaunchRole(exe, role, started),
+            Launch = request =>
+                LaunchRole(
+                    exe,
+                    request.Role,
+                    request.Started,
+                    request.ReadyTimeout,
+                    request.Waiting
+                ),
             Kill = Kill,
+            FindUntracked = (role, tracked) =>
+                UntrackedRoleProcesses.Find(
+                    role,
+                    ProcessTable.Snapshot(),
+                    ProcessCommandLine.TryRead,
+                    exe,
+                    Environment.ProcessId,
+                    tracked,
+                    (pid, name) => ServiceReadyFile.FindByPid(pid, name)
+                ),
+            CommitPercent = ReadCommitPercent,
             CloseGame = StopSpectatedGame,
             SpectateDown = () => MakeObsSafe(settings.SpectateDownObs),
             Wait = pause => cancellationToken.WaitHandle.WaitOne(pause),
@@ -336,7 +354,9 @@ public class ServicesCommand : Command
     private static ServiceLaunch LaunchRole(
         string exe,
         string role,
-        Action<ServiceProcessRecord> started
+        Action<ServiceProcessRecord> started,
+        TimeSpan? readyTimeout = null,
+        Action waiting = null
     )
     {
         ServiceStartupHandshake handshake = CreateHandshake(exe);
@@ -345,15 +365,125 @@ public class ServicesCommand : Command
             return new ServiceLaunch(null, false, false, "role configuration could not be loaded.");
         }
 
-        handshake.Cancelled = () => File.Exists(ServiceStopFile.DefaultPath);
+        Func<bool> stopping = () => File.Exists(ServiceStopFile.DefaultPath);
+        handshake.Cancelled = stopping;
+        if (readyTimeout is TimeSpan wait && wait > TimeSpan.Zero)
+        {
+            handshake.ReadyTimeout = wait;
+        }
+
+        if (waiting != null)
+        {
+            handshake.Wait = pause =>
+            {
+                Thread.Sleep(pause);
+                waiting();
+            };
+        }
+
+        TimeSpan launcherWait = LauncherWait(handshake.ReadyTimeout);
         return ServiceSupervisor.Restart(
             role,
             exe,
-            (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
+            (name, arguments) =>
+                StartProcess(exe, arguments, handshake.Pending, launcherWait, stopping),
             ProcessNameOrNull,
             handshake,
             started
         );
+    }
+
+    /// <summary>
+    /// How long a launch waits for the PowerShell launcher to report the pid: 15 s, longer with
+    /// a longer ready wait (a third of it, at most 60 s), because PowerShell itself starts slowly
+    /// on a machine short of memory (#397).
+    /// </summary>
+    private static TimeSpan LauncherWait(TimeSpan readyTimeout)
+    {
+        TimeSpan third = readyTimeout / 3;
+        if (third < DefaultLauncherWait)
+        {
+            return DefaultLauncherWait;
+        }
+
+        return third > MaxLauncherWait ? MaxLauncherWait : third;
+    }
+
+    private static readonly TimeSpan DefaultLauncherWait = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan MaxLauncherWait = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// The role process a launch started when the launcher did not report its pid (#397). Its
+    /// ready file names its pid once it is ready; before that, it is this install's heroesreplay
+    /// with the role's command line, started since the launch began, that services.json does not
+    /// track. Looks for about three seconds.
+    /// </summary>
+    private static int? FindStartedRole(
+        string exe,
+        ServiceProcessRecord pending,
+        DateTimeOffset began
+    )
+    {
+        for (int attempt = 0; attempt < 6; attempt++)
+        {
+            if (
+                ServiceReadyFile.TryRead(pending)?.Pid is int ready
+                && ready > 0
+                && ServiceProcessPlan.IsHeroesReplay(ProcessNameOrNull(ready))
+            )
+            {
+                return ready;
+            }
+
+            var tracked = new HashSet<int> { Environment.ProcessId };
+            foreach (
+                ServiceProcessRecord record in ServiceLockStore
+                    .TryLoad(ServiceLockStore.DefaultPath)
+                    ?.Processes
+                    ?? new List<ServiceProcessRecord>()
+            )
+            {
+                if (record?.Pid > 0)
+                {
+                    tracked.Add(record.Pid);
+                }
+            }
+
+            UntrackedRoleProcess newest = UntrackedRoleProcesses
+                .Find(
+                    pending.Name,
+                    ProcessTable.Snapshot(),
+                    ProcessCommandLine.TryRead,
+                    exe,
+                    Environment.ProcessId,
+                    tracked
+                )
+                .Where(item =>
+                    item.Process.StartedAt is DateTimeOffset started
+                    && started >= began - TimeSpan.FromSeconds(2)
+                )
+                .OrderByDescending(item => item.Process.StartedAt)
+                .FirstOrDefault();
+            if (newest != null)
+            {
+                return newest.Process.Pid;
+            }
+
+            Thread.Sleep(500);
+        }
+
+        return null;
+    }
+
+    /// <summary>The commit charge, percent of the commit limit, or null when it cannot be read.</summary>
+    private static double? ReadCommitPercent()
+    {
+        MachineHealthSettings settings = ServiceCollectionExtensions.LoadMachineHealthSettings();
+        MachineHealthReport report = MachineHealth.Evaluate(
+            MachineHealthProbe.Read(settings),
+            settings
+        );
+        return report.CommitLimitMegabytes > 0 ? report.CommitPercent : null;
     }
 
     private static Command EnsureCommand()
@@ -572,6 +702,7 @@ public class ServicesCommand : Command
         handshake.StopStarted = Kill;
         handshake.Probe = ServiceProcessProbe.TryFromProcess;
         handshake.Wait = Thread.Sleep;
+        handshake.FindStarted = (pending, began) => FindStartedRole(exe, pending, began);
         return handshake;
     }
 
@@ -820,7 +951,13 @@ public class ServicesCommand : Command
             + " -Value $p.Id -NoNewline";
     }
 
-    private static int? StartProcess(string exe, string arguments, ServiceProcessRecord launch)
+    private static int? StartProcess(
+        string exe,
+        string arguments,
+        ServiceProcessRecord launch,
+        TimeSpan? launcherWait = null,
+        Func<bool> stopping = null
+    )
     {
         string logDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -858,24 +995,56 @@ public class ServicesCommand : Command
             return null;
         }
 
-        if (!process.WaitForExit(15000))
+        // A stop request ends the wait early; what the launcher started is still looked for.
+        DateTimeOffset until = DateTimeOffset.UtcNow + (launcherWait ?? DefaultLauncherWait);
+        bool exited = false;
+        while (!(exited = process.WaitForExit(500)))
+        {
+            if (DateTimeOffset.UtcNow >= until || stopping?.Invoke() == true)
+            {
+                break;
+            }
+        }
+
+        if (!exited)
         {
             try
             {
                 process.Kill();
+                process.WaitForExit(2000);
             }
             catch (InvalidOperationException) { }
-            return null;
         }
 
-        int? pid = File.Exists(pidFile) ? ParseProcessId(File.ReadAllText(pidFile)) : null;
-        if (process.ExitCode != 0 || pid == null)
+        // Start-Process may have started the role, and even written its pid, before the
+        // launcher was cut off or failed (#397): the pid file still counts then.
+        int? pid = File.Exists(pidFile) ? ParseProcessId(ReadPidFile(pidFile)) : null;
+        if (pid == null)
         {
             return null;
         }
 
+        if (!exited || process.ExitCode != 0)
+        {
+            Console.Error.WriteLine(
+                $"The launcher for {arguments} did not finish cleanly, but it wrote pid {pid}."
+            );
+        }
+
         Console.WriteLine($"Console open for {arguments} (pid file {pidFile}).");
         return pid;
+    }
+
+    private static string ReadPidFile(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     public static int? ParseProcessId(string stdout)

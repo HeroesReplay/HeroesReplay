@@ -163,7 +163,19 @@ public sealed class ServiceEnsure
             }
 
             // ServiceSupervisor.Restart already stopped a role that started but did not get ready.
-            Restore(launch.Record, previous, role);
+            // One that would not stop stays in services.json, so it is never left untracked (#397).
+            if (launch.StillRunning && launch.Record != null)
+            {
+                Record(launch.Record);
+                Log.WriteLine(
+                    $"{role} pid {launch.Record.Pid} did not get ready and did not stop. It stays in services.json; `heroesreplay services stop` stops it."
+                );
+            }
+            else
+            {
+                Restore(launch.Record, previous, role);
+            }
+
             rows[role] = rows[role] with
             {
                 Action = ServiceEnsureActions.StartFailed,

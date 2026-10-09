@@ -23,6 +23,9 @@ public sealed class ServiceRestartSettings
     public static readonly TimeSpan DefaultBudgetWindow = TimeSpan.FromMinutes(30);
     public static readonly TimeSpan DefaultStaleRestartAfter = TimeSpan.FromMinutes(2);
     public static readonly TimeSpan DefaultPollInterval = TimeSpan.FromSeconds(1);
+    public static readonly TimeSpan DefaultReadyTimeout = TimeSpan.FromSeconds(45);
+    public static readonly TimeSpan DefaultSlowReadyTimeout = TimeSpan.FromMinutes(3);
+    public const double DefaultSlowReadyCommitPercent = 90;
 
     /// <summary>
     /// The wait before restart n, where n counts the restarts still inside the budget window.
@@ -49,6 +52,33 @@ public sealed class ServiceRestartSettings
     /// and stays down: show the waiting scene (default), stop the stream, or nothing.
     /// </summary>
     public ObsFailSafeAction SpectateDownObs { get; set; } = ObsFailSafeAction.WaitingScene;
+
+    /// <summary>How long a restart waits for the new role's ready file and first heartbeat.</summary>
+    public TimeSpan ReadyTimeout { get; set; } = DefaultReadyTimeout;
+
+    /// <summary>
+    /// The ready wait of a restart while the machine is short of memory: the commit charge is
+    /// above <see cref="SlowReadyCommitPercent"/> (#397). A role that thrashes on start can take
+    /// minutes to write its ready file, and the restart waits for it rather than give up.
+    /// </summary>
+    public TimeSpan SlowReadyTimeout { get; set; } = DefaultSlowReadyTimeout;
+
+    /// <summary>Commit charge, percent of the commit limit, above which the slow wait applies.</summary>
+    public double SlowReadyCommitPercent { get; set; } = DefaultSlowReadyCommitPercent;
+
+    public TimeSpan ReadyWait => ReadyTimeout > TimeSpan.Zero ? ReadyTimeout : DefaultReadyTimeout;
+
+    /// <summary>Never shorter than <see cref="ReadyWait"/>.</summary>
+    public TimeSpan SlowReadyWait => SlowReadyTimeout > ReadyWait ? SlowReadyTimeout : ReadyWait;
+
+    /// <summary>
+    /// The ready wait for a restart when the commit charge is <paramref name="commitPercent"/>.
+    /// An unreadable charge (null) gets the normal wait.
+    /// </summary>
+    public TimeSpan ReadyWaitFor(double? commitPercent) =>
+        commitPercent is double percent && percent > SlowReadyCommitPercent
+            ? SlowReadyWait
+            : ReadyWait;
 
     public IReadOnlyList<TimeSpan> Delays
     {

@@ -53,6 +53,70 @@ public class ServiceRestartPolicyTests
     }
 
     [Fact]
+    public void ReadyWait_Is45s_And3mWhileTheCommitChargeIsAbove90Percent()
+    {
+        // #397: a role that thrashes on start is waited for, not taken for a failed start.
+        Assert.Equal(TimeSpan.FromSeconds(45), Defaults.ReadyWaitFor(null));
+        Assert.Equal(TimeSpan.FromSeconds(45), Defaults.ReadyWaitFor(90));
+        Assert.Equal(TimeSpan.FromMinutes(3), Defaults.ReadyWaitFor(90.1));
+        Assert.Equal(TimeSpan.FromMinutes(3), Defaults.ReadyWaitFor(98));
+
+        var odd = new ServiceRestartSettings
+        {
+            ReadyTimeout = TimeSpan.FromMinutes(2),
+            SlowReadyTimeout = TimeSpan.FromSeconds(30),
+            SlowReadyCommitPercent = 80,
+        };
+        Assert.Equal(TimeSpan.FromMinutes(2), odd.ReadyWaitFor(85));
+        Assert.Equal(
+            TimeSpan.FromSeconds(45),
+            new ServiceRestartSettings { ReadyTimeout = TimeSpan.Zero }.ReadyWait
+        );
+
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string>
+                {
+                    ["ServiceRestart:SlowReadyTimeout"] = "00:05:00",
+                    ["ServiceRestart:SlowReadyCommitPercent"] = "95",
+                }
+            )
+            .Build();
+        ServiceRestartSettings bound = configuration
+            .GetSection("ServiceRestart")
+            .Get<ServiceRestartSettings>();
+        Assert.Equal(TimeSpan.FromSeconds(45), bound.ReadyWaitFor(94));
+        Assert.Equal(TimeSpan.FromMinutes(5), bound.ReadyWaitFor(96));
+    }
+
+    [Fact]
+    public void Adopted_ClearsTheDownStateAndTheFailure_AndUsesNoBudget()
+    {
+        var ledger = new ServiceRoleRestarts { Role = "spectate", Nonce = "old" };
+        Assert.Equal(ServiceRestartAction.Scheduled, Decide(Failed(), ledger, Now));
+        ServiceRestartPolicy.Restarted(
+            ledger,
+            Now.AddSeconds(10),
+            null,
+            "Failed to start spectate."
+        );
+        Assert.Equal(ServiceRestartAction.Scheduled, Decide(Failed(), ledger, Now.AddSeconds(11)));
+
+        ServiceRestartPolicy.Adopted(ledger, Now.AddSeconds(41), "n21960", 21960);
+
+        Assert.Equal(1, ledger.Adopted);
+        Assert.Equal(Now.AddSeconds(41), ledger.LastAdoptedAt);
+        Assert.Equal(21960, ledger.LastAdoptedPid);
+        Assert.Equal("n21960", ledger.Nonce);
+        Assert.Null(ledger.LastFailure);
+        Assert.Null(ledger.DownSince);
+        Assert.Null(ledger.NextRestartAt);
+        Assert.Equal(1, ledger.Count);
+        Assert.Single(ledger.Recent);
+        Assert.Equal(ServiceRestartAction.None, Decide(Ready(), ledger, Now.AddSeconds(42)));
+    }
+
+    [Fact]
     public void Failed_SchedulesTheBackoff_ThenRestartsWhenItIsDue()
     {
         var ledger = new ServiceRoleRestarts { Role = "download" };

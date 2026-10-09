@@ -155,6 +155,14 @@ public static class ServiceSupervisor
         if (!launch.Ready && !launch.Cancelled && launch.Record != null)
         {
             Rollback(null, new[] { launch.Record }, handshake);
+            // A child that would not stop stays the caller's to track, never an orphan (#397).
+            if (ServiceProcessPlan.IsHeroesReplay(processNameOrNull?.Invoke(launch.Record.Pid)))
+            {
+                Console.Error.WriteLine(
+                    $"{name} pid {launch.Record.Pid} did not stop. It stays recorded, so it is not left unsupervised."
+                );
+                return launch with { StillRunning = true };
+            }
         }
 
         return launch;
@@ -200,14 +208,26 @@ public static class ServiceSupervisor
                 Version = version,
             };
             handshake.Pending = pending;
+            DateTimeOffset began = DateTimeOffset.UtcNow;
             int? pid = startProcess(name, arguments);
             if (pid is not int id || id <= 0)
             {
-                return new ServiceLaunch(
-                    null,
-                    false,
-                    false,
-                    Fail(handshake, $"Failed to start {name} ({arguments}).")
+                // The launcher can give up after it started the child: a PowerShell cut off on a
+                // machine short of memory (#397). The child has this launch's nonce and command
+                // line, so look for it before calling the start failed and leaving it orphaned.
+                id = FindStarted(handshake, pending, began);
+                if (id <= 0)
+                {
+                    return new ServiceLaunch(
+                        null,
+                        false,
+                        false,
+                        Fail(handshake, $"Failed to start {name} ({arguments}).")
+                    );
+                }
+
+                Console.WriteLine(
+                    $"The launcher did not report {name}'s pid, but pid {id} runs `{arguments}` for this launch. Waiting for it."
                 );
             }
 
@@ -233,6 +253,26 @@ public static class ServiceSupervisor
                 false,
                 Fail(handshake, $"{name} failed: {e.Message}")
             );
+        }
+    }
+
+    /// <summary>The pid <see cref="ServiceStartupHandshake.FindStarted"/> finds, or 0.</summary>
+    private static int FindStarted(
+        ServiceStartupHandshake handshake,
+        ServiceProcessRecord pending,
+        DateTimeOffset began
+    )
+    {
+        try
+        {
+            return handshake.FindStarted?.Invoke(pending, began) is int pid && pid > 0 ? pid : 0;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(
+                $"Could not look for the {pending.Name} process the launcher started: {e.Message}"
+            );
+            return 0;
         }
     }
 
@@ -814,7 +854,10 @@ public static class ServiceSupervisor
                 string budget = restarts.BudgetExhausted
                     ? "budget exhausted"
                     : $"budget {restarts.BudgetUsed} of {restarts.BudgetLimit} used in {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(restarts.BudgetWindowSeconds))}";
-                output.WriteLine($"{"", 20}Restarts: {restarts.Count}{last}; {budget}.");
+                string adopted = restarts.LastAdoptedAt is DateTimeOffset taken
+                    ? $"; took over a running process {restarts.Adopted}x, last {taken.ToLocalTime():HH:mm:ss}"
+                    : string.Empty;
+                output.WriteLine($"{"", 20}Restarts: {restarts.Count}{last}; {budget}{adopted}.");
             }
 
             WriteLogText(output, role);
