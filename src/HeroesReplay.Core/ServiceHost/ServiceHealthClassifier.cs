@@ -119,6 +119,8 @@ public static class ServiceHealthClassifier
             SessionsWithoutProgress = heartbeat?.SessionsWithoutProgress,
             LastOutcome = heartbeat?.LastOutcome,
             LaunchingSince = heartbeat?.LaunchingSince,
+            StreamHoldSince = heartbeat?.StreamHoldSince,
+            StreamHoldReason = heartbeat?.StreamHoldReason,
             SessionOutcomes = heartbeat?.SessionOutcomes,
             Dependency = heartbeat?.Dependency,
         };
@@ -206,6 +208,29 @@ public static class ServiceHealthClassifier
         string degradedFix =
             $"Check the {role} console, its log file, or the Aspire logs. If it does not recover, "
             + RestartStack;
+        // A spectate that holds the next replay while the desired stream is down is not failing
+        // (#396): no match progress is expected, so no launch stall, no run of sessions without
+        // progress, and no work age makes it degraded. Its heartbeat still has to be fresh.
+        if (
+            heartbeat.StreamHoldSince is DateTimeOffset holding
+            && heartbeat.Readiness != ServiceReadiness.Stopping
+        )
+        {
+            string held = Age(now, holding) is TimeSpan heldFor ? Describe(heldFor) : "a moment";
+            string why = string.IsNullOrWhiteSpace(heartbeat.StreamHoldReason)
+                ? string.Empty
+                : " " + heartbeat.StreamHoldReason.TrimEnd('.') + ".";
+            return With(
+                health,
+                ServiceRoleState.Ready,
+                $"Holding the next replay for {held}: the desired stream is not live.{why} The next replay loads once the stream is live again (Spectate:HoldWhileStreamDown).",
+                null
+            ) with
+            {
+                CauseCode = ServiceHealthCodes.SpectateStreamHold,
+            };
+        }
+
         TimeSpan stallLimit = settings.LaunchStallThreshold(role);
         if (
             stallLimit > TimeSpan.Zero

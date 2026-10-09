@@ -47,7 +47,12 @@ public class GameManager : IGameManager
     private readonly MediaPolicyAttemptLog mediaPolicy;
     private readonly IGameData gameData;
     private readonly CancellationTokenProvider tokenProvider;
+    private readonly StreamHold streamHold;
 
+    /// <param name="streamHold">
+    /// Holds the launch of the next replay during the report while the desired stream is down
+    /// (#396). Null never holds.
+    /// </param>
     public GameManager(
         AppSettings settings,
         IReplayContextSetter contextSetter,
@@ -62,7 +67,8 @@ public class GameManager : IGameManager
         ILogger<GameManager> logger,
         MediaPolicyAttemptLog mediaPolicy,
         IGameData gameData,
-        CancellationTokenProvider tokenProvider
+        CancellationTokenProvider tokenProvider,
+        StreamHold streamHold = null
     )
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -86,6 +92,7 @@ public class GameManager : IGameManager
         this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.streamHold = streamHold;
     }
 
     public async Task<ReplaySessionKind> LaunchAndSpectate(
@@ -942,6 +949,11 @@ public class GameManager : IGameManager
             return HandOffStopped(next);
         }
 
+        if (HoldsNextLaunch(next))
+        {
+            return NextMatchLaunch.NotStarted;
+        }
+
         // Heroes is closed here, so Variables.txt can be repaired. The next session starts with
         // this client already running and could only warn (#206).
         EnsureWindowedClient(next.ReplayId);
@@ -1074,6 +1086,27 @@ public class GameManager : IGameManager
             next.ReplayId
         );
         return NextMatchLaunch.ProcessOnly;
+    }
+
+    /// <summary>
+    /// The report loaded the next replay, but its client does not start while the desired stream
+    /// is not live (#396): the stream can drop during the report, after the preload was decided.
+    /// The replay stays prepared, and the next loop holds before it plays.
+    /// </summary>
+    internal bool HoldsNextLaunch(LoadedReplay next)
+    {
+        StreamHoldCheck hold = streamHold?.Check(matchOver: true);
+        if (hold?.Holds != true)
+        {
+            return false;
+        }
+
+        logger.LogInformation(
+            "Next replay {ReplayId} is not launched during the report: the stream is desired and not live ({Reason}). It plays once the stream is live again.",
+            next?.ReplayId,
+            hold.Reason
+        );
+        return true;
     }
 
     /// <summary>

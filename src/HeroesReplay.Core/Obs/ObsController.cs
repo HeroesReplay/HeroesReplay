@@ -379,6 +379,8 @@ public class ObsController : IObsController
 
     public ObsStreamHealth ReadStreamHealth() => coordinator.ReadStreamHealth();
 
+    public ObsStreamHealth CheckStreamHealth() => coordinator.CheckStreamHealth();
+
     public void UpdateReplayInfoVisibility(TimeSpan matchTime)
     {
         if (

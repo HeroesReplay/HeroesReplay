@@ -30,6 +30,15 @@ public sealed class SpectatorStatus
     /// Why the last session ended. Completion fields are set only for <c>VerifiedCompleted</c>.
     /// </summary>
     public string Outcome { get; set; }
+
+    /// <summary>
+    /// When spectate began holding the next replay because the desired stream is not live (#396).
+    /// <see cref="Phase"/> is <c>StreamHold</c> meanwhile. Null outside a hold.
+    /// </summary>
+    public DateTimeOffset? StreamHoldSince { get; set; }
+
+    /// <summary>Why spectate holds: the stream state and OBS's detail. Null outside a hold.</summary>
+    public string StreamHoldReason { get; set; }
     public bool ObsSession { get; set; }
     public bool? ConnectivityOnline { get; set; }
     public string Connectivity { get; set; }

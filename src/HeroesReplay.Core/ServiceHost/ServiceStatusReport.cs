@@ -54,6 +54,12 @@ public static class ServiceHealthCodes
     /// </summary>
     public const string SpectateLaunchStalled = "spectate.launch_stalled";
 
+    /// <summary>
+    /// A ready spectate that holds the next replay because the desired stream is not live (#396).
+    /// It is not spectate failure: no match progress is expected, and the supervisor leaves it.
+    /// </summary>
+    public const string SpectateStreamHold = "spectate.stream_hold";
+
     public static string For(ServiceRoleState state) =>
         state switch
         {
@@ -110,6 +116,12 @@ public sealed record ServiceRoleHealth
 
     /// <summary>Spectate: when the current launch and loading phase began. Null outside it.</summary>
     public DateTimeOffset? LaunchingSince { get; init; }
+
+    /// <summary>Spectate: when it began holding the next replay for a stream that is down (#396).</summary>
+    public DateTimeOffset? StreamHoldSince { get; init; }
+
+    /// <summary>Spectate: why it holds the next replay. Null outside a hold.</summary>
+    public string StreamHoldReason { get; init; }
 
     /// <summary>Spectate: replay sessions this process ended, by outcome.</summary>
     public IReadOnlyDictionary<string, int> SessionOutcomes { get; init; }
@@ -194,6 +206,10 @@ public sealed record ServiceSpectatorSummary
     public DateTimeOffset? CompletedAt { get; init; }
     public int? CompletedWinnerTeam { get; init; }
 
+    /// <summary>When spectate began holding the next replay for a stream that is down (#396).</summary>
+    public DateTimeOffset? StreamHoldSince { get; init; }
+    public string StreamHoldReason { get; init; }
+
     public static ServiceSpectatorSummary From(SpectatorStatus status) =>
         status == null
             ? null
@@ -209,6 +225,8 @@ public sealed record ServiceSpectatorSummary
                 CompletedReplayId = status.CompletedReplayId,
                 CompletedAt = status.CompletedAt,
                 CompletedWinnerTeam = status.CompletedWinnerTeam,
+                StreamHoldSince = status.StreamHoldSince,
+                StreamHoldReason = status.StreamHoldReason,
             };
 }
 

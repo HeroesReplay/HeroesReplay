@@ -69,4 +69,12 @@ public class SpectateSettings
     /// download role. Zero or less means the default, 4 hours.
     /// </summary>
     public TimeSpan BuildDownloadHold { get; set; } = TimeSpan.FromHours(4);
+
+    /// <summary>
+    /// When true (the default), spectate loads no next replay while the stream is desired
+    /// (<c>OBS:StreamingEnabled</c>, this machine armed, connectivity online) and not live
+    /// (#396). It holds on the waiting scene, with no time limit, until the stream is live again;
+    /// a match already on screen is never interrupted. False plays on without the stream.
+    /// </summary>
+    public bool HoldWhileStreamDown { get; set; } = true;
 }

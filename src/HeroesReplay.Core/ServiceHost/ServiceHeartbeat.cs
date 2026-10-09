@@ -174,6 +174,26 @@ public sealed class ServiceHeartbeat : IDisposable
     public static void RecordLaunchEnded() => Volatile.Read(ref current)?.LaunchEnded();
 
     /// <summary>
+    /// Spectate holds the next replay while the desired stream is down (#396), or stopped holding
+    /// (<paramref name="since"/> null). No-op outside a service role. See <see cref="StreamHold"/>.
+    /// </summary>
+    public static void RecordStreamHold(DateTimeOffset? since, string reason) =>
+        Volatile.Read(ref current)?.StreamHold(since, reason);
+
+    /// <summary>
+    /// The hold is not work, and not a launch: it neither moves <c>lastSuccessfulWorkAt</c> nor
+    /// counts toward a stalled launch or sessions without progress.
+    /// </summary>
+    public void StreamHold(DateTimeOffset? since, string reason)
+    {
+        lock (gate)
+        {
+            report.StreamHoldSince = since;
+            report.StreamHoldReason = since == null ? null : Redact(reason);
+        }
+    }
+
+    /// <summary>
     /// The launch phase starts now, or starts over: a client that is still downloading or
     /// preparing game data is at work, so its wait does not count toward a stalled launch.
     /// </summary>
@@ -354,6 +374,8 @@ public sealed class ServiceHeartbeat : IDisposable
                         ? null
                         : new Dictionary<string, int>(report.SessionOutcomes),
                 LaunchingSince = report.LaunchingSince,
+                StreamHoldSince = report.StreamHoldSince,
+                StreamHoldReason = report.StreamHoldReason,
                 Concern =
                     report.Concern == null
                         ? null

@@ -34,6 +34,7 @@ public class Engine : IEngine
     private readonly IReleaseUpdateGate releaseUpdate;
     private readonly Action<bool, string> recordSession;
     private readonly SpectateMemoryLog memoryLog;
+    private readonly StreamHold streamHold;
     private readonly Dictionary<int, int> frontAttempts = new();
     private LoadedReplay preparedNext;
 
@@ -48,7 +49,8 @@ public class Engine : IEngine
         IReplayResume replayResume,
         IReplayLoader replayLoader,
         IReleaseUpdateGate releaseUpdate,
-        SpectateMemoryLog memoryLog = null
+        SpectateMemoryLog memoryLog = null,
+        StreamHold streamHold = null
     )
         : this(
             logger,
@@ -62,13 +64,16 @@ public class Engine : IEngine
             replayLoader,
             releaseUpdate,
             heartbeat: null,
-            memoryLog
+            memoryLog,
+            streamHold
         ) { }
 
     /// <summary>
     /// <paramref name="heartbeat"/> receives each session's match progress. Null sends it to the
     /// role's installed heartbeat (<see cref="ServiceHeartbeat.RecordSession"/>).
     /// <paramref name="memoryLog"/> logs spectate's own memory at each session end (#399).
+    /// <paramref name="streamHold"/> holds the next replay while the desired stream is down
+    /// (#396). Null never holds.
     /// </summary>
     internal Engine(
         ILogger<Engine> logger,
@@ -82,7 +87,8 @@ public class Engine : IEngine
         IReplayLoader replayLoader,
         IReleaseUpdateGate releaseUpdate,
         ServiceHeartbeat heartbeat,
-        SpectateMemoryLog memoryLog = null
+        SpectateMemoryLog memoryLog = null,
+        StreamHold streamHold = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -101,6 +107,7 @@ public class Engine : IEngine
             releaseUpdate ?? throw new ArgumentNullException(nameof(releaseUpdate));
         recordSession = heartbeat == null ? ServiceHeartbeat.RecordSession : heartbeat.Session;
         this.memoryLog = memoryLog;
+        this.streamHold = streamHold;
     }
 
     public async Task<bool> RunAsync()
@@ -204,6 +211,25 @@ public class Engine : IEngine
             return true;
         }
 
+        // #396: the stream is the product. While it is desired and not live, no replay loads.
+        StreamHoldCheck hold = streamHold?.Check();
+        if (hold?.Holds == true)
+        {
+            StreamHoldEnd end = await streamHold
+                .HoldAsync(hold, StageReleaseAsync, consoleTokenProvider.Token)
+                .ConfigureAwait(false);
+            if (end == StreamHoldEnd.ReleaseStaged && HandOffRelease())
+            {
+                ReturnPreparedNext();
+                logger.LogInformation(
+                    "Stopping during the stream hold so the new release can replace this install."
+                );
+                return false;
+            }
+
+            return true;
+        }
+
         LoadedReplay loadedReplay = await TakeResumedReplayAsync().ConfigureAwait(false);
         if (loadedReplay != null)
         {
@@ -247,7 +273,9 @@ public class Engine : IEngine
                             // The match is over. A new release is checked before the next
                             // replay is picked, so an update never interrupts a launched game.
                             releaseCheck = StageReleaseAsync();
-                            nextLoad = LoadNextUnlessReleaseAsync(releaseCheck, loadedReplay);
+                            nextLoad = HoldsNextReplay()
+                                ? Task.FromResult<LoadedReplay>(null)
+                                : LoadNextUnlessReleaseAsync(releaseCheck, loadedReplay);
                             return nextLoad;
                         }
                     )
@@ -442,6 +470,25 @@ public class Engine : IEngine
         int attempt = previous + 1;
         frontAttempts[id] = attempt;
         return attempt;
+    }
+
+    /// <summary>
+    /// The report of a finished match preloads no next replay while the desired stream is not
+    /// live (#396): the report plays out, and the next loop holds before it loads anything.
+    /// </summary>
+    private bool HoldsNextReplay()
+    {
+        StreamHoldCheck hold = streamHold?.Check(matchOver: true);
+        if (hold?.Holds != true)
+        {
+            return false;
+        }
+
+        logger.LogInformation(
+            "The next replay is not preloaded during the report: the stream is desired and not live ({Reason}). Spectate holds before the next replay until the stream is live.",
+            hold.Reason
+        );
+        return true;
     }
 
     /// <summary>False when no release is staged, including a stop during the check.</summary>
