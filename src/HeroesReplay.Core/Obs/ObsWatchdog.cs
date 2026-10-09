@@ -437,9 +437,10 @@ public static class ObsWatchdogPolicy
 /// session, never the spectator's), applies <see cref="ObsWatchdogPolicy"/>, and starts or
 /// restarts OBS: a hung OBS gets <c>CloseMainWindow</c>, is killed when it is still there after
 /// <see cref="ObsWatchdogRules.CloseWait"/>, and is started again with the profile and the
-/// collection, after its stale crash sentinel is removed. It never starts the stream: spectate's
-/// guarded <c>ReconcileStream</c> does. Every step that touches OBS is a port, so tests use
-/// fakes.
+/// collection. Every start goes through <see cref="ObsLauncher"/>, spectate's launcher too: the
+/// launch gate, the stale crash sentinel, and a start detached from the supervisor (#409). It
+/// never starts the stream: spectate's guarded <c>ReconcileStream</c> does. Every step that
+/// touches OBS is a port, so tests use fakes.
 /// </summary>
 public sealed class ObsWatchdog
 {
@@ -478,11 +479,11 @@ public sealed class ObsWatchdog
     public Func<int, TimeSpan, bool> WaitForExit { get; init; }
     public Action<int> Kill { get; init; }
 
-    /// <summary>Starts OBS (path, arguments) detached from the supervisor. Null on success, else why not.</summary>
-    public Func<string, string, string> Start { get; init; }
-
-    /// <summary>Deletes OBS's stale crash sentinels before a start (<see cref="ObsCrashSentinel"/>).</summary>
-    public Action RemoveStaleSentinels { get; init; }
+    /// <summary>
+    /// Starts OBS detached from the supervisor, inside the launch gate, after the stale crash
+    /// sentinel: the same launcher as spectate's (#409). Null starts nothing.
+    /// </summary>
+    public ObsLauncher Launcher { get; init; }
 
     /// <summary>Called before a slow step, so <c>supervisor.json</c> shows the state.</summary>
     public Action Changed { get; set; }
@@ -640,14 +641,14 @@ public sealed class ObsWatchdog
             Describe(Rules.Window)
         );
         ObsWatchdogPolicy.Started(State, now, cause, why);
-        Safely(() => RemoveStaleSentinels?.Invoke(), "remove OBS's stale crash sentinels");
         string failure;
         try
         {
+            ObsLaunch launch = Launcher?.Launch(Rules.ExecutablePath, Rules.Arguments);
             failure =
-                Start == null
-                    ? "No start step was given."
-                    : Start(Rules.ExecutablePath, Rules.Arguments);
+                launch == null ? "No launcher was given."
+                : launch.Outcome == ObsLaunchOutcome.Failed ? launch.Detail
+                : null;
         }
         catch (Exception e)
         {

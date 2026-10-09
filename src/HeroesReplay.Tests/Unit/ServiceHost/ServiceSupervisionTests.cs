@@ -7,7 +7,10 @@ using System.Threading;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Tests.Unit.Obs;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -258,12 +261,38 @@ public class ServiceSupervisionTests
         );
     }
 
+    /// <summary>
+    /// A watchdog whose start is the shared <see cref="ObsLauncher"/> (#409) on a fake table and
+    /// a fake <c>cmd</c>: the started OBS is whatever <paramref name="find"/> returns afterwards.
+    /// </summary>
     private static ObsWatchdog Watchdog(
         FakeStack stack,
         Func<ObsProcessInfo> find,
         Action<DateTimeOffset> start
-    ) =>
-        new()
+    )
+    {
+        var table = new FakeProcessTable();
+        var starter = new FakeProcessStarter
+        {
+            OnRun = _ =>
+            {
+                start(stack.Clock.Now);
+                if (find() is ObsProcessInfo obs)
+                {
+                    table.Add(
+                        FakeProcessTable.Entry(
+                            obs.Pid,
+                            FakeProcessStarter.CmdPid,
+                            FakeProcessTable.Obs,
+                            obs.StartedAt
+                        )
+                    );
+                }
+
+                return new ProcessRun(FakeProcessStarter.CmdPid, true, 0);
+            },
+        };
+        return new ObsWatchdog
         {
             Rules = new ServiceRestartSettings { ObsWatchdog = true }.ObsRules(
                 new OBSSettings { ExecutablePath = @"C:\obs\obs64.exe" }
@@ -272,12 +301,15 @@ public class ServiceSupervisionTests
             Desired = () => ObsWatchdogDesire.Yes,
             FindObs = find,
             Probe = () => ObsWatchdogProbe.Answered(new JObject { ["outputActive"] = false }),
-            Start = (path, arguments) =>
+            Launcher = new ObsLauncher(starter, table, null, NullLogger.Instance)
             {
-                start(stack.Clock.Now);
-                return null;
+                GateName = LaunchGateProbe.NewName(),
+                ExecutableExists = _ => true,
+                Now = () => stack.Clock.Now,
+                Wait = _ => { },
             },
         };
+    }
 
     [Fact]
     public void StopRequest_EndsTheLoopBeforeAnyRestart()

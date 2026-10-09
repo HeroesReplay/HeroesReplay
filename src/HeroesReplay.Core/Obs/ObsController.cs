@@ -60,7 +60,8 @@ public class ObsController : IObsController
             logger,
             settings,
             socket,
-            new WindowsObsProcess(),
+            // OBS starts detached (#409), never as spectate's child.
+            new WindowsObsProcess(ObsLauncher.ForThisUser(logger)),
             new RecordingSession(
                 logger,
                 socket,
@@ -92,7 +93,6 @@ public class ObsController : IObsController
                     }
                 ),
             settings.OBS?.StartupIdentifyTimeout,
-            sentinel: ObsCrashSentinel.ForThisUser(logger),
             microphones: new ObsBorrowedMicrophoneSession(this.obs),
             // A scene switch and a session start reach status.json at once (#357).
             stateChanged: () => ObsStatus.Write(statusStore, ReadObsState),

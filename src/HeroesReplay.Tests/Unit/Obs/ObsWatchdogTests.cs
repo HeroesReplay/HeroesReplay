@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.ServiceHost;
+using HeroesReplay.Core.Shared;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -21,6 +26,10 @@ public class ObsWatchdogTests
     private static readonly DateTimeOffset Start = new(2026, 10, 9, 6, 0, 0, TimeSpan.Zero);
     private const string Exe = @"C:\Program Files\obs-studio\bin\64bit\obs64.exe";
 
+    /// <summary>The detached start of OBS with the profile and collection only (#409).</summary>
+    private const string Launched =
+        "cmd /d /c start \"\" /D \"C:\\Program Files\\obs-studio\\bin\\64bit\" \"C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe\" --profile \"HeroesReplay\" --collection \"HeroesReplay\"";
+
     [Fact]
     public void AMissingObs_IsStartedAtOnce_WithTheProfileAndCollection_NeverTheStream()
     {
@@ -29,14 +38,7 @@ public class ObsWatchdogTests
 
         Assert.Equal(ObsWatchdogAction.Start, watchdog.Tick(Start, stopRequested: false));
 
-        Assert.Equal(
-            new[]
-            {
-                "sentinels",
-                $"start {Exe} --profile \"HeroesReplay\" --collection \"HeroesReplay\"",
-            },
-            obs.Steps
-        );
+        Assert.Equal(new[] { Launched }, obs.Steps);
         Assert.DoesNotContain(obs.Steps, step => step.Contains("--startstreaming"));
         Assert.Equal(1, watchdog.State.Restarts);
         Assert.Equal(ObsWatchdogState.ProcessMissingCode, watchdog.State.LastCause);
@@ -48,6 +50,57 @@ public class ObsWatchdogTests
         obs.Ticks(watchdog, 600);
         Assert.Single(obs.Starts);
         Assert.Equal(ObsWatchdogStates.Running, watchdog.State.State);
+    }
+
+    [Fact]
+    public void TheWatchdog_StartsObsThroughSpectatesLauncher_GateSentinelAndDetachedStart()
+    {
+        // #409: the watchdog and spectate share ObsLauncher: the gate, the stale crash sentinel
+        // cleared before the start, and cmd /c start, so OBS is never the supervisor's child.
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "hr-obs-watchdog-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string stale = Path.Combine(directory, "run_0d9f3c51-0000-0000-0000-000000000000");
+            File.WriteAllText(stale, "");
+            FakeObs obs = null;
+            obs = new FakeObs
+            {
+                Sentinel = new ObsCrashSentinel(
+                    directory,
+                    () => obs.Running != null,
+                    NullLogger.Instance
+                ),
+            };
+            bool gateHeld = false;
+            bool sentinelLeft = true;
+            obs.OnStart = () =>
+            {
+                gateHeld = LaunchGateProbe.HeldElsewhere(obs.GateName);
+                sentinelLeft = File.Exists(stale);
+            };
+            ObsWatchdog watchdog = obs.Watchdog();
+
+            Assert.Equal(ObsWatchdogAction.Start, watchdog.Tick(Start, stopRequested: false));
+
+            Assert.IsType<ObsLauncher>(watchdog.Launcher);
+            Assert.Equal(new[] { Launched }, obs.Steps);
+            Assert.True(gateHeld);
+            Assert.False(sentinelLeft);
+            Assert.Contains(
+                obs.Log.Entries,
+                entry =>
+                    entry.Level == LogLevel.Information
+                    && entry.Message.Contains("Started OBS detached: obs64 pid 9000")
+            );
+        }
+        finally
+        {
+            TestTemp.Delete(directory);
+        }
     }
 
     [Fact]
@@ -95,15 +148,7 @@ public class ObsWatchdogTests
         obs.Ticks(watchdog, 1);
 
         Assert.Equal(
-            new[]
-            {
-                "close 252",
-                "wait 252 15s",
-                "kill 252",
-                "wait 252 5s",
-                "sentinels",
-                $"start {Exe} --profile \"HeroesReplay\" --collection \"HeroesReplay\"",
-            },
+            new[] { "close 252", "wait 252 15s", "kill 252", "wait 252 5s", Launched },
             obs.Steps
         );
         Assert.Equal(Start.AddMinutes(3), obs.Starts.Single());
@@ -130,7 +175,7 @@ public class ObsWatchdogTests
 
         obs.Ticks(watchdog, 180);
 
-        Assert.Equal(new[] { "close 252", "wait 252 15s", "sentinels" }, obs.Steps.Take(3));
+        Assert.Equal(new[] { "close 252", "wait 252 15s", Launched }, obs.Steps.Take(3));
         Assert.DoesNotContain(obs.Steps, step => step.StartsWith("kill"));
         Assert.Single(obs.Starts);
     }
@@ -422,9 +467,18 @@ public class ObsWatchdogTests
     }
 
     /// <summary>A fake obs64 on a fake clock: start, close, kill, and the websocket probe.</summary>
-    private sealed class FakeObs
+    private sealed class FakeObs : IProcessStarter, IProcessTable
     {
         private int nextPid = 9000;
+
+        /// <summary>This test's own launch gate, never the stack's.</summary>
+        public string GateName { get; } = LaunchGateProbe.NewName();
+
+        /// <summary>The launcher's crash sentinel. Null clears none.</summary>
+        public ObsCrashSentinel Sentinel { get; init; }
+
+        /// <summary>Runs inside the fake <c>cmd /c start</c>, before OBS shows.</summary>
+        public Action OnStart { get; set; }
 
         public DateTimeOffset Now { get; private set; } = Start;
         public bool Enabled { get; init; } = true;
@@ -492,29 +546,58 @@ public class ObsWatchdogTests
                         Running = null;
                     }
                 },
-                Start = (path, arguments) =>
+                // The real shared launcher (#409) on this fake's process table and cmd.
+                Launcher = new ObsLauncher(this, this, Sentinel, Log)
                 {
-                    Steps.Add($"start {path} {arguments}");
-                    Starts.Add(Now);
-                    if (!StartedObsDies)
-                    {
-                        Running = new ObsProcessInfo(nextPid++, Now);
-                        if (NewObsNeverAnswers)
-                        {
-                            Answer = null;
-                        }
-                        else
-                        {
-                            Answer ??= Status(active: false, bytes: null);
-                        }
-                    }
-
-                    return null;
+                    GateName = GateName,
+                    ExecutableExists = _ => true,
+                    Now = () => Now,
+                    Wait = _ => { },
                 },
-                RemoveStaleSentinels = () => Steps.Add("sentinels"),
                 Changed = () => Saves++,
                 Logger = Log,
             };
+
+        /// <summary>The fake <c>cmd /c start</c>: OBS shows in the table at once, unless it dies.</summary>
+        ProcessRun IProcessStarter.Run(ProcessStartInfo start, TimeSpan wait)
+        {
+            Steps.Add("cmd " + start.Arguments);
+            Starts.Add(Now);
+            OnStart?.Invoke();
+            if (!StartedObsDies)
+            {
+                Running = new ObsProcessInfo(nextPid++, Now);
+                if (NewObsNeverAnswers)
+                {
+                    Answer = null;
+                }
+                else
+                {
+                    Answer ??= Status(active: false, bytes: null);
+                }
+            }
+
+            return new ProcessRun(FakeProcessStarter.CmdPid, true, 0);
+        }
+
+        IReadOnlyList<ProcessTableEntry> IProcessTable.Snapshot() =>
+            Running == null
+                ? Array.Empty<ProcessTableEntry>()
+                :
+                [
+                    FakeProcessTable.Entry(
+                        Running.Pid,
+                        FakeProcessStarter.CmdPid,
+                        FakeProcessTable.Obs,
+                        Running.StartedAt
+                    ),
+                ];
+
+        ProcessTableEntry IProcessTable.Find(int pid) =>
+            ((IProcessTable)this).Snapshot().FirstOrDefault(entry => entry.Pid == pid);
+
+        ProcessKillResult IProcessTable.Kill(ProcessTableEntry entry) =>
+            throw new InvalidOperationException("The launcher never kills a process.");
 
         public void Ticks(ObsWatchdog watchdog, int seconds, bool stopRequested = false)
         {
