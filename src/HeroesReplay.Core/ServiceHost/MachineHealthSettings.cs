@@ -5,9 +5,9 @@ using System.Linq;
 namespace HeroesReplay.Core.ServiceHost;
 
 /// <summary>
-/// The machine section of <c>services status</c> and the supervisor's hourly health line (#251).
-/// Bound from the <c>MachineHealth</c> section. A value above a limit is a warning; it does not
-/// change a role's state or the exit code.
+/// The machine section of <c>services status</c> and the supervisor's hourly health line (#251,
+/// #399). Bound from the <c>MachineHealth</c> section. A value above a limit is a warning; it does
+/// not change a role's state or the exit code.
 /// </summary>
 public sealed class MachineHealthSettings
 {
@@ -36,6 +36,15 @@ public sealed class MachineHealthSettings
 
     /// <summary>How often the supervisor logs the machine and the watched processes' private bytes.</summary>
     public TimeSpan LogInterval { get; set; } = TimeSpan.FromHours(1);
+
+    public const int DefaultTopConsumerCount = 5;
+
+    /// <summary>
+    /// While physical memory or commit is above its limit, the machine line names this many
+    /// processes with the most private bytes (commit), whoever owns them (#399). Report only:
+    /// HeroesReplay never stops or changes them. Zero or less names none.
+    /// </summary>
+    public int TopConsumerCount { get; set; } = DefaultTopConsumerCount;
 
     /// <summary>
     /// Process names (no <c>.exe</c>) whose private bytes the supervisor logs, so steady growth
