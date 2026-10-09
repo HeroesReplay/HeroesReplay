@@ -64,10 +64,15 @@ public class ObsController : IObsController
             new RecordingSession(
                 logger,
                 socket,
-                ObsRecordingBudget.Default,
+                new ObsRecordingBudget
+                {
+                    StreamStartTimeout =
+                        settings.OBS?.StreamStartTimeout > TimeSpan.Zero
+                            ? settings.OBS.StreamStartTimeout
+                            : OBSSettings.DefaultStreamStartTimeout,
+                },
                 new RecordingClaimStore(RecordingClaimStore.DefaultPath)
             ),
-            ObsBackoff.Default,
             Thread.Sleep,
             TimeSpan.FromSeconds(10),
             () => PatchInstalledCollection(),
@@ -87,14 +92,12 @@ public class ObsController : IObsController
                     }
                 ),
             settings.OBS?.StartupIdentifyTimeout,
-            sentinel: new ObsCrashSentinel(
-                ObsCrashSentinel.DefaultDirectory(),
-                () => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
-                logger
-            ),
+            sentinel: ObsCrashSentinel.ForThisUser(logger),
             microphones: new ObsBorrowedMicrophoneSession(this.obs),
             // A scene switch and a session start reach status.json at once (#357).
-            stateChanged: () => ObsStatus.Write(statusStore, ReadObsState)
+            stateChanged: () => ObsStatus.Write(statusStore, ReadObsState),
+            ingest: new TcpIngestProbe(),
+            windows: new Win32ObsWindows()
         );
     }
 
@@ -381,6 +384,8 @@ public class ObsController : IObsController
 
     public ObsStreamHealth CheckStreamHealth() => coordinator.CheckStreamHealth();
 
+    public void ReconcileScene() => coordinator.ReconcileScene();
+
     public void UpdateReplayInfoVisibility(TimeSpan matchTime)
     {
         if (
@@ -425,6 +430,9 @@ public class ObsController : IObsController
     {
         if (SkipWhileUnavailable("The game scene"))
         {
+            // Still the scene the spectator wants: once OBS answers, the scene reconcile puts it
+            // on air, and a stream started meanwhile does not show the waiting scene (#407).
+            coordinator.WantScene(settings.OBS.GameSceneName);
             return;
         }
 
@@ -465,6 +473,7 @@ public class ObsController : IObsController
     {
         if (SkipWhileUnavailable("The waiting scene"))
         {
+            coordinator.WantScene(settings.OBS.WaitingSceneName);
             return;
         }
 

@@ -13,6 +13,15 @@ internal enum ObsRecordSignalKind
     Stopped,
     Split,
     Disconnected,
+
+    /// <summary>StreamStateChanged <c>OBS_WEBSOCKET_OUTPUT_STARTING</c>: OBS began a stream start.</summary>
+    StreamStarting,
+
+    /// <summary>StreamStateChanged <c>OBS_WEBSOCKET_OUTPUT_STARTED</c>.</summary>
+    StreamStarted,
+
+    /// <summary>StreamStateChanged <c>OBS_WEBSOCKET_OUTPUT_STOPPED</c>: after a start, the start failed.</summary>
+    StreamStopped,
 }
 
 internal sealed class ObsRecordSignal : EventArgs
@@ -33,6 +42,9 @@ internal sealed class ObsRecordSignal : EventArgs
     public static ObsRecordSignal Split(string path) => new(ObsRecordSignalKind.Split, path);
 
     public static ObsRecordSignal Disconnected() => new(ObsRecordSignalKind.Disconnected, null);
+
+    /// <summary>A stream output state (#407): starting, started, or stopped.</summary>
+    public static ObsRecordSignal Stream(ObsRecordSignalKind kind) => new(kind, null);
 }
 
 internal interface IObsRecordSocket
@@ -65,6 +77,9 @@ internal interface IObsSession : IObsRecordSocket
 
     /// <summary>GetSceneCollectionList → currentSceneCollectionName.</summary>
     string CurrentSceneCollection();
+
+    /// <summary>GetStreamServiceSettings: the type, the named service, and the server. Never the key.</summary>
+    ObsStreamServer StreamServer();
 }
 
 internal sealed class ObsWebsocketRecordSocket : IObsSession
@@ -76,6 +91,7 @@ internal sealed class ObsWebsocketRecordSocket : IObsSession
         this.obs = obs ?? throw new ArgumentNullException(nameof(obs));
         obs.RecordStateChanged += OnRecordStateChanged;
         obs.RecordFileChanged += OnRecordFileChanged;
+        obs.StreamStateChanged += OnStreamStateChanged;
         obs.Disconnected += OnDisconnected;
     }
 
@@ -120,6 +136,9 @@ internal sealed class ObsWebsocketRecordSocket : IObsSession
     public string CurrentProfile() => obs.GetProfileList()?.CurrentProfileName;
 
     public string CurrentSceneCollection() => obs.GetCurrentSceneCollection();
+
+    public ObsStreamServer StreamServer() =>
+        ObsStreamServer.From(obs.SendRequest("GetStreamServiceSettings"));
 
     public void Connect(string endpoint, string password, TimeSpan identifyTimeout)
     {
@@ -194,6 +213,36 @@ internal sealed class ObsWebsocketRecordSocket : IObsSession
         if (output == OutputState.OBS_WEBSOCKET_OUTPUT_STARTED || state.IsActive)
         {
             Raise(ObsRecordSignal.Started());
+        }
+    }
+
+    private void OnStreamStateChanged(object sender, StreamStateChangedEventArgs args)
+    {
+        OutputState output;
+        try
+        {
+            if (args?.OutputState == null)
+            {
+                return;
+            }
+
+            output = args.OutputState.State;
+        }
+        catch (ArgumentException)
+        {
+            return;
+        }
+
+        ObsRecordSignalKind? kind = output switch
+        {
+            OutputState.OBS_WEBSOCKET_OUTPUT_STARTING => ObsRecordSignalKind.StreamStarting,
+            OutputState.OBS_WEBSOCKET_OUTPUT_STARTED => ObsRecordSignalKind.StreamStarted,
+            OutputState.OBS_WEBSOCKET_OUTPUT_STOPPED => ObsRecordSignalKind.StreamStopped,
+            _ => null,
+        };
+        if (kind is ObsRecordSignalKind signal)
+        {
+            Raise(ObsRecordSignal.Stream(signal));
         }
     }
 

@@ -353,28 +353,40 @@ public sealed class ConnectivityWatchdog : IConnectivityWatchdog
     /// <summary>
     /// While online, a desired stream that is not live goes to the OBS coordinator's reconcile:
     /// an inactive output is started, and one stuck reconnecting or frozen past
-    /// <c>OBS:StreamStuckAfter</c> is restarted (#395). An active output alone is not live. The
-    /// coordinator logs what it did, at most one warning per attempt, so nothing is logged here.
+    /// <c>OBS:StreamStuckAfter</c> is restarted (#395). An active output alone is not live. Then,
+    /// live or not, online or not, the spectator's scene goes back on the program output when OBS
+    /// shows another one (#407). The coordinator logs what it did, at most one warning per
+    /// attempt and one INF per scene correction, so nothing is logged here.
     /// </summary>
     private void ReconcileDesiredStream()
     {
-        if (obsController == null || !IsOnline || !IngestAllowed())
+        if (obsController == null || !IngestAllowed())
         {
             return;
         }
 
+        if (IsOnline)
+        {
+            try
+            {
+                if (obsController.ReadStreamHealth()?.IsLive != true)
+                {
+                    obsController.StartStreaming();
+                }
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "OBS stream reconcile failed.");
+            }
+        }
+
         try
         {
-            if (obsController.ReadStreamHealth()?.IsLive == true)
-            {
-                return;
-            }
-
-            obsController.StartStreaming();
+            obsController.ReconcileScene();
         }
         catch (Exception e)
         {
-            logger.LogWarning(e, "OBS stream reconcile failed.");
+            logger.LogWarning(e, "OBS scene reconcile failed.");
         }
     }
 

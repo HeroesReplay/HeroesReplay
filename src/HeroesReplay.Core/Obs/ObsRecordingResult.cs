@@ -26,6 +26,12 @@ public enum ObsOutputFailure
     /// time, or the next attempt after a failed one is not due yet (#395).
     /// </summary>
     Waiting,
+
+    /// <summary>
+    /// The ingest did not accept a TCP connection, so StartStream was not sent (#407,
+    /// <c>obs.ingest_unreachable</c>). A failed attempt: the next one waits for the backoff.
+    /// </summary>
+    IngestUnreachable,
 }
 
 /// <summary>
@@ -150,6 +156,12 @@ internal sealed class ObsRecordingBudget
     public int RetryCount { get; init; } = 5;
     public TimeSpan RetryDelay { get; init; } = TimeSpan.FromSeconds(1);
     public TimeSpan StartTimeout { get; init; } = TimeSpan.FromSeconds(8);
+
+    /// <summary>
+    /// How long one StartStream may take to end: OBS reports the output active, or reports it
+    /// stopped (the start failed). <c>OBS:StreamStartTimeout</c>, default 30 seconds (#407).
+    /// </summary>
+    public TimeSpan StreamStartTimeout { get; init; } = OBSSettings.DefaultStreamStartTimeout;
     public TimeSpan StopTimeout { get; init; } = TimeSpan.FromSeconds(10);
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromMilliseconds(250);
 }

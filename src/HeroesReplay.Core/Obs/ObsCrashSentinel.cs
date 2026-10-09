@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Obs;
@@ -29,6 +30,18 @@ public sealed class ObsCrashSentinel
         this.obsRunning = obsRunning ?? throw new ArgumentNullException(nameof(obsRunning));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
+
+    /// <summary>
+    /// This user's sentinel folder, with "OBS runs" read from the process table: the one sentinel
+    /// every HeroesReplay OBS launch clears before it starts OBS, spectate's (<c>ObsCoordinator</c>)
+    /// and the supervisor's OBS watchdog (#398, #407).
+    /// </summary>
+    public static ObsCrashSentinel ForThisUser(ILogger logger) =>
+        new(
+            DefaultDirectory(),
+            () => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
+            logger
+        );
 
     /// <summary><c>%APPDATA%\obs-studio\.sentinel</c>.</summary>
     public static string DefaultDirectory() =>

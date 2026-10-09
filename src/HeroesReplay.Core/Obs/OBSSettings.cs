@@ -43,6 +43,32 @@ public class OBSSettings
     /// </summary>
     public TimeSpan StreamStuckAfter { get; set; } = ObsStreamRecovery.DefaultStuckAfter;
 
+    public static readonly TimeSpan DefaultStreamStartTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How long one StartStream may take to end (#407): OBS reports the output active, or reports
+    /// it stopped because the start failed. Each start or restart attempt sends StartStream once
+    /// and waits for that; the next attempt is the 1, 2, 5 minute backoff, never a quick retry.
+    /// A multitrack (Enhanced Broadcasting) start builds its encoders on OBS's UI thread first,
+    /// about 1.5 s each under a match's load. Default 30 seconds.
+    /// </summary>
+    public TimeSpan StreamStartTimeout { get; set; } = DefaultStreamStartTimeout;
+
+    /// <summary>
+    /// Before each StartStream, a TCP connect to the ingest (the stream server's host and port;
+    /// Twitch's global ingest for Twitch with server <c>auto</c>) must open within this long, or
+    /// StartStream is not sent: <c>obs.ingest_unreachable</c>, and the attempt backs off (#407).
+    /// Zero turns the check off. Default 3 seconds.
+    /// </summary>
+    public TimeSpan IngestPreflightTimeout { get; set; } = ObsIngest.DefaultTimeout;
+
+    /// <summary>
+    /// The title of OBS's dialog for a stream that did not connect. After a failed start, while
+    /// OBS answers, each visible top-level window of the OBS process with exactly this title is
+    /// closed (#407). Empty turns that off. Default <c>Failed to connect</c> (en-US OBS).
+    /// </summary>
+    public string ConnectFailDialogTitle { get; set; } = ObsConnectFailDialog.DefaultTitle;
+
     /// <summary>
     /// OBS profile that must be active before HeroesReplay starts a stream or a recording.
     /// The profile folder under <c>%APPDATA%\obs-studio\basic\profiles</c> has this name.
