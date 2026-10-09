@@ -580,8 +580,6 @@ public class GameManagerReportTests
 
     private sealed class NoContext : IReplayContext
     {
-        public ContextData Previous => null;
-
         public ContextData Current => null;
     }
 

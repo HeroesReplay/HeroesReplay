@@ -531,7 +531,6 @@ public class TalentNotifierTests
             Current = new ContextData { Payloads = game };
         }
 
-        public ContextData Previous => null;
         public ContextData Current { get; }
     }
 

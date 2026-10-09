@@ -13,16 +13,18 @@ public class SpectateMemoryTests
     private const long Megabyte = 1024L * 1024;
 
     [Fact]
-    public void Trend_FlagsPrivateBytesThatRoseAtEverySessionEndInARow()
+    public void Trend_FlagsPrivateBytesThatRoseAfterEveryCollectionInARow()
     {
         var trend = new SpectateMemoryTrend(new ServiceHealthSettings());
 
-        // Production pid 21960 went 484 -> 999 -> 1304 MB in about 3 h (#399), and kept going.
+        // Production pid 21960 went 484 -> 999 -> 1304 MB in about 3 h (#399). Had it kept going
+        // with a gen2 collection before every session end, the collector kept it: growth.
         SpectateMemoryVerdict[] verdicts = new long[] { 484, 999, 1304, 1350, 1420, 1500 }
-            .Select(megabytes => trend.Add(megabytes * Megabyte))
+            .Select((megabytes, session) => trend.Add(megabytes * Megabyte, session))
             .ToArray();
 
         Assert.Equal(new[] { 0, 1, 2, 3, 4, 5 }, verdicts.Select(v => v.RisingSessions));
+        Assert.All(verdicts, verdict => Assert.True(verdict.AfterCollection));
         Assert.All(verdicts.Take(5), verdict => Assert.False(verdict.SustainedGrowth));
         Assert.True(verdicts[5].SustainedGrowth);
         Assert.Equal((1500 - 484) * Megabyte, verdicts[5].GrowthBytes);
@@ -30,23 +32,48 @@ public class SpectateMemoryTests
     }
 
     [Fact]
-    public void Trend_ADropStartsTheRunOver()
+    public void Trend_SessionsWithoutAGen2CollectionNeitherExtendNorEndTheRun()
+    {
+        var trend = new SpectateMemoryTrend(
+            new ServiceHealthSettings { SpectateMemoryGrowthSessions = 2 }
+        );
+
+        // ASA-SERVER, 2026-10-09: 597 then 913 MB with the gen2 count still at 8, while the
+        // live heap after a full collection was about 350 MB. That rise is garbage, not growth.
+        Assert.False(trend.Add(597 * Megabyte, 8).SustainedGrowth);
+        SpectateMemoryVerdict uncollected = trend.Add(913 * Megabyte, 8);
+        Assert.False(uncollected.AfterCollection);
+        Assert.Equal(0, uncollected.RisingSessions);
+        Assert.Equal(0, uncollected.GrowthBytes);
+
+        // A drop without a collection does not end a run either.
+        Assert.Equal(1, trend.Add(760 * Megabyte, 12).RisingSessions);
+        Assert.Equal(1, trend.Add(500 * Megabyte, 12).RisingSessions);
+        SpectateMemoryVerdict grown = trend.Add(900 * Megabyte, 13);
+        Assert.Equal(2, grown.RisingSessions);
+        Assert.Equal((900 - 597) * Megabyte, grown.GrowthBytes);
+        Assert.True(grown.SustainedGrowth);
+    }
+
+    [Fact]
+    public void Trend_ADropAfterACollectionStartsTheRunOver()
     {
         var trend = new SpectateMemoryTrend(
             new ServiceHealthSettings { SpectateMemoryGrowthSessions = 3 }
         );
 
         // Production pid 16380 swung between 440 and 822 MB over 12 h: GC, not growth.
+        int gen2 = 0;
         foreach (long megabytes in new long[] { 440, 600, 822, 450 })
         {
-            trend.Add(megabytes * Megabyte);
+            trend.Add(megabytes * Megabyte, ++gen2);
         }
 
-        SpectateMemoryVerdict verdict = trend.Add(700 * Megabyte);
+        SpectateMemoryVerdict verdict = trend.Add(700 * Megabyte, ++gen2);
         Assert.Equal(1, verdict.RisingSessions);
         Assert.Equal(250 * Megabyte, verdict.GrowthBytes);
         Assert.False(verdict.SustainedGrowth);
-        Assert.False(trend.Add(700 * Megabyte).SustainedGrowth);
+        Assert.False(trend.Add(700 * Megabyte, ++gen2).SustainedGrowth);
     }
 
     [Fact]
@@ -56,9 +83,10 @@ public class SpectateMemoryTests
             new ServiceHealthSettings { SpectateMemoryGrowthSessions = 3 }
         );
         SpectateMemoryVerdict verdict = null;
+        int gen2 = 0;
         foreach (long megabytes in new long[] { 500, 510, 520, 530, 540 })
         {
-            verdict = trend.Add(megabytes * Megabyte);
+            verdict = trend.Add(megabytes * Megabyte, ++gen2);
         }
 
         Assert.Equal(4, verdict.RisingSessions);
@@ -67,19 +95,20 @@ public class SpectateMemoryTests
     }
 
     [Fact]
-    public void Trend_WarnsAboveTheCeilingFromTheFirstSession()
+    public void Trend_WarnsAboveTheCeilingWithOrWithoutACollection()
     {
         var trend = new SpectateMemoryTrend(new ServiceHealthSettings());
 
-        Assert.False(trend.Add(2048 * Megabyte).AboveCeiling);
-        SpectateMemoryVerdict above = trend.Add(2049 * Megabyte);
+        Assert.False(trend.Add(2048 * Megabyte, 1).AboveCeiling);
+        SpectateMemoryVerdict above = trend.Add(2049 * Megabyte, 1);
+        Assert.False(above.AfterCollection);
         Assert.True(above.AboveCeiling);
         Assert.Equal(2048 * Megabyte, above.CeilingBytes);
 
         var configured = new SpectateMemoryTrend(
             new ServiceHealthSettings { SpectatePrivateBytesWarn = 600 * Megabyte }
         );
-        Assert.True(configured.Add(601 * Megabyte).AboveCeiling);
+        Assert.True(configured.Add(601 * Megabyte, 0).AboveCeiling);
     }
 
     [Theory]
@@ -133,9 +162,15 @@ public class SpectateMemoryTests
     {
         var logger = new ListLogger();
         var samples = new Queue<long>(new long[] { 900, 1100, 1300, 2100 });
+        int gen2 = 0;
         var log = new SpectateMemoryLog(
             new ServiceHealthSettings { SpectateMemoryGrowthSessions = 3 },
-            () => new SpectateMemorySample { PrivateBytes = samples.Dequeue() * Megabyte },
+            () =>
+                new SpectateMemorySample
+                {
+                    PrivateBytes = samples.Dequeue() * Megabyte,
+                    Gen2Collections = ++gen2,
+                },
             logger
         );
 
@@ -158,7 +193,10 @@ public class SpectateMemoryTests
             "2100 MB, above ServiceHealth:SpectatePrivateBytesWarn (2048 MB)",
             warnings[0].Message
         );
-        Assert.Contains("rose at 3 session ends in a row, by 1200 MB", warnings[1].Message);
+        Assert.Contains(
+            "rose at 3 session ends in a row, each after a gen2 collection, by 1200 MB",
+            warnings[1].Message
+        );
         Assert.All(warnings, warning => Assert.Contains("not restarted", warning.Message));
     }
 
