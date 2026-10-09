@@ -57,23 +57,37 @@ public sealed record SpectateMemoryVerdict
     public bool AboveCeiling { get; init; }
     public long CeilingBytes { get; init; }
 
-    /// <summary>Session ends in a row, up to this one, whose private bytes rose above the one before.</summary>
+    /// <summary>
+    /// A gen2 collection ran since the last session end, so this sample counts toward the run.
+    /// Without one, the heap still holds the garbage of the sessions before it, and the sample
+    /// neither extends nor ends the run.
+    /// </summary>
+    public bool AfterCollection { get; init; }
+
+    /// <summary>
+    /// Counted session ends in a row, up to this one, whose private bytes rose above the counted
+    /// one before.
+    /// </summary>
     public int RisingSessions { get; init; }
 
     /// <summary>How far private bytes rose across those sessions.</summary>
     public long GrowthBytes { get; init; }
 
     /// <summary>
-    /// <see cref="RisingSessions"/> reached <see cref="ServiceHealthSettings.SpectateMemoryGrowthSessions"/>
-    /// and the rise is at least <see cref="SpectateMemoryTrend.MinimumGrowthBytes"/>.
+    /// This sample counted, <see cref="RisingSessions"/> reached
+    /// <see cref="ServiceHealthSettings.SpectateMemoryGrowthSessions"/>, and the rise is at least
+    /// <see cref="SpectateMemoryTrend.MinimumGrowthBytes"/>.
     /// </summary>
     public bool SustainedGrowth { get; init; }
 }
 
 /// <summary>
 /// Spectate's private bytes at each replay session end, and whether they are above the ceiling
-/// or rising session after session (#399). A collection between sessions makes the sample go
-/// down, so a run of rises survives only while memory is kept from one replay to the next.
+/// or rising session after session (#399). Each parsed replay outlives its session, so it reaches
+/// gen2, and the workstation GC can go more than one session without a gen2 collection: on
+/// ASA-SERVER on 2026-10-09 private bytes went 597 to 913 MB across a session with no gen2
+/// collection while the live heap stayed about 350 MB. So a session end counts toward a run only
+/// when a gen2 collection ran since the last one, and a counted drop starts the run over.
 /// </summary>
 public sealed class SpectateMemoryTrend
 {
@@ -82,7 +96,8 @@ public sealed class SpectateMemoryTrend
 
     private readonly long ceiling;
     private readonly int growthRun;
-    private long? last;
+    private long? lastCounted;
+    private int? lastGen2;
     private long runStart;
     private int rising;
 
@@ -93,27 +108,38 @@ public sealed class SpectateMemoryTrend
         growthRun = settings.SpectateMemoryGrowthRun();
     }
 
-    public SpectateMemoryVerdict Add(long privateBytes)
+    /// <param name="privateBytes">Spectate's private bytes at this session end.</param>
+    /// <param name="gen2Collections">The process's gen2 collections so far (<see cref="GC.CollectionCount"/>).</param>
+    public SpectateMemoryVerdict Add(long privateBytes, int gen2Collections)
     {
-        if (last is long previous && privateBytes > previous)
+        // The first sample is the baseline. After it, only a sample with a gen2 collection
+        // since the last one says what the collector kept.
+        bool counted = lastGen2 is not int previousGen2 || gen2Collections > previousGen2;
+        lastGen2 = gen2Collections;
+        if (counted)
         {
-            rising++;
-        }
-        else
-        {
-            rising = 0;
-            runStart = privateBytes;
+            if (lastCounted is long previous && privateBytes > previous)
+            {
+                rising++;
+            }
+            else
+            {
+                rising = 0;
+                runStart = privateBytes;
+            }
+
+            lastCounted = privateBytes;
         }
 
-        last = privateBytes;
-        long growth = privateBytes - runStart;
+        long growth = counted ? privateBytes - runStart : 0;
         return new SpectateMemoryVerdict
         {
             AboveCeiling = privateBytes > ceiling,
             CeilingBytes = ceiling,
+            AfterCollection = counted,
             RisingSessions = rising,
             GrowthBytes = growth,
-            SustainedGrowth = rising >= growthRun && growth >= MinimumGrowthBytes,
+            SustainedGrowth = counted && rising >= growthRun && growth >= MinimumGrowthBytes,
         };
     }
 }
@@ -162,7 +188,7 @@ public sealed class SpectateMemoryLog
         }
 
         sessions++;
-        SpectateMemoryVerdict verdict = trend.Add(sample.PrivateBytes);
+        SpectateMemoryVerdict verdict = trend.Add(sample.PrivateBytes, sample.Gen2Collections);
         logger.LogInformation(
             "Spectate memory after session {Session} (replay {ReplayId}, {Outcome}): {PrivateMegabytes} MB private, {WorkingSetMegabytes} MB working set, {ManagedHeapMegabytes} MB managed heap ({LargeObjectHeapMegabytes} MB large objects, {FragmentedMegabytes} MB fragmented), {GcCommittedMegabytes} MB GC committed, {OtherPrivateMegabytes} MB other private, {Gen2Collections} gen2 collections.",
             sessions,
@@ -189,7 +215,7 @@ public sealed class SpectateMemoryLog
         if (verdict.SustainedGrowth)
         {
             logger.LogWarning(
-                "Spectate private bytes rose at {RisingSessions} session ends in a row, by {GrowthMegabytes} MB to {PrivateMegabytes} MB (ServiceHealth:SpectateMemoryGrowthSessions). This is a warning only; spectate is not restarted.",
+                "Spectate private bytes rose at {RisingSessions} session ends in a row, each after a gen2 collection, by {GrowthMegabytes} MB to {PrivateMegabytes} MB (ServiceHealth:SpectateMemoryGrowthSessions). This is a warning only; spectate is not restarted.",
                 verdict.RisingSessions,
                 verdict.GrowthBytes / Megabyte,
                 sample.PrivateBytes / Megabyte
