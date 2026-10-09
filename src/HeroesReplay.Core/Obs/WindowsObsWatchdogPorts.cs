@@ -164,11 +164,7 @@ public static class WindowsObsWatchdogPorts
 
     /// <summary>Deletes stale <c>run_*</c> sentinels while no OBS runs (<see cref="ObsCrashSentinel"/>).</summary>
     public static void RemoveStaleSentinels(ILogger logger) =>
-        new ObsCrashSentinel(
-            ObsCrashSentinel.DefaultDirectory(),
-            () => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
-            logger
-        ).RemoveStale();
+        ObsCrashSentinel.ForThisUser(logger).RemoveStale();
 
     private static DateTimeOffset? StartTime(Process process)
     {

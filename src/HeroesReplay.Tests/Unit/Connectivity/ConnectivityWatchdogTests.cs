@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands.Services;
@@ -155,6 +157,37 @@ public class ConnectivityWatchdogTests
         Assert.False(fixture.Watchdog.IsOnline);
         Assert.Equal(whileOnline, fixture.Obs.StartCalls);
         Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
+    public void Apply_EveryTick_ReconcilesTheScene_LiveOrNotOnlineOrNot()
+    {
+        // #407: a live stream skipped the reconcile, so nothing put game-scene back after OBS
+        // came back on waiting-screen and its stream went live.
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
+        fixture.Obs.Streaming = true;
+
+        fixture.Watchdog.Apply(OkSnapshot());
+        fixture.Obs.Streaming = false;
+        fixture.Watchdog.Apply(OkSnapshot());
+        for (int i = 0; i < 4; i++)
+        {
+            fixture.Watchdog.Apply(FailSnapshot());
+        }
+
+        Assert.False(fixture.Watchdog.IsOnline);
+        Assert.Equal(6, fixture.Obs.SceneReconciles);
+        Assert.Equal(new[] { "scene", "start", "scene" }, fixture.Obs.Calls.Take(3));
+    }
+
+    [Fact]
+    public void Apply_StreamingOff_NeverReconcilesTheScene()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: false);
+
+        fixture.Watchdog.Apply(OkSnapshot());
+
+        Assert.Equal(0, fixture.Obs.SceneReconciles);
     }
 
     private static ObsStreamHealth Reconnecting() =>
@@ -695,9 +728,21 @@ public class ConnectivityWatchdogTests
         public ObsRecordingResult StopRecording() =>
             ObsRecordingResult.Failed(ObsOutputFailure.NotRequested, "test");
 
+        /// <summary>The stream and scene calls in order: <c>start</c> and <c>scene</c>.</summary>
+        public List<string> Calls { get; } = new();
+
+        public int SceneReconciles { get; private set; }
+
+        public void ReconcileScene()
+        {
+            SceneReconciles++;
+            Calls.Add("scene");
+        }
+
         public ObsStreamResult StartStreaming()
         {
             StartCalls++;
+            Calls.Add("start");
             if (StartResult != null)
             {
                 return StartResult;

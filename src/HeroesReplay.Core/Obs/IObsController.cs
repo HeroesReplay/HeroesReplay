@@ -31,5 +31,13 @@ public interface IObsController
     /// nothing is started or stopped.
     /// </summary>
     ObsStreamHealth CheckStreamHealth() => ReadStreamHealth();
+
+    /// <summary>
+    /// Puts the spectator's scene back on the program output when OBS shows another one (#407):
+    /// a failed put-back, an OBS that restarted on the scene it saved, or a change in the OBS UI.
+    /// The watchdog calls it on every tick while streaming is desired. One INF per correction;
+    /// nothing while the spectator is switching scenes or OBS is not identified.
+    /// </summary>
+    void ReconcileScene() { }
     ObsRuntimeSnapshot ReadObsState();
 }

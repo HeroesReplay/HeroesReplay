@@ -8,6 +8,9 @@ namespace HeroesReplay.Core.Obs;
 internal interface IObsProcess
 {
     bool IsRunning();
+
+    /// <summary>The oldest running obs64's pid, or null: whose windows the dialog close may touch.</summary>
+    int? ProcessId();
     bool ExecutableExists(string path);
     bool IsOwned { get; }
     ObsLaunchDecision Start(ObsLaunchDecision decision);
@@ -42,6 +45,8 @@ internal sealed class WindowsObsProcess : IObsProcess
     }
 
     public bool IsRunning() => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName);
+
+    public int? ProcessId() => WindowsObsWatchdogPorts.FindObs()?.Pid;
 
     public bool ExecutableExists(string path) =>
         !string.IsNullOrWhiteSpace(path) && File.Exists(path);

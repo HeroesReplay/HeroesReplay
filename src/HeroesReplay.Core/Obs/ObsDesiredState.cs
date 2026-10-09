@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using HeroesReplay.Core.Status;
 
 namespace HeroesReplay.Core.Obs;
@@ -178,7 +177,7 @@ public sealed record ObsRuntimeSnapshot
     public bool WebsocketDesired { get; init; }
     public bool WebsocketIdentified { get; init; }
 
-    /// <summary>The scene the spectator last asked OBS for (#282).</summary>
+    /// <summary>The scene the spectator last asked OBS for (#282), whatever the stream start showed (#407).</summary>
     public string SceneDesired { get; init; }
 
     /// <summary>The program scene: the last one OBS accepted, or the one it last reported.</summary>
@@ -207,9 +206,9 @@ public static class ObsDesired
         obs is { Enabled: true } && SessionMedia.ShouldStream(obs);
 
     /// <summary>
-    /// <paramref name="sceneRequested"/> is the scene this process last put on the program
-    /// output. Until it asks for one, a desired stream wants the waiting scene, which is where
-    /// the stream starts.
+    /// <paramref name="sceneRequested"/> is the scene the spectator last asked for; the stream
+    /// start never sets it (#407). Until it asks for one, a desired stream wants the waiting
+    /// scene, which is where such a stream starts.
     /// </summary>
     public static ObsRuntimeSnapshot Capture(
         OBSSettings obs,
@@ -247,85 +246,6 @@ public static class ObsDesired
             StreamBlockedBy =
                 streamDesired && stream is { Succeeded: false } ? stream.Reason : null,
         };
-    }
-}
-
-public sealed class ObsBackoff
-{
-    public static ObsBackoff Default { get; } =
-        new(attempts: 4, first: TimeSpan.FromSeconds(1), cap: TimeSpan.FromSeconds(8));
-
-    private readonly int attempts;
-    private readonly TimeSpan first;
-    private readonly TimeSpan cap;
-
-    public ObsBackoff(int attempts, TimeSpan first, TimeSpan cap)
-    {
-        this.attempts = attempts < 1 ? 1 : attempts;
-        this.first = first < TimeSpan.Zero ? TimeSpan.Zero : first;
-        this.cap = cap < this.first ? this.first : cap;
-    }
-
-    public IReadOnlyList<TimeSpan> Delays() => Delays(attempts, first, cap);
-
-    public static IReadOnlyList<TimeSpan> Delays(int attempts, TimeSpan first, TimeSpan cap)
-    {
-        int waits = attempts < 1 ? 0 : attempts - 1;
-        if (first < TimeSpan.Zero)
-        {
-            first = TimeSpan.Zero;
-        }
-
-        if (cap < first)
-        {
-            cap = first;
-        }
-
-        var delays = new List<TimeSpan>(waits);
-        TimeSpan delay = first;
-        for (int i = 0; i < waits; i++)
-        {
-            delays.Add(delay);
-            long doubled = delay.Ticks > long.MaxValue / 2 ? long.MaxValue : delay.Ticks * 2;
-            TimeSpan next = doubled == long.MaxValue ? cap : TimeSpan.FromTicks(doubled);
-            delay = next > cap ? cap : next;
-        }
-
-        return delays;
-    }
-
-    public static ObsStreamResult Run(
-        IReadOnlyList<TimeSpan> delays,
-        Func<ObsStreamResult> attempt,
-        Action<TimeSpan> wait
-    )
-    {
-        if (attempt == null)
-        {
-            throw new ArgumentNullException(nameof(attempt));
-        }
-
-        ObsStreamResult result = attempt();
-        if (delays == null)
-        {
-            return result;
-        }
-
-        foreach (TimeSpan delay in delays)
-        {
-            if (
-                result != null
-                && (result.Succeeded || result.Failure == ObsOutputFailure.NotRequested)
-            )
-            {
-                return result;
-            }
-
-            wait?.Invoke(delay);
-            result = attempt();
-        }
-
-        return result;
     }
 }
 
