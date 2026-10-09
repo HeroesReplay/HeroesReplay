@@ -17,6 +17,11 @@ public interface IObsController
     ObsRecordingResult StopRecording();
     ObsStreamResult StartStreaming();
     ObsStreamResult StopStreaming();
-    bool IsStreaming();
+
+    /// <summary>
+    /// The stream's health from GetStreamStatus (#395). Only <see cref="ObsStreamState.Live"/>
+    /// is on air; an output that is active but reconnecting or frozen is not.
+    /// </summary>
+    ObsStreamHealth ReadStreamHealth();
     ObsRuntimeSnapshot ReadObsState();
 }

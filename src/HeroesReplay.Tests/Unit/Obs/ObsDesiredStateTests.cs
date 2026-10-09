@@ -706,6 +706,414 @@ public class ObsDesiredStateTests
         Assert.True(snapshot.Stream.Active);
     }
 
+    // #395, production 2026-10-09: OBS 32.2.2 with Twitch Enhanced Broadcasting reported the
+    // stream active and reconnecting, with frozen bytes, for 4 h 11 min. It counted as live.
+
+    [Fact]
+    public void Reconcile_ActiveButReconnecting_IsNotLiveInStatusJson()
+    {
+        var clock = new FakeClock();
+        Harness harness = Open(Settings(), StuckSocket(), now: clock.Now);
+
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.False(snapshot.StreamActive);
+        Assert.Equal(ObsStreamState.Reconnecting, snapshot.StreamHealth.State);
+        Assert.Equal(ObsOutputFailure.Waiting, snapshot.Stream.Failure);
+        Assert.Null(snapshot.StreamBlockedBy);
+        Assert.False(harness.Coordinator.ReadStreamHealth().IsLive);
+        var status = new SpectatorStatus();
+        Assert.True(ObsStatus.Copy(status, snapshot));
+        Assert.Equal(false, status.ObsStreamActive);
+        Assert.Equal("Reconnecting", status.ObsStreamState);
+        Assert.Equal(true, status.ObsStreamReconnecting);
+        Assert.Equal(clock.Start, status.ObsStreamStuckSince);
+        Assert.Contains(
+            " active=False state=Reconnecting since=2026-10-09T05:51:48Z",
+            ObsStatus.Describe(status),
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public void Reconcile_ReconnectingUnderTheThreshold_LeavesObsAlone()
+    {
+        var clock = new FakeClock();
+        FakeSession socket = StuckSocket();
+        Harness harness = Open(Settings(), socket, now: clock.Now);
+
+        harness.Coordinator.ReconcileStream();
+        clock.Advance(ObsStreamRecovery.DefaultStuckAfter - TimeSpan.FromSeconds(1));
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.Empty(socket.Events);
+        Assert.Equal(0, socket.StopStreamCalls);
+        Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal(ObsOutputFailure.Waiting, snapshot.Stream.Failure);
+        Assert.Equal(TimeSpan.FromSeconds(90), Settings().StreamStuckAfter);
+    }
+
+    [Fact]
+    public void Reconcile_ReconnectingPastTheThreshold_StopsAndStartsExactlyOnce()
+    {
+        var clock = new FakeClock();
+        FakeSession socket = StuckSocket();
+        Harness harness = Open(Settings(), socket, now: clock.Now);
+
+        harness.Coordinator.ReconcileStream();
+        clock.Advance(ObsStreamRecovery.DefaultStuckAfter);
+        ObsRuntimeSnapshot restarted = harness.Coordinator.ReconcileStream();
+        clock.Advance(TimeSpan.FromSeconds(15));
+        ObsRuntimeSnapshot again = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(1, socket.StopStreamCalls);
+        Assert.Equal(1, socket.StartStreamCalls);
+        Assert.Equal(new[] { "stop", "scene:" + WaitingScene, "start" }, socket.Events);
+        Assert.True(restarted.Stream.Succeeded);
+        Assert.True(restarted.StreamActive);
+        Assert.Equal(ObsStreamState.Live, restarted.StreamHealth.State);
+        Assert.True(again.StreamActive);
+        Assert.True(again.Stream.Succeeded);
+    }
+
+    [Fact]
+    public void Reconcile_RestartMidMatch_EndsWithGameSceneOnAir()
+    {
+        // #395: a stuck stream is restarted mid-match. The start shows the waiting scene, and the
+        // spectator's game-scene must be back on air right after StartStream.
+        var clock = new FakeClock();
+        FakeSession socket = StuckSocket();
+        Harness harness = Open(Settings(), socket, now: clock.Now);
+        harness.Coordinator.SelectScene("game-scene");
+
+        harness.Coordinator.ReconcileStream();
+        clock.Advance(ObsStreamRecovery.DefaultStuckAfter);
+        ObsRuntimeSnapshot restarted = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(
+            new[]
+            {
+                "scene:game-scene",
+                "stop",
+                "scene:" + WaitingScene,
+                "start",
+                "scene:game-scene",
+            },
+            socket.Events
+        );
+        Assert.Equal("game-scene", socket.ProgramScene);
+        Assert.Equal("game-scene", restarted.SceneDesired);
+        Assert.Equal("game-scene", restarted.SceneActual);
+        Assert.True(restarted.StreamActive);
+    }
+
+    [Fact]
+    public void Reconcile_StartMidMatch_PutsGameSceneBackRightAfterStartStream()
+    {
+        // Production 2026-10-09 11:03:02: after a StopStream by hand, the reconcile started the
+        // stream on waiting-screen mid-match, and it stayed on air for the last 21 minutes.
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        Harness harness = Open(Settings(), socket);
+        harness.Coordinator.SelectScene("game-scene");
+
+        ObsRuntimeSnapshot started = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(
+            new[] { "scene:game-scene", "scene:" + WaitingScene, "start", "scene:game-scene" },
+            socket.Events
+        );
+        Assert.Equal("game-scene", socket.ProgramScene);
+        Assert.Equal("game-scene", started.SceneActual);
+        Assert.True(started.StreamActive);
+    }
+
+    [Fact]
+    public void Reconcile_StartThatFailsMidMatch_StillPutsGameSceneBack()
+    {
+        // A recording takes the program output too: a failed start must not leave the waiting
+        // scene in the match's recording.
+        var socket = new FakeSession { IsIdentified = true, IsConnected = true };
+        Harness harness = Open(Settings(), socket);
+        harness.Coordinator.SelectScene("game-scene");
+
+        ObsRuntimeSnapshot failed = harness.Coordinator.ReconcileStream();
+
+        Assert.False(failed.Stream.Succeeded);
+        Assert.Equal("game-scene", socket.ProgramScene);
+        Assert.Equal("game-scene", failed.SceneActual);
+    }
+
+    [Fact]
+    public void Reconcile_SceneTheSpectatorChoseDuringTheStart_IsNotOverwritten()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        Harness harness = Open(Settings(), socket);
+        harness.Coordinator.SelectScene("game-scene");
+        socket.WhileStarting = () => harness.Coordinator.SelectScene("match-report");
+
+        ObsRuntimeSnapshot started = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal("match-report", socket.ProgramScene);
+        Assert.Equal("match-report", started.SceneDesired);
+        Assert.Equal("match-report", started.SceneActual);
+    }
+
+    [Fact]
+    public void Reconcile_SpectatorOnTheWaitingScene_StaysThere()
+    {
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            ActivateOnStart = true,
+        };
+        Harness harness = Open(Settings(), socket);
+        harness.Coordinator.SelectScene(WaitingScene);
+
+        ObsRuntimeSnapshot started = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(
+            new[] { "scene:" + WaitingScene, "scene:" + WaitingScene, "start" },
+            socket.Events
+        );
+        Assert.Equal(WaitingScene, started.SceneActual);
+    }
+
+    [Fact]
+    public void Reconcile_StreamStuckAfter_IsTheConfiguredThreshold()
+    {
+        var clock = new FakeClock();
+        FakeSession socket = StuckSocket();
+        OBSSettings obs = Settings();
+        obs.StreamStuckAfter = TimeSpan.FromSeconds(30);
+        Harness harness = Open(obs, socket, now: clock.Now);
+
+        harness.Coordinator.ReconcileStream();
+        clock.Advance(TimeSpan.FromSeconds(29));
+        harness.Coordinator.ReconcileStream();
+        int stopsBefore = socket.StopStreamCalls;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(0, stopsBefore);
+        Assert.Equal(1, socket.StopStreamCalls);
+        Assert.Equal(1, socket.StartStreamCalls);
+    }
+
+    [Fact]
+    public void Reconcile_FrozenBytesPastTheThreshold_CountAsStalled()
+    {
+        var clock = new FakeClock();
+        var socket = new FakeSession
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            Streaming = true,
+            FreezeBytes = true,
+            Bytes = 199_373_948_174,
+            ActivateOnStart = true,
+            ProgramScene = "game-scene",
+        };
+        Harness harness = Open(Settings(), socket, now: clock.Now);
+
+        ObsRuntimeSnapshot first = harness.Coordinator.ReconcileStream();
+        clock.Advance(ObsStreamHealth.StallWindow);
+        ObsRuntimeSnapshot stalled = harness.Coordinator.ReconcileStream();
+        int stopsWhileStalled = socket.StopStreamCalls;
+        clock.Advance(ObsStreamRecovery.DefaultStuckAfter);
+        ObsRuntimeSnapshot restarted = harness.Coordinator.ReconcileStream();
+
+        // One read cannot tell frozen bytes from moving ones.
+        Assert.True(first.StreamActive);
+        Assert.Equal(ObsStreamState.Stalled, stalled.StreamHealth.State);
+        Assert.Equal(clock.Start, stalled.StreamHealth.StuckSince);
+        Assert.False(stalled.StreamActive);
+        Assert.Equal(0, stopsWhileStalled);
+        Assert.Equal(1, socket.StopStreamCalls);
+        Assert.Equal(1, socket.StartStreamCalls);
+        Assert.True(restarted.StreamActive);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void Reconcile_AStuckStreamOnABoxThatDoesNotStream_IsNeverStoppedOrStarted(
+        bool streaming,
+        bool armed
+    )
+    {
+        var clock = new FakeClock();
+        FakeSession socket = StuckSocket();
+        Harness harness = Open(
+            Settings(streaming: streaming),
+            socket,
+            armed: () => armed,
+            now: clock.Now
+        );
+
+        harness.Coordinator.ReconcileStream();
+        clock.Advance(TimeSpan.FromHours(4));
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.Empty(socket.Events);
+        Assert.Equal(0, socket.StopStreamCalls);
+        Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal(ObsOutputFailure.NotRequested, snapshot.Stream.Failure);
+    }
+
+    [Fact]
+    public void Reconcile_FailedRestart_BacksOffOneTwoThenFiveMinutes()
+    {
+        var clock = new FakeClock();
+        FakeSession socket = StuckSocket();
+        socket.ActivateOnStart = false;
+        Harness harness = Open(Settings(), socket, now: clock.Now);
+
+        harness.Coordinator.ReconcileStream();
+        clock.Advance(ObsStreamRecovery.DefaultStuckAfter);
+        ObsRuntimeSnapshot failed = harness.Coordinator.ReconcileStream();
+
+        Assert.Equal(1, socket.StopStreamCalls);
+        Assert.Equal(1, socket.StartStreamCalls);
+        Assert.False(failed.Stream.Succeeded);
+        Assert.False(failed.StreamActive);
+        TimeSpan[] delays =
+        [
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(5),
+            TimeSpan.FromMinutes(5),
+        ];
+        foreach (TimeSpan delay in delays)
+        {
+            int starts = socket.StartStreamCalls;
+            clock.Advance(delay - TimeSpan.FromSeconds(1));
+            ObsRuntimeSnapshot waiting = harness.Coordinator.ReconcileStream();
+            Assert.Equal(starts, socket.StartStreamCalls);
+            Assert.Equal(ObsOutputFailure.Waiting, waiting.Stream.Failure);
+            clock.Advance(TimeSpan.FromSeconds(1));
+            harness.Coordinator.ReconcileStream();
+            Assert.Equal(starts + 1, socket.StartStreamCalls);
+        }
+
+        // Stopped once: later attempts start the output the restart left inactive.
+        Assert.Equal(1, socket.StopStreamCalls);
+    }
+
+    [Fact]
+    public void Reconcile_ARestartThatComesBackReconnecting_IsAFailedAttempt()
+    {
+        var clock = new FakeClock();
+        FakeSession socket = StuckSocket();
+        socket.ReconnectOnStart = true;
+        Harness harness = Open(Settings(), socket, now: clock.Now);
+
+        harness.Coordinator.ReconcileStream();
+        clock.Advance(ObsStreamRecovery.DefaultStuckAfter);
+        ObsRuntimeSnapshot restarted = harness.Coordinator.ReconcileStream();
+        clock.Advance(TimeSpan.FromSeconds(30));
+        ObsRuntimeSnapshot waiting = harness.Coordinator.ReconcileStream();
+
+        Assert.False(restarted.StreamActive);
+        Assert.Equal(ObsStreamState.Reconnecting, restarted.StreamHealth.State);
+        // The new output's own stretch began at the restart, and the backoff holds the next one.
+        Assert.Equal(
+            clock.Start + ObsStreamRecovery.DefaultStuckAfter,
+            restarted.StreamHealth.StuckSince
+        );
+        Assert.Equal(ObsOutputFailure.Waiting, waiting.Stream.Failure);
+        Assert.Equal(1, socket.StopStreamCalls);
+        Assert.Equal(1, socket.StartStreamCalls);
+    }
+
+    [Fact]
+    public void Reconcile_AStopThatIsNotConfirmed_DoesNotStartAndBacksOff()
+    {
+        var clock = new FakeClock();
+        FakeSession socket = StuckSocket();
+        socket.KeepStreamingOnStop = true;
+        Harness harness = Open(Settings(), socket, now: clock.Now);
+
+        harness.Coordinator.ReconcileStream();
+        clock.Advance(ObsStreamRecovery.DefaultStuckAfter);
+        ObsRuntimeSnapshot refused = harness.Coordinator.ReconcileStream();
+        clock.Advance(TimeSpan.FromSeconds(59));
+        harness.Coordinator.ReconcileStream();
+        int stopsDuringBackoff = socket.StopStreamCalls;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        harness.Coordinator.ReconcileStream();
+
+        Assert.False(refused.Stream.Succeeded);
+        Assert.Equal(ObsStreamHealth.StuckReconnectingCode, refused.Stream.Reason);
+        Assert.Equal(0, socket.StartStreamCalls);
+        Assert.Equal(1, stopsDuringBackoff);
+        Assert.Equal(2, socket.StopStreamCalls);
+    }
+
+    [Fact]
+    public void Reconcile_StreamStatusNotRead_StartsAndStopsNothing()
+    {
+        FakeSession socket = StuckSocket();
+        socket.StreamReadError = new TimeoutException("GetStreamStatus timed out.");
+        Harness harness = Open(Settings(), socket);
+
+        ObsRuntimeSnapshot snapshot = harness.Coordinator.ReconcileStream();
+
+        Assert.Empty(socket.Events);
+        Assert.Equal(ObsStreamState.Unknown, snapshot.StreamHealth.State);
+        Assert.False(snapshot.StreamActive);
+        Assert.Equal(ObsOutputFailure.NotConfirmed, snapshot.Stream.Failure);
+        Assert.Contains("timed out", snapshot.Stream.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Shutdown_StopsAStreamStuckReconnecting()
+    {
+        FakeSession socket = StuckSocket();
+        Harness harness = Open(Settings(), socket);
+
+        ObsShutdownResult result = harness.Coordinator.Shutdown();
+
+        Assert.True(result.Stream.Succeeded);
+        Assert.False(result.Stream.Active);
+        Assert.Equal(1, socket.StopStreamCalls);
+        Assert.Equal(ObsStreamState.Inactive, harness.Coordinator.State.StreamHealth.State);
+    }
+
+    private static FakeSession StuckSocket() =>
+        new()
+        {
+            IsIdentified = true,
+            IsConnected = true,
+            Streaming = true,
+            Reconnecting = true,
+            Bytes = 199_373_948_174,
+            ActivateOnStart = true,
+            ProgramScene = "game-scene",
+        };
+
+    /// <summary>A clock that moves only when a test says so.</summary>
+    private sealed class FakeClock
+    {
+        private TimeSpan elapsed;
+
+        public DateTimeOffset Start { get; } = new(2026, 10, 9, 5, 51, 48, TimeSpan.Zero);
+
+        public DateTimeOffset Now() => Start + elapsed;
+
+        public void Advance(TimeSpan by) => elapsed += by;
+    }
+
     [Fact]
     public void Reconcile_BackoffWaitsWithoutSleeping()
     {
@@ -1638,7 +2046,8 @@ public class ObsDesiredStateTests
         Func<ObsValidation> preflight = null,
         IObsMicrophoneSession microphones = null,
         SpectatorStatusStore statusStore = null,
-        Action stateChanged = null
+        Action stateChanged = null,
+        Func<DateTimeOffset> now = null
     )
     {
         socket ??= new FakeSession();
@@ -1663,6 +2072,7 @@ public class ObsDesiredStateTests
             beforeLaunch,
             armed ?? (() => true),
             preflight,
+            now: now,
             microphones: microphones,
             stateChanged: stateChanged
         );
@@ -1924,10 +2334,43 @@ public class ObsDesiredStateTests
 
         public bool IsStreamActive() => Streaming;
 
+        /// <summary>GetStreamStatus outputReconnecting. StopStream clears it, as OBS does.</summary>
+        public bool Reconnecting { get; set; }
+
+        /// <summary>A started stream reports reconnecting at once, as an ingest that refuses it.</summary>
+        public bool ReconnectOnStart { get; set; }
+
+        /// <summary>outputBytes. Each read of a live output adds to it unless <see cref="FreezeBytes"/>.</summary>
+        public long Bytes { get; set; }
+
+        public bool FreezeBytes { get; set; }
+
+        /// <summary>GetStreamStatus throws this, like a websocket request that timed out.</summary>
+        public Exception StreamReadError { get; set; }
+
+        public ObsStreamSample ReadStream()
+        {
+            if (StreamReadError != null)
+            {
+                throw StreamReadError;
+            }
+
+            if (Streaming && !Reconnecting && !FreezeBytes)
+            {
+                Bytes += 750_000;
+            }
+
+            return new ObsStreamSample(Streaming, Streaming && Reconnecting, Bytes);
+        }
+
+        /// <summary>Runs inside StartStream, as another thread would while OBS answers.</summary>
+        public Action WhileStarting { get; set; }
+
         public void StartStream()
         {
             StartStreamCalls++;
             Events.Add("start");
+            WhileStarting?.Invoke();
             if (StartStreamError != null)
             {
                 throw StartStreamError;
@@ -1936,6 +2379,9 @@ public class ObsDesiredStateTests
             if (ActivateOnStart || (ActivateOnCall > 0 && StartStreamCalls >= ActivateOnCall))
             {
                 Streaming = true;
+                Reconnecting = ReconnectOnStart;
+                FreezeBytes = false;
+                Bytes = 0;
             }
         }
 
@@ -1946,6 +2392,7 @@ public class ObsDesiredStateTests
             if (!KeepStreamingOnStop)
             {
                 Streaming = false;
+                Reconnecting = false;
             }
         }
     }

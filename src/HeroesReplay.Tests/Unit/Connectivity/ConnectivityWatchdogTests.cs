@@ -97,6 +97,74 @@ public class ConnectivityWatchdogTests
     }
 
     [Fact]
+    public void Apply_ActiveButReconnectingStream_GoesToTheReconcile()
+    {
+        // #395: the reconcile skipped any active output, so a reconnect stuck for 4 h 11 min on
+        // 2026-10-09 was never repaired. The coordinator's reconcile decides what to do with it.
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
+        fixture.Obs.Streaming = true;
+        fixture.Obs.Health = Reconnecting();
+        fixture.Obs.StartResult = ObsStreamResult.Waiting("OBS's own reconnect still has time.");
+
+        fixture.Watchdog.Apply(OkSnapshot());
+
+        Assert.Equal(1, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
+    public void Apply_LiveStream_IsLeftAlone()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
+        fixture.Obs.Streaming = true;
+
+        fixture.Watchdog.Apply(OkSnapshot());
+
+        Assert.Equal(0, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
+    public void Apply_StuckStreamWithStreamingOff_IsNeverTouched()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: false);
+        fixture.Obs.Streaming = true;
+        fixture.Obs.Health = Reconnecting();
+
+        fixture.Watchdog.Apply(OkSnapshot());
+        DropThenRestore(fixture);
+
+        Assert.Equal(0, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    [Fact]
+    public void Apply_StuckStreamWhileOffline_IsLeftToObsOwnReconnect()
+    {
+        using Fixture fixture = CreateFixture(streamingEnabled: true);
+        fixture.Obs.Streaming = true;
+        fixture.Obs.Health = Reconnecting();
+        fixture.Obs.StartResult = ObsStreamResult.Waiting("OBS's own reconnect still has time.");
+        fixture.Watchdog.Apply(FailSnapshot());
+        fixture.Watchdog.Apply(FailSnapshot());
+        int whileOnline = fixture.Obs.StartCalls;
+
+        fixture.Watchdog.Apply(FailSnapshot());
+        fixture.Watchdog.Apply(FailSnapshot());
+
+        Assert.False(fixture.Watchdog.IsOnline);
+        Assert.Equal(whileOnline, fixture.Obs.StartCalls);
+        Assert.Equal(0, fixture.Obs.StopCalls);
+    }
+
+    private static ObsStreamHealth Reconnecting() =>
+        ObsStreamHealth.Next(
+            null,
+            new ObsStreamSample(true, true, 199_373_948_174),
+            DateTimeOffset.UtcNow.AddHours(-4)
+        );
+
+    [Fact]
     public void Apply_ShortOutageDoesNotStopTheStream()
     {
         using Fixture fixture = CreateFixture(streamingEnabled: true);
@@ -645,6 +713,17 @@ public class ConnectivityWatchdogTests
             Streaming = false;
             return ObsStreamResult.ConfirmedInactive();
         }
+
+        /// <summary>When set, what <see cref="ReadStreamHealth"/> reports, whatever <see cref="Streaming"/> says.</summary>
+        public ObsStreamHealth Health { get; set; }
+
+        public ObsStreamHealth ReadStreamHealth() =>
+            Health
+            ?? ObsStreamHealth.Next(
+                null,
+                new ObsStreamSample(Streaming, false, 1000),
+                DateTimeOffset.UtcNow
+            );
 
         public bool IsStreaming() => Streaming;
 

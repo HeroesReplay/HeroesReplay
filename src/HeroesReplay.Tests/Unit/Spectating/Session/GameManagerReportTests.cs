@@ -427,7 +427,8 @@ public class GameManagerReportTests
 
         public ObsStreamResult StopStreaming() => throw new NotSupportedException();
 
-        public bool IsStreaming() => false;
+        public ObsStreamHealth ReadStreamHealth() =>
+            ObsStreamHealth.Unknown(null, "test", DateTimeOffset.UtcNow);
 
         public ObsRuntimeSnapshot ReadObsState() => throw new NotSupportedException();
     }

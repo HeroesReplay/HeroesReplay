@@ -110,15 +110,27 @@ public static class ObsFailSafe
         try
         {
             using IObsFailSafeSession session = open();
-            if (ObsResponse.Bool(session.Get("GetStreamStatus"), "outputActive") != true)
+            // Any active output counts, live or stuck reconnecting (#395): it can go back on air.
+            ObsStreamHealth stream = ObsStreamHealth.Next(
+                null,
+                session.Get("GetStreamStatus"),
+                DateTimeOffset.UtcNow
+            );
+            if (!stream.OutputActive)
             {
                 return "The OBS stream is not live, so OBS was left as it is.";
             }
 
+            string reconnecting =
+                stream.State == ObsStreamState.Reconnecting
+                    ? " (OBS reported it reconnecting)"
+                    : "";
             if (action == ObsFailSafeAction.StopStream)
             {
                 session.StopStream();
-                return "Stopped the OBS stream: nothing drives it while spectate is down.";
+                return "Stopped the OBS stream"
+                    + reconnecting
+                    + ": nothing drives it while spectate is down.";
             }
 
             string scene = obs?.WaitingSceneName;
@@ -130,7 +142,9 @@ public static class ObsFailSafe
             session.ShowScene(scene);
             return "Switched OBS to the waiting scene '"
                 + scene
-                + "'. The stream stays live while spectate is down.";
+                + "'. The stream stays live while spectate is down"
+                + reconnecting
+                + ".";
         }
         catch (ObsUnavailableException e)
         {

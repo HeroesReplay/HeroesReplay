@@ -37,6 +37,13 @@ public class OBSSettings
     public bool StreamingEnabled { get; set; }
 
     /// <summary>
+    /// How long a desired stream may stay reconnecting, or active with frozen bytes, before the
+    /// spectator stops it and starts it again (#395). OBS's own reconnect owns a drop shorter than
+    /// this. Default 90 seconds.
+    /// </summary>
+    public TimeSpan StreamStuckAfter { get; set; } = ObsStreamRecovery.DefaultStuckAfter;
+
+    /// <summary>
     /// OBS profile that must be active before HeroesReplay starts a stream or a recording.
     /// The profile folder under <c>%APPDATA%\obs-studio\basic\profiles</c> has this name.
     /// </summary>

@@ -10,8 +10,9 @@ Spectate one .StormReplay file, or each file in a directory, then exit.
 
 - **Options:** `--file` (`-f`), `--player`
 - **Before:** Not elevated. Heroes of the Storm installed; a current-patch replay needs Battle.net signed in. OBS is optional. On ASA-SERVER only to prove a change (AGENTS.md phases). On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
-- **Changes:** Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\Contexts\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. It mutes every microphone input (global Mic/Aux and audio input capture sources, never Desktop Audio) at each replay's session start and before it starts the stream (`OBS:MuteMicrophones`, #314). Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.
+- **Changes:** Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\Contexts\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. A desired stream counts as live only when OBS reports it active, not reconnecting, with its bytes moving; one that stays reconnecting, or active with frozen bytes, past `OBS:StreamStuckAfter` (90 s) is stopped and started again, and a failed attempt waits 1, 2, then 5 min. Every start shows the waiting scene for `StartStream`, then puts the spectator's scene back right after it (#395). It mutes every microphone input (global Mic/Aux and audio input capture sources, never Desktop Audio) at each replay's session start and before it starts the stream (`OBS:MuteMicrophones`, #314). Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.
 - **Exit:** 0 after the queue has played. 1 on a parse error (`--player` not a BattleTag, a `--file` that does not exist) or when the engine stops on an unexpected error.
+- **Codes:** `obs.stream_stuck_reconnecting`, `obs.stream_stalled`
 
 ## `spectate heroesprofile`
 
@@ -20,6 +21,7 @@ Spectate StormReplay files already in Data\Standard and Data\Requests. Does not 
 - **Before:** As `spectate file`, with replays already in `Data\Standard` and `Data\Requests` (`heroesprofile download`). `services start` runs it as the spectate role.
 - **Changes:** As `spectate file`, over the cached replays, in a loop. Does not call Heroes Profile.
 - **Exit:** Runs until stopped (Ctrl+C, or `services stop` for a role). 1 on a parse error or an unexpected error.
+- **Codes:** `obs.stream_stuck_reconnecting`, `obs.stream_stalled`
 
 ## `calculators report`
 
@@ -417,7 +419,7 @@ Stop this machine from starting Twitch ingest. Deletes the arm file. A stream th
 
 ## `obs status`
 
-Print the stream arm, OBS:StreamingEnabled, and the expected OBS profile and scene collection. Does not connect to OBS.
+Print the stream arm, OBS:StreamingEnabled, the expected OBS profile and scene collection, and the stream state spectate last wrote to status.json (Live, Reconnecting, Stalled, Inactive, Unknown). Does not connect to OBS.
 
 - **Options:** `--output` (`-o`)
 - **Before:** None. Does not connect to OBS or resolve secrets.

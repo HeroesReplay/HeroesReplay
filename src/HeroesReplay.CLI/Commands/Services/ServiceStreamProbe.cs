@@ -97,7 +97,13 @@ internal static class ServiceStreamProbe
                 return ServiceStreamCheck.Unknown("GetStreamStatus returned no status.");
             }
 
-            return status.IsActive ? ServiceStreamCheck.Active() : ServiceStreamCheck.Inactive();
+            return ServiceStreamCheck.From(
+                ObsStreamHealth.Next(
+                    null,
+                    new ObsStreamSample(status.IsActive, status.IsReconnecting, status.BytesSent),
+                    DateTimeOffset.UtcNow
+                )
+            );
         }
         finally
         {
