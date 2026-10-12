@@ -64,6 +64,75 @@ public class GameManagerReportTests
         Assert.Equal(1, fixture.Obs.EndSessions);
     }
 
+    /// <summary>
+    /// #411: a Blind Rating replay is over and no replay launched behind it, as on a stop. Its
+    /// client is closed, so AhliObs goes back now, not only before the next replay.
+    /// </summary>
+    [Fact]
+    public async Task BlindSessionWithoutANextReplay_PutsAhliObsBack()
+    {
+        using var fixture = new Fixture();
+        File.Copy(Interface(ClientSettings.AhliObsBlindInterfaceFile), fixture.InstalledInterface);
+
+        await fixture
+            .Manager.FinishSessionAsync(
+                Blind(),
+                enteredMatch: true,
+                obsSession: false,
+                _ => { },
+                () => Task.FromResult<LoadedReplay>(null)
+            )
+            .WaitAsync(Patience);
+
+        Assert.Equal(
+            File.ReadAllBytes(Interface(ClientSettings.AhliObsInterfaceFile)),
+            File.ReadAllBytes(fixture.InstalledInterface)
+        );
+    }
+
+    /// <summary>A normal replay leaves the interface to the next replay's preset.</summary>
+    [Fact]
+    public async Task NormalSessionWithoutANextReplay_LeavesTheInterface()
+    {
+        using var fixture = new Fixture();
+        string blind = Interface(ClientSettings.AhliObsBlindInterfaceFile);
+        File.Copy(blind, fixture.InstalledInterface);
+
+        await fixture
+            .Manager.FinishSessionAsync(
+                new LoadedReplay { ReplayId = 101 },
+                enteredMatch: true,
+                obsSession: false,
+                _ => { },
+                () => Task.FromResult<LoadedReplay>(null)
+            )
+            .WaitAsync(Patience);
+
+        Assert.Equal(File.ReadAllBytes(blind), File.ReadAllBytes(fixture.InstalledInterface));
+    }
+
+    private static LoadedReplay Blind() =>
+        new()
+        {
+            ReplayId = 101,
+            RewardQueueItem = new HeroesReplay.Core.Requests.RewardQueueItem
+            {
+                Request = new HeroesReplay.Core.Requests.RewardRequest
+                {
+                    Login = "viewer",
+                    RewardTitle = "Blind Rating",
+                    Blind = true,
+                },
+            },
+        };
+
+    private static string Interface(string fileName)
+    {
+        string path = StormClientConfigurator.FindInterfaceFile(fileName);
+        Assert.NotNull(path);
+        return path;
+    }
+
     [Fact]
     public async Task StopBeforeTheReport_HearsTheOutcomeAndSkipsTheReport()
     {
@@ -340,7 +409,9 @@ public class GameManagerReportTests
                     WaitingSceneName = "Waiting",
                     BeforeNextReplay = TimeSpan.FromSeconds(90),
                 },
+                Client = new ClientSettings(),
             };
+            Directory.CreateDirectory(Path.Combine(GameFolder, "Interfaces"));
             Manager = new GameManager(
                 settings,
                 new NoContextSetter(),
@@ -349,7 +420,7 @@ public class GameManagerReportTests
                 Obs,
                 new NoContext(),
                 Status,
-                new StormClientConfigurator(settings),
+                new StormClientConfigurator(settings, GameFolder),
                 new NotOnYouTube(),
                 new RecordingClock(),
                 NullLogger<GameManager>.Instance,
@@ -361,6 +432,12 @@ public class GameManagerReportTests
         }
 
         public CancellationTokenSource Stop { get; } = new();
+
+        /// <summary>The Documents\Heroes of the Storm stand-in: never the real one.</summary>
+        public string GameFolder => Path.Combine(root, "Heroes of the Storm");
+
+        public string InstalledInterface =>
+            Path.Combine(GameFolder, "Interfaces", ClientSettings.AhliObsInterfaceFile);
 
         /// <summary>A stream hold on a box that streams, with the client of the last match still closing.</summary>
         private StreamHold Hold(bool live)

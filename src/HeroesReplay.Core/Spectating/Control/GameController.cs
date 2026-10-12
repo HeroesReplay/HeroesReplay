@@ -1150,7 +1150,18 @@ public class GameController : IGameController
 
             if (!oweAhliObs && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, loading))
             {
-                ShowGameScene("loading screen in memory");
+                if (ReplayLoadCue.LoadingScreenOnAir(BlindReplay))
+                {
+                    ShowGameScene("loading screen in memory");
+                }
+                else
+                {
+                    // The spectator shows game-scene at the first match clock read (#411).
+                    logger.LogInformation(
+                        "Blind Rating replay on its loading screen, which names the players. OBS stays on the current scene until the match clock runs."
+                    );
+                }
+
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
