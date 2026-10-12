@@ -39,5 +39,10 @@
             Include="Dependencies\dependencies.json"
             LogicalName="HeroesReplay.Core.Dependencies.dependencies.json"
         />
+        <!-- The talent-build reference (#412): build names, talents and guide links, no guide text. -->
+        <EmbeddedResource
+            Include="Builds\Reference\icy-veins-builds.json"
+            LogicalName="HeroesReplay.Core.Builds.Reference.icy-veins-builds.json"
+        />
     </ItemGroup>
 </Project>

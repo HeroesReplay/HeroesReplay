@@ -59,6 +59,24 @@ Count team-composition labels (split push, siege, dive, poke, and the rest) and 
 - **Changes:** Writes `--output` (`.md` or `.csv`) when given; otherwise prints only. Read-only for the replays.
 - **Exit:** 0 when it finishes. 1 for a missing folder, an `--output` that is not `.md` or `.csv`, or a parse error.
 
+## `builds import`
+
+Check the icy-veins-builds skill's extract (build names, tags, per-tier marks) against the heroes-data2 catalog's talents under Location:DataDirectory and write the talent-build reference JSON. Prints every warning (a stale tier, a renamed talent, a hero with no guide). Refuses to write when a guide names no catalog hero, a build lacks seven tiers, or a mark is not y, s, or n. Reads nothing from the web.
+
+- **Options:** `--input` (`-i`, required), `--reference` (`-r`, required), `--checked-at`
+- **Before:** The `icy-veins-builds` skill's extract (`--input`) and the heroes-data2 catalog under `Location:DataDirectory`. Reads nothing from the web.
+- **Changes:** Writes the talent-build reference (`--reference`, normally `src/HeroesReplay.Core/Builds/Reference/icy-veins-builds.json`): build names, tags, talent ids per tier and guide links, no guide text. Writes nothing when it refuses.
+- **Exit:** 0 when the reference is written (warnings are printed). 1 for a missing or unreadable extract or a bad `--checked-at`. 2 when the extract names an unknown hero, a build lacks seven tiers, or a mark is not y, s, or n.
+
+## `builds match`
+
+Read one .StormReplay and print, for each player, the talents picked (English names) and the guide build they fit best from the shipped talent-build reference: its score (1 = every pick recommended), how many picks it recommends, the runner-up, and the guide link. Reads the heroes-data2 catalog under Location:DataDirectory. Read-only.
+
+- **Options:** `--replay` (required)
+- **Before:** A `.StormReplay` (`--replay`) and the heroes-data2 catalog under `Location:DataDirectory`.
+- **Changes:** Prints each player's talents and best guide build from the shipped reference. Read-only.
+- **Exit:** 0 when the replay parsed. 1 for a missing file or a replay that does not parse.
+
 ## `check`
 
 Validate configuration, connectivity to Heroes Profile, OBS, Twitch, and the internet, and the ffmpeg tools clips use.

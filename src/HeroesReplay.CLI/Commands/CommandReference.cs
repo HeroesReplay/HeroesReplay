@@ -108,6 +108,18 @@ public static class CommandReference
             "0 when it finishes. 1 for a missing folder, an `--output` that is not `.md` or `.csv`, or a parse error."
         ),
         new(
+            "builds import",
+            "The `icy-veins-builds` skill's extract (`--input`) and the heroes-data2 catalog under `Location:DataDirectory`. Reads nothing from the web.",
+            "Writes the talent-build reference (`--reference`, normally `src/HeroesReplay.Core/Builds/Reference/icy-veins-builds.json`): build names, tags, talent ids per tier and guide links, no guide text. Writes nothing when it refuses.",
+            "0 when the reference is written (warnings are printed). 1 for a missing or unreadable extract or a bad `--checked-at`. 2 when the extract names an unknown hero, a build lacks seven tiers, or a mark is not y, s, or n."
+        ),
+        new(
+            "builds match",
+            "A `.StormReplay` (`--replay`) and the heroes-data2 catalog under `Location:DataDirectory`.",
+            "Prints each player's talents and best guide build from the shipped reference. Read-only.",
+            "0 when the replay parsed. 1 for a missing file or a replay that does not parse."
+        ),
+        new(
             "check",
             "Settings readable from the current directory or the exe folder. Read-only, so safe on both machines.",
             "Nothing in OBS, Twitch, or Heroes Profile: Get-style reads only (Helix GetUsers, GET /replays, an OBS Identify and GetVersion, the Battle.net window capture). Logs go to stderr.",
