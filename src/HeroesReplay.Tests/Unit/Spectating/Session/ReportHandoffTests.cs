@@ -29,4 +29,26 @@ public class ReportHandoffTests
     {
         Assert.False(ReportHandoff.ShouldCutReport(mapLoading: false, matchClock: null));
     }
+
+    /// <summary>#411: a Blind Rating replay's loading screen names the players.</summary>
+    [Fact]
+    public void ShouldCutReport_BlindLoadingScreen_KeepsTheReport()
+    {
+        Assert.False(
+            ReportHandoff.ShouldCutReport(mapLoading: true, matchClock: null, blind: true)
+        );
+        Assert.False(
+            ReportHandoff.ShouldCutReport(mapLoading: false, matchClock: null, blind: true)
+        );
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ShouldCutReport_BlindMatchClock_StopsTheReport(bool mapLoading)
+    {
+        Assert.True(
+            ReportHandoff.ShouldCutReport(mapLoading, TimeSpan.FromSeconds(3), blind: true)
+        );
+    }
 }

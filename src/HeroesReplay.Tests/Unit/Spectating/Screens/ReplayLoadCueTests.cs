@@ -8,6 +8,15 @@ namespace HeroesReplay.Tests.Unit.Spectating.Screens;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class ReplayLoadCueTests
 {
+    /// <summary>#411: the loading screen names the players, so a Blind Rating replay hides it.</summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void LoadingScreenOnAir_OnlyWhenNotBlind(bool blind, bool onAir)
+    {
+        Assert.Equal(onAir, ReplayLoadCue.LoadingScreenOnAir(blind));
+    }
+
     [Fact]
     public void Classify_ProcessAlone_DoesNotSelectTheGameScene()
     {

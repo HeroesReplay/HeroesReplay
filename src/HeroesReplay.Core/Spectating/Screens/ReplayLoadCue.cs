@@ -76,6 +76,13 @@ public static class ReplayLoadCue
     public static bool SelectsGameScene(NextMatchLaunch launch) =>
         launch == NextMatchLaunch.Presented;
 
+    /// <summary>
+    /// Whether the map loading screen may go on air. It is the game's own screen and names
+    /// every player, so a Blind Rating replay stays off game-scene until its match clock runs
+    /// (#411): the waiting or report scene covers the loading screen.
+    /// </summary>
+    public static bool LoadingScreenOnAir(bool blind) => !blind;
+
     public static bool SelectsWaitingScene(NextMatchLaunch launch) =>
         launch == NextMatchLaunch.NotStarted;
 }

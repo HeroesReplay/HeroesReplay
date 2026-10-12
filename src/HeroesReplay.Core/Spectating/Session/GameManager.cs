@@ -156,6 +156,18 @@ public class GameManager : IGameManager
             {
                 // The loading screen goes on air before ConfigureFromContext runs (#411).
                 obsController.HideRank();
+                if (
+                    !ClientInterfacePlan.CheckedBeforeLaunch(
+                        loadedReplay?.ReplayId,
+                        clientPreparedFor
+                    )
+                )
+                {
+                    // A cold launch. A session that ended without the report can leave game-scene
+                    // on air, and this replay's loading screen names the players. The spectator
+                    // shows game-scene at the first match clock read (#411).
+                    ParkWaitingScene();
+                }
             }
 
             recordingClock.Reset();
@@ -1011,6 +1023,8 @@ public class GameManager : IGameManager
         }
 
         bool loggedReadFailure = false;
+        bool loggedBlindLoading = false;
+        bool blind = ReplayRequestKind.Blind(next);
         bool reopenedFromHome = false;
         DateTimeOffset reopenAt = DateTimeOffset.UtcNow.AddSeconds(25);
         DateTimeOffset readyBy = DateTimeOffset.UtcNow.AddMinutes(3);
@@ -1073,7 +1087,7 @@ public class GameManager : IGameManager
                 }
             }
 
-            if (ReportHandoff.ShouldCutReport(mapLoading, matchClock))
+            if (ReportHandoff.ShouldCutReport(mapLoading, matchClock, blind))
             {
                 logger.LogInformation(
                     "Next replay {ReplayId} is on the map loading screen, in a match, or its match clock is running. The report stops so OBS shows the game.",
@@ -1081,6 +1095,15 @@ public class GameManager : IGameManager
                 );
                 cutReport.Cancel();
                 return NextMatchLaunch.Presented;
+            }
+
+            if (blind && mapLoading && !loggedBlindLoading)
+            {
+                loggedBlindLoading = true;
+                logger.LogInformation(
+                    "Next replay {ReplayId} is a Blind Rating replay on its loading screen, which names the players. The report and waiting scenes stay until its match clock runs.",
+                    next.ReplayId
+                );
             }
 
             if (NextReplayHold.StopWhenReportEnds(beforeNext) && report.IsCompleted)

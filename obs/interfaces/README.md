@@ -53,4 +53,4 @@ These are the settings Ahli's Observer UI Settings Editor (from [Galaxy-Observer
 pwsh -File tools/new-blind-interface.ps1
 ```
 
-The map loading screen is the game's own and still names the players.
+The map loading screen is the game's own and names the players, so spectate keeps a blind replay's loading screen off the stream. The waiting or report scene stays on air until the match clock runs, then game-scene shows the match.
