@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
@@ -31,6 +32,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
     private readonly ITwitchClient chat;
     private string cachedChannelId;
     private int? currentReplayId;
+    private PredictionKind currentKind;
 
     public TwitchMatchPredictionService(
         ILogger<TwitchMatchPredictionService> logger,
@@ -52,10 +54,16 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         OpenAsync(
             replay?.ReplayId ?? 0,
             EnglishMapNames.Prefer(null, replay?.Replay?.Map, replay?.Replay?.MapAlternativeName),
+            PredictionKind.Winner,
             cancellationToken
         );
 
-    public async Task<bool> OpenAsync(int replayId, string map, CancellationToken cancellationToken)
+    public async Task<bool> OpenAsync(
+        int replayId,
+        string map,
+        PredictionKind kind,
+        CancellationToken cancellationToken
+    )
     {
         if (!settings.Twitch.EnablePredictions || settings.Capture.Method == CaptureMethod.None)
         {
@@ -63,14 +71,21 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        string title = MatchPrediction.TitleForMap(map);
+        bool rating = kind == PredictionKind.Rating;
+        string title = rating ? RatingPrediction.Title : MatchPrediction.TitleForMap(map);
+        int window = MatchPrediction.WindowSeconds(
+            rating ? settings.Twitch.RatingPredictionWindow : settings.Twitch.PredictionWindow
+        );
+        IReadOnlyList<string> outcomes = RatingPrediction.OutcomesFor(kind);
+        currentKind = kind;
         reports.TryWriteCurrent(title);
         if (settings.Twitch.DryRunMode)
         {
             logger.LogInformation(
-                "Dry-run prediction: {Title} ({Window}s) Blue vs Red.",
+                "Dry-run prediction: {Title} ({Window}s) {Outcomes}.",
                 title,
-                MatchPrediction.WindowSeconds(settings.Twitch.PredictionWindow)
+                window,
+                string.Join(" / ", outcomes)
             );
             return true;
         }
@@ -124,14 +139,8 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         {
             BroadcasterId = channelId,
             Title = title,
-            PredictionWindowSeconds = MatchPrediction.WindowSeconds(
-                settings.Twitch.PredictionWindow
-            ),
-            Outcomes = new[]
-            {
-                new CreateOutcome { Title = MatchPrediction.Blue },
-                new CreateOutcome { Title = MatchPrediction.Red },
-            },
+            PredictionWindowSeconds = window,
+            Outcomes = outcomes.Select(outcome => new CreateOutcome { Title = outcome }).ToArray(),
         };
 
         CreatePredictionResponse created;
@@ -164,8 +173,14 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             ReplayId = replayId,
             Attempt = attempt,
             PredictionId = prediction.Id,
-            BlueOutcomeId = FindOutcomeId(prediction.Outcomes, MatchPrediction.Blue),
-            RedOutcomeId = FindOutcomeId(prediction.Outcomes, MatchPrediction.Red),
+            BlueOutcomeId = rating
+                ? null
+                : FindOutcomeId(prediction.Outcomes, MatchPrediction.Blue),
+            RedOutcomeId = rating ? null : FindOutcomeId(prediction.Outcomes, MatchPrediction.Red),
+            Kind = kind,
+            OutcomeIds = rating
+                ? outcomes.Select(outcome => FindOutcomeId(prediction.Outcomes, outcome)).ToList()
+                : null,
             BroadcasterId = string.IsNullOrWhiteSpace(prediction.BroadcasterId)
                 ? channelId
                 : prediction.BroadcasterId,
@@ -178,7 +193,8 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         ledger.Upsert(entry);
         currentReplayId = replayId;
         logger.LogInformation(
-            "Opened Blue/Red prediction {PredictionId} for replay {ReplayId} attempt {Attempt} ({Title}, {Window}s).",
+            "Opened {Prediction} prediction {PredictionId} for replay {ReplayId} attempt {Attempt} ({Title}, {Window}s).",
+            rating ? "rating" : "Blue/Red",
             prediction.Id,
             replayId,
             attempt,
@@ -206,7 +222,12 @@ public class TwitchMatchPredictionService : IMatchPredictionService
 
             settings.Capture.Method = CaptureMethod.BitBlt;
             settings.Twitch.PredictionWindow = TimeSpan.FromSeconds(30);
-            await OpenAsync(dummy.ReplayId ?? 0, dummy.Replay.Map, cancellationToken)
+            await OpenAsync(
+                    dummy.ReplayId ?? 0,
+                    dummy.Replay.Map,
+                    PredictionKind.Winner,
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
             await ResolveTeamAsync(winningTeam, cancellationToken).ConfigureAwait(false);
         }
@@ -351,7 +372,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 {
                     // Found settled at startup: the page is caught up, but chat is not told about
                     // a game that ended before this process was watching.
-                    reports.TryWrite(match, entry.Map);
+                    reports.TryWrite(match, entry.Map, entry.Kind);
                 }
             }
         }
@@ -487,10 +508,17 @@ public class TwitchMatchPredictionService : IMatchPredictionService
                 return;
             }
 
-            string winningId = entry.WinningTeam == 0 ? entry.BlueOutcomeId : entry.RedOutcomeId;
+            string winningId = entry.OutcomeIdFor(entry.WinningTeam);
             if (entry.WinningTeam == null || string.IsNullOrWhiteSpace(winningId))
             {
-                MarkTerminal(entry, "missing outcome id for team " + entry.WinningTeam);
+                MarkTerminal(
+                    entry,
+                    "missing outcome id for "
+                        + (
+                            RatingPrediction.OutcomeTitle(entry.Kind, entry.WinningTeam)
+                            ?? "outcome " + entry.WinningTeam
+                        )
+                );
                 return;
             }
 
@@ -640,7 +668,7 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             MarkSettled(entry, remote);
             if (remote == PredictionRemoteState.Resolved)
             {
-                AnnounceVerdict(reports.TryWrite(settled, entry.Map));
+                AnnounceVerdict(reports.TryWrite(settled, entry.Map, entry.Kind));
             }
 
             return;
@@ -809,19 +837,36 @@ public class TwitchMatchPredictionService : IMatchPredictionService
             entry.BroadcasterId = channel.BroadcasterId;
         }
 
-        string blue = FindOutcomeId(channel.Outcomes, MatchPrediction.Blue);
-        string red = FindOutcomeId(channel.Outcomes, MatchPrediction.Red);
-        if (!string.IsNullOrWhiteSpace(blue))
+        if (entry.Kind == PredictionKind.Rating)
         {
-            entry.BlueOutcomeId = blue;
-        }
+            var ids = new List<string>();
+            foreach (string outcome in RatingPrediction.Outcomes)
+            {
+                ids.Add(
+                    FindOutcomeId(channel.Outcomes, outcome)
+                        ?? entry.OutcomeIdFor(RatingPrediction.OutcomeIndex(outcome))
+                );
+            }
 
-        if (!string.IsNullOrWhiteSpace(red))
+            entry.OutcomeIds = ids;
+        }
+        else
         {
-            entry.RedOutcomeId = red;
+            string blue = FindOutcomeId(channel.Outcomes, MatchPrediction.Blue);
+            string red = FindOutcomeId(channel.Outcomes, MatchPrediction.Red);
+            if (!string.IsNullOrWhiteSpace(blue))
+            {
+                entry.BlueOutcomeId = blue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(red))
+            {
+                entry.RedOutcomeId = red;
+            }
         }
 
         currentReplayId = entry.ReplayId;
+        currentKind = entry.Kind;
         ledger.Upsert(entry);
     }
 
@@ -880,13 +925,13 @@ public class TwitchMatchPredictionService : IMatchPredictionService
         && settings.Capture.Method != CaptureMethod.None
         && !settings.Twitch.DryRunMode;
 
-    private void LogDrySettle(int? team)
+    private void LogDrySettle(int? winner)
     {
-        if (team.HasValue)
+        if (winner.HasValue)
         {
             logger.LogInformation(
                 "Dry-run prediction resolve -> {Outcome}.",
-                MatchPrediction.OutcomeTitle(team.Value)
+                RatingPrediction.OutcomeTitle(currentKind, winner)
             );
             return;
         }

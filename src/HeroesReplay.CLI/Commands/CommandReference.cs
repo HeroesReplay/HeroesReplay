@@ -252,7 +252,7 @@ public static class CommandReference
             "twitch connect",
             "Twitch token with the chat and redemption scopes. Dev turns every side effect off (`DryRunMode`). "
                 + LiveAsk,
-            "Joins chat, syncs channel-point rewards, queues redemptions in `Data\\requests.json`, and opens and resolves Blue/Red predictions.",
+            "Joins chat, syncs channel-point rewards, queues redemptions in `Data\\requests.json`, and opens and resolves Blue/Red predictions, or the rating guess (Bronze to Master) for a Blind Rating replay.",
             Blocks
         ),
         new(

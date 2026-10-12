@@ -23,18 +23,24 @@ public enum PredictionSessionFault
     NoClock,
 }
 
+/// <param name="Winner">
+/// The winning outcome's position: the team (0 Blue, 1 Red) for Blue/Red, the rating
+/// (0 Bronze to 5 Master) for a rating prediction. Null for a cancel.
+/// </param>
 public readonly record struct PredictionSignal(
     PredictionSignalKind Kind,
     int ReplayId,
     string Map,
-    int? WinnerTeam,
-    int Attempt
+    int? Winner,
+    int Attempt,
+    PredictionKind Prediction = PredictionKind.Winner
 );
 
 /// <summary>
-/// Decides when the Twitch process should open or settle a Blue/Red prediction from spectator
-/// status. The spectator does not call Helix. Completion fields stay on the status file across
-/// the next replay load so a slow poll still sees the result.
+/// Decides when the Twitch process should open or settle a prediction from spectator status:
+/// Blue/Red, or the rating guess for a Blind Rating replay (#411). The spectator does not call
+/// Helix. Completion fields stay on the status file across the next replay load so a slow poll
+/// still sees the result.
 /// </summary>
 public sealed class PredictionSessionTracker
 {
@@ -45,6 +51,7 @@ public sealed class PredictionSessionTracker
     private int? announcedDisabledReplayId;
     private DateTimeOffset openedAt;
     private string openMap;
+    private PredictionKind openKind;
 
     public void Release(int replayId)
     {
@@ -54,10 +61,17 @@ public sealed class PredictionSessionTracker
             openAttempt = 0;
             openMap = null;
             openedAt = default;
+            openKind = PredictionKind.Winner;
         }
     }
 
-    public void Restore(int replayId, int attempt, DateTimeOffset openedAt, string map)
+    public void Restore(
+        int replayId,
+        int attempt,
+        DateTimeOffset openedAt,
+        string map,
+        PredictionKind kind = PredictionKind.Winner
+    )
     {
         if (replayId <= 0 || attempt <= 0)
         {
@@ -68,6 +82,7 @@ public sealed class PredictionSessionTracker
         openAttempt = attempt;
         this.openedAt = openedAt;
         openMap = map;
+        openKind = kind;
     }
 
     /// <summary>
@@ -110,7 +125,11 @@ public sealed class PredictionSessionTracker
             && status.CompletedAt.Value > openedAt
         )
         {
-            return Finish(status.CompletedWinnerTeam);
+            return Finish(
+                openKind == PredictionKind.Rating
+                    ? RatingPrediction.OutcomeIndex(status.CompletedRating)
+                    : status.CompletedWinnerTeam
+            );
         }
 
         if (openReplayId.HasValue && SessionAbandoned(status, utcNow))
@@ -141,31 +160,35 @@ public sealed class PredictionSessionTracker
             openAttempt = 0;
             openedAt = status.UpdatedAt;
             openMap = status.Map;
+            openKind = status.RatingPrediction ? PredictionKind.Rating : PredictionKind.Winner;
             return new PredictionSignal(
                 PredictionSignalKind.Open,
                 status.ReplayId.Value,
                 status.Map,
                 null,
-                openAttempt
+                openAttempt,
+                openKind
             );
         }
 
         return default;
     }
 
-    private PredictionSignal Finish(int? winnerTeam)
+    private PredictionSignal Finish(int? winner)
     {
         int replayId = openReplayId.Value;
         int attempt = openAttempt;
         string map = openMap;
+        PredictionKind prediction = openKind;
         openReplayId = null;
         openAttempt = 0;
         openMap = null;
         openedAt = default;
-        PredictionSignalKind kind = winnerTeam.HasValue
+        openKind = PredictionKind.Winner;
+        PredictionSignalKind kind = winner.HasValue
             ? PredictionSignalKind.Resolve
             : PredictionSignalKind.Cancel;
-        return new PredictionSignal(kind, replayId, map, winnerTeam, attempt);
+        return new PredictionSignal(kind, replayId, map, winner, attempt, prediction);
     }
 
     private bool SessionAbandoned(SpectatorStatus status, DateTimeOffset utcNow)

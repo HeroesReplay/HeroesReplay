@@ -78,7 +78,12 @@ public class TwitchMatchPredictionServiceTests
 
         try
         {
-            await service.OpenAsync(10, "Cursed Hollow", CancellationToken.None);
+            await service.OpenAsync(
+                10,
+                "Cursed Hollow",
+                PredictionKind.Winner,
+                CancellationToken.None
+            );
             await service.ResolveTeamAsync(0, CancellationToken.None);
         }
         finally
@@ -124,7 +129,12 @@ public class TwitchMatchPredictionServiceTests
             )
         );
 
-        await service.OpenAsync(11, "Garden of Terror", CancellationToken.None);
+        await service.OpenAsync(
+            11,
+            "Garden of Terror",
+            PredictionKind.Winner,
+            CancellationToken.None
+        );
 
         Assert.NotNull(http.EndPredictionBody);
         Assert.Contains("\"CANCELED\"", http.EndPredictionBody, StringComparison.Ordinal);
@@ -224,6 +234,182 @@ public class TwitchMatchPredictionServiceTests
         }
     }
 
+    /// <summary>#411: a Blind Rating replay opens Bronze to Master for the rating window.</summary>
+    [Fact]
+    public async Task OpenRating_OffersSixRatingsForTheRatingWindowAndKeepsTheirIds()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "hr-pred-rating-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        var http = new RecordingHttpHandler
+        {
+            GetBody = "{\"data\":[]}",
+            CreateResponse = RatingPredictionJson("ACTIVE", winningId: null),
+        };
+        TwitchMatchPredictionService service = RatingService(directory, http);
+
+        bool opened;
+        PredictionLedgerEntry saved;
+        try
+        {
+            opened = await service.OpenAsync(
+                12,
+                "Cursed Hollow",
+                PredictionKind.Rating,
+                CancellationToken.None
+            );
+            saved = PredictionLedger.Load(PredictionLedger.PathFor(directory)).FindUnsettled(12);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+
+        Assert.True(opened);
+        Assert.Equal(1, http.CreateCount);
+        Assert.Contains(RatingPrediction.Title, http.CreateBody, StringComparison.Ordinal);
+        Assert.Contains("480", http.CreateBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Blue\"", http.CreateBody, StringComparison.Ordinal);
+        foreach (string outcome in RatingPrediction.Outcomes)
+        {
+            Assert.Contains("\"" + outcome + "\"", http.CreateBody, StringComparison.Ordinal);
+        }
+
+        Assert.NotNull(saved);
+        Assert.Equal(PredictionKind.Rating, saved.Kind);
+        Assert.Equal(RatingOutcomeIds, saved.OutcomeIds);
+        Assert.Null(saved.BlueOutcomeId);
+        Assert.Equal("rating-diamond", saved.OutcomeIdFor(4));
+    }
+
+    /// <summary>#411: the rating prediction resolves to the outcome of the match's rating.</summary>
+    [Fact]
+    public async Task ResolveRating_EndsOnTheMatchRatingsOutcome()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            "hr-pred-rating-" + Guid.NewGuid().ToString("N")
+        );
+        Directory.CreateDirectory(directory);
+        PredictionLedger
+            .Load(PredictionLedger.PathFor(directory))
+            .Upsert(
+                new PredictionLedgerEntry
+                {
+                    SessionKey = "12:1",
+                    ReplayId = 12,
+                    Attempt = 1,
+                    PredictionId = PredictionId,
+                    Kind = PredictionKind.Rating,
+                    OutcomeIds = new List<string>(RatingOutcomeIds),
+                    BroadcasterId = BroadcasterId,
+                    Title = RatingPrediction.Title,
+                    Map = "Cursed Hollow",
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    State = PredictionLedgerState.Open,
+                }
+            );
+        var http = new RecordingHttpHandler
+        {
+            GetBody = RatingPredictionJson("LOCKED", winningId: null),
+            ResolvedBody = RatingPredictionJson("RESOLVED", winningId: "rating-diamond"),
+        };
+        TwitchMatchPredictionService service = RatingService(directory, http);
+
+        string saved;
+        try
+        {
+            await service.ResolveReplayAsync(12, 4, CancellationToken.None);
+            saved = File.ReadAllText(
+                Path.Combine(directory, PredictionReportWriter.SavedReportFileName)
+            );
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+
+        Assert.Contains("\"RESOLVED\"", http.EndPredictionBody, StringComparison.Ordinal);
+        Assert.Contains("rating-diamond", http.EndPredictionBody, StringComparison.Ordinal);
+        PredictionReport report = System.Text.Json.JsonSerializer.Deserialize<PredictionReport>(
+            saved
+        );
+        Assert.Equal(PredictionKind.Rating, report.Kind);
+        Assert.Equal("Diamond", report.WinningOutcome);
+        Assert.DoesNotContain(" wins", report.Verdict, StringComparison.Ordinal);
+    }
+
+    private static readonly string[] RatingOutcomeIds =
+    {
+        "rating-bronze",
+        "rating-silver",
+        "rating-gold",
+        "rating-platinum",
+        "rating-diamond",
+        "rating-master",
+    };
+
+    private static TwitchMatchPredictionService RatingService(
+        string directory,
+        RecordingHttpHandler http
+    )
+    {
+        var settings = new AppSettings
+        {
+            Location = new LocationSettings { DataDirectory = directory },
+            Twitch = new TwitchSettings
+            {
+                EnablePredictions = true,
+                DryRunMode = false,
+                Channel = "saltysadism",
+                PredictionWindow = TimeSpan.FromMinutes(2),
+                RatingPredictionWindow = TimeSpan.FromMinutes(8),
+            },
+            Capture = new CaptureSettings { Method = CaptureMethod.BitBlt },
+        };
+        return new TwitchMatchPredictionService(
+            NullLogger<TwitchMatchPredictionService>.Instance,
+            settings,
+            FakeTwitchApi.Create(http),
+            new PredictionReportWriter(NullLogger<PredictionReportWriter>.Instance, settings)
+        );
+    }
+
+    private static string RatingPredictionJson(string status, string winningId)
+    {
+        var outcomes = new List<string>();
+        for (int index = 0; index < RatingOutcomeIds.Length; index++)
+        {
+            outcomes.Add(
+                "{\"id\":\""
+                    + RatingOutcomeIds[index]
+                    + "\",\"title\":\""
+                    + RatingPrediction.Outcomes[index]
+                    + "\",\"users\":"
+                    + (index == 2 ? 4 : 1)
+                    + ",\"channel_points\":"
+                    + (index == 2 ? 2000 : 100)
+                    + "}"
+            );
+        }
+
+        return "{\"data\":[{\"id\":\""
+            + PredictionId
+            + "\",\"broadcaster_id\":\""
+            + BroadcasterId
+            + "\",\"title\":\""
+            + RatingPrediction.Title
+            + "\",\"status\":\""
+            + status
+            + "\""
+            + (winningId == null ? "" : ",\"winning_outcome_id\":\"" + winningId + "\"")
+            + ",\"outcomes\":["
+            + string.Join(",", outcomes)
+            + "]}]}";
+    }
+
     private static string ResolvedBlue() =>
         "{\"data\":[{"
         + "\"id\":\""
@@ -274,6 +460,12 @@ public class TwitchMatchPredictionServiceTests
         public string LockedTitle { get; set; } = "Cursed Hollow: who wins?";
         public string ResolvedBody { get; set; }
 
+        /// <summary>Replaces the LOCKED Blue/Red prediction every GET returns by default.</summary>
+        public string GetBody { get; set; }
+
+        public string CreateBody { get; private set; }
+        public string CreateResponse { get; set; }
+
         public Task<KeyValuePair<int, string>> GeneralRequestAsync(
             string url,
             string method,
@@ -291,6 +483,15 @@ public class TwitchMatchPredictionServiceTests
                         "{\"data\":[{\"id\":\"" + BroadcasterId + "\",\"login\":\"saltysadism\"}]}"
                     )
                 );
+            }
+
+            if (
+                url.Contains("/predictions", StringComparison.Ordinal)
+                && method == "GET"
+                && GetBody != null
+            )
+            {
+                return Task.FromResult(new KeyValuePair<int, string>(200, GetBody));
             }
 
             if (url.Contains("/predictions", StringComparison.Ordinal) && method == "GET")
@@ -332,7 +533,10 @@ public class TwitchMatchPredictionServiceTests
             if (url.Contains("/predictions", StringComparison.Ordinal) && method == "POST")
             {
                 CreateCount++;
-                return Task.FromResult(new KeyValuePair<int, string>(200, "{\"data\":[]}"));
+                CreateBody = payload;
+                return Task.FromResult(
+                    new KeyValuePair<int, string>(200, CreateResponse ?? "{\"data\":[]}")
+                );
             }
 
             return Task.FromResult(new KeyValuePair<int, string>(200, "{}"));

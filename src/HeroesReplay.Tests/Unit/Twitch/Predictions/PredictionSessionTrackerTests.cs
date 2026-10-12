@@ -41,7 +41,7 @@ public class PredictionSessionTrackerTests
 
         Assert.Equal(PredictionSignalKind.Resolve, signal.Kind);
         Assert.Equal(10, signal.ReplayId);
-        Assert.Equal(0, signal.WinnerTeam);
+        Assert.Equal(0, signal.Winner);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class PredictionSessionTrackerTests
         replay.CompletedAt = T0.AddMinutes(15);
         PredictionSignal signal = tracker.Observe(replay, T0.AddMinutes(15));
         Assert.Equal(PredictionSignalKind.Resolve, signal.Kind);
-        Assert.Equal(1, signal.WinnerTeam);
+        Assert.Equal(1, signal.Winner);
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public class PredictionSessionTrackerTests
         Assert.Equal(PredictionSignalKind.Resolve, signal.Kind);
         Assert.Equal(10, signal.ReplayId);
         Assert.Equal(1, signal.Attempt);
-        Assert.Equal(0, signal.WinnerTeam);
+        Assert.Equal(0, signal.Winner);
         Assert.Equal(PredictionSignalKind.None, duplicate.Kind);
     }
 

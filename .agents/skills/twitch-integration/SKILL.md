@@ -18,7 +18,7 @@ description: >
 
 Channel-point methods are `*Async`: `GetCustomRewardAsync`, `CreateCustomRewardsAsync`, `UpdateCustomRewardAsync`, `DeleteCustomRewardAsync`.
 
-Helix Predictions (Blue/Red who-wins): `twitch connect` calls `CreatePredictionAsync` when `status.json` phase is `TimerDetected`, and `EndPredictionAsync` (RESOLVED/CANCELED) from the completion fields when the session ends. Team 0 = Blue (left), team 1 = Red (right). Requires `channel:manage:predictions`. Toggle `Twitch:EnablePredictions` (true in base settings, false in `appsettings.dev.json` because the dev box shares the live channel). Window `Twitch:PredictionWindow` (base `00:02:00`, clamped 30s–1800s). `Twitch:DryRunMode` logs the prediction without calling Helix; `CaptureMethod.None` opens none. The spectator does not call Helix.
+Helix Predictions (Blue/Red who-wins): `twitch connect` calls `CreatePredictionAsync` when `status.json` phase is `TimerDetected`, and `EndPredictionAsync` (RESOLVED/CANCELED) from the completion fields when the session ends. Team 0 = Blue (left), team 1 = Red (right). A Blind Rating replay (#411, `status.json` `ratingPrediction`) gets "Guess the rating of the match" instead: Bronze, Silver, Gold, Platinum, Diamond, Master (Grandmaster counts as Master), for `Twitch:RatingPredictionWindow` (8 min), resolved from `completedRating` after the match. Twitch runs one prediction per channel, and six ratings times two teams is more than its ten outcomes, so a blind replay has no Blue/Red. Requires `channel:manage:predictions`. Toggle `Twitch:EnablePredictions` (true in base settings, false in `appsettings.dev.json` because the dev box shares the live channel). Window `Twitch:PredictionWindow` (base `00:02:00`, clamped 30s–1800s). `Twitch:DryRunMode` logs the prediction without calling Helix; `CaptureMethod.None` opens none. The spectator does not call Helix.
 
 ## Redemptions are EventSub
 
@@ -53,7 +53,7 @@ dotnet run --project src/HeroesReplay.CLI --no-launch-profile -- twitch predicti
 
 `twitch predictions test` creates a 30s Blue/Red Helix prediction then resolves (`Blue`/`Red`) or `cancel`. Watch it on the Twitch creator dashboard.
 
-`twitch connect` opens the real match prediction. It watches `%LOCALAPPDATA%\HeroesReplay\status.json` and does not call into the spectator. Phase `TimerDetected` opens Blue/Red for `map`. When the session ends, the spectator writes `completedReplayId`, `completedAt`, and `completedWinnerTeam` (0 blue, 1 red, null cancels) and leaves them in place while the next replay loads. The spectator process does not call Helix.
+`twitch connect` opens the real match prediction. It watches `%LOCALAPPDATA%\HeroesReplay\status.json` and does not call into the spectator. Phase `TimerDetected` opens Blue/Red for `map`. When the session ends, the spectator writes `completedReplayId`, `completedAt`, and `completedWinnerTeam` (0 blue, 1 red, null cancels), plus `completedRating` for a Blind Rating replay, and leaves them in place while the next replay loads. The spectator process does not call Helix.
 
 Twitch allows one ACTIVE or LOCKED prediction per channel. When a new game opens and the channel already has one that is not this replay's (a prediction from another machine, another data directory, or a previous replay that never settled), it is cancelled first, which refunds every point, and then the new Blue/Red prediction is created. If that cancel fails, no prediction opens for this game.
 

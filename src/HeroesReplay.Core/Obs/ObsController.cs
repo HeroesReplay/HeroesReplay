@@ -688,14 +688,7 @@ public class ObsController : IObsController
         }
 
         HeroesProfileReplay row = context.Current?.LoadedReplay?.HeroesProfileReplay;
-        string rank = row?.Rank;
-        int? leagueTier = row?.LeagueTier;
-        if (string.IsNullOrWhiteSpace(RankImage.SourceName(rank, leagueTier)))
-        {
-            rank = RankImage.RankFromCacheFileName(context.Current?.LoadedReplay?.FileInfo?.Name);
-            leagueTier = null;
-        }
-
+        string rank = RankImage.RankOf(context.Current?.LoadedReplay, out int? leagueTier);
         string sourceName = RankImage.SourceName(rank, leagueTier);
         if (string.IsNullOrWhiteSpace(sourceName))
         {

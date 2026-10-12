@@ -47,6 +47,7 @@ public sealed class PredictionResume
     public string PredictionId { get; init; }
     public string Map { get; init; }
     public DateTimeOffset OpenedAt { get; init; }
+    public PredictionKind Kind { get; init; }
 }
 
 public sealed class PredictionReconcileResult
@@ -301,6 +302,7 @@ public static class PredictionSettlementPolicy
                 PredictionId = resumeEntry.PredictionId,
                 Map = resumeEntry.Map,
                 OpenedAt = resumeEntry.CreatedAt,
+                Kind = resumeEntry.Kind,
             };
         }
 

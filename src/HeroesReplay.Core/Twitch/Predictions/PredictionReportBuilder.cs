@@ -16,7 +16,8 @@ public static class PredictionReportBuilder
         Prediction prediction,
         PredictionStreakBook streaks,
         string map,
-        Random random
+        Random random,
+        PredictionKind kind = PredictionKind.Winner
     )
     {
         if (prediction == null)
@@ -28,6 +29,8 @@ public static class PredictionReportBuilder
         var rows = new List<PredictorRow>();
         Outcome winning = null;
         Outcome losing = null;
+        int loserVoters = 0;
+        int loserPoints = 0;
         Outcome[] outcomes = prediction.Outcomes ?? Array.Empty<Outcome>();
         foreach (Outcome outcome in outcomes)
         {
@@ -43,7 +46,14 @@ public static class PredictionReportBuilder
             }
             else
             {
-                losing ??= outcome;
+                // Blue/Red has one losing side. A rating prediction has five: their viewers and
+                // points add up, and the one most points went on names the crowd's wrong guess.
+                loserVoters += Voters(outcome);
+                loserPoints += Points(outcome);
+                if (losing == null || BackedMore(outcome, losing))
+                {
+                    losing = outcome;
+                }
             }
 
             TopPredictor[] predictors = outcome.TopPredictors ?? Array.Empty<TopPredictor>();
@@ -78,15 +88,20 @@ public static class PredictionReportBuilder
             streaks
         ) with
         {
+            Kind = kind,
             LosingOutcome = winning == null ? null : losing?.Title,
             Map = EnglishMapNames.IsCatalog(canonical) ? canonical : null,
             WinnerVoters = Voters(winning),
-            LoserVoters = Voters(losing),
+            LoserVoters = loserVoters,
             WinnerPoints = Points(winning),
-            LoserPoints = Points(losing),
+            LoserPoints = loserPoints,
         };
         return WithVerdict(report, streaks, random);
     }
+
+    private static bool BackedMore(Outcome outcome, Outcome than) =>
+        Points(outcome) > Points(than)
+        || (Points(outcome) == Points(than) && Voters(outcome) > Voters(than));
 
     public static PredictionReport FromRows(
         string predictionId,

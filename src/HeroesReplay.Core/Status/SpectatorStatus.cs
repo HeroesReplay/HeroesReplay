@@ -22,9 +22,21 @@ public sealed class SpectatorStatus
     /// because that id is already public.
     /// </summary>
     public bool SuppressPredictions { get; set; }
+
+    /// <summary>
+    /// True for a Blind Rating replay with a known rank (#411): the Twitch process opens the
+    /// rating prediction (Bronze to Master) instead of Blue/Red.
+    /// </summary>
+    public bool RatingPrediction { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public int? CompletedReplayId { get; set; }
     public int? CompletedWinnerTeam { get; set; }
+
+    /// <summary>
+    /// The rating (Bronze to Master) of a completed Blind Rating replay, written with the other
+    /// completion fields so the rating prediction resolves only after the match (#411).
+    /// </summary>
+    public string CompletedRating { get; set; }
 
     /// <summary>
     /// Why the last session ended. Completion fields are set only for <c>VerifiedCompleted</c>.

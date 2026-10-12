@@ -20,7 +20,14 @@ public sealed record PredictionReport
 
     public string WinningOutcome { get; init; }
 
+    /// <summary>
+    /// Blue/Red's other team. For a rating prediction, the wrong rating most points went on;
+    /// the loser counts below then cover every wrong rating (#411).
+    /// </summary>
     public string LosingOutcome { get; init; }
+
+    /// <summary>Blue/Red, or the Blind Rating guess (#411). Saved reports without it are Blue/Red.</summary>
+    public PredictionKind Kind { get; init; }
 
     /// <summary>The English catalog map name, or null when the map is not a catalog map.</summary>
     public string Map { get; init; }
