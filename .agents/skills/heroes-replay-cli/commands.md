@@ -59,6 +59,15 @@ Count team-composition labels (split push, siege, dive, poke, and the rest) and 
 - **Changes:** Writes `--output` (`.md` or `.csv`) when given; otherwise prints only. Read-only for the replays.
 - **Exit:** 0 when it finishes. 1 for a missing folder, an `--output` that is not `.md` or `.csv`, or a parse error.
 
+## `calculators insights`
+
+Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, and each player's closest guide build. Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only.
+
+- **Options:** `--directory` (`-d`, required), `--recursive`, `--output` (`-o`)
+- **Before:** A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, and the shipped talent-build reference.
+- **Changes:** Prints each replay's match insights and the frequency tables; writes `--output` (`.md`) when given. Read-only for the replays.
+- **Exit:** 0 when at least one replay was read. 1 for a missing folder, an `--output` that is not `.md`, or no replays in it. 2 when no replay parsed.
+
 ## `builds import`
 
 Check the icy-veins-builds skill's extract (build names, tags, per-tier marks) against the heroes-data2 catalog's talents under Location:DataDirectory and write the talent-build reference JSON. Prints every warning (a stale tier, a renamed talent, a hero with no guide). Refuses to write when a guide names no catalog hero, a build lacks seven tiers, or a mark is not y, s, or n. Reads nothing from the web.

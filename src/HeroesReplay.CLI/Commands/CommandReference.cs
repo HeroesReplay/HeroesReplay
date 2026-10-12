@@ -108,6 +108,12 @@ public static class CommandReference
             "0 when it finishes. 1 for a missing folder, an `--output` that is not `.md` or `.csv`, or a parse error."
         ),
         new(
+            "calculators insights",
+            "A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, and the shipped talent-build reference.",
+            "Prints each replay's match insights and the frequency tables; writes `--output` (`.md`) when given. Read-only for the replays.",
+            "0 when at least one replay was read. 1 for a missing folder, an `--output` that is not `.md`, or no replays in it. 2 when no replay parsed."
+        ),
+        new(
             "builds import",
             "The `icy-veins-builds` skill's extract (`--input`) and the heroes-data2 catalog under `Location:DataDirectory`. Reads nothing from the web.",
             "Writes the talent-build reference (`--reference`, normally `src/HeroesReplay.Core/Builds/Reference/icy-veins-builds.json`): build names, tags, talent ids per tier and guide links, no guide text. Writes nothing when it refuses.",
