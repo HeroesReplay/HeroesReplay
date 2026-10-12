@@ -1,3 +1,5 @@
+using HeroesReplay.Core.YouTube.Metadata.Highlights;
+
 namespace HeroesReplay.Core.YouTube.Metadata;
 
 /// <summary>
@@ -54,4 +56,10 @@ public class YouTubeTitleSettings
 
     /// <summary>Heroes Profile statistics hooks (<c>YouTube:Titles:StatHooks</c>). Off by default.</summary>
     public StatHookSettings StatHooks { get; set; } = new StatHookSettings();
+
+    /// <summary>
+    /// Match highlights from the replay's insights (<c>YouTube:Titles:Highlights</c>, #412): the
+    /// title's lead and the description's insight lines. Off by default.
+    /// </summary>
+    public HighlightSettings Highlights { get; set; } = new HighlightSettings();
 }

@@ -69,6 +69,7 @@ public sealed class BuildMatcher
         double sum = 0;
         int tiers = 0;
         int recommended = 0;
+        int situational = 0;
         foreach (HeroTalent pick in played.Picks)
         {
             if (pick.Tier < 0 || pick.Tier >= build.Tiers.Count)
@@ -91,10 +92,11 @@ public sealed class BuildMatcher
             else if (Contains(tier.Situational, pick))
             {
                 sum += options.SituationalWeight;
+                situational++;
             }
         }
 
-        return new BuildScore(build, tiers == 0 ? 0 : sum / tiers, tiers, recommended);
+        return new BuildScore(build, tiers == 0 ? 0 : sum / tiers, tiers, recommended, situational);
     }
 
     private static bool Contains(IReadOnlyList<string> talentIds, HeroTalent pick) =>

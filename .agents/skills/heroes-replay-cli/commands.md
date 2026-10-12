@@ -339,6 +339,15 @@ Run the YouTube library pass now: list the channel's uploads, record videos miss
 - **Changes:** Records missing videos in `Data\youtube-library.jsonl` and inserts playlist items (50 units each). Dry run writes `Data\youtube-library-dry-run.json` and calls nothing.
 - **Exit:** With `--once`: 0 when the pass finished, 1 when it failed. Without it, runs until stopped.
 
+## `youtube preview`
+
+Print the full match title, description lines and tags a .StormReplay would get, with its match insights: the solo laners, standouts, MVP, camps, core race, comeback, each player's closest guide build, and the hero the focus timeline follows most. Highlights (YouTube:Titles:Highlights) are on for the preview unless --configured. Mode and rank come from a cache-style file name (<id>_<mode>_<rank>_<map>_...). Offline and read-only: no YouTube, Heroes Profile, game or OBS.
+
+- **Options:** `--replay` (required), `--configured`, `--insights`
+- **Before:** A `.StormReplay` (`--replay`), ideally with a cache-style name (`<id>_<mode>_<rank>_<map>_...`) for the mode and rank, and the heroes-data2 catalog under `Location:DataDirectory`.
+- **Changes:** Prints the title, description lines and tags the replay would get, with highlights on unless `--configured`, and with `--insights` the `insights.json` spectate would write. Offline and read-only: no YouTube, Heroes Profile, game or OBS.
+- **Exit:** 0 when the replay parsed. 1 for a missing file or a replay that does not parse.
+
 ## `heroesprofile download`
 
 List and download Storm League replays into Data\Standard. Does not launch the game.

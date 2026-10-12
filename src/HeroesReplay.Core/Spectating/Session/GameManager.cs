@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.GameClient;
@@ -48,6 +49,7 @@ public class GameManager : IGameManager
     private readonly IGameData gameData;
     private readonly CancellationTokenProvider tokenProvider;
     private readonly StreamHold streamHold;
+    private readonly IMatchInsightsRecorder insightsRecorder;
 
     /// <param name="streamHold">
     /// Holds the launch of the next replay during the report while the desired stream is down
@@ -68,7 +70,8 @@ public class GameManager : IGameManager
         MediaPolicyAttemptLog mediaPolicy,
         IGameData gameData,
         CancellationTokenProvider tokenProvider,
-        StreamHold streamHold = null
+        StreamHold streamHold = null,
+        IMatchInsightsRecorder insightsRecorder = null
     )
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -93,6 +96,7 @@ public class GameManager : IGameManager
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         this.streamHold = streamHold;
+        this.insightsRecorder = insightsRecorder;
     }
 
     public async Task<ReplaySessionKind> LaunchAndSpectate(
@@ -1317,6 +1321,12 @@ public class GameManager : IGameManager
         }
 
         string directory = context.Current?.Directory?.FullName;
+        MatchInsights insights = insightsRecorder?.Record(
+            loadedReplay?.Replay,
+            gameData.Heroes,
+            context.Current?.Players,
+            directory
+        );
         bool wrote = await YouTubeEntryWriter
             .WriteIfAllowedAsync(
                 directory,
@@ -1326,7 +1336,8 @@ public class GameManager : IGameManager
                 isCompleteRecording: true,
                 CancellationToken.None,
                 gameData.Heroes,
-                StatHookSource.For(settings, loadedReplay, DateTimeOffset.UtcNow)
+                StatHookSource.For(settings, loadedReplay, DateTimeOffset.UtcNow),
+                insights
             )
             .ConfigureAwait(false);
         if (wrote)

@@ -29,6 +29,9 @@ public sealed record PlayerBuild
     /// <summary>Picks the build recommends.</summary>
     public int Recommended { get; init; }
 
+    /// <summary>Picks the build lists as situational.</summary>
+    public int Situational { get; init; }
+
     /// <summary>Picks compared.</summary>
     public int Tiers { get; init; }
 

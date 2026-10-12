@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Replays;
@@ -18,7 +19,8 @@ public static class YouTubeEntryBuilder
         YouTubeSettings youtube,
         bool isCompleteRecording,
         IReadOnlyList<Hero> heroCatalog = null,
-        HeroStatsSnapshot heroStats = null
+        HeroStatsSnapshot heroStats = null,
+        MatchInsights insights = null
     )
     {
         ReplayMediaPolicyInput facts = ReplayMediaFacts.From(
@@ -50,6 +52,7 @@ public static class YouTubeEntryBuilder
             NotableEvents = facts.NotableEvents,
             IsCompleteRecording = isCompleteRecording,
             HeroStats = heroStats,
+            Insights = insights,
         };
         FullMatchMetadata metadata = FullMatchMetadataBuilder.Build(
             input,

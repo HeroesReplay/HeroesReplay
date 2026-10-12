@@ -53,6 +53,7 @@ public sealed class BuildAnalyzer : IInsightAnalyzer<BuildInsights>
                     Tag = match.Best.Build.Tag,
                     Score = Math.Round(match.Best.Score, 3),
                     Recommended = match.Best.Recommended,
+                    Situational = match.Best.Situational,
                     Tiers = match.Best.Tiers,
                     Ambiguous = match.Ambiguous,
                     RunnerUp = match.RunnerUp?.Build.Name,
