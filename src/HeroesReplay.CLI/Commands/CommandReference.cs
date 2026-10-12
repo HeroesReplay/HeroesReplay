@@ -306,6 +306,12 @@ public static class CommandReference
             "With `--once`: 0 when the pass finished, 1 when it failed. Without it, runs until stopped."
         ),
         new(
+            "youtube preview",
+            "A `.StormReplay` (`--replay`), ideally with a cache-style name (`<id>_<mode>_<rank>_<map>_...`) for the mode and rank, and the heroes-data2 catalog under `Location:DataDirectory`.",
+            "Prints the title, description lines and tags the replay would get, with highlights on unless `--configured`, and with `--insights` the `insights.json` spectate would write. Offline and read-only: no YouTube, Heroes Profile, game or OBS.",
+            "0 when the replay parsed. 1 for a missing file or a replay that does not parse."
+        ),
+        new(
             "heroesprofile download",
             "`HeroesProfileApi:ApiKey`.",
             "Downloads Storm League replays into `Data\\Standard` and requested ones into `Data\\Requests`; keeps the hero statistics current while `YouTube:Titles:StatHooks:Enabled`. A Standard replay whose download Heroes Profile refuses with an HTTP status is skipped (replay id and status logged), not counted as an outage. Does not launch the game.",

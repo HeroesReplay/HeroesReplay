@@ -10,5 +10,6 @@ public class YouTubeCommand : Command
     {
         Subcommands.Add(new UploaderCommand());
         Subcommands.Add(new LibraryCommand());
+        Subcommands.Add(new PreviewCommand());
     }
 }

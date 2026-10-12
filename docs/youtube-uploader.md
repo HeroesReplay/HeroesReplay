@@ -257,14 +257,14 @@ A paid request that ends at 16:00 that day publishes at 16:00, as soon as it is 
 
 ## What the video contains
 
-A full match title is one line of at most 100 characters. It does not name a pentakill, a team wipe, a date, or an MMR. Those events are not a title, because one streak does not describe the match.
+A full match title is one line of at most 100 characters. It never names a date, an MMR, or who won. Without match highlights (below) it does not name a pentakill or a team wipe either. With them, one hero's own pentakill can lead the title, never a wipe shared across players.
 
 - Ordinary: `Volskaya Foundry - Storm League - Diamond - 65389750`.
 - A reward that names a player: `Illidan focus - Dragon Shire - Storm League - Diamond 3 - 65550001`. The title never names the Twitch viewer.
 - A paid upload that does not name a player has the ordinary title. The requestor is credited in the description only.
 - A new hero in the match: `Ft. Xal'atath - Volskaya Foundry - Storm League - Diamond - 65389750`. Ft. means featuring. One hero only. When the reward already leads with that hero, the title does not say her twice.
 
-There is no parsed MVP hero, so a title does not say MVP. The heroes in the title come from the parsed replay, in the catalog's English name: the hero unit the game spawned for each player (`HeroDemonHunter` is Valla), then the lobby hero attribute outside ARAM, then the character name. In ARAM the lobby attribute is the hero the player had selected before the game assigned one, so it is never used there (#348).
+The ordinary title does not say MVP. With match highlights on, the game's own MVP award, read from the replay, can lead it, whichever team the MVP was on. The heroes in the title come from the parsed replay, in the catalog's English name: the hero unit the game spawned for each player (`HeroDemonHunter` is Valla), then the lobby hero attribute outside ARAM, then the character name. In ARAM the lobby attribute is the hero the player had selected before the game assigned one, so it is never used there (#348).
 
 A draft note is added before the replay id when the current hero-select roles are not one tank, one bruiser, one healer, and a ranged assassin. Those roles are Tank, Bruiser, Melee Assassin, Ranged Assassin, Healer, and Support. Johanna plus Chen is a tank and a bruiser, so that draft is left alone. A tank talent overrides the catalog role: Varian is a Bruiser in hero select, but Varian with Taunt (`VarianTaunt`, level 4) counts as a tank, so Muradin plus Taunt Varian is a double tank and Taunt Varian plus Chen is left alone (issue #187). The talent comes from the replay's tracker events. The note is the whole match when both teams share it (`Cursed Hollow - Storm League - Diamond - No healer - 65550001`) and names the team when they differ (`Blue no tank, Red double healer`). A hero the catalog cannot match, or a hero with no current role, suppresses that team's note. A normal draft adds nothing.
 
@@ -344,7 +344,67 @@ The numbers go on a `Stats:` line in the description, for example `Stats: Valla 
 
 The statistics are one file per major patch and game type, `Data\HeroesProfile\hero-stats\2.57-sl.json`, keyed by `attribute_id`: each hero's wins and games on every map (and its ban rate there), against each enemy hero, and with each ally. The download role writes it, never spectate. While hooks are on it checks every `HeroesProfileApi:HeroStats:CheckInterval` (1 h) and fetches the newest major patch again when the file is older than `RefreshInterval` (24 h), for each `GameTypes` entry (Storm League). Files of patches older than the newest two are deleted. Spectate uses the file for the replay's own patch and game type only when it is younger than `MaxAge` (72 h); a missing, unreadable, or stale file leaves the title as before. `heroesreplay heroesprofile hero-stats` fetches it once by hand. The calls and their limits are in `docs/heroesprofile-api.md`.
 
-The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 7 (6 had no statistics hook).
+### Match highlights
+
+With `YouTube:Titles:Highlights:Enabled` (on in dev, off in the base and prod files until reviewed), the title leads with one highlight read from the replay itself (issue #412). The highlights name heroes, builds and the shape of the match. They never say who won, because the MVP can be on either team and the video is the match. Struggling players are never called out.
+
+**Where the facts come from.**
+
+- At session end, spectate reads the replay it already parsed into match insights (`Analysis/Insights`, `MatchInsightsRecorder`), together with the focus timeline it already followed. Nothing is parsed or calculated twice.
+- It writes them next to the recording as `insights.json`.
+- A failure is logged, and the entry is written without highlights.
+
+**Title layout.** `[X focus] - highlight - [Ft. X] - Map - Mode - Rank - [draft note] - ReplayId`, for example `Deathless Teleport Li-Ming 12/0/9 - Garden of Terror - Storm League - Master - 65581797`.
+
+- **Too long.** Over 100 characters, the draft note goes first, then the highlight's shorter wordings are tried (without the build, then without the score). If none fits, the title is built as before.
+- **No bare number.** No part is a bare number, so the replay id stays the first all-digit part.
+- **Named-player requests.** A request that named a player keeps its `X focus` lead, and takes only a highlight about no one hero.
+- **Featured hero.** A highlight about the featured new hero replaces its `Ft.` part.
+
+**What can lead.** The first kind in `Order` that the match has wins:
+
+| Kind | Title | When | Measured on 545 local games |
+| --- | --- | --- | --- |
+| `Pentakill` | `Valla pentakill` | One hero's own pentakill (#369 rules) | rare |
+| `CoreRace` | `Core race finish` | Both teams lost keeps, and 2+ heroes of the team whose core fell were at the other core in the last 60 s. Core health is not in the replay | 1% |
+| `Comeback` | `Insane comeback` | The team whose core survived lost 3+ more towers, forts and keeps, or was 3+ levels behind at some point | 4% |
+| `DeathlessCarry` | `Deathless Teleport Li-Ming 12/0/9` | 0 deaths, 8+ kills | 11% |
+| `KillLeader` | `Valla 14/1/6` | 10+ kills, at most 1 death | 8% |
+| `SoloLane` | `Solo lane Chen vs Thrall` | Each team's one side-lane soaker from gates open to the first level 10, at High confidence only: the other team's soaker was in the same lane | 32% of teams |
+| `CampDrought` | `Red takes 1 camp` | A team took at most 1 camp in a game of 10+ minutes | 8% |
+| `Mvp` | `MVP Orphea 7/1/5` | The game's MVP award | 100% |
+| `MostFollowed` | `Valla 3/4/10` | The hero the focus timeline followed most | |
+
+**Builds in a title.** A player highlight names the hero's closest guide build only when all of these hold:
+
+- the talents score at least `TitleBuildMinScore` (0.85) against it (1 per pick the build recommends, 0.5 per situational pick);
+- no other build is within 0.10;
+- the name is not a plain one (`GenericBuildNames`: Standard, Basic Attacks, Hybrid, ARAM and so on).
+
+**Description lines.**
+
+- **`Highlights:`** keeps the pentakills first, then adds the standouts (`Li-Ming 12/0/9 with no deaths`), the MVP (merged into a standout of the same player), the core race, and the comeback.
+- **`Solo lanes: Chen (Blue) vs Thrall (Red)`** names High confidence only.
+- **`Camps: Blue 9 (4 on Red's side), Red 3 (0 on Blue's side)`** counts each team's captures and those on the other team's side.
+- **The talent-build block** follows the roster lines. Its heading credits Icy Veins and links its hero guides, and each line names one player's closest guide build and links that guide. A player is listed when their talents score at least `DescriptionBuildMinScore` (0.70): about 57% of players in the corpus. Example: `Li-Ming (Blue): Teleport Build, 6 of 7 talents as recommended - https://www.icy-veins.com/heroes/li-ming-build-guide`.
+
+None of these lines starts with a label the library pass reads.
+
+**Tags.** The highlight's tag (`Deathless`, `Core race`, `Comeback`, `Solo lane`, `MVP`, `Pentakill`) and the build with the hero (`Teleport Li-Ming`) come after the composition labels.
+
+**The build reference.**
+
+- The builds come from `src/HeroesReplay.Core/Builds/Reference/icy-veins-builds.json`, embedded in Core.
+- It holds 91 heroes and 296 builds as build names, tags, talent ids per tier, and guide and calculator links, never guide text.
+- It is refreshed by hand with the `icy-veins-builds` skill and `heroesreplay builds import`.
+- `heroesreplay builds match --replay <file>` shows each player's best build.
+
+**Previews and tuning.**
+
+- `heroesreplay youtube preview --replay <file> [--insights]` prints the title, description and tags a replay would get, offline.
+- `heroesreplay calculators insights --directory <folder> --recursive --output report.md` measures how often each insight fires on a corpus. The thresholds are in `Insights`.
+
+The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 8 (7 had no match highlights, 6 no statistics hook).
 
 Every `videos.insert`, full match or clip, is built by `UploadBody` with the `snippet,status` parts:
 

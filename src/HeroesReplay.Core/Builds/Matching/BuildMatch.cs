@@ -11,7 +11,14 @@ namespace HeroesReplay.Core.Builds.Matching;
 /// <param name="Score">0 to 1.</param>
 /// <param name="Tiers">Tiers compared: the player's picks in tiers the build does not mark stale.</param>
 /// <param name="Recommended">How many of those picks the build recommends.</param>
-public sealed record BuildScore(GuideBuild Build, double Score, int Tiers, int Recommended);
+/// <param name="Situational">How many of those picks the build lists as situational.</param>
+public sealed record BuildScore(
+    GuideBuild Build,
+    double Score,
+    int Tiers,
+    int Recommended,
+    int Situational = 0
+);
 
 /// <summary>The build a player's talents fit best, and the runner-up.</summary>
 /// <param name="Guide">The hero's guide.</param>

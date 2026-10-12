@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.YouTube.Metadata.Highlights;
 
 namespace HeroesReplay.Core.YouTube.Metadata;
 
@@ -46,6 +48,12 @@ public sealed record FullMatchMetadataInput
     /// when <c>YouTube:Titles:StatHooks:Enabled</c> is true.
     /// </summary>
     public HeroStatsSnapshot HeroStats { get; init; }
+
+    /// <summary>
+    /// The replay's match insights (#412), or null. Used only when
+    /// <c>YouTube:Titles:Highlights:Enabled</c> is true.
+    /// </summary>
+    public MatchInsights Insights { get; init; }
 }
 
 public sealed class FullMatchMetadata
@@ -73,11 +81,14 @@ public sealed class FullMatchMetadata
     /// <c>Stats:</c> line and the attribution stay in the description even when a long title drops it.
     /// </summary>
     public string StatHook { get; init; }
+
+    /// <summary>The highlight wording the title leads with (#412), or null.</summary>
+    public string Highlight { get; init; }
 }
 
 public static class FullMatchMetadataBuilder
 {
-    public const string TemplateVersion = "7";
+    public const string TemplateVersion = "8";
     public const int TitleMaxCharacters = 100;
     public const int DescriptionMaxCharacters = 5000;
     public const int TagMaxCharacters = 30;
@@ -147,17 +158,46 @@ public static class FullMatchMetadataBuilder
                 ? Hook(input, titles, map, mode, namedLead ? focus : null, featuredHero)
                 : null;
         string hookTitle = Clean(hook?.Title, 80);
-        string title = TitleFor(
-            titles,
-            input.NamedPlayer,
+        HighlightContext highlights =
+            titles.Highlights?.Enabled == true && input.Insights != null
+                ? new HighlightContext(input.Insights, events, titles.Highlights)
+                : null;
+        Highlight highlight =
+            highlights == null
+                ? null
+                : HighlightPicker.Default.Pick(
+                    highlights,
+                    candidate => !namedLead || candidate.Hero == null
+                );
+        string highlightTitle = HighlightTitle.Compose(
+            highlight,
+            TitleMaxCharacters,
+            Lead(titles, input.NamedPlayer, focus),
+            highlight != null && highlight.IsAbout(featuredHero) ? null : feature,
             map,
             mode,
             rank,
-            focus,
-            feature,
             draft.Title ?? hookTitle,
             replayText
         );
+        if (highlightTitle == null)
+        {
+            highlight = null;
+        }
+
+        string title =
+            highlightTitle
+            ?? TitleFor(
+                titles,
+                input.NamedPlayer,
+                map,
+                mode,
+                rank,
+                focus,
+                feature,
+                draft.Title ?? hookTitle,
+                replayText
+            );
 
         var lines = new List<string>();
         if (hookTitle != null)
@@ -182,11 +222,20 @@ public static class FullMatchMetadataBuilder
         AddLine(lines, draft.Line == null ? null : "Draft: " + draft.Line);
         AddLine(lines, featuredHero == null ? null : "Featuring: " + featuredHero);
         AddLine(lines, hookTitle == null ? null : Clean(hook.StatsLine, 400));
-        AddLine(lines, Highlights(events));
+        AddLine(
+            lines,
+            highlights == null ? Highlights(events) : HighlightLines.Highlights(highlights, events)
+        );
+        AddLine(lines, highlights == null ? null : HighlightLines.SoloLanes(highlights));
+        AddLine(lines, highlights == null ? null : HighlightLines.Camps(highlights));
         AddLine(lines, requestor == null ? null : "Requested by: " + requestor);
         string resultLine = winner == null ? null : "Result: " + winner;
         AddLine(lines, resultLine);
         AddRoster(lines, input.Roster);
+        if (highlights != null)
+        {
+            lines.AddRange(HighlightLines.TalentBuilds(highlights));
+        }
 
         IReadOnlyList<string> kept = FitLines(lines);
         string description = string.Join("\n", kept);
@@ -198,7 +247,7 @@ public static class FullMatchMetadataBuilder
             pentakill,
             teamWipe,
             replayId != null,
-            draft.Labels
+            HighlightTags(draft.Labels, highlights, highlight)
         );
         string combined = title + "\n" + description;
         return new FullMatchMetadata
@@ -221,8 +270,46 @@ public static class FullMatchMetadataBuilder
             ClaimsTeamWipe = teamWipe && Has(combined, "team wipe"),
             IncludesSpoiler = resultLine != null && Has(description, resultLine),
             StatHook = hookTitle,
+            Highlight = highlight == null ? null : title,
         };
     }
+
+    /// <summary>
+    /// The composition labels, then the highlight's tag and, when it is about one hero with a
+    /// strong build, that build with the hero (<c>Teleport Li-Ming</c>). They come last, so the
+    /// 500-character budget drops them first.
+    /// </summary>
+    private static IReadOnlyList<string> HighlightTags(
+        IReadOnlyList<string> labels,
+        HighlightContext highlights,
+        Highlight highlight
+    )
+    {
+        var tags = new List<string>(labels ?? Array.Empty<string>());
+        if (highlights == null || highlight == null)
+        {
+            return tags;
+        }
+
+        if (!string.IsNullOrWhiteSpace(highlight.Tag))
+        {
+            tags.Add(highlight.Tag);
+        }
+
+        if (highlight.Hero != null && highlights.LineFor(highlight.Hero) is { } line)
+        {
+            string build = highlights.BuildLabel(line.PlayerIndex, highlight.Hero);
+            if (build != null)
+            {
+                tags.Add(build);
+            }
+        }
+
+        return tags;
+    }
+
+    private static string Lead(YouTubeTitleSettings titles, bool namedPlayer, string hero) =>
+        namedPlayer && titles.NamedPlayerTitles && hero != null ? hero + " focus" : null;
 
     /// <summary>
     /// The statistics hook for the draft slot when the match has no draft note, or null. The title
