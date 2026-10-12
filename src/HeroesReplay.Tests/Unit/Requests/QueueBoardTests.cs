@@ -67,7 +67,52 @@ public class QueueBoardTests
             "<span class=\"label\">ReplayId + YouTube</span> also records the match and uploads it to YouTube.",
             html
         );
+        Assert.Contains(
+            "<span class=\"label\">Blind Rating</span> plays a random Storm League match and hides its rank until the end.",
+            html
+        );
         Assert.DoesNotContain("Pick a random match, a map, or a rank.", html);
+    }
+
+    /// <summary>#411: a queued Blind Rating replay does not show its rank on the queue page.</summary>
+    [Fact]
+    public void Write_BlindRatingRequest_HidesItsRank()
+    {
+        string html = Render(
+            new[]
+            {
+                new RewardQueueItem
+                {
+                    Request = new RewardRequest
+                    {
+                        Login = "viewer",
+                        RewardTitle = "Blind Rating",
+                        Blind = true,
+                    },
+                    HeroesProfileReplay = new HeroesProfileReplay
+                    {
+                        Id = 65500001,
+                        Map = "Cursed Hollow",
+                        Rank = "Diamond 2",
+                    },
+                },
+                new RewardQueueItem
+                {
+                    Request = new RewardRequest { Login = "other", RewardTitle = "Random (SL)" },
+                    HeroesProfileReplay = new HeroesProfileReplay
+                    {
+                        Id = 65500002,
+                        Map = "Sky Temple",
+                        Rank = "Gold 3",
+                    },
+                },
+            }
+        );
+
+        Assert.Contains("rank hidden · Blind Rating", html);
+        Assert.DoesNotContain("Diamond", html);
+        Assert.DoesNotContain("65500001", html);
+        Assert.Contains("Gold 3 · Random (SL)", html);
     }
 
     [Fact]

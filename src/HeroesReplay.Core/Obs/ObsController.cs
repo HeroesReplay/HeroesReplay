@@ -11,6 +11,7 @@ using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays.Context;
+using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging;
@@ -455,6 +456,26 @@ public class ObsController : IObsController
             });
     }
 
+    public void HideRank()
+    {
+        if (SkipWhileUnavailable("Hiding the rank"))
+        {
+            return;
+        }
+
+        try
+        {
+            EnsureConnected();
+            HideRankImages();
+            HideRankCaption();
+            logger.LogInformation("OBS rank badge, tier, and MMR hidden.");
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not hide the rank on the game scene.");
+        }
+    }
+
     public void SetRankImage()
     {
         try
@@ -657,6 +678,15 @@ public class ObsController : IObsController
 
     private bool ShowRankImage()
     {
+        if (ReplayRequestKind.Blind(context.Current?.LoadedReplay))
+        {
+            logger.LogInformation(
+                "Blind Rating replay {ReplayId}: no rank badge, tier, or MMR on the game scene.",
+                context.Current.LoadedReplay.ReplayId
+            );
+            return false;
+        }
+
         HeroesProfileReplay row = context.Current?.LoadedReplay?.HeroesProfileReplay;
         string rank = row?.Rank;
         int? leagueTier = row?.LeagueTier;

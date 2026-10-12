@@ -18,4 +18,7 @@ public enum RewardType
 
     Map = 16,
     Rank = 32,
+
+    /// <summary>Blind Rating (#411): the replay's rank stays hidden until the match ends.</summary>
+    Blind = 64,
 }

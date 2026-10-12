@@ -516,9 +516,10 @@ public class RequestQueue : IRequestQueue, IDisposable
             );
         }
 
+        string rank = ReplayRequestKind.Blind(request) ? ReplayRequestKind.HiddenRank : chosen.Rank;
         return new RewardResponse(
             success: true,
-            message: $"'{request.RewardTitle}' - {ReplayLabel.MapAndRank(chosen.Map, chosen.Rank)} has been queued ({position})"
+            message: $"'{request.RewardTitle}' - {ReplayLabel.MapAndRank(chosen.Map, rank)} has been queued ({position})"
         );
     }
 

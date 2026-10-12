@@ -14,6 +14,10 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
     private const int RankedMapCost = 500;
     private const int ReplayCost = 250;
     private const int ReplayUploadCost = 500;
+    private const int BlindRatingCost = 250;
+
+    /// <summary>A random Storm League match with its rank hidden until the match ends (#411).</summary>
+    public const string BlindRatingTitle = "Blind Rating";
 
     private readonly IGameData gameData;
 
@@ -63,6 +67,15 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
                 "Random (ARAM)",
                 mode: GameType.ARAM,
                 cost: RandomCost
+            )
+        );
+        // Storm League only: Heroes Profile rates SL matches, and QM and ARAM have no rank.
+        rewards.Add(
+            new SupportedReward(
+                RewardType.SL | RewardType.Blind,
+                BlindRatingTitle,
+                mode: GameType.StormLeague,
+                cost: BlindRatingCost
             )
         );
 

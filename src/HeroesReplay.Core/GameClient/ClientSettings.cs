@@ -18,9 +18,22 @@ public class ClientSettings
     public string WindowState { get; set; } = "1";
     public const string AhliObsInterfaceFile = "AhliObs 0.75.StormInterface";
 
+    /// <summary>
+    /// AhliObs with hero names over the health bars and the chat hidden, built by
+    /// tools/new-blind-interface.ps1 (#411).
+    /// </summary>
+    public const string AhliObsBlindInterfaceFile = "AhliObs 0.75 Blind.StormInterface";
+
     public string ObserverInterface { get; set; } = AhliObsInterfaceFile;
     public string ReplayInterface { get; set; } = AhliObsInterfaceFile;
     public string InterfaceFileName { get; set; } = AhliObsInterfaceFile;
+
+    /// <summary>
+    /// The archive a Blind Rating replay's client loads (#411). It is installed under
+    /// <see cref="InterfaceFileName"/>, because the signed-in client keeps loading the interface
+    /// it had even when Variables.txt names another one. Empty turns the blind HUD off.
+    /// </summary>
+    public string BlindInterfaceFileName { get; set; } = AhliObsBlindInterfaceFile;
 
     /// <summary>Play in Background. Account Variables.txt overrides the root file after login.</summary>
     public string SoundGlobal { get; set; } = "true";
