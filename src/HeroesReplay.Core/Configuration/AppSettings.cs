@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using HeroesReplay.Core.Analysis;
+using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.Dependencies;
@@ -49,6 +50,7 @@ public class AppSettings
     public MapSettings Maps { get; set; }
     public ParseOptionsSettings ParseOptions { get; set; }
     public AbilityDetectionSettings AbilityDetection { get; set; }
+    public InsightsSettings Insights { get; set; } = new InsightsSettings();
     public YouTubeSettings YouTube { get; set; }
     public DiskBacklogSettings Disk { get; set; } = SpectateAdmission.DefaultWatermarks();
     public ReplayMediaPolicySettings ReplayMedia { get; set; } = new ReplayMediaPolicySettings();
