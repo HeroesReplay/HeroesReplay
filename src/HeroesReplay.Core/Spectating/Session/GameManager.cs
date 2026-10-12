@@ -395,9 +395,70 @@ public class GameManager : IGameManager
         ReplaySessionKind kind = DecideOutcome(loadedReplay, outcomeKnown);
         // The report and the next replay's preload are their own bounded phase, not a launch.
         ServiceHeartbeat.RecordLaunchEnded();
-        await ReportAndHandOffAsync(enteredMatch, obsSession, whileReporting).ConfigureAwait(false);
+        NextMatchLaunch next = await ReportAndHandOffAsync(enteredMatch, obsSession, whileReporting)
+            .ConfigureAwait(false);
+        if (ReplayRequestKind.Blind(loadedReplay) && next == NextMatchLaunch.NotStarted)
+        {
+            await RestoreAhliObsAfterBlindAsync(loadedReplay.ReplayId, enteredMatch)
+                .ConfigureAwait(false);
+        }
+
         return kind;
     }
+
+    /// <summary>
+    /// A Blind Rating replay is over and no replay launched behind it (a stop, an empty queue, a
+    /// release update): AhliObs goes back as soon as its client has closed, not only before the
+    /// next replay (#411). The session closed a client that reached the match; one that is still
+    /// open keeps the blind copy, and the next replay's preset puts AhliObs back.
+    /// </summary>
+    private async Task RestoreAhliObsAfterBlindAsync(int? replayId, bool enteredMatch)
+    {
+        // Not the stop token: a stop is the main reason to restore here, and services stop gives
+        // spectate 20 s to exit.
+        DateTimeOffset exitBy = DateTimeOffset.UtcNow.Add(
+            enteredMatch ? BlindRestoreExitWait : TimeSpan.Zero
+        );
+        while (gameController.IsGameRunning() && DateTimeOffset.UtcNow < exitBy)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250)).ConfigureAwait(false);
+        }
+
+        if (gameController.IsGameRunning())
+        {
+            logger.LogInformation(
+                "Blind Rating replay {ReplayId} is over, but Heroes is still open with the blind copy of AhliObs. The next replay puts AhliObs back.",
+                replayId
+            );
+            return;
+        }
+
+        try
+        {
+            if (clientConfigurator.InstalledInterfaceIs(blind: false))
+            {
+                return;
+            }
+
+            ClientConfigureResult result = clientConfigurator.Configure(blind: false);
+            logger.LogInformation(
+                "Blind Rating replay {ReplayId} is over. AhliObs is installed again at {Interface}.",
+                replayId,
+                result.InterfaceDestination
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not put AhliObs back after Blind Rating replay {ReplayId}. The next replay puts it back.",
+                replayId
+            );
+        }
+    }
+
+    /// <summary>How long a blind session waits for the client it closed before AhliObs goes back.</summary>
+    internal static readonly TimeSpan BlindRestoreExitWait = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// The outcome is final here. The redemption and the caller hear it now, before the report
@@ -430,13 +491,15 @@ public class GameManager : IGameManager
     /// <summary>
     /// The report scenes and the next replay's launch, then this session's OBS connection ends.
     /// A stop skips the report or cuts it short, and the next replay is not launched.
+    /// <see cref="NextMatchLaunch.NotStarted"/> when no next replay was launched.
     /// </summary>
-    private async Task ReportAndHandOffAsync(
+    private async Task<NextMatchLaunch> ReportAndHandOffAsync(
         bool enteredMatch,
         bool obsSession,
         Func<Task<LoadedReplay>> whileReporting
     )
     {
+        NextMatchLaunch nextMatch = NextMatchLaunch.NotStarted;
         bool reports =
             enteredMatch
             && obsSession
@@ -468,7 +531,7 @@ public class GameManager : IGameManager
                     cutReport
                 );
                 await Task.WhenAll(report, launch).ConfigureAwait(false);
-                NextMatchLaunch nextMatch = await launch.ConfigureAwait(false);
+                nextMatch = await launch.ConfigureAwait(false);
                 if (ReplayLoadCue.SelectsGameScene(nextMatch))
                 {
                     try
@@ -512,6 +575,8 @@ public class GameManager : IGameManager
                 obsController.EndSession();
             }
         }
+
+        return nextMatch;
     }
 
     public MatchOutcome LastOutcome => spectator.Outcome;
