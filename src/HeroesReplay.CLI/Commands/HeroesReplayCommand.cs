@@ -1,4 +1,5 @@
 using System.CommandLine;
+using HeroesReplay.CLI.Commands.Builds;
 using HeroesReplay.CLI.Commands.Calculators;
 using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
@@ -23,6 +24,7 @@ public class HeroesReplayCommand : RootCommand
     {
         Subcommands.Add(new SpectateCommand());
         Subcommands.Add(new CalculatorsCommand());
+        Subcommands.Add(new BuildsCommand());
         Subcommands.Add(new CheckCommand());
         Subcommands.Add(new ClientCommand());
         Subcommands.Add(new OtelCommand());

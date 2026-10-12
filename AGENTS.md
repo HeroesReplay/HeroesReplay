@@ -22,7 +22,8 @@ The client memory readers live in their own repo and package, [HeroesClientSDK](
 | `Replays` (`Context`) | Replay providers and loaders, `LoadedReplay`, the spectate queue and queue pick, the per-replay context folder |
 | `Requests` | Twitch request queue, leases, played ids, reward request models |
 | `HeroesProfile` | Heroes Profile API, replay listing, patch index, rank enrichment, the hero statistics behind YouTube title hooks (`HeroStatsRefresh`, `HeroStatsStore`) |
-| `HeroesData` | heroes-data2 hero and unit catalog |
+| `HeroesData` | heroes-data2 hero and unit catalog, each hero's talents (tier, column, English name; `HeroTalents`) |
+| `Builds` (`Played`, `Reference`, `Matching`, `Import`) | Talent builds (#412). `Played`: a replay player's picks as catalog talents (`PlayedBuilds`). `Reference`: the embedded talent-build reference (`icy-veins-builds.json`: build names, tags, talent ids per tier, guide links, no guide text) and `IGuideCatalog`. `Matching`: the guide build a player's talents fit best (`BuildMatcher`). `Import`: the skill's extract checked against the catalog (`GuideImporter`, `IcyVeins` slugs), behind `builds import` |
 | `Twitch` (`Predictions`, `Rewards`, `RedeemedRewards`, `ChatMessages`) | Chat bot, predictions and their ledger, channel-point rewards |
 | `TwitchExtension` | Heroes Profile Twitch extension payloads |
 | `Obs` (`Collection`, `Inspection`, `Recording`, `Pages`) | OBS websocket control, the stream arm, report scenes. `Collection`: the scene collection and profile files OBS reads. `Inspection`: the read-only reads behind `obs inspect`, `obs validate`, and the MCP tools. `Recording`: the match recording and its HUD clock. `Pages`: `obs pages` |
@@ -254,8 +255,9 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 | `.agents/skills/twitch-integration` | TwitchLib, rewards, predictions, `check twitch` |
 | `.agents/skills/ffmpeg` | Cut pentakill clips from OBS recordings, full 1920x1080 frame. ffmpeg 9.0.2 is pinned (version, URL, SHA-256) in `src/HeroesReplay.Core/Dependencies/dependencies.json` only; `heroesreplay deps install` puts it in `C:\heroesreplay\tools\ffmpeg`, and `check ffmpeg` reports what clips will run. |
 | `.agents/skills/release-install` | Install production from the GitHub Release zip instead of cloning and building. |
+| `.agents/skills/icy-veins-builds` | Refresh the talent-build reference from the Icy Veins guides with a real browser (`extract.js`), then `heroesreplay builds import`. Facts only, never guide text. |
 
-Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/heroes-replay-obs`, `/obs-docs`, `/twitch-integration`, `/ffmpeg`, `/release-install`. `csharp-solid` is also in this folder.
+Slash: `/heroes-replay-cli`, `/op-service-account`, `/dotnet-10-csharpier`, `/obs-websocket-v5`, `/heroes-replay-obs`, `/obs-docs`, `/twitch-integration`, `/ffmpeg`, `/release-install`, `/icy-veins-builds`. `csharp-solid` is also in this folder.
 
 **Grok reads `.agents/skills` itself** (#313). Grok 1.0.46 scans `.agents/skills` next to `.grok/skills` at each level, so there is no `.grok/skills` mirror: a stale copy there would shadow the real skill. `AgentDocsTests` fails if one appears, and checks that every skill name is one Grok accepts. Grok loads project skills only in a trusted project, and trust is per repository root. Trusting `C:\heroesreplay` does not trust the `C:\heroesreplay\HeroesReplay` checkout or its worktrees. Trust the checkout itself in Grok (`/hooks-trust`, or start Grok there with `--trust`), and `grok inspect` lists the repo skills as `project`.
 
