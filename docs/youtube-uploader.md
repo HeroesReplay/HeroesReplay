@@ -346,7 +346,7 @@ The statistics are one file per major patch and game type, `Data\HeroesProfile\h
 
 ### Match highlights
 
-With `YouTube:Titles:Highlights:Enabled` (on in dev, off in the base and prod files until reviewed), the title leads with one highlight read from the replay itself (issue #412). The highlights name heroes, builds and the shape of the match. They never say who won, because the MVP can be on either team and the video is the match. Struggling players are never called out.
+With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base file), the title leads with one highlight read from the replay itself (issue #412). The highlights name heroes, builds and the shape of the match. They never say who won, because the MVP can be on either team and the video is the match. Struggling players are never called out.
 
 **Where the facts come from.**
 
