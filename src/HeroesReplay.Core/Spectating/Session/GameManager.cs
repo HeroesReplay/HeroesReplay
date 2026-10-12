@@ -22,6 +22,7 @@ using HeroesReplay.Core.Spectating.Control;
 using HeroesReplay.Core.Spectating.Screens;
 using HeroesReplay.Core.Status;
 using HeroesReplay.Core.Telemetry;
+using HeroesReplay.Core.Twitch.Predictions;
 using HeroesReplay.Core.Twitch.Rewards;
 using HeroesReplay.Core.YouTube.Metadata;
 using HeroesReplay.Core.YouTube.Publication;
@@ -525,6 +526,7 @@ public class GameManager : IGameManager
         status.ReplayId = loadedReplay?.ReplayId;
         status.Outcome = null;
         status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(loadedReplay);
+        status.RatingPrediction = RatingPrediction.Applies(loadedReplay);
         status.GatesOpen = current?.GatesOpen.ToString();
         status.CoreKilled = current?.CoreKilled.ToString();
     }

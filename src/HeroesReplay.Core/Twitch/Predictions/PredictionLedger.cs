@@ -40,11 +40,46 @@ public sealed class PredictionLedgerEntry
     public DateTimeOffset CreatedAt { get; set; }
     public PredictionLedgerState State { get; set; }
     public PredictionIntent Intent { get; set; }
+
+    /// <summary>
+    /// The winning outcome's position: the team for Blue/Red, the rating (0 Bronze to 5 Master)
+    /// for a rating prediction. The name predates the rating prediction (#411).
+    /// </summary>
     public int? WinningTeam { get; set; }
     public int FailureCount { get; set; }
     public DateTimeOffset? NextAttemptAt { get; set; }
     public string TerminalReason { get; set; }
     public string SettledStatus { get; set; }
+
+    /// <summary>Blue/Red, or the Blind Rating guess (#411). Entries written before it are Blue/Red.</summary>
+    public PredictionKind Kind { get; set; }
+
+    /// <summary>
+    /// The Twitch outcome ids of a rating prediction, in <see cref="RatingPrediction.Outcomes"/>
+    /// order. Blue/Red keeps <see cref="BlueOutcomeId"/> and <see cref="RedOutcomeId"/>.
+    /// </summary>
+    public List<string> OutcomeIds { get; set; }
+
+    /// <summary>The Twitch outcome id of outcome <paramref name="index"/>, or null.</summary>
+    public string OutcomeIdFor(int? index)
+    {
+        if (index is not int value || value < 0)
+        {
+            return null;
+        }
+
+        if (Kind == PredictionKind.Rating)
+        {
+            return OutcomeIds != null && value < OutcomeIds.Count ? OutcomeIds[value] : null;
+        }
+
+        return value switch
+        {
+            0 => BlueOutcomeId,
+            1 => RedOutcomeId,
+            _ => null,
+        };
+    }
 }
 
 public sealed class PredictionLedgerDocument

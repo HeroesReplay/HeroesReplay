@@ -257,10 +257,10 @@ Run a stdio MCP server so an agent can read spectator status, run integration ch
 
 ## `twitch connect`
 
-Connect chat, sync channel-point rewards, and watch spectator status for Blue/Red predictions. Does not launch the game.
+Connect chat, sync channel-point rewards, and watch spectator status for Blue/Red and Blind Rating predictions. Does not launch the game.
 
 - **Before:** Twitch token with the chat and redemption scopes. Dev turns every side effect off (`DryRunMode`). On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
-- **Changes:** Joins chat, syncs channel-point rewards, queues redemptions in `Data\requests.json`, and opens and resolves Blue/Red predictions.
+- **Changes:** Joins chat, syncs channel-point rewards, queues redemptions in `Data\requests.json`, and opens and resolves Blue/Red predictions, or the rating guess (Bronze to Master) for a Blind Rating replay.
 - **Exit:** Runs until stopped (Ctrl+C, or `services stop` for a role). 1 on a parse error or an unexpected error.
 
 ## `twitch say`

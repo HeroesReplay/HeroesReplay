@@ -122,7 +122,12 @@ public class ReplaySessionPredictionTests
     {
         public ActivityTraceId? OpenedOn { get; private set; }
 
-        public Task<bool> OpenAsync(int replayId, string map, CancellationToken cancellationToken)
+        public Task<bool> OpenAsync(
+            int replayId,
+            string map,
+            PredictionKind kind,
+            CancellationToken cancellationToken
+        )
         {
             OpenedOn = Activity.Current?.TraceId;
             return Task.FromResult(true);

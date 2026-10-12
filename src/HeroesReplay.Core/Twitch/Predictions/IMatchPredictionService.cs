@@ -7,7 +7,17 @@ namespace HeroesReplay.Core.Twitch.Predictions;
 public interface IMatchPredictionService
 {
     Task StartAsync(LoadedReplay replay, CancellationToken cancellationToken);
-    Task<bool> OpenAsync(int replayId, string map, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Opens the replay's prediction: Blue/Red, or the rating guess for a Blind Rating replay
+    /// (<paramref name="kind"/>, #411).
+    /// </summary>
+    Task<bool> OpenAsync(
+        int replayId,
+        string map,
+        PredictionKind kind,
+        CancellationToken cancellationToken
+    );
     Task ResolveAsync(LoadedReplay replay, CancellationToken cancellationToken);
     Task ResolveTeamAsync(int? winningTeam, CancellationToken cancellationToken);
     Task ResolveReplayAsync(int replayId, int? winningTeam, CancellationToken cancellationToken);

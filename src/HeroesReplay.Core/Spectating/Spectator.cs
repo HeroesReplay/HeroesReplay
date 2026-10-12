@@ -754,6 +754,7 @@ public class Spectator : ISpectator
             status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(
                 data?.LoadedReplay
             );
+            status.RatingPrediction = RatingPrediction.Applies(data?.LoadedReplay);
         });
     }
 
@@ -770,6 +771,12 @@ public class Spectator : ISpectator
             outcome == MatchOutcome.VerifiedCompleted
                 ? TwitchMatchPredictionService.WinningTeam(Data?.LoadedReplay?.Replay)
                 : null;
+        // The rating a Blind Rating prediction resolves to, only after a verified match (#411).
+        string rating =
+            outcome == MatchOutcome.VerifiedCompleted
+            && RatingPrediction.Applies(Data?.LoadedReplay)
+                ? RatingPrediction.OutcomeFor(Data.LoadedReplay)
+                : null;
         DateTimeOffset completedAt = DateTimeOffset.UtcNow;
         logger.LogInformation(
             "Session outcome {Outcome} for replay {ReplayId}.",
@@ -784,7 +791,7 @@ public class Spectator : ISpectator
             status.ObsSession = false;
             status.Focus = null;
             status.Outcome = outcome.ToString();
-            completion.Apply(status, outcome, replayId, winner, completedAt);
+            completion.Apply(status, outcome, replayId, winner, completedAt, rating);
             if (Data?.LoadedReplay == null)
             {
                 status.ReplayId = replayId ?? status.ReplayId;
@@ -801,6 +808,7 @@ public class Spectator : ISpectator
             status.ReplayVersion = Data.LoadedReplay.Replay?.ReplayVersion ?? status.ReplayVersion;
             status.ReplayId = Data.LoadedReplay.ReplayId ?? status.ReplayId;
             status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(Data.LoadedReplay);
+            status.RatingPrediction = RatingPrediction.Applies(Data.LoadedReplay);
         });
     }
 }

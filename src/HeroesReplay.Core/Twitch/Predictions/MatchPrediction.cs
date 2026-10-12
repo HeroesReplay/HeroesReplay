@@ -43,6 +43,4 @@ public static class MatchPrediction
 
         return seconds;
     }
-
-    public static string OutcomeTitle(int team) => team == 0 ? Blue : Red;
 }

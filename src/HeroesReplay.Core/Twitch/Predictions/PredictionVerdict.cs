@@ -123,6 +123,49 @@ public static class PredictionVerdict
             },
         };
 
+    /// <summary>
+    /// A rating prediction (#411) names a rank, not a team: {winner} is the match's rating and
+    /// {loser} the wrong rating most points went on. The team lines in <see cref="Contest"/> do
+    /// not fit it.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<PredictionVerdictKind, string[]> RatingOpenings =
+        new Dictionary<PredictionVerdictKind, string[]>
+        {
+            [PredictionVerdictKind.Upset] = new[]
+            {
+                "It was {winner}. Most of you guessed {loser}. You judged them by their mistakes and saw only your own.",
+                "{winner}. The herd said {loser}, and the herd was wrong. As herds are.",
+                "They played like {loser}, you said. They were {winner}. You cannot read a battle, only a badge.",
+                "{winner}. Only {winners} of you saw it. The other {losers} may now explain themselves.",
+            },
+            [PredictionVerdictKind.Favourite] = new[]
+            {
+                "{winner}, as most of you guessed. Even a herd can read a rank it cannot see.",
+                "It was {winner}. The crowd read them correctly. I find that deeply irritating.",
+                "{winner}. Most of you saw it. Do not expect praise for recognising mediocrity.",
+            },
+            [PredictionVerdictKind.EvenMatch] = new[]
+            {
+                "{winner}. The chat could not agree, which means most of you were wrong. As usual.",
+            },
+            [PredictionVerdictKind.Unanimous] = new[]
+            {
+                "Every one of you guessed {winner}, and it was {winner}. Suspiciously competent.",
+                "{winner}, and not one of you doubted it. I expected at least one fool.",
+            },
+            [PredictionVerdictKind.Wipeout] = new[]
+            {
+                "It was {winner}. Not one of you guessed it. Not one.",
+                "{winner}. Every point went on {loser} or worse, and every point is gone. Magnificent.",
+                "{pool} points of guesswork, all wrong. It was {winner}. The Tal'darim would sing of this folly, if they sang.",
+            },
+            [PredictionVerdictKind.Silence] = new[]
+            {
+                "It was {winner}. No one dared to guess. Cowardice is also a choice.",
+                "{winner}. Not one of you wagered on a rank you could not see. Wise, or merely afraid.",
+            },
+        };
+
     internal static readonly string[] TopCallouts =
     {
         "{top} takes {won} points. Do not let it go to your head; that is my role.",
@@ -196,8 +239,8 @@ public static class PredictionVerdict
         random ??= Random.Shared;
         var avoid = new HashSet<string>(recent ?? Array.Empty<string>(), StringComparer.Ordinal);
         IReadOnlyDictionary<string, string> values = Values(report);
-        string opening = Pick(OpeningsFor(Kind(report)), values, avoid, random);
-        string callout = Pick(CalloutsFor(values), values, avoid, random);
+        string opening = Pick(OpeningsFor(Kind(report), report.Kind), values, avoid, random);
+        string callout = Pick(CalloutsFor(values, report.Kind), values, avoid, random);
 
         string text = Fill(opening, values);
         var used = new List<string> { opening };
@@ -219,8 +262,18 @@ public static class PredictionVerdict
         return new PredictionVerdictLine(text, used);
     }
 
-    internal static IEnumerable<string> OpeningsFor(PredictionVerdictKind kind)
+    internal static IEnumerable<string> OpeningsFor(
+        PredictionVerdictKind kind,
+        PredictionKind prediction = PredictionKind.Winner
+    )
     {
+        if (prediction == PredictionKind.Rating)
+        {
+            return RatingOpenings.TryGetValue(kind, out string[] rating)
+                ? rating
+                : Array.Empty<string>();
+        }
+
         IEnumerable<string> own = Openings.TryGetValue(kind, out string[] lines)
             ? lines
             : Array.Empty<string>();
@@ -290,8 +343,26 @@ public static class PredictionVerdict
         return values;
     }
 
-    private static IEnumerable<string> CalloutsFor(IReadOnlyDictionary<string, string> values) =>
-        values.ContainsKey("streak") ? StreakCallouts : TopCallouts.Concat(LoserCallouts);
+    /// <summary>
+    /// A rating prediction's losers backed different ratings, so a callout that names {loser}
+    /// as the victim's pick does not fit it.
+    /// </summary>
+    private static IEnumerable<string> CalloutsFor(
+        IReadOnlyDictionary<string, string> values,
+        PredictionKind prediction
+    )
+    {
+        if (values.ContainsKey("streak"))
+        {
+            return StreakCallouts;
+        }
+
+        IEnumerable<string> losers =
+            prediction == PredictionKind.Rating
+                ? LoserCallouts.Where(line => !line.Contains("{loser}", StringComparison.Ordinal))
+                : LoserCallouts;
+        return TopCallouts.Concat(losers);
+    }
 
     private static string Pick(
         IEnumerable<string> templates,

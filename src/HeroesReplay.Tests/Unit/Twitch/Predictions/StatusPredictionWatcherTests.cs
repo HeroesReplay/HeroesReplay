@@ -20,7 +20,7 @@ public class StatusPredictionWatcherTests
         PredictionSignal second = StatusPredictionWatcher.DecideObserved(observed, status, settled);
 
         Assert.Equal(PredictionSignalKind.Resolve, first.Kind);
-        Assert.Equal(1, first.WinnerTeam);
+        Assert.Equal(1, first.Winner);
         Assert.Equal(10, first.ReplayId);
         Assert.Equal(PredictionSignalKind.None, second.Kind);
     }
@@ -40,7 +40,7 @@ public class StatusPredictionWatcherTests
         );
 
         Assert.Equal(PredictionSignalKind.Cancel, decided.Kind);
-        Assert.Null(decided.WinnerTeam);
+        Assert.Null(decided.Winner);
         Assert.Equal(
             PredictionSignalKind.None,
             StatusPredictionWatcher.DecideObserved(observed, status, settled).Kind
@@ -57,7 +57,7 @@ public class StatusPredictionWatcherTests
         );
 
         Assert.Equal(PredictionSignalKind.Cancel, decided.Kind);
-        Assert.Null(decided.WinnerTeam);
+        Assert.Null(decided.Winner);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class StatusPredictionWatcherTests
         );
 
         Assert.Equal(PredictionSignalKind.Cancel, decided.Kind);
-        Assert.Null(decided.WinnerTeam);
+        Assert.Null(decided.Winner);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class StatusPredictionWatcherTests
         );
 
         Assert.Equal(PredictionSignalKind.Open, decided.Kind);
-        Assert.Null(decided.WinnerTeam);
+        Assert.Null(decided.Winner);
     }
 
     private static PredictionSignal Observed(PredictionSignalKind kind, int? winner) =>

@@ -91,7 +91,8 @@ public sealed class MatchCompletion
         MatchOutcome outcome,
         int? replayId,
         int? winner,
-        DateTimeOffset completedAt
+        DateTimeOffset completedAt,
+        string rating = null
     )
     {
         if (status == null || written)
@@ -108,5 +109,6 @@ public sealed class MatchCompletion
         status.CompletedAt = completedAt;
         status.CompletedReplayId = replayId;
         status.CompletedWinnerTeam = winner;
+        status.CompletedRating = rating;
     }
 }

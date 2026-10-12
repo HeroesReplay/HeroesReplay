@@ -78,7 +78,7 @@ public sealed class StatusPredictionWatcher
         else
         {
             logger.LogInformation(
-                "Watching {StatusFile} for Blue/Red predictions.",
+                "Watching {StatusFile} for Blue/Red and rating predictions.",
                 statusStore.FilePath
             );
         }
@@ -94,7 +94,13 @@ public sealed class StatusPredictionWatcher
                 PredictionResume resume = reconciled?.Resume;
                 if (resume != null)
                 {
-                    tracker.Restore(resume.ReplayId, resume.Attempt, resume.OpenedAt, resume.Map);
+                    tracker.Restore(
+                        resume.ReplayId,
+                        resume.Attempt,
+                        resume.OpenedAt,
+                        resume.Map,
+                        resume.Kind
+                    );
                     logger.LogInformation(
                         "Resumed prediction {PredictionId} for replay {ReplayId} attempt {Attempt}.",
                         resume.PredictionId,
@@ -185,12 +191,13 @@ public sealed class StatusPredictionWatcher
         {
             case PredictionSignalKind.Open:
                 logger.LogInformation(
-                    "Opening Blue/Red prediction for replay {ReplayId} ({Map}).",
+                    "Opening {Prediction} prediction for replay {ReplayId} ({Map}).",
+                    signal.Prediction == PredictionKind.Rating ? "rating" : "Blue/Red",
                     signal.ReplayId,
                     signal.Map
                 );
                 bool opened = await predictions
-                    .OpenAsync(signal.ReplayId, signal.Map, cancellationToken)
+                    .OpenAsync(signal.ReplayId, signal.Map, signal.Prediction, cancellationToken)
                     .ConfigureAwait(false);
                 if (!opened)
                 {
@@ -200,13 +207,13 @@ public sealed class StatusPredictionWatcher
                 break;
             case PredictionSignalKind.Resolve:
                 logger.LogInformation(
-                    "Resolving prediction for replay {ReplayId} attempt {Attempt} -> team {Team}.",
+                    "Resolving prediction for replay {ReplayId} attempt {Attempt} -> {Outcome}.",
                     signal.ReplayId,
                     signal.Attempt,
-                    signal.WinnerTeam
+                    RatingPrediction.OutcomeTitle(signal.Prediction, signal.Winner)
                 );
                 await predictions
-                    .ResolveReplayAsync(signal.ReplayId, signal.WinnerTeam, cancellationToken)
+                    .ResolveReplayAsync(signal.ReplayId, signal.Winner, cancellationToken)
                     .ConfigureAwait(false);
                 break;
             case PredictionSignalKind.Cancel:
@@ -284,7 +291,7 @@ public sealed class StatusPredictionWatcher
         PredictionSignalKind decided = PredictionSessionTracker.DecideSession(
             ReplaySession.Classify(parsed),
             matchClockSeen,
-            observed.WinnerTeam,
+            observed.Winner,
             Fault(parsed),
             alreadySettled
         );
@@ -293,13 +300,14 @@ public sealed class StatusPredictionWatcher
             return default;
         }
 
-        int? winner = decided == PredictionSignalKind.Resolve ? observed.WinnerTeam : null;
+        int? winner = decided == PredictionSignalKind.Resolve ? observed.Winner : null;
         return new PredictionSignal(
             decided,
             observed.ReplayId,
             observed.Map,
             winner,
-            observed.Attempt
+            observed.Attempt,
+            observed.Prediction
         );
     }
 
