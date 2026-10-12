@@ -104,6 +104,58 @@ public class RequestQueueTests
         }
     }
 
+    /// <summary>
+    /// #411: the chat reply for a Blind Rating request names the map but not the rank. The queue
+    /// keeps the rank, which settles the rating prediction after the match.
+    /// </summary>
+    [Fact]
+    public async Task Enqueue_BlindRating_RepliesWithoutTheRank()
+    {
+        string directory = TempDirectory();
+        RequestQueue queue = CreateQueue(directory);
+        try
+        {
+            var request = new RewardRequest(
+                "viewer",
+                Guid.NewGuid(),
+                "Blind Rating",
+                replayId: null,
+                rank: null,
+                map: null,
+                GameType.StormLeague
+            )
+            {
+                Blind = true,
+            };
+
+            RewardResponse response = await queue.EnqueueItemAsync(request);
+
+            Assert.True(response.Success);
+            Assert.Equal(
+                "'Blind Rating' - Braxis Holdout (rank hidden) has been queued (1)",
+                response.Message
+            );
+            Assert.DoesNotContain("Gold", response.Message);
+            List<RewardQueueItem> items = System.Text.Json.JsonSerializer.Deserialize<
+                List<RewardQueueItem>
+            >(
+                File.ReadAllText(Path.Combine(directory, "requests.json")),
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+                }
+            );
+            RewardQueueItem queued = Assert.Single(items);
+            Assert.True(queued.Request.Blind);
+            Assert.Equal("Gold", queued.HeroesProfileReplay.Rank);
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task Enqueue_DifferentRedemptions_BothQueue()
     {

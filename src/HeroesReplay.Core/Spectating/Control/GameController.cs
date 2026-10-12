@@ -15,6 +15,7 @@ using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Replays.Context;
+using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Capture;
@@ -962,7 +963,7 @@ public class GameController : IGameController
             {
                 try
                 {
-                    clientConfigurator.Configure();
+                    clientConfigurator.Configure(BlindReplay);
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {
@@ -979,12 +980,22 @@ public class GameController : IGameController
                     launchFile.Root,
                     launchFile.Account
                 );
-                if (ClientInterfacePlan.LoadsDefaultHud(expectedInterface, actualInterface))
+                bool defaultHud = ClientInterfacePlan.LoadsDefaultHud(
+                    expectedInterface,
+                    actualInterface
+                );
+                // A client that outlived its replay can hold the other copy of AhliObs: the blind
+                // copy for a normal replay, or AhliObs for a Blind Rating replay (#411).
+                bool otherCopy =
+                    !defaultHud && !clientConfigurator.InstalledInterfaceIs(BlindReplay);
+                if (defaultHud || otherCopy)
                 {
                     if (defaultHudCorrections >= 1)
                     {
                         logger.LogWarning(
-                            "The client read replayinterface={Actual} and the HUD stays the default. The replay stops. Battle.net was not clicked.",
+                            otherCopy
+                                ? "The client still loaded the wrong copy of {Actual} after a restart. The replay stops. Battle.net was not clicked."
+                                : "The client read replayinterface={Actual} and the HUD stays the default. The replay stops. Battle.net was not clicked.",
                             actualInterface ?? "(missing)"
                         );
                         return new ColdBoot(
@@ -995,11 +1006,24 @@ public class GameController : IGameController
 
                     defaultHudCorrections++;
                     checkedLaunchFile = false;
-                    logger.LogWarning(
-                        "This client reads replayinterface={Actual}. That loads the default HUD. Closing the client and writing {Expected}.",
-                        actualInterface ?? "(missing)",
-                        expectedInterface
-                    );
+                    if (otherCopy)
+                    {
+                        logger.LogWarning(
+                            "This client loaded the {Loaded} copy of {Expected}. Closing the client and installing the {Wanted} copy.",
+                            BlindReplay ? "AhliObs" : "Blind Rating",
+                            expectedInterface,
+                            BlindReplay ? "Blind Rating" : "AhliObs"
+                        );
+                    }
+                    else
+                    {
+                        logger.LogWarning(
+                            "This client reads replayinterface={Actual}. That loads the default HUD. Closing the client and writing {Expected}.",
+                            actualInterface ?? "(missing)",
+                            expectedInterface
+                        );
+                    }
+
                     await RestartForObserverInterfaceAsync(replayPath).ConfigureAwait(false);
                     interfaceRestarted = true;
                     openedFromHome = false;
@@ -1450,6 +1474,9 @@ public class GameController : IGameController
         );
     }
 
+    /// <summary>A Blind Rating replay's client reads the blind copy of AhliObs (#411).</summary>
+    private bool BlindReplay => ReplayRequestKind.Blind(context.Current?.LoadedReplay);
+
     private bool LaunchFileLoadsDefaultHud(ReplayClientPatch patch, string expected)
     {
         ReplayInterfaceValues values = clientConfigurator.ReadReplayInterfaces();
@@ -1469,7 +1496,7 @@ public class GameController : IGameController
         CloseIdleSwitcher();
         try
         {
-            ClientConfigureResult result = clientConfigurator.Configure();
+            ClientConfigureResult result = clientConfigurator.Configure(BlindReplay);
             logger.LogInformation(
                 "Applied windowed 1080p, background audio, and AhliObs after the game-data download. Interface copied: {Copied}.",
                 result.InterfaceCopied

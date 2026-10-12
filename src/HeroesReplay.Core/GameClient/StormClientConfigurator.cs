@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 using HeroesReplay.Core.Configuration;
 
 namespace HeroesReplay.Core.GameClient;
@@ -9,27 +10,37 @@ namespace HeroesReplay.Core.GameClient;
 public sealed class StormClientConfigurator
 {
     private readonly AppSettings settings;
+    private readonly string gameFolder;
 
     public StormClientConfigurator(AppSettings settings)
+        : this(settings, AppSettings.UserGameFolderPath) { }
+
+    /// <summary>Tests point <paramref name="gameFolder"/> at a temp folder.</summary>
+    internal StormClientConfigurator(AppSettings settings, string gameFolder)
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        this.gameFolder = gameFolder ?? throw new ArgumentNullException(nameof(gameFolder));
     }
 
-    public ClientConfigureResult Configure()
+    private string InterfacesFolder => Path.Combine(gameFolder, "Interfaces");
+
+    /// <summary>
+    /// Installs the interface and writes the preset into the root and every account
+    /// Variables.txt. <paramref name="blind"/> installs the blind copy of AhliObs (hero names, no
+    /// chat) under the AhliObs file name for a Blind Rating replay (#411); otherwise AhliObs
+    /// itself. Heroes must be closed: it holds the installed file open.
+    /// </summary>
+    public ClientConfigureResult Configure(bool blind = false)
     {
         ClientSettings client =
             settings.Client
             ?? throw new InvalidOperationException("Client settings are not bound.");
 
-        string gameFolder = AppSettings.UserGameFolderPath;
         Directory.CreateDirectory(gameFolder);
-        Directory.CreateDirectory(AppSettings.UserStormInterfacePath);
+        Directory.CreateDirectory(InterfacesFolder);
 
-        string interfaceSource = FindInterfaceFile(client.InterfaceFileName);
-        string interfaceDest = Path.Combine(
-            AppSettings.UserStormInterfacePath,
-            client.InterfaceFileName
-        );
+        string interfaceSource = InterfaceSourceFor(client, blind, out bool blindHud);
+        string interfaceDest = Path.Combine(InterfacesFolder, client.InterfaceFileName);
         bool copied = false;
         if (interfaceSource != null)
         {
@@ -53,6 +64,13 @@ public sealed class StormClientConfigurator
             );
         }
 
+        if (blind && !blindHud)
+        {
+            warnings.Add(
+                $"Could not find {client.BlindInterfaceFileName}. This Blind Rating replay shows player names and chat."
+            );
+        }
+
         if (hotSRunning)
         {
             warnings.Add(
@@ -72,7 +90,6 @@ public sealed class StormClientConfigurator
 
     public ReplayInterfaceValues ReadReplayInterfaces()
     {
-        string gameFolder = AppSettings.UserGameFolderPath;
         string root = ReadReplayInterface(Path.Combine(gameFolder, "Variables.txt"));
         string account = null;
         foreach (string accountVariables in EnumerateAccountVariables(gameFolder))
@@ -88,13 +105,26 @@ public sealed class StormClientConfigurator
         return new ReplayInterfaceValues(root, account);
     }
 
-    public ClientStatusResult GetStatus()
+    /// <summary>
+    /// True when the installed interface holds the archive this replay needs: the blind copy for
+    /// a Blind Rating replay, else AhliObs. It reads the file while Heroes holds it open, and the
+    /// client keeps the archive it opened, so this is what a running client shows. A file that
+    /// cannot be read, or no archive in the build to compare with, counts as a match.
+    /// </summary>
+    public bool InstalledInterfaceIs(bool blind)
+    {
+        ClientSettings client = settings.Client ?? new ClientSettings();
+        string source = InterfaceSourceFor(client, blind, out _);
+        string installed = Path.Combine(InterfacesFolder, client.InterfaceFileName);
+        return source == null || !File.Exists(installed) || SameContent(source, installed) != false;
+    }
+
+    public ClientStatusResult GetStatus(bool blind = false)
     {
         ClientSettings client =
             settings.Client
             ?? throw new InvalidOperationException("Client settings are not bound.");
 
-        string gameFolder = AppSettings.UserGameFolderPath;
         string variablesPath = Path.Combine(gameFolder, "Variables.txt");
         var mismatches = new List<string>();
         CollectMismatches(variablesPath, client.VariablesPreset, mismatches);
@@ -114,14 +144,21 @@ public sealed class StormClientConfigurator
             }
         }
 
-        string interfaceDest = Path.Combine(
-            AppSettings.UserStormInterfacePath,
-            client.InterfaceFileName
-        );
+        string interfaceDest = Path.Combine(InterfacesFolder, client.InterfaceFileName);
         bool interfaceInstalled = File.Exists(interfaceDest);
         if (!interfaceInstalled)
         {
             mismatches.Add($"interface file missing: {interfaceDest}");
+        }
+        else
+        {
+            // After a Blind Rating replay the blind copy is still installed, and the next replay
+            // must get AhliObs back (#411).
+            string source = InterfaceSourceFor(client, blind, out _);
+            if (source != null && SameContent(source, interfaceDest) == false)
+            {
+                mismatches.Add($"interface file differs from {source}: {interfaceDest}");
+            }
         }
 
         return new ClientStatusResult(
@@ -131,6 +168,40 @@ public sealed class StormClientConfigurator
             mismatches,
             IsHeroesRunning()
         );
+    }
+
+    /// <summary>
+    /// The archive installed as <see cref="ClientSettings.InterfaceFileName"/>: the blind copy for
+    /// a Blind Rating replay when the build carries it, else AhliObs. Null when neither is found.
+    /// </summary>
+    private static string InterfaceSourceFor(ClientSettings client, bool blind, out bool blindHud)
+    {
+        string blindSource =
+            blind && !string.IsNullOrWhiteSpace(client.BlindInterfaceFileName)
+                ? FindInterfaceFile(client.BlindInterfaceFileName)
+                : null;
+        blindHud = blindSource != null;
+        return blindSource ?? FindInterfaceFile(client.InterfaceFileName);
+    }
+
+    /// <summary>Null when either file cannot be read.</summary>
+    private static bool? SameContent(string left, string right)
+    {
+        try
+        {
+            using FileStream a = new(left, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using FileStream b = new(right, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (a.Length != b.Length)
+            {
+                return false;
+            }
+
+            return SHA256.HashData(a).AsSpan().SequenceEqual(SHA256.HashData(b));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private static void ApplyVariables(string path, IReadOnlyDictionary<string, string> updates)

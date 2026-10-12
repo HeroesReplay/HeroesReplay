@@ -44,6 +44,7 @@ public class MapRewardHandler : IRewardHandler
         RewardType.QM | RewardType.Map | RewardType.Rank,
         RewardType.ARAM | RewardType.Map | RewardType.Rank,
         RewardType.SL | RewardType.Map | RewardType.Rank,
+        RewardType.SL | RewardType.Blind,
     };
 
     public IEnumerable<RewardType> Supports => Supported;

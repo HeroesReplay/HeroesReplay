@@ -9,6 +9,12 @@ public interface IObsController
     void BeginSession();
     void EndSession();
     void ConfigureFromContext();
+
+    /// <summary>
+    /// Hides the rank badge, tier division, and MMR on the game scene. The next replay's loading
+    /// screen goes on air before its own rank is set, and a Blind Rating replay sets none (#411).
+    /// </summary>
+    void HideRank() { }
     Task CycleReportAsync(CancellationToken cancellationToken = default);
     void SwapToGameScene();
     void UpdateReplayInfoVisibility(TimeSpan matchTime);

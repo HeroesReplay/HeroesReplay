@@ -20,6 +20,7 @@ public sealed class ReplayFileProvider : IReplayProvider
     private readonly Queue<FileInfo> remaining = new();
     private readonly bool playOnce;
     private readonly string battleTag;
+    private readonly bool blind;
     private LoadedReplay staged;
     private int? heldBackId;
 
@@ -43,6 +44,7 @@ public sealed class ReplayFileProvider : IReplayProvider
 
         playOnce = pathOptions?.PlayOnce ?? true;
         battleTag = pathOptions?.BattleTag;
+        blind = pathOptions?.Blind ?? false;
         string path = !string.IsNullOrWhiteSpace(pathOptions?.Path)
             ? pathOptions.Path
             : settings.Location.ReplaySource;
@@ -88,8 +90,17 @@ public sealed class ReplayFileProvider : IReplayProvider
             {
                 reward = new RewardQueueItem
                 {
-                    Request = new RewardRequest { ReplayId = replayId, BattleTag = battleTag },
+                    Request = new RewardRequest
+                    {
+                        ReplayId = replayId,
+                        BattleTag = battleTag,
+                        Blind = blind,
+                    },
                 };
+            }
+            else if (blind)
+            {
+                reward = new RewardQueueItem { Request = new RewardRequest { Blind = true } };
             }
 
             return new LoadedReplay

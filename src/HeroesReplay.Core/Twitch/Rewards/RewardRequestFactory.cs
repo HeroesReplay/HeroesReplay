@@ -61,6 +61,9 @@ public class RewardRequestFactory : IRewardRequestFactory
             rank: null,
             reward.Map,
             reward.Mode
-        );
+        )
+        {
+            Blind = reward.RewardType.HasFlag(RewardType.Blind),
+        };
     }
 }

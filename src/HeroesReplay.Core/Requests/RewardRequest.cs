@@ -37,6 +37,12 @@ public class RewardRequest
     public GameType? GameType { get; set; }
     public bool RecordAndUpload { get; set; }
 
+    /// <summary>
+    /// A Blind Rating replay (#411): its rank, tier, and MMR stay off the stream until the match
+    /// ends, and the client loads the blind interface (hero names, no chat).
+    /// </summary>
+    public bool Blind { get; set; }
+
     public RewardRequest() { }
 
     public RewardRequest(

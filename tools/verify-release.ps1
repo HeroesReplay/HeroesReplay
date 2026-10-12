@@ -28,7 +28,7 @@ $failures = [System.Collections.Generic.List[string]]::new()
 # ReleaseInstall (heroesreplay.exe at the root, version.txt), the memory match clock and screen
 # state (HeroesClientSDK.dll, the package restored from .packages), ReleaseUpdateGate and
 # apply-release.ps1 (apply-release.ps1, appsettings.json for MinReplayId), the prod overlay,
-# client configure (AhliObs), update install-obs (Default.json, Default\basic.ini), and the MCP
+# client configure (AhliObs and its Blind Rating copy), update install-obs (Default.json, Default\basic.ini), and the MCP
 # discovery file (.mcp.json, which starts the read-only `heroesreplay mcp`).
 $required = [System.Collections.Generic.List[string]]::new()
 @(
@@ -41,6 +41,7 @@ $required = [System.Collections.Generic.List[string]]::new()
     'apply-release.ps1',
     'version.txt',
     'Assets\Interfaces\AhliObs 0.75.StormInterface',
+    'Assets\Interfaces\AhliObs 0.75 Blind.StormInterface',
     'obs\Default.json',
     'obs\Default\basic.ini',
     '.mcp.json'

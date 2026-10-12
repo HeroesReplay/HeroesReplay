@@ -150,7 +150,13 @@ public class GameManager : IGameManager
                 loadedReplay?.Replay?.ReplayVersion
             );
 
-            EnsureWindowedClient(loadedReplay?.ReplayId);
+            EnsureWindowedClient(loadedReplay);
+            if (settings.OBS.Enabled && ReplayRequestKind.Blind(loadedReplay))
+            {
+                // The loading screen goes on air before ConfigureFromContext runs (#411).
+                obsController.HideRank();
+            }
+
             recordingClock.Reset();
             ClientHoldReason hold = await gameController.LaunchAsync().ConfigureAwait(false);
             if (hold == ClientHoldReason.AwardScreen)
@@ -958,9 +964,15 @@ public class GameManager : IGameManager
             return NextMatchLaunch.NotStarted;
         }
 
+        // The report is on air. The game scene still shows this replay's rank, and the next
+        // replay's loading screen goes on air before its own rank is set (#411).
+        obsController.HideRank();
+
         // Heroes is closed here, so Variables.txt can be repaired. The next session starts with
-        // this client already running and could only warn (#206).
-        EnsureWindowedClient(next.ReplayId);
+        // this client already running and could only warn (#206). A Blind Rating replay needs
+        // its request now: it decides the interface this client loads (#411).
+        LinkRequest(next);
+        EnsureWindowedClient(next);
         clientPreparedFor = next.ReplayId;
 
         try
@@ -1554,28 +1566,30 @@ public class GameManager : IGameManager
 
     /// <summary>
     /// Writes windowed 1080p, background audio, and AhliObs into the root and account
-    /// Variables.txt while Heroes is closed. A running client is never touched.
+    /// Variables.txt while Heroes is closed. A running client is never touched. A Blind Rating
+    /// replay gets the blind copy of AhliObs (#411).
     /// </summary>
-    private void EnsureWindowedClient(int? replayId)
+    private void EnsureWindowedClient(LoadedReplay replay)
     {
         try
         {
-            ApplyClientPreset(replayId);
+            ApplyClientPreset(replay?.ReplayId, ReplayRequestKind.Blind(replay));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(
                 e,
                 "Could not write the Heroes client settings before replay {ReplayId}.",
-                replayId
+                replay?.ReplayId
             );
         }
     }
 
-    private void ApplyClientPreset(int? replayId)
+    private void ApplyClientPreset(int? replayId, bool blind)
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.client.configure");
-        ClientStatusResult status = clientConfigurator.GetStatus();
+        activity?.SetTag("client.blind", blind);
+        ClientStatusResult status = clientConfigurator.GetStatus(blind);
         string newest = ClientInterfacePlan.Newest(
             InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory)
         );
@@ -1593,10 +1607,12 @@ public class GameManager : IGameManager
         activity?.SetTag("client.matches_preset", status.MatchesPreset);
         activity?.SetTag("client.hots_running", status.HotSRunning);
         activity?.SetTag("client.interface_action", action.ToString());
+        string hud = blind ? "the Blind Rating copy of AhliObs" : "AhliObs";
         if (action == ClientPresetAction.Keep)
         {
             logger.LogInformation(
-                "Heroes client already windowed 1080p with background audio and AhliObs."
+                "Heroes client already windowed 1080p with background audio and {Interface}.",
+                hud
             );
             return;
         }
@@ -1622,13 +1638,18 @@ public class GameManager : IGameManager
             return;
         }
 
-        ClientConfigureResult result = clientConfigurator.Configure();
+        ClientConfigureResult result = clientConfigurator.Configure(blind);
         logger.LogInformation(
-            "Applied windowed 1080p, background audio, and AhliObs to {Variables}. Interface copied: {Copied}. Installed build {Build}.",
+            "Applied windowed 1080p, background audio, and {Interface} to {Variables}. Interface copied: {Copied}. Installed build {Build}.",
+            hud,
             result.VariablesPath,
             result.InterfaceCopied,
             newest ?? "(unknown)"
         );
+        foreach (string warning in result.Warnings)
+        {
+            logger.LogWarning("{Warning}", warning);
+        }
     }
 
     private void RememberInterfaceBuild()

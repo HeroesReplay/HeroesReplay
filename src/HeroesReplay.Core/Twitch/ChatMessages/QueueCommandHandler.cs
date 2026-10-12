@@ -109,7 +109,7 @@ public class QueueCommandHandler : IMessageHandler
     {
         string label = ReplayLabel.MapAndRank(
             item?.HeroesProfileReplay?.Map,
-            item?.HeroesProfileReplay?.Rank
+            ReplayRequestKind.ShownRank(item)
         );
         if (ReplayRequestKind.ViewerEnteredReplayId(item))
         {

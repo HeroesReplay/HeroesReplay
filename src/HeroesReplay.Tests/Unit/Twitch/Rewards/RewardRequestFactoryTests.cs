@@ -33,6 +33,54 @@ public class RewardRequestFactoryTests
         Assert.Equal("ReplayId + YouTube", request.RewardTitle);
     }
 
+    /// <summary>#411: Blind Rating is a random Storm League request with its rank hidden.</summary>
+    [Fact]
+    public void BlindRating_IsABlindStormLeagueRequest()
+    {
+        var factory = new RewardRequestFactory();
+        var reward = new SupportedReward(
+            RewardType.SL | RewardType.Blind,
+            "Blind Rating",
+            mode: HeroesReplay.Core.Shared.GameType.StormLeague,
+            cost: 250
+        );
+        var args = new OnRewardRedeemedArgs
+        {
+            Login = "viewer",
+            RedemptionId = System.Guid.NewGuid(),
+            RewardTitle = reward.Title,
+        };
+
+        RewardRequest request = factory.Create(reward, args);
+
+        Assert.True(request.Blind);
+        Assert.True(ReplayRequestKind.Blind(request));
+        Assert.Equal(HeroesReplay.Core.Shared.GameType.StormLeague, request.GameType);
+        Assert.Null(request.ReplayId);
+        Assert.Null(request.Rank);
+        Assert.Null(request.Map);
+        Assert.False(ReplayRequestKind.ViewerEnteredReplayId(request));
+    }
+
+    [Fact]
+    public void RandomStormLeague_IsNotBlind()
+    {
+        var factory = new RewardRequestFactory();
+        var reward = new SupportedReward(
+            RewardType.SL,
+            "Random (SL)",
+            mode: HeroesReplay.Core.Shared.GameType.StormLeague,
+            cost: 125
+        );
+
+        RewardRequest request = factory.Create(
+            reward,
+            new OnRewardRedeemedArgs { Login = "viewer", RewardTitle = reward.Title }
+        );
+
+        Assert.False(request.Blind);
+    }
+
     [Fact]
     public void ReplayId_PlainRewardKeepsItsFlagAndStillUploads()
     {
