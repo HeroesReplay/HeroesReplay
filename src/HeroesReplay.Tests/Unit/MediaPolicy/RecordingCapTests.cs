@@ -13,8 +13,14 @@ public class RecordingCapTests
         // 6 a day less 2 for requests is 4, under 30/7 a week, over 3 days.
         Assert.Equal(12, RecordingCap.PublicationCapacity(Production(), 95));
 
-        // The stream PC since 2026-10-07: 12 a day less 2 is 10, at 84/7 = 12 a week, over 3 days.
-        Assert.Equal(30, RecordingCap.PublicationCapacity(StreamPcSettings(), 20));
+        // The stream PC from 2026-10-07: 12 a day less 2 is 10, at 84/7 = 12 a week, over 3 days.
+        Assert.Equal(30, RecordingCap.PublicationCapacity(TenADaySettings(), 20));
+
+        // The stream PC since 2026-10-13: 24 a day less 2 is 22, at 168/7 = 24 a week, over 3 days.
+        Assert.Equal(66, RecordingCap.PublicationCapacity(StreamPcSettings(), 30));
+
+        // The upload calls still cap it: 20 a day over 3 days.
+        Assert.Equal(60, RecordingCap.PublicationCapacity(StreamPcSettings(), 20));
 
         ReplayMediaPolicySettings fortnight = Production();
         fortnight.MaxPublishAhead = TimeSpan.FromDays(14);
@@ -135,7 +141,7 @@ public class RecordingCapTests
     {
         RecordingCapDecision decision = RecordingCap.Decide(
             StreamPc(pending: 10, ahead: 29, playedAgo: TimeSpan.FromHours(6)),
-            StreamPcSettings()
+            TenADaySettings()
         );
 
         Assert.True(decision.Allow);
@@ -161,7 +167,7 @@ public class RecordingCapTests
     {
         RecordingCapDecision decision = RecordingCap.Decide(
             StreamPc(pending: 10, ahead: 29, playedAgo: TimeSpan.FromDays(2)),
-            StreamPcSettings()
+            TenADaySettings()
         );
 
         Assert.False(decision.Allow);
@@ -185,7 +191,7 @@ public class RecordingCapTests
     {
         RecordingCapDecision decision = RecordingCap.Decide(
             StreamPc(pending, ahead: 30, playedAgo: TimeSpan.FromHours(6)),
-            StreamPcSettings()
+            TenADaySettings()
         );
 
         Assert.Equal(allow, decision.Allow);
@@ -201,7 +207,7 @@ public class RecordingCapTests
     {
         RecordingCapDecision decision = RecordingCap.Decide(
             StreamPc(pending: 2, ahead: 27, playedAgo: TimeSpan.FromDays(2.9)),
-            StreamPcSettings()
+            TenADaySettings()
         );
 
         Assert.True(decision.Allow);
@@ -215,7 +221,7 @@ public class RecordingCapTests
     {
         RecordingCapDecision decision = RecordingCap.Decide(
             StreamPc(pending: 20, ahead: 0, playedAgo: TimeSpan.FromMinutes(30)),
-            StreamPcSettings()
+            TenADaySettings()
         );
 
         Assert.False(decision.Allow);
@@ -238,7 +244,7 @@ public class RecordingCapTests
                 UploadsPerDay = 20,
                 Now = Now,
             },
-            StreamPcSettings()
+            TenADaySettings()
         );
 
         Assert.False(decision.Allow);
@@ -273,14 +279,26 @@ public class RecordingCapTests
             Now = Now,
         };
 
-    /// <summary><c>appsettings.prod.json</c> since 2026-10-07: 12 a day, 84 a week, 2 for requests.</summary>
-    private static ReplayMediaPolicySettings StreamPcSettings()
+    /// <summary><c>appsettings.prod.json</c> from 2026-10-07 to 2026-10-13: 12 a day, 84 a week, 2 for requests. Its 30-slot window is the full-window case.</summary>
+    private static ReplayMediaPolicySettings TenADaySettings()
     {
         ReplayMediaPolicySettings settings = Production();
         settings.MaxPublicPerDay = 12;
         settings.MaxPublicPerWeek = 84;
         settings.MaxInsertsPerQuotaDay = 20;
         settings.OrdinaryCandidateMaxAge = TimeSpan.FromDays(3);
+        return settings;
+    }
+
+    /// <summary><c>appsettings.prod.json</c> since 2026-10-13: 24 a day, an hour apart, 168 a week, 30 inserts.</summary>
+    private static ReplayMediaPolicySettings StreamPcSettings()
+    {
+        ReplayMediaPolicySettings settings = TenADaySettings();
+        settings.MaxPublicPerDay = 24;
+        settings.MaxPublicPerWeek = 168;
+        settings.MinimumPublicInterval = TimeSpan.FromHours(1);
+        settings.RankCooldown = TimeSpan.FromHours(4);
+        settings.MaxInsertsPerQuotaDay = 30;
         return settings;
     }
 
