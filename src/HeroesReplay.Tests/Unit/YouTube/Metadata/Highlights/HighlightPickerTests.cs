@@ -118,22 +118,35 @@ public class HighlightPickerTests
     }
 
     [Fact]
-    public void CampDrought_NamesTheTeamAndCount_AndAKindLeftOutOfTheOrderIsNeverPicked()
+    public void ATeamThatTookNoCampsIsNeverATitle_TheNextKindInTheOrderLeads()
     {
-        var settings = new HighlightSettings { Enabled = true, Order = new[] { "CampDrought" } };
-        Assert.Equal(
-            "Red takes 1 camp",
-            HighlightPicker
-                .Default.Pick(
-                    HighlightFixtures.Context(
-                        HighlightFixtures.Insights(redCamps: 1),
-                        settings: settings
-                    )
+        Highlight mvp = Pick(HighlightFixtures.Insights(deathless: false, redCamps: 0));
+
+        Assert.Equal(HighlightKind.Mvp, mvp.Kind);
+        Assert.Equal("MVP Orphea 7/1/5", mvp.Text);
+        Assert.DoesNotContain(
+            new MatchHighlights().Find(
+                HighlightFixtures.Context(HighlightFixtures.Insights(redCamps: 0))
+            ),
+            highlight =>
+                highlight.Variants.Any(variant =>
+                    variant.Contains("camp", System.StringComparison.OrdinalIgnoreCase)
                 )
-                .Text
         );
+    }
+
+    [Fact]
+    public void AnUnknownNameInTheOrderIsIgnored_AndAKindLeftOutIsNeverPicked()
+    {
+        var settings = new HighlightSettings
+        {
+            Enabled = true,
+            Order = new[] { "CampDrought", "NoSuchKind", "", null, "mvp", "Mvp" },
+        };
+
+        Assert.Equal(new[] { HighlightKind.Mvp }, settings.Kinds());
         Assert.Equal(
-            "Red takes 0 camps",
+            "MVP Orphea 7/1/5",
             HighlightPicker
                 .Default.Pick(
                     HighlightFixtures.Context(
@@ -143,9 +156,15 @@ public class HighlightPickerTests
                 )
                 .Text
         );
+
+        var onlyUnknown = new HighlightSettings { Enabled = true, Order = new[] { "CampDrought" } };
+        Assert.Empty(onlyUnknown.Kinds());
         Assert.Null(
             HighlightPicker.Default.Pick(
-                HighlightFixtures.Context(HighlightFixtures.Insights(), settings: settings)
+                HighlightFixtures.Context(
+                    HighlightFixtures.Insights(redCamps: 0),
+                    settings: onlyUnknown
+                )
             )
         );
     }

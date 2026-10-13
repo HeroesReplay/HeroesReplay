@@ -1,12 +1,10 @@
 using System.Collections.Generic;
-using HeroesReplay.Core.Analysis.Insights.Camps;
-using HeroesReplay.Core.Analysis.Insights.Snapshot;
 
 namespace HeroesReplay.Core.YouTube.Metadata.Highlights;
 
 /// <summary>
-/// Highlights about the match's shape (#412): a core race, an insane comeback, and a team that
-/// took almost no camps. None names the winner.
+/// Highlights about the match's shape (#412): a core race and an insane comeback. None names the
+/// winner, and none calls out a team.
 /// </summary>
 public sealed class MatchHighlights : IHighlightSource
 {
@@ -30,20 +28,6 @@ public sealed class MatchHighlights : IHighlightSource
                 new[] { "Insane comeback" },
                 "Comeback"
             );
-        }
-
-        foreach (TeamCamps team in context.Insights.Camps.Teams)
-        {
-            if (team.Drought)
-            {
-                string camps = team.Captures == 1 ? "camp" : "camps";
-                yield return new Highlight(
-                    HighlightKind.CampDrought,
-                    null,
-                    new[] { $"{ReplaySnapshot.TeamName(team.Team)} takes {team.Captures} {camps}" },
-                    null
-                );
-            }
         }
     }
 }
