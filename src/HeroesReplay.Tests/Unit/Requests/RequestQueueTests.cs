@@ -448,6 +448,156 @@ public class RequestQueueTests
         return directory;
     }
 
+    private const string NoGamesMap = "Hanamura Temple";
+    private const int UnknownReplayId = 404;
+
+    /// <summary>
+    /// #425: a map reward that finds no game gets its points back. The queue records a cancel
+    /// for twitch connect (it never calls Twitch itself), and the reply says so.
+    /// </summary>
+    [Fact]
+    public async Task Enqueue_NoGameForTheReward_RecordsACancel_AndSaysThePointsReturn()
+    {
+        string directory = TempDirectory();
+        RequestQueue queue = CreateQueue(directory);
+        try
+        {
+            var redemptionId = Guid.NewGuid();
+            var rewardId = Guid.NewGuid();
+            var request = new RewardRequest(
+                "viewer",
+                redemptionId,
+                "Hanamura Temple (SL)",
+                replayId: null,
+                rank: null,
+                NoGamesMap,
+                GameType.StormLeague
+            )
+            {
+                RewardId = rewardId,
+                BroadcasterId = "487238352",
+            };
+
+            RewardResponse response = await queue.EnqueueItemAsync(request);
+
+            Assert.False(response.Success);
+            Assert.Equal(
+                "I couldn't queue a game for that reward. Every recent match for it was already played, already waiting, or from an older patch. Your points will be returned. Redeem ReplayId and paste a Heroes Profile replay number to request one specific game.",
+                response.Message
+            );
+            RedemptionDispositionLine line = Assert.Single(
+                RedemptionDispositionLog.Read(
+                    Path.Combine(directory, RedemptionDispositionLog.FileName)
+                )
+            );
+            Assert.Equal(RedemptionEnd.Cancel, line.End);
+            Assert.Equal(redemptionId, line.RedemptionId);
+            Assert.Equal(rewardId, line.RewardId);
+            Assert.Equal("487238352", line.BroadcasterId);
+            Assert.Equal(0, line.ReplayId);
+            Assert.Equal(0, await queue.GetItemsInQueue());
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Enqueue_UnknownReplayId_RecordsACancelForThatReplay()
+    {
+        string directory = TempDirectory();
+        RequestQueue queue = CreateQueue(directory);
+        try
+        {
+            var request = new RewardRequest(
+                "viewer",
+                Guid.NewGuid(),
+                "ReplayId",
+                UnknownReplayId,
+                rank: null,
+                map: null,
+                gameMode: null
+            )
+            {
+                RewardId = Guid.NewGuid(),
+                BroadcasterId = "487238352",
+            };
+
+            RewardResponse response = await queue.EnqueueItemAsync(request);
+
+            Assert.False(response.Success);
+            Assert.Equal(
+                "could not find replay with id 404. Your points will be returned.",
+                response.Message
+            );
+            RedemptionDispositionLine line = Assert.Single(
+                RedemptionDispositionLog.Read(
+                    Path.Combine(directory, RedemptionDispositionLog.FileName)
+                )
+            );
+            Assert.Equal(RedemptionEnd.Cancel, line.End);
+            Assert.Equal(UnknownReplayId, line.ReplayId);
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Enqueue_NoGameWithoutARedemption_RecordsNothing_AndPromisesNoPoints()
+    {
+        string directory = TempDirectory();
+        RequestQueue queue = CreateQueue(directory);
+        try
+        {
+            var request = new RewardRequest(
+                "viewer",
+                Guid.Empty,
+                "Hanamura Temple (SL)",
+                replayId: null,
+                rank: null,
+                NoGamesMap,
+                GameType.StormLeague
+            );
+
+            RewardResponse response = await queue.EnqueueItemAsync(request);
+
+            Assert.False(response.Success);
+            Assert.DoesNotContain("points", response.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(directory, RedemptionDispositionLog.FileName)));
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Enqueue_SameRedemptionTwice_IsNotRefunded()
+    {
+        string directory = TempDirectory();
+        RequestQueue queue = CreateQueue(directory);
+        try
+        {
+            RewardRequest request = FilterRequest(Guid.NewGuid());
+            await queue.EnqueueItemAsync(request);
+            RewardResponse second = await queue.EnqueueItemAsync(request);
+
+            Assert.True(second.Duplicate);
+            Assert.False(File.Exists(Path.Combine(directory, RedemptionDispositionLog.FileName)));
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static RequestQueue CreateQueue(string directory, ICustomRewardsHolder rewards = null)
     {
         return new RequestQueue(
@@ -492,6 +642,11 @@ public class RequestQueueTests
             string gameMap = null
         )
         {
+            if (gameMap == NoGamesMap)
+            {
+                return Task.FromResult(Enumerable.Empty<HeroesProfileReplay>());
+            }
+
             return Task.FromResult<IEnumerable<HeroesProfileReplay>>(
                 new[]
                 {
@@ -515,6 +670,11 @@ public class RequestQueueTests
 
         public Task<HeroesProfileReplay> GetReplayByIdAsync(int replayId)
         {
+            if (replayId == UnknownReplayId)
+            {
+                return Task.FromResult<HeroesProfileReplay>(null);
+            }
+
             return Task.FromResult(
                 new HeroesProfileReplay
                 {

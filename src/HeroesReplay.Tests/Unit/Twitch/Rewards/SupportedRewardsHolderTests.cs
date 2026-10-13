@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Twitch.Rewards;
 using TwitchLib.PubSub.Events;
@@ -103,16 +104,20 @@ public class SupportedRewardsHolderTests
         Assert.Equal(GameType.ARAM, aram.Mode);
     }
 
+    /// <summary>
+    /// #425: Warhead Junction is out of the Storm League pool in the shipped catalog's fallback,
+    /// so it has Quick Match rewards and its Storm League rewards are retired.
+    /// </summary>
     [Fact]
-    public void LiveCatalog_AcceptsRankQuickMatchForWarheadJunction()
+    public void LiveCatalog_WarheadJunctionIsAQuickMatchMap()
     {
         var holder = new SupportedRewardsHolder(new MapOnlyGameData(LoadCatalog().ToArray()));
 
-        Assert.DoesNotContain(
-            holder.Rewards,
-            reward => reward.Title == "Warhead Junction (Rank QM)"
-        );
-        Assert.Contains(holder.Rewards, reward => reward.Title == "Warhead Junction (SL)");
+        Assert.Contains(holder.Rewards, reward => reward.Title == "Warhead Junction (QM)");
+        Assert.Contains(holder.Rewards, reward => reward.Title == "Warhead Junction (Rank QM)");
+        Assert.DoesNotContain(holder.Rewards, reward => reward.Title == "Warhead Junction (SL)");
+        Assert.Contains("Warhead Junction (SL)", holder.RetiredTitles);
+        Assert.Contains("Warhead Junction (Rank SL)", holder.RetiredTitles);
         Assert.True(
             holder.TryGetReward(
                 new OnRewardRedeemedArgs { RewardTitle = "Warhead Junction (Rank QM)" },
@@ -316,6 +321,72 @@ public class SupportedRewardsHolderTests
         };
 
         Assert.Equal(expected, JsonSerializer.Deserialize<RewardType>(json, options));
+    }
+
+    /// <summary>
+    /// #425: the Storm League pool, not the catalog flag, decides which maps get Storm League
+    /// rewards. A map out of the pool gets Quick Match rewards instead, and its Storm League
+    /// rewards are retired so the sync deletes them from the channel.
+    /// </summary>
+    [Fact]
+    public void Rotation_MapsOutOfThePoolGetQuickMatchRewards_AndRetireTheirStormLeagueOnes()
+    {
+        var holder = new SupportedRewardsHolder(
+            new MapOnlyGameData(
+                new Map("Cursed Hollow", "CursedHollow", false, "standard", true),
+                new Map("Hanamura Temple", "Hanamura", true, "standard", true),
+                new Map("Silver City", "SilverCity", false, "ARAM", true)
+            ),
+            new FixedRotation("Cursed Hollow")
+        );
+        List<string> titles = holder.Rewards.Select(reward => reward.Title).ToList();
+
+        Assert.Contains("Cursed Hollow (SL)", titles);
+        Assert.Contains("Cursed Hollow (Rank SL)", titles);
+        Assert.DoesNotContain("Cursed Hollow (QM)", titles);
+        Assert.Contains("Hanamura Temple (QM)", titles);
+        Assert.Contains("Hanamura Temple (Rank QM)", titles);
+        Assert.DoesNotContain("Hanamura Temple (SL)", titles);
+        Assert.DoesNotContain("Hanamura Temple (Rank SL)", titles);
+        Assert.Contains("Silver City (ARAM)", titles);
+        Assert.Equal(
+            new[] { "Hanamura Temple (SL)", "Hanamura Temple (Rank SL)" },
+            holder.RetiredTitles
+        );
+        Assert.Equal("pool: Cursed Hollow", holder.PoolSummary);
+    }
+
+    [Fact]
+    public void Rotation_WithoutOne_TheCatalogFlagDecides()
+    {
+        var holder = new SupportedRewardsHolder(
+            new MapOnlyGameData(
+                new Map("Cursed Hollow", "CursedHollow", true, "standard", true),
+                new Map("Hanamura Temple", "Hanamura", false, "standard", true)
+            )
+        );
+
+        Assert.Contains(holder.Rewards, reward => reward.Title == "Cursed Hollow (SL)");
+        Assert.Contains(holder.Rewards, reward => reward.Title == "Hanamura Temple (QM)");
+        Assert.Equal(
+            new[] { "Hanamura Temple (SL)", "Hanamura Temple (Rank SL)" },
+            holder.RetiredTitles
+        );
+    }
+
+    private sealed class FixedRotation : IStormLeagueRotation
+    {
+        private readonly HashSet<string> pool;
+
+        public FixedRotation(params string[] maps)
+        {
+            pool = new HashSet<string>(maps, StringComparer.Ordinal);
+        }
+
+        public bool Contains(Map map) => map != null && pool.Contains(map.Name);
+
+        public string Describe(IEnumerable<Map> catalog) =>
+            "pool: " + string.Join(", ", pool.OrderBy(name => name, StringComparer.Ordinal));
     }
 
     private sealed class MapOnlyGameData : IGameData

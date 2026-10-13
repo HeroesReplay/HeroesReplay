@@ -17,6 +17,7 @@ using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.GameClient.Firewall;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
@@ -442,6 +443,9 @@ public static class ServiceCollectionExtensions
                     ClientId = settings.Twitch.ClientId,
                 };
             })
+            .AddSingleton<IStormLeagueRotation>(serviceProvider =>
+                StormLeagueRotation.FromCache(serviceProvider.GetRequiredService<AppSettings>())
+            )
             .AddSingleton<ICustomRewardsHolder, SupportedRewardsHolder>()
             .AddSingleton<IOnRewardHandler, OnRewardRedeemedHandler>()
             .AddSingleton<IOnMessageHandler, OnMessageReceivedHandler>()
