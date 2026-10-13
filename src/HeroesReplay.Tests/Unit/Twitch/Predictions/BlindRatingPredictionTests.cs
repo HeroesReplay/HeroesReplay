@@ -9,6 +9,7 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
 using HeroesReplay.Core.Twitch;
@@ -98,6 +99,30 @@ public sealed class BlindRatingPredictionTests : IDisposable
     }
 
     /// <summary>Twitch: a title of at most 45 characters, 2 to 10 outcomes of at most 25.</summary>
+    /// <summary>#423: the queue page states the window only when predictions run.</summary>
+    [Fact]
+    public void WindowFor_IsTheRatingWindowOnlyWhenPredictionsRun()
+    {
+        AppSettings Settings(bool enabled, CaptureMethod method) =>
+            new()
+            {
+                Twitch = new TwitchSettings
+                {
+                    EnablePredictions = enabled,
+                    RatingPredictionWindow = TimeSpan.FromMinutes(8),
+                },
+                Capture = new CaptureSettings { Method = method },
+            };
+
+        Assert.Equal(
+            TimeSpan.FromMinutes(8),
+            RatingPrediction.WindowFor(Settings(true, CaptureMethod.BitBlt))
+        );
+        Assert.Null(RatingPrediction.WindowFor(Settings(false, CaptureMethod.BitBlt)));
+        Assert.Null(RatingPrediction.WindowFor(Settings(true, CaptureMethod.None)));
+        Assert.Null(RatingPrediction.WindowFor(null));
+    }
+
     [Fact]
     public void Prediction_FitsTwitchLimits()
     {

@@ -25,14 +25,7 @@ public class SupportedReward
     )
     {
         RecordAndUpload = recordAndUpload;
-        Prompt =
-            rewardType == RewardType.ReplayId
-                ? recordAndUpload
-                    ? "Enter a recent patch ReplayId, or ReplayId,BattleTag (12345678,Name#1234) to follow that player. Redeem before that match starts. This match is recorded and uploaded to YouTube."
-                    : "Enter a recent patch ReplayId, or ReplayId,BattleTag (12345678,Name#1234) to follow that player. Redeem before that match starts."
-                : rewardType.HasFlag(RewardType.Rank)
-                    ? "Enter a rank without a division"
-                    : null;
+        Prompt = RewardDescription.For(rewardType, map, mode, recordAndUpload);
 
         IsUserInputRequired =
             rewardType.HasFlag(RewardType.Rank) || rewardType == RewardType.ReplayId;

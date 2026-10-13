@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Twitch.Predictions;
 using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 
@@ -78,7 +79,13 @@ public class RequestQueue : IRequestQueue, IDisposable
         boardPath = Path.Combine(settings.Location.DataDirectory, QueueBoard.FileName);
         try
         {
-            QueueBoard.Write(boardPath, ReadItems(queueFile), Rewards(), Failures());
+            QueueBoard.Write(
+                boardPath,
+                ReadItems(queueFile),
+                Rewards(),
+                Failures(),
+                RatingPrediction.WindowFor(settings)
+            );
         }
         catch (Exception e)
         {
@@ -592,7 +599,13 @@ public class RequestQueue : IRequestQueue, IDisposable
     private void SaveQueue(List<RewardQueueItem> items)
     {
         WriteItems(queueFile, items);
-        QueueBoard.Write(boardPath, items, Rewards(), Failures());
+        QueueBoard.Write(
+            boardPath,
+            items,
+            Rewards(),
+            Failures(),
+            RatingPrediction.WindowFor(settings)
+        );
     }
 
     /// <summary>The queue page's recent failures. The failed file is read under its own lock.</summary>

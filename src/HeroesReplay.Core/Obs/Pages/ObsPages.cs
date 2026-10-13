@@ -171,7 +171,8 @@ public static class ObsPages
                 Path.Combine(data, QueueBoard.FileName),
                 items,
                 rewards.Rewards,
-                failed
+                failed,
+                RatingPrediction.WindowFor(settings)
             );
             return new ObsPageResult(
                 QueueBoard.FileName,
