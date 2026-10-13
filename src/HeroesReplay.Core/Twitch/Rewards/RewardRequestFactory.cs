@@ -1,6 +1,4 @@
-using System;
 using HeroesReplay.Core.Requests;
-using HeroesReplay.Core.Shared;
 using TwitchLib.PubSub.Events;
 
 namespace HeroesReplay.Core.Twitch.Rewards;
@@ -37,20 +35,22 @@ public class RewardRequestFactory : IRewardRequestFactory
             };
         }
 
-        if (
-            reward.RewardType.HasFlag(RewardType.Rank)
-            && Enum.TryParse(args.Message, ignoreCase: true, out GameRank rank)
-        )
+        if (reward.RewardType.HasFlag(RewardType.Rank))
         {
+            // "Gold", "gold 3", "Plat" and "GM" all name a league (#429). Text that names none
+            // leaves Rank empty, and the queue returns the points instead of queueing any game.
             return new RewardRequest(
                 args.Login,
                 args.RedemptionId,
                 reward.Title,
                 replayId: null,
-                rank: rank,
+                rank: RankInput.Read(args.Message),
                 reward.Map,
                 reward.Mode
-            );
+            )
+            {
+                RankRequired = true,
+            };
         }
 
         return new RewardRequest(

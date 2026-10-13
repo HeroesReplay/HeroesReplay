@@ -33,6 +33,12 @@ public class RewardRequest
     public int? LegacyPlayerIndex { get; set; }
 
     public GameRank? Rank { get; set; }
+
+    /// <summary>
+    /// The reward asks for a rank (#429). With no <see cref="Rank"/> read from what the viewer
+    /// entered, nothing is queued and the points go back.
+    /// </summary>
+    public bool RankRequired { get; set; }
     public string Map { get; set; }
     public GameType? GameType { get; set; }
     public bool RecordAndUpload { get; set; }

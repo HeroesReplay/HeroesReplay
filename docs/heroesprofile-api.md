@@ -27,7 +27,8 @@ Hand-written partials of `HeroesProfileClient` sit next to `Generated/` and use 
 | List / max id | `GET /replays?after={id}&game_type=Storm League` |
 | Download | `GET /download/replay?replayID={id}` |
 | One match | `GET /replays?after={id-1}` then pick `replayID` |
-| Rank badge | `GET /replay/{replayID}` (average player MMR) |
+| Reward search (map and rank rewards) | `GET /replays?after={id}&game_type=…&game_map=…` (every match after `after`, oldest first, up to 1,000; there is no rank or MMR filter) |
+| Rank badge, and a rank reward's candidates (#429) | `GET /replay/{replayID}` (average `player_mmr`), then `GET /mmr/tier?game_type=…&mmr=…`. Each game type has its own ladder: on 2026-10-13, 2,750 was Platinum 4 in `sl`, Diamond 4 in `qm` and Platinum 2 in `aram` |
 | Hero statistics: newest patch | `GET /patches` (newest `game_version` with `valid_globals`; `2.57.0.98348` is major `2.57`) |
 | Hero statistics: ids | `GET /heroes` (`id`, `name`, `attribute_id`) |
 | Hero statistics: every hero on every map | `GET /heroes/stats?timeframe_type=major&timeframe=2.57&game_type=sl&group_by_map=true` (one object per map, a `data` row per hero: `hero_id`, `wins`, `games_played`, `ban_rate`) |
@@ -37,7 +38,7 @@ Hand-written partials of `HeroesProfileClient` sit next to `Generated/` and use 
 
 `region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable`. Skip when `downloadable` is false or `deleted` is non-zero.
 
-Measured on 2026-10-13 (`x-hp-quota-limit`, rolling 7 days): `/replays` allows 60,000 calls a week and `/maps` 1,000,000. The `/replays` list is in replay-id order, which is upload order, not play order: old games are still being uploaded (replay 65960001 is a 2.55.5 game from July 2024), so a filter on `game_version` is what keeps a sample to the current patch.
+Measured on 2026-10-13 (`x-hp-quota-limit`, rolling 7 days, and `x-ratelimit-limit` per minute): `/replays` allows 60,000 calls a week and 200 a minute, `/replay/{id}` 1,000,000 a week and 500 a minute, `/mmr/tier` 1,000,000 a week and 60 a minute, and `/maps` 1,000,000 a week. A rank reward stays within `/mmr/tier`'s minute with at most `HeroesProfileApi:RankLookupLimit` (40) lookups; a 429 waits for its `Retry-After` (1–3 s when measured). The `/replays` list is in replay-id order, which is upload order, not play order: old games are still being uploaded (replay 65960001 is a 2.55.5 game from July 2024), so a filter on `game_version` is what keeps a sample to the current patch.
 
 `/maps` `ranked_rotation` is maintained by hand and lags. On 2026-10-13 it marked every standard map 1 except Blackheart's Bay, while Heroes Profile's own replays had no Storm League game on Hanamura Temple or Warhead Junction since 2.55.17.97605 (20 Jul 2026). `StormLeagueRotation` uses only its 0, and only when too few Storm League replays are cached to see the pool.
 
