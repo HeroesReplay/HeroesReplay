@@ -250,10 +250,7 @@ public class SupportedRewardsHolderTests
             "Queues the replay you choose. " + RewardDescription.ReplayIdInput,
             Prompt("ReplayId")
         );
-        Assert.EndsWith(
-            "Recorded and uploaded to YouTube.",
-            Prompt("ReplayId + YouTube")
-        );
+        Assert.EndsWith("Recorded and uploaded to YouTube.", Prompt("ReplayId + YouTube"));
     }
 
     [Fact]
