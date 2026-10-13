@@ -18,7 +18,6 @@ public class HighlightSettings
         nameof(HighlightKind.DeathlessCarry),
         nameof(HighlightKind.KillLeader),
         nameof(HighlightKind.SoloLane),
-        nameof(HighlightKind.CampDrought),
         nameof(HighlightKind.Mvp),
         nameof(HighlightKind.MostFollowed),
     };
@@ -40,7 +39,8 @@ public class HighlightSettings
 
     /// <summary>
     /// The kinds a title may lead with, rarest first: the first kind the match has wins. A kind
-    /// left out is never a title. Null means <see cref="DefaultOrder"/>.
+    /// left out is never a title. A name that is no kind (one removed since) is ignored, so an older
+    /// config still starts. Null means <see cref="DefaultOrder"/>.
     /// </summary>
     public string[] Order { get; set; }
 

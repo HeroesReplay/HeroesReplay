@@ -346,7 +346,7 @@ The statistics are one file per major patch and game type, `Data\HeroesProfile\h
 
 ### Match highlights
 
-With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base file), the title leads with one highlight read from the replay itself (issue #412). The highlights name heroes, builds and the shape of the match. They never say who won, because the MVP can be on either team and the video is the match. Struggling players are never called out.
+With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base file), the title leads with one highlight read from the replay itself (issue #412). The highlights name heroes, builds and the shape of the match. They never say who won, because the MVP can be on either team and the video is the match. Struggling players and teams are never called out.
 
 **Where the facts come from.**
 
@@ -361,7 +361,7 @@ With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base fi
 - **Named-player requests.** A request that named a player keeps its `X focus` lead, and takes only a highlight about no one hero.
 - **Featured hero.** A highlight about the featured new hero replaces its `Ft.` part.
 
-**What can lead.** The first kind in `Order` that the match has wins:
+**What can lead.** The first kind in `Order` that the match has wins. The default order is `Pentakill`, `CoreRace`, `Comeback`, `DeathlessCarry`, `KillLeader`, `SoloLane`, `Mvp`, `MostFollowed`. A name in `Order` that is no kind is ignored, so an older config that still lists the removed `CampDrought` starts as before. Every kind is a positive call-out about a hero or the match; a team is never called out for what it did not do, so a team's camp count stays on the neutral `Camps:` line of the description:
 
 | Kind | Title | When | Measured on 545 local games |
 | --- | --- | --- | --- |
@@ -371,7 +371,6 @@ With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base fi
 | `DeathlessCarry` | `Deathless Teleport Li-Ming 12/0/9` | 0 deaths, 8+ kills | 11% |
 | `KillLeader` | `Valla 14/1/6` | 10+ kills, at most 1 death | 8% |
 | `SoloLane` | `Solo lane Chen vs Thrall` | Each team's one side-lane soaker from gates open to the first level 10, at High confidence only: the other team's soaker was in the same lane | 32% of teams |
-| `CampDrought` | `Red takes 1 camp` | A team took at most 1 camp in a game of 10+ minutes | 8% |
 | `Mvp` | `MVP Orphea 7/1/5` | The game's MVP award | 100% |
 | `MostFollowed` | `Valla 3/4/10` | The hero the focus timeline followed most | |
 

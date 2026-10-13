@@ -24,9 +24,6 @@ public enum HighlightKind
     /// <summary>Each team's solo laner, named only at High confidence.</summary>
     SoloLane,
 
-    /// <summary>A team took almost no merc camps.</summary>
-    CampDrought,
-
     /// <summary>The game's MVP award, which either team can win.</summary>
     Mvp,
 
