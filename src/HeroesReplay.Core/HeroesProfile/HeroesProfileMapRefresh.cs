@@ -11,9 +11,9 @@ namespace HeroesReplay.Core.HeroesProfile;
 
 /// <summary>
 /// Fetches Heroes Profile's <c>/maps</c> before a reward sync when the saved list is older than
-/// <c>HeroesProfileApi:MapsRefreshInterval</c> (#425). Each call counts against the key's maps
-/// allowance, and the Storm League pool changes once a season, so a saved list is reused until
-/// it is due. A failed call keeps the saved list and never stops the sync.
+/// <c>HeroesProfileApi:MapsRefreshInterval</c> (#425). The Storm League pool changes once a
+/// season, so a saved list is reused until it is due. A failed call keeps the saved list and
+/// never stops the sync.
 /// </summary>
 public sealed class HeroesProfileMapRefresh
 {

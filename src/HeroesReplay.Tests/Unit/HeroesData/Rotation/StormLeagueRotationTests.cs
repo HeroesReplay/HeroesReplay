@@ -112,14 +112,49 @@ public class StormLeagueRotationTests
     }
 
     [Fact]
-    public void HeroesProfileZero_TakesAMapOut_ThoughCachedGamesAreOnIt()
+    public void HeroesProfileZero_DoesNotOverrideCachedGames()
     {
+        // The flag lagged a season in 2026-10. A map back in Storm League keeps its rewards
+        // while Heroes Profile still marks it 0.
         StormLeagueRotation rotation = StormLeagueRotation
             .FromFileNames(SeasonOf(Pool, firstId: 65_000_000, perMap: 25))
             .With(Flags(("Cursed Hollow", 0), ("Sky Temple", 1)));
 
-        Assert.False(rotation.Contains(Cursed));
+        Assert.True(rotation.Contains(Cursed));
         Assert.True(rotation.Contains(Standard("Sky Temple", ranked: false)));
+    }
+
+    [Fact]
+    public void TheStaleFlagOf2026_10_13_AddsNoMap_WithOrWithoutCachedReplays()
+    {
+        // Heroes Profile's /maps on 2026-10-13: every standard map 1 except Blackheart's Bay.
+        // Its own Storm League replays had no game on Hanamura Temple or Warhead Junction since
+        // 2.55.17.97605 (20 Jul 2026), and Maps:Catalog marks the three not ranked.
+        HeroesProfileMapList flags = Flags(
+            Pool.Select(name => (name, 1))
+                .Append(("Hanamura Temple", 1))
+                .Append(("Warhead Junction", 1))
+                .Append(("Blackheart's Bay", 0))
+                .ToArray()
+        );
+        Map[] retired =
+        {
+            Standard("Hanamura Temple", ranked: false),
+            Standard("Warhead Junction", ranked: false),
+            Standard("Blackheart's Bay", ranked: false),
+        };
+        Map haunted = Standard("Haunted Mines", ranked: true);
+
+        foreach (int perMap in new[] { 25, 2 })
+        {
+            StormLeagueRotation rotation = StormLeagueRotation
+                .FromFileNames(SeasonOf(Pool, firstId: 65_000_000, perMap: perMap))
+                .With(flags);
+
+            Assert.Equal(perMap == 25, rotation.Observed);
+            Assert.All(retired, map => Assert.False(rotation.Contains(map)));
+            Assert.True(rotation.Contains(haunted));
+        }
     }
 
     [Fact]
@@ -145,7 +180,7 @@ public class StormLeagueRotationTests
     }
 
     [Fact]
-    public void TooFewCachedReplays_HeroesProfileFlagDecides_ThenTheCatalog()
+    public void TooFewCachedReplays_TheCatalogDecides_LessHeroesProfileZeros()
     {
         StormLeagueRotation rotation = StormLeagueRotation
             .FromFileNames(SeasonOf(Pool, firstId: 65_000_000, perMap: 8))
@@ -153,9 +188,11 @@ public class StormLeagueRotationTests
 
         Assert.False(rotation.Observed);
         Assert.True(rotation.Flagged);
+        // The catalog says ranked, Heroes Profile says 0: out.
         Assert.False(rotation.Contains(Hanamura));
-        Assert.True(rotation.Contains(Cursed));
-        // Heroes Profile does not list it, so the catalog flag decides.
+        // Heroes Profile's 1 does not add a map the catalog leaves out.
+        Assert.False(rotation.Contains(Cursed));
+        // Heroes Profile does not list these, so the catalog flag decides.
         Assert.True(rotation.Contains(Standard("Alterac Pass", ranked: true)));
         Assert.False(rotation.Contains(Standard("Sky Temple", ranked: false)));
     }
@@ -164,27 +201,64 @@ public class StormLeagueRotationTests
     public void HeroesProfileNames_MatchTheCatalogNames()
     {
         StormLeagueRotation rotation = StormLeagueRotation.Catalog.With(
-            Flags(("Blackheart’s Bay", 1), ("  cursed hollow ", 0))
+            Flags(("Blackheart’s Bay", 0), ("  cursed hollow ", 0))
         );
 
-        Assert.True(rotation.Contains(Standard("Blackheart's Bay", ranked: false)));
+        Assert.False(rotation.Contains(Standard("Blackheart's Bay", ranked: true)));
         Assert.False(rotation.Contains(Standard("Cursed Hollow", ranked: true)));
+        Assert.True(rotation.Contains(Standard("Sky Temple", ranked: true)));
         Assert.False(StormLeagueRotation.Catalog.Flagged);
     }
 
     [Fact]
-    public void Describe_BothSources_NamesTheFlaggedMapsNoGameIsOn()
+    public void Describe_BothSources_NamesWhereHeroesProfileDisagrees()
     {
         StormLeagueRotation rotation = StormLeagueRotation
             .FromFileNames(SeasonOf(Pool, firstId: 65_000_000, perMap: 25))
-            .With(Flags(("Cursed Hollow", 1), ("Hanamura Temple", 1), ("Blackheart's Bay", 0)));
+            .With(
+                Flags(
+                    ("Cursed Hollow", 1),
+                    ("Hanamura Temple", 1),
+                    ("Blackheart's Bay", 0),
+                    ("Sky Temple", 0)
+                )
+            );
 
         string line = rotation.Describe(
-            new[] { Cursed, Hanamura, Standard("Blackheart's Bay", ranked: false) }
+            new[]
+            {
+                Cursed,
+                Hanamura,
+                Standard("Blackheart's Bay", ranked: false),
+                Standard("Sky Temple", ranked: true),
+            }
         );
 
         Assert.Equal(
-            "Storm League map pool from Heroes Profile ranked_rotation (2026-10-13) and the newest 300 cached Storm League replays: Cursed Hollow. Not in Storm League: Hanamura Temple, Blackheart's Bay. Heroes Profile marks Hanamura Temple ranked, but no cached Storm League replay is on them.",
+            "Storm League map pool from the newest 300 cached Storm League replays: Cursed Hollow, Sky Temple. Not in Storm League: Hanamura Temple, Blackheart's Bay. Heroes Profile marks Hanamura Temple ranked, but no cached Storm League replay is on them. Heroes Profile marks Sky Temple not ranked, but cached Storm League replays are on them.",
+            line
+        );
+    }
+
+    [Fact]
+    public void Describe_TooFewCachedReplays_NamesTheCatalogAndHeroesProfile()
+    {
+        StormLeagueRotation rotation = StormLeagueRotation.Catalog.With(
+            Flags(("Hanamura Temple", 0), ("Warhead Junction", 1))
+        );
+
+        string line = rotation.Describe(
+            new[]
+            {
+                Standard("Alterac Pass", ranked: true),
+                Hanamura,
+                Standard("Warhead Junction", ranked: false),
+                Cursed,
+            }
+        );
+
+        Assert.Equal(
+            "Storm League map pool from Maps:Catalog RankedRotation less the maps Heroes Profile ranked_rotation (2026-10-13) marks 0 (too few cached Storm League replays): Alterac Pass. Not in Storm League: Hanamura Temple, Warhead Junction, Cursed Hollow. Heroes Profile marks Warhead Junction ranked, but Maps:Catalog does not.",
             line
         );
     }

@@ -33,8 +33,8 @@ public class HeroesProfileApiSettings
 
     /// <summary>
     /// How long the saved <c>/maps</c> list (<c>Data\HeroesProfile\maps.json</c>) is reused before
-    /// a reward sync fetches it again (#425). Each fetch counts against the key's maps allowance.
-    /// Zero turns the fetch off; a saved list is still read.
+    /// a reward sync fetches it again (#425). <c>/maps</c> allows 1,000,000 calls a week (measured
+    /// 2026-10-13). Zero turns the fetch off; a saved list is still read.
     /// </summary>
     public TimeSpan MapsRefreshInterval { get; set; } = TimeSpan.FromDays(1);
 

@@ -19,21 +19,21 @@ public interface IStormLeagueRotation
 }
 
 /// <summary>
-/// The Storm League map pool (#425). Blizzard rotates maps out of Storm League each season. Two
-/// sources decide it:
+/// The Storm League map pool (#425). Blizzard rotates maps out of Storm League each season.
 /// <list type="bullet">
-/// <item>Heroes Profile's <c>/maps</c> <c>ranked_rotation</c> flag, saved in
-/// <c>Data\HeroesProfile\maps.json</c>. Its 0 always takes a map out.</item>
-/// <item>The replays the download role already keeps in <c>Data\Standard</c>. The download takes
-/// Heroes Profile's Storm League list with no map filter, so the newest
+/// <item>The replays the download role already keeps in <c>Data\Standard</c> decide it. The
+/// download takes Heroes Profile's Storm League list with no map filter, so the newest
 /// <see cref="SampleSize"/> of them show what is played. A map counts when at least
 /// <see cref="MinimumGames"/> of them are on it.</item>
+/// <item>With fewer than <see cref="MinimumSample"/> Storm League replays cached (a new install,
+/// a dev box), the catalog's <c>Maps:Catalog:RankedRotation</c> decides, less any map Heroes
+/// Profile's <c>/maps</c> <c>ranked_rotation</c> (<c>Data\HeroesProfile\maps.json</c>) marks
+/// 0.</item>
 /// </list>
-/// A map Heroes Profile flags 1 still needs games in the cached replays: in the 2026-10 season
-/// it flagged Hanamura Temple and Warhead Junction, and no Storm League game was played on either.
-/// With fewer than <see cref="MinimumSample"/> Storm League replays cached (a new install, a dev
-/// box), the flag alone decides. Without either source, the catalog's
-/// <c>Maps:Catalog:RankedRotation</c> decides.
+/// Heroes Profile's flag never adds a map, and never overrides the cached games: it lagged a
+/// season. On 2026-10-13 it marked Hanamura Temple and Warhead Junction ranked, and Heroes
+/// Profile's own replays have no Storm League game on either since build 2.55.17.97605 (20 Jul
+/// 2026). <see cref="Describe"/> names every map where it disagrees.
 /// </summary>
 public sealed class StormLeagueRotation : IStormLeagueRotation
 {
@@ -77,7 +77,7 @@ public sealed class StormLeagueRotation : IStormLeagueRotation
     /// <summary>True when the pool came from cached replays, not the catalog.</summary>
     public bool Observed => pool != null;
 
-    /// <summary>True when Heroes Profile's <c>ranked_rotation</c> flags are part of the decision.</summary>
+    /// <summary>True when Heroes Profile's <c>ranked_rotation</c> flags were read.</summary>
     public bool Flagged => flags != null;
 
     /// <summary>
@@ -149,18 +149,12 @@ public sealed class StormLeagueRotation : IStormLeagueRotation
         }
 
         string key = Key(map.Name);
-        bool? flagged = Flag(key);
-        if (flagged == false)
-        {
-            return false;
-        }
-
         if (pool != null)
         {
             return pool.Contains(key);
         }
 
-        return flagged ?? map.RankedRotation;
+        return map.RankedRotation && Flag(key) != false;
     }
 
     public string Describe(IEnumerable<Map> catalog)
@@ -173,31 +167,40 @@ public sealed class StormLeagueRotation : IStormLeagueRotation
             : null;
         string source = (Flagged, Observed) switch
         {
-            (true, true) => $"{flagSource} and the newest {sampled} cached Storm League replays",
-            (true, false) => $"{flagSource} (too few cached Storm League replays)",
-            (false, true) => $"the newest {sampled} cached Storm League replays",
+            (_, true) => $"the newest {sampled} cached Storm League replays",
+            (true, false) =>
+                $"Maps:Catalog RankedRotation less the maps {flagSource} marks 0 (too few cached Storm League replays)",
             _ => "Maps:Catalog RankedRotation (too few cached Storm League replays)",
         };
-        string inPool = string.Join(", ", standard.Where(Contains).Select(map => map.Name));
-        string outOfPool = string.Join(
-            ", ",
-            standard.Where(map => !Contains(map)).Select(map => map.Name)
-        );
+        string inPool = Names(standard.Where(Contains));
+        string outOfPool = Names(standard.Where(map => !Contains(map)));
         string line =
-            $"Storm League map pool from {source}: {inPool}. Not in Storm League: {(outOfPool.Length == 0 ? "none" : outOfPool)}.";
+            $"Storm League map pool from {source}: {(inPool.Length == 0 ? "none" : inPool)}. Not in Storm League: {(outOfPool.Length == 0 ? "none" : outOfPool)}.";
 
-        // Heroes Profile's flag has lagged a season before (Hanamura Temple, Warhead Junction in
-        // 2026-10). Name the maps it calls ranked that no cached Storm League game is on.
-        string unplayed = string.Join(
-            ", ",
-            standard
-                .Where(map => Observed && Flag(Key(map.Name)) == true && !Contains(map))
-                .Select(map => map.Name)
+        // Heroes Profile's flag lagged a season (Hanamura Temple, Warhead Junction in 2026-10), so
+        // it only takes part as a check. Name every map where it disagrees with the pool.
+        string ranked = Names(standard.Where(map => Flag(Key(map.Name)) == true && !Contains(map)));
+        string unranked = Names(
+            standard.Where(map => Flag(Key(map.Name)) == false && Contains(map))
         );
-        return unplayed.Length == 0
-            ? line
-            : $"{line} Heroes Profile marks {unplayed} ranked, but no cached Storm League replay is on them.";
+        if (ranked.Length > 0)
+        {
+            line += Observed
+                ? $" Heroes Profile marks {ranked} ranked, but no cached Storm League replay is on them."
+                : $" Heroes Profile marks {ranked} ranked, but Maps:Catalog does not.";
+        }
+
+        if (unranked.Length > 0)
+        {
+            line +=
+                $" Heroes Profile marks {unranked} not ranked, but cached Storm League replays are on them.";
+        }
+
+        return line;
     }
+
+    private static string Names(IEnumerable<Map> maps) =>
+        string.Join(", ", maps.Select(map => map.Name));
 
     private bool? Flag(string key) =>
         flags != null && key != null && flags.TryGetValue(key, out bool ranked) ? ranked : null;

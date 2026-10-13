@@ -25,7 +25,7 @@ Heroes Profile loop is **Storm League** on the current patch. Channel-point rewa
 
 ReplayId rewards should use a **recent current-patch** id. Older `.StormReplay` files need a matching `Versions\Base*` client already on disk; Blizzard often stops serving old builds.
 
-Catalog: `Maps:Catalog` in `appsettings.json` (`Playable`, `RankedRotation`, `Type`). Storm League rewards follow this season's pool, not the catalog flag: a map needs Heroes Profile's `ranked_rotation` 1 and games in the recent Storm League downloads (#425). The catalog's `RankedRotation` is the fallback when neither is available.
+Catalog: `Maps:Catalog` in `appsettings.json` (`Playable`, `RankedRotation`, `Type`). Storm League rewards follow this season's pool, not the catalog flag: a map needs games in the recent Storm League downloads (#425). With too few downloads, the catalog's `RankedRotation` decides, less any map Heroes Profile's `ranked_rotation` marks 0.
 
 ## Requirements
 
