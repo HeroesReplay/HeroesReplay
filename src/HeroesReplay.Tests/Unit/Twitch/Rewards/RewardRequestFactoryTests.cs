@@ -133,6 +133,42 @@ public class RewardRequestFactoryTests
         Assert.False(ReplayRequestKind.RecordsAndUploads(map));
     }
 
+    /// <summary>#429: a rank reward reads the league from what the viewer typed.</summary>
+    [Theory]
+    [InlineData("gold 3", HeroesReplay.Core.Shared.GameRank.Gold)]
+    [InlineData("Plat", HeroesReplay.Core.Shared.GameRank.Platinum)]
+    [InlineData("potato", null)]
+    public void RankReward_ReadsTheLeague_AndAlwaysNeedsOne(
+        string message,
+        HeroesReplay.Core.Shared.GameRank? expected
+    )
+    {
+        var factory = new RewardRequestFactory();
+        var reward = new SupportedReward(
+            RewardType.SL | RewardType.Map | RewardType.Rank,
+            "Cursed Hollow (Rank SL)",
+            map: "Cursed Hollow",
+            mode: HeroesReplay.Core.Shared.GameType.StormLeague,
+            cost: 500
+        );
+
+        RewardRequest request = factory.Create(
+            reward,
+            new OnRewardRedeemedArgs
+            {
+                Login = "viewer",
+                RedemptionId = System.Guid.NewGuid(),
+                RewardTitle = reward.Title,
+                Message = message,
+            }
+        );
+
+        Assert.Equal(expected, request.Rank);
+        Assert.True(request.RankRequired);
+        Assert.Equal("Cursed Hollow", request.Map);
+        Assert.Equal(HeroesReplay.Core.Shared.GameType.StormLeague, request.GameType);
+    }
+
     [Fact]
     public void ReplayId_WithBattleTag_KeepsThePlayerToFollow()
     {

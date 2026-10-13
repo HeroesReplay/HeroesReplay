@@ -248,7 +248,7 @@ public class SupportedRewardsHolderTests
             Prompt("Silver City (ARAM)")
         );
         Assert.Equal(
-            "Queues a recent Storm League replay on Cursed Hollow at the rank you enter: Bronze, Silver, Gold, Platinum, Diamond, Master (no division).",
+            "Queues a recent Storm League replay on Cursed Hollow at the rank you enter: Bronze, Silver, Gold, Platinum, Diamond or Master. Your points come back if none is found.",
             Prompt("Cursed Hollow (Rank SL)")
         );
         Assert.Equal(

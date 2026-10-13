@@ -15,6 +15,25 @@ public static class RewardCandidateFilter
         string minimumVersion = null
     )
     {
+        List<HeroesProfileReplay> pool = Eligible(
+            replays,
+            playedIds,
+            queuedIds,
+            versionsSupported,
+            minimumVersion
+        );
+        return pool.Count == 0 ? null : pool[Random.Shared.Next(pool.Count)];
+    }
+
+    /// <summary>The replays a reward may queue: listed, downloadable, on a supported client, and not played or queued.</summary>
+    public static List<HeroesProfileReplay> Eligible(
+        IEnumerable<HeroesProfileReplay> replays,
+        ISet<int> playedIds,
+        ISet<int> queuedIds,
+        IEnumerable<string> versionsSupported,
+        string minimumVersion = null
+    )
+    {
         var versions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (versionsSupported != null)
         {
@@ -27,7 +46,7 @@ public static class RewardCandidateFilter
             }
         }
 
-        List<HeroesProfileReplay> pool = (replays ?? Enumerable.Empty<HeroesProfileReplay>())
+        return (replays ?? Enumerable.Empty<HeroesProfileReplay>())
             .Where(replay => replay != null && replay.Id > 0)
             .Where(replay => replay.Deleted is not > 0)
             .Where(replay => replay.Downloadable != false)
@@ -35,11 +54,5 @@ public static class RewardCandidateFilter
             .Where(replay => playedIds == null || !playedIds.Contains(replay.Id))
             .Where(replay => queuedIds == null || !queuedIds.Contains(replay.Id))
             .ToList();
-        if (pool.Count == 0)
-        {
-            return null;
-        }
-
-        return pool[Random.Shared.Next(pool.Count)];
     }
 }

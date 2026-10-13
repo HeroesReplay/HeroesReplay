@@ -633,7 +633,12 @@ public static class ServiceCollectionExtensions
     {
         return services
             .AddHeroesProfileKiotaClient()
-            .AddSingleton<IHeroesProfileService, HeroesProfileService>();
+            .AddSingleton<HeroesProfileService>()
+            .AddSingleton<IHeroesProfileService>(sp =>
+                sp.GetRequiredService<HeroesProfileService>()
+            )
+            // A rank reward's tier lookups (#429) share the service's client and cache.
+            .AddSingleton<IReplayTierLookup>(sp => sp.GetRequiredService<HeroesProfileService>());
     }
 
     /// <summary>

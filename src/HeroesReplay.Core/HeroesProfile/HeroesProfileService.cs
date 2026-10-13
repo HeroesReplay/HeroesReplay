@@ -19,9 +19,10 @@ using Polly;
 
 namespace HeroesReplay.Core.HeroesProfile;
 
-public class HeroesProfileService : IHeroesProfileService
+public class HeroesProfileService : IHeroesProfileService, IReplayTierLookup
 {
     private static readonly ResiliencePropertyKey<int> FilterMinIdKey = new("minId");
+    private const string StormLeagueLadder = "Storm League";
 
     private readonly ILogger<HeroesProfileService> logger;
     private readonly CancellationTokenProvider tokenProvider;
@@ -136,13 +137,19 @@ public class HeroesProfileService : IHeroesProfileService
                 filter = await content.ReadAsStringAsync();
             }
 
+            // A rank reward looks up the rank of each candidate (#429), so it reads a wider window
+            // of the list than a map reward needs.
+            int window =
+                gameRank.HasValue && settings.HeroesProfileApi.RankSearchWindow > 0
+                    ? settings.HeroesProfileApi.RankSearchWindow
+                    : settings.HeroesProfileApi.ApiMaxReturnedReplays;
             return await MemoryCacheLookup
                 .GetOrCreateAsync(
                     cache,
                     logger,
                     $"hp-filter:{filter}",
                     replays => replays.Any() ? TimeSpan.FromHours(1) : TimeSpan.Zero,
-                    token => LoadFilteredReplaysAsync(gameType, gameMap, filter, token),
+                    token => LoadFilteredReplaysAsync(gameType, gameMap, filter, window, token),
                     tokenProvider.Token
                 )
                 .ConfigureAwait(false);
@@ -295,16 +302,7 @@ public class HeroesProfileService : IHeroesProfileService
                 return;
             }
 
-            string tier = await MemoryCacheLookup
-                .GetOrCreateAsync(
-                    cache,
-                    logger,
-                    $"hp-sl-tier:{rounded.Value}",
-                    value =>
-                        string.IsNullOrWhiteSpace(value) ? TimeSpan.Zero : TimeSpan.FromHours(1),
-                    token => LookupStormLeagueTierAsync(rounded.Value, token),
-                    cancellationToken
-                )
+            string tier = await TierForMmrAsync(StormLeagueLadder, rounded.Value, cancellationToken)
                 .ConfigureAwait(false);
 
             replay.Rank = HeroesProfileRankEnricher.Resolve(replay.GameType, replay.Rank, tier);
@@ -336,13 +334,84 @@ public class HeroesProfileService : IHeroesProfileService
         }
     }
 
-    private async Task<string> LookupStormLeagueTierAsync(
+    /// <summary>
+    /// The tier of a replay on its own game type's ladder (#429): the players' average MMR from
+    /// <c>/replay/{id}</c>, placed by <c>/mmr/tier</c>. Each type has its own ladder (2,750 was
+    /// Platinum 4 in Storm League and Diamond 4 in Quick Match on 2026-10-13). Cached per replay.
+    /// </summary>
+    public async Task<string> GetTierAsync(
+        int replayId,
+        GameType gameType,
+        CancellationToken cancellationToken
+    )
+    {
+        string ladder = gameType.GetQueryValue();
+        try
+        {
+            string tier = await MemoryCacheLookup
+                .GetOrCreateAsync(
+                    cache,
+                    logger,
+                    $"hp-replay-tier:{ladder}:{replayId}",
+                    value =>
+                        string.IsNullOrWhiteSpace(value) ? TimeSpan.Zero : TimeSpan.FromHours(2),
+                    async token =>
+                    {
+                        var detail = await kiotaClient
+                            .Replay[replayId]
+                            .GetAsync(cancellationToken: token)
+                            .ConfigureAwait(false);
+                        int? mmr = HeroesProfileRankEnricher.RoundMmr(
+                            RankImage.AveragePlayerMmr(detail?.Players)
+                        );
+                        return mmr.HasValue
+                            ? await TierForMmrAsync(ladder, mmr.Value, token).ConfigureAwait(false)
+                            : string.Empty;
+                    },
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(tier) ? null : tier;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                "Could not read the {Ladder} tier of replay {ReplayId}: {Error}",
+                ladder,
+                replayId,
+                e.Message
+            );
+            return null;
+        }
+    }
+
+    /// <summary>The tier <paramref name="mmr"/> falls in on one ladder, cached an hour. Empty when unknown.</summary>
+    private Task<string> TierForMmrAsync(
+        string ladder,
+        int mmr,
+        CancellationToken cancellationToken
+    ) =>
+        MemoryCacheLookup.GetOrCreateAsync(
+            cache,
+            logger,
+            $"hp-tier:{ladder}:{mmr}",
+            value => string.IsNullOrWhiteSpace(value) ? TimeSpan.Zero : TimeSpan.FromHours(1),
+            token => LookupTierAsync(ladder, mmr, token),
+            cancellationToken
+        );
+
+    private async Task<string> LookupTierAsync(
+        string ladder,
         int mmr,
         CancellationToken cancellationToken
     )
     {
         string tier = await kiotaClient
-            .GetMmrTierAsync("Storm League", mmr, cancellationToken)
+            .GetMmrTierAsync(ladder, mmr, cancellationToken)
             .ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(tier) || RankImage.SourceName(tier) == null)
         {
@@ -356,6 +425,7 @@ public class HeroesProfileService : IHeroesProfileService
         GameType? gameType,
         string gameMap,
         string filter,
+        int window,
         CancellationToken token
     )
     {
@@ -386,10 +456,7 @@ public class HeroesProfileService : IHeroesProfileService
         ResilienceContext context = ResilienceContextPool.Shared.Get(token);
         try
         {
-            context.Properties.Set(
-                FilterMinIdKey,
-                maxId - settings.HeroesProfileApi.ApiMaxReturnedReplays
-            );
+            context.Properties.Set(FilterMinIdKey, maxId - window);
             return await pipeline
                 .ExecuteAsync(
                     ctx => new ValueTask<IEnumerable<HeroesProfileReplay>>(ReadFilterPage(ctx)),
