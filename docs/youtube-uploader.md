@@ -27,17 +27,17 @@ Production is `HEROES_REPLAY_ENV=prod` (`DESKTOP-8SJEK72`). The environment deci
   "Version": "1",
   "RecordingMode": "Selected",
   "PublicationMode": "AllEligible",
-  "MaxPublicPerDay": 12,
-  "MaxPublicPerWeek": 84,
-  "MinimumPublicInterval": "02:00:00",
+  "MaxPublicPerDay": 24,
+  "MaxPublicPerWeek": 168,
+  "MinimumPublicInterval": "01:00:00",
   "MaxPublishAhead": "3.00:00:00",
   "OrdinaryCandidateMaxAge": "3.00:00:00",
   "MapCooldown": "08:00:00",
-  "RankCooldown": "08:00:00",
+  "RankCooldown": "04:00:00",
   "FeaturedHeroCooldown": "08:00:00",
   "MaxSharedHeroes": 4,
   "ReservedRequestSlotsPerDay": 2,
-  "MaxInsertsPerQuotaDay": 20,
+  "MaxInsertsPerQuotaDay": 30,
   "CapRecordingToPublication": true
 }
 ```
@@ -99,7 +99,7 @@ The first matching line decides, and the spectator logs it as `recording cap ...
 | `cap-queued` | yes | The window is full, and the slots that must open first (waiting plus scheduled plus this one, less what the window holds), at the window's daily pace, still leave a day before the replay expires. |
 | `cap-publication-full` | no | The window is full, and this replay would wait until less than a day before it expires, or its game time is unknown. |
 
-With the production settings the window holds 10 a day over 3 days, so 30 slots, and a full window opens about one slot every 2.4 hours. On 2026-10-08 the stream PC had 10 recordings waiting for upload and 29 uploads scheduled (#370). Before #370 the cap stopped at 30 in flight, so it recorded nothing for about a day, although a replay played 6 hours earlier would have waited one day and still had 1.75 days of its 3 left. Now that replay is recorded (`cap-queued`). One played 2 days earlier is not. In steady state about 17 fresh recordings wait (about 37 GB), and a video goes public about 4 to 5 days after its game. Without the queue only about one waited, so a slot whose map, rank, or hero cooldown ruled out that one recording went unused. The publication pace is the same either way.
+With the production settings the window holds 22 a day over 3 days, so 66 slots, and a full window opens about one slot an hour (until 2026-10-13 it held 10 a day, so 30 slots, one every 2.4 hours). On 2026-10-08 the stream PC had 10 recordings waiting for upload and 29 uploads scheduled (#370). Before #370 the cap stopped at 30 in flight, so it recorded nothing for about a day, although a replay played 6 hours earlier would have waited one day and still had 1.75 days of its 3 left. Now that replay is recorded (`cap-queued`). One played 2 days earlier is not. In steady state about 17 fresh recordings wait (about 37 GB), and a video goes public about 4 to 5 days after its game. Without the queue only about one waited, so a slot whose map, rank, or hero cooldown ruled out that one recording went unused. The publication pace is the same either way.
 
 Notable and high-skill replays are capped like ordinary ones. Only a request goes past the cap. A capped replay is still spectated and streamed, without an mp4. Before the cap, production recorded about 25 replays a day while 4 a day could go public, and the rest waited on disk until they were too old to publish (#250).
 
@@ -232,28 +232,28 @@ A dry run plans in `Data\publication-reservations-dry-run.txt`, so its times nev
 
 The spectator plays the next queued replay as soon as the previous session ends. YouTube does not follow that clock.
 
-A recording is uploaded as soon as the upload bucket and a publish slot allow. YouTube's Video Uploads bucket is 100 calls a day; 5 are held back, and production's `MaxInsertsPerQuotaDay` (20) caps it lower. Full matches and clips share it, and library spend never takes from it. Before #250 the app charged each insert 1600 units from the 10,000-unit pool, so it stopped at 6 uploads a day and starved the library pass, while Google's console showed 6 of 100 upload calls and 4 of 10,000 pool units used.
+A recording is uploaded as soon as the upload bucket and a publish slot allow. YouTube's Video Uploads bucket is 100 calls a day; 5 are held back, and production's `MaxInsertsPerQuotaDay` (30) caps it lower. Full matches and clips share it, and library spend never takes from it. Before #250 the app charged each insert 1600 units from the 10,000-unit pool, so it stopped at 6 uploads a day and starved the library pass, while Google's console showed 6 of 100 upload calls and 4 of 10,000 pool units used.
 
-With the production settings the videos go public at most every 2 hours (`MinimumPublicInterval`), at most 12 in any rolling 24 hours (`MaxPublicPerDay`; a non-request only while fewer than 10 are in it, because `ReservedRequestSlotsPerDay` keeps 2 for requests), and at most 84 in any rolling 7 days (`MaxPublicPerWeek`). The interval already allows only 12 a day, so in practice ordinary videos go out 10 a day, 2 hours apart. The same map, the same rank tier, or a roster that shares 4 or more heroes with a video 8 hours either side moves the time later.
+With the production settings the videos go public at most every hour (`MinimumPublicInterval`), at most 24 in any rolling 24 hours (`MaxPublicPerDay`; a non-request only while fewer than 22 are in it, because `ReservedRequestSlotsPerDay` keeps 2 for requests), and at most 168 in any rolling 7 days (`MaxPublicPerWeek`). In practice ordinary videos go out up to 22 a day, an hour apart. The same map or a roster that shares 4 or more heroes with a video 8 hours either side, or the same rank tier 4 hours either side (`RankCooldown`), moves the time later. Until 2026-10-13 production ran 12 a day, 2 hours apart, with an 8-hour rank cooldown: 10 ordinary videos a day, which filled the 3-day window, stopped new recordings (`cap-publication-full`) and let eligible recordings expire unpublished while the stream played about 60 games a day.
 
-Twelve ordinary games that end at 10:00, 10:30, and every half hour to 15:30 UTC, on a quota day with nothing spent yet. No map or rank tier repeats within 8 hours, and no two rosters share 4 heroes. `PublicationSchedule.Plan` with the production settings gives:
+Twelve ordinary games that end at 10:00, 10:30, and every half hour to 15:30 UTC, on a quota day with nothing spent yet. No map repeats within 8 hours, no rank tier within 4, and no two rosters share 4 heroes. `PublicationSchedule.Plan` with the production settings gives:
 
 | Game | Uploaded | Publishes | Why not earlier |
 | --- | --- | --- | --- |
 | 1 | 10:00 | 10:00 | |
-| 2 | 10:30 | 12:00 | interval |
-| 3 | 11:00 | 14:00 | interval |
-| 4 | 11:30 | 16:00 | interval |
-| 5 | 12:00 | 18:00 | interval |
-| 6 | 12:30 | 20:00 | interval |
-| 7 | 13:00 | 22:00 | interval |
-| 8 | 13:30 | next day 00:00 | interval |
-| 9 | 14:00 | next day 02:00 | interval |
-| 10 | 14:30 | next day 04:00 | interval |
-| 11 | 15:00 | next day 10:00 | reserved: 10 non-requests are in every 24 hours until game 1 leaves |
-| 12 | 15:30 | next day 12:00 | reserved |
+| 2 | 10:30 | 11:00 | interval |
+| 3 | 11:00 | 12:00 | interval |
+| 4 | 11:30 | 13:00 | interval |
+| 5 | 12:00 | 14:00 | interval |
+| 6 | 12:30 | 15:00 | interval |
+| 7 | 13:00 | 16:00 | interval |
+| 8 | 13:30 | 17:00 | interval |
+| 9 | 14:00 | 18:00 | interval |
+| 10 | 14:30 | 19:00 | interval |
+| 11 | 15:00 | 20:00 | interval |
+| 12 | 15:30 | 21:00 | interval |
 
-A paid request that ends at 16:00 that day publishes at 16:00, as soon as it is uploaded, at the same time as game 4: a request is not paced. All twelve uploads stay under `MaxInsertsPerQuotaDay` (20), so each recording goes on the retention sweep that follows its upload. With `MaxPublishAhead` 3 days and 10 non-request videos a day, the publication window holds 30 slots, and a full window opens about one slot every 2.4 hours. Once it is full, the recording cap still records an ordinary game while the slots ahead of it leave at least a day before the game is 3 days old (`cap-queued`, see [The recording cap](#the-recording-cap)). In steady state a video then goes public about 4 to 5 days after its game.
+A paid request that ends at 16:00 that day publishes at 16:00, as soon as it is uploaded, at the same time as game 7: a request is not paced. All twelve uploads stay under `MaxInsertsPerQuotaDay` (30), so each recording goes on the retention sweep that follows its upload. With `MaxPublishAhead` 3 days and 22 non-request videos a day, the publication window holds 66 slots, and a full window opens about one slot an hour. Once it is full, the recording cap still records an ordinary game while the slots ahead of it leave at least a day before the game is 3 days old (`cap-queued`, see [The recording cap](#the-recording-cap)). In steady state a video then goes public about 3 to 4 days after its game.
 
 ## What the video contains
 
