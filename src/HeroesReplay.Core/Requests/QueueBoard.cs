@@ -17,12 +17,15 @@ public static class QueueBoard
     /// <summary>
     /// The waiting requests, the how-to, and under "Could not play" the requests in
     /// <c>failed</c>: given up after they were queued (#351), newest first, with their reason.
+    /// <paramref name="ratingPrediction"/> is how long the Blind Rating prediction stays open,
+    /// or null when predictions are off (#423).
     /// </summary>
     public static void Write(
         string path,
         IReadOnlyList<RewardQueueItem> items,
         IReadOnlyList<SupportedReward> rewards = null,
-        IReadOnlyList<RewardQueueItem> failed = null
+        IReadOnlyList<RewardQueueItem> failed = null,
+        TimeSpan? ratingPrediction = null
     )
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -59,7 +62,7 @@ public static class QueueBoard
             .Append(count)
             .Append(count == 1 ? " request" : " requests")
             .Append(" waiting</p>");
-        AppendHowTo(html, rewards);
+        AppendHowTo(html, rewards, ratingPrediction);
         if (count == 0)
         {
             html.Append("<p class=\"lead\">The queue is empty.</p>");
@@ -152,7 +155,11 @@ public static class QueueBoard
         html.Append("</ul>");
     }
 
-    private static void AppendHowTo(StringBuilder html, IReadOnlyList<SupportedReward> rewards)
+    private static void AppendHowTo(
+        StringBuilder html,
+        IReadOnlyList<SupportedReward> rewards,
+        TimeSpan? ratingPrediction
+    )
     {
         List<SupportedReward> known =
             rewards?.Where(reward => !string.IsNullOrWhiteSpace(reward?.Title)).ToList()
@@ -196,19 +203,13 @@ public static class QueueBoard
                 .Append(" also ask for a rank.");
         }
 
-        if (blind != null)
-        {
-            html.Append(' ')
-                .Append(Quote(blind))
-                .Append(" plays a random Storm League match and hides its rank until the end.");
-        }
-
         if (randoms.Count == 0 && mapExample == null && rankExample == null && blind == null)
         {
             html.Append(" Pick a random match, a map, or a rank.");
         }
 
         html.Append("</p>");
+        AppendBlind(html, blind, ratingPrediction);
 
         List<SupportedReward> replayIds = known
             .Where(reward => reward.RewardType == RewardType.ReplayId)
@@ -241,6 +242,50 @@ public static class QueueBoard
             .Append(
                 ". Send it before that match starts. The camera stays on that player's hero while they are alive and uses the normal view while they are dead.</p>"
             );
+    }
+
+    /// <summary>
+    /// What Blind Rating is (#411, #423): a random Storm League match whose rank stays off the
+    /// stream, and how viewers guess it.
+    /// </summary>
+    private static void AppendBlind(StringBuilder html, string blind, TimeSpan? ratingPrediction)
+    {
+        if (blind == null)
+        {
+            return;
+        }
+
+        html.Append("<p class=\"help\"><span class=\"label\">Play it blind.</span> ")
+            .Append(Quote(blind))
+            .Append(
+                " queues a random Storm League match with its rank hidden: no rank badge, tier or MMR on stream."
+            );
+        if (ratingPrediction is TimeSpan window && window > TimeSpan.Zero)
+        {
+            html.Append(
+                    " Chat guesses the rating, Bronze to Master, in a Twitch prediction open for the first "
+                )
+                .Append(Duration(window))
+                .Append(" of the match.");
+        }
+        else
+        {
+            html.Append(" Guess the rating, Bronze to Master, in chat.");
+        }
+
+        html.Append(" The rank is revealed when the match ends.</p>");
+    }
+
+    private static string Duration(TimeSpan window)
+    {
+        int minutes = (int)Math.Round(window.TotalMinutes);
+        if (minutes >= 1)
+        {
+            return minutes == 1 ? "minute" : minutes + " minutes";
+        }
+
+        int seconds = Math.Max(1, (int)Math.Round(window.TotalSeconds));
+        return seconds + " seconds";
     }
 
     private static bool IsRankReward(SupportedReward reward)

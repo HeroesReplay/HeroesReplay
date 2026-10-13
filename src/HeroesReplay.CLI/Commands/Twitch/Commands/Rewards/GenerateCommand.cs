@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -31,6 +32,9 @@ public class GenerateCommand : Command
         using IServiceScope scope = provider.CreateScope();
         IGameData gameData = scope.ServiceProvider.GetRequiredService<IGameData>();
         await gameData.LoadDataAsync();
+        await scope
+            .ServiceProvider.GetRequiredService<HeroesProfileMapRefresh>()
+            .RefreshIfDueAsync(cancellationToken);
         ITwitchRewardsManager rewardsManager =
             scope.ServiceProvider.GetRequiredService<ITwitchRewardsManager>();
         await rewardsManager.GenerateAsync();

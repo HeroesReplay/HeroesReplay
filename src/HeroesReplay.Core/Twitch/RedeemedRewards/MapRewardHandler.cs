@@ -62,10 +62,10 @@ public class MapRewardHandler : IRewardHandler
                         rewardRequestFactory.Create(reward, args)
                     );
                     string queued = RewardRedemptionStatus.ForQueue(response);
-                    if (queued != null)
+                    if (queued != null && !response.Duplicate)
                     {
                         logger.LogInformation(
-                            "Redemption {RedemptionId} is {Status}. Twitch was not called.",
+                            "Redemption {RedemptionId} was not queued ({Status}). Its cancel is recorded, and twitch connect returns the points.",
                             args.RedemptionId,
                             queued
                         );

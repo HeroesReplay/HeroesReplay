@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Twitch.Predictions;
 using HeroesReplay.Core.Twitch.Rewards;
@@ -158,7 +159,8 @@ public static class ObsPages
         try
         {
             var rewards = new SupportedRewardsHolder(
-                new GameData(NullLogger<GameData>.Instance, settings)
+                new GameData(NullLogger<GameData>.Instance, settings),
+                StormLeagueRotation.FromCache(settings)
             );
             string failedFileName = settings.Twitch?.FailedFileName;
             IReadOnlyList<RewardQueueItem> failed = string.IsNullOrWhiteSpace(failedFileName)
@@ -171,7 +173,8 @@ public static class ObsPages
                 Path.Combine(data, QueueBoard.FileName),
                 items,
                 rewards.Rewards,
-                failed
+                failed,
+                RatingPrediction.WindowFor(settings)
             );
             return new ObsPageResult(
                 QueueBoard.FileName,

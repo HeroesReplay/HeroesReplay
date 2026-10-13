@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Core.Twitch.Predictions;
 using HeroesReplay.Core.Twitch.Rewards;
 using Microsoft.Extensions.Logging;
 
@@ -78,7 +79,13 @@ public class RequestQueue : IRequestQueue, IDisposable
         boardPath = Path.Combine(settings.Location.DataDirectory, QueueBoard.FileName);
         try
         {
-            QueueBoard.Write(boardPath, ReadItems(queueFile), Rewards(), Failures());
+            QueueBoard.Write(
+                boardPath,
+                ReadItems(queueFile),
+                Rewards(),
+                Failures(),
+                RatingPrediction.WindowFor(settings)
+            );
         }
         catch (Exception e)
         {
@@ -130,9 +137,11 @@ public class RequestQueue : IRequestQueue, IDisposable
         catch (Exception e)
         {
             logger.LogError(e, "Could not queue request");
-            return new RewardResponse(
-                success: false,
-                message: "there was an unexpected error with your request."
+            return Unqueued(
+                request,
+                null,
+                "there was an unexpected error with your request.",
+                remember: false
             );
         }
     }
@@ -371,19 +380,19 @@ public class RequestQueue : IRequestQueue, IDisposable
             .ConfigureAwait(false);
         if (replay == null)
         {
-            RememberFailure(new RewardQueueItem(request, replay));
-            return new RewardResponse(
-                success: false,
-                message: $"could not find replay with id {request.ReplayId.Value}"
+            return Unqueued(
+                request,
+                null,
+                $"could not find replay with id {request.ReplayId.Value}."
             );
         }
 
         if (replay.Deleted is > 0 || replay.Downloadable == false)
         {
-            RememberFailure(new RewardQueueItem(request, replay));
-            return new RewardResponse(
-                success: false,
-                message: $"the raw file for replay id {request.ReplayId.Value} is no longer available."
+            return Unqueued(
+                request,
+                replay,
+                $"the raw file for replay id {request.ReplayId.Value} is no longer available."
             );
         }
 
@@ -395,14 +404,14 @@ public class RequestQueue : IRequestQueue, IDisposable
             )
         )
         {
-            RememberFailure(new RewardQueueItem(request, replay));
             string floor = settings.Spectate?.MinimumGameVersion;
             string required = string.IsNullOrWhiteSpace(floor)
                 ? "a supported client"
                 : $"{floor} or newer";
-            return new RewardResponse(
-                success: false,
-                message: $"replay {request.ReplayId.Value} is client {replay.GameVersion}. We only play {required}. Your points were spent."
+            return Unqueued(
+                request,
+                replay,
+                $"replay {request.ReplayId.Value} is client {replay.GameVersion}. We only play {required}."
             );
         }
 
@@ -429,9 +438,11 @@ public class RequestQueue : IRequestQueue, IDisposable
 
         if (position < 0)
         {
-            return new RewardResponse(
-                success: false,
-                message: "there was an unexpected error with your request."
+            return Unqueued(
+                request,
+                null,
+                "there was an unexpected error with your request.",
+                remember: false
             );
         }
 
@@ -501,18 +512,21 @@ public class RequestQueue : IRequestQueue, IDisposable
 
         if (position < 0)
         {
-            return new RewardResponse(
-                success: false,
-                message: "there was an unexpected error with your request."
+            return Unqueued(
+                request,
+                null,
+                "there was an unexpected error with your request.",
+                remember: false
             );
         }
 
         if (chosen == null)
         {
-            RememberFailure(new RewardQueueItem(request, null));
-            return new RewardResponse(
-                success: false,
-                message: "I couldn't queue a game for that reward. Every recent match for it was already played, already waiting, or from an older patch. Your points were spent. Redeem ReplayId and paste a Heroes Profile replay number to request one specific game."
+            return Unqueued(
+                request,
+                null,
+                "I couldn't queue a game for that reward. Every recent match for it was already played, already waiting, or from an older patch.",
+                tip: "Redeem ReplayId and paste a Heroes Profile replay number to request one specific game."
             );
         }
 
@@ -550,6 +564,52 @@ public class RequestQueue : IRequestQueue, IDisposable
             },
             null
         );
+    }
+
+    /// <summary>
+    /// A redemption that was not queued (#425): it goes to the failed list (unless
+    /// <paramref name="remember"/> is false) and gets its points back. Like the download role,
+    /// the queue does not call Twitch: it records a cancel in
+    /// <c>Data\redemption-dispositions.txt</c>, and <c>twitch connect</c> sends it
+    /// (<see cref="RedemptionFulfiller"/>). Before #425 these redemptions stayed UNFULFILLED,
+    /// so the viewer's points were spent. A request with no redemption has no points to return.
+    /// </summary>
+    private RewardResponse Unqueued(
+        RewardRequest request,
+        HeroesProfileReplay replay,
+        string reason,
+        string tip = null,
+        bool remember = true
+    )
+    {
+        if (remember)
+        {
+            RememberFailure(new RewardQueueItem(request, replay));
+        }
+
+        bool refund = request?.RedemptionId is Guid id && id != Guid.Empty;
+        if (refund)
+        {
+            RedemptionDispositionLog.Append(
+                Path.Combine(settings.Location.DataDirectory, RedemptionDispositionLog.FileName),
+                replay?.Id ?? request.ReplayId,
+                request,
+                RedemptionEnd.Cancel
+            );
+        }
+
+        string message = reason;
+        if (refund)
+        {
+            message += " Your points will be returned.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(tip))
+        {
+            message += " " + tip;
+        }
+
+        return new RewardResponse(success: false, message: message);
     }
 
     private void RememberFailure(RewardQueueItem item)
@@ -592,7 +652,13 @@ public class RequestQueue : IRequestQueue, IDisposable
     private void SaveQueue(List<RewardQueueItem> items)
     {
         WriteItems(queueFile, items);
-        QueueBoard.Write(boardPath, items, Rewards(), Failures());
+        QueueBoard.Write(
+            boardPath,
+            items,
+            Rewards(),
+            Failures(),
+            RatingPrediction.WindowFor(settings)
+        );
     }
 
     /// <summary>The queue page's recent failures. The failed file is read under its own lock.</summary>

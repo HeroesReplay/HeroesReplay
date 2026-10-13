@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Twitch.Rewards;
 using TwitchLib.PubSub.Events;
@@ -103,16 +104,20 @@ public class SupportedRewardsHolderTests
         Assert.Equal(GameType.ARAM, aram.Mode);
     }
 
+    /// <summary>
+    /// #425: Warhead Junction is out of the Storm League pool in the shipped catalog's fallback,
+    /// so it has Quick Match rewards and its Storm League rewards are retired.
+    /// </summary>
     [Fact]
-    public void LiveCatalog_AcceptsRankQuickMatchForWarheadJunction()
+    public void LiveCatalog_WarheadJunctionIsAQuickMatchMap()
     {
         var holder = new SupportedRewardsHolder(new MapOnlyGameData(LoadCatalog().ToArray()));
 
-        Assert.DoesNotContain(
-            holder.Rewards,
-            reward => reward.Title == "Warhead Junction (Rank QM)"
-        );
-        Assert.Contains(holder.Rewards, reward => reward.Title == "Warhead Junction (SL)");
+        Assert.Contains(holder.Rewards, reward => reward.Title == "Warhead Junction (QM)");
+        Assert.Contains(holder.Rewards, reward => reward.Title == "Warhead Junction (Rank QM)");
+        Assert.DoesNotContain(holder.Rewards, reward => reward.Title == "Warhead Junction (SL)");
+        Assert.Contains("Warhead Junction (SL)", holder.RetiredTitles);
+        Assert.Contains("Warhead Junction (Rank SL)", holder.RetiredTitles);
         Assert.True(
             holder.TryGetReward(
                 new OnRewardRedeemedArgs { RewardTitle = "Warhead Junction (Rank QM)" },
@@ -138,7 +143,10 @@ public class SupportedRewardsHolderTests
         Assert.Equal(GameType.StormLeague, blind.Mode);
         Assert.Null(blind.Map);
         Assert.False(blind.IsUserInputRequired);
-        Assert.Null(blind.Prompt);
+        Assert.Equal(
+            "Queues a random recent Storm League replay with its rank hidden. Guess the rating, Bronze to Master, before it is revealed at the end of the match.",
+            blind.Prompt
+        );
         Assert.True(
             holder.TryGetReward(
                 new OnRewardRedeemedArgs { RewardTitle = "Blind Rating" },
@@ -195,6 +203,59 @@ public class SupportedRewardsHolderTests
         }
 
         return maps;
+    }
+
+    /// <summary>
+    /// #423: every reward the sync writes to the channel says what it does, within Twitch's
+    /// prompt limit, for every map in the shipped catalog.
+    /// </summary>
+    [Fact]
+    public void Rewards_EveryCatalogRewardHasADescriptionTwitchAccepts()
+    {
+        var holder = new SupportedRewardsHolder(new MapOnlyGameData(LoadCatalog().ToArray()));
+
+        Assert.NotEmpty(holder.Rewards);
+        foreach (SupportedReward reward in holder.Rewards)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(reward.Prompt), reward.Title);
+            Assert.True(
+                reward.Prompt.Length <= RewardDescription.MaxLength,
+                $"{reward.Title}: {reward.Prompt.Length} characters"
+            );
+            Assert.StartsWith("Queues ", reward.Prompt);
+        }
+    }
+
+    [Fact]
+    public void Rewards_DescriptionsSayWhatEachKindQueues()
+    {
+        var holder = new SupportedRewardsHolder(
+            new MapOnlyGameData(
+                new Map("Cursed Hollow", "CursedHollow", true, "standard", true),
+                new Map("Silver City", "SilverCity", false, "ARAM", true)
+            )
+        );
+
+        string Prompt(string title) =>
+            holder.Rewards.Single(reward => reward.Title == title).Prompt;
+
+        Assert.Equal(
+            "Queues a random recent Quick Match replay to watch on stream.",
+            Prompt("Random (QM)")
+        );
+        Assert.Equal(
+            "Queues a random recent ARAM replay on Silver City to watch on stream.",
+            Prompt("Silver City (ARAM)")
+        );
+        Assert.Equal(
+            "Queues a recent Storm League replay on Cursed Hollow at the rank you enter: Bronze, Silver, Gold, Platinum, Diamond, Master (no division).",
+            Prompt("Cursed Hollow (Rank SL)")
+        );
+        Assert.Equal(
+            "Queues the replay you choose. " + RewardDescription.ReplayIdInput,
+            Prompt("ReplayId")
+        );
+        Assert.EndsWith("Recorded and uploaded to YouTube.", Prompt("ReplayId + YouTube"));
     }
 
     [Fact]
@@ -260,6 +321,72 @@ public class SupportedRewardsHolderTests
         };
 
         Assert.Equal(expected, JsonSerializer.Deserialize<RewardType>(json, options));
+    }
+
+    /// <summary>
+    /// #425: the Storm League pool, not the catalog flag, decides which maps get Storm League
+    /// rewards. A map out of the pool gets Quick Match rewards instead, and its Storm League
+    /// rewards are retired so the sync deletes them from the channel.
+    /// </summary>
+    [Fact]
+    public void Rotation_MapsOutOfThePoolGetQuickMatchRewards_AndRetireTheirStormLeagueOnes()
+    {
+        var holder = new SupportedRewardsHolder(
+            new MapOnlyGameData(
+                new Map("Cursed Hollow", "CursedHollow", false, "standard", true),
+                new Map("Hanamura Temple", "Hanamura", true, "standard", true),
+                new Map("Silver City", "SilverCity", false, "ARAM", true)
+            ),
+            new FixedRotation("Cursed Hollow")
+        );
+        List<string> titles = holder.Rewards.Select(reward => reward.Title).ToList();
+
+        Assert.Contains("Cursed Hollow (SL)", titles);
+        Assert.Contains("Cursed Hollow (Rank SL)", titles);
+        Assert.DoesNotContain("Cursed Hollow (QM)", titles);
+        Assert.Contains("Hanamura Temple (QM)", titles);
+        Assert.Contains("Hanamura Temple (Rank QM)", titles);
+        Assert.DoesNotContain("Hanamura Temple (SL)", titles);
+        Assert.DoesNotContain("Hanamura Temple (Rank SL)", titles);
+        Assert.Contains("Silver City (ARAM)", titles);
+        Assert.Equal(
+            new[] { "Hanamura Temple (SL)", "Hanamura Temple (Rank SL)" },
+            holder.RetiredTitles
+        );
+        Assert.Equal("pool: Cursed Hollow", holder.PoolSummary);
+    }
+
+    [Fact]
+    public void Rotation_WithoutOne_TheCatalogFlagDecides()
+    {
+        var holder = new SupportedRewardsHolder(
+            new MapOnlyGameData(
+                new Map("Cursed Hollow", "CursedHollow", true, "standard", true),
+                new Map("Hanamura Temple", "Hanamura", false, "standard", true)
+            )
+        );
+
+        Assert.Contains(holder.Rewards, reward => reward.Title == "Cursed Hollow (SL)");
+        Assert.Contains(holder.Rewards, reward => reward.Title == "Hanamura Temple (QM)");
+        Assert.Equal(
+            new[] { "Hanamura Temple (SL)", "Hanamura Temple (Rank SL)" },
+            holder.RetiredTitles
+        );
+    }
+
+    private sealed class FixedRotation : IStormLeagueRotation
+    {
+        private readonly HashSet<string> pool;
+
+        public FixedRotation(params string[] maps)
+        {
+            pool = new HashSet<string>(maps, StringComparer.Ordinal);
+        }
+
+        public bool Contains(Map map) => map != null && pool.Contains(map.Name);
+
+        public string Describe(IEnumerable<Map> catalog) =>
+            "pool: " + string.Join(", ", pool.OrderBy(name => name, StringComparer.Ordinal));
     }
 
     private sealed class MapOnlyGameData : IGameData

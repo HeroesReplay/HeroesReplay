@@ -31,6 +31,13 @@ public class HeroesProfileApiSettings
     public string StandardCacheDirectoryName { get; set; }
     public string RequestsCacheDirectoryName { get; set; }
 
+    /// <summary>
+    /// How long the saved <c>/maps</c> list (<c>Data\HeroesProfile\maps.json</c>) is reused before
+    /// a reward sync fetches it again (#425). <c>/maps</c> allows 1,000,000 calls a week (measured
+    /// 2026-10-13). Zero turns the fetch off; a saved list is still read.
+    /// </summary>
+    public TimeSpan MapsRefreshInterval { get; set; } = TimeSpan.FromDays(1);
+
     /// <summary>The per-patch hero statistics behind YouTube title hooks.</summary>
     public HeroStatsSettings HeroStats { get; set; } = new HeroStatsSettings();
 
@@ -64,6 +71,15 @@ public class HeroesProfileApiSettings
     }
 
     private static bool IsStormLeague(string gameType) => GameTypesEqual("Storm League", gameType);
+
+    /// <summary>
+    /// True when <paramref name="actual"/> is the game type <paramref name="expected"/> names
+    /// ("Storm League" and "sl" are the same). False when either is empty.
+    /// </summary>
+    public static bool SameGameType(string expected, string actual) =>
+        !string.IsNullOrWhiteSpace(expected)
+        && !string.IsNullOrWhiteSpace(actual)
+        && GameTypesEqual(expected, actual);
 
     private static bool GameTypesEqual(string expected, string actual)
     {
