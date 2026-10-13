@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -68,10 +69,38 @@ public class QueueBoardTests
             html
         );
         Assert.Contains(
-            "<span class=\"label\">Blind Rating</span> plays a random Storm League match and hides its rank until the end.",
+            "<span class=\"label\">Play it blind.</span> <span class=\"label\">Blind Rating</span> queues a random Storm League match with its rank hidden: no rank badge, tier or MMR on stream.",
             html
         );
+        Assert.Contains("Guess the rating, Bronze to Master, in chat.", html);
+        Assert.Contains("The rank is revealed when the match ends.", html);
+        Assert.DoesNotContain("Twitch prediction", html);
         Assert.DoesNotContain("Pick a random match, a map, or a rank.", html);
+    }
+
+    /// <summary>#423: with predictions on, the page says how long viewers can guess.</summary>
+    [Fact]
+    public void Write_BlindRatingWithPredictions_SaysHowLongThePredictionIsOpen()
+    {
+        var holder = new SupportedRewardsHolder(
+            new MapOnlyGameData(new Map("Cursed Hollow", "CursedHollow", true, "standard", true))
+        );
+
+        string html = Render(null, holder.Rewards, ratingPrediction: TimeSpan.FromMinutes(8));
+
+        Assert.Contains(
+            "Chat guesses the rating, Bronze to Master, in a Twitch prediction open for the first 8 minutes of the match. The rank is revealed when the match ends.",
+            html
+        );
+        Assert.DoesNotContain("in chat.", html);
+    }
+
+    [Fact]
+    public void Write_NoBlindReward_HasNoBlindParagraph()
+    {
+        string html = Render(null, ratingPrediction: TimeSpan.FromMinutes(8));
+
+        Assert.DoesNotContain("Play it blind.", html);
     }
 
     /// <summary>#411: a queued Blind Rating replay does not show its rank on the queue page.</summary>
@@ -188,13 +217,14 @@ public class QueueBoardTests
     private static string Render(
         IReadOnlyList<RewardQueueItem> items,
         IReadOnlyList<SupportedReward> rewards = null,
-        IReadOnlyList<RewardQueueItem> failed = null
+        IReadOnlyList<RewardQueueItem> failed = null,
+        TimeSpan? ratingPrediction = null
     )
     {
         string path = Path.Combine(Path.GetTempPath(), "hr-queue-" + Path.GetRandomFileName());
         try
         {
-            QueueBoard.Write(path, items, rewards, failed);
+            QueueBoard.Write(path, items, rewards, failed, ratingPrediction);
             return File.ReadAllText(path);
         }
         finally

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Spectating.Capture;
 
 namespace HeroesReplay.Core.Twitch.Predictions;
 
@@ -63,6 +65,17 @@ public static class RatingPrediction
 
         return null;
     }
+
+    /// <summary>
+    /// How long the rating prediction stays open on this install, or null when predictions are
+    /// off (<c>Twitch:EnablePredictions</c> false, or capture none), as in
+    /// <see cref="TwitchMatchPredictionService"/>. The queue page says so (#423).
+    /// </summary>
+    public static TimeSpan? WindowFor(AppSettings settings) =>
+        settings?.Twitch is { EnablePredictions: true } twitch
+        && settings.Capture?.Method != CaptureMethod.None
+            ? twitch.RatingPredictionWindow
+            : null;
 
     /// <summary>A Blind Rating replay with a known rank gets the rating prediction.</summary>
     public static bool Applies(LoadedReplay replay) =>

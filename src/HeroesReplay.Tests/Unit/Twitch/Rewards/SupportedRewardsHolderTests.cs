@@ -138,7 +138,10 @@ public class SupportedRewardsHolderTests
         Assert.Equal(GameType.StormLeague, blind.Mode);
         Assert.Null(blind.Map);
         Assert.False(blind.IsUserInputRequired);
-        Assert.Null(blind.Prompt);
+        Assert.Equal(
+            "Queues a random recent Storm League replay with its rank hidden. Guess the rating, Bronze to Master, before it is revealed at the end of the match.",
+            blind.Prompt
+        );
         Assert.True(
             holder.TryGetReward(
                 new OnRewardRedeemedArgs { RewardTitle = "Blind Rating" },
@@ -195,6 +198,62 @@ public class SupportedRewardsHolderTests
         }
 
         return maps;
+    }
+
+    /// <summary>
+    /// #423: every reward the sync writes to the channel says what it does, within Twitch's
+    /// prompt limit, for every map in the shipped catalog.
+    /// </summary>
+    [Fact]
+    public void Rewards_EveryCatalogRewardHasADescriptionTwitchAccepts()
+    {
+        var holder = new SupportedRewardsHolder(new MapOnlyGameData(LoadCatalog().ToArray()));
+
+        Assert.NotEmpty(holder.Rewards);
+        foreach (SupportedReward reward in holder.Rewards)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(reward.Prompt), reward.Title);
+            Assert.True(
+                reward.Prompt.Length <= RewardDescription.MaxLength,
+                $"{reward.Title}: {reward.Prompt.Length} characters"
+            );
+            Assert.StartsWith("Queues ", reward.Prompt);
+        }
+    }
+
+    [Fact]
+    public void Rewards_DescriptionsSayWhatEachKindQueues()
+    {
+        var holder = new SupportedRewardsHolder(
+            new MapOnlyGameData(
+                new Map("Cursed Hollow", "CursedHollow", true, "standard", true),
+                new Map("Silver City", "SilverCity", false, "ARAM", true)
+            )
+        );
+
+        string Prompt(string title) =>
+            holder.Rewards.Single(reward => reward.Title == title).Prompt;
+
+        Assert.Equal(
+            "Queues a random recent Quick Match replay to watch on stream.",
+            Prompt("Random (QM)")
+        );
+        Assert.Equal(
+            "Queues a random recent ARAM replay on Silver City to watch on stream.",
+            Prompt("Silver City (ARAM)")
+        );
+        Assert.Equal(
+            "Queues a recent Storm League replay on Cursed Hollow at the rank you enter: Bronze, Silver, Gold, Platinum, Diamond, Master (no division).",
+            Prompt("Cursed Hollow (Rank SL)")
+        );
+        Assert.Equal(
+            "Queues the replay you choose. " + RewardDescription.ReplayIdInput,
+            Prompt("ReplayId")
+        );
+        Assert.EndsWith(
+            "Recorded and uploaded to YouTube.",
+            Prompt("ReplayId + YouTube")
+        );
     }
 
     [Fact]
