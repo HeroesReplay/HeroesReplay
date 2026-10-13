@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch;
@@ -66,6 +67,11 @@ public class ConnectCommand : Command
         {
             try
             {
+                // The Storm League pool reads Heroes Profile's map list (#425). It is fetched
+                // when due, before the rewards resolve and build the pool.
+                await scope
+                    .ServiceProvider.GetRequiredService<HeroesProfileMapRefresh>()
+                    .RefreshIfDueAsync(stop.Token);
                 ITwitchRewardsManager rewards =
                     scope.ServiceProvider.GetRequiredService<ITwitchRewardsManager>();
                 await rewards.CreateOrUpdateAsync();

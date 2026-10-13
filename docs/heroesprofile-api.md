@@ -33,8 +33,13 @@ Hand-written partials of `HeroesProfileClient` sit next to `Generated/` and use 
 | Hero statistics: every hero on every map | `GET /heroes/stats?timeframe_type=major&timeframe=2.57&game_type=sl&group_by_map=true` (one object per map, a `data` row per hero: `hero_id`, `wins`, `games_played`, `ban_rate`) |
 | Hero statistics: one hero against and with each other | `GET /heroes/matchups?timeframe_type=major&timeframe=2.57&game_type=sl&hero=Valla` (`enemy[]` and `ally[]`, each with `hero.attribute_id`, `wins`, `games_played`) |
 | A job's result | `GET /jobs/{id}` (202 still running, 200 the result) |
+| Map list (Storm League pool check, #425) | `GET /maps` (`name`, `type`, `ranked_rotation`, `playable`) |
 
 `region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable`. Skip when `downloadable` is false or `deleted` is non-zero.
+
+Measured on 2026-10-13 (`x-hp-quota-limit`, rolling 7 days): `/replays` allows 60,000 calls a week and `/maps` 1,000,000. The `/replays` list is in replay-id order, which is upload order, not play order: old games are still being uploaded (replay 65960001 is a 2.55.5 game from July 2024), so a filter on `game_version` is what keeps a sample to the current patch.
+
+`/maps` `ranked_rotation` is maintained by hand and lags. On 2026-10-13 it marked every standard map 1 except Blackheart's Bay, while Heroes Profile's own replays had no Storm League game on Hanamura Temple or Warhead Junction since 2.55.17.97605 (20 Jul 2026). `StormLeagueRotation` uses only its 0, and only when too few Storm League replays are cached to see the pool.
 
 ### Retries and rejected downloads
 

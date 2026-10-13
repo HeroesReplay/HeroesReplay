@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.HeroesData.Rotation;
@@ -18,13 +19,21 @@ public interface IStormLeagueRotation
 }
 
 /// <summary>
-/// The Storm League map pool, read from the replays the download role already keeps in
-/// <c>Data\Standard</c> (#425). Blizzard rotates maps out of Storm League each season, and the
+/// The Storm League map pool (#425). Blizzard rotates maps out of Storm League each season.
+/// <list type="bullet">
+/// <item>The replays the download role already keeps in <c>Data\Standard</c> decide it. The
 /// download takes Heroes Profile's Storm League list with no map filter, so the newest
-/// <see cref="SampleSize"/> of them show the pool. A map counts when at least
-/// <see cref="MinimumGames"/> of them are on it. With fewer than <see cref="MinimumSample"/>
-/// Storm League replays cached (a new install, a dev box), the catalog's
-/// <c>Maps:Catalog:RankedRotation</c> decides instead.
+/// <see cref="SampleSize"/> of them show what is played. A map counts when at least
+/// <see cref="MinimumGames"/> of them are on it.</item>
+/// <item>With fewer than <see cref="MinimumSample"/> Storm League replays cached (a new install,
+/// a dev box), the catalog's <c>Maps:Catalog:RankedRotation</c> decides, less any map Heroes
+/// Profile's <c>/maps</c> <c>ranked_rotation</c> (<c>Data\HeroesProfile\maps.json</c>) marks
+/// 0.</item>
+/// </list>
+/// Heroes Profile's flag never adds a map, and never overrides the cached games: it lagged a
+/// season. On 2026-10-13 it marked Hanamura Temple and Warhead Junction ranked, and Heroes
+/// Profile's own replays have no Storm League game on either since build 2.55.17.97605 (20 Jul
+/// 2026). <see cref="Describe"/> names every map where it disagrees.
 /// </summary>
 public sealed class StormLeagueRotation : IStormLeagueRotation
 {
@@ -36,11 +45,30 @@ public sealed class StormLeagueRotation : IStormLeagueRotation
 
     private readonly HashSet<string> pool;
     private readonly int sampled;
+    private readonly HeroesProfileMapList heroesProfile;
+    private readonly Dictionary<string, bool> flags;
 
-    private StormLeagueRotation(HashSet<string> pool, int sampled)
+    private StormLeagueRotation(
+        HashSet<string> pool,
+        int sampled,
+        HeroesProfileMapList heroesProfile = null
+    )
     {
         this.pool = pool;
         this.sampled = sampled;
+        this.heroesProfile = heroesProfile;
+        if (heroesProfile != null)
+        {
+            flags = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            foreach (HeroesProfileMap map in heroesProfile.Maps)
+            {
+                string key = Key(map.Name);
+                if (key != null)
+                {
+                    flags[key] = map.RankedRotation;
+                }
+            }
+        }
     }
 
     /// <summary>The catalog's <c>RankedRotation</c> flags, with no cached replays read.</summary>
@@ -49,7 +77,20 @@ public sealed class StormLeagueRotation : IStormLeagueRotation
     /// <summary>True when the pool came from cached replays, not the catalog.</summary>
     public bool Observed => pool != null;
 
-    public static StormLeagueRotation FromCache(AppSettings settings)
+    /// <summary>True when Heroes Profile's <c>ranked_rotation</c> flags were read.</summary>
+    public bool Flagged => flags != null;
+
+    /// <summary>
+    /// The pool from the cached replays and the saved Heroes Profile map list. It reads files
+    /// only; <see cref="HeroesProfileMapRefresh"/> fetches the list before a reward sync.
+    /// </summary>
+    public static StormLeagueRotation FromCache(AppSettings settings) =>
+        FromReplayCache(settings).With(HeroesProfileMapStore.For(settings).Read());
+
+    /// <summary>This pool with Heroes Profile's flags from <paramref name="maps"/> (null: none).</summary>
+    public StormLeagueRotation With(HeroesProfileMapList maps) => new(pool, sampled, maps);
+
+    private static StormLeagueRotation FromReplayCache(AppSettings settings)
     {
         string directory =
             string.IsNullOrWhiteSpace(settings?.Location?.DataDirectory)
@@ -107,7 +148,13 @@ public sealed class StormLeagueRotation : IStormLeagueRotation
             return false;
         }
 
-        return pool == null ? map.RankedRotation : pool.Contains(Key(map.Name));
+        string key = Key(map.Name);
+        if (pool != null)
+        {
+            return pool.Contains(key);
+        }
+
+        return map.RankedRotation && Flag(key) != false;
     }
 
     public string Describe(IEnumerable<Map> catalog)
@@ -115,16 +162,48 @@ public sealed class StormLeagueRotation : IStormLeagueRotation
         List<Map> standard = (catalog ?? Enumerable.Empty<Map>())
             .Where(map => map != null && map.Playable && map.Type == "standard")
             .ToList();
-        string source = Observed
-            ? $"the newest {sampled} cached Storm League replays"
-            : "Maps:Catalog RankedRotation (too few cached Storm League replays)";
-        string inPool = string.Join(", ", standard.Where(Contains).Select(map => map.Name));
-        string outOfPool = string.Join(
-            ", ",
-            standard.Where(map => !Contains(map)).Select(map => map.Name)
+        string flagSource = Flagged
+            ? $"Heroes Profile ranked_rotation ({heroesProfile.FetchedAtUtc:yyyy-MM-dd})"
+            : null;
+        string source = (Flagged, Observed) switch
+        {
+            (_, true) => $"the newest {sampled} cached Storm League replays",
+            (true, false) =>
+                $"Maps:Catalog RankedRotation less the maps {flagSource} marks 0 (too few cached Storm League replays)",
+            _ => "Maps:Catalog RankedRotation (too few cached Storm League replays)",
+        };
+        string inPool = Names(standard.Where(Contains));
+        string outOfPool = Names(standard.Where(map => !Contains(map)));
+        string line =
+            $"Storm League map pool from {source}: {(inPool.Length == 0 ? "none" : inPool)}. Not in Storm League: {(outOfPool.Length == 0 ? "none" : outOfPool)}.";
+
+        // Heroes Profile's flag lagged a season (Hanamura Temple, Warhead Junction in 2026-10), so
+        // it only takes part as a check. Name every map where it disagrees with the pool.
+        string ranked = Names(standard.Where(map => Flag(Key(map.Name)) == true && !Contains(map)));
+        string unranked = Names(
+            standard.Where(map => Flag(Key(map.Name)) == false && Contains(map))
         );
-        return $"Storm League map pool from {source}: {inPool}. Not in Storm League: {(outOfPool.Length == 0 ? "none" : outOfPool)}.";
+        if (ranked.Length > 0)
+        {
+            line += Observed
+                ? $" Heroes Profile marks {ranked} ranked, but no cached Storm League replay is on them."
+                : $" Heroes Profile marks {ranked} ranked, but Maps:Catalog does not.";
+        }
+
+        if (unranked.Length > 0)
+        {
+            line +=
+                $" Heroes Profile marks {unranked} not ranked, but cached Storm League replays are on them.";
+        }
+
+        return line;
     }
+
+    private static string Names(IEnumerable<Map> maps) =>
+        string.Join(", ", maps.Select(map => map.Name));
+
+    private bool? Flag(string key) =>
+        flags != null && key != null && flags.TryGetValue(key, out bool ranked) ? ranked : null;
 
     private static (int Id, string Map)? TryRead(string fileName)
     {

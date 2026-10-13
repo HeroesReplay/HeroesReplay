@@ -112,6 +112,193 @@ public class StormLeagueRotationTests
     }
 
     [Fact]
+    public void HeroesProfileZero_DoesNotOverrideCachedGames()
+    {
+        // The flag lagged a season in 2026-10. A map back in Storm League keeps its rewards
+        // while Heroes Profile still marks it 0.
+        StormLeagueRotation rotation = StormLeagueRotation
+            .FromFileNames(SeasonOf(Pool, firstId: 65_000_000, perMap: 25))
+            .With(Flags(("Cursed Hollow", 0), ("Sky Temple", 1)));
+
+        Assert.True(rotation.Contains(Cursed));
+        Assert.True(rotation.Contains(Standard("Sky Temple", ranked: false)));
+    }
+
+    [Fact]
+    public void TheStaleFlagOf2026_10_13_AddsNoMap_WithOrWithoutCachedReplays()
+    {
+        // Heroes Profile's /maps on 2026-10-13: every standard map 1 except Blackheart's Bay.
+        // Its own Storm League replays had no game on Hanamura Temple or Warhead Junction since
+        // 2.55.17.97605 (20 Jul 2026), and Maps:Catalog marks the three not ranked.
+        HeroesProfileMapList flags = Flags(
+            Pool.Select(name => (name, 1))
+                .Append(("Hanamura Temple", 1))
+                .Append(("Warhead Junction", 1))
+                .Append(("Blackheart's Bay", 0))
+                .ToArray()
+        );
+        Map[] retired =
+        {
+            Standard("Hanamura Temple", ranked: false),
+            Standard("Warhead Junction", ranked: false),
+            Standard("Blackheart's Bay", ranked: false),
+        };
+        Map haunted = Standard("Haunted Mines", ranked: true);
+
+        foreach (int perMap in new[] { 25, 2 })
+        {
+            StormLeagueRotation rotation = StormLeagueRotation
+                .FromFileNames(SeasonOf(Pool, firstId: 65_000_000, perMap: perMap))
+                .With(flags);
+
+            Assert.Equal(perMap == 25, rotation.Observed);
+            Assert.All(retired, map => Assert.False(rotation.Contains(map)));
+            Assert.True(rotation.Contains(haunted));
+        }
+    }
+
+    [Fact]
+    public void HeroesProfileOne_StillNeedsCachedStormLeagueGames()
+    {
+        // 2026-10: Heroes Profile flagged Hanamura Temple and Warhead Junction, and none of
+        // production's 1,265 Storm League downloads were on them.
+        StormLeagueRotation rotation = StormLeagueRotation
+            .FromFileNames(SeasonOf(Pool, firstId: 65_000_000, perMap: 25))
+            .With(
+                Flags(
+                    ("Hanamura Temple", 1),
+                    ("Warhead Junction", 1),
+                    ("Blackheart's Bay", 0),
+                    ("Cursed Hollow", 1)
+                )
+            );
+
+        Assert.False(rotation.Contains(Hanamura));
+        Assert.False(rotation.Contains(Standard("Warhead Junction", ranked: true)));
+        Assert.False(rotation.Contains(Standard("Blackheart's Bay", ranked: true)));
+        Assert.True(rotation.Contains(Cursed));
+    }
+
+    [Fact]
+    public void TooFewCachedReplays_TheCatalogDecides_LessHeroesProfileZeros()
+    {
+        StormLeagueRotation rotation = StormLeagueRotation
+            .FromFileNames(SeasonOf(Pool, firstId: 65_000_000, perMap: 8))
+            .With(Flags(("Hanamura Temple", 0), ("Cursed Hollow", 1)));
+
+        Assert.False(rotation.Observed);
+        Assert.True(rotation.Flagged);
+        // The catalog says ranked, Heroes Profile says 0: out.
+        Assert.False(rotation.Contains(Hanamura));
+        // Heroes Profile's 1 does not add a map the catalog leaves out.
+        Assert.False(rotation.Contains(Cursed));
+        // Heroes Profile does not list these, so the catalog flag decides.
+        Assert.True(rotation.Contains(Standard("Alterac Pass", ranked: true)));
+        Assert.False(rotation.Contains(Standard("Sky Temple", ranked: false)));
+    }
+
+    [Fact]
+    public void HeroesProfileNames_MatchTheCatalogNames()
+    {
+        StormLeagueRotation rotation = StormLeagueRotation.Catalog.With(
+            Flags(("Blackheart’s Bay", 0), ("  cursed hollow ", 0))
+        );
+
+        Assert.False(rotation.Contains(Standard("Blackheart's Bay", ranked: true)));
+        Assert.False(rotation.Contains(Standard("Cursed Hollow", ranked: true)));
+        Assert.True(rotation.Contains(Standard("Sky Temple", ranked: true)));
+        Assert.False(StormLeagueRotation.Catalog.Flagged);
+    }
+
+    [Fact]
+    public void Describe_BothSources_NamesWhereHeroesProfileDisagrees()
+    {
+        StormLeagueRotation rotation = StormLeagueRotation
+            .FromFileNames(SeasonOf(Pool, firstId: 65_000_000, perMap: 25))
+            .With(
+                Flags(
+                    ("Cursed Hollow", 1),
+                    ("Hanamura Temple", 1),
+                    ("Blackheart's Bay", 0),
+                    ("Sky Temple", 0)
+                )
+            );
+
+        string line = rotation.Describe(
+            new[]
+            {
+                Cursed,
+                Hanamura,
+                Standard("Blackheart's Bay", ranked: false),
+                Standard("Sky Temple", ranked: true),
+            }
+        );
+
+        Assert.Equal(
+            "Storm League map pool from the newest 300 cached Storm League replays: Cursed Hollow, Sky Temple. Not in Storm League: Hanamura Temple, Blackheart's Bay. Heroes Profile marks Hanamura Temple ranked, but no cached Storm League replay is on them. Heroes Profile marks Sky Temple not ranked, but cached Storm League replays are on them.",
+            line
+        );
+    }
+
+    [Fact]
+    public void Describe_TooFewCachedReplays_NamesTheCatalogAndHeroesProfile()
+    {
+        StormLeagueRotation rotation = StormLeagueRotation.Catalog.With(
+            Flags(("Hanamura Temple", 0), ("Warhead Junction", 1))
+        );
+
+        string line = rotation.Describe(
+            new[]
+            {
+                Standard("Alterac Pass", ranked: true),
+                Hanamura,
+                Standard("Warhead Junction", ranked: false),
+                Cursed,
+            }
+        );
+
+        Assert.Equal(
+            "Storm League map pool from Maps:Catalog RankedRotation less the maps Heroes Profile ranked_rotation (2026-10-13) marks 0 (too few cached Storm League replays): Alterac Pass. Not in Storm League: Hanamura Temple, Warhead Junction, Cursed Hollow. Heroes Profile marks Warhead Junction ranked, but Maps:Catalog does not.",
+            line
+        );
+    }
+
+    [Fact]
+    public void FromCache_ReadsTheSavedHeroesProfileMapList()
+    {
+        string data = Path.Combine(
+            Path.GetTempPath(),
+            "hr-rotation-" + Guid.NewGuid().ToString("N")
+        );
+        var settings = new AppSettings
+        {
+            Location = new LocationSettings { DataDirectory = data },
+            HeroesProfileApi = new HeroesProfileApiSettings
+            {
+                StandardCacheDirectoryName = "Standard",
+            },
+        };
+        try
+        {
+            Assert.False(StormLeagueRotation.FromCache(settings).Flagged);
+
+            HeroesProfileMapStore.For(settings).Write(Flags(("Hanamura Temple", 0)));
+            StormLeagueRotation rotation = StormLeagueRotation.FromCache(settings);
+
+            Assert.True(rotation.Flagged);
+            Assert.False(rotation.Observed);
+            Assert.False(rotation.Contains(Hanamura));
+        }
+        finally
+        {
+            if (Directory.Exists(data))
+            {
+                Directory.Delete(data, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void FromCache_ReadsTheStandardFolder_AndFallsBackWithoutOne()
     {
         string data = Path.Combine(
@@ -173,6 +360,13 @@ public class StormLeagueRotationTests
             line
         );
     }
+
+    private static HeroesProfileMapList Flags(params (string Name, int Ranked)[] maps) =>
+        new(
+            new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero),
+            maps.Select(map => new HeroesProfileMap(map.Name, "standard", map.Ranked == 1, true))
+                .ToList()
+        );
 
     private static Map Standard(string name, bool ranked) =>
         new(name, name.Replace(" ", string.Empty), ranked, "standard", true);

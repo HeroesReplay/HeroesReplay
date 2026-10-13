@@ -443,6 +443,7 @@ public static class ServiceCollectionExtensions
                     ClientId = settings.Twitch.ClientId,
                 };
             })
+            .AddHeroesProfileMapRefresh()
             .AddSingleton<IStormLeagueRotation>(serviceProvider =>
                 StormLeagueRotation.FromCache(serviceProvider.GetRequiredService<AppSettings>())
             )
@@ -662,6 +663,37 @@ public static class ServiceCollectionExtensions
                 new HeroStatsStore(settings.Location.DataDirectory),
                 api?.HeroStats ?? new HeroStatsSettings(),
                 sp.GetRequiredService<ILogger<HeroStatsRefresh>>()
+            );
+        });
+    }
+
+    /// <summary>
+    /// Heroes Profile's <c>/maps</c> behind the Storm League reward pool (#425). It uses the hero
+    /// statistics' <c>HttpClient</c>, which has no retry handler: a failed fetch keeps the saved
+    /// list instead of holding the reward sync back.
+    /// </summary>
+    public static IServiceCollection AddHeroesProfileMapRefresh(this IServiceCollection services)
+    {
+        services.AddHttpClient(
+            HeroStatsApi.HttpClientName,
+            client => client.Timeout = HeroesProfileHttp.AttemptTimeout
+        );
+        return services.AddSingleton(sp =>
+        {
+            AppSettings settings = sp.GetRequiredService<AppSettings>();
+            HeroesProfileApiSettings api = settings.HeroesProfileApi;
+            HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
+                .CreateClient(HeroStatsApi.HttpClientName);
+            HeroesProfileClient client = HeroesProfileClientFactory.Create(
+                api?.ApiKey,
+                httpClient,
+                api?.ExternalV1BaseUri
+            );
+            return new HeroesProfileMapRefresh(
+                new HeroStatsApi(client),
+                HeroesProfileMapStore.For(settings),
+                api?.MapsRefreshInterval ?? TimeSpan.Zero,
+                sp.GetRequiredService<ILogger<HeroesProfileMapRefresh>>()
             );
         });
     }
