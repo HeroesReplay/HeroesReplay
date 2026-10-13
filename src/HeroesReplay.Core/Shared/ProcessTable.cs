@@ -32,6 +32,36 @@ public enum ProcessKillResult
 }
 
 /// <summary>
+/// The process table as a port (#409): what a detached OBS launch looks for after its start and
+/// what a role's tree kill walks. Tests give a fake table; <see cref="WindowsProcessTable"/> is
+/// the real one.
+/// </summary>
+public interface IProcessTable
+{
+    IReadOnlyList<ProcessTableEntry> Snapshot();
+
+    /// <summary>The running process with this pid, or null.</summary>
+    ProcessTableEntry Find(int pid);
+
+    /// <summary>Kills the entry only while its pid still has the start time the table saw.</summary>
+    ProcessKillResult Kill(ProcessTableEntry entry);
+}
+
+/// <summary>The real <see cref="IProcessTable"/>: <see cref="ProcessTable"/>.</summary>
+public sealed class WindowsProcessTable : IProcessTable
+{
+    public static readonly WindowsProcessTable Instance = new();
+
+    private WindowsProcessTable() { }
+
+    public IReadOnlyList<ProcessTableEntry> Snapshot() => ProcessTable.Snapshot();
+
+    public ProcessTableEntry Find(int pid) => ProcessTable.Find(pid);
+
+    public ProcessKillResult Kill(ProcessTableEntry entry) => ProcessTable.Kill(entry);
+}
+
+/// <summary>
 /// The Windows process table with parent pids (toolhelp snapshot), image paths, and start times.
 /// <see cref="System.Diagnostics.Process"/> has no parent pid, and its <c>MainModule</c> throws
 /// for processes this one cannot read.

@@ -8,10 +8,11 @@ Each command: what must be true first, what it changes, its exit codes, and the 
 
 Spectate one .StormReplay file, or each file in a directory, then exit.
 
-- **Options:** `--file` (`-f`), `--player`
+- **Options:** `--file` (`-f`), `--player`, `--blind`
 - **Before:** Not elevated. Heroes of the Storm installed; a current-patch replay needs Battle.net signed in. OBS is optional. On ASA-SERVER only to prove a change (AGENTS.md phases). On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
-- **Changes:** Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\Contexts\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. It mutes every microphone input (global Mic/Aux and audio input capture sources, never Desktop Audio) at each replay's session start and before it starts the stream (`OBS:MuteMicrophones`, #314). Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.
+- **Changes:** Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\Contexts\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. A desired stream counts as live only when OBS reports it active, not reconnecting, with its bytes moving; one that stays reconnecting, or active with frozen bytes, past `OBS:StreamStuckAfter` (90 s) is stopped and started again, and a failed attempt waits 1, 2, then 5 min. Each attempt sends `StartStream` once and waits for it to end (`OBS:StreamStartTimeout`, 30 s), after a TCP connect to the ingest (`OBS:IngestPreflightTimeout`, 3 s; `obs.ingest_unreachable` sends no `StartStream`), and closes OBS's "Failed to connect" dialog after a failed start (`OBS:ConnectFailDialogTitle`). A start mid-match keeps the spectator's scene on air; only a start with no scene asked for, or the waiting scene asked for, shows the waiting scene. Every watchdog tick puts the spectator's scene back when OBS shows another one (#407). Between replays, while that stream is desired and not live, it loads no replay and holds on the waiting scene until the stream is live again, with no time limit (`Spectate:HoldWhileStreamDown`, phase `StreamHold` in `status.json`, #396). It mutes every microphone input (global Mic/Aux and audio input capture sources, never Desktop Audio) at each replay's session start and before it starts the stream (`OBS:MuteMicrophones`, #314). Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.
 - **Exit:** 0 after the queue has played. 1 on a parse error (`--player` not a BattleTag, a `--file` that does not exist) or when the engine stops on an unexpected error.
+- **Codes:** `obs.stream_stuck_reconnecting`, `obs.stream_stalled`, `obs.ingest_unreachable`
 
 ## `spectate heroesprofile`
 
@@ -20,6 +21,7 @@ Spectate StormReplay files already in Data\Standard and Data\Requests. Does not 
 - **Before:** As `spectate file`, with replays already in `Data\Standard` and `Data\Requests` (`heroesprofile download`). `services start` runs it as the spectate role.
 - **Changes:** As `spectate file`, over the cached replays, in a loop. Does not call Heroes Profile.
 - **Exit:** Runs until stopped (Ctrl+C, or `services stop` for a role). 1 on a parse error or an unexpected error.
+- **Codes:** `obs.stream_stuck_reconnecting`, `obs.stream_stalled`, `obs.ingest_unreachable`
 
 ## `calculators report`
 
@@ -56,6 +58,33 @@ Count team-composition labels (split push, siege, dive, poke, and the rest) and 
 - **Before:** A folder of replays and the heroes-data2 catalog under `Location:DataDirectory`.
 - **Changes:** Writes `--output` (`.md` or `.csv`) when given; otherwise prints only. Read-only for the replays.
 - **Exit:** 0 when it finishes. 1 for a missing folder, an `--output` that is not `.md` or `.csv`, or a parse error.
+
+## `calculators insights`
+
+Read every .StormReplay in a folder, one file at a time, with units, events and statistics, and print each replay's match insights: each team's solo laner and its confidence, positive standouts, the MVP, camps (and how many on the enemy side), forts and keeps lost, a core race, a comeback, and each player's closest guide build. Then how often each appears per game, per team or per player, to tune the Insights thresholds. Reads the heroes-data2 catalog under Location:DataDirectory and the shipped talent-build reference. Read-only.
+
+- **Options:** `--directory` (`-d`, required), `--recursive`, `--output` (`-o`)
+- **Before:** A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, and the shipped talent-build reference.
+- **Changes:** Prints each replay's match insights and the frequency tables; writes `--output` (`.md`) when given. Read-only for the replays.
+- **Exit:** 0 when at least one replay was read. 1 for a missing folder, an `--output` that is not `.md`, or no replays in it. 2 when no replay parsed.
+
+## `builds import`
+
+Check the icy-veins-builds skill's extract (build names, tags, per-tier marks) against the heroes-data2 catalog's talents under Location:DataDirectory and write the talent-build reference JSON. Prints every warning (a stale tier, a renamed talent, a hero with no guide). Refuses to write when a guide names no catalog hero, a build lacks seven tiers, or a mark is not y, s, or n. Reads nothing from the web.
+
+- **Options:** `--input` (`-i`, required), `--reference` (`-r`, required), `--checked-at`
+- **Before:** The `icy-veins-builds` skill's extract (`--input`) and the heroes-data2 catalog under `Location:DataDirectory`. Reads nothing from the web.
+- **Changes:** Writes the talent-build reference (`--reference`, normally `src/HeroesReplay.Core/Builds/Reference/icy-veins-builds.json`): build names, tags, talent ids per tier and guide links, no guide text. Writes nothing when it refuses.
+- **Exit:** 0 when the reference is written (warnings are printed). 1 for a missing or unreadable extract or a bad `--checked-at`. 2 when the extract names an unknown hero, a build lacks seven tiers, or a mark is not y, s, or n.
+
+## `builds match`
+
+Read one .StormReplay and print, for each player, the talents picked (English names) and the guide build they fit best from the shipped talent-build reference: its score (1 = every pick recommended), how many picks it recommends, the runner-up, and the guide link. Reads the heroes-data2 catalog under Location:DataDirectory. Read-only.
+
+- **Options:** `--replay` (required)
+- **Before:** A `.StormReplay` (`--replay`) and the heroes-data2 catalog under `Location:DataDirectory`.
+- **Changes:** Prints each player's talents and best guide build from the shipped reference. Read-only.
+- **Exit:** 0 when the replay parsed. 1 for a missing file or a replay that does not parse.
 
 ## `check`
 
@@ -228,10 +257,10 @@ Run a stdio MCP server so an agent can read spectator status, run integration ch
 
 ## `twitch connect`
 
-Connect chat, sync channel-point rewards, and watch spectator status for Blue/Red predictions. Does not launch the game.
+Connect chat, sync channel-point rewards, and watch spectator status for Blue/Red and Blind Rating predictions. Does not launch the game.
 
 - **Before:** Twitch token with the chat and redemption scopes. Dev turns every side effect off (`DryRunMode`). On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
-- **Changes:** Joins chat, syncs channel-point rewards, queues redemptions in `Data\requests.json`, and opens and resolves Blue/Red predictions.
+- **Changes:** Joins chat, syncs channel-point rewards, queues redemptions in `Data\requests.json`, and opens and resolves Blue/Red predictions, or the rating guess (Bronze to Master) for a Blind Rating replay.
 - **Exit:** Runs until stopped (Ctrl+C, or `services stop` for a role). 1 on a parse error or an unexpected error.
 
 ## `twitch say`
@@ -310,6 +339,15 @@ Run the YouTube library pass now: list the channel's uploads, record videos miss
 - **Changes:** Records missing videos in `Data\youtube-library.jsonl` and inserts playlist items (50 units each). Dry run writes `Data\youtube-library-dry-run.json` and calls nothing.
 - **Exit:** With `--once`: 0 when the pass finished, 1 when it failed. Without it, runs until stopped.
 
+## `youtube preview`
+
+Print the full match title, description lines and tags a .StormReplay would get, with its match insights: the solo laners, standouts, MVP, camps, core race, comeback, each player's closest guide build, and the hero the focus timeline follows most. Highlights (YouTube:Titles:Highlights) are on for the preview unless --configured. Mode and rank come from a cache-style file name (<id>_<mode>_<rank>_<map>_...). Offline and read-only: no YouTube, Heroes Profile, game or OBS.
+
+- **Options:** `--replay` (required), `--configured`, `--insights`
+- **Before:** A `.StormReplay` (`--replay`), ideally with a cache-style name (`<id>_<mode>_<rank>_<map>_...`) for the mode and rank, and the heroes-data2 catalog under `Location:DataDirectory`.
+- **Changes:** Prints the title, description lines and tags the replay would get, with highlights on unless `--configured`, and with `--insights` the `insights.json` spectate would write. Offline and read-only: no YouTube, Heroes Profile, game or OBS.
+- **Exit:** 0 when the replay parsed. 1 for a missing file or a replay that does not parse.
+
 ## `heroesprofile download`
 
 List and download Storm League replays into Data\Standard. Does not launch the game.
@@ -365,11 +403,12 @@ Make sure the requested roles run from this install: start only the ones that ar
 
 ## `services stop`
 
-Ask the recorded processes to shut down, kill any still running after 20 seconds, close Heroes of the Storm and any HeroesSwitcher left without it, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game and those switchers closed, OBS is not streaming, and no recording spectate started is still running.
+Ask the recorded processes, and any role process from this install that is not recorded, to shut down, kill any still running after 20 seconds, close Heroes of the Storm and any HeroesSwitcher left without it, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game and those switchers closed, OBS is not streaming, and no recording spectate started is still running.
 
 - **Before:** On DESKTOP-8SJEK72 only with the owner, in a scheduled downtime.
-- **Changes:** Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Then closes each `HeroesSwitcher_x64` that has no Heroes child (`CloseMainWindow`, then a kill after 5 s) and leaves one whose Heroes child still runs; the `Heroes of the Storm:` line names each switcher (#359). Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.
+- **Changes:** Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. A role process from this install that `services.json` does not list, found by its command line, is stopped like a role but never recorded: a hand-started `spectate file` (#381), or any role (`spectate`, `twitch connect`, `heroesprofile download`, `youtube uploader`) running next to a dead pid in `services.json` (#397). With no services recorded the game is closed too; a role from another install is never touched, and while its spectate runs the game is left to it. Then closes each `HeroesSwitcher_x64` that has no Heroes child (`CloseMainWindow`, then a kill after 5 s) and leaves one whose Heroes child still runs; the `Heroes of the Storm:` line names each switcher (#359). Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream, and never kills OBS: a forced kill takes the role's process tree but leaves any obs64 in it running, with what that OBS started, and prints one line with `service.role_kill_spared_obs` (#409).
 - **Exit:** 0 when every role and the supervisor exited, the game and every `HeroesSwitcher_x64` without a Heroes child closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked.
+- **Codes:** `service.role_kill_spared_obs`
 
 ## `services status`
 
@@ -379,16 +418,16 @@ Classify each role as ready, degraded, stale, stopped, or failed from its heartb
 - **Before:** None. Over SSH the supervisor's mutex is not visible, so `supervisor.json` decides.
 - **Changes:** Nothing. Read only.
 - **Exit:** 0 when no role is failed, stale, or degraded; 1 otherwise.
-- **Codes:** `service.ready`, `service.degraded`, `service.stale`, `service.stopped`, `service.failed`, `service.restart_budget_exhausted`, `spectate.no_match_progress`, `spectate.launch_stalled`, `download.heroesprofile_rejected`, `download.heroesprofile_unreachable`, `twitch.token_invalid`, `twitch.unreachable`, `youtube.oauth_invalid`, `youtube.oauth_missing`, `youtube.oauth_unreachable`, `youtube.quota_blocked`, `youtube.not_publishing`, `spectate.obs_rejected`, `spectate.obs_unreachable`
+- **Codes:** `service.ready`, `service.degraded`, `service.stale`, `service.stopped`, `service.failed`, `service.restart_budget_exhausted`, `spectate.no_match_progress`, `spectate.launch_stalled`, `spectate.stream_hold`, `download.heroesprofile_rejected`, `download.heroesprofile_unreachable`, `twitch.token_invalid`, `twitch.unreachable`, `youtube.oauth_invalid`, `youtube.oauth_missing`, `youtube.oauth_unreachable`, `youtube.quota_blocked`, `youtube.not_publishing`, `spectate.obs_rejected`, `spectate.obs_unreachable`
 
 ## `services supervise`
 
 Supervise the roles `services start` recorded, in the foreground: restart failed roles with backoff (10s, 30s, 2m, 5m), kill and restart roles whose heartbeat is 2 minutes old, at most 5 restarts per role in 30 minutes (ServiceRestart), then leave the role down (service.restart_budget_exhausted). One supervisor at a time, across logon sessions (an SSH session sees the desktop's through supervisor.json). `services stop` ends it; Ctrl+C leaves the roles running unsupervised.
 
 - **Before:** Roles recorded by `services start`; no other supervisor in any session.
-- **Changes:** Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`).
+- **Changes:** Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397). With `ServiceRestart:ObsWatchdog` (prod) and streaming desired (`OBS:StreamingEnabled` and the machine arm), it starts OBS when obs64 is gone and restarts it (CloseMainWindow, then a kill) when its websocket has not answered for `OBS:HungAfter` (3 min) and the stream is not live; it never passes `--startstreaming`, never kills OBS while its stream bytes advance, and does nothing once `services stop` is under way (#398). It starts OBS detached through `cmd /c start`, the same launcher as spectate's, and a role kill leaves any obs64 in the role's tree running (#409).
 - **Exit:** Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised). 1 when a supervisor already runs.
-- **Codes:** `service.restart_budget_exhausted`
+- **Codes:** `service.restart_budget_exhausted`, `service.role_adopted`, `service.untracked_role_killed`, `service.role_kill_spared_obs`, `obs.process_missing`, `obs.websocket_hung`, `obs.watchdog_exhausted`
 
 ## `services install-task`
 
@@ -417,7 +456,7 @@ Stop this machine from starting Twitch ingest. Deletes the arm file. A stream th
 
 ## `obs status`
 
-Print the stream arm, OBS:StreamingEnabled, and the expected OBS profile and scene collection. Does not connect to OBS.
+Print the stream arm, OBS:StreamingEnabled, the expected OBS profile and scene collection, and the stream state spectate last wrote to status.json (Live, Reconnecting, Stalled, Inactive, Unknown). Does not connect to OBS.
 
 - **Options:** `--output` (`-o`)
 - **Before:** None. Does not connect to OBS or resolve secrets.

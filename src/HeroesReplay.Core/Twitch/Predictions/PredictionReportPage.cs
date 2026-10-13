@@ -46,7 +46,12 @@ public static class PredictionReportPage
             html.Append(Encode(report.WinningOutcome));
             html.Append(" won.");
             AppendSide(html, report.WinningOutcome, report.WinnerVoters, report.WinnerPoints);
-            AppendSide(html, report.LosingOutcome, report.LoserVoters, report.LoserPoints);
+            AppendSide(
+                html,
+                report.Kind == PredictionKind.Rating ? "Other guesses" : report.LosingOutcome,
+                report.LoserVoters,
+                report.LoserPoints
+            );
             html.Append(" Twitch only returns the top predictors, not every viewer.");
         }
 

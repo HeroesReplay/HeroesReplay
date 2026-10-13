@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.GameClient;
@@ -21,6 +22,7 @@ using HeroesReplay.Core.Spectating.Control;
 using HeroesReplay.Core.Spectating.Screens;
 using HeroesReplay.Core.Status;
 using HeroesReplay.Core.Telemetry;
+using HeroesReplay.Core.Twitch.Predictions;
 using HeroesReplay.Core.Twitch.Rewards;
 using HeroesReplay.Core.YouTube.Metadata;
 using HeroesReplay.Core.YouTube.Publication;
@@ -47,7 +49,13 @@ public class GameManager : IGameManager
     private readonly MediaPolicyAttemptLog mediaPolicy;
     private readonly IGameData gameData;
     private readonly CancellationTokenProvider tokenProvider;
+    private readonly StreamHold streamHold;
+    private readonly IMatchInsightsRecorder insightsRecorder;
 
+    /// <param name="streamHold">
+    /// Holds the launch of the next replay during the report while the desired stream is down
+    /// (#396). Null never holds.
+    /// </param>
     public GameManager(
         AppSettings settings,
         IReplayContextSetter contextSetter,
@@ -62,7 +70,9 @@ public class GameManager : IGameManager
         ILogger<GameManager> logger,
         MediaPolicyAttemptLog mediaPolicy,
         IGameData gameData,
-        CancellationTokenProvider tokenProvider
+        CancellationTokenProvider tokenProvider,
+        StreamHold streamHold = null,
+        IMatchInsightsRecorder insightsRecorder = null
     )
     {
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -86,6 +96,8 @@ public class GameManager : IGameManager
         this.gameData = gameData ?? throw new ArgumentNullException(nameof(gameData));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
+        this.streamHold = streamHold;
+        this.insightsRecorder = insightsRecorder;
     }
 
     public async Task<ReplaySessionKind> LaunchAndSpectate(
@@ -139,7 +151,25 @@ public class GameManager : IGameManager
                 loadedReplay?.Replay?.ReplayVersion
             );
 
-            EnsureWindowedClient(loadedReplay?.ReplayId);
+            EnsureWindowedClient(loadedReplay);
+            if (settings.OBS.Enabled && ReplayRequestKind.Blind(loadedReplay))
+            {
+                // The loading screen goes on air before ConfigureFromContext runs (#411).
+                obsController.HideRank();
+                if (
+                    !ClientInterfacePlan.CheckedBeforeLaunch(
+                        loadedReplay?.ReplayId,
+                        clientPreparedFor
+                    )
+                )
+                {
+                    // A cold launch. A session that ended without the report can leave game-scene
+                    // on air, and this replay's loading screen names the players. The spectator
+                    // shows game-scene at the first match clock read (#411).
+                    ParkWaitingScene();
+                }
+            }
+
             recordingClock.Reset();
             ClientHoldReason hold = await gameController.LaunchAsync().ConfigureAwait(false);
             if (hold == ClientHoldReason.AwardScreen)
@@ -365,9 +395,70 @@ public class GameManager : IGameManager
         ReplaySessionKind kind = DecideOutcome(loadedReplay, outcomeKnown);
         // The report and the next replay's preload are their own bounded phase, not a launch.
         ServiceHeartbeat.RecordLaunchEnded();
-        await ReportAndHandOffAsync(enteredMatch, obsSession, whileReporting).ConfigureAwait(false);
+        NextMatchLaunch next = await ReportAndHandOffAsync(enteredMatch, obsSession, whileReporting)
+            .ConfigureAwait(false);
+        if (ReplayRequestKind.Blind(loadedReplay) && next == NextMatchLaunch.NotStarted)
+        {
+            await RestoreAhliObsAfterBlindAsync(loadedReplay.ReplayId, enteredMatch)
+                .ConfigureAwait(false);
+        }
+
         return kind;
     }
+
+    /// <summary>
+    /// A Blind Rating replay is over and no replay launched behind it (a stop, an empty queue, a
+    /// release update): AhliObs goes back as soon as its client has closed, not only before the
+    /// next replay (#411). The session closed a client that reached the match; one that is still
+    /// open keeps the blind copy, and the next replay's preset puts AhliObs back.
+    /// </summary>
+    private async Task RestoreAhliObsAfterBlindAsync(int? replayId, bool enteredMatch)
+    {
+        // Not the stop token: a stop is the main reason to restore here, and services stop gives
+        // spectate 20 s to exit.
+        DateTimeOffset exitBy = DateTimeOffset.UtcNow.Add(
+            enteredMatch ? BlindRestoreExitWait : TimeSpan.Zero
+        );
+        while (gameController.IsGameRunning() && DateTimeOffset.UtcNow < exitBy)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250)).ConfigureAwait(false);
+        }
+
+        if (gameController.IsGameRunning())
+        {
+            logger.LogInformation(
+                "Blind Rating replay {ReplayId} is over, but Heroes is still open with the blind copy of AhliObs. The next replay puts AhliObs back.",
+                replayId
+            );
+            return;
+        }
+
+        try
+        {
+            if (clientConfigurator.InstalledInterfaceIs(blind: false))
+            {
+                return;
+            }
+
+            ClientConfigureResult result = clientConfigurator.Configure(blind: false);
+            logger.LogInformation(
+                "Blind Rating replay {ReplayId} is over. AhliObs is installed again at {Interface}.",
+                replayId,
+                result.InterfaceDestination
+            );
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not put AhliObs back after Blind Rating replay {ReplayId}. The next replay puts it back.",
+                replayId
+            );
+        }
+    }
+
+    /// <summary>How long a blind session waits for the client it closed before AhliObs goes back.</summary>
+    internal static readonly TimeSpan BlindRestoreExitWait = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// The outcome is final here. The redemption and the caller hear it now, before the report
@@ -400,13 +491,15 @@ public class GameManager : IGameManager
     /// <summary>
     /// The report scenes and the next replay's launch, then this session's OBS connection ends.
     /// A stop skips the report or cuts it short, and the next replay is not launched.
+    /// <see cref="NextMatchLaunch.NotStarted"/> when no next replay was launched.
     /// </summary>
-    private async Task ReportAndHandOffAsync(
+    private async Task<NextMatchLaunch> ReportAndHandOffAsync(
         bool enteredMatch,
         bool obsSession,
         Func<Task<LoadedReplay>> whileReporting
     )
     {
+        NextMatchLaunch nextMatch = NextMatchLaunch.NotStarted;
         bool reports =
             enteredMatch
             && obsSession
@@ -438,7 +531,7 @@ public class GameManager : IGameManager
                     cutReport
                 );
                 await Task.WhenAll(report, launch).ConfigureAwait(false);
-                NextMatchLaunch nextMatch = await launch.ConfigureAwait(false);
+                nextMatch = await launch.ConfigureAwait(false);
                 if (ReplayLoadCue.SelectsGameScene(nextMatch))
                 {
                     try
@@ -482,6 +575,8 @@ public class GameManager : IGameManager
                 obsController.EndSession();
             }
         }
+
+        return nextMatch;
     }
 
     public MatchOutcome LastOutcome => spectator.Outcome;
@@ -508,6 +603,7 @@ public class GameManager : IGameManager
         status.ReplayId = loadedReplay?.ReplayId;
         status.Outcome = null;
         status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(loadedReplay);
+        status.RatingPrediction = RatingPrediction.Applies(loadedReplay);
         status.GatesOpen = current?.GatesOpen.ToString();
         status.CoreKilled = current?.CoreKilled.ToString();
     }
@@ -942,9 +1038,20 @@ public class GameManager : IGameManager
             return HandOffStopped(next);
         }
 
+        if (HoldsNextLaunch(next))
+        {
+            return NextMatchLaunch.NotStarted;
+        }
+
+        // The report is on air. The game scene still shows this replay's rank, and the next
+        // replay's loading screen goes on air before its own rank is set (#411).
+        obsController.HideRank();
+
         // Heroes is closed here, so Variables.txt can be repaired. The next session starts with
-        // this client already running and could only warn (#206).
-        EnsureWindowedClient(next.ReplayId);
+        // this client already running and could only warn (#206). A Blind Rating replay needs
+        // its request now: it decides the interface this client loads (#411).
+        LinkRequest(next);
+        EnsureWindowedClient(next);
         clientPreparedFor = next.ReplayId;
 
         try
@@ -981,6 +1088,8 @@ public class GameManager : IGameManager
         }
 
         bool loggedReadFailure = false;
+        bool loggedBlindLoading = false;
+        bool blind = ReplayRequestKind.Blind(next);
         bool reopenedFromHome = false;
         DateTimeOffset reopenAt = DateTimeOffset.UtcNow.AddSeconds(25);
         DateTimeOffset readyBy = DateTimeOffset.UtcNow.AddMinutes(3);
@@ -1043,7 +1152,7 @@ public class GameManager : IGameManager
                 }
             }
 
-            if (ReportHandoff.ShouldCutReport(mapLoading, matchClock))
+            if (ReportHandoff.ShouldCutReport(mapLoading, matchClock, blind))
             {
                 logger.LogInformation(
                     "Next replay {ReplayId} is on the map loading screen, in a match, or its match clock is running. The report stops so OBS shows the game.",
@@ -1051,6 +1160,15 @@ public class GameManager : IGameManager
                 );
                 cutReport.Cancel();
                 return NextMatchLaunch.Presented;
+            }
+
+            if (blind && mapLoading && !loggedBlindLoading)
+            {
+                loggedBlindLoading = true;
+                logger.LogInformation(
+                    "Next replay {ReplayId} is a Blind Rating replay on its loading screen, which names the players. The report and waiting scenes stay until its match clock runs.",
+                    next.ReplayId
+                );
             }
 
             if (NextReplayHold.StopWhenReportEnds(beforeNext) && report.IsCompleted)
@@ -1074,6 +1192,27 @@ public class GameManager : IGameManager
             next.ReplayId
         );
         return NextMatchLaunch.ProcessOnly;
+    }
+
+    /// <summary>
+    /// The report loaded the next replay, but its client does not start while the desired stream
+    /// is not live (#396): the stream can drop during the report, after the preload was decided.
+    /// The replay stays prepared, and the next loop holds before it plays.
+    /// </summary>
+    internal bool HoldsNextLaunch(LoadedReplay next)
+    {
+        StreamHoldCheck hold = streamHold?.Check(matchOver: true);
+        if (hold?.Holds != true)
+        {
+            return false;
+        }
+
+        logger.LogInformation(
+            "Next replay {ReplayId} is not launched during the report: the stream is desired and not live ({Reason}). It plays once the stream is live again.",
+            next?.ReplayId,
+            hold.Reason
+        );
+        return true;
     }
 
     /// <summary>
@@ -1284,6 +1423,12 @@ public class GameManager : IGameManager
         }
 
         string directory = context.Current?.Directory?.FullName;
+        MatchInsights insights = insightsRecorder?.Record(
+            loadedReplay?.Replay,
+            gameData.Heroes,
+            context.Current?.Players,
+            directory
+        );
         bool wrote = await YouTubeEntryWriter
             .WriteIfAllowedAsync(
                 directory,
@@ -1293,7 +1438,8 @@ public class GameManager : IGameManager
                 isCompleteRecording: true,
                 CancellationToken.None,
                 gameData.Heroes,
-                StatHookSource.For(settings, loadedReplay, DateTimeOffset.UtcNow)
+                StatHookSource.For(settings, loadedReplay, DateTimeOffset.UtcNow),
+                insights
             )
             .ConfigureAwait(false);
         if (wrote)
@@ -1510,28 +1656,30 @@ public class GameManager : IGameManager
 
     /// <summary>
     /// Writes windowed 1080p, background audio, and AhliObs into the root and account
-    /// Variables.txt while Heroes is closed. A running client is never touched.
+    /// Variables.txt while Heroes is closed. A running client is never touched. A Blind Rating
+    /// replay gets the blind copy of AhliObs (#411).
     /// </summary>
-    private void EnsureWindowedClient(int? replayId)
+    private void EnsureWindowedClient(LoadedReplay replay)
     {
         try
         {
-            ApplyClientPreset(replayId);
+            ApplyClientPreset(replay?.ReplayId, ReplayRequestKind.Blind(replay));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(
                 e,
                 "Could not write the Heroes client settings before replay {ReplayId}.",
-                replayId
+                replay?.ReplayId
             );
         }
     }
 
-    private void ApplyClientPreset(int? replayId)
+    private void ApplyClientPreset(int? replayId, bool blind)
     {
         using Activity activity = HeroesReplayTelemetry.StartSpan("heroesreplay.client.configure");
-        ClientStatusResult status = clientConfigurator.GetStatus();
+        activity?.SetTag("client.blind", blind);
+        ClientStatusResult status = clientConfigurator.GetStatus(blind);
         string newest = ClientInterfacePlan.Newest(
             InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory)
         );
@@ -1549,10 +1697,12 @@ public class GameManager : IGameManager
         activity?.SetTag("client.matches_preset", status.MatchesPreset);
         activity?.SetTag("client.hots_running", status.HotSRunning);
         activity?.SetTag("client.interface_action", action.ToString());
+        string hud = blind ? "the Blind Rating copy of AhliObs" : "AhliObs";
         if (action == ClientPresetAction.Keep)
         {
             logger.LogInformation(
-                "Heroes client already windowed 1080p with background audio and AhliObs."
+                "Heroes client already windowed 1080p with background audio and {Interface}.",
+                hud
             );
             return;
         }
@@ -1578,13 +1728,18 @@ public class GameManager : IGameManager
             return;
         }
 
-        ClientConfigureResult result = clientConfigurator.Configure();
+        ClientConfigureResult result = clientConfigurator.Configure(blind);
         logger.LogInformation(
-            "Applied windowed 1080p, background audio, and AhliObs to {Variables}. Interface copied: {Copied}. Installed build {Build}.",
+            "Applied windowed 1080p, background audio, and {Interface} to {Variables}. Interface copied: {Copied}. Installed build {Build}.",
+            hud,
             result.VariablesPath,
             result.InterfaceCopied,
             newest ?? "(unknown)"
         );
+        foreach (string warning in result.Warnings)
+        {
+            logger.LogWarning("{Warning}", warning);
+        }
     }
 
     private void RememberInterfaceBuild()

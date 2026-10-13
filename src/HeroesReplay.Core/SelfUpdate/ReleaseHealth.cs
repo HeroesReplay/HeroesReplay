@@ -170,9 +170,11 @@ public static class ReleaseHealth
 
         int held = Count(spectate, HeldOutside);
         string nothing =
-            held > 0
+            spectate?.StreamHoldSince is DateTimeOffset holding
+                ? $"spectate holds the next replay because the desired stream is not live (since {holding.ToUniversalTime():yyyy-MM-dd HH:mm:ss}Z; {spectate.StreamHoldReason}), so the build was not tried{Sessions(spectate)}."
+            : held > 0
                 ? $"spectate had no replay it could play: {held} session(s) were held for reasons outside the build{Sessions(spectate)}."
-                : $"spectate had no replay to play after the install (an empty queue, or no connectivity){Sessions(spectate)}.";
+            : $"spectate had no replay to play after the install (an empty queue, or no connectivity){Sessions(spectate)}.";
         return new ReleaseHealthResult(ReleaseHealthVerdict.Inconclusive, new[] { nothing });
     }
 

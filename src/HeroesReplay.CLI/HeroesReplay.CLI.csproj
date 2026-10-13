@@ -57,6 +57,10 @@
             <Link>Assets\Interfaces\AhliObs 0.75.StormInterface</Link>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Include="..\..\obs\interfaces\AhliObs 0.75 Blind.StormInterface">
+            <Link>Assets\Interfaces\AhliObs 0.75 Blind.StormInterface</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
     <Target Name="IncludeObsBundle" BeforeTargets="AssignTargetPaths">

@@ -7,7 +7,6 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using HeroesClientSDK;
 using HeroesReplay.Core.Analysis;
@@ -16,22 +15,19 @@ using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Replays.Context;
+using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Screens;
 using HeroesReplay.Core.Telemetry;
 using Microsoft.Extensions.Logging;
-using Windows.Graphics.Imaging;
-using Windows.Media.Ocr;
-using Windows.Storage.Streams;
 using static PInvoke.User32;
 
 namespace HeroesReplay.Core.Spectating.Control;
 
 public class GameController : IGameController
 {
-    private readonly OcrEngine ocrEngine;
     private readonly CancellationTokenProvider tokenProvider;
     private readonly ILogger<GameController> logger;
     private readonly IReplayContext context;
@@ -42,11 +38,14 @@ public class GameController : IGameController
     private readonly StormClientConfigurator clientConfigurator;
 
     private readonly object controllerLock = new object();
+
+    // One attached client per process for every memory reader, the timer's clock included (#382).
+    private readonly SharedClientProcess clientProcess;
     private readonly MatchClock matchClock = new();
     private readonly LoadingScreen loadingScreen = new();
     private readonly ClientScreen clientScreens = new();
     private readonly IClientWindows clientWindows = new Win32ClientWindows();
-    private readonly ScreenShadow screenShadow;
+
     private LoadingScreenSample lastScreen;
     private ClientScreenSample lastClientScreen;
     private string lastClockReason = "no-process";
@@ -101,11 +100,13 @@ public class GameController : IGameController
         IGameCapture capture,
         IReplayOpener replayOpener,
         StormClientConfigurator clientConfigurator,
-        OcrEngine engine,
-        CancellationTokenProvider tokenProvider
+        CancellationTokenProvider tokenProvider,
+        SharedClientProcess clientProcess
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        this.clientProcess =
+            clientProcess ?? throw new ArgumentNullException(nameof(clientProcess));
         this.context = context ?? throw new ArgumentNullException(nameof(context));
         this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
         this.obsController =
@@ -114,10 +115,8 @@ public class GameController : IGameController
         this.replayOpener = replayOpener ?? throw new ArgumentNullException(nameof(replayOpener));
         this.clientConfigurator =
             clientConfigurator ?? throw new ArgumentNullException(nameof(clientConfigurator));
-        this.ocrEngine = engine ?? throw new ArgumentNullException(nameof(engine));
         this.tokenProvider =
             tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
-        screenShadow = new ScreenShadow(logger, TimeProvider.System);
     }
 
     public async Task<ClientHoldReason> LaunchAsync()
@@ -152,7 +151,8 @@ public class GameController : IGameController
         for (int attempt = 1; attempt <= 2; attempt++)
         {
             activity?.SetTag("launch.replay_attempt", attempt);
-            ColdBoot boot = await StartReplayAndWaitAsync().ConfigureAwait(false);
+            ColdBoot boot = await StartReplayAndWaitAsync(battleNetRetried: attempt > 1)
+                .ConfigureAwait(false);
             if (boot.Hold != ClientHoldReason.None)
             {
                 return boot.Hold;
@@ -164,7 +164,7 @@ public class GameController : IGameController
             }
 
             logger.LogWarning(
-                "Battle.net disconnected while loading the replay. Closing the client and trying once more."
+                "Battle.net error dialog while loading the replay. Closing the client and asking Battle.net once more."
             );
             Kill();
             replayFileOpened = false;
@@ -208,7 +208,10 @@ public class GameController : IGameController
         return boot.OpenedFromHome || boot.Auth == ReplayLaunchAuth.AlreadyInMatch;
     }
 
-    public async Task<bool> OpenReplayFromHomeScreenAsync(string replayPath)
+    public Task<bool> OpenReplayFromHomeScreenAsync(string replayPath) =>
+        Task.FromResult(OpenReplayFromHomeScreen(replayPath));
+
+    private bool OpenReplayFromHomeScreen(string replayPath)
     {
         // While Blizzard fetches the replay's build, the menu on screen is the newest exe's
         // handoff. Opening the file again there would start the switch over.
@@ -217,7 +220,7 @@ public class GameController : IGameController
             return false;
         }
 
-        if (!IsLaunched() || !await IsHomeScreen().ConfigureAwait(false))
+        if (!IsLaunched() || !IsHomeScreen())
         {
             return false;
         }
@@ -351,7 +354,7 @@ public class GameController : IGameController
                 .ConfigureAwait(false);
             otherReplay =
                 presented && ReplayClientRoute.OtherReplayOnClient(replayOnClient, replayPath);
-            home = !presented && await IsHomeScreen().ConfigureAwait(false);
+            home = !presented && IsHomeScreen();
         }
 
         ReplayLaunchAuth auth = ReplayClientRoute.Decide(
@@ -516,7 +519,7 @@ public class GameController : IGameController
         }
 
         await WaitForAuthenticatedClientAsync().ConfigureAwait(false);
-        if (IsLaunched() && await IsHomeScreen().ConfigureAwait(false))
+        if (IsLaunched() && IsHomeScreen())
         {
             OpenReplayFromHome(replayPath);
             return new ReplayBoot(auth, true);
@@ -544,23 +547,18 @@ public class GameController : IGameController
             return RunningClientBuild.Unreadable;
         }
 
-        try
+        // The client the memory readers share: read-only, its main module's file version (#382).
+        (bool ok, string reason, HeroesClientVersion detected) = clientProcess.Read(
+            cachedProcess,
+            running =>
+                (running?.Ok == true, running?.Reason ?? "no-process", running?.DetectedVersion)
+        );
+        if (!ok)
         {
-            string version = cachedProcess?.MainModule?.FileVersionInfo?.FileVersion;
-            if (string.IsNullOrWhiteSpace(version))
-            {
-                return RunningClientBuild.Unreadable;
-            }
+            logger.LogWarning("Could not read the running Heroes file version ({Reason}).", reason);
+        }
 
-            return ReplayClientRoute.SameBuild(version, replayVersion)
-                ? RunningClientBuild.Matches
-                : RunningClientBuild.Differs;
-        }
-        catch (Exception e)
-        {
-            logger.LogWarning(e, "Could not read the running Heroes file version.");
-            return RunningClientBuild.Unreadable;
-        }
+        return ReplayClientRoute.RunningBuild(detected, replayVersion);
     }
 
     private async Task WaitForAuthenticatedClientAsync()
@@ -587,7 +585,11 @@ public class GameController : IGameController
 
     private readonly record struct ColdBoot(bool RetryDisconnect, ClientHoldReason Hold);
 
-    private async Task<ColdBoot> StartReplayAndWaitAsync()
+    /// <param name="battleNetRetried">
+    /// True on the launch after a Battle.net error dialog closed the client once: an unknown
+    /// Battle.net error that shows again is an invalid client.
+    /// </param>
+    private async Task<ColdBoot> StartReplayAndWaitAsync(bool battleNetRetried)
     {
         string replayPath = context.Current.LoadedReplay.FileInfo.FullName;
         string replayVersion = context.Current.LoadedReplay.Replay?.ReplayVersion;
@@ -603,21 +605,6 @@ public class GameController : IGameController
         }
 
         bool openedFromHome = boot.OpenedFromHome;
-        var searchTerms = context
-            .Current.LoadedReplay.Replay.Players.Select(x => x.Name)
-            .Concat(context.Current.LoadedReplay.Replay.Players.Select(x => x.Character))
-            .Concat(settings.OCR.LoadingScreenText)
-            .Concat(new[] { context.Current.LoadedReplay.Replay.Map })
-            .ToArray();
-
-        // The OCR verdict on the map loading screen: a player, hero, map, or welcome term.
-        bool ShowsSearchTerm(string windowText) =>
-            !string.IsNullOrWhiteSpace(windowText)
-            && searchTerms.Any(word =>
-                !string.IsNullOrWhiteSpace(word)
-                && windowText.Contains(word, StringComparison.OrdinalIgnoreCase)
-            );
-
         bool recoveredLogin = false;
         bool loggedMismatch = false;
         bool loggedPreparing = false;
@@ -629,6 +616,7 @@ public class GameController : IGameController
         bool interfaceRestarted = false;
         int blankRelaunches = 0;
         bool blankTiming = false;
+        bool loggedBlank = false;
         DateTimeOffset blankSince = default;
         DateTimeOffset started = DateTimeOffset.UtcNow;
         DateTimeOffset deadline = started.Add(ClientRelaunch.ColdBootLimit);
@@ -652,9 +640,10 @@ public class GameController : IGameController
         DateTimeOffset stuckSince = started;
         int waitRecoveries = 0;
 
-        async Task<bool> HoldForGameDataDownloadAsync(string primary, string later)
+        // The game-data DOWNLOADING dialog, from memory only (#292): a shown CProgressBarDialog.
+        async Task<bool> HoldForGameDataDownloadAsync(bool downloading)
         {
-            if (!ClientScreenText.IsGameDataDownload(primary, later))
+            if (!downloading)
             {
                 return false;
             }
@@ -801,28 +790,65 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.ClientNotReady);
             }
 
-            WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
-            string text = window.Text;
-            if (BattleNetDisconnect.IsShown(text))
+            // The window's pixels only say whether it is blank; nothing on screen is read as text
+            // (#292). Every screen and dialog comes from client memory.
+            WindowFrame window = ReadWindowFrame();
+            ClientScreenSample? clientScreen = ReadClientScreen();
+
+            // Battle.net's own error dialogs from memory: a shown CBattlenetErrorDialog or
+            // CDisconnectedDialog and the text its labels hold (HeroesClientSDK 0.4.4). A
+            // disconnect, or an error whose text names nothing known, closes the client and asks
+            // Battle.net once more; an unknown error still there after that is an invalid client.
+            BattleNetErrorRead battleNet = BattleNetErrorDialog.Read(clientScreen);
+            if (battleNet.RetriesBattleNet)
             {
-                logger.LogWarning("Battle.net disconnect dialog: {Text}", text);
+                if (battleNetRetried && battleNet.HoldAfterRetry != ClientHoldReason.None)
+                {
+                    logger.LogWarning(
+                        "Battle.net error dialog is still up after asking Battle.net again (client memory: {BattleNetError}). This client cannot play the replay; it is held as an invalid client and the replay stays queued. Battle.net was not clicked.",
+                        battleNet
+                    );
+                    return new ColdBoot(RetryDisconnect: false, battleNet.HoldAfterRetry);
+                }
+
+                logger.LogWarning(
+                    "Battle.net error dialog (client memory: {BattleNetError}).",
+                    battleNet
+                );
                 return new ColdBoot(RetryDisconnect: true, ClientHoldReason.None);
             }
 
-            ShadowScreen(
-                ScreenState.VersionMismatch,
-                ClientScreenText.IsVersionMismatch(text),
-                text
-            );
-            ShadowScreen(
-                ScreenState.RegionUnavailable,
-                ClientScreenText.IsRegionUnavailable(text),
-                text
-            );
-            ClientHoldReason hold = ClientHold.Classify(text);
+            // Any game-launch failure the client shows (its launch result in a CStandardDialog,
+            // read from memory) is an invalid client, handled like the version dialog (#292).
+            // Battle.net's region and region-version errors are not game-launch results; they
+            // come from the Battle.net error dialog's text in memory.
+            LaunchFailure? launchFailure = ClientLaunchFailure.Read(clientScreen);
+            ClientHoldReason hold =
+                launchFailure != null ? ClientLaunchFailure.Classify(clientScreen) : battleNet.Hold;
+            if (launchFailure == null && hold != ClientHoldReason.None && !loggedMismatch)
+            {
+                logger.LogWarning(
+                    "Battle.net error dialog (client memory: {BattleNetError}).",
+                    battleNet
+                );
+            }
+            if (launchFailure is LaunchFailure failure && !loggedMismatch)
+            {
+                logger.LogWarning(
+                    "Heroes shows game-launch result {Code} {Key} in a {Dialog} (client memory). The client cannot play this replay.",
+                    failure.Code,
+                    failure.Key,
+                    ClientLaunchFailure.ResultDialog
+                );
+            }
+
             if (ClientDownloadHold.DialogFailsDownload(buildDownload, hold))
             {
-                return FailBuildDownload("the version mismatch dialog");
+                return FailBuildDownload(
+                    launchFailure is LaunchFailure failed
+                        ? $"game-launch result {failed}"
+                        : "Battle.net's version mismatch dialog"
+                );
             }
 
             if (hold != ClientHoldReason.None)
@@ -850,37 +876,31 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, hold);
             }
 
-            bool awardScreen = MatchEndBanner.EndsLaunchWait(text);
-            ShadowScreen(ScreenState.EndScreen, awardScreen, text);
-            if (awardScreen)
+            // The MVP/awards screen from memory only (#292): CEndOfGameAwardsPanel shown.
+            if (clientScreen?.OnAwards == true)
             {
                 logger.LogInformation("The client is on the award screen. This replay is over.");
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.AwardScreen);
             }
 
-            ShadowScreen(
-                ScreenState.GameDataDownload,
-                ClientScreenText.IsGameDataDownload(text, null),
-                text
-            );
-            if (await HoldForGameDataDownloadAsync(text, null).ConfigureAwait(false))
+            bool downloading = clientScreen?.OnDownload == true;
+            if (await HoldForGameDataDownloadAsync(downloading).ConfigureAwait(false))
             {
                 continue;
             }
 
-            // Memory decides the map loading screen. The OCR'd words only count when it cannot.
-            // A match in memory is the replay already playing, with or without a clock read.
+            // Memory alone decides the map loading screen (#292): LoadingScreen after a menu, else
+            // ClientScreen's map panel, which also reads before any menu. The screen is not OCR'd
+            // for it. A match in memory is the replay already playing, with or without a clock.
             LoadingScreenSample? screen = ReadScreenInMemory();
-            bool? memoryLoading = screen?.MapLoading;
+            bool? memoryLoading = ReplayLoadCue.MapLoadingInMemory(screen, ReadClientScreen());
             bool inMatch =
                 screen?.InMatch == true
                 && !ReplayClientRoute.OtherReplayOnClient(replayOnClient, replayPath);
-            bool ocrLoading = ShowsSearchTerm(text);
-            ShadowScreen(ScreenState.MapLoading, ocrLoading, text);
-            bool loading = memoryLoading ?? ocrLoading;
+            bool loading = memoryLoading == true;
             bool timer = await IsMatchClockRunning().ConfigureAwait(false);
-            bool loginForm = ClientScreenText.IsLoginForm(text);
-            ShadowScreen(ScreenState.LoginForm, loginForm, text);
+            // The email/password form from memory only (#292); the window is not OCR'd for it.
+            bool loginForm = LoginFormCue.Sees(clientScreen?.OnLogin);
             // A login form while the build downloads is the newest exe's handoff. Closing it
             // would stop the download.
             if (
@@ -916,39 +936,21 @@ public class GameController : IGameController
                 continue;
             }
 
-            string laterText = null;
-            bool home = false;
-            if (!openedFromHome && !loading && !timer && !inMatch && IsGameProcessRunning())
-            {
-                WordScan homeScan = await ScanPrimaryAsync(settings.OCR.HomeScreenText)
-                    .ConfigureAwait(false);
-                laterText = homeScan.Text;
-                home = SeesHome(homeScan);
-            }
-
-            if (laterText != null)
-            {
-                ShadowScreen(
-                    ScreenState.GameDataDownload,
-                    ClientScreenText.IsGameDataDownload(text, laterText),
-                    laterText
-                );
-            }
-
-            if (await HoldForGameDataDownloadAsync(text, laterText).ConfigureAwait(false))
-            {
-                continue;
-            }
-
-            bool ocrLaterLoading = ShowsSearchTerm(laterText);
-            if (laterText != null)
-            {
-                ShadowScreen(ScreenState.MapLoading, ocrLaterLoading, laterText);
-            }
-
-            bool laterLoading = memoryLoading == null && ocrLaterLoading;
-            bool startup = ClientScreenText.IsGameDataStartup(text, laterText);
-            ShadowScreen(ScreenState.GameDataStartup, startup, text);
+            // Home from memory only (#292); the window is not OCR'd for the menu's words.
+            bool home =
+                !openedFromHome
+                && !loading
+                && !timer
+                && !inMatch
+                && IsGameProcessRunning()
+                && SeesHome();
+            // "Preparing game data" is a native Win32 dialog of the client exe, read from the
+            // client's windows (#292): a visible #32770 with a msctls_progress32 child. Not OCR.
+            GameDataWindowSample preparing = GameDataProgressWindow.Read(
+                clientWindows,
+                GetGameProcess()?.Id
+            );
+            bool startup = preparing.Shown == true;
             RunningClientBuild runningBuild = ReadRunningBuild(replayVersion);
             bool differentBuild = runningBuild == RunningClientBuild.Differs;
             bool matchingBuild = runningBuild == RunningClientBuild.Matches;
@@ -961,7 +963,7 @@ public class GameController : IGameController
             {
                 try
                 {
-                    clientConfigurator.Configure();
+                    clientConfigurator.Configure(BlindReplay);
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {
@@ -978,12 +980,22 @@ public class GameController : IGameController
                     launchFile.Root,
                     launchFile.Account
                 );
-                if (ClientInterfacePlan.LoadsDefaultHud(expectedInterface, actualInterface))
+                bool defaultHud = ClientInterfacePlan.LoadsDefaultHud(
+                    expectedInterface,
+                    actualInterface
+                );
+                // A client that outlived its replay can hold the other copy of AhliObs: the blind
+                // copy for a normal replay, or AhliObs for a Blind Rating replay (#411).
+                bool otherCopy =
+                    !defaultHud && !clientConfigurator.InstalledInterfaceIs(BlindReplay);
+                if (defaultHud || otherCopy)
                 {
                     if (defaultHudCorrections >= 1)
                     {
                         logger.LogWarning(
-                            "The client read replayinterface={Actual} and the HUD stays the default. The replay stops. Battle.net was not clicked.",
+                            otherCopy
+                                ? "The client still loaded the wrong copy of {Actual} after a restart. The replay stops. Battle.net was not clicked."
+                                : "The client read replayinterface={Actual} and the HUD stays the default. The replay stops. Battle.net was not clicked.",
                             actualInterface ?? "(missing)"
                         );
                         return new ColdBoot(
@@ -994,11 +1006,24 @@ public class GameController : IGameController
 
                     defaultHudCorrections++;
                     checkedLaunchFile = false;
-                    logger.LogWarning(
-                        "This client reads replayinterface={Actual}. That loads the default HUD. Closing the client and writing {Expected}.",
-                        actualInterface ?? "(missing)",
-                        expectedInterface
-                    );
+                    if (otherCopy)
+                    {
+                        logger.LogWarning(
+                            "This client loaded the {Loaded} copy of {Expected}. Closing the client and installing the {Wanted} copy.",
+                            BlindReplay ? "AhliObs" : "Blind Rating",
+                            expectedInterface,
+                            BlindReplay ? "Blind Rating" : "AhliObs"
+                        );
+                    }
+                    else
+                    {
+                        logger.LogWarning(
+                            "This client reads replayinterface={Actual}. That loads the default HUD. Closing the client and writing {Expected}.",
+                            actualInterface ?? "(missing)",
+                            expectedInterface
+                        );
+                    }
+
                     await RestartForObserverInterfaceAsync(replayPath).ConfigureAwait(false);
                     interfaceRestarted = true;
                     openedFromHome = false;
@@ -1064,11 +1089,11 @@ public class GameController : IGameController
                 matchingBuild,
                 differentBuild
             );
-            bool replayVisible = loading || laterLoading || timer || inMatch || home;
+            bool replayVisible = loading || timer || inMatch || home;
             if (
                 ClientInterfacePlan.RestartAfterGameData(
                     sawGameDataDownload,
-                    downloadVisible: ClientScreenText.IsGameDataDownload(text, laterText),
+                    downloadVisible: downloading,
                     startup,
                     replayVisible,
                     dataRestarts,
@@ -1123,17 +1148,20 @@ public class GameController : IGameController
                 OpenReplayFromHome(replayPath);
             }
 
-            if (
-                !oweAhliObs
-                && ClientInterfacePlan.MayAcceptReplayScreen(
-                    !differentBuild,
-                    loading || laterLoading
-                )
-            )
+            if (!oweAhliObs && ClientInterfacePlan.MayAcceptReplayScreen(!differentBuild, loading))
             {
-                ShowGameScene(
-                    memoryLoading == true ? "loading screen in memory" : "loading screen"
-                );
+                if (ReplayLoadCue.LoadingScreenOnAir(BlindReplay))
+                {
+                    ShowGameScene("loading screen in memory");
+                }
+                else
+                {
+                    // The spectator shows game-scene at the first match clock read (#411).
+                    logger.LogInformation(
+                        "Blind Rating replay on its loading screen, which names the players. OBS stays on the current scene until the match clock runs."
+                    );
+                }
+
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
@@ -1158,10 +1186,24 @@ public class GameController : IGameController
                 return new ColdBoot(RetryDisconnect: false, ClientHoldReason.None);
             }
 
-            bool blank = ClientRelaunch.IsBlankClientWindow(text, window.Width, window.Height);
+            // A blank startup window from the frame's pixels and memory, never OCR (#292): a
+            // uniform full-size frame, no screen in ClientScreen yet, and a young process.
+            TimeSpan? processAge = GameProcessAge();
+            bool blank = !startup && BlankStartupWindow.IsBlank(window, clientScreen, processAge);
             if (!blank)
             {
+                if (blankTiming && loggedBlank)
+                {
+                    logger.LogInformation(
+                        "Heroes window is no longer blank after {BlankFor} (frame {Frame}, memory screen {Screen}).",
+                        DateTimeOffset.UtcNow - blankSince,
+                        window,
+                        ClientScreenDescription.Describe(clientScreen)
+                    );
+                }
+
                 blankTiming = false;
+                loggedBlank = false;
             }
             else if (!blankTiming)
             {
@@ -1169,9 +1211,19 @@ public class GameController : IGameController
                 blankSince = DateTimeOffset.UtcNow;
             }
 
+            if (blank && !loggedBlank)
+            {
+                loggedBlank = true;
+                logger.LogInformation(
+                    "Heroes window is blank: frame {Frame}, memory screen {Screen}, process {ProcessAge} old. It counts as startup.",
+                    window,
+                    ClientScreenDescription.Describe(clientScreen),
+                    processAge?.ToString(@"hh\:mm\:ss") ?? "of unknown age"
+                );
+            }
+
             TimeSpan blankFor = blankTiming ? DateTimeOffset.UtcNow - blankSince : TimeSpan.Zero;
-            bool startupOrDownload =
-                startup || ClientScreenText.IsGameDataDownload(text, laterText);
+            bool startupOrDownload = startup || downloading;
             bool gameDataStillStarting = ClientRelaunch.KeepsWaitingForGameData(
                 startup,
                 sawGameDataStartup,
@@ -1187,7 +1239,6 @@ public class GameController : IGameController
 
             bool clientBusy =
                 loading
-                || laterLoading
                 || timer
                 || inMatch
                 || home
@@ -1211,7 +1262,7 @@ public class GameController : IGameController
                 if (stuck != LaunchWaitAction.KeepWaiting)
                 {
                     logger.LogWarning(
-                        "Launch wait on replay {Version} saw nothing usable for {Waited} (limit {Limit}). Running client {Running}, memory screen {Screen} ({ScreenReason}, menu seen {MenuSeen}), match clock {ClockReason}, window text: {Text}. Recovery {Action}.",
+                        "Launch wait on replay {Version} saw nothing usable for {Waited} (limit {Limit}). Running client {Running}, memory screen {Screen} ({ScreenReason}, menu seen {MenuSeen}), client screen {ClientScreen}, match clock {ClockReason}, window frame {Frame}. Recovery {Action}.",
                         replayVersion,
                         DateTimeOffset.UtcNow - stuckSince,
                         LaunchWaitLimit,
@@ -1219,8 +1270,9 @@ public class GameController : IGameController
                         screen?.Screen,
                         screen?.Reason,
                         screen?.MenuSeen,
+                        ClientScreenDescription.Describe(clientScreen),
                         lastClockReason,
-                        ScreenShadow.Excerpt(text),
+                        window,
                         stuck
                     );
                 }
@@ -1433,6 +1485,9 @@ public class GameController : IGameController
         );
     }
 
+    /// <summary>A Blind Rating replay's client reads the blind copy of AhliObs (#411).</summary>
+    private bool BlindReplay => ReplayRequestKind.Blind(context.Current?.LoadedReplay);
+
     private bool LaunchFileLoadsDefaultHud(ReplayClientPatch patch, string expected)
     {
         ReplayInterfaceValues values = clientConfigurator.ReadReplayInterfaces();
@@ -1452,7 +1507,7 @@ public class GameController : IGameController
         CloseIdleSwitcher();
         try
         {
-            ClientConfigureResult result = clientConfigurator.Configure();
+            ClientConfigureResult result = clientConfigurator.Configure(BlindReplay);
             logger.LogInformation(
                 "Applied windowed 1080p, background audio, and AhliObs after the game-data download. Interface copied: {Copied}.",
                 result.InterfaceCopied
@@ -1593,121 +1648,40 @@ public class GameController : IGameController
         }
     }
 
-    private readonly record struct WindowRead(string Text, int Width, int Height);
-
-    private readonly record struct WordScan(bool Found, string Text);
-
-    private async Task<string> ReadWindowTextAsync()
-    {
-        WindowRead window = await ReadWindowAsync().ConfigureAwait(false);
-        return window.Text;
-    }
-
-    private async Task<WindowRead> ReadWindowAsync()
+    /// <summary>
+    /// The game window's frame, measured by brightness only (<see cref="BlankStartupWindow"/>).
+    /// No text is read from it.
+    /// </summary>
+    private WindowFrame ReadWindowFrame()
     {
         if (!TryGetGameHandle(out IntPtr handle))
         {
-            return new WindowRead(string.Empty, 0, 0);
+            return WindowFrame.None;
         }
 
         using Bitmap frame = capture.Capture(handle);
-        if (frame == null)
-        {
-            return new WindowRead(string.Empty, 0, 0);
-        }
-
-        string text = await RecognizeFrameAsync(frame).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            string startup = await StartupTextFromOtherWindowsAsync(handle).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(startup))
-            {
-                text = startup;
-            }
-        }
-
-        logger.LogInformation(
-            "Window OCR ({Width}x{Height}): {Text}",
-            frame.Width,
-            frame.Height,
-            string.IsNullOrWhiteSpace(text) ? "(empty)" : text
-        );
-        return new WindowRead(text, frame.Width, frame.Height);
+        WindowFrame measured = BlankStartupWindow.Measure(frame);
+        logger.LogDebug("Window frame: {Frame}", measured);
+        return measured;
     }
 
-    private async Task<string> RecognizeFrameAsync(Bitmap frame)
+    /// <summary>How long ago the game process started, or null when it is gone or unreadable.</summary>
+    private TimeSpan? GameProcessAge()
     {
-        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
-            .ConfigureAwait(false);
-        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-        return result?.Text ?? string.Empty;
-    }
-
-    /// <summary>
-    /// The largest Heroes window can stay black while a smaller window still says it is
-    /// preparing game data. Return that phrase only. Do not log the other window's text.
-    /// </summary>
-    private async Task<string> StartupTextFromOtherWindowsAsync(IntPtr primary)
-    {
-        Process process = cachedProcess;
+        Process process = GetGameProcess();
         if (process == null)
         {
             return null;
         }
 
-        int processId;
         try
         {
-            if (process.HasExited)
-            {
-                return null;
-            }
-
-            processId = process.Id;
+            return DateTime.Now - process.StartTime;
         }
-        catch (InvalidOperationException)
+        catch (Exception e) when (e is InvalidOperationException or Win32Exception)
         {
             return null;
         }
-        catch (Win32Exception)
-        {
-            return null;
-        }
-
-        var windows = new List<GameWindowInput.VisibleClientWindow>();
-        GameWindowInput.CollectVisibleWindows(processId, windows);
-        GameWindowInput.CollectVisibleChildWindows(primary, windows);
-        foreach (GameWindowInput.VisibleClientWindow window in windows)
-        {
-            if (window.Handle == primary || window.Handle == IntPtr.Zero)
-            {
-                continue;
-            }
-
-            try
-            {
-                using Bitmap frame = capture.Capture(window.Handle);
-                if (frame == null)
-                {
-                    continue;
-                }
-
-                string text = await RecognizeFrameAsync(frame).ConfigureAwait(false);
-                if (
-                    ClientScreenText.IsGameDataStartup(text)
-                    || ClientScreenText.IsGameDataDownload(text)
-                )
-                {
-                    return text;
-                }
-            }
-            catch (Exception e)
-            {
-                logger.LogDebug(e, "Could not read another Heroes window.");
-            }
-        }
-
-        return null;
     }
 
     private void ShowGameScene(string reason)
@@ -1734,96 +1708,15 @@ public class GameController : IGameController
         );
 
     /// <summary>
-    /// Home is memory first (<see cref="HomeScreenCue"/>): the client's own home screen
+    /// Home from memory only (<see cref="HomeScreenCue"/>, #292): the client's own home screen
     /// (<see cref="ClientScreen"/>) when it can tell, else a menu in <see cref="LoadingScreen"/>.
-    /// OCR's words decide only when memory cannot tell, and its text still vetoes a login form.
-    /// Shadow mode sees the same memory read.
+    /// The window is not OCR'd for it.
     /// </summary>
-    private bool SeesHome(WordScan scan)
+    private bool SeesHome()
     {
         LoadingScreenSample? screen = ReadScreenInMemory();
         ClientScreenSample? client = ReadClientScreen();
-        bool home = HomeScreenCue.Sees(client?.OnHome, screen?.OnMenu, scan.Found, scan.Text);
-        bool loginForm = ClientScreenText.IsLoginForm(scan.Text);
-        ShadowScreen(ScreenState.Home, scan.Found && !loginForm, scan.Text);
-        ShadowScreen(ScreenState.LoginForm, loginForm, scan.Text);
-        return home;
-    }
-
-    /// <summary>
-    /// Shadow mode (#292): the memory verdict of the HeroesClientSDK menu screens
-    /// (<see cref="ClientScreen"/>) next to an OCR verdict the caller already has. It
-    /// changes no decision and never throws into the caller.
-    /// </summary>
-    private void ShadowScreen(ScreenState state, bool ocr, string ocrText)
-    {
-        if (settings.OCR?.ShadowEnabled == false)
-        {
-            return;
-        }
-
-        try
-        {
-            ClientScreenSample? screen = ReadClientScreen();
-            GameDataWindowSample? window =
-                state == ScreenState.GameDataStartup
-                    ? GameDataProgressWindow.Read(clientWindows, GetGameProcess()?.Id)
-                    : null;
-            ShadowObservation observed = screenShadow.Observe(
-                state,
-                ocr,
-                ScreenMemoryVerdicts.For(state, screen, window),
-                ocrText,
-                ScreenMemoryVerdicts.Describe(state, screen, window)
-            );
-            if (observed.SaveFrame)
-            {
-                SaveShadowFrame(state);
-            }
-        }
-        catch (Exception e)
-        {
-            logger.LogDebug(e, "Screen shadow failed for {State}.", state);
-        }
-    }
-
-    /// <summary>
-    /// A fresh frame of the game window when OCR and memory disagree, saved under the replay
-    /// context's shadow folder. The OCR frame is already disposed by then.
-    /// </summary>
-    private void SaveShadowFrame(ScreenState state)
-    {
-        string directory = context.Current?.Directory?.FullName;
-        if (string.IsNullOrWhiteSpace(directory))
-        {
-            logger.LogDebug(
-                "No screen shadow frame for {State}: there is no replay context directory.",
-                state
-            );
-            return;
-        }
-
-        if (!TryGetGameHandle(out IntPtr handle))
-        {
-            logger.LogDebug("No screen shadow frame for {State}: there is no game window.", state);
-            return;
-        }
-
-        using Bitmap frame = capture.Capture(handle);
-        if (frame == null)
-        {
-            logger.LogDebug(
-                "No screen shadow frame for {State}: the capture returned no bitmap.",
-                state
-            );
-            return;
-        }
-
-        string folder = Path.Combine(directory, ScreenShadow.FrameFolder);
-        Directory.CreateDirectory(folder);
-        string path = Path.Combine(folder, ScreenShadow.FrameFileName(state, DateTimeOffset.Now));
-        frame.Save(path, ImageFormat.Png);
-        logger.LogInformation("Saved the screen shadow frame for {State} to {Path}.", state, path);
+        return HomeScreenCue.Sees(client?.OnHome, screen?.OnMenu);
     }
 
     private LoadingScreenSample? ReadScreenInMemory()
@@ -1836,7 +1729,10 @@ public class GameController : IGameController
 
         try
         {
-            LoadingScreenSample sample = loadingScreen.Read(process);
+            LoadingScreenSample sample = clientProcess.Read(
+                process,
+                client => loadingScreen.Read(client)
+            );
             if (sample.Screen != lastScreen.Screen || sample.MenuSeen != lastScreen.MenuSeen)
             {
                 logger.LogInformation(
@@ -1871,7 +1767,10 @@ public class GameController : IGameController
 
         try
         {
-            ClientScreenSample sample = clientScreens.Read(process);
+            ClientScreenSample sample = clientProcess.Read(
+                process,
+                client => clientScreens.Read(client)
+            );
             if (
                 sample.Screen != lastClientScreen.Screen
                 || sample.Reason != lastClientScreen.Reason
@@ -1883,7 +1782,7 @@ public class GameController : IGameController
                     sample.Screen,
                     sample.Reason,
                     sample.MenuSeen,
-                    ScreenMemoryVerdicts.Describe(sample)
+                    ClientScreenDescription.Describe(sample)
                 );
                 lastClientScreen = sample;
             }
@@ -1908,7 +1807,10 @@ public class GameController : IGameController
 
         try
         {
-            MatchClockSample sample = matchClock.Read(process);
+            MatchClockSample sample = clientProcess.Read(
+                process,
+                client => matchClock.Read(client)
+            );
             lastClockReason = sample.Reason;
             return sample;
         }
@@ -1927,103 +1829,34 @@ public class GameController : IGameController
             return false;
         }
 
-        // The match clock is memory only. A match or the loading screen in memory decides next;
-        // OCR reads "WELCOME TO" only when memory cannot tell. A match with no clock yet is the
-        // replay on screen, not a client stuck before its menu (#249).
+        // Memory only (#292): the running match clock, a match, or the map loading screen
+        // (LoadingScreen after a menu, else ClientScreen's map panel, before any menu too). A match
+        // with no clock yet is the replay on screen, not a client stuck before its menu (#249).
+        // When memory cannot tell, the replay is not presented yet; the screen is not OCR'd.
         bool clockRunning = (await TryReadRunningMatchClockAsync().ConfigureAwait(false)).HasValue;
         LoadingScreenSample? screen = ReadScreenInMemory();
-        if (ReplayLoadCue.PresentedInMemory(clockRunning, screen) is bool known)
-        {
-            return known;
-        }
-
-        var parsed = replay?.Replay;
-        string text = await ReadWindowTextAsync().ConfigureAwait(false);
-        bool loadingScreen = ReplayLoadCue.SeesLoadingScreen(
-            text,
-            parsed?.Map,
-            parsed?.MapAlternativeName,
-            parsed?.Players?.Select(player => player.Name),
-            parsed?.Players?.Select(player => player.Character),
-            settings.OCR.LoadingScreenText
-        );
-        ShadowScreen(ScreenState.MapLoading, loadingScreen, text);
-        return loadingScreen;
+        return ReplayLoadCue.PresentedInMemory(clockRunning, screen, ReadClientScreen()) ?? false;
     }
 
-    public async Task<bool> TrySeeEndScreenAsync(bool nearCore)
+    /// <summary>
+    /// The MVP and awards screen from memory only (#292): HeroesClientSDK
+    /// <see cref="ClientScreenSample.OnAwards"/>, the in-game <c>CEndOfGameAwardsPanel</c> shown.
+    /// The window is not OCR'd for MVP, award titles, VICTORY or DEFEAT, so
+    /// <paramref name="nearCore"/> no longer matters: a camp tooltip can't read as the end.
+    /// </summary>
+    public Task<bool> TrySeeEndScreenAsync(bool nearCore)
     {
-        try
+        _ = nearCore;
+        bool awards = ReadClientScreen()?.OnAwards == true;
+        if (awards)
         {
-            if (!TryGetGameHandle(out IntPtr handle))
-            {
-                return false;
-            }
-
-            using Bitmap frame = capture.Capture(handle);
-            if (frame == null || frame.Width < 200 || frame.Height < 200)
-            {
-                return false;
-            }
-
-            var crop = new Rectangle(
-                frame.Width / 5,
-                frame.Height / 8,
-                frame.Width * 3 / 5,
-                frame.Height / 3
-            );
-            using Bitmap region = frame.Clone(crop, frame.PixelFormat);
-            using Bitmap resized = region.GetResized(zoom: 2);
-            using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(resized)
-                .ConfigureAwait(false);
-            OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-            string text = result?.Text ?? string.Empty;
-            bool endScreen = MatchEndBanner.IsEnd(text, nearCore);
-            ShadowScreen(ScreenState.EndScreen, endScreen, text);
-            if (endScreen)
-            {
-                logger.LogInformation("End-screen OCR saw: {Text}", text.Replace('\n', ' '));
-            }
-
-            return endScreen;
+            logger.LogInformation("The MVP screen is up (client memory: CEndOfGameAwardsPanel).");
         }
-        catch (Exception e)
-        {
-            logger.LogDebug(e, "End-screen OCR failed.");
-            return false;
-        }
+
+        return Task.FromResult(awards);
     }
 
-    private static async Task<SoftwareBitmap> GetSoftwareBitmapAsync(Bitmap bitmap)
-    {
-        if (bitmap == null)
-            throw new ArgumentNullException(nameof(bitmap));
-
-        using (var stream = new InMemoryRandomAccessStream())
-        using (Stream netStream = stream.AsStream())
-        {
-            bitmap.Save(netStream, ImageFormat.Bmp);
-            netStream.Flush();
-            stream.Seek(0);
-
-            BitmapDecoder decoder = await BitmapDecoder.CreateAsync(
-                BitmapDecoder.BmpDecoderId,
-                stream
-            );
-            return await decoder.GetSoftwareBitmapAsync();
-        }
-    }
-
-    private async Task<bool> IsHomeScreen()
-    {
-        if (!IsGameProcessRunning())
-        {
-            return false;
-        }
-
-        WordScan scan = await ScanPrimaryAsync(settings.OCR.HomeScreenText).ConfigureAwait(false);
-        return SeesHome(scan);
-    }
+    private bool IsHomeScreen() => IsGameProcessRunning() && SeesHome();
 
     private bool IsGameProcessRunning()
     {
@@ -2053,54 +1886,6 @@ public class GameController : IGameController
 
     private async Task<bool> IsMatchClockRunning() =>
         IsLaunched() && (await TryReadRunningMatchClockAsync().ConfigureAwait(false)) != null;
-
-    private async Task<WordScan> ScanPrimaryAsync(IEnumerable<string> words)
-    {
-        if (!TryGetGameHandle(out IntPtr handle))
-        {
-            return new WordScan(false, string.Empty);
-        }
-
-        using Bitmap frame = capture.Capture(handle);
-        if (frame == null)
-        {
-            return new WordScan(false, string.Empty);
-        }
-
-        using SoftwareBitmap softwareBitmap = await GetSoftwareBitmapAsync(frame)
-            .ConfigureAwait(false);
-        OcrResult result = await ocrEngine.RecognizeAsync(softwareBitmap);
-        string recognized = result?.Text ?? string.Empty;
-        logger.LogInformation(
-            "Window OCR ({Width}x{Height}): {Text}",
-            frame.Width,
-            frame.Height,
-            string.IsNullOrWhiteSpace(recognized) ? "(empty)" : recognized
-        );
-
-        if (words != null)
-        {
-            foreach (string word in words)
-            {
-                if (
-                    !string.IsNullOrWhiteSpace(word)
-                    && recognized.Contains(word, StringComparison.OrdinalIgnoreCase)
-                )
-                {
-                    logger.LogInformation("{Word} has been found.", word);
-                    return new WordScan(true, recognized);
-                }
-            }
-        }
-
-        if (settings.Capture.SaveCaptureFailureCondition)
-        {
-            Directory.CreateDirectory(settings.CapturesPath);
-            frame.Save(Path.Combine(settings.CapturesPath, Guid.NewGuid().ToString() + ".bmp"));
-        }
-
-        return new WordScan(false, recognized);
-    }
 
     public void SendFocus(int index)
     {
@@ -2239,12 +2024,15 @@ public class GameController : IGameController
             process.Dispose();
         }
 
+        // The game exited: the memory readers' client goes with it (#382).
+        clientProcess.Detach();
         return null;
     }
 
     public void Kill()
     {
         ClearProcessCache();
+        clientProcess.Detach();
         replayOnClient = null;
         try
         {

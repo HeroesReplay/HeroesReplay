@@ -15,6 +15,9 @@ public class TwitchSettings
     public bool EnableChatBot { get; set; }
     public bool EnablePredictions { get; set; }
     public TimeSpan PredictionWindow { get; set; }
+
+    /// <summary>How long the Blind Rating prediction takes guesses (#411). Twitch allows 30 s to 30 min.</summary>
+    public TimeSpan RatingPredictionWindow { get; set; } = TimeSpan.FromMinutes(8);
     public bool DryRunMode { get; set; }
 
     /// <summary>

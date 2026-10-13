@@ -41,7 +41,12 @@ public class PredictionLedgerTests
             PredictionReconcileResult second = await restarted.ReconcileAsync(
                 CancellationToken.None
             );
-            bool opened = await restarted.OpenAsync(42, "Cursed Hollow", CancellationToken.None);
+            bool opened = await restarted.OpenAsync(
+                42,
+                "Cursed Hollow",
+                PredictionKind.Winner,
+                CancellationToken.None
+            );
 
             Assert.Equal("pred-a", first.Resume.PredictionId);
             Assert.Equal(42, first.Resume.ReplayId);
@@ -69,7 +74,12 @@ public class PredictionLedgerTests
             http.Items.Add(Item("pred-b", "Cursed Hollow: who wins?", "LOCKED"));
             TwitchMatchPredictionService service = Service(directory, http);
 
-            bool opened = await service.OpenAsync(11, "Cursed Hollow", CancellationToken.None);
+            bool opened = await service.OpenAsync(
+                11,
+                "Cursed Hollow",
+                PredictionKind.Winner,
+                CancellationToken.None
+            );
             PredictionLedger reloaded = PredictionLedger.Load(PredictionLedger.PathFor(directory));
 
             Assert.True(opened);
@@ -98,7 +108,12 @@ public class PredictionLedgerTests
             http.Items.Add(Item("pred-a", "Cursed Hollow: who wins?", "LOCKED"));
             TwitchMatchPredictionService service = Service(directory, http);
 
-            bool opened = await service.OpenAsync(11, "Cursed Hollow", CancellationToken.None);
+            bool opened = await service.OpenAsync(
+                11,
+                "Cursed Hollow",
+                PredictionKind.Winner,
+                CancellationToken.None
+            );
             PredictionLedger reloaded = PredictionLedger.Load(PredictionLedger.PathFor(directory));
             PredictionLedgerEntry previous = reloaded.FindByPredictionId("pred-a");
 
@@ -124,7 +139,12 @@ public class PredictionLedgerTests
             http.Items.Add(Item("pred-b", "Cursed Hollow: who wins?", "LOCKED"));
             TwitchMatchPredictionService service = Service(directory, http);
 
-            bool opened = await service.OpenAsync(11, "Cursed Hollow", CancellationToken.None);
+            bool opened = await service.OpenAsync(
+                11,
+                "Cursed Hollow",
+                PredictionKind.Winner,
+                CancellationToken.None
+            );
 
             Assert.False(opened);
             Assert.Equal(1, http.PatchCount);
@@ -147,7 +167,12 @@ public class PredictionLedgerTests
             http.Items.Add(Item("pred-a", "Towers of Doom: who wins?", "LOCKED"));
             TwitchMatchPredictionService service = Service(directory, http);
 
-            bool opened = await service.OpenAsync(10, "Cursed Hollow", CancellationToken.None);
+            bool opened = await service.OpenAsync(
+                10,
+                "Cursed Hollow",
+                PredictionKind.Winner,
+                CancellationToken.None
+            );
             Assert.True(opened);
             Assert.Equal(0, http.PatchCount);
             Assert.Null(http.LastPatch);
@@ -266,7 +291,12 @@ public class PredictionLedgerTests
             var http = new PredictionHttp();
             TwitchMatchPredictionService service = Service(directory, http);
 
-            bool opened = await service.OpenAsync(10, "Cursed Hollow", CancellationToken.None);
+            bool opened = await service.OpenAsync(
+                10,
+                "Cursed Hollow",
+                PredictionKind.Winner,
+                CancellationToken.None
+            );
             PredictionLedgerEntry saved = PredictionLedger
                 .Load(PredictionLedger.PathFor(directory))
                 .FindByPredictionId("created-prediction");

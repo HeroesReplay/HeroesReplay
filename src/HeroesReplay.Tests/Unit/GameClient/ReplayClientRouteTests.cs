@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HeroesClientSDK;
 using HeroesReplay.Core.GameClient;
 using Xunit;
 
@@ -15,6 +16,49 @@ public class ReplayClientRouteTests
         "2.55.17.98025",
         "2.57.0.98285",
     };
+
+    [Fact]
+    public void RunningBuild_ComparesTheDetectedVersionWithTheReplays()
+    {
+        // HeroesClientSDK HeroesClientProcess.DetectedVersion of the running exe (HeroesClientSDK#12).
+        var running = new HeroesClientVersion(2, 57, 0, 98348);
+
+        Assert.Equal(
+            RunningClientBuild.Matches,
+            ReplayClientRoute.RunningBuild(running, "2.57.0.98348")
+        );
+        Assert.Equal(
+            RunningClientBuild.Matches,
+            ReplayClientRoute.RunningBuild(running, " 2, 57, 0, 98348 ")
+        );
+        Assert.Equal(
+            RunningClientBuild.Differs,
+            ReplayClientRoute.RunningBuild(running, "2.57.0.98304")
+        );
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void RunningBuild_UnknownReplayVersion_IsUnreadable(string replayVersion)
+    {
+        Assert.Equal(
+            RunningClientBuild.Unreadable,
+            ReplayClientRoute.RunningBuild(new HeroesClientVersion(2, 57, 0, 98348), replayVersion)
+        );
+    }
+
+    [Fact]
+    public void RunningBuild_AnExeWithoutAVersion_IsUnreadable()
+    {
+        // The SDK never throws: a client that is not attached, or an exe without a readable
+        // file version, has no detected version.
+        Assert.Equal(
+            RunningClientBuild.Unreadable,
+            ReplayClientRoute.RunningBuild(null, "2.57.0.98348")
+        );
+    }
 
     [Fact]
     public void Classify_NewestInstalledBuildIsTheCurrentPatch()
@@ -512,7 +556,7 @@ public class ReplayClientRouteTests
                     replayPresented: false
                 ),
                 alreadyOpened: false,
-                windowBlank: ClientRelaunch.IsBlankClientWindow("", 1280, 720),
+                windowBlank: true,
                 gameDataStillStarting: false
             )
         );
@@ -521,7 +565,12 @@ public class ReplayClientRouteTests
     [Fact]
     public void OpenMatchingBuildNow_LeavesTheClientUpWhileGameDataStartupIsStillBlank()
     {
-        bool blank = ClientRelaunch.IsBlankClientWindow("", 1280, 720);
+        // A uniform full-size frame with no screen in memory yet (BlankStartupWindow).
+        bool blank = BlankStartupWindow.IsBlank(
+            BlankStartupWindowTests.Black,
+            null,
+            System.TimeSpan.FromSeconds(30)
+        );
         bool stillStarting = ClientRelaunch.KeepsWaitingForGameData(
             startupText: false,
             sawStartup: true,
@@ -554,7 +603,7 @@ public class ReplayClientRouteTests
             ReplayClientRoute.OpenMatchingBuildNow(
                 ReplayLaunchAuth.OpenMatchingBuild,
                 alreadyOpened: false,
-                windowBlank: ClientRelaunch.IsBlankClientWindow("Preparing game data", 403, 139),
+                windowBlank: false,
                 gameDataStillStarting: false
             )
         );

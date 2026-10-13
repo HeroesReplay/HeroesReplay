@@ -337,6 +337,89 @@ public class PublicationPlanTests
         );
     }
 
+    [Fact]
+    public void Plan_StreamPcPublishesTwelveHalfHourlyGamesAnHourApart()
+    {
+        // docs/youtube-uploader.md, How often: twelve ordinary games end every half hour
+        // from 10:00, with no map repeating and no rank. Each publishes an hour after the last.
+        string[] maps =
+        {
+            "Infernal Shrines",
+            "Sky Temple",
+            "Cursed Hollow",
+            "Dragon Shire",
+            "Towers of Doom",
+            "Tomb of the Spider Queen",
+            "Volskaya Foundry",
+            "Garden of Terror",
+            "Blackheart's Bay",
+            "Warhead Junction",
+            "Alterac Pass",
+            "Braxis Holdout",
+        };
+        var slots = new List<PublicationSample>();
+
+        for (int game = 0; game < maps.Length; game++)
+        {
+            DateTimeOffset ended = Now.AddMinutes(30 * game);
+            PublicationDecision planned = PublicationSchedule.Plan(
+                StreamPcSettings(),
+                new PublicationSendFacts
+                {
+                    Criteria = ReplayMediaPriority.Ordinary,
+                    RecordedAtUtc = ended,
+                },
+                true,
+                game,
+                ended,
+                slots,
+                maps[game],
+                null,
+                null,
+                null
+            );
+
+            Assert.True(planned.Allow);
+            Assert.Equal(Now.AddHours(game), planned.PublishAtUtc);
+            slots.Add(new PublicationSample { At = planned.PublishAtUtc.Value, Map = maps[game] });
+        }
+    }
+
+    [Fact]
+    public void Plan_StreamPcKeepsTheSameRankFourHoursApart()
+    {
+        var slots = new[]
+        {
+            new PublicationSample { At = Now, Rank = "Gold" },
+        };
+
+        PublicationDecision gold = Plan(Ordinary(), slots, StreamPcSettings(), rank: "Gold");
+        PublicationDecision silver = Plan(Ordinary(), slots, StreamPcSettings(), rank: "Silver");
+
+        Assert.Equal(Now.AddHours(4), gold.PublishAtUtc);
+        Assert.Equal(Now.AddHours(1), silver.PublishAtUtc);
+    }
+
+    /// <summary><c>appsettings.prod.json</c> since 2026-10-13.</summary>
+    private static ReplayMediaPolicySettings StreamPcSettings() =>
+        new()
+        {
+            Version = "1",
+            RecordingMode = ReplayRecordingMode.Selected,
+            PublicationMode = ReplayPublicationMode.AllEligible,
+            MaxPublicPerDay = 24,
+            MaxPublicPerWeek = 168,
+            MinimumPublicInterval = TimeSpan.FromHours(1),
+            MaxPublishAhead = TimeSpan.FromDays(3),
+            OrdinaryCandidateMaxAge = TimeSpan.FromDays(3),
+            MapCooldown = TimeSpan.FromHours(8),
+            RankCooldown = TimeSpan.FromHours(4),
+            FeaturedHeroCooldown = TimeSpan.FromHours(8),
+            MaxSharedHeroes = 4,
+            ReservedRequestSlotsPerDay = 2,
+            MaxInsertsPerQuotaDay = 30,
+        };
+
     private static PublicationDecision Plan(
         PublicationSendFacts facts,
         IReadOnlyList<PublicationSample> slots,

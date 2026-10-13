@@ -1,21 +1,15 @@
 using System;
-using System.Collections.Generic;
 
 namespace HeroesReplay.Core.Spectating.Screens;
 
 /// <summary>
-/// Screen text the spectator reads with OCR: the home screen and the map loading screen.
-/// The match clock is never read this way; it comes from memory.
+/// The launch wait's pace (<see cref="CheckSleepDuration"/>, between two passes of the launch
+/// loop). The section keeps its old name so existing settings files still bind, but nothing in the
+/// game client path is OCR'd any more (#292): every client screen and dialog, Battle.net's own
+/// error dialogs included, comes from HeroesClientSDK memory reads or the client's windows, the
+/// blank startup window from the captured frame's pixels, and the match clock from memory only.
 /// </summary>
 public class OCRSettings
 {
-    public IEnumerable<string> HomeScreenText { get; set; }
-    public IEnumerable<string> LoadingScreenText { get; set; }
     public TimeSpan CheckSleepDuration { get; set; }
-
-    /// <summary>
-    /// Shadow mode (#292): log the memory verdict next to every OCR screen verdict
-    /// (<see cref="ScreenShadow"/>). It changes no decision.
-    /// </summary>
-    public bool ShadowEnabled { get; set; } = true;
 }

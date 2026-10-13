@@ -38,6 +38,51 @@ public class ServiceHealthClassifierTests
     }
 
     [Fact]
+    public void ARecordWithoutAPid_IsFailed_AndStoppedOnceAStopIsRequested()
+    {
+        // #397: the supervisor keeps a role whose restart left no process without a pid.
+        var lockFile = new ServiceLock
+        {
+            StartedAt = Now,
+            Processes = new List<ServiceProcessRecord>
+            {
+                new()
+                {
+                    Name = "spectate",
+                    Pid = 0,
+                    Arguments = "spectate heroesprofile",
+                    Nonce = "n1",
+                },
+            },
+        };
+
+        ServiceStatusReport report = ServiceHealthClassifier.Build(
+            lockFile,
+            pid => "heroesreplay",
+            _ => null,
+            _ => null,
+            stopRequested: false,
+            Now,
+            Defaults
+        );
+        ServiceRoleHealth spectate = report.Roles.Single(role => role.Role == "spectate");
+        Assert.Equal(ServiceRoleState.Failed, spectate.State);
+        Assert.True(spectate.Expected);
+        Assert.False(spectate.Running);
+        Assert.Null(spectate.Pid);
+        Assert.Equal(
+            "No spectate process is running: its last restart did not leave one.",
+            spectate.Cause
+        );
+        Assert.Equal(1, report.ExitCode);
+
+        ServiceRoleHealth stopping = ServiceHealthClassifier
+            .Build(lockFile, pid => "heroesreplay", _ => null, _ => null, true, Now, Defaults)
+            .Roles.Single(role => role.Role == "spectate");
+        Assert.Equal(ServiceRoleState.Stopped, stopping.State);
+    }
+
+    [Fact]
     public void FreshHeartbeatAndRecentWork_IsReady()
     {
         ServiceRoleHealth health = Classify(
@@ -732,6 +777,50 @@ public class ServiceHealthClassifierTests
         Assert.NotEqual(ServiceHealthCodes.SpectateLaunchStalled, stopping.CauseCode);
         Assert.Equal(TimeSpan.FromMinutes(20), Defaults.LaunchStallThreshold("spectate"));
         Assert.Equal(TimeSpan.Zero, Defaults.LaunchStallThreshold("youtube"));
+    }
+
+    [Fact]
+    public void ASpectateHoldingTheNextReplayForTheStream_IsReadyAndLeftAlone()
+    {
+        // #396: four hours without match progress while the desired stream is down, after
+        // earlier misses, is a hold, not a failing spectate.
+        ServiceReadyReport beat = Beat(TimeSpan.FromSeconds(5), TimeSpan.FromHours(4), "spectate");
+        beat.SessionsWithoutProgress = 3;
+        beat.LastOutcome = "LoadTimedOut";
+        beat.StreamHoldSince = Now.AddHours(-4);
+        beat.StreamHoldReason =
+            "Reconnecting. OBS reported the stream reconnecting since 05:51:48Z.";
+
+        ServiceRoleHealth held = Classify("spectate", running: true, beat);
+
+        Assert.Equal(ServiceRoleState.Ready, held.State);
+        Assert.Equal(ServiceHealthCodes.Ready, held.Code);
+        Assert.Equal(ServiceHealthCodes.SpectateStreamHold, held.CauseCode);
+        Assert.Contains("Holding the next replay for 4h", held.Cause, StringComparison.Ordinal);
+        Assert.Contains("Reconnecting", held.Cause, StringComparison.Ordinal);
+        Assert.Equal(beat.StreamHoldSince, held.StreamHoldSince);
+        Assert.Equal(
+            ServiceRestartAction.None,
+            ServiceRestartPolicy.Decide(
+                held,
+                new ServiceRoleRestarts(),
+                Now,
+                new ServiceRestartSettings()
+            )
+        );
+
+        beat.StreamHoldSince = null;
+        Assert.Equal(ServiceRoleState.Degraded, Classify("spectate", running: true, beat).State);
+    }
+
+    [Fact]
+    public void AHoldingSpectateWithAnOldHeartbeat_IsStillStale()
+    {
+        ServiceReadyReport beat = Beat(TimeSpan.FromMinutes(3), TimeSpan.FromHours(1), "spectate");
+        beat.StreamHoldSince = Now.AddHours(-1);
+        beat.StreamHoldReason = "Inactive. OBS reported the stream inactive.";
+
+        Assert.Equal(ServiceRoleState.Stale, Classify("spectate", running: true, beat).State);
     }
 
     private static ServiceRoleHealth Classify(

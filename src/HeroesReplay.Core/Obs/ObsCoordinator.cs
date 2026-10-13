@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Recording;
@@ -19,12 +20,18 @@ internal sealed class ObsCoordinator
     /// <summary>The pause between identify attempts while an OBS HeroesReplay started comes up.</summary>
     internal static readonly TimeSpan StartupRetryPause = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// After a failed start, how often and how long OBS's "Failed to connect" dialog is looked
+    /// for: OBS opens it right after it reports the stream stopped (#407).
+    /// </summary>
+    internal static readonly TimeSpan DialogLookPause = TimeSpan.FromMilliseconds(250);
+    internal const int DialogLooks = 8;
+
     private readonly ILogger logger;
     private readonly AppSettings settings;
     private readonly IObsSession socket;
     private readonly IObsProcess process;
     private readonly RecordingSession recording;
-    private readonly ObsBackoff backoff;
     private readonly Action<TimeSpan> wait;
     private readonly TimeSpan identifyTimeout;
     private readonly Action beforeLaunch;
@@ -32,14 +39,29 @@ internal sealed class ObsCoordinator
     private readonly Func<ObsValidation> preflight;
     private readonly TimeSpan startupIdentifyTimeout;
     private readonly Func<DateTimeOffset> now;
-    private readonly ObsCrashSentinel sentinel;
     private readonly ObsMicrophoneMute microphones;
     private readonly Action stateChanged;
+    private readonly ObsStreamRecovery recovery;
+    private readonly IObsIngestProbe ingest;
+    private readonly IObsWindows windows;
 
     // The watchdog reconciles the stream while the spectator switches scenes on its own thread.
     private readonly object stateGate = new();
+    private readonly object healthGate = new();
+
+    // Held while the program scene changes: by the spectator (a switch, or the live collection
+    // swap), and by the stream start. The scene reconcile skips a tick while it is held (#407).
+    private readonly object sceneGate = new();
     private volatile ObsRuntimeSnapshot state;
+    private ObsStreamHealth health;
+    private DateTimeOffset? stuckNoted;
+    private bool waitingSceneMissingLogged;
+
+    // The scene the spectator wants on air: only the spectator sets it, never the stream start
+    // (#407). Null until it asks for one.
     private string sceneRequested;
+    private string sceneFailureLogged;
+    private int starting;
     private DateTimeOffset? startupDeadline;
     private DateTimeOffset launchedAt;
     private bool recordingDesired;
@@ -59,7 +81,6 @@ internal sealed class ObsCoordinator
         IObsSession socket,
         IObsProcess process,
         RecordingSession recording,
-        ObsBackoff backoff,
         Action<TimeSpan> wait,
         TimeSpan identifyTimeout,
         Action beforeLaunch = null,
@@ -67,9 +88,10 @@ internal sealed class ObsCoordinator
         Func<ObsValidation> preflight = null,
         TimeSpan? startupIdentifyTimeout = null,
         Func<DateTimeOffset> now = null,
-        ObsCrashSentinel sentinel = null,
         IObsMicrophoneSession microphones = null,
-        Action stateChanged = null
+        Action stateChanged = null,
+        IObsIngestProbe ingest = null,
+        IObsWindows windows = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -77,8 +99,10 @@ internal sealed class ObsCoordinator
         this.socket = socket ?? throw new ArgumentNullException(nameof(socket));
         this.process = process ?? throw new ArgumentNullException(nameof(process));
         this.recording = recording ?? throw new ArgumentNullException(nameof(recording));
-        this.backoff = backoff ?? ObsBackoff.Default;
         this.wait = wait;
+        // No probe means no ingest check, and no window list means no dialog is closed.
+        this.ingest = ingest;
+        this.windows = windows;
         this.identifyTimeout =
             identifyTimeout > TimeSpan.Zero ? identifyTimeout : TimeSpan.FromSeconds(10);
         this.beforeLaunch = beforeLaunch;
@@ -90,10 +114,12 @@ internal sealed class ObsCoordinator
                 ? startup
                 : TimeSpan.FromSeconds(60);
         this.now = now ?? (() => DateTimeOffset.UtcNow);
-        this.sentinel = sentinel;
         // No microphone session means nothing is muted.
         this.microphones = microphones == null ? null : new ObsMicrophoneMute(logger, microphones);
         this.stateChanged = stateChanged;
+        recovery = new ObsStreamRecovery(
+            settings.OBS?.StreamStuckAfter ?? ObsStreamRecovery.DefaultStuckAfter
+        );
     }
 
     public ObsRuntimeSnapshot State => state;
@@ -101,39 +127,154 @@ internal sealed class ObsCoordinator
     public bool IsIdentified => socket.IsIdentified;
 
     /// <summary>
-    /// Puts <paramref name="scene"/> on the program output. Once OBS accepts it, it is both the
-    /// scene the spectator asked for and the scene on air in <see cref="State"/>, so status.json
-    /// follows each switch rather than the scene the session started on (#282). The new state
-    /// goes to the status writer at once, not at the watchdog's next tick (#357). A refused
-    /// scene throws and leaves <see cref="State"/> as it was.
+    /// The spectator puts <paramref name="scene"/> on the program output. It is the scene the
+    /// spectator wants from now on, even when OBS refuses it: the scene reconcile tries it again
+    /// (#407). Once OBS accepts it, it is also the scene on air in <see cref="State"/>, so
+    /// status.json follows each switch rather than the scene the session started on (#282). The
+    /// new state goes to the status writer at once, not at the watchdog's next tick (#357). A
+    /// refused scene throws and leaves <see cref="State"/> as it was.
     /// </summary>
     public void SelectScene(string scene)
     {
-        socket.SelectProgramScene(scene);
-        if (!SceneSelected(scene))
+        lock (sceneGate)
         {
-            // No reconcile has run yet (streaming is off, or it is still to come): read the
-            // rest of OBS once so the scene has a snapshot to live in.
-            Remember(null, scene);
+            WantScene(scene);
+            socket.SelectProgramScene(scene);
+            if (!SceneOnAir(scene))
+            {
+                // No reconcile has run yet (streaming is off, or it is still to come): read the
+                // rest of OBS once so the scene has a snapshot to live in.
+                Remember(null, scene);
+            }
         }
 
         Publish();
     }
 
-    /// <summary>False when there is no <see cref="State"/> yet to show the scene.</summary>
-    private bool SceneSelected(string scene)
+    /// <summary>
+    /// The spectator wants <paramref name="scene"/> while OBS cannot be asked (the replay is
+    /// spectated without OBS). The scene reconcile puts it on air once OBS answers, and a stream
+    /// started meanwhile does not show the waiting scene instead (#407).
+    /// </summary>
+    public void WantScene(string scene)
     {
+        if (string.IsNullOrWhiteSpace(scene))
+        {
+            return;
+        }
+
         lock (stateGate)
         {
             sceneRequested = scene;
+        }
+    }
+
+    private string DesiredScene()
+    {
+        lock (stateGate)
+        {
+            return sceneRequested;
+        }
+    }
+
+    /// <summary>False when there is no <see cref="State"/> yet to show the scene.</summary>
+    private bool SceneOnAir(string scene)
+    {
+        lock (stateGate)
+        {
             if (state == null)
             {
                 return false;
             }
 
-            state = state with { SceneDesired = scene, SceneActual = scene };
+            state = state with
+            {
+                SceneDesired = sceneRequested ?? state.SceneDesired,
+                SceneActual = scene,
+            };
             return true;
         }
+    }
+
+    /// <summary>
+    /// Puts the spectator's scene back when OBS shows another one (#407): after a put-back that
+    /// failed, after OBS restarted on the scene it saved, or after someone changed it in the OBS
+    /// UI. The watchdog runs it every tick while streaming is desired, and the stream reconcile
+    /// right after it finds OBS again. It uses the scene the spectator wants now, skips the tick
+    /// while the spectator is switching scenes, and does nothing before the spectator asked for
+    /// one, while the websocket is not identified, or when the stream is not desired
+    /// (<c>OBS:Enabled</c> and <c>OBS:StreamingEnabled</c>). One INF per correction. Never throws.
+    /// </summary>
+    public bool ReconcileScene()
+    {
+        // OBS:Enabled false sends OBS nothing (#318); a box that does not stream is left as it is.
+        if (!StreamIsDesired() || !socket.IsIdentified || !Monitor.TryEnter(sceneGate))
+        {
+            return false;
+        }
+
+        bool corrected;
+        try
+        {
+            corrected = PutDesiredSceneOnAir();
+        }
+        finally
+        {
+            Monitor.Exit(sceneGate);
+        }
+
+        if (corrected)
+        {
+            Publish();
+        }
+
+        return corrected;
+    }
+
+    /// <summary>Under <see cref="sceneGate"/>. True when it changed the program scene.</summary>
+    private bool PutDesiredSceneOnAir()
+    {
+        string desired = DesiredScene();
+        if (string.IsNullOrWhiteSpace(desired))
+        {
+            return false;
+        }
+
+        string actual;
+        try
+        {
+            actual = socket.ProgramScene;
+            if (string.Equals(actual, desired, StringComparison.Ordinal))
+            {
+                sceneFailureLogged = null;
+                return false;
+            }
+
+            socket.SelectProgramScene(desired);
+        }
+        catch (Exception e)
+        {
+            if (!string.Equals(sceneFailureLogged, desired, StringComparison.Ordinal))
+            {
+                sceneFailureLogged = desired;
+                logger.LogWarning(
+                    e,
+                    "Could not check or put the spectator's {Scene} on the OBS program output. The next watchdog tick tries again.",
+                    desired
+                );
+            }
+
+            return false;
+        }
+
+        sceneFailureLogged = null;
+        SceneOnAir(desired);
+        logger.LogInformation(
+            "OBS showed {Actual}, not the spectator's scene: put {Scene} back on the program output.",
+            string.IsNullOrEmpty(actual) ? "no scene" : actual,
+            desired
+        );
+        return true;
     }
 
     /// <summary>
@@ -190,7 +331,12 @@ internal sealed class ObsCoordinator
             microphones?.NewSession();
             try
             {
-                collectionReady?.Invoke();
+                // The live swap switches collections and puts the program scene back itself:
+                // the scene reconcile must not act on the spare collection meanwhile (#407).
+                lock (sceneGate)
+                {
+                    collectionReady?.Invoke();
+                }
             }
             catch (Exception e)
             {
@@ -255,19 +401,75 @@ internal sealed class ObsCoordinator
     public ObsRecordingResult StopRecording(int? replayId) =>
         recording.StopRecording(EnsureIdentified, replayId);
 
-    public bool IsStreaming()
+    /// <summary>
+    /// The stream's health now (#395): one GetStreamStatus read when the websocket is identified,
+    /// compared with the read before it. Only <see cref="ObsStreamState.Live"/> is a stream viewers
+    /// see; an output that is active but reconnecting or frozen is not. Never throws.
+    /// </summary>
+    public ObsStreamHealth ReadStreamHealth()
     {
+        ObsStreamSample? sample = null;
+        string failure = "OBS websocket is not identified.";
         try
         {
-            return socket.IsIdentified && socket.IsStreamActive();
+            if (socket.IsIdentified)
+            {
+                sample = socket.ReadStream();
+            }
         }
         catch (Exception e)
         {
             logger.LogDebug(e, "Could not read OBS stream status.");
-            return false;
+            failure = "GetStreamStatus failed. " + e.Message;
+        }
+
+        lock (healthGate)
+        {
+            DateTimeOffset at = now();
+            health = sample is ObsStreamSample read
+                ? ObsStreamHealth.Next(health, read, at)
+                : ObsStreamHealth.Unknown(health, failure, at);
+            if (health.IsLive)
+            {
+                recovery.Recovered();
+            }
+
+            return health;
         }
     }
 
+    /// <summary>
+    /// The stream's health for a decision between replays (#396). The replay's session ended, so
+    /// the websocket may be closed: when OBS runs, it identifies first (one attempt, no launch),
+    /// and the connection stays for the next session. Never throws, starts, or stops anything.
+    /// </summary>
+    public ObsStreamHealth CheckStreamHealth()
+    {
+        if (!socket.IsIdentified && ReadRunning())
+        {
+            try
+            {
+                socket.Connect(Endpoint(), Password(), identifyTimeout);
+            }
+            catch (Exception e)
+            {
+                logger.LogDebug(e, "OBS websocket did not identify for the stream check.");
+            }
+        }
+
+        return ReadStreamHealth();
+    }
+
+    /// <summary>
+    /// Keeps a desired stream live (#395). A live stream is left alone. An inactive one gets the
+    /// guarded start: the profile and collection check, the preflight, the ingest check, the
+    /// scene, the microphone mute, then one StartStream (#407). One that stays reconnecting, or
+    /// active with frozen bytes, longer than <c>OBS:StreamStuckAfter</c> is stopped, confirmed
+    /// inactive, and started the same way. A failed start or restart waits 1, 2, then 5 minutes
+    /// before the next, and each attempt logs at most one warning. Nothing is sent unless
+    /// streaming is enabled and this machine is armed. When it had to identify OBS again (a new
+    /// OBS, or a reconnect), the spectator's scene goes back first (#407).
+    /// </summary>
     public ObsRuntimeSnapshot ReconcileStream()
     {
         if (!StreamIsDesired())
@@ -305,6 +507,7 @@ internal sealed class ObsCoordinator
             logger.LogWarning(e, "OBS collection was not updated before stream reconcile.");
         }
 
+        bool wasIdentified = socket.IsIdentified;
         if (!TryIdentify(out string identifyFailure))
         {
             ObsStreamResult unconfirmed = ObsStreamResult.Failed(
@@ -315,20 +518,194 @@ internal sealed class ObsCoordinator
             return Remember(unconfirmed, ReadScene());
         }
 
-        if (ReadStreamActive())
+        if (!wasIdentified)
         {
-            return Remember(ObsStreamResult.ConfirmedActive(), ReadScene());
+            // OBS found again: a restarted OBS comes back on the scene it saved (#407).
+            ReconcileScene();
         }
 
-        string scene = settings.OBS?.WaitingSceneName;
-        if (string.IsNullOrWhiteSpace(scene))
+        ObsStreamHealth read = ReadStreamHealth();
+        switch (recovery.Decide(read, now()))
         {
-            return Remember(
-                ObsStreamResult.Failed(
-                    ObsOutputFailure.NotConfirmed,
-                    "Waiting scene is not configured."
-                ),
-                ReadScene()
+            case ObsStreamStep.Keep:
+                stuckNoted = null;
+                return Remember(ObsStreamResult.ConfirmedActive(), ReadScene());
+            case ObsStreamStep.NotRead:
+                logger.LogWarning(
+                    "OBS stream status was not read, so the stream was neither started nor stopped. {Detail}",
+                    read.Detail
+                );
+                return Remember(
+                    ObsStreamResult.Failed(ObsOutputFailure.NotConfirmed, read.Detail),
+                    ReadScene()
+                );
+            case ObsStreamStep.WaitForObs:
+                return Remember(WaitForObs(read), ReadScene());
+            case ObsStreamStep.Backoff:
+                return Remember(
+                    ObsStreamResult.Waiting(
+                        read.Detail
+                            + " The last stream attempt failed; the next is due at "
+                            + Clock(recovery.NextAttemptAt)
+                            + "."
+                    ),
+                    ReadScene()
+                );
+            case ObsStreamStep.Restart:
+                return Restart(read);
+            default:
+                return Start();
+        }
+    }
+
+    /// <summary>
+    /// The output is reconnecting or frozen, under <c>OBS:StreamStuckAfter</c>: OBS's own reconnect
+    /// owns it. Logged once per stretch.
+    /// </summary>
+    private ObsStreamResult WaitForObs(ObsStreamHealth stuck)
+    {
+        if (stuckNoted != stuck.StuckSince)
+        {
+            stuckNoted = stuck.StuckSince;
+            logger.LogInformation(
+                "OBS stream is {State}. {Detail} OBS's own reconnect has {StuckAfter} (OBS:StreamStuckAfter) before the stream is stopped and started again.",
+                stuck.State,
+                stuck.Detail,
+                recovery.StuckAfter
+            );
+        }
+
+        return ObsStreamResult.Waiting(
+            stuck.Detail
+                + " OBS's own reconnect has until "
+                + Clock(stuck.StuckSince + recovery.StuckAfter)
+                + " before the stream is restarted."
+        );
+    }
+
+    /// <summary>The output is inactive: the guarded start, with a backoff after a failure.</summary>
+    private ObsRuntimeSnapshot Start()
+    {
+        ObsStreamResult stream = StartInactive(out bool attempted);
+        if (Live(stream))
+        {
+            logger.LogInformation("OBS stream is active.");
+        }
+        else if (attempted)
+        {
+            TimeSpan delay = recovery.Failed(now());
+            if (stream?.Failure == ObsOutputFailure.IngestUnreachable)
+            {
+                logger.LogWarning(
+                    "OBS stream was not started ({Code}). {Detail} Next attempt in {Delay}.",
+                    stream.Reason,
+                    stream.Detail,
+                    delay
+                );
+            }
+            else
+            {
+                logger.LogWarning(
+                    "OBS stream was not confirmed live ({Failure}). {Detail} Next attempt in {Delay}.",
+                    stream?.Failure,
+                    stream?.Detail,
+                    delay
+                );
+            }
+        }
+
+        return Remember(stream, ReadScene());
+    }
+
+    /// <summary>
+    /// The output stayed reconnecting or frozen past <c>OBS:StreamStuckAfter</c> (#395):
+    /// StopStream, confirm it inactive, then the guarded start. One warning per attempt, with the
+    /// cause code, the frozen byte count, and how long it was stuck. A restart that does not end
+    /// live waits for the backoff. A restart mid-match never shows the waiting scene: the
+    /// spectator's scene stays on air (#407).
+    /// </summary>
+    private ObsRuntimeSnapshot Restart(ObsStreamHealth stuck)
+    {
+        TimeSpan stuckFor = stuck.StuckFor(now());
+        ObsStreamResult stopped = recording.StopStreaming(EnsureIdentified);
+        ObsStreamResult result;
+        if (stopped is { Succeeded: true, Active: false })
+        {
+            // A new output starts a new stretch: the stuck one's bytes and clock are done.
+            ReadStreamHealth();
+            result = StartInactive(out _);
+        }
+        else
+        {
+            result = ObsStreamResult.Failed(
+                stopped?.Failure is ObsOutputFailure failure && failure != ObsOutputFailure.None
+                    ? failure
+                    : ObsOutputFailure.NotConfirmed,
+                "StopStream was not confirmed. " + stopped?.Detail,
+                stuck.CauseCode
+            );
+        }
+
+        if (Live(result))
+        {
+            logger.LogWarning(
+                "OBS stream was stuck {State} for {StuckFor} ({CauseCode}): {Bytes} bytes sent, frozen since {StuckSince}. Stopped it and started it again; the stream is live.",
+                stuck.State,
+                stuckFor,
+                stuck.CauseCode,
+                stuck.Bytes,
+                stuck.StuckSince
+            );
+        }
+        else
+        {
+            TimeSpan delay = recovery.Failed(now());
+            logger.LogWarning(
+                "OBS stream was stuck {State} for {StuckFor} ({CauseCode}): {Bytes} bytes sent, frozen since {StuckSince}. The restart did not end live ({Failure}): {Detail} Next attempt in {Delay}.",
+                stuck.State,
+                stuckFor,
+                stuck.CauseCode,
+                stuck.Bytes,
+                stuck.StuckSince,
+                result?.Failure,
+                result?.Detail,
+                delay
+            );
+        }
+
+        return Remember(result, ReadScene());
+    }
+
+    /// <summary>A start that OBS confirmed, and whose output then reads live, not reconnecting.</summary>
+    private bool Live(ObsStreamResult started) =>
+        started is { Succeeded: true, Active: true } && ReadStreamHealth().IsLive;
+
+    /// <summary>
+    /// The guarded start of an inactive output (#407): the profile and collection check, the
+    /// preflight, the ingest check, the scene, the microphone mute, then StartStream once, and a
+    /// wait until that start ended. <paramref name="attempted"/> is true once StartStream was
+    /// sent, or the ingest refused it: both are attempts the backoff counts. No retry follows
+    /// inside an attempt; the 1, 2, 5 minute backoff is the retry. On ASA-SERVER on 2026-10-09
+    /// four StartStream calls 9 to 12 s apart, each building 5 multitrack encoders under a
+    /// match's load, hung OBS 32.2.2 for good. Only one start runs at a time.
+    /// </summary>
+    private ObsStreamResult StartInactive(out bool attempted)
+    {
+        attempted = false;
+        string waiting = settings.OBS?.WaitingSceneName;
+        if (string.IsNullOrWhiteSpace(waiting))
+        {
+            if (!waitingSceneMissingLogged)
+            {
+                waitingSceneMissingLogged = true;
+                logger.LogWarning(
+                    "OBS stream was not started: OBS:WaitingSceneName is not configured."
+                );
+            }
+
+            return ObsStreamResult.Failed(
+                ObsOutputFailure.NotConfirmed,
+                "Waiting scene is not configured."
             );
         }
 
@@ -336,59 +713,226 @@ internal sealed class ObsCoordinator
         ObsSelectionResult selection = CheckSelection();
         if (!selection.Ok)
         {
-            return Remember(
-                ObsStreamResult.Failed(
-                    ObsOutputFailure.SelectionMismatch,
-                    selection.Detail,
-                    selection.Reason
-                ),
-                ReadScene()
+            return ObsStreamResult.Failed(
+                ObsOutputFailure.SelectionMismatch,
+                selection.Detail,
+                selection.Reason
             );
         }
 
         ObsStreamResult blocked = Preflight();
         if (blocked != null)
         {
-            return Remember(blocked, ReadScene());
+            return blocked;
+        }
+
+        if (Interlocked.CompareExchange(ref starting, 1, 0) != 0)
+        {
+            return ObsStreamResult.Waiting(
+                "A stream start is still running, so no second StartStream was sent."
+            );
         }
 
         try
         {
-            socket.SelectProgramScene(scene);
-            SceneSelected(scene);
+            return StartOnce(waiting, out attempted);
         }
-        catch (Exception e)
+        finally
         {
-            logger.LogWarning(e, "Could not select the OBS waiting scene.");
-            return Remember(
-                ObsStreamResult.Failed(ObsOutputFailure.NotConfirmed, e.Message),
-                ReadScene()
-            );
+            Volatile.Write(ref starting, 0);
+        }
+    }
+
+    private ObsStreamResult StartOnce(string waiting, out bool attempted)
+    {
+        attempted = false;
+        ObsStreamResult unreachable = CheckIngest();
+        if (unreachable != null)
+        {
+            attempted = true;
+            return unreachable;
+        }
+
+        ObsStreamResult refused = SceneForStart(waiting);
+        if (refused != null)
+        {
+            return refused;
         }
 
         // Last thing before the stream goes out: a microphone unmuted since the session began
         // must not go live with it.
         MuteMicrophones(ObsMicrophoneMute.BeforeStartStream);
-        ObsStreamResult stream = ObsBackoff.Run(
-            backoff.Delays(),
-            () => recording.StartStreaming(EnsureIdentified),
-            wait
-        );
-        if (stream == null || !stream.Succeeded)
+        // A dialog an earlier start left open (it can show after that start's look ended).
+        CloseConnectFailDialogs(look: false);
+        attempted = true;
+        ObsStreamResult started = recording.StartStreaming(EnsureIdentified);
+        if (started is not { Succeeded: true, Active: true })
         {
-            logger.LogWarning(
-                "OBS stream was not confirmed ({Failure}). {Detail}",
-                stream?.Failure,
-                stream?.Detail
-            );
-        }
-        else
-        {
-            logger.LogInformation("OBS stream is active.");
+            CloseConnectFailDialogs(look: true);
         }
 
-        return Remember(stream, ReadScene());
+        return started;
     }
+
+    /// <summary>
+    /// The scene the stream starts on (#407). When the spectator wants a scene other than the
+    /// waiting scene (a match or a report is on screen), the start never shows the waiting scene:
+    /// it only makes sure the spectator's scene is on air. Only a start with no scene asked for,
+    /// or the waiting scene asked for, shows the waiting scene first, and that never changes what
+    /// the spectator wants. On 2026-10-09 a restart mid-match switched to the waiting scene, its
+    /// put-back timed out, and the waiting scene stayed on air for the rest of the match. Null
+    /// when the start may go on; a failed result when OBS refused the waiting scene.
+    /// </summary>
+    private ObsStreamResult SceneForStart(string waiting)
+    {
+        lock (sceneGate)
+        {
+            string desired = DesiredScene();
+            if (
+                !string.IsNullOrWhiteSpace(desired)
+                && !string.Equals(desired, waiting, StringComparison.Ordinal)
+            )
+            {
+                PutDesiredSceneOnAir();
+                return null;
+            }
+
+            try
+            {
+                socket.SelectProgramScene(waiting);
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "Could not select the OBS waiting scene.");
+                return ObsStreamResult.Failed(ObsOutputFailure.NotConfirmed, e.Message);
+            }
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A TCP connect to the ingest before StartStream (#407,
+    /// <c>OBS:IngestPreflightTimeout</c>). An ingest that does not accept one gets no StartStream:
+    /// OBS builds no encoders and opens no "Failed to connect" dialog. Null when the start may go
+    /// on, which includes a server the check cannot read or name (the start is then unchecked).
+    /// </summary>
+    private ObsStreamResult CheckIngest()
+    {
+        TimeSpan timeout = settings.OBS?.IngestPreflightTimeout ?? ObsIngest.DefaultTimeout;
+        if (ingest == null || timeout <= TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        ObsIngestTarget target;
+        try
+        {
+            target = ObsIngest.Resolve(socket.StreamServer());
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(
+                e,
+                "Could not read the OBS stream server. StartStream goes ahead without the ingest check."
+            );
+            return null;
+        }
+
+        if (target == null)
+        {
+            logger.LogDebug(
+                "The OBS stream server names no RTMP ingest to check. StartStream goes ahead without the ingest check."
+            );
+            return null;
+        }
+
+        string failure;
+        try
+        {
+            failure = ingest.Connect(target.Host, target.Port, timeout);
+        }
+        catch (Exception e)
+        {
+            failure = e.Message;
+        }
+
+        if (failure == null)
+        {
+            return null;
+        }
+
+        return ObsStreamResult.Failed(
+            ObsOutputFailure.IngestUnreachable,
+            "The ingest "
+                + target
+                + " did not accept a TCP connection within "
+                + timeout.TotalSeconds.ToString("0.#")
+                + " s ("
+                + failure
+                + "), so StartStream was not sent.",
+            ObsIngest.UnreachableCode
+        );
+    }
+
+    /// <summary>
+    /// Closes OBS's "Failed to connect" dialogs (<c>OBS:ConnectFailDialogTitle</c>, #407), only
+    /// while OBS answers its websocket: a hung OBS never handled the close on 2026-10-09. With
+    /// <paramref name="look"/>, after a failed start, it waits up to
+    /// <see cref="DialogLooks"/> x <see cref="DialogLookPause"/> for OBS to open one.
+    /// </summary>
+    private void CloseConnectFailDialogs(bool look)
+    {
+        string title = settings.OBS?.ConnectFailDialogTitle;
+        if (windows == null || string.IsNullOrEmpty(title))
+        {
+            return;
+        }
+
+        if (look && ReadStreamHealth().State == ObsStreamState.Unknown)
+        {
+            logger.LogDebug(
+                "OBS did not answer after the failed start, so its dialogs were left alone."
+            );
+            return;
+        }
+
+        int? pid = ReadPid();
+        if (pid == null)
+        {
+            return;
+        }
+
+        for (int attempt = 1; ; attempt++)
+        {
+            if (
+                ObsConnectFailDialog.Close(windows, pid, title, logger) > 0
+                || !look
+                || attempt >= DialogLooks
+            )
+            {
+                return;
+            }
+
+            wait?.Invoke(DialogLookPause);
+        }
+    }
+
+    private int? ReadPid()
+    {
+        try
+        {
+            return process.ProcessId();
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Could not read the OBS process id.");
+            return null;
+        }
+    }
+
+    private static string Clock(DateTimeOffset? at) =>
+        at is DateTimeOffset value ? value.ToUniversalTime().ToString("HH:mm:ss") + "Z" : "-";
 
     public ObsShutdownResult Shutdown()
     {
@@ -507,7 +1051,7 @@ internal sealed class ObsCoordinator
             return;
         }
 
-        RemoveStaleSentinels();
+        // The launcher clears OBS's stale crash sentinels inside the launch gate (#409).
         try
         {
             ObsLaunchDecision started = process.Start(decision);
@@ -521,10 +1065,11 @@ internal sealed class ObsCoordinator
         }
 
         logger.LogWarning(
-            "OBS launch {Path} {Arguments}. Started={Started}.",
+            "OBS launch {Path} {Arguments}. Started={Started}. {Detail}",
             lastLaunch.ExecutablePath,
             lastLaunch.Arguments,
-            lastLaunch.Started
+            lastLaunch.Started,
+            lastLaunch.Detail
         );
         if (lastLaunch.Started)
         {
@@ -617,22 +1162,6 @@ internal sealed class ObsCoordinator
         );
     }
 
-    /// <summary>
-    /// A run sentinel left by an OBS that did not exit cleanly stops the launch on the Crash
-    /// Detected dialog. The sentinel itself checks again that no OBS runs before it deletes.
-    /// </summary>
-    private void RemoveStaleSentinels()
-    {
-        try
-        {
-            sentinel?.RemoveStale();
-        }
-        catch (Exception e)
-        {
-            logger.LogWarning(e, "Could not clear stale OBS crash sentinels before the launch.");
-        }
-    }
-
     private bool InStartupWindow() => startupDeadline is DateTimeOffset end && now() < end;
 
     private static TimeSpan Shorter(TimeSpan a, TimeSpan b) => a < b ? a : b;
@@ -640,8 +1169,14 @@ internal sealed class ObsCoordinator
     private ObsRuntimeSnapshot Remember(ObsStreamResult stream, string sceneActual)
     {
         bool running = ReadRunning();
+        ObsStreamHealth read = ReadStreamHealth();
+        // Live only: an output that is active but reconnecting or frozen is not on air (#395).
+        // A start OBS just confirmed still counts when the read after it failed.
         bool streamActive =
-            stream != null && stream.Succeeded && stream.Active ? true : ReadStreamActive();
+            read.IsLive
+            || (
+                read.State == ObsStreamState.Unknown && stream is { Succeeded: true, Active: true }
+            );
         bool recordingActive = ReadRecording();
         lock (stateGate)
         {
@@ -656,7 +1191,8 @@ internal sealed class ObsCoordinator
                 recordingDesired,
                 recordingActive,
                 stream,
-                sceneRequested
+                sceneRequested,
+                read
             );
             return state;
         }
@@ -667,18 +1203,6 @@ internal sealed class ObsCoordinator
         try
         {
             return process.IsRunning();
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-
-    private bool ReadStreamActive()
-    {
-        try
-        {
-            return socket.IsIdentified && socket.IsStreamActive();
         }
         catch (Exception)
         {

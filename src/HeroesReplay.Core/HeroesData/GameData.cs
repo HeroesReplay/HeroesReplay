@@ -120,7 +120,8 @@ public class GameData : IGameData
                         Ratings(hero.Ratings),
                         hero.HeroUnits == null
                             ? Array.Empty<string>()
-                            : hero.HeroUnits.Keys.ToArray()
+                            : hero.HeroUnits.Keys.ToArray(),
+                        HeroTalents.Read(hero)
                     )
                 );
             }

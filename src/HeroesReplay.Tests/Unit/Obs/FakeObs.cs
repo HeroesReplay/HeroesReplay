@@ -66,6 +66,15 @@ internal sealed class FakeObs : IObsReadSessionFactory
         };
     public byte[] Png { get; set; } = TinyPng.Create(32, 18);
 
+    /// <summary>GetStreamStatus outputActive.</summary>
+    public bool StreamActive { get; set; }
+
+    /// <summary>GetStreamStatus outputReconnecting (#395).</summary>
+    public bool StreamReconnecting { get; set; }
+
+    /// <summary>GetStreamStatus outputBytes.</summary>
+    public long StreamBytes { get; set; }
+
     /// <summary>GetRecordStatus outputActive. StopRecord turns it off unless <see cref="KeepRecordingOnStop"/>.</summary>
     public bool Recording { get; set; } = true;
 
@@ -333,12 +342,12 @@ internal sealed class FakeObs : IObsReadSessionFactory
             },
             "GetStreamStatus" => new JObject
             {
-                ["outputActive"] = false,
-                ["outputReconnecting"] = false,
+                ["outputActive"] = StreamActive,
+                ["outputReconnecting"] = StreamReconnecting,
                 ["outputTimecode"] = "00:00:00.000",
                 ["outputDuration"] = 0,
-                ["outputCongestion"] = 0,
-                ["outputBytes"] = 0,
+                ["outputCongestion"] = StreamReconnecting ? 1 : 0,
+                ["outputBytes"] = StreamBytes,
                 ["outputSkippedFrames"] = 3,
                 ["outputTotalFrames"] = 1000,
             },
@@ -763,6 +772,8 @@ internal sealed class FakeObs : IObsReadSessionFactory
         public string StopRecord() => owner.StopRecord();
 
         public bool IsStreamActive() => false;
+
+        public ObsStreamSample ReadStream() => new(false, false, 0);
 
         public void StartStream() => owner.Requests.Add("StartStream");
 

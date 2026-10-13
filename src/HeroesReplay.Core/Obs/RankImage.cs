@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Replays;
 using Microsoft.Kiota.Abstractions.Serialization;
 
 namespace HeroesReplay.Core.Obs;
@@ -44,6 +46,23 @@ public static class RankImage
 
         string rank = parts[2];
         return SourceName(rank) == null ? null : rank;
+    }
+
+    /// <summary>
+    /// The rank the game scene shows for <paramref name="replay"/>: Heroes Profile's rank or
+    /// league tier, else the rank in the cache file name. Null when neither names one.
+    /// </summary>
+    public static string RankOf(LoadedReplay replay, out int? leagueTier)
+    {
+        HeroesProfileReplay row = replay?.HeroesProfileReplay;
+        leagueTier = row?.LeagueTier;
+        if (!string.IsNullOrWhiteSpace(SourceName(row?.Rank, leagueTier)))
+        {
+            return row?.Rank;
+        }
+
+        leagueTier = null;
+        return RankFromCacheFileName(replay?.FileInfo?.Name);
     }
 
     /// <summary>Storm League division painted on the badge, 1 through 5. Master and Grandmaster have none.</summary>

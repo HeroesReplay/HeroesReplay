@@ -11,6 +11,7 @@ using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.Obs.Recording;
 using HeroesReplay.Core.Replays.Context;
+using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.Logging;
@@ -60,14 +61,20 @@ public class ObsController : IObsController
             logger,
             settings,
             socket,
-            new WindowsObsProcess(),
+            // OBS starts detached (#409), never as spectate's child.
+            new WindowsObsProcess(ObsLauncher.ForThisUser(logger)),
             new RecordingSession(
                 logger,
                 socket,
-                ObsRecordingBudget.Default,
+                new ObsRecordingBudget
+                {
+                    StreamStartTimeout =
+                        settings.OBS?.StreamStartTimeout > TimeSpan.Zero
+                            ? settings.OBS.StreamStartTimeout
+                            : OBSSettings.DefaultStreamStartTimeout,
+                },
                 new RecordingClaimStore(RecordingClaimStore.DefaultPath)
             ),
-            ObsBackoff.Default,
             Thread.Sleep,
             TimeSpan.FromSeconds(10),
             () => PatchInstalledCollection(),
@@ -87,14 +94,11 @@ public class ObsController : IObsController
                     }
                 ),
             settings.OBS?.StartupIdentifyTimeout,
-            sentinel: new ObsCrashSentinel(
-                ObsCrashSentinel.DefaultDirectory(),
-                () => NamedProcess.IsRunning(ObsLaunchDecision.ProcessName),
-                logger
-            ),
             microphones: new ObsBorrowedMicrophoneSession(this.obs),
             // A scene switch and a session start reach status.json at once (#357).
-            stateChanged: () => ObsStatus.Write(statusStore, ReadObsState)
+            stateChanged: () => ObsStatus.Write(statusStore, ReadObsState),
+            ingest: new TcpIngestProbe(),
+            windows: new Win32ObsWindows()
         );
     }
 
@@ -377,7 +381,11 @@ public class ObsController : IObsController
 
     private int? CurrentReplayId => context.Current?.LoadedReplay?.ReplayId;
 
-    public bool IsStreaming() => coordinator.IsStreaming();
+    public ObsStreamHealth ReadStreamHealth() => coordinator.ReadStreamHealth();
+
+    public ObsStreamHealth CheckStreamHealth() => coordinator.CheckStreamHealth();
+
+    public void ReconcileScene() => coordinator.ReconcileScene();
 
     public void UpdateReplayInfoVisibility(TimeSpan matchTime)
     {
@@ -423,6 +431,9 @@ public class ObsController : IObsController
     {
         if (SkipWhileUnavailable("The game scene"))
         {
+            // Still the scene the spectator wants: once OBS answers, the scene reconcile puts it
+            // on air, and a stream started meanwhile does not show the waiting scene (#407).
+            coordinator.WantScene(settings.OBS.GameSceneName);
             return;
         }
 
@@ -445,6 +456,26 @@ public class ObsController : IObsController
             });
     }
 
+    public void HideRank()
+    {
+        if (SkipWhileUnavailable("Hiding the rank"))
+        {
+            return;
+        }
+
+        try
+        {
+            EnsureConnected();
+            HideRankImages();
+            HideRankCaption();
+            logger.LogInformation("OBS rank badge, tier, and MMR hidden.");
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not hide the rank on the game scene.");
+        }
+    }
+
     public void SetRankImage()
     {
         try
@@ -463,6 +494,7 @@ public class ObsController : IObsController
     {
         if (SkipWhileUnavailable("The waiting scene"))
         {
+            coordinator.WantScene(settings.OBS.WaitingSceneName);
             return;
         }
 
@@ -646,15 +678,17 @@ public class ObsController : IObsController
 
     private bool ShowRankImage()
     {
-        HeroesProfileReplay row = context.Current?.LoadedReplay?.HeroesProfileReplay;
-        string rank = row?.Rank;
-        int? leagueTier = row?.LeagueTier;
-        if (string.IsNullOrWhiteSpace(RankImage.SourceName(rank, leagueTier)))
+        if (ReplayRequestKind.Blind(context.Current?.LoadedReplay))
         {
-            rank = RankImage.RankFromCacheFileName(context.Current?.LoadedReplay?.FileInfo?.Name);
-            leagueTier = null;
+            logger.LogInformation(
+                "Blind Rating replay {ReplayId}: no rank badge, tier, or MMR on the game scene.",
+                context.Current.LoadedReplay.ReplayId
+            );
+            return false;
         }
 
+        HeroesProfileReplay row = context.Current?.LoadedReplay?.HeroesProfileReplay;
+        string rank = RankImage.RankOf(context.Current?.LoadedReplay, out int? leagueTier);
         string sourceName = RankImage.SourceName(rank, leagueTier);
         if (string.IsNullOrWhiteSpace(sourceName))
         {

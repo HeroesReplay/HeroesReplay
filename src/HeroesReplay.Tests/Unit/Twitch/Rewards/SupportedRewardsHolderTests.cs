@@ -123,6 +123,54 @@ public class SupportedRewardsHolderTests
         Assert.Equal(GameType.QuickMatch, reward.Mode);
     }
 
+    /// <summary>#411: one Blind Rating reward, Storm League, no viewer input.</summary>
+    [Fact]
+    public void BlindRating_IsOneStormLeagueRewardWithoutInput()
+    {
+        var holder = new SupportedRewardsHolder(new MapOnlyGameData(LoadCatalog().ToArray()));
+
+        SupportedReward blind = Assert.Single(
+            holder.Rewards,
+            reward => reward.RewardType.HasFlag(RewardType.Blind)
+        );
+        Assert.Equal(SupportedRewardsHolder.BlindRatingTitle, blind.Title);
+        Assert.Equal(RewardType.SL | RewardType.Blind, blind.RewardType);
+        Assert.Equal(GameType.StormLeague, blind.Mode);
+        Assert.Null(blind.Map);
+        Assert.False(blind.IsUserInputRequired);
+        Assert.Null(blind.Prompt);
+        Assert.True(
+            holder.TryGetReward(
+                new OnRewardRedeemedArgs { RewardTitle = "Blind Rating" },
+                out SupportedReward found
+            )
+        );
+        Assert.Same(blind, found);
+    }
+
+    [Fact]
+    public void BlindRating_IsHandledByTheMapRewardHandler()
+    {
+        var handler = new HeroesReplay.Core.Twitch.RedeemedRewards.MapRewardHandler(
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        Assert.Contains(RewardType.SL | RewardType.Blind, handler.Supports);
+    }
+
+    /// <summary>Twitch allows 50 custom rewards per channel.</summary>
+    [Fact]
+    public void LiveCatalog_StaysUnderTheTwitchRewardLimit()
+    {
+        var holder = new SupportedRewardsHolder(new MapOnlyGameData(LoadCatalog().ToArray()));
+
+        Assert.InRange(holder.Rewards.Count, 1, 50);
+    }
+
     private static List<Map> LoadCatalog()
     {
         string path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
@@ -188,6 +236,8 @@ public class SupportedRewardsHolderTests
                 mode + " | Map | Rank"
             );
             Assert.False((mode | RewardType.Map).HasFlag(RewardType.Rank), mode + " | Map");
+            Assert.True(values.Add(mode | RewardType.Blind), mode + " | Blind");
+            Assert.False((mode | RewardType.Map).HasFlag(RewardType.Blind), mode + " | Map");
         }
     }
 
@@ -196,6 +246,7 @@ public class SupportedRewardsHolderTests
     [InlineData("\"SL, Map, Rank\"", RewardType.SL | RewardType.Map | RewardType.Rank)]
     [InlineData("\"ARAM, Map\"", RewardType.ARAM | RewardType.Map)]
     [InlineData("\"ReplayId\"", RewardType.ReplayId)]
+    [InlineData("\"SL, Blind\"", RewardType.SL | RewardType.Blind)]
     public void RewardType_StoredNamesParseToTheIntendedValue(string json, RewardType expected)
     {
         var options = new JsonSerializerOptions

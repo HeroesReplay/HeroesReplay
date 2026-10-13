@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.ServiceHost;
@@ -6,7 +7,8 @@ namespace HeroesReplay.Core.ServiceHost;
 /// <summary>
 /// The supervisor's machine line (#251): memory, commit charge, the leaking process counts, and
 /// each watched process's private bytes, once per <see cref="MachineHealthSettings.LogInterval"/>.
-/// A warning names each value above its limit.
+/// A warning names each value above its limit, and while memory or commit is above its limit one
+/// more names the processes holding the most commit, whoever owns them (#399).
 /// </summary>
 public sealed class MachineHealthLog
 {
@@ -47,10 +49,11 @@ public sealed class MachineHealthLog
             foreach (MachineProcessMemory process in report.Processes)
             {
                 logger.LogInformation(
-                    "Process {Name} pid {Pid}: {PrivateMegabytes} MB private, started {StartedAt:O}.",
+                    "Process {Name} pid {Pid}: {PrivateMegabytes} MB private, {WorkingSetMegabytes} MB working set, started {StartedAt:O}.",
                     process.Name,
                     process.Pid,
                     process.PrivateMegabytes,
+                    process.WorkingSetMegabytes,
                     process.StartedAt
                 );
             }
@@ -58,6 +61,16 @@ public sealed class MachineHealthLog
             foreach (string warning in report.Warnings)
             {
                 logger.LogWarning("Machine health: {Warning}", warning);
+            }
+
+            if (report.TopConsumers.Count > 0)
+            {
+                // Whoever owns them (a browser tab held 13 GB on 2026-10-08, #399). Report only.
+                logger.LogWarning(
+                    "Machine health: the {Count} processes holding the most commit (private bytes), report only: {TopConsumers}.",
+                    report.TopConsumers.Count,
+                    string.Join("; ", report.TopConsumers.Select(MachineHealth.DescribeProcess))
+                );
             }
         }
         catch (Exception e)

@@ -119,6 +119,8 @@ public static class ServiceHealthClassifier
             SessionsWithoutProgress = heartbeat?.SessionsWithoutProgress,
             LastOutcome = heartbeat?.LastOutcome,
             LaunchingSince = heartbeat?.LaunchingSince,
+            StreamHoldSince = heartbeat?.StreamHoldSince,
+            StreamHoldReason = heartbeat?.StreamHoldReason,
             SessionOutcomes = heartbeat?.SessionOutcomes,
             Dependency = heartbeat?.Dependency,
         };
@@ -133,15 +135,35 @@ public static class ServiceHealthClassifier
             );
         }
 
-        if (!running)
+        if (!running || record.Pid <= 0)
         {
             if (stopRequested || heartbeat?.Readiness == ServiceReadiness.Stopping)
             {
                 return With(
-                    health,
+                    health with
+                    {
+                        Running = false,
+                    },
                     ServiceRoleState.Stopped,
-                    $"pid {pid} exited after a stop request.",
+                    record.Pid <= 0
+                        ? "Not running, and a stop was requested."
+                        : $"pid {pid} exited after a stop request.",
                     "Run `heroesreplay services start` to start the stack again."
+                );
+            }
+
+            if (record.Pid <= 0)
+            {
+                // The supervisor keeps the role without a pid when a restart left no process, so
+                // services.json never names a dead one (#397).
+                return With(
+                    health with
+                    {
+                        Running = false,
+                    },
+                    ServiceRoleState.Failed,
+                    $"No {role} process is running: its last restart did not leave one.",
+                    $"Read the {role} log and the supervisor log, then " + RestartStack
                 );
             }
 
@@ -186,6 +208,29 @@ public static class ServiceHealthClassifier
         string degradedFix =
             $"Check the {role} console, its log file, or the Aspire logs. If it does not recover, "
             + RestartStack;
+        // A spectate that holds the next replay while the desired stream is down is not failing
+        // (#396): no match progress is expected, so no launch stall, no run of sessions without
+        // progress, and no work age makes it degraded. Its heartbeat still has to be fresh.
+        if (
+            heartbeat.StreamHoldSince is DateTimeOffset holding
+            && heartbeat.Readiness != ServiceReadiness.Stopping
+        )
+        {
+            string held = Age(now, holding) is TimeSpan heldFor ? Describe(heldFor) : "a moment";
+            string why = string.IsNullOrWhiteSpace(heartbeat.StreamHoldReason)
+                ? string.Empty
+                : " " + heartbeat.StreamHoldReason.TrimEnd('.') + ".";
+            return With(
+                health,
+                ServiceRoleState.Ready,
+                $"Holding the next replay for {held}: the desired stream is not live.{why} The next replay loads once the stream is live again (Spectate:HoldWhileStreamDown).",
+                null
+            ) with
+            {
+                CauseCode = ServiceHealthCodes.SpectateStreamHold,
+            };
+        }
+
         TimeSpan stallLimit = settings.LaunchStallThreshold(role);
         if (
             stallLimit > TimeSpan.Zero
@@ -391,6 +436,8 @@ public static class ServiceHealthClassifier
                     BudgetWindowSeconds = state.BudgetWindowSeconds,
                     BudgetExhausted = ledger.Exhausted,
                     ExhaustedAt = ledger.ExhaustedAt,
+                    Adopted = ledger.Adopted,
+                    LastAdoptedAt = ledger.LastAdoptedAt,
                 },
             };
             string log = string.IsNullOrWhiteSpace(role.LogPath)
@@ -455,6 +502,7 @@ public static class ServiceHealthClassifier
                 Budget = state?.Budget ?? 0,
                 BudgetWindowSeconds = state?.BudgetWindowSeconds ?? 0,
                 StaleRestartAfterSeconds = state?.StaleRestartAfterSeconds ?? 0,
+                Obs = state?.Obs,
             },
         };
     }

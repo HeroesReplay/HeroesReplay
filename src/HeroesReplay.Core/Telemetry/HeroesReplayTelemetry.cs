@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Globalization;
@@ -9,25 +8,10 @@ namespace HeroesReplay.Core.Telemetry;
 public static class HeroesReplayTelemetry
 {
     public const string SourceName = "HeroesReplay";
-    public const string ScreenShadowInstrument = "heroesreplay.screen.shadow";
 
     public static readonly ActivitySource ActivitySource = new(SourceName);
 
     public static readonly Meter Meter = new(SourceName);
-
-    private static readonly Counter<long> ScreenShadowObservations = Meter.CreateCounter<long>(
-        ScreenShadowInstrument,
-        unit: "{observation}",
-        description: "Client screen observations with the OCR and memory verdicts side by side (#292)."
-    );
-
-    /// <summary>One shadow observation of a client screen, by state and verdict.</summary>
-    public static void CountScreenShadow(string state, string verdict) =>
-        ScreenShadowObservations.Add(
-            1,
-            new KeyValuePair<string, object>("state", state),
-            new KeyValuePair<string, object>("verdict", verdict)
-        );
 
     public static Activity StartSpan(string name, Activity parent = null)
     {

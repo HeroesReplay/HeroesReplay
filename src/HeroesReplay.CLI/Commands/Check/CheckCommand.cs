@@ -819,11 +819,12 @@ public class CheckCommand : Command
 
     public static async Task<CheckResult> CheckBattleNetAsync(CheckRun run)
     {
+        // The Battle.net launcher, not the game client: the one check that still OCRs (#292).
+        _ = run;
         try
         {
-            using var provider = run.CreateProvider();
             return await BattleNetLauncherCheck
-                .ReadAsync(provider.GetService<Windows.Media.Ocr.OcrEngine>())
+                .ReadAsync(LauncherOcr.TryCreate())
                 .ConfigureAwait(false);
         }
         catch (Exception e)

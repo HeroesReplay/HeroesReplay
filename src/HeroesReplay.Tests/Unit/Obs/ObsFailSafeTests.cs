@@ -33,6 +33,20 @@ public class ObsFailSafeTests
         Assert.Contains("Stopped the OBS stream", result);
     }
 
+    [Theory]
+    [InlineData(ObsFailSafeAction.StopStream, "stop")]
+    [InlineData(ObsFailSafeAction.WaitingScene, "scene:waiting-screen")]
+    public void AStreamStuckReconnecting_IsStillMadeSafe(ObsFailSafeAction action, string change)
+    {
+        // #395: an active output that is reconnecting can go back on air, so it counts.
+        var session = new FakeSession { Live = true, Reconnecting = true };
+
+        string result = Apply(action, session);
+
+        Assert.Equal(new[] { change }, session.Changes);
+        Assert.Contains("reconnecting", result, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void AStreamThatIsNotLive_IsLeftAlone()
     {
@@ -111,6 +125,7 @@ public class ObsFailSafeTests
     private sealed class FakeSession : IObsFailSafeSession
     {
         public bool Live { get; init; }
+        public bool Reconnecting { get; init; }
         public Exception SceneError { get; init; }
         public List<string> Changes { get; } = new();
         public bool Disposed { get; private set; }
@@ -119,7 +134,7 @@ public class ObsFailSafeTests
         {
             Assert.True(ObsReadOnly.IsAllowed(requestType), requestType);
             return requestType == "GetStreamStatus"
-                ? new JObject { ["outputActive"] = Live }
+                ? new JObject { ["outputActive"] = Live, ["outputReconnecting"] = Reconnecting }
                 : new JObject();
         }
 

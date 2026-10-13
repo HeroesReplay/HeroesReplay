@@ -12,7 +12,11 @@ public class StableGameTimerTests
     [Fact]
     public void ReadAsync_WithoutAGameProcess_HasNoClockAndNeverFallsBackToTheScreen()
     {
-        var timer = new StableGameTimer(new StubController(NullLogger<StubController>.Instance));
+        using var shared = new SharedClientProcess(NullLogger<SharedClientProcess>.Instance);
+        var timer = new StableGameTimer(
+            new StubController(NullLogger<StubController>.Instance),
+            shared
+        );
 
         GameTimerReading reading = timer.ReadAsync(CancellationToken.None).Result;
 

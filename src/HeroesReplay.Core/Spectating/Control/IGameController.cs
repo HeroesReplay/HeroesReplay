@@ -15,6 +15,7 @@ public interface IGameController
     Task<TimeSpan?> TryReadRunningMatchClockAsync();
     Task<bool> IsReplayPresentedAsync(LoadedReplay replay);
     Task<bool> TrySeeEndScreenAsync(bool nearCore);
+
     void SendFocus(int player);
     void SendPanel(Panel panel);
     void ShowSelectedUnit();

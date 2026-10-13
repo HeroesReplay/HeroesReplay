@@ -76,7 +76,11 @@ public sealed class PredictionReportWriter
     /// the verdict memory, and writes the page. Returns the report (with its verdict) even when
     /// the page could not be written; null when no report could be built.
     /// </summary>
-    public PredictionReport TryWrite(Prediction prediction, string map)
+    public PredictionReport TryWrite(
+        Prediction prediction,
+        string map,
+        PredictionKind kind = PredictionKind.Winner
+    )
     {
         if (prediction == null || string.IsNullOrWhiteSpace(ReportPath))
         {
@@ -92,7 +96,8 @@ public sealed class PredictionReportWriter
                 prediction,
                 streaks,
                 map,
-                Random.Shared
+                Random.Shared,
+                kind
             );
             if (report == null)
             {

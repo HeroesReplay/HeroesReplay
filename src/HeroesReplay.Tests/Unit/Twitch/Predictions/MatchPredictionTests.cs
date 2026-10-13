@@ -36,8 +36,8 @@ public class MatchPredictionTests : IClassFixture<ReplayFixture>
     [Fact]
     public void OutcomeTitle_BlueIsTeam0()
     {
-        Assert.Equal("Blue", MatchPrediction.OutcomeTitle(0));
-        Assert.Equal("Red", MatchPrediction.OutcomeTitle(1));
+        Assert.Equal("Blue", RatingPrediction.OutcomeTitle(PredictionKind.Winner, 0));
+        Assert.Equal("Red", RatingPrediction.OutcomeTitle(PredictionKind.Winner, 1));
     }
 
     [Fact]

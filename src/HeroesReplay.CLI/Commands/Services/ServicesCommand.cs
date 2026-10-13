@@ -302,6 +302,9 @@ public class ServicesCommand : Command
             .GetServices<ILoggerProvider>()
             .OfType<ServiceRoleLogProvider>()
             .FirstOrDefault();
+        ILogger<ServiceSupervision> logger = provider.GetRequiredService<
+            ILogger<ServiceSupervision>
+        >();
         var supervision = new ServiceSupervision
         {
             Settings = settings,
@@ -311,12 +314,31 @@ public class ServicesCommand : Command
             ReadHeartbeat = record => ServiceReadyFile.TryRead(record),
             DeleteHeartbeat = record => ServiceReadyFile.Delete(record?.Nonce),
             StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
-            Launch = (role, started) => LaunchRole(exe, role, started),
-            Kill = Kill,
+            Launch = request =>
+                LaunchRole(
+                    exe,
+                    request.Role,
+                    request.Started,
+                    request.ReadyTimeout,
+                    request.Waiting
+                ),
+            // The stale, stalled, and untracked kills spare OBS and log it here (#409).
+            Kill = pid => KillRole(pid, logger),
+            FindUntracked = (role, tracked) =>
+                UntrackedRoleProcesses.Find(
+                    role,
+                    ProcessTable.Snapshot(),
+                    ProcessCommandLine.TryRead,
+                    exe,
+                    Environment.ProcessId,
+                    tracked,
+                    (pid, name) => ServiceReadyFile.FindByPid(pid, name)
+                ),
+            CommitPercent = ReadCommitPercent,
             CloseGame = StopSpectatedGame,
             SpectateDown = () => MakeObsSafe(settings.SpectateDownObs),
             Wait = pause => cancellationToken.WaitHandle.WaitOne(pause),
-            Logger = provider.GetRequiredService<ILogger<ServiceSupervision>>(),
+            Logger = logger,
             ExecutablePath = exe,
             Version = ServiceReadyFile.CurrentVersion(),
             LogPath = () => log?.CurrentPath,
@@ -324,8 +346,61 @@ public class ServicesCommand : Command
                 ServiceCollectionExtensions.LoadMachineHealthSettings(),
                 provider.GetRequiredService<ILogger<MachineHealthLog>>()
             ),
+            Obs = CreateObsWatchdog(settings, provider.GetRequiredService<ILogger<ObsWatchdog>>()),
         };
         return supervision.Run(cancellationToken);
+    }
+
+    /// <summary>
+    /// The supervisor's OBS watchdog (#398) on the real process table, a short read-only
+    /// websocket session, and a start detached from the supervisor. It watches only while
+    /// streaming is desired: <c>OBS:Enabled</c>, <c>OBS:StreamingEnabled</c>, and this machine's
+    /// stream arm, read on every pass.
+    /// </summary>
+    private static ObsWatchdog CreateObsWatchdog(ServiceRestartSettings restart, ILogger logger)
+    {
+        OBSSettings obs = ServiceCollectionExtensions.LoadAppSettings().OBS ?? new OBSSettings();
+        var arm = new ObsStreamArm();
+        return new ObsWatchdog
+        {
+            Rules = restart.ObsRules(obs),
+            WatchingSince = DateTimeOffset.UtcNow,
+            Desired = () =>
+            {
+                if (!obs.Enabled)
+                {
+                    return ObsWatchdogDesire.No("OBS:Enabled is false.");
+                }
+
+                if (!SessionMedia.ShouldStream(obs))
+                {
+                    return ObsWatchdogDesire.No("OBS:StreamingEnabled is false.");
+                }
+
+                return arm.IsArmed()
+                    ? ObsWatchdogDesire.Yes
+                    : ObsWatchdogDesire.No(
+                        "this machine is not armed for the stream (`heroesreplay obs arm`)."
+                    );
+            },
+            CannotControl = WindowsObsWatchdogPorts.CannotControl,
+            FindObs = WindowsObsWatchdogPorts.FindObs,
+            Probe = () =>
+                WindowsObsWatchdogPorts.Probe(obs.WebSocketEndpoint, obs.WebSocketPassword),
+            SpectatorSeesLiveStream = () =>
+                new SpectatorStatusStore().TryReadShared() is { SnapshotStale: false } status
+                && string.Equals(
+                    status.ObsStreamState,
+                    nameof(ObsStreamState.Live),
+                    StringComparison.Ordinal
+                ),
+            Close = WindowsObsWatchdogPorts.Close,
+            WaitForExit = WindowsObsWatchdogPorts.WaitForExit,
+            Kill = WindowsObsWatchdogPorts.Kill,
+            // Spectate's launcher too: the gate, the crash sentinel, a detached start (#409).
+            Launcher = ObsLauncher.ForThisUser(logger),
+            Logger = logger,
+        };
     }
 
     /// <summary>
@@ -336,7 +411,9 @@ public class ServicesCommand : Command
     private static ServiceLaunch LaunchRole(
         string exe,
         string role,
-        Action<ServiceProcessRecord> started
+        Action<ServiceProcessRecord> started,
+        TimeSpan? readyTimeout = null,
+        Action waiting = null
     )
     {
         ServiceStartupHandshake handshake = CreateHandshake(exe);
@@ -345,15 +422,125 @@ public class ServicesCommand : Command
             return new ServiceLaunch(null, false, false, "role configuration could not be loaded.");
         }
 
-        handshake.Cancelled = () => File.Exists(ServiceStopFile.DefaultPath);
+        Func<bool> stopping = () => File.Exists(ServiceStopFile.DefaultPath);
+        handshake.Cancelled = stopping;
+        if (readyTimeout is TimeSpan wait && wait > TimeSpan.Zero)
+        {
+            handshake.ReadyTimeout = wait;
+        }
+
+        if (waiting != null)
+        {
+            handshake.Wait = pause =>
+            {
+                Thread.Sleep(pause);
+                waiting();
+            };
+        }
+
+        TimeSpan launcherWait = LauncherWait(handshake.ReadyTimeout);
         return ServiceSupervisor.Restart(
             role,
             exe,
-            (name, arguments) => StartProcess(exe, arguments, handshake.Pending),
+            (name, arguments) =>
+                StartProcess(exe, arguments, handshake.Pending, launcherWait, stopping),
             ProcessNameOrNull,
             handshake,
             started
         );
+    }
+
+    /// <summary>
+    /// How long a launch waits for the PowerShell launcher to report the pid: 15 s, longer with
+    /// a longer ready wait (a third of it, at most 60 s), because PowerShell itself starts slowly
+    /// on a machine short of memory (#397).
+    /// </summary>
+    private static TimeSpan LauncherWait(TimeSpan readyTimeout)
+    {
+        TimeSpan third = readyTimeout / 3;
+        if (third < DefaultLauncherWait)
+        {
+            return DefaultLauncherWait;
+        }
+
+        return third > MaxLauncherWait ? MaxLauncherWait : third;
+    }
+
+    private static readonly TimeSpan DefaultLauncherWait = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan MaxLauncherWait = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// The role process a launch started when the launcher did not report its pid (#397). Its
+    /// ready file names its pid once it is ready; before that, it is this install's heroesreplay
+    /// with the role's command line, started since the launch began, that services.json does not
+    /// track. Looks for about three seconds.
+    /// </summary>
+    private static int? FindStartedRole(
+        string exe,
+        ServiceProcessRecord pending,
+        DateTimeOffset began
+    )
+    {
+        for (int attempt = 0; attempt < 6; attempt++)
+        {
+            if (
+                ServiceReadyFile.TryRead(pending)?.Pid is int ready
+                && ready > 0
+                && ServiceProcessPlan.IsHeroesReplay(ProcessNameOrNull(ready))
+            )
+            {
+                return ready;
+            }
+
+            var tracked = new HashSet<int> { Environment.ProcessId };
+            foreach (
+                ServiceProcessRecord record in ServiceLockStore
+                    .TryLoad(ServiceLockStore.DefaultPath)
+                    ?.Processes
+                    ?? new List<ServiceProcessRecord>()
+            )
+            {
+                if (record?.Pid > 0)
+                {
+                    tracked.Add(record.Pid);
+                }
+            }
+
+            UntrackedRoleProcess newest = UntrackedRoleProcesses
+                .Find(
+                    pending.Name,
+                    ProcessTable.Snapshot(),
+                    ProcessCommandLine.TryRead,
+                    exe,
+                    Environment.ProcessId,
+                    tracked
+                )
+                .Where(item =>
+                    item.Process.StartedAt is DateTimeOffset started
+                    && started >= began - TimeSpan.FromSeconds(2)
+                )
+                .OrderByDescending(item => item.Process.StartedAt)
+                .FirstOrDefault();
+            if (newest != null)
+            {
+                return newest.Process.Pid;
+            }
+
+            Thread.Sleep(500);
+        }
+
+        return null;
+    }
+
+    /// <summary>The commit charge, percent of the commit limit, or null when it cannot be read.</summary>
+    private static double? ReadCommitPercent()
+    {
+        MachineHealthSettings settings = ServiceCollectionExtensions.LoadMachineHealthSettings();
+        MachineHealthReport report = MachineHealth.Evaluate(
+            MachineHealthProbe.Read(settings),
+            settings
+        );
+        return report.CommitLimitMegabytes > 0 ? report.CommitPercent : null;
     }
 
     private static Command EnsureCommand()
@@ -572,6 +759,7 @@ public class ServicesCommand : Command
         handshake.StopStarted = Kill;
         handshake.Probe = ServiceProcessProbe.TryFromProcess;
         handshake.Wait = Thread.Sleep;
+        handshake.FindStarted = (pending, began) => FindStartedRole(exe, pending, began);
         return handshake;
     }
 
@@ -669,7 +857,7 @@ public class ServicesCommand : Command
     {
         var command = new Command(
             "stop",
-            "Ask the recorded processes to shut down, kill any still running after 20 seconds, close Heroes of the Storm and any HeroesSwitcher left without it, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game and those switchers closed, OBS is not streaming, and no recording spectate started is still running."
+            "Ask the recorded processes, and any role process from this install that is not recorded, to shut down, kill any still running after 20 seconds, close Heroes of the Storm and any HeroesSwitcher left without it, and stop an OBS recording spectate left running (never the stream). Exits 1 unless every role exited, the game and those switchers closed, OBS is not streaming, and no recording spectate started is still running."
         );
         command.SetAction(
             (parseResult, cancellationToken) =>
@@ -685,6 +873,15 @@ public class ServicesCommand : Command
                         GracefulWait = ServiceShutdown.DefaultGracefulWait,
                         Wait = Thread.Sleep,
                         ClearStopFile = () => ServiceStopFile.Clear(),
+                        FindUnrecordedRoles = recorded =>
+                            UnrecordedRoles.Find(
+                                ProcessTable.Snapshot(),
+                                ProcessCommandLine.TryRead,
+                                Environment.ProcessPath,
+                                Environment.ProcessId,
+                                recorded
+                            ),
+                        GameRunning = () => NamedProcess.IsRunning(GameProcessName),
                         CloseGame = StopSpectatedGame,
                         CloseIdleSwitchers = new HeroesSwitcherShutdown().CloseIdle,
                         ConfirmStream = ObsServiceStop.DelegateToSpectator,
@@ -811,7 +1008,13 @@ public class ServicesCommand : Command
             + " -Value $p.Id -NoNewline";
     }
 
-    private static int? StartProcess(string exe, string arguments, ServiceProcessRecord launch)
+    private static int? StartProcess(
+        string exe,
+        string arguments,
+        ServiceProcessRecord launch,
+        TimeSpan? launcherWait = null,
+        Func<bool> stopping = null
+    )
     {
         string logDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -849,24 +1052,56 @@ public class ServicesCommand : Command
             return null;
         }
 
-        if (!process.WaitForExit(15000))
+        // A stop request ends the wait early; what the launcher started is still looked for.
+        DateTimeOffset until = DateTimeOffset.UtcNow + (launcherWait ?? DefaultLauncherWait);
+        bool exited = false;
+        while (!(exited = process.WaitForExit(500)))
+        {
+            if (DateTimeOffset.UtcNow >= until || stopping?.Invoke() == true)
+            {
+                break;
+            }
+        }
+
+        if (!exited)
         {
             try
             {
                 process.Kill();
+                process.WaitForExit(2000);
             }
             catch (InvalidOperationException) { }
-            return null;
         }
 
-        int? pid = File.Exists(pidFile) ? ParseProcessId(File.ReadAllText(pidFile)) : null;
-        if (process.ExitCode != 0 || pid == null)
+        // Start-Process may have started the role, and even written its pid, before the
+        // launcher was cut off or failed (#397): the pid file still counts then.
+        int? pid = File.Exists(pidFile) ? ParseProcessId(ReadPidFile(pidFile)) : null;
+        if (pid == null)
         {
             return null;
         }
 
+        if (!exited || process.ExitCode != 0)
+        {
+            Console.Error.WriteLine(
+                $"The launcher for {arguments} did not finish cleanly, but it wrote pid {pid}."
+            );
+        }
+
         Console.WriteLine($"Console open for {arguments} (pid file {pidFile}).");
         return pid;
+    }
+
+    private static string ReadPidFile(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     public static int? ParseProcessId(string stdout)
@@ -957,10 +1192,23 @@ public class ServicesCommand : Command
         return left.Length == 0;
     }
 
-    private static void Kill(int pid)
+    private static void Kill(int pid) => KillRole(pid, null);
+
+    /// <summary>
+    /// Kills a role's process tree, but leaves any obs64 in it running, so a forced stop or the
+    /// supervisor's kill never takes the stream down (#409, <see cref="RoleProcessTree"/>). The
+    /// spared OBS is one warning in <paramref name="logger"/>, else one line on stderr.
+    /// </summary>
+    private static void KillRole(int pid, ILogger logger)
     {
+        // The handle keeps the pid from being reused until the wait below is over.
         using Process process = Process.GetProcessById(pid);
-        process.Kill(entireProcessTree: true);
+        RoleTreeKill kill = new RoleProcessTree(WindowsProcessTable.Instance, logger).Kill(pid);
+        if (logger == null && RoleProcessTree.Describe(pid, kill) is string spared)
+        {
+            Console.Error.WriteLine(spared);
+        }
+
         process.WaitForExit(5000);
     }
 }

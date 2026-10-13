@@ -54,8 +54,6 @@ public class StubGameTimerTests
             };
         }
 
-        public ContextData Previous => null;
-
         public ContextData Current { get; }
     }
 }

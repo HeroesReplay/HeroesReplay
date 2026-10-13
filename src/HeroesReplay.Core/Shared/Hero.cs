@@ -36,6 +36,12 @@ public class Hero
     /// </summary>
     public IReadOnlyList<string> HeroUnitIds { get; }
 
+    /// <summary>
+    /// herodata talents, every tier, ordered by tier then column (#412). Empty when the catalog
+    /// has none.
+    /// </summary>
+    public IReadOnlyList<HeroTalent> Talents { get; }
+
     public Hero(
         string name,
         string unitId,
@@ -46,9 +52,11 @@ public class Hero
         DateTime? releaseDate = null,
         bool? isMelee = null,
         HeroRatings ratings = null,
-        IReadOnlyList<string> heroUnitIds = null
+        IReadOnlyList<string> heroUnitIds = null,
+        IReadOnlyList<HeroTalent> talents = null
     )
     {
+        Talents = talents ?? Array.Empty<HeroTalent>();
         Name = name;
         UnitId = unitId;
         HyperlinkId = hyperLinkId;

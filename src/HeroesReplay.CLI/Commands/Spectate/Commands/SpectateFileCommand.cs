@@ -37,12 +37,20 @@ public class SpectateFileCommand : Command
         };
         Options.Add(playerOption);
 
+        var blindOption = new Option<bool>("--blind")
+        {
+            Description =
+                "Play each replay as a Blind Rating request: the blind interface (hero names, no chat) and no rank, tier, or MMR on the game scene.",
+        };
+        Options.Add(blindOption);
+
         SetAction(
             async (parseResult, cancellationToken) =>
             {
                 return await CommandAsync(
                     parseResult.GetValue(fileOption),
                     parseResult.GetValue(playerOption),
+                    parseResult.GetValue(blindOption),
                     cancellationToken
                 );
             }
@@ -75,6 +83,7 @@ public class SpectateFileCommand : Command
     protected async Task<int> CommandAsync(
         string path,
         string battleTag,
+        bool blind,
         CancellationToken cancellationToken
     )
     {
@@ -84,6 +93,7 @@ public class SpectateFileCommand : Command
             Path = path,
             PlayOnce = true,
             BattleTag = battleTag,
+            Blind = blind,
         };
         using ServiceStopLink stop = ServiceStopFile.Link(cancellationToken);
         using ServiceProvider provider = new ServiceCollection()

@@ -35,3 +35,22 @@ heroesreplay client status
 ```
 
 That also sets windowed 1080p (`displaymode=0`, 1920×1080) which capture/OCR needs. Quit the game before `configure`; HotS rewrites `Variables.txt` on exit.
+
+## Blind Rating copy
+
+`AhliObs 0.75 Blind.StormInterface` is the same interface for a Blind Rating replay (#411), with two of AhliObs's own settings changed:
+
+| Setting (`_Config.StormLayout`) | AhliObs 0.75 | Blind |
+| --- | --- | --- |
+| `HeroUnitStatusNameType` (name over the health bar) | `Automatic` (player names) | `Unit` (hero names) |
+| `ChatInitiallyHidden` | `false` | `true` |
+
+Before a Blind Rating replay's client starts, spectate installs this archive **under the AhliObs file name** (`Interfaces\AhliObs 0.75.StormInterface`), and `Variables.txt` keeps naming AhliObs. When the blind replay is over it puts AhliObs back as soon as that client has closed, even when no replay follows (a stop, an empty queue, a release update). Before every other replay it checks again, so a leftover blind copy is always replaced (`client status` reports it as not AhliObs). Spectate doesn't switch `Variables.txt` to the blind file name because that doesn't work. On ASA-SERVER on 2026-10-12, both `Variables.txt` files named `AhliObs 0.75 Blind.StormInterface` before Battle.net started the client. The signed-in client still opened `AhliObs 0.75.StormInterface` and showed player names. Heroes holds the installed file open while it runs, so the copy only changes while Heroes is closed. The client is closed after every replay anyway. A client that outlived its replay with the wrong copy is restarted. `Client:BlindInterfaceFileName` names the archive in `Assets\Interfaces`; empty turns the blind HUD off.
+
+These are the settings Ahli's Observer UI Settings Editor (from [Galaxy-Observer-UI](https://github.com/Ahli/Galaxy-Observer-UI/releases)) shows for AhliObs. Its Save rebuilds the archive with the `MPQEditor.exe` it ships. `tools/new-blind-interface.ps1` does the same from the command line. It extracts AhliObs with that `MPQEditor.exe`, changes the two `<Constant>` values, and rebuilds the archive with the editor's Heroes compression preset. Then it checks that every other file is byte-identical. Run it again whenever `AhliObs 0.75.StormInterface` changes, and commit both files:
+
+```powershell
+pwsh -File tools/new-blind-interface.ps1
+```
+
+The map loading screen is the game's own and names the players, so spectate keeps a blind replay's loading screen off the stream. The waiting or report scene stays on air until the match clock runs, then game-scene shows the match.

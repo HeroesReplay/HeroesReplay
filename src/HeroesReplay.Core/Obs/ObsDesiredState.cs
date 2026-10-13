@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using HeroesReplay.Core.Status;
 
 namespace HeroesReplay.Core.Obs;
@@ -37,11 +36,42 @@ public sealed record ObsLaunchDecision
         + ObsNames.Pick(collectionName)
         + "\"";
 
-    public static string ResolveExecutable(string configured)
+    /// <summary>
+    /// <c>OBS:ExecutablePath</c> when it is set; else <c>bin\64bit\obs64.exe</c> under the folder
+    /// the OBS installer wrote to the registry (<c>HKLM\SOFTWARE\OBS Studio</c>, #398) when that
+    /// file exists; else the default Program Files install.
+    /// </summary>
+    public static string ResolveExecutable(string configured) =>
+        ResolveExecutable(configured, ObsInstallLocation.FromRegistry, System.IO.File.Exists);
+
+    public static string ResolveExecutable(
+        string configured,
+        Func<string> installDirectory,
+        Func<string, bool> exists
+    )
     {
         if (!string.IsNullOrWhiteSpace(configured))
         {
             return configured;
+        }
+
+        string installed = null;
+        try
+        {
+            installed = installDirectory?.Invoke();
+        }
+        catch (Exception)
+        {
+            // An unreadable registry falls back to the default install.
+        }
+
+        if (!string.IsNullOrWhiteSpace(installed))
+        {
+            string candidate = System.IO.Path.Combine(installed, "bin", "64bit", "obs64.exe");
+            if (exists?.Invoke(candidate) == true)
+            {
+                return candidate;
+            }
         }
 
         return System.IO.Path.Combine(
@@ -147,13 +177,18 @@ public sealed record ObsRuntimeSnapshot
     public bool WebsocketDesired { get; init; }
     public bool WebsocketIdentified { get; init; }
 
-    /// <summary>The scene the spectator last asked OBS for (#282).</summary>
+    /// <summary>The scene the spectator last asked OBS for (#282), whatever the stream start showed (#407).</summary>
     public string SceneDesired { get; init; }
 
     /// <summary>The program scene: the last one OBS accepted, or the one it last reported.</summary>
     public string SceneActual { get; init; }
     public bool StreamDesired { get; init; }
+
+    /// <summary>True only while <see cref="StreamHealth"/> is <see cref="ObsStreamState.Live"/> (#395).</summary>
     public bool StreamActive { get; init; }
+
+    /// <summary>The last GetStreamStatus read: live, reconnecting, stalled, inactive, or unknown (#395).</summary>
+    public ObsStreamHealth StreamHealth { get; init; }
     public bool RecordingDesired { get; init; }
     public bool RecordingActive { get; init; }
     public ObsStreamResult Stream { get; init; }
@@ -171,9 +206,9 @@ public static class ObsDesired
         obs is { Enabled: true } && SessionMedia.ShouldStream(obs);
 
     /// <summary>
-    /// <paramref name="sceneRequested"/> is the scene this process last put on the program
-    /// output. Until it asks for one, a desired stream wants the waiting scene, which is where
-    /// the stream starts.
+    /// <paramref name="sceneRequested"/> is the scene the spectator last asked for; the stream
+    /// start never sets it (#407). Until it asks for one, a desired stream wants the waiting
+    /// scene, which is where such a stream starts.
     /// </summary>
     public static ObsRuntimeSnapshot Capture(
         OBSSettings obs,
@@ -186,7 +221,8 @@ public static class ObsDesired
         bool recordingDesired,
         bool recordingActive,
         ObsStreamResult stream,
-        string sceneRequested = null
+        string sceneRequested = null,
+        ObsStreamHealth streamHealth = null
     )
     {
         bool enabled = obs?.Enabled == true;
@@ -203,91 +239,13 @@ public static class ObsDesired
             SceneActual = sceneActual,
             StreamDesired = streamDesired,
             StreamActive = streamActive,
+            StreamHealth = streamHealth,
             RecordingDesired = recordingDesired,
             RecordingActive = recordingActive,
             Stream = stream,
             StreamBlockedBy =
                 streamDesired && stream is { Succeeded: false } ? stream.Reason : null,
         };
-    }
-}
-
-public sealed class ObsBackoff
-{
-    public static ObsBackoff Default { get; } =
-        new(attempts: 4, first: TimeSpan.FromSeconds(1), cap: TimeSpan.FromSeconds(8));
-
-    private readonly int attempts;
-    private readonly TimeSpan first;
-    private readonly TimeSpan cap;
-
-    public ObsBackoff(int attempts, TimeSpan first, TimeSpan cap)
-    {
-        this.attempts = attempts < 1 ? 1 : attempts;
-        this.first = first < TimeSpan.Zero ? TimeSpan.Zero : first;
-        this.cap = cap < this.first ? this.first : cap;
-    }
-
-    public IReadOnlyList<TimeSpan> Delays() => Delays(attempts, first, cap);
-
-    public static IReadOnlyList<TimeSpan> Delays(int attempts, TimeSpan first, TimeSpan cap)
-    {
-        int waits = attempts < 1 ? 0 : attempts - 1;
-        if (first < TimeSpan.Zero)
-        {
-            first = TimeSpan.Zero;
-        }
-
-        if (cap < first)
-        {
-            cap = first;
-        }
-
-        var delays = new List<TimeSpan>(waits);
-        TimeSpan delay = first;
-        for (int i = 0; i < waits; i++)
-        {
-            delays.Add(delay);
-            long doubled = delay.Ticks > long.MaxValue / 2 ? long.MaxValue : delay.Ticks * 2;
-            TimeSpan next = doubled == long.MaxValue ? cap : TimeSpan.FromTicks(doubled);
-            delay = next > cap ? cap : next;
-        }
-
-        return delays;
-    }
-
-    public static ObsStreamResult Run(
-        IReadOnlyList<TimeSpan> delays,
-        Func<ObsStreamResult> attempt,
-        Action<TimeSpan> wait
-    )
-    {
-        if (attempt == null)
-        {
-            throw new ArgumentNullException(nameof(attempt));
-        }
-
-        ObsStreamResult result = attempt();
-        if (delays == null)
-        {
-            return result;
-        }
-
-        foreach (TimeSpan delay in delays)
-        {
-            if (
-                result != null
-                && (result.Succeeded || result.Failure == ObsOutputFailure.NotRequested)
-            )
-            {
-                return result;
-            }
-
-            wait?.Invoke(delay);
-            result = attempt();
-        }
-
-        return result;
     }
 }
 
@@ -305,6 +263,10 @@ public static class ObsStatus
         }
 
         string detail = snapshot.Stream?.Detail ?? snapshot.Launch?.Detail;
+        ObsStreamHealth health = snapshot.StreamHealth;
+        string streamState = health?.State.ToString();
+        bool? reconnecting = health == null ? null : health.State == ObsStreamState.Reconnecting;
+        DateTimeOffset? stuckSince = health?.StuckSince;
         bool changed =
             status.ObsProcessRunning != snapshot.ProcessRunning
             || status.ObsWebsocketIdentified != snapshot.WebsocketIdentified
@@ -316,6 +278,9 @@ public static class ObsStatus
             || !string.Equals(status.ObsSceneActual, snapshot.SceneActual, StringComparison.Ordinal)
             || status.ObsStreamDesired != snapshot.StreamDesired
             || status.ObsStreamActive != snapshot.StreamActive
+            || !string.Equals(status.ObsStreamState, streamState, StringComparison.Ordinal)
+            || status.ObsStreamReconnecting != reconnecting
+            || status.ObsStreamStuckSince != stuckSince
             || !string.Equals(
                 status.ObsStreamBlockedBy,
                 snapshot.StreamBlockedBy,
@@ -328,6 +293,9 @@ public static class ObsStatus
         status.ObsSceneActual = snapshot.SceneActual;
         status.ObsStreamDesired = snapshot.StreamDesired;
         status.ObsStreamActive = snapshot.StreamActive;
+        status.ObsStreamState = streamState;
+        status.ObsStreamReconnecting = reconnecting;
+        status.ObsStreamStuckSince = stuckSince;
         status.ObsStreamBlockedBy = snapshot.StreamBlockedBy;
         status.ObsDetail = detail;
         return changed;
@@ -374,6 +342,16 @@ public static class ObsStatus
             + status.ObsStreamDesired
             + " active="
             + status.ObsStreamActive
+            + (
+                string.IsNullOrWhiteSpace(status.ObsStreamState)
+                    ? string.Empty
+                    : " state=" + status.ObsStreamState
+            )
+            + (
+                status.ObsStreamStuckSince is DateTimeOffset stuck
+                    ? " since=" + stuck.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+                    : string.Empty
+            )
             + (
                 string.IsNullOrWhiteSpace(status.ObsStreamBlockedBy)
                     ? string.Empty

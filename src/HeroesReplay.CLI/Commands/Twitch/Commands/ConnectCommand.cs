@@ -21,7 +21,7 @@ public class ConnectCommand : Command
     public ConnectCommand()
         : base(
             "connect",
-            "Connect chat, sync channel-point rewards, and watch spectator status for Blue/Red predictions. Does not launch the game."
+            "Connect chat, sync channel-point rewards, and watch spectator status for Blue/Red and Blind Rating predictions. Does not launch the game."
         )
     {
         SetAction(

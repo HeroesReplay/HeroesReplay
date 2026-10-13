@@ -155,6 +155,14 @@ public static class ServiceSupervisor
         if (!launch.Ready && !launch.Cancelled && launch.Record != null)
         {
             Rollback(null, new[] { launch.Record }, handshake);
+            // A child that would not stop stays the caller's to track, never an orphan (#397).
+            if (ServiceProcessPlan.IsHeroesReplay(processNameOrNull?.Invoke(launch.Record.Pid)))
+            {
+                Console.Error.WriteLine(
+                    $"{name} pid {launch.Record.Pid} did not stop. It stays recorded, so it is not left unsupervised."
+                );
+                return launch with { StillRunning = true };
+            }
         }
 
         return launch;
@@ -200,14 +208,26 @@ public static class ServiceSupervisor
                 Version = version,
             };
             handshake.Pending = pending;
+            DateTimeOffset began = DateTimeOffset.UtcNow;
             int? pid = startProcess(name, arguments);
             if (pid is not int id || id <= 0)
             {
-                return new ServiceLaunch(
-                    null,
-                    false,
-                    false,
-                    Fail(handshake, $"Failed to start {name} ({arguments}).")
+                // The launcher can give up after it started the child: a PowerShell cut off on a
+                // machine short of memory (#397). The child has this launch's nonce and command
+                // line, so look for it before calling the start failed and leaving it orphaned.
+                id = FindStarted(handshake, pending, began);
+                if (id <= 0)
+                {
+                    return new ServiceLaunch(
+                        null,
+                        false,
+                        false,
+                        Fail(handshake, $"Failed to start {name} ({arguments}).")
+                    );
+                }
+
+                Console.WriteLine(
+                    $"The launcher did not report {name}'s pid, but pid {id} runs `{arguments}` for this launch. Waiting for it."
                 );
             }
 
@@ -236,14 +256,35 @@ public static class ServiceSupervisor
         }
     }
 
+    /// <summary>The pid <see cref="ServiceStartupHandshake.FindStarted"/> finds, or 0.</summary>
+    private static int FindStarted(
+        ServiceStartupHandshake handshake,
+        ServiceProcessRecord pending,
+        DateTimeOffset began
+    )
+    {
+        try
+        {
+            return handshake.FindStarted?.Invoke(pending, began) is int pid && pid > 0 ? pid : 0;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(
+                $"Could not look for the {pending.Name} process the launcher started: {e.Message}"
+            );
+            return 0;
+        }
+    }
+
     private static bool IsHeroesReplayExe(string exePath) =>
         !string.IsNullOrWhiteSpace(exePath)
         && ServiceProcessPlan.IsHeroesReplay(Path.GetFileName(exePath));
 
     /// <summary>
-    /// Ask every recorded role to exit, kill the ones left after the graceful budget, close the
-    /// game, read the OBS stream state, then stop a recording spectate left running (never the
-    /// stream, #318). Exit code 0 needs all four confirmed. A role that is still running stays in
+    /// Ask every recorded role, and a spectate from this install that <c>services.json</c> does
+    /// not list (#381), to exit, kill the ones left after the graceful budget, close the game,
+    /// read the OBS stream state, then stop a recording spectate left running (never the stream,
+    /// #318). Exit code 0 needs all four confirmed. A recorded role that is still running stays in
     /// the lock so status and a second stop can still find it, and OBS is not opened then.
     /// </summary>
     public static ServiceStopResult Stop(string lockPath, ServiceShutdown shutdown)
@@ -258,6 +299,26 @@ public static class ServiceSupervisor
             .ToList();
         Action<TimeSpan> pause = shutdown.Wait ?? Thread.Sleep;
         ServiceRoleStop supervisor = null;
+
+        // A role process from this install that services.json does not list is stopped like a
+        // role, but it is never written there: a hand-started spectate (#381), or a role a lost
+        // restart left running next to a dead pid in services.json (#397).
+        UnrecordedRoles unrecorded = FindUnrecordedRoles(shutdown.FindUnrecordedRoles, recorded);
+        var handStarted = new HashSet<ServiceProcessRecord>(unrecorded.ThisInstall);
+        recorded.AddRange(unrecorded.ThisInstall);
+        foreach (ServiceProcessRecord record in unrecorded.ThisInstall)
+        {
+            Console.WriteLine(
+                $"  {record.Name} pid {record.Pid} ({record.Arguments}) is not in services.json. It runs this install, so it is stopped like a role."
+            );
+        }
+
+        foreach (ServiceProcessRecord record in unrecorded.OtherInstalls)
+        {
+            Console.WriteLine(
+                $"  {record.Name} pid {record.Pid} ({record.Arguments}) runs another install ({record.ExecutablePath ?? "path unreadable"}). It is left alone."
+            );
+        }
 
         // Until the processes are probed, every recorded role counts as running.
         List<ServiceProcessRecord> survivors = recorded;
@@ -276,6 +337,18 @@ public static class ServiceSupervisor
                 // A restart it began before it saw the stop file is in the lock by now.
                 foreach (ServiceProcessRecord added in Added(recorded, lockPath))
                 {
+                    // The scan saw it before the supervisor recorded it: it is a role after all.
+                    ServiceProcessRecord seen = handStarted.FirstOrDefault(record =>
+                        record.Pid == added.Pid
+                    );
+                    if (seen != null)
+                    {
+                        handStarted.Remove(seen);
+                        recorded.Remove(seen);
+                        living.Remove(seen);
+                        asked.Remove(seen);
+                    }
+
                     recorded.Add(added);
                     if (StillRunning(new[] { added }, shutdown).Count == 1)
                     {
@@ -286,7 +359,6 @@ public static class ServiceSupervisor
             }
 
             RequestStreamShutdown(shutdown.ConfirmStream);
-            bool hadSpectate = recorded.Any(record => record.Name == "spectate");
 
             // The budget ends on the wall clock or on the summed pauses, whichever is first.
             TimeSpan interval = TimeSpan.FromMilliseconds(200);
@@ -345,20 +417,49 @@ public static class ServiceSupervisor
                 }
 
                 killErrors.TryGetValue(record, out string detail);
-                var role = new ServiceRoleStop(
-                    record.Name,
-                    record.Pid,
-                    outcome,
-                    outcome == ServiceStopOutcome.StillRunning ? detail : null
-                );
+                if (outcome != ServiceStopOutcome.StillRunning)
+                {
+                    detail = null;
+                }
+
+                if (handStarted.Contains(record))
+                {
+                    detail = string.IsNullOrEmpty(detail)
+                        ? "Not in services.json."
+                        : "Not in services.json. " + detail;
+                }
+
+                var role = new ServiceRoleStop(record.Name, record.Pid, outcome, detail);
                 roles.Add(role);
                 Console.WriteLine("  " + role.Describe());
             }
 
-            bool? gameClosed = hadSpectate ? CloseGame(shutdown.CloseGame) : null;
-            SwitcherStopResult switchers = hadSpectate
-                ? CloseIdleSwitchers(shutdown.CloseIdleSwitchers)
-                : null;
+            // The game belongs to the stack when it recorded spectate. With no recorded spectate,
+            // it is this install's when its hand-started spectate was found, or when nothing is
+            // recorded at all (a spectate that already exited left it). A spectate from another
+            // install owns it then, so it is left alone (#381).
+            // Only a spectate drives the game: an unrecorded download or uploader does not.
+            bool spectateRecorded = recorded.Any(record =>
+                record.Name == UnrecordedRoles.Role && !handStarted.Contains(record)
+            );
+            bool handStartedSpectate = handStarted.Any(record =>
+                record.Name == UnrecordedRoles.Role
+            );
+            bool nothingRecorded = recorded.Count == handStarted.Count;
+            bool ownsGame =
+                spectateRecorded
+                || (!unrecorded.OtherInstallSpectates && (handStartedSpectate || nothingRecorded));
+            bool gameWasRunning =
+                ownsGame
+                && (spectateRecorded || handStartedSpectate || GameRunning(shutdown.GameRunning));
+            bool? gameClosed = null;
+            SwitcherStopResult switchers = null;
+            if (ownsGame)
+            {
+                gameClosed = gameWasRunning ? CloseGame(shutdown.CloseGame) : true;
+                switchers = CloseIdleSwitchers(shutdown.CloseIdleSwitchers);
+            }
+
             if (gameClosed == true && switchers?.LeftAlone.Count > 0)
             {
                 // A switcher started Heroes again after the game closed: a game is still up.
@@ -367,7 +468,17 @@ public static class ServiceSupervisor
 
             if (gameClosed is bool closed)
             {
-                Console.WriteLine(ServiceStopResult.DescribeGame(closed, switchers));
+                Console.WriteLine(
+                    gameWasRunning || !closed
+                        ? ServiceStopResult.DescribeGame(closed, switchers)
+                        : ServiceStopResult.DescribeGameNotRunning(switchers)
+                );
+            }
+            else if (!spectateRecorded && unrecorded.OtherInstallSpectates)
+            {
+                Console.WriteLine(
+                    "Heroes of the Storm: not checked, because spectate from another install still runs."
+                );
             }
 
             ServiceStreamCheck stream = null;
@@ -411,17 +522,23 @@ public static class ServiceSupervisor
 
             if (result.Succeeded)
             {
-                Console.WriteLine(
-                    recorded.Count == 0
-                        ? "No HeroesReplay services are running."
-                        : "Services stopped."
-                );
+                bool closedSomething =
+                    supervisor != null
+                    || gameWasRunning
+                    || switchers?.Stopped.Count > 0
+                    || recording?.State == OrphanRecordingState.Stopped;
+                result.Summary =
+                    recorded.Count > 0 ? "Services stopped."
+                    : closedSomething
+                        ? "No HeroesReplay services are running. Closed what was left running."
+                    : "No HeroesReplay services are running. Nothing to stop.";
+                Console.WriteLine(result.Summary);
             }
             else
             {
-                Console.Error.WriteLine(
-                    "Services did not stop cleanly. " + string.Join(" ", result.Failures())
-                );
+                result.Summary =
+                    "Services did not stop cleanly. " + string.Join(" ", result.Failures());
+                Console.Error.WriteLine(result.Summary);
             }
 
             return result;
@@ -436,14 +553,18 @@ public static class ServiceSupervisor
                 }
             }
 
-            if (survivors.Count > 0)
+            // services.json keeps only what services start launched, never a hand-started spectate.
+            List<ServiceProcessRecord> recordedSurvivors = survivors
+                .Where(record => !handStarted.Contains(record))
+                .ToList();
+            if (recordedSurvivors.Count > 0)
             {
                 ServiceLockStore.Save(
                     lockPath,
                     new ServiceLock
                     {
                         StartedAt = snapshot?.StartedAt ?? DateTimeOffset.UtcNow,
-                        Processes = survivors.ToList(),
+                        Processes = recordedSurvivors,
                     }
                 );
             }
@@ -504,6 +625,43 @@ public static class ServiceSupervisor
                 && !known.Contains(record.Nonce ?? "pid:" + record.Pid)
             )
             .ToList();
+    }
+
+    /// <summary>None when no step was given or the process table could not be read.</summary>
+    private static UnrecordedRoles FindUnrecordedRoles(
+        Func<IReadOnlyCollection<int>, UnrecordedRoles> find,
+        IEnumerable<ServiceProcessRecord> recorded
+    )
+    {
+        if (find == null)
+        {
+            return UnrecordedRoles.None;
+        }
+
+        try
+        {
+            return find(recorded.Select(record => record.Pid).ToList()) ?? UnrecordedRoles.None;
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine(
+                "Could not look for a role process that is not in services.json. " + e.Message
+            );
+            return UnrecordedRoles.None;
+        }
+    }
+
+    /// <summary>True unless the step says no game runs. A step that throws counts as running.</summary>
+    private static bool GameRunning(Func<bool> gameRunning)
+    {
+        try
+        {
+            return gameRunning?.Invoke() ?? true;
+        }
+        catch (Exception)
+        {
+            return true;
+        }
     }
 
     private static bool? CloseGame(Func<bool> closeGame)
@@ -643,7 +801,7 @@ public static class ServiceSupervisor
             output.WriteLine("  A stop request is pending (services.stop).");
         }
 
-        WriteSupervisorText(output, report.Supervisor);
+        WriteSupervisorText(output, report.Supervisor, report.CheckedAt);
         foreach (ServiceRoleHealth role in report.Roles)
         {
             string state = role.State.ToString().ToLowerInvariant();
@@ -695,7 +853,10 @@ public static class ServiceSupervisor
                 string budget = restarts.BudgetExhausted
                     ? "budget exhausted"
                     : $"budget {restarts.BudgetUsed} of {restarts.BudgetLimit} used in {ServiceHealthClassifier.Describe(TimeSpan.FromSeconds(restarts.BudgetWindowSeconds))}";
-                output.WriteLine($"{"", 20}Restarts: {restarts.Count}{last}; {budget}.");
+                string adopted = restarts.LastAdoptedAt is DateTimeOffset taken
+                    ? $"; took over a running process {restarts.Adopted}x, last {taken.ToLocalTime():HH:mm:ss}"
+                    : string.Empty;
+                output.WriteLine($"{"", 20}Restarts: {restarts.Count}{last}; {budget}{adopted}.");
             }
 
             WriteLogText(output, role);
@@ -726,7 +887,11 @@ public static class ServiceSupervisor
         }
     }
 
-    private static void WriteSupervisorText(TextWriter output, ServiceSupervisorSummary supervisor)
+    private static void WriteSupervisorText(
+        TextWriter output,
+        ServiceSupervisorSummary supervisor,
+        DateTimeOffset now
+    )
     {
         if (supervisor == null)
         {
@@ -759,6 +924,11 @@ public static class ServiceSupervisor
         if (!string.IsNullOrWhiteSpace(supervisor.LogPath))
         {
             output.WriteLine($"{"", 20}Log: {supervisor.LogPath}");
+        }
+
+        if (supervisor.Obs != null)
+        {
+            output.WriteLine($"  OBS watchdog: {supervisor.Obs.Describe(now)}");
         }
     }
 
@@ -823,6 +993,20 @@ public static class ServiceSupervisor
         foreach (string warning in machine.Warnings)
         {
             output.WriteLine($"  WARN {warning}");
+        }
+
+        // Above the memory or commit limit only, whoever owns them (#399). Report only.
+        IReadOnlyList<MachineProcessMemory> top =
+            machine.TopConsumers ?? Array.Empty<MachineProcessMemory>();
+        if (top.Count > 0)
+        {
+            output.WriteLine(
+                $"  Top {top.Count} processes by commit (private bytes), report only:"
+            );
+            foreach (MachineProcessMemory process in top)
+            {
+                output.WriteLine($"    {MachineHealth.DescribeProcess(process)}");
+            }
         }
     }
 

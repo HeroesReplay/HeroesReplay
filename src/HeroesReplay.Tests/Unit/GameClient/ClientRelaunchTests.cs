@@ -63,17 +63,6 @@ public class ClientRelaunchTests
     }
 
     [Fact]
-    public void IsBlankClientWindow_RequiresAnEmptyFullSizeCapture()
-    {
-        Assert.True(ClientRelaunch.IsBlankClientWindow("", 1280, 720));
-        Assert.True(ClientRelaunch.IsBlankClientWindow("   ", 1280, 720));
-        Assert.False(ClientRelaunch.IsBlankClientWindow("PLAY", 1280, 720));
-        Assert.False(ClientRelaunch.IsBlankClientWindow("", 403, 139));
-        Assert.False(ClientRelaunch.IsBlankClientWindow(null, 999, 720));
-        Assert.False(ClientRelaunch.IsBlankClientWindow("Preparing game data", 1280, 720));
-    }
-
-    [Fact]
     public void KeepsWaitingForGameData_HoldsTheBlackWindowAfterStartupText()
     {
         Assert.True(

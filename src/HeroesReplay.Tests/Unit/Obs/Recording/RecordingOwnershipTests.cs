@@ -459,6 +459,8 @@ public class RecordingOwnershipTests
 
         public bool IsStreamActive() => Streaming;
 
+        public ObsStreamSample ReadStream() => new(Streaming, false, 0);
+
         public void StartRecord()
         {
             StartCalls++;

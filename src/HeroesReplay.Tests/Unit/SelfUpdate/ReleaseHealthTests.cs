@@ -71,6 +71,27 @@ public class ReleaseHealthTests
     }
 
     [Fact]
+    public void AStreamHoldForTheWholeWindow_IsInconclusive()
+    {
+        // #396: the new install holds its first replay while the desired stream is down.
+        List<ServiceRoleHealth> roles = Stack();
+        roles[0] = roles[0] with
+        {
+            LastSuccessfulWorkAt = null,
+            SessionOutcomes = null,
+            StreamHoldSince = Since.AddMinutes(1),
+            StreamHoldReason = "Inactive. OBS reported the stream inactive.",
+        };
+
+        ReleaseHealthResult result = Judge(roles, at: Closed);
+
+        Assert.Equal(ReleaseHealthVerdict.Inconclusive, result.Verdict);
+        string problem = Assert.Single(result.Problems);
+        Assert.Contains("holds the next replay", problem, StringComparison.Ordinal);
+        Assert.Contains("Inactive", problem, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void OneLoadTimedOutSessionAndNothingElse_IsUnhealthy()
     {
         List<ServiceRoleHealth> roles = Stack();

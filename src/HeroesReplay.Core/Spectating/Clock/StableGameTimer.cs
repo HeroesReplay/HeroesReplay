@@ -14,11 +14,18 @@ namespace HeroesReplay.Core.Spectating.Clock;
 public sealed class StableGameTimer : IGameTimer
 {
     private readonly IGameController controller;
+    private readonly SharedClientProcess clientProcess;
     private readonly MatchClock clock = new();
 
-    public StableGameTimer(IGameController controller)
+    /// <summary>
+    /// <paramref name="clientProcess"/> is the client the controller's readers attach (#382), so
+    /// the clock reads through the same handle instead of opening its own.
+    /// </summary>
+    public StableGameTimer(IGameController controller, SharedClientProcess clientProcess)
     {
         this.controller = controller;
+        this.clientProcess =
+            clientProcess ?? throw new ArgumentNullException(nameof(clientProcess));
     }
 
     public void Reset() => clock.BeginMatch();
@@ -30,7 +37,7 @@ public sealed class StableGameTimer : IGameTimer
             return Task.FromResult(new GameTimerReading(false, "memory", "no-process", null));
         }
 
-        MatchClockSample sample = clock.Read(process);
+        MatchClockSample sample = clientProcess.Read(process, client => clock.Read(client));
         string telemetry = clock.LastTelemetry.State;
         if (!sample.Ok)
         {

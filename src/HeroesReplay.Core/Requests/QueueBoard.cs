@@ -73,7 +73,7 @@ public static class QueueBoard
                 string who = Encode(item?.Request?.Login);
                 string title = Encode(item?.Request?.RewardTitle);
                 string map = Encode(item?.HeroesProfileReplay?.Map);
-                string rank = Encode(item?.HeroesProfileReplay?.Rank);
+                string rank = Encode(ReplayRequestKind.ShownRank(item));
                 string id = item?.HeroesProfileReplay?.Id.ToString() ?? "";
                 html.Append("<li><span class=\"who\">")
                     .Append(string.IsNullOrWhiteSpace(who) ? "viewer" : who)
@@ -159,10 +159,15 @@ public static class QueueBoard
             ?? new List<SupportedReward>();
         List<string> randoms = known
             .Where(reward =>
-                reward.RewardType != RewardType.ReplayId && string.IsNullOrWhiteSpace(reward.Map)
+                reward.RewardType != RewardType.ReplayId
+                && !reward.RewardType.HasFlag(RewardType.Blind)
+                && string.IsNullOrWhiteSpace(reward.Map)
             )
             .Select(reward => reward.Title)
             .ToList();
+        string blind = known
+            .FirstOrDefault(reward => reward.RewardType.HasFlag(RewardType.Blind))
+            ?.Title;
         List<SupportedReward> maps = known
             .Where(reward =>
                 reward.RewardType != RewardType.ReplayId && !string.IsNullOrWhiteSpace(reward.Map)
@@ -191,7 +196,14 @@ public static class QueueBoard
                 .Append(" also ask for a rank.");
         }
 
-        if (randoms.Count == 0 && mapExample == null && rankExample == null)
+        if (blind != null)
+        {
+            html.Append(' ')
+                .Append(Quote(blind))
+                .Append(" plays a random Storm League match and hides its rank until the end.");
+        }
+
+        if (randoms.Count == 0 && mapExample == null && rankExample == null && blind == null)
         {
             html.Append(" Pick a random match, a map, or a rank.");
         }

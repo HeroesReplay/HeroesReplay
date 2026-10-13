@@ -22,14 +22,35 @@ public sealed class SpectatorStatus
     /// because that id is already public.
     /// </summary>
     public bool SuppressPredictions { get; set; }
+
+    /// <summary>
+    /// True for a Blind Rating replay with a known rank (#411): the Twitch process opens the
+    /// rating prediction (Bronze to Master) instead of Blue/Red.
+    /// </summary>
+    public bool RatingPrediction { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public int? CompletedReplayId { get; set; }
     public int? CompletedWinnerTeam { get; set; }
 
     /// <summary>
+    /// The rating (Bronze to Master) of a completed Blind Rating replay, written with the other
+    /// completion fields so the rating prediction resolves only after the match (#411).
+    /// </summary>
+    public string CompletedRating { get; set; }
+
+    /// <summary>
     /// Why the last session ended. Completion fields are set only for <c>VerifiedCompleted</c>.
     /// </summary>
     public string Outcome { get; set; }
+
+    /// <summary>
+    /// When spectate began holding the next replay because the desired stream is not live (#396).
+    /// <see cref="Phase"/> is <c>StreamHold</c> meanwhile. Null outside a hold.
+    /// </summary>
+    public DateTimeOffset? StreamHoldSince { get; set; }
+
+    /// <summary>Why spectate holds: the stream state and OBS's detail. Null outside a hold.</summary>
+    public string StreamHoldReason { get; set; }
     public bool ObsSession { get; set; }
     public bool? ConnectivityOnline { get; set; }
     public string Connectivity { get; set; }
@@ -38,7 +59,22 @@ public sealed class SpectatorStatus
     public string ObsSceneDesired { get; set; }
     public string ObsSceneActual { get; set; }
     public bool? ObsStreamDesired { get; set; }
+
+    /// <summary>True only while <see cref="ObsStreamState"/> is <c>Live</c> (#395).</summary>
     public bool? ObsStreamActive { get; set; }
+
+    /// <summary>
+    /// The stream's health from GetStreamStatus (#395): <c>Live</c>, <c>Reconnecting</c>,
+    /// <c>Stalled</c> (active, not reconnecting, bytes frozen), <c>Inactive</c>, or
+    /// <c>Unknown</c> (OBS not read). Null before the first read.
+    /// </summary>
+    public string ObsStreamState { get; set; }
+
+    /// <summary>OBS reports the stream output active and reconnecting.</summary>
+    public bool? ObsStreamReconnecting { get; set; }
+
+    /// <summary>When the stream became <c>Reconnecting</c> or <c>Stalled</c>; null otherwise.</summary>
+    public DateTimeOffset? ObsStreamStuckSince { get; set; }
 
     /// <summary>
     /// Why a desired stream was not started: <c>obs.stream_not_armed</c> (OBS:StreamingEnabled

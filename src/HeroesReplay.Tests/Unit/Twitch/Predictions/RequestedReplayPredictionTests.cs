@@ -132,7 +132,12 @@ public sealed class RequestedReplayPredictionTests : IDisposable
     {
         public int Count { get; private set; }
 
-        public Task<bool> OpenAsync(int replayId, string map, CancellationToken cancellationToken)
+        public Task<bool> OpenAsync(
+            int replayId,
+            string map,
+            PredictionKind kind,
+            CancellationToken cancellationToken
+        )
         {
             Count++;
             return Task.FromResult(true);

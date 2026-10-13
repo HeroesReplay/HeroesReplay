@@ -8,6 +8,8 @@ using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Calculators;
+using HeroesReplay.Core.Analysis.Insights;
+using HeroesReplay.Core.Builds.Reference;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
@@ -60,7 +62,6 @@ using TwitchLib.Client.Interfaces;
 using TwitchLib.Client.Models;
 using TwitchLib.PubSub;
 using TwitchLib.PubSub.Interfaces;
-using Windows.Media.Ocr;
 
 namespace HeroesReplay.CLI;
 
@@ -127,6 +128,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IContextFileManager, ContextFileManager>()
             .AddSingleton(typeof(IReplayProvider), replayProvider)
             .AddSingleton<ISpectateReportWriter, SpectateReportCsvWriter>()
+            .AddMatchInsights(settings)
             .AddFocusCalculators();
     }
 
@@ -150,7 +152,6 @@ public static class ServiceCollectionExtensions
             )
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
-            .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
             .AddSingleton<StormClientConfigurator>()
             .AddSingleton(new CancellationTokenProvider(token))
             .AddHeroesProfileService()
@@ -307,6 +308,26 @@ public static class ServiceCollectionExtensions
             .AddSingleton(settings)
             .AddSingleton<StormClientConfigurator>()
             .AddSingleton<IGameFirewall, NetshGameFirewall>();
+    }
+
+    /// <summary>
+    /// The match insights (#412): the shipped talent-build reference, the insights reader with
+    /// every analyzer, and the session-end recorder that writes <c>insights.json</c>.
+    /// </summary>
+    public static IServiceCollection AddMatchInsights(
+        this IServiceCollection services,
+        AppSettings settings
+    )
+    {
+        return services
+            .AddSingleton<IGuideCatalog>(_ => GuideCatalog.Embedded())
+            .AddSingleton<IMatchInsightsReader>(provider =>
+                MatchInsightsReader.Create(
+                    settings?.Insights,
+                    provider.GetRequiredService<IGuideCatalog>()
+                )
+            )
+            .AddSingleton<IMatchInsightsRecorder, MatchInsightsRecorder>();
     }
 
     public static IServiceCollection AddFocusCalculators(this IServiceCollection services)
@@ -471,7 +492,6 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(settings)
             .AddSingleton(new CancellationTokenProvider(token))
-            .AddSingleton(OcrEngine.TryCreateFromUserProfileLanguages())
             .AddSingleton(
                 typeof(IGameCapture),
                 settings.Capture.Method switch
@@ -490,6 +510,8 @@ public static class ServiceCollectionExtensions
                 }
             )
             .AddSingleton<GameTimerLog>()
+            // One attached client per Heroes process for the timer and the controller (#382).
+            .AddSingleton<SharedClientProcess>()
             .AddSingleton(
                 typeof(IGameController),
                 settings.Capture.Method switch
@@ -520,6 +542,7 @@ public static class ServiceCollectionExtensions
                 MediaPolicyAttemptLog.AttemptsRoot(settings),
                 serviceProvider.GetRequiredService<ILogger<MediaPolicyAttemptLog>>()
             ))
+            .AddMatchInsights(settings)
             .AddSingleton<IGameManager, GameManager>()
             .AddSingleton<IReplayAnalyzer, ReplayAnalyzer>()
             .AddSingleton<IObserverPanelRequests, ObserverPanelRequests>()
@@ -538,6 +561,8 @@ public static class ServiceCollectionExtensions
             .AddSingleton<OBSWebsocket>()
             .AddSingleton<IObsController, ObsController>()
             .AddSingleton<IReleaseUpdateGate, ReleaseUpdateGate>()
+            .AddSingleton<SpectateMemoryLog>()
+            .AddSingleton<StreamHold>()
             .AddSingleton<IEngine, Engine>()
             .AddSingleton<SpectatorStatusStore>()
             .AddConnectivityServices()

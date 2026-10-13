@@ -27,6 +27,12 @@ internal sealed class RecordingSession
     private bool disconnectSeen;
     private string stoppedPath;
 
+    // The StartStream in flight (#407): when it was sent, whether OBS reported it starting, and
+    // whether OBS then reported the output stopped (the start failed).
+    private DateTimeOffset? streamStartedAt;
+    private bool streamStarting;
+    private bool streamStoppedSeen;
+
     /// <summary>
     /// <paramref name="claims"/> is where the recording this process starts is claimed for
     /// <c>services stop</c> (#318) and the next spectate's start (#342). Null writes no claim.
@@ -121,17 +127,31 @@ internal sealed class RecordingSession
         return result;
     }
 
+    /// <summary>
+    /// One StartStream, and a wait until it ends (#407): OBS reports the output active, reports it
+    /// stopped after it began (the start failed), the websocket drops, or
+    /// <see cref="ObsRecordingBudget.StreamStartTimeout"/> passes. A request that throws before
+    /// StartStream goes out is retried; once it went out it never is, because a StartStream that
+    /// timed out may still be running in OBS. A StartStream that has not ended is not followed
+    /// by another until OBS reports it ended, the websocket drops, or
+    /// <see cref="StreamStartPendingLimit"/> passes.
+    /// </summary>
     public ObsStreamResult StartStreaming(Action ensureConnected)
     {
+        bool sent = false;
         return Execute(
-            () => StartStreamCore(ensureConnected),
+            () => StartStreamCore(ensureConnected, () => sent = true),
             error =>
                 error is TimeoutException
                     ? ObsStreamResult.Failed(ObsOutputFailure.NotConfirmed, error.Message)
                     : ObsStreamResult.Failed(ObsOutputFailure.RequestError, error.Message),
-            "start OBS streaming"
+            "start OBS streaming",
+            retry: () => !sent
         );
     }
+
+    /// <summary>How long a StartStream that never ended blocks the next one.</summary>
+    public static readonly TimeSpan StreamStartPendingLimit = TimeSpan.FromMinutes(5);
 
     public ObsStreamResult StopStreaming(Action ensureConnected)
     {
@@ -145,7 +165,7 @@ internal sealed class RecordingSession
         );
     }
 
-    private ObsStreamResult StartStreamCore(Action ensureConnected)
+    private ObsStreamResult StartStreamCore(Action ensureConnected, Action sending)
     {
         EnsureIdentified(ensureConnected);
         if (!socket.IsConnected)
@@ -158,34 +178,118 @@ internal sealed class RecordingSession
 
         if (socket.IsStreamActive())
         {
+            EndStreamStart();
             return ObsStreamResult.ConfirmedActive();
+        }
+
+        DateTimeOffset? pending = PendingStreamStart();
+        if (pending is DateTimeOffset sentAt)
+        {
+            return ObsStreamResult.Failed(
+                ObsOutputFailure.NotConfirmed,
+                "The StartStream sent at "
+                    + sentAt.ToUniversalTime().ToString("HH:mm:ss")
+                    + "Z has not ended (OBS reported it neither started nor stopped), so no second StartStream was sent."
+            );
+        }
+
+        lock (gate)
+        {
+            streamStartedAt = now();
+            streamStarting = false;
+            streamStoppedSeen = false;
+            wake.Reset();
         }
 
         logger.LogInformation("Starting OBS stream.");
+        sending();
         socket.StartStream();
         if (socket.IsStreamActive())
         {
+            EndStreamStart();
             return ObsStreamResult.ConfirmedActive();
         }
 
-        ObsOutputFailure waited = WaitUntil(() => ProbeStream(active: true), budget.StartTimeout);
+        ObsOutputFailure waited = WaitUntil(ProbeStreamStart, budget.StreamStartTimeout);
         if (waited == ObsOutputFailure.None && socket.IsStreamActive())
         {
+            EndStreamStart();
             return ObsStreamResult.ConfirmedActive();
         }
 
         if (waited == ObsOutputFailure.Disconnected)
         {
+            EndStreamStart();
             return ObsStreamResult.Failed(
                 ObsOutputFailure.Disconnected,
                 "OBS websocket disconnected before the stream was confirmed."
             );
         }
 
+        if (waited == ObsOutputFailure.NotConfirmed)
+        {
+            EndStreamStart();
+            return ObsStreamResult.Failed(
+                ObsOutputFailure.NotConfirmed,
+                "OBS reported the stream stopped: the start did not connect."
+            );
+        }
+
         return ObsStreamResult.Failed(
             ObsOutputFailure.NotConfirmed,
-            "OBS did not report the stream active."
+            "OBS did not report the stream active within "
+                + budget.StreamStartTimeout.TotalSeconds.ToString("0.#")
+                + " s."
         );
+    }
+
+    /// <summary>
+    /// The start is still running: OBS reported neither started nor stopped since StartStream,
+    /// the websocket did not drop, and it was sent less than <see cref="StreamStartPendingLimit"/>
+    /// ago. Null when no start is running.
+    /// </summary>
+    private DateTimeOffset? PendingStreamStart()
+    {
+        lock (gate)
+        {
+            if (streamStartedAt is DateTimeOffset sent && now() - sent < StreamStartPendingLimit)
+            {
+                return sent;
+            }
+
+            streamStartedAt = null;
+            return null;
+        }
+    }
+
+    private void EndStreamStart()
+    {
+        lock (gate)
+        {
+            streamStartedAt = null;
+        }
+    }
+
+    /// <summary>
+    /// Active is <see cref="ObsOutputFailure.None"/>. OBS reporting the output stopped after it
+    /// reported it starting is <see cref="ObsOutputFailure.NotConfirmed"/>: the start failed.
+    /// </summary>
+    private ObsOutputFailure? ProbeStreamStart()
+    {
+        if (!socket.IsConnected)
+        {
+            return ObsOutputFailure.Disconnected;
+        }
+
+        if (socket.IsStreamActive())
+        {
+            return ObsOutputFailure.None;
+        }
+
+        lock (gate)
+        {
+            return streamStoppedSeen ? ObsOutputFailure.NotConfirmed : null;
+        }
     }
 
     private ObsStreamResult StopStreamCore(Action ensureConnected)
@@ -625,7 +729,13 @@ internal sealed class RecordingSession
         }
     }
 
-    private T Execute<T>(Func<T> action, Func<Exception, T> failed, string operation)
+    // retry is asked after an exception: false ends the attempts there. Null retries every one.
+    private T Execute<T>(
+        Func<T> action,
+        Func<Exception, T> failed,
+        string operation,
+        Func<bool> retry = null
+    )
     {
         try
         {
@@ -633,7 +743,7 @@ internal sealed class RecordingSession
                 .Constant<T>(
                     budget.RetryCount,
                     budget.RetryDelay,
-                    outcome => outcome.Exception != null,
+                    outcome => outcome.Exception != null && (retry == null || retry()),
                     args =>
                         logger.LogWarning(
                             args.Outcome.Exception,
@@ -689,6 +799,29 @@ internal sealed class RecordingSession
                     break;
                 case ObsRecordSignalKind.Disconnected:
                     disconnectSeen = true;
+                    // A new connection is a new OBS, or one that answers again: no start runs.
+                    streamStartedAt = null;
+                    break;
+                case ObsRecordSignalKind.StreamStarting:
+                    if (streamStartedAt != null)
+                    {
+                        streamStarting = true;
+                    }
+
+                    break;
+                case ObsRecordSignalKind.StreamStarted:
+                    streamStartedAt = null;
+                    break;
+                case ObsRecordSignalKind.StreamStopped:
+                    // Only a stop after this start began: a late one from an earlier StopStream
+                    // is not this start's failure.
+                    if (streamStarting)
+                    {
+                        streamStoppedSeen = true;
+                        streamStarting = false;
+                        streamStartedAt = null;
+                    }
+
                     break;
             }
 

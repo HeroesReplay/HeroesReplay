@@ -216,7 +216,7 @@ public static class ServiceProcessPlan
         return true;
     }
 
-    private static bool SamePath(string left, string right)
+    internal static bool SamePath(string left, string right)
     {
         try
         {

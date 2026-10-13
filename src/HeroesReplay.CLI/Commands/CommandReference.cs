@@ -8,6 +8,7 @@ using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
 using HeroesReplay.CLI.Commands.Deps;
 using HeroesReplay.CLI.Commands.Obs;
+using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
@@ -63,14 +64,24 @@ public static class CommandReference
             "spectate file",
             "Not elevated. Heroes of the Storm installed; a current-patch replay needs Battle.net signed in. OBS is optional. On ASA-SERVER only to prove a change (AGENTS.md phases). "
                 + LiveAsk,
-            "Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\\Contexts\\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. It mutes every microphone input (global Mic/Aux and audio input capture sources, never Desktop Audio) at each replay's session start and before it starts the stream (`OBS:MuteMicrophones`, #314). Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.",
-            "0 after the queue has played. 1 on a parse error (`--player` not a BattleTag, a `--file` that does not exist) or when the engine stops on an unexpected error."
+            "Launches Battle.net, HeroesSwitcher and Heroes of the Storm, sends spectator keys, and writes `Data\\Contexts\\<id>` and `status.json`. With OBS it changes scenes and records (`OBS:RecordingEnabled`), and streams only with `OBS:StreamingEnabled` and the arm. A desired stream counts as live only when OBS reports it active, not reconnecting, with its bytes moving; one that stays reconnecting, or active with frozen bytes, past `OBS:StreamStuckAfter` (90 s) is stopped and started again, and a failed attempt waits 1, 2, then 5 min. Each attempt sends `StartStream` once and waits for it to end (`OBS:StreamStartTimeout`, 30 s), after a TCP connect to the ingest (`OBS:IngestPreflightTimeout`, 3 s; `obs.ingest_unreachable` sends no `StartStream`), and closes OBS's \"Failed to connect\" dialog after a failed start (`OBS:ConnectFailDialogTitle`). A start mid-match keeps the spectator's scene on air; only a start with no scene asked for, or the waiting scene asked for, shows the waiting scene. Every watchdog tick puts the spectator's scene back when OBS shows another one (#407). Between replays, while that stream is desired and not live, it loads no replay and holds on the waiting scene until the stream is live again, with no time limit (`Spectate:HoldWhileStreamDown`, phase `StreamHold` in `status.json`, #396). It mutes every microphone input (global Mic/Aux and audio input capture sources, never Desktop Audio) at each replay's session start and before it starts the stream (`OBS:MuteMicrophones`, #314). Before the first replay it sends `StopRecord` for a recording an earlier spectate claimed in `obs-recording.json` and left running, when that spectate is dead (pid and start time) and the duration matches the claim (#342); never the stream. Starts the Aspire dashboard when OTLP :4317 is down.",
+            "0 after the queue has played. 1 on a parse error (`--player` not a BattleTag, a `--file` that does not exist) or when the engine stops on an unexpected error.",
+            [
+                ObsStreamHealth.StuckReconnectingCode,
+                ObsStreamHealth.StalledCode,
+                ObsIngest.UnreachableCode,
+            ]
         ),
         new(
             "spectate heroesprofile",
             "As `spectate file`, with replays already in `Data\\Standard` and `Data\\Requests` (`heroesprofile download`). `services start` runs it as the spectate role.",
             "As `spectate file`, over the cached replays, in a loop. Does not call Heroes Profile.",
-            Blocks
+            Blocks,
+            [
+                ObsStreamHealth.StuckReconnectingCode,
+                ObsStreamHealth.StalledCode,
+                ObsIngest.UnreachableCode,
+            ]
         ),
         new(
             "calculators report",
@@ -95,6 +106,24 @@ public static class CommandReference
             "A folder of replays and the heroes-data2 catalog under `Location:DataDirectory`.",
             "Writes `--output` (`.md` or `.csv`) when given; otherwise prints only. Read-only for the replays.",
             "0 when it finishes. 1 for a missing folder, an `--output` that is not `.md` or `.csv`, or a parse error."
+        ),
+        new(
+            "calculators insights",
+            "A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, and the shipped talent-build reference.",
+            "Prints each replay's match insights and the frequency tables; writes `--output` (`.md`) when given. Read-only for the replays.",
+            "0 when at least one replay was read. 1 for a missing folder, an `--output` that is not `.md`, or no replays in it. 2 when no replay parsed."
+        ),
+        new(
+            "builds import",
+            "The `icy-veins-builds` skill's extract (`--input`) and the heroes-data2 catalog under `Location:DataDirectory`. Reads nothing from the web.",
+            "Writes the talent-build reference (`--reference`, normally `src/HeroesReplay.Core/Builds/Reference/icy-veins-builds.json`): build names, tags, talent ids per tier and guide links, no guide text. Writes nothing when it refuses.",
+            "0 when the reference is written (warnings are printed). 1 for a missing or unreadable extract or a bad `--checked-at`. 2 when the extract names an unknown hero, a build lacks seven tiers, or a mark is not y, s, or n."
+        ),
+        new(
+            "builds match",
+            "A `.StormReplay` (`--replay`) and the heroes-data2 catalog under `Location:DataDirectory`.",
+            "Prints each player's talents and best guide build from the shipped reference. Read-only.",
+            "0 when the replay parsed. 1 for a missing file or a replay that does not parse."
         ),
         new(
             "check",
@@ -223,7 +252,7 @@ public static class CommandReference
             "twitch connect",
             "Twitch token with the chat and redemption scopes. Dev turns every side effect off (`DryRunMode`). "
                 + LiveAsk,
-            "Joins chat, syncs channel-point rewards, queues redemptions in `Data\\requests.json`, and opens and resolves Blue/Red predictions.",
+            "Joins chat, syncs channel-point rewards, queues redemptions in `Data\\requests.json`, and opens and resolves Blue/Red predictions, or the rating guess (Bronze to Master) for a Blind Rating replay.",
             Blocks
         ),
         new(
@@ -277,6 +306,12 @@ public static class CommandReference
             "With `--once`: 0 when the pass finished, 1 when it failed. Without it, runs until stopped."
         ),
         new(
+            "youtube preview",
+            "A `.StormReplay` (`--replay`), ideally with a cache-style name (`<id>_<mode>_<rank>_<map>_...`) for the mode and rank, and the heroes-data2 catalog under `Location:DataDirectory`.",
+            "Prints the title, description lines and tags the replay would get, with highlights on unless `--configured`, and with `--insights` the `insights.json` spectate would write. Offline and read-only: no YouTube, Heroes Profile, game or OBS.",
+            "0 when the replay parsed. 1 for a missing file or a replay that does not parse."
+        ),
+        new(
             "heroesprofile download",
             "`HeroesProfileApi:ApiKey`.",
             "Downloads Storm League replays into `Data\\Standard` and requested ones into `Data\\Requests`; keeps the hero statistics current while `YouTube:Titles:StatHooks:Enabled`. A Standard replay whose download Heroes Profile refuses with an HTTP status is skipped (replay id and status logged), not counted as an outage. Does not launch the game.",
@@ -317,8 +352,9 @@ public static class CommandReference
         new(
             "services stop",
             LiveAsk,
-            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. Then closes each `HeroesSwitcher_x64` that has no Heroes child (`CloseMainWindow`, then a kill after 5 s) and leaves one whose Heroes child still runs; the `Heroes of the Storm:` line names each switcher (#359). Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream.",
-            "0 when every role and the supervisor exited, the game and every `HeroesSwitcher_x64` without a Heroes child closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked."
+            "Writes `services.stop`, stops the supervisor, then the roles (kills any still running after 20 s), and closes Heroes of the Storm. A role process from this install that `services.json` does not list, found by its command line, is stopped like a role but never recorded: a hand-started `spectate file` (#381), or any role (`spectate`, `twitch connect`, `heroesprofile download`, `youtube uploader`) running next to a dead pid in `services.json` (#397). With no services recorded the game is closed too; a role from another install is never touched, and while its spectate runs the game is left to it. Then closes each `HeroesSwitcher_x64` that has no Heroes child (`CloseMainWindow`, then a kill after 5 s) and leaves one whose Heroes child still runs; the `Heroes of the Storm:` line names each switcher (#359). Once every role has exited, sends `StopRecord` for a recording spectate claimed in `obs-recording.json` and left running, when the claiming spectate is dead (pid and start time) and the duration matches the claim (#318, #342). Never stops an OBS stream, and never kills OBS: a forced kill takes the role's process tree but leaves any obs64 in it running, with what that OBS started, and prints one line with `service.role_kill_spared_obs` (#409).",
+            "0 when every role and the supervisor exited, the game and every `HeroesSwitcher_x64` without a Heroes child closed, OBS is closed or not streaming, and no recording spectate started is left running. 1 otherwise, including a running OBS whose websocket does not answer on an install that streams, and a claimed recording that OBS refused to stop or that could not be checked.",
+            [RoleProcessTree.ObsSparedCode]
         ),
         new(
             "services status",
@@ -343,9 +379,17 @@ public static class CommandReference
         new(
             "services supervise",
             "Roles recorded by `services start`; no other supervisor in any session.",
-            "Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`).",
+            "Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397). With `ServiceRestart:ObsWatchdog` (prod) and streaming desired (`OBS:StreamingEnabled` and the machine arm), it starts OBS when obs64 is gone and restarts it (CloseMainWindow, then a kill) when its websocket has not answered for `OBS:HungAfter` (3 min) and the stream is not live; it never passes `--startstreaming`, never kills OBS while its stream bytes advance, and does nothing once `services stop` is under way (#398). It starts OBS detached through `cmd /c start`, the same launcher as spectate's, and a role kill leaves any obs64 in the role's tree running (#409).",
             "Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised). 1 when a supervisor already runs.",
-            [ServiceHealthCodes.RestartBudgetExhausted]
+            [
+                ServiceHealthCodes.RestartBudgetExhausted,
+                ServiceSupervision.RoleAdoptedCode,
+                ServiceSupervision.UntrackedRoleKilledCode,
+                RoleProcessTree.ObsSparedCode,
+                ObsWatchdogState.ProcessMissingCode,
+                ObsWatchdogState.WebsocketHungCode,
+                ObsWatchdogState.ExhaustedCode,
+            ]
         ),
         new(
             "services install-task",

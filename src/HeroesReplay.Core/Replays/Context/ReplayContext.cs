@@ -11,9 +11,13 @@ using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Replays.Context;
 
+/// <summary>
+/// The replay being spectated. Only <see cref="Current"/> is kept: a parsed replay with its tracker
+/// events is about 150 MB of managed heap, and a heap dump on ASA-SERVER on 2026-10-09 found the
+/// previous one alive only through an unread <c>Previous</c> property (#399).
+/// </summary>
 public class ReplayContext : IReplayContext, IReplayContextSetter
 {
-    public ContextData Previous { get; private set; }
     public ContextData Current { get; private set; }
 
     private readonly IContextFileManager contextFileManager;
@@ -48,8 +52,6 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
             loadedReplay.ReplayId,
             loadedReplay.Replay?.ReplayVersion
         );
-
-        Previous = Current;
 
         Replay replay = loadedReplay.Replay;
 

@@ -27,17 +27,17 @@ Production is `HEROES_REPLAY_ENV=prod` (`DESKTOP-8SJEK72`). The environment deci
   "Version": "1",
   "RecordingMode": "Selected",
   "PublicationMode": "AllEligible",
-  "MaxPublicPerDay": 12,
-  "MaxPublicPerWeek": 84,
-  "MinimumPublicInterval": "02:00:00",
+  "MaxPublicPerDay": 24,
+  "MaxPublicPerWeek": 168,
+  "MinimumPublicInterval": "01:00:00",
   "MaxPublishAhead": "3.00:00:00",
   "OrdinaryCandidateMaxAge": "3.00:00:00",
   "MapCooldown": "08:00:00",
-  "RankCooldown": "08:00:00",
+  "RankCooldown": "04:00:00",
   "FeaturedHeroCooldown": "08:00:00",
   "MaxSharedHeroes": 4,
   "ReservedRequestSlotsPerDay": 2,
-  "MaxInsertsPerQuotaDay": 20,
+  "MaxInsertsPerQuotaDay": 30,
   "CapRecordingToPublication": true
 }
 ```
@@ -99,7 +99,7 @@ The first matching line decides, and the spectator logs it as `recording cap ...
 | `cap-queued` | yes | The window is full, and the slots that must open first (waiting plus scheduled plus this one, less what the window holds), at the window's daily pace, still leave a day before the replay expires. |
 | `cap-publication-full` | no | The window is full, and this replay would wait until less than a day before it expires, or its game time is unknown. |
 
-With the production settings the window holds 10 a day over 3 days, so 30 slots, and a full window opens about one slot every 2.4 hours. On 2026-10-08 the stream PC had 10 recordings waiting for upload and 29 uploads scheduled (#370). Before #370 the cap stopped at 30 in flight, so it recorded nothing for about a day, although a replay played 6 hours earlier would have waited one day and still had 1.75 days of its 3 left. Now that replay is recorded (`cap-queued`). One played 2 days earlier is not. In steady state about 17 fresh recordings wait (about 37 GB), and a video goes public about 4 to 5 days after its game. Without the queue only about one waited, so a slot whose map, rank, or hero cooldown ruled out that one recording went unused. The publication pace is the same either way.
+With the production settings the window holds 22 a day over 3 days, so 66 slots, and a full window opens about one slot an hour (until 2026-10-13 it held 10 a day, so 30 slots, one every 2.4 hours). On 2026-10-08 the stream PC had 10 recordings waiting for upload and 29 uploads scheduled (#370). Before #370 the cap stopped at 30 in flight, so it recorded nothing for about a day, although a replay played 6 hours earlier would have waited one day and still had 1.75 days of its 3 left. Now that replay is recorded (`cap-queued`). One played 2 days earlier is not. In steady state about 17 fresh recordings wait (about 37 GB), and a video goes public about 4 to 5 days after its game. Without the queue only about one waited, so a slot whose map, rank, or hero cooldown ruled out that one recording went unused. The publication pace is the same either way.
 
 Notable and high-skill replays are capped like ordinary ones. Only a request goes past the cap. A capped replay is still spectated and streamed, without an mp4. Before the cap, production recorded about 25 replays a day while 4 a day could go public, and the rest waited on disk until they were too old to publish (#250).
 
@@ -160,13 +160,13 @@ A recording stays on disk only for the YouTube quota or for the media rules. The
 3. The mode allows this class. `Disabled` refuses everyone. `RequestedOnly` refuses anything except a request. `Curated` refuses ordinary. `AllEligible` allows every class.
 4. The upload bucket has room. `Data\youtube-quota-units.json` counts `videos.insert` calls today, and they stay under `YouTube:DailyUploadCalls` (100) less `YouTube:UploadCallReserve` (5). Library spend is a different bucket and never holds an upload. No quota response from an upload paused uploads, and `videos.insert` calls today are under `MaxInsertsPerQuotaDay`. The quota day starts at midnight Pacific. A held upload logs when uploads resume: the pause a quota response set, or the next Pacific midnight. `MaxInsertsPerQuotaDay` (20 in production) is this app's own cap, not YouTube's bucket, and its reason is `insert-cap` (it was `quota`, which read like YouTube's quota). When the bucket or the insert cap is closed, the pass does not open each recording: it logs one line (`N recording(s) wait: the daily insert cap is reached (20 of ReplayMedia:MaxInsertsPerQuotaDay 20 ...). Uploads resume at ...`) when the gate closes, and only an interrupted upload (below) still goes on, because resuming its session spends no new insert.
 5. When `YouTube:PrivacyStatus` is public, an ordinary replay's game time is inside `OrdinaryCandidateMaxAge`. A request, a notable replay, and a high-skill replay do not use this age at send time. They already expired by their own windows above. An ordinary replay that is too old is not retried, and its recording is deleted with a warning (`Removed recording that was eligible but never uploaded ... stale`). The recording cap exists so this does not happen.
-6. When `YouTube:PrivacyStatus` is public, a publish time inside `MaxPublishAhead` (14 days) keeps every rule below. With none, the reason is `publication-full` (it was `horizon`): every time in that window breaks a pacing rule for this replay, and the recording waits for a later pass. Another replay with a different map, rank, or heroes can still find a time in the same window.
+6. When `YouTube:PrivacyStatus` is public, a publish time inside `MaxPublishAhead` (3 days in production; the code default is 14) keeps every rule below. With none, the reason is `publication-full` (it was `horizon`): every time in that window breaks a pacing rule for this replay, and the recording waits for a later pass. Another replay with a different map, rank, or heroes can still find a time in the same window.
 
 A paid request is not paced. It publishes as soon as it is uploaded, whatever the rules below say. The rules below no longer hold an ordinary, notable, or high-skill recording back. They choose its publish time: the earliest time from now that keeps all of them. Each rule looks both ways, at videos already public and at slots already scheduled, so a later replay can take a free time between two earlier ones.
 
 - Week. No rolling 7 days holds more than `MaxPublicPerWeek` videos.
 - Day. No rolling 24 hours holds more than `MaxPublicPerDay` videos.
-- Reserved request room. With 6 and 2, a non-request may not join a rolling 24 hours that already holds 4 videos, requests included, so the last 2 stay free for requests.
+- Reserved request room. With production's 12 and 2, a non-request may not join a rolling 24 hours that already holds 10 videos, requests included, so the last 2 stay free for requests.
 - Interval. Every other publish time is at least `MinimumPublicInterval` away.
 - Map. No slot within `MapCooldown` has the same map. Comparison ignores case and surrounding spaces.
 - Rank. No slot within `RankCooldown` has the same tier. Division is ignored, so Diamond 3 and Diamond 1 are the same tier. An unrecognized rank is compared as written. MMR is not part of this check.
@@ -203,7 +203,7 @@ After each pending pass the uploader writes `Data\publication-status.txt` and lo
 - `scheduled`: uploads not public yet whose publish time is ahead, or passed less than two library passes ago (at least 2 hours).
 - `stuck-private`: uploads still not public later than that, within the last 30 days.
 
-Before #250, `published-*` counted only inserts whose response was already public, which a scheduled upload never is, so it stayed 0. `stuck-private` added one for every scheduled upload and never went down, so it grew by 6 a day while the videos did go public on schedule.
+Before #250, `published-*` counted only inserts whose response was already public, which a scheduled upload never is, so it stayed 0. `stuck-private` added one for every scheduled upload and never went down, so it grew by 6 a day (the production pace then) while the videos did go public on schedule.
 
 When a scheduled video is still not public after that grace, the library pass logs one warning with each video's `status` from YouTube: privacy, `uploadStatus`, `publishAt`, and any `rejectionReason` or `failureReason`. A video that stays private with no rejection is the sign of a Google API project that is not audited: YouTube keeps every `videos.insert` from such a project private. The code cannot fix that; the project needs the YouTube API audit.
 
@@ -232,35 +232,39 @@ A dry run plans in `Data\publication-reservations-dry-run.txt`, so its times nev
 
 The spectator plays the next queued replay as soon as the previous session ends. YouTube does not follow that clock.
 
-A recording is uploaded as soon as the upload bucket and a publish slot allow. YouTube's Video Uploads bucket is 100 calls a day; 5 are held back, and production's `MaxInsertsPerQuotaDay` (20) caps it lower. Full matches and clips share it, and library spend never takes from it. Before #250 the app charged each insert 1600 units from the 10,000-unit pool, so it stopped at 6 uploads a day and starved the library pass, while Google's console showed 6 of 100 upload calls and 4 of 10,000 pool units used.
+A recording is uploaded as soon as the upload bucket and a publish slot allow. YouTube's Video Uploads bucket is 100 calls a day; 5 are held back, and production's `MaxInsertsPerQuotaDay` (30) caps it lower. Full matches and clips share it, and library spend never takes from it. Before #250 the app charged each insert 1600 units from the 10,000-unit pool, so it stopped at 6 uploads a day and starved the library pass, while Google's console showed 6 of 100 upload calls and 4 of 10,000 pool units used.
 
-With the production settings the videos go public at most every 2 hours, at most 6 in any rolling 24 hours (a non-request only while fewer than 4 are in it), and at most 30 in any rolling 7 days. The same map, the same rank tier, or a roster that shares 4 or more heroes with a video 8 hours either side moves the time later.
+With the production settings the videos go public at most every hour (`MinimumPublicInterval`), at most 24 in any rolling 24 hours (`MaxPublicPerDay`; a non-request only while fewer than 22 are in it, because `ReservedRequestSlotsPerDay` keeps 2 for requests), and at most 168 in any rolling 7 days (`MaxPublicPerWeek`). In practice ordinary videos go out up to 22 a day, an hour apart. The same map or a roster that shares 4 or more heroes with a video 8 hours either side, or the same rank tier 4 hours either side (`RankCooldown`), moves the time later. Until 2026-10-13 production ran 12 a day, 2 hours apart, with an 8-hour rank cooldown: 10 ordinary videos a day, which filled the 3-day window, stopped new recordings (`cap-publication-full`) and let eligible recordings expire unpublished while the stream played about 60 games a day.
 
-Eight ordinary games that end at 10:00, 10:30, and every half hour to 13:30 UTC, on eight maps and four rank tiers, on a quota day with nothing spent yet:
+Twelve ordinary games that end at 10:00, 10:30, and every half hour to 15:30 UTC, on a quota day with nothing spent yet. No map repeats within 8 hours, no rank tier within 4, and no two rosters share 4 heroes. `PublicationSchedule.Plan` with the production settings gives:
 
 | Game | Uploaded | Publishes | Why not earlier |
 | --- | --- | --- | --- |
 | 1 | 10:00 | 10:00 | |
-| 2 | 10:30 | 12:00 | interval |
-| 3 | 11:00 | 14:00 | interval |
-| 4 | 11:30 | 16:00 | interval |
-| 5 | 12:00 | next day 10:00 | reserved: 4 non-requests are in every 24 hours until game 1 leaves |
-| 6 | 12:30 | next day 12:00 | reserved |
-| 7 | 13:00 | next day 14:00 | reserved |
-| 8 | 13:30 | next day 16:00 | reserved |
+| 2 | 10:30 | 11:00 | interval |
+| 3 | 11:00 | 12:00 | interval |
+| 4 | 11:30 | 13:00 | interval |
+| 5 | 12:00 | 14:00 | interval |
+| 6 | 12:30 | 15:00 | interval |
+| 7 | 13:00 | 16:00 | interval |
+| 8 | 13:30 | 17:00 | interval |
+| 9 | 14:00 | 18:00 | interval |
+| 10 | 14:30 | 19:00 | interval |
+| 11 | 15:00 | 20:00 | interval |
+| 12 | 15:30 | 21:00 | interval |
 
-A paid request that ends at 14:00 that day publishes at 14:00, as soon as it is uploaded. A ninth ordinary game publishes on the third day at 10:00. Every recording goes on the retention sweep that follows its upload; none waits on disk for the quota. With `MaxPublishAhead` 3 days and 4 non-request videos a day, the window holds 12. Once it is full, the recording cap records an ordinary game only while the recordings ahead of it drain, at 4 a day, at least a day before the game is 3 days old.
+A paid request that ends at 16:00 that day publishes at 16:00, as soon as it is uploaded, at the same time as game 7: a request is not paced. All twelve uploads stay under `MaxInsertsPerQuotaDay` (30), so each recording goes on the retention sweep that follows its upload. With `MaxPublishAhead` 3 days and 22 non-request videos a day, the publication window holds 66 slots, and a full window opens about one slot an hour. Once it is full, the recording cap still records an ordinary game while the slots ahead of it leave at least a day before the game is 3 days old (`cap-queued`, see [The recording cap](#the-recording-cap)). In steady state a video then goes public about 3 to 4 days after its game.
 
 ## What the video contains
 
-A full match title is one line of at most 100 characters. It does not name a pentakill, a team wipe, a date, or an MMR. Those events are not a title, because one streak does not describe the match.
+A full match title is one line of at most 100 characters. It never names a date, an MMR, or who won. Without match highlights (below) it does not name a pentakill or a team wipe either. With them, one hero's own pentakill can lead the title, never a wipe shared across players.
 
 - Ordinary: `Volskaya Foundry - Storm League - Diamond - 65389750`.
 - A reward that names a player: `Illidan focus - Dragon Shire - Storm League - Diamond 3 - 65550001`. The title never names the Twitch viewer.
 - A paid upload that does not name a player has the ordinary title. The requestor is credited in the description only.
 - A new hero in the match: `Ft. Xal'atath - Volskaya Foundry - Storm League - Diamond - 65389750`. Ft. means featuring. One hero only. When the reward already leads with that hero, the title does not say her twice.
 
-There is no parsed MVP hero, so a title does not say MVP. The heroes in the title come from the parsed replay, in the catalog's English name: the hero unit the game spawned for each player (`HeroDemonHunter` is Valla), then the lobby hero attribute outside ARAM, then the character name. In ARAM the lobby attribute is the hero the player had selected before the game assigned one, so it is never used there (#348).
+The ordinary title does not say MVP. With match highlights on, the game's own MVP award, read from the replay, can lead it, whichever team the MVP was on. The heroes in the title come from the parsed replay, in the catalog's English name: the hero unit the game spawned for each player (`HeroDemonHunter` is Valla), then the lobby hero attribute outside ARAM, then the character name. In ARAM the lobby attribute is the hero the player had selected before the game assigned one, so it is never used there (#348).
 
 A draft note is added before the replay id when the current hero-select roles are not one tank, one bruiser, one healer, and a ranged assassin. Those roles are Tank, Bruiser, Melee Assassin, Ranged Assassin, Healer, and Support. Johanna plus Chen is a tank and a bruiser, so that draft is left alone. A tank talent overrides the catalog role: Varian is a Bruiser in hero select, but Varian with Taunt (`VarianTaunt`, level 4) counts as a tank, so Muradin plus Taunt Varian is a double tank and Taunt Varian plus Chen is left alone (issue #187). The talent comes from the replay's tracker events. The note is the whole match when both teams share it (`Cursed Hollow - Storm League - Diamond - No healer - 65550001`) and names the team when they differ (`Blue no tank, Red double healer`). A hero the catalog cannot match, or a hero with no current role, suppresses that team's note. A normal draft adds nothing.
 
@@ -340,7 +344,66 @@ The numbers go on a `Stats:` line in the description, for example `Stats: Valla 
 
 The statistics are one file per major patch and game type, `Data\HeroesProfile\hero-stats\2.57-sl.json`, keyed by `attribute_id`: each hero's wins and games on every map (and its ban rate there), against each enemy hero, and with each ally. The download role writes it, never spectate. While hooks are on it checks every `HeroesProfileApi:HeroStats:CheckInterval` (1 h) and fetches the newest major patch again when the file is older than `RefreshInterval` (24 h), for each `GameTypes` entry (Storm League). Files of patches older than the newest two are deleted. Spectate uses the file for the replay's own patch and game type only when it is younger than `MaxAge` (72 h); a missing, unreadable, or stale file leaves the title as before. `heroesreplay heroesprofile hero-stats` fetches it once by hand. The calls and their limits are in `docs/heroesprofile-api.md`.
 
-The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 7 (6 had no statistics hook).
+### Match highlights
+
+With `YouTube:Titles:Highlights:Enabled` (on in dev and prod, off in the base file), the title leads with one highlight read from the replay itself (issue #412). The highlights name heroes, builds and the shape of the match. They never say who won, because the MVP can be on either team and the video is the match. Struggling players and teams are never called out.
+
+**Where the facts come from.**
+
+- At session end, spectate reads the replay it already parsed into match insights (`Analysis/Insights`, `MatchInsightsRecorder`), together with the focus timeline it already followed. Nothing is parsed or calculated twice.
+- It writes them next to the recording as `insights.json`.
+- A failure is logged, and the entry is written without highlights.
+
+**Title layout.** `[X focus] - highlight - [Ft. X] - Map - Mode - Rank - [draft note] - ReplayId`, for example `Deathless Teleport Li-Ming 12/0/9 - Garden of Terror - Storm League - Master - 65581797`.
+
+- **Too long.** Over 100 characters, the draft note goes first, then the highlight's shorter wordings are tried (without the build, then without the score). If none fits, the title is built as before.
+- **No bare number.** No part is a bare number, so the replay id stays the first all-digit part.
+- **Named-player requests.** A request that named a player keeps its `X focus` lead, and takes only a highlight about no one hero.
+- **Featured hero.** A highlight about the featured new hero replaces its `Ft.` part.
+
+**What can lead.** The first kind in `Order` that the match has wins. The default order is `Pentakill`, `CoreRace`, `Comeback`, `DeathlessCarry`, `KillLeader`, `SoloLane`, `Mvp`, `MostFollowed`. A name in `Order` that is no kind is ignored, so an older config that still lists the removed `CampDrought` starts as before. Every kind is a positive call-out about a hero or the match; a team is never called out for what it did not do, so a team's camp count stays on the neutral `Camps:` line of the description:
+
+| Kind | Title | When | Measured on 545 local games |
+| --- | --- | --- | --- |
+| `Pentakill` | `Valla pentakill` | One hero's own pentakill (#369 rules) | rare |
+| `CoreRace` | `Core race finish` | Both teams lost keeps, and 2+ heroes of the team whose core fell were at the other core in the last 60 s. Core health is not in the replay | 1% |
+| `Comeback` | `Insane comeback` | The team whose core survived lost 3+ more towers, forts and keeps, or was 3+ levels behind at some point | 4% |
+| `DeathlessCarry` | `Deathless Teleport Li-Ming 12/0/9` | 0 deaths, 8+ kills | 11% |
+| `KillLeader` | `Valla 14/1/6` | 10+ kills, at most 1 death | 8% |
+| `SoloLane` | `Solo lane Chen vs Thrall` | Each team's one side-lane soaker from gates open to the first level 10, at High confidence only: the other team's soaker was in the same lane | 32% of teams |
+| `Mvp` | `MVP Orphea 7/1/5` | The game's MVP award | 100% |
+| `MostFollowed` | `Valla 3/4/10` | The hero the focus timeline followed most | |
+
+**Builds in a title.** A player highlight names the hero's closest guide build only when all of these hold:
+
+- the talents score at least `TitleBuildMinScore` (0.85) against it (1 per pick the build recommends, 0.5 per situational pick);
+- no other build is within 0.10;
+- the name is not a plain one (`GenericBuildNames`: Standard, Basic Attacks, Hybrid, ARAM and so on).
+
+**Description lines.**
+
+- **`Highlights:`** keeps the pentakills first, then adds the standouts (`Li-Ming 12/0/9 with no deaths`), the MVP (merged into a standout of the same player), the core race, and the comeback.
+- **`Solo lanes: Chen (Blue) vs Thrall (Red)`** names High confidence only.
+- **`Camps: Blue 9 (4 on Red's side), Red 3 (0 on Blue's side)`** counts each team's captures and those on the other team's side.
+- **The talent-build block** follows the roster lines. Its heading credits Icy Veins and links its hero guides, and each line names one player's closest guide build and links that guide. A player is listed when their talents score at least `DescriptionBuildMinScore` (0.70): about 57% of players in the corpus. Example: `Li-Ming (Blue): Teleport Build, 6 of 7 talents as recommended - https://www.icy-veins.com/heroes/li-ming-build-guide`.
+
+None of these lines starts with a label the library pass reads.
+
+**Tags.** The highlight's tag (`Deathless`, `Core race`, `Comeback`, `Solo lane`, `MVP`, `Pentakill`) and the build with the hero (`Teleport Li-Ming`) come after the composition labels.
+
+**The build reference.**
+
+- The builds come from `src/HeroesReplay.Core/Builds/Reference/icy-veins-builds.json`, embedded in Core.
+- It holds 91 heroes and 296 builds as build names, tags, talent ids per tier, and guide and calculator links, never guide text.
+- It is refreshed by hand with the `icy-veins-builds` skill and `heroesreplay builds import`.
+- `heroesreplay builds match --replay <file>` shows each player's best build.
+
+**Previews and tuning.**
+
+- `heroesreplay youtube preview --replay <file> [--insights]` prints the title, description and tags a replay would get, offline.
+- `heroesreplay calculators insights --directory <folder> --recursive --output report.md` measures how often each insight fires on a corpus. The thresholds are in `Insights`.
+
+The description starts with `Twitch: https://twitch.tv/saltysadism`, then the Heroes Profile attribution when a statistics hook was used, `Full match.` when the recording completed, the replay id, the Heroes Profile match link, date, build, map, mode, rank, the featured hero when one was named, the draft note with its composition labels, `Featuring:` when a new hero is in the title, the `Stats:` line of a hook, each pentakill as a highlight (`Highlights: Valla pentakill (team wipe)` when it wiped the team), and the requestor when it was a paid upload. The Blue and Red roster lines name each player without the BattleTag number, because YouTube turns `#1234` into a hashtag. Average MMR is not written. The winner is not included. Category id is `20`. Tags come from the map, mode, rank, hero, those events, and each composition label. The entry records `TemplateVersion` 8 (7 had no match highlights, 6 no statistics hook).
 
 Every `videos.insert`, full match or clip, is built by `UploadBody` with the `snippet,status` parts:
 
