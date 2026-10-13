@@ -31,6 +31,13 @@ public class HeroesProfileApiSettings
     public string StandardCacheDirectoryName { get; set; }
     public string RequestsCacheDirectoryName { get; set; }
 
+    /// <summary>
+    /// How long the saved <c>/maps</c> list (<c>Data\HeroesProfile\maps.json</c>) is reused before
+    /// a reward sync fetches it again (#425). Each fetch counts against the key's maps allowance.
+    /// Zero turns the fetch off; a saved list is still read.
+    /// </summary>
+    public TimeSpan MapsRefreshInterval { get; set; } = TimeSpan.FromDays(1);
+
     /// <summary>The per-patch hero statistics behind YouTube title hooks.</summary>
     public HeroStatsSettings HeroStats { get; set; } = new HeroStatsSettings();
 
