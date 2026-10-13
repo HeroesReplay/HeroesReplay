@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.Shared;
 using TwitchLib.PubSub.Events;
 
@@ -20,15 +21,35 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
     public const string BlindRatingTitle = "Blind Rating";
 
     private readonly IGameData gameData;
+    private readonly IStormLeagueRotation rotation;
 
     private List<SupportedReward> rewards;
 
     public List<SupportedReward> Rewards => rewards ??= GetRewards();
 
-    public SupportedRewardsHolder(IGameData gameData)
+    /// <summary>
+    /// <paramref name="rotation"/> decides which maps get Storm League rewards (#425). Without
+    /// one, the catalog's <c>RankedRotation</c> flags do.
+    /// </summary>
+    public SupportedRewardsHolder(IGameData gameData, IStormLeagueRotation rotation = null)
     {
         this.gameData = gameData;
+        this.rotation = rotation ?? StormLeagueRotation.Catalog;
     }
+
+    public string PoolSummary => rotation.Describe(gameData.Maps);
+
+    /// <summary>
+    /// The Storm League map rewards of playable maps that are out of the Storm League pool
+    /// (#425): "{map} (SL)" and "{map} (Rank SL)". No Storm League game on those maps can be
+    /// found, so the sync deletes these rewards from the channel. They come back when the map
+    /// returns to the pool.
+    /// </summary>
+    public IReadOnlyList<string> RetiredTitles =>
+        StandardMaps()
+            .Where(map => !rotation.Contains(map))
+            .SelectMany(map => new[] { $"{map.Name} (SL)", $"{map.Name} (Rank SL)" })
+            .ToList();
 
     private List<SupportedReward> GetRewards()
     {
@@ -38,11 +59,10 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
 
         var rewards = new List<SupportedReward>();
 
-        var rankedMaps = gameData.Maps.Where(m => m.Playable && m.RankedRotation);
-        // Quick Match maps outside the ranked rotation. Not Unranked Draft.
-        var unrankedMaps = gameData.Maps.Where(m =>
-            m.Playable && !m.RankedRotation && m.Type.Equals("standard")
-        );
+        // Storm League rewards for the maps in this season's pool (#425), Quick Match rewards
+        // for the standard maps outside it. Not Unranked Draft.
+        var rankedMaps = StandardMaps().Where(rotation.Contains).ToList();
+        var unrankedMaps = StandardMaps().Where(m => !rotation.Contains(m)).ToList();
         var aramMaps = gameData.Maps.Where(m => m.Playable && m.Type.Equals("ARAM"));
 
         rewards.Add(
@@ -153,6 +173,13 @@ public class SupportedRewardsHolder : ICustomRewardsHolder
 
         return rewards;
     }
+
+    private IEnumerable<Map> StandardMaps() =>
+        (gameData.Maps ?? (IReadOnlyList<Map>)Array.Empty<Map>()).Where(map =>
+            map != null
+            && map.Playable
+            && string.Equals(map.Type, "standard", StringComparison.Ordinal)
+        );
 
     public bool TryGetReward(OnRewardRedeemedArgs args, out SupportedReward reward)
     {

@@ -65,6 +65,15 @@ public class HeroesProfileApiSettings
 
     private static bool IsStormLeague(string gameType) => GameTypesEqual("Storm League", gameType);
 
+    /// <summary>
+    /// True when <paramref name="actual"/> is the game type <paramref name="expected"/> names
+    /// ("Storm League" and "sl" are the same). False when either is empty.
+    /// </summary>
+    public static bool SameGameType(string expected, string actual) =>
+        !string.IsNullOrWhiteSpace(expected)
+        && !string.IsNullOrWhiteSpace(actual)
+        && GameTypesEqual(expected, actual);
+
     private static bool GameTypesEqual(string expected, string actual)
     {
         if (string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))

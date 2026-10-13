@@ -56,9 +56,16 @@ public class TwitchRewardsManager : ITwitchRewardsManager
 
         var broadcasterId = await GetChannelId();
 
+        string pool = rewardsHolder.PoolSummary;
+        if (!string.IsNullOrWhiteSpace(pool))
+        {
+            logger.LogInformation("{Pool}", pool);
+        }
+
         var rewards = await twitchApi.Helix.ChannelPoints.GetCustomRewardAsync(broadcasterId);
         var existing =
             rewards?.Data ?? Array.Empty<TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward>();
+        existing = await DeleteRetiredRewardsAsync(broadcasterId, existing);
 
         var updateList = new List<UpdateCustomRewardResponse>();
         var createList = new List<CreateCustomRewardsResponse>();
@@ -140,6 +147,61 @@ public class TwitchRewardsManager : ITwitchRewardsManager
             updateList.Count,
             rewardsHolder.Rewards.Count
         );
+    }
+
+    /// <summary>
+    /// Deletes the channel rewards the catalog retired (#425): the Storm League rewards of maps
+    /// out of the Storm League pool, which can never find a game. They also take channel slots
+    /// (Twitch allows 50) that the Quick Match rewards of those maps need. Returns the rewards
+    /// left on the channel.
+    /// </summary>
+    private async Task<TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward[]> DeleteRetiredRewardsAsync(
+        string broadcasterId,
+        TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward[] existing
+    )
+    {
+        var retired = new HashSet<string>(
+            rewardsHolder.RetiredTitles ?? Array.Empty<string>(),
+            StringComparer.Ordinal
+        );
+        if (retired.Count == 0)
+        {
+            return existing;
+        }
+
+        var kept = new List<TwitchLib.Api.Helix.Models.ChannelPoints.CustomReward>();
+        foreach (var reward in existing)
+        {
+            if (reward == null || !retired.Contains(reward.Title))
+            {
+                kept.Add(reward);
+                continue;
+            }
+
+            try
+            {
+                await twitchApi.Helix.ChannelPoints.DeleteCustomRewardAsync(
+                    broadcasterId,
+                    reward.Id,
+                    settings.Twitch.AccessToken
+                );
+                logger.LogInformation(
+                    "Deleted '{Title}': its map is not in the Storm League pool, so no game can be found for it.",
+                    reward.Title
+                );
+            }
+            catch (Exception e)
+            {
+                kept.Add(reward);
+                logger.LogWarning(
+                    "Could not delete retired reward '{Title}': {Error}",
+                    reward.Title,
+                    SafeError(e)
+                );
+            }
+        }
+
+        return kept.ToArray();
     }
 
     public async Task<IReadOnlyList<string>> ListRemoteTitlesAsync()

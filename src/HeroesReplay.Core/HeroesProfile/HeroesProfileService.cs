@@ -414,7 +414,15 @@ public class HeroesProfileService : IHeroesProfileService
                     ctx.CancellationToken
                 )
                 .ConfigureAwait(false);
-            return FilterListed(HeroesProfileReplayMapper.ToReplays(page));
+            // A reward asks for its own game type (#425). HeroesProfileApi:GameTypes is what the
+            // download role lists, Storm League only, and it used to drop every Quick Match,
+            // ARAM and Unranked Draft answer here.
+            return FilterListed(
+                HeroesProfileReplayMapper.ToReplays(page),
+                gameType.HasValue
+                    ? listed => HeroesProfileApiSettings.SameGameType(typeQuery, listed)
+                    : null
+            );
         }
     }
 
@@ -447,16 +455,24 @@ public class HeroesProfileService : IHeroesProfileService
         );
     }
 
-    private IEnumerable<HeroesProfileReplay> FilterListed(IEnumerable<HeroesProfileReplay> replays)
+    /// <summary>
+    /// The listed replays spectate can play. <paramref name="allowGameType"/> decides the game
+    /// type; without it, <c>HeroesProfileApi:GameTypes</c> does (the download role's list).
+    /// </summary>
+    private IEnumerable<HeroesProfileReplay> FilterListed(
+        IEnumerable<HeroesProfileReplay> replays,
+        Func<string, bool> allowGameType = null
+    )
     {
         if (replays == null)
         {
             return Enumerable.Empty<HeroesProfileReplay>();
         }
 
+        allowGameType ??= settings.HeroesProfileApi.IsAllowedGameType;
         return replays
             .Where(x => x.Deleted is not > 0)
-            .Where(x => settings.HeroesProfileApi.IsAllowedGameType(x.GameType))
+            .Where(x => allowGameType(x.GameType))
             .Where(x =>
                 x.Downloadable == true
                 || (x.Downloadable != false && settings.HeroesProfileApi.MatchesReplayUrl(x.Url))

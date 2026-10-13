@@ -76,10 +76,10 @@ public class ReplayIdRequestHandler : IRewardHandler
                         requestFactory.Create(reward, args)
                     );
                     string queued = RewardRedemptionStatus.ForQueue(response);
-                    if (queued != null)
+                    if (queued != null && !response.Duplicate)
                     {
                         logger.LogInformation(
-                            "Redemption {RedemptionId} is {Status}. Twitch was not called.",
+                            "Redemption {RedemptionId} was not queued ({Status}). Its cancel is recorded, and twitch connect returns the points.",
                             args.RedemptionId,
                             queued
                         );
@@ -110,14 +110,35 @@ public class ReplayIdRequestHandler : IRewardHandler
         }
         else
         {
+            // Nothing can be queued, so the points go back (#425): a cancel is recorded, and
+            // twitch connect sends it (RedemptionFulfiller).
+            bool refund = args.RedemptionId != System.Guid.Empty;
+            if (refund)
+            {
+                RedemptionDispositionLog.Append(
+                    System.IO.Path.Combine(
+                        settings.Location.DataDirectory,
+                        RedemptionDispositionLog.FileName
+                    ),
+                    null,
+                    requestFactory.Create(reward, args),
+                    RedemptionEnd.Cancel
+                );
+            }
+
             logger.LogInformation(
-                "Redemption {RedemptionId} is {Status}. Twitch was not called.",
+                "Redemption {RedemptionId} was not queued ({Status}). {Refund}",
                 args.RedemptionId,
-                RewardRedemptionStatus.Decide(RewardTerminal.InvalidInput)
+                RewardRedemptionStatus.Decide(RewardTerminal.InvalidInput),
+                refund
+                    ? "Its cancel is recorded, and twitch connect returns the points."
+                    : "It has no redemption to refund."
             );
             twitchClient.SendMessage(
                 settings.Twitch.Channel,
-                $"{args.DisplayName}, your request is invalid.",
+                refund
+                    ? $"{args.DisplayName}, your request is invalid. Your points will be returned. Enter a ReplayId such as 12345678, or ReplayId,BattleTag."
+                    : $"{args.DisplayName}, your request is invalid.",
                 dryRun: settings.Twitch.DryRunMode
             );
             logger.LogDebug($"{args.TimeStamp}: {args.RewardId} - {args.RewardCost}");
