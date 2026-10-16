@@ -41,6 +41,17 @@ public sealed class YouTubeLibraryVideo
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string FocusHero { get; set; }
 
+    /// <summary>
+    /// The hero of the cycle's own focus video (#433), from the description's <c>Hero focus:</c>
+    /// line. Null for any other video.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string HeroFocus { get; set; }
+
+    /// <summary>The focus hero's role (<c>Ranged Assassin</c>), from the same line.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string HeroFocusRole { get; set; }
+
     [JsonIgnore]
     public bool IsClip => string.Equals(Kind, YouTubeLibraryRecord.Clip, StringComparison.Ordinal);
 
@@ -104,6 +115,8 @@ public static class YouTubeLibraryRecord
             PublishAt = entry.PublishAtUtc,
             Draft = clip ? null : YouTubeVideoFacts.Draft(lines),
             FocusHero = clip ? null : YouTubeVideoFacts.FocusHero(lines),
+            HeroFocus = clip ? null : YouTubeVideoFacts.HeroFocus(lines).Hero,
+            HeroFocusRole = clip ? null : YouTubeVideoFacts.HeroFocus(lines).Role,
         };
     }
 

@@ -82,6 +82,27 @@ public class HighlightSettings
         return kinds;
     }
 
+    /// <summary>
+    /// The hero with the build's short name, <c>Teleport Li-Ming</c>, or null when the build is
+    /// missing or too plain once " Build" is dropped. The caller decides whether the build is
+    /// strong enough to name.
+    /// </summary>
+    public string BuildLabel(string build, string hero)
+    {
+        if (string.IsNullOrWhiteSpace(build) || string.IsNullOrWhiteSpace(hero))
+        {
+            return null;
+        }
+
+        string name = build.Trim();
+        if (name.EndsWith(" Build", StringComparison.OrdinalIgnoreCase))
+        {
+            name = name.Substring(0, name.Length - " Build".Length).Trim();
+        }
+
+        return name.Length == 0 || IsGenericBuildName(name) ? null : name + " " + hero.Trim();
+    }
+
     public bool IsGenericBuildName(string name)
     {
         foreach (string generic in GenericBuildNames ?? DefaultGenericBuildNames)
