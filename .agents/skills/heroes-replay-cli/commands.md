@@ -86,6 +86,25 @@ Read one .StormReplay and print, for each player, the talents picked (English na
 - **Changes:** Prints each player's talents and best guide build from the shipped reference. Read-only.
 - **Exit:** 0 when the replay parsed. 1 for a missing file or a replay that does not parse.
 
+## `focus candidates`
+
+Read every .StormReplay in a folder, one at a time, into focus cards (each player's catalog hero, role, score screen, awards, closest guide build and team comps), build the hero baselines from them, and rank every player as a focus: the gates that rule a player out, then quality × (0.5 + novelty) with each part. Heroes Profile is not called, so every player's record counts as unknown. Reads the heroes-data2 catalog under Location:DataDirectory, the shipped talent-build reference and hero signatures, and --ledger when given. Read-only.
+
+- **Options:** `--directory` (`-d`, required), `--recursive`, `--ledger`, `--top`, `--simulate`, `--any-mode`, `--fetch`
+- **Before:** A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, the shipped talent-build reference and hero signatures, and `--ledger` when given. Calls Heroes Profile only with `--fetch` (then `HeroesProfileApi:ApiKey`).
+- **Changes:** Prints the gates that ruled players out, the best focus candidates with each part of their score, and with `--simulate` a run of focus picks. Never writes the ledger. `--fetch N` makes up to N `players/heroes` calls and fills the cache under `Data\HeroesProfile\players`, counting against the weekly budget.
+- **Exit:** 0 when at least one replay was read. 1 for a missing folder or ledger, or no replays in it. 2 when no replay parsed.
+
+## `focus coverage`
+
+Report what the focus picks have covered: picks, plays and uploads; heroes covered out of the roster (the shipped talent-build reference's heroes) and which are not; and the spread over roles, maps, leagues, regions and builds. Reads Data\Focus\ledger.json and Data\youtube-library.jsonl. Read-only.
+
+- **Options:** `--ledger`, `--library`, `--output` (`-o`)
+- **Before:** `Data\Focus\ledger.json` and `Data\youtube-library.jsonl` under `Location:DataDirectory`, or `--ledger` and `--library`. A missing file counts as empty.
+- **Changes:** Nothing. Read only.
+- **Exit:** 0 when it finishes. 1 on a parse error or an unexpected error.
+- **Codes:** `focus.coverage`
+
 ## `check`
 
 Validate configuration, connectivity to Heroes Profile, OBS, Twitch, and the internet, and the ffmpeg tools clips use.
@@ -343,7 +362,7 @@ Run the YouTube library pass now: list the channel's uploads, record videos miss
 
 Print the full match title, description lines and tags a .StormReplay would get, with its match insights: the solo laners, standouts, MVP, camps, core race, comeback, each player's closest guide build, and the hero the focus timeline follows most. Highlights (YouTube:Titles:Highlights) are on for the preview unless --configured. Mode and rank come from a cache-style file name (<id>_<mode>_<rank>_<map>_...). Offline and read-only: no YouTube, Heroes Profile, game or OBS.
 
-- **Options:** `--replay` (required), `--configured`, `--insights`
+- **Options:** `--replay` (required), `--configured`, `--insights`, `--focus`
 - **Before:** A `.StormReplay` (`--replay`), ideally with a cache-style name (`<id>_<mode>_<rank>_<map>_...`) for the mode and rank, and the heroes-data2 catalog under `Location:DataDirectory`.
 - **Changes:** Prints the title, description lines and tags the replay would get, with highlights on unless `--configured`, and with `--insights` the `insights.json` spectate would write. Offline and read-only: no YouTube, Heroes Profile, game or OBS.
 - **Exit:** 0 when the replay parsed. 1 for a missing file or a replay that does not parse.
@@ -372,6 +391,15 @@ Find the first Heroes Profile replay id on the same patch line as the latest rep
 - **Before:** `HeroesProfileApi:ApiKey`.
 - **Changes:** Nothing, unless `--write`: then it stores `MinReplayId` in `appsettings.json`.
 - **Exit:** 0 when it finishes, 1 when the latest replay's version or (with `--write`) `appsettings.json` or its `MinReplayId` cannot be found.
+
+## `heroesprofile player-hero`
+
+Look up one player's Storm League record on one hero (wins, games, win rate, KDA, hero MMR and tier) from Heroes Profile players/heroes, the lookup behind focus-hero picks. Uses and fills the cache under Data\HeroesProfile\players and counts against HeroesProfileApi:PlayerStats:WeeklyCallBudget. A private profile, a missing player and an unknown hero are answers too.
+
+- **Options:** `--battletag` (required), `--region` (required), `--hero` (required), `--attribute`, `--fresh`
+- **Before:** `HeroesProfileApi:ApiKey` (the v1 key). Network access to Heroes Profile.
+- **Changes:** Calls `players/heroes` at most once (none when the cache under `Data\HeroesProfile\players` is fresh) and writes the answer there; counts against `HeroesProfileApi:PlayerStats:WeeklyCallBudget`. `--fresh` deletes that player's cached file first.
+- **Exit:** 0 when Heroes Profile answered: a record, no games on the hero, a private profile, or no such player. 1 for a bad BattleTag or region, an unanswered lookup (422, a failed job, a network error), a refused key, or a spent budget.
 
 ## `heroesprofile sample`
 

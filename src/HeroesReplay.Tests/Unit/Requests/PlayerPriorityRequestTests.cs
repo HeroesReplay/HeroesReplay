@@ -1,5 +1,6 @@
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Shared;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Requests;
@@ -98,6 +99,37 @@ public class PlayerPriorityRequestTests
             "PlayerIndex",
             System.Text.Json.JsonSerializer.Serialize(new RewardRequest { BattleTag = "B#2" })
         );
+    }
+
+    /// <summary>
+    /// A replay from a Russian client names Diablo <c>Диабло</c>. With the catalog the request's
+    /// hero is the English name the cycle's focus picks and the roster use.
+    /// </summary>
+    [Fact]
+    public void HeroName_WithTheCatalog_IsTheEnglishHeroNotTheLocalizedCharacter()
+    {
+        var replay = new Replay
+        {
+            Players =
+            [
+                new Player
+                {
+                    Name = "Kazpa",
+                    BattleTag = 2345,
+                    Character = "Диабло",
+                    HeroAttributeId = "Diab",
+                },
+                new Player { Name = "Plain", BattleTag = 1 },
+            ],
+        };
+        Hero[] catalog = [new Hero("Diablo", "HeroDiablo", "Diablo", "Diab")];
+
+        Assert.Equal("Diablo", PlayerPriorityRequest.HeroName(replay, 0, catalog));
+        Assert.Equal("Диабло", PlayerPriorityRequest.HeroName(replay, 0));
+        Assert.Equal("Диабло", PlayerPriorityRequest.HeroName(replay, 0, []));
+        Assert.Equal("Plain", PlayerPriorityRequest.HeroName(replay, 1, catalog));
+        Assert.Null(PlayerPriorityRequest.HeroName(replay, null, catalog));
+        Assert.Null(PlayerPriorityRequest.HeroName(replay, 2, catalog));
     }
 
     [Fact]

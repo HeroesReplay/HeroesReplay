@@ -16,6 +16,12 @@ public sealed class FullMatchMetadataOptions
     public bool IncludeRequestAttribution { get; init; } = true;
     public string CategoryId { get; init; } = "20";
     public YouTubeTitleSettings Titles { get; init; }
+
+    /// <summary>
+    /// The marker the uploader puts before the title (<c>[TEST]</c>). A focus title leaves room
+    /// for it, so the marked title still fits YouTube's 100 characters.
+    /// </summary>
+    public string TitleMarker { get; init; }
 }
 
 public sealed record FullMatchMetadataInput
@@ -38,6 +44,22 @@ public sealed record FullMatchMetadataInput
     /// <summary>True only when the reward named a player slot. A focus hero alone does not change the title.</summary>
     public bool NamedPlayer { get; init; }
     public IReadOnlyList<TeamKillClip> NotableEvents { get; init; }
+
+    /// <summary>
+    /// The cycle's focus pick (#433): the title leads with its build and hero
+    /// (<c>Teleport Li-Ming gameplay</c>) and the description names it. Null for any other video;
+    /// a viewer request never has one.
+    /// </summary>
+    public HeroFocusFacts HeroFocus { get; init; }
+
+    /// <summary>The focus player's kills, deaths and assists (<c>12/0/9</c>), or null.</summary>
+    public string HeroFocusKda { get; init; }
+
+    /// <summary>
+    /// The focus player's <c>Name#1234</c>, only so the roster can leave their name out. Never
+    /// written anywhere.
+    /// </summary>
+    public string HeroFocusPlayer { get; init; }
 
     /// <summary>Caller sets this only after completion and media validation. It is not inferred.</summary>
     public bool IsCompleteRecording { get; init; }
@@ -88,7 +110,7 @@ public sealed class FullMatchMetadata
 
 public static class FullMatchMetadataBuilder
 {
-    public const string TemplateVersion = "8";
+    public const string TemplateVersion = "9";
     public const int TitleMaxCharacters = 100;
     public const int DescriptionMaxCharacters = 5000;
     public const int TagMaxCharacters = 30;
@@ -152,9 +174,41 @@ public static class FullMatchMetadataBuilder
             featuredHero = null;
         }
 
+        // The cycle's focus hero leads the title on its own (#433): no feature, hook or highlight.
+        HeroFocusFacts heroFocus = input.NamedPlayer ? null : input.HeroFocus;
+        string focusHero = Clean(heroFocus?.Hero, 40);
+        string focusBuild = Clean(heroFocus?.Build, 60);
+        string focusRole = Clean(heroFocus?.Role, 40);
+        string focusLabel =
+            focusHero == null
+                ? null
+                : (titles.Highlights ?? new HighlightSettings()).BuildLabel(focusBuild, focusHero);
+        string focusTitle =
+            focusHero == null
+                ? null
+                : FocusTitle.Compose(
+                    TitleBudget(options.TitleMarker),
+                    focusHero,
+                    focusLabel,
+                    Clean(input.HeroFocusKda, 20),
+                    map,
+                    mode,
+                    rank,
+                    draft.Title,
+                    replayText
+                );
+        if (
+            focusHero != null
+            && featuredHero != null
+            && HeroDraft.SameName(featuredHero, focusHero)
+        )
+        {
+            featuredHero = null;
+        }
+
         string feature = FeatureSegment(titles, featuredHero);
         StatHook hook =
-            draft.Title == null
+            draft.Title == null && focusTitle == null
                 ? Hook(input, titles, map, mode, namedLead ? focus : null, featuredHero)
                 : null;
         string hookTitle = Clean(hook?.Title, 80);
@@ -163,7 +217,7 @@ public static class FullMatchMetadataBuilder
                 ? new HighlightContext(input.Insights, events, titles.Highlights)
                 : null;
         Highlight highlight =
-            highlights == null
+            highlights == null || focusTitle != null
                 ? null
                 : HighlightPicker.Default.Pick(
                     highlights,
@@ -186,7 +240,8 @@ public static class FullMatchMetadataBuilder
         }
 
         string title =
-            highlightTitle
+            focusTitle
+            ?? highlightTitle
             ?? TitleFor(
                 titles,
                 input.NamedPlayer,
@@ -219,6 +274,7 @@ public static class FullMatchMetadataBuilder
         AddLine(lines, mode == null ? null : "Mode: " + mode);
         AddLine(lines, rank == null ? null : "Rank: " + rank);
         AddLine(lines, focus == null ? null : "Featured: " + focus);
+        AddLine(lines, HeroFocusLine(focusHero, focusBuild, focusRole));
         AddLine(lines, draft.Line == null ? null : "Draft: " + draft.Line);
         AddLine(lines, featuredHero == null ? null : "Featuring: " + featuredHero);
         AddLine(lines, hookTitle == null ? null : Clean(hook.StatsLine, 400));
@@ -231,7 +287,7 @@ public static class FullMatchMetadataBuilder
         AddLine(lines, requestor == null ? null : "Requested by: " + requestor);
         string resultLine = winner == null ? null : "Result: " + winner;
         AddLine(lines, resultLine);
-        AddRoster(lines, input.Roster);
+        AddRoster(lines, input.Roster, heroFocus == null ? null : input.HeroFocusPlayer);
         if (highlights != null)
         {
             lines.AddRange(HighlightLines.TalentBuilds(highlights));
@@ -244,6 +300,9 @@ public static class FullMatchMetadataBuilder
             mode,
             rank,
             focus,
+            focusHero == null
+                ? Array.Empty<string>()
+                : new[] { focusHero, FocusTitle.Lead(focusHero, null), focusLabel, focusRole },
             pentakill,
             teamWipe,
             replayId != null,
@@ -307,6 +366,34 @@ public static class FullMatchMetadataBuilder
 
         return tags;
     }
+
+    /// <summary>
+    /// <c>Hero focus: Li-Ming (Teleport Build), Ranged Assassin</c>: the line the library reads a
+    /// focus video's hero and role back from (<see cref="Playlists.YouTubeVideoFacts"/>).
+    /// </summary>
+    public static string HeroFocusLine(string hero, string build, string role)
+    {
+        if (string.IsNullOrWhiteSpace(hero))
+        {
+            return null;
+        }
+
+        string line = HeroFocusLabel + " " + hero.Trim();
+        if (!string.IsNullOrWhiteSpace(build))
+        {
+            line += " (" + build.Trim() + ")";
+        }
+
+        return string.IsNullOrWhiteSpace(role) ? line : line + ", " + role.Trim();
+    }
+
+    public const string HeroFocusLabel = "Hero focus:";
+
+    /// <summary>YouTube's 100 characters, less the marker and its space.</summary>
+    private static int TitleBudget(string marker) =>
+        string.IsNullOrWhiteSpace(marker)
+            ? TitleMaxCharacters
+            : TitleMaxCharacters - marker.Trim().Length - 1;
 
     private static string Lead(YouTubeTitleSettings titles, bool namedPlayer, string hero) =>
         namedPlayer && titles.NamedPlayerTitles && hero != null ? hero + " focus" : null;
@@ -462,16 +549,25 @@ public static class FullMatchMetadataBuilder
         return "Highlights: " + string.Join("; ", parts);
     }
 
-    private static void AddRoster(List<string> lines, IReadOnlyList<ReplayMediaPlayer> roster)
+    /// <summary>
+    /// Each team's heroes with their players' names. A focus video (#433) names its focused hero
+    /// without the player: the video never says who it follows.
+    /// </summary>
+    private static void AddRoster(
+        List<string> lines,
+        IReadOnlyList<ReplayMediaPlayer> roster,
+        string unnamed
+    )
     {
-        AddLine(lines, RosterLine("Blue", roster, 0));
-        AddLine(lines, RosterLine("Red", roster, 1));
+        AddLine(lines, RosterLine("Blue", roster, 0, unnamed));
+        AddLine(lines, RosterLine("Red", roster, 1, unnamed));
     }
 
     private static string RosterLine(
         string teamName,
         IReadOnlyList<ReplayMediaPlayer> roster,
-        int team
+        int team,
+        string unnamed
     )
     {
         if (roster == null)
@@ -487,7 +583,9 @@ public static class FullMatchMetadataBuilder
                 continue;
             }
 
-            string described = Describe(player);
+            string described = IsPlayer(player, unnamed)
+                ? Clean(player.Hero, 40)
+                : Describe(player);
             if (!string.IsNullOrWhiteSpace(described))
             {
                 parts.Add(described);
@@ -501,6 +599,17 @@ public static class FullMatchMetadataBuilder
 
         return teamName + ": " + string.Join(", ", parts);
     }
+
+    /// <summary>The roster player is <paramref name="battleTag"/> (<c>Name#1234</c>).</summary>
+    private static bool IsPlayer(ReplayMediaPlayer player, string battleTag) =>
+        !string.IsNullOrWhiteSpace(battleTag)
+        && !player.IsAi
+        && !string.IsNullOrWhiteSpace(player.Name)
+        && string.Equals(
+            player.Name.Trim() + "#" + player.BattleTag,
+            battleTag.Trim(),
+            StringComparison.OrdinalIgnoreCase
+        );
 
     private static string Describe(ReplayMediaPlayer player)
     {
@@ -534,6 +643,7 @@ public static class FullMatchMetadataBuilder
         string mode,
         string rank,
         string focus,
+        IReadOnlyList<string> heroFocus,
         bool pentakill,
         bool teamWipe,
         bool replayKnown,
@@ -545,6 +655,10 @@ public static class FullMatchMetadataBuilder
         AddTag(tags, mode);
         AddTag(tags, ReplayMediaRanks.Display(rank));
         AddTag(tags, focus);
+        foreach (string tag in heroFocus)
+        {
+            AddTag(tags, tag);
+        }
         if (pentakill)
         {
             AddTag(tags, "Pentakill");

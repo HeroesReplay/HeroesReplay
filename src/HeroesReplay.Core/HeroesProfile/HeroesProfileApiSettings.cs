@@ -38,8 +38,29 @@ public class HeroesProfileApiSettings
     /// </summary>
     public TimeSpan MapsRefreshInterval { get; set; } = TimeSpan.FromDays(1);
 
+    /// <summary>
+    /// How many replay ids back a rank reward's search reads Heroes Profile's list (#429). One
+    /// call returns up to 1,000 games of that type and map after it, so a rank reward gets more
+    /// candidates than a map reward, whose search reads <see cref="ApiMaxReturnedReplays"/> ids.
+    /// </summary>
+    public int RankSearchWindow { get; set; } = 20000;
+
+    /// <summary>
+    /// How many candidates a rank reward looks up before its points go back (#429). Each costs a
+    /// <c>/replay/{id}</c> call (500 a minute) and, unless that MMR is cached, a <c>/mmr/tier</c>
+    /// call (60 a minute). Ranks are uneven: 25 recent Storm League games on Cursed Hollow on
+    /// 2026-10-13 were 11 Bronze, 7 Platinum, 3 Silver, 2 Gold, 2 Master and no Diamond.
+    /// </summary>
+    public int RankLookupLimit { get; set; } = 40;
+
+    /// <summary>How long a rank reward's lookups may take in all before its points go back (#429).</summary>
+    public TimeSpan RankSearchTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
     /// <summary>The per-patch hero statistics behind YouTube title hooks.</summary>
     public HeroStatsSettings HeroStats { get; set; } = new HeroStatsSettings();
+
+    /// <summary>The player lookups behind focus-hero picks (#433).</summary>
+    public PlayerStatsSettings PlayerStats { get; set; } = new PlayerStatsSettings();
 
     public bool MatchesReplayUrl(Uri url)
     {

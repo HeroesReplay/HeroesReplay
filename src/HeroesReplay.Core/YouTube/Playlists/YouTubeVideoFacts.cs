@@ -9,7 +9,8 @@ namespace HeroesReplay.Core.YouTube.Playlists;
 /// <summary>
 /// Reads what a channel video shows from its title and description. The current template
 /// writes <c>Map:</c>, <c>Mode:</c>, <c>Rank:</c>, and <c>Build:</c> lines, plus
-/// <c>Draft:</c> for an unusual draft and <c>Featured:</c> for a request that named a player.
+/// <c>Draft:</c> for an unusual draft, <c>Featured:</c> for a request that named a player, and
+/// <c>Hero focus:</c> for the cycle's own focus video (#433).
 /// Older uploads have only the title (<c>Sky Temple - 65269475 - Platinum</c>) and a
 /// <c>Game type:</c> line, so their build comes from Heroes Profile and they have no draft
 /// note or named player.
@@ -20,7 +21,18 @@ public static class YouTubeVideoFacts
     /// Raised when <see cref="Read"/> learns a new fact. The library pass then lists every
     /// channel page once more so videos already in the record pick it up.
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
+
+    /// <summary>The six catalog roles a <c>Hero focus:</c> line may end with.</summary>
+    public static readonly string[] Roles =
+    {
+        "Tank",
+        "Bruiser",
+        "Melee Assassin",
+        "Ranged Assassin",
+        "Healer",
+        "Support",
+    };
 
     public static YouTubeLibraryVideo Read(
         string videoId,
@@ -60,7 +72,40 @@ public static class YouTubeVideoFacts
             PrivacyStatus = privacyStatus,
             Draft = clip ? null : Draft(lines),
             FocusHero = clip ? null : FocusHero(lines),
+            HeroFocus = clip ? null : HeroFocus(lines).Hero,
+            HeroFocusRole = clip ? null : HeroFocus(lines).Role,
         };
+    }
+
+    /// <summary>
+    /// The cycle's focus hero and role from <c>Hero focus: Li-Ming (Teleport Build), Ranged
+    /// Assassin</c> (#433). The build is not kept; a role that is not a catalog role is null.
+    /// </summary>
+    public static (string Hero, string Role) HeroFocus(string[] lines)
+    {
+        string value = Label(lines, "Hero focus:");
+        if (value == null)
+        {
+            return (null, null);
+        }
+
+        string role = null;
+        int comma = value.LastIndexOf(", ", StringComparison.Ordinal);
+        if (comma > 0)
+        {
+            string tail = value.Substring(comma + 2).Trim();
+            role = Roles.FirstOrDefault(known =>
+                string.Equals(known, tail, StringComparison.OrdinalIgnoreCase)
+            );
+            if (role != null)
+            {
+                value = value.Substring(0, comma).Trim();
+            }
+        }
+
+        int build = value.IndexOf(" (", StringComparison.Ordinal);
+        string hero = (build > 0 ? value.Substring(0, build) : value).Trim();
+        return (hero.Length == 0 ? null : hero, role);
     }
 
     /// <summary>
@@ -97,6 +142,16 @@ public static class YouTubeVideoFacts
         )
         {
             known.FocusHero = shown.FocusHero;
+            changed = true;
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(known.HeroFocus)
+            && !string.IsNullOrWhiteSpace(shown.HeroFocus)
+        )
+        {
+            known.HeroFocus = shown.HeroFocus;
+            known.HeroFocusRole ??= shown.HeroFocusRole;
             changed = true;
         }
 

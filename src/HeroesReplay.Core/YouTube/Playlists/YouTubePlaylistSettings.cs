@@ -24,6 +24,12 @@ public class YouTubePlaylistSettings
     /// </summary>
     public bool ViewerReview { get; set; } = true;
 
+    /// <summary>One playlist for the cycle's own focus-hero videos (#433): <c>Hero focus</c>.</summary>
+    public bool HeroFocus { get; set; } = true;
+
+    /// <summary>One playlist per role of those videos: <c>Hero focus - Healer</c>.</summary>
+    public bool HeroFocusRole { get; set; } = true;
+
     /// <summary>
     /// The current patch line (or <c>YouTube:SeasonName</c>), then <c>Patch 2.55 archive</c>.
     /// Clips are filed here only.

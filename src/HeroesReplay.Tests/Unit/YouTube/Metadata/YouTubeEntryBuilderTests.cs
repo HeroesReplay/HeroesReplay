@@ -1,9 +1,12 @@
 using Heroes.ReplayParser;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Metadata;
+using HeroesReplay.Core.YouTube.Playlists;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube.Metadata;
@@ -52,6 +55,53 @@ public class YouTubeEntryBuilderTests
             line =>
                 line.StartsWith("Blue:", System.StringComparison.Ordinal)
                 || line.StartsWith("Red:", System.StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void Create_CarriesTheCycleFocus_WithoutTheViewerRequestLead()
+    {
+        var loaded = new LoadedReplay
+        {
+            ReplayId = 65389750,
+            HeroesProfileReplay = new HeroesProfileReplay
+            {
+                Id = 65389750,
+                Map = "Volskaya Foundry",
+                GameType = "Storm League",
+                Rank = "Diamond",
+            },
+            FocusPick = new FocusPick(
+                65389750,
+                "65389750",
+                0,
+                "Star#1234",
+                "Li-Ming",
+                "Wiza",
+                "Ranged Assassin",
+                "Teleport Build"
+            ),
+        };
+
+        YouTubeEntry entry = YouTubeEntryBuilder.Create(
+            loaded,
+            new YouTubeSettings { PrivacyStatus = "public", CategoryId = "20" }
+        );
+
+        Assert.False(entry.Requested);
+        Assert.Equal("Li-Ming", entry.Hero);
+        Assert.Equal("Li-Ming", entry.HeroFocus.Hero);
+        Assert.Equal("Ranged Assassin", entry.HeroFocus.Role);
+        Assert.Equal("Teleport Build", entry.HeroFocus.Build);
+        Assert.DoesNotContain("focus", entry.Title, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            entry.DescriptionLines,
+            line => line.StartsWith("Featured:", System.StringComparison.Ordinal)
+        );
+        Assert.Null(
+            YouTubeEntryBuilder
+                .Create(new LoadedReplay { ReplayId = 1 }, new YouTubeSettings())
+                .HeroFocus
         );
     }
 
@@ -265,6 +315,68 @@ public class YouTubeEntryBuilderTests
         Assert.DoesNotContain("MMR", entry.Title, System.StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// 2026-10-16: a dev replay from a Russian client named Diablo <c>Диабло</c>, and the request's
+    /// title lead and <c>Featured:</c> line used it. They name the catalog's English hero, which
+    /// the library files viewer reviews under and the featured-hero cooldown spaces.
+    /// </summary>
+    [Fact]
+    public void Create_RequestedPlayerOnALocalizedReplay_NamesTheEnglishHero()
+    {
+        LoadedReplay loaded = LocalizedRequest(
+            new RewardRequest { ReplayId = 1, BattleTag = "Kazpa#2345" }
+        );
+
+        YouTubeEntry entry = YouTubeEntryBuilder.Create(
+            loaded,
+            new YouTubeSettings(),
+            isCompleteRecording: false,
+            heroCatalog: DiabloCatalog
+        );
+
+        Assert.Equal("Diablo focus - Dragon Shire - Storm League - Diamond 3 - 1", entry.Title);
+        Assert.Contains("Featured: Diablo", entry.DescriptionLines);
+        Assert.Equal("Diablo", YouTubeVideoFacts.FocusHero(entry.DescriptionLines));
+        Assert.Equal("Diablo", entry.Hero);
+        Assert.Contains("Diablo", entry.Heroes);
+        Assert.DoesNotContain(
+            entry.DescriptionLines,
+            line => line.Contains("Диабло", System.StringComparison.Ordinal)
+        );
+        Assert.DoesNotContain("Диабло", entry.Title, System.StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Create_RequestWithoutANamedPlayerOnALocalizedReplay_IsUnchanged()
+    {
+        LoadedReplay loaded = LocalizedRequest(
+            new RewardRequest
+            {
+                ReplayId = 1,
+                Login = "Zemill",
+                RewardTitle = "ReplayId",
+            }
+        );
+
+        YouTubeEntry withCatalog = YouTubeEntryBuilder.Create(
+            loaded,
+            new YouTubeSettings(),
+            isCompleteRecording: false,
+            heroCatalog: DiabloCatalog
+        );
+        YouTubeEntry without = YouTubeEntryBuilder.Create(loaded, new YouTubeSettings());
+
+        Assert.Equal("Dragon Shire - Storm League - Diamond 3 - 1", withCatalog.Title);
+        Assert.Equal(without.Title, withCatalog.Title);
+        Assert.True(withCatalog.Requested);
+        Assert.Null(withCatalog.Hero);
+        Assert.Null(YouTubeVideoFacts.FocusHero(withCatalog.DescriptionLines));
+        Assert.DoesNotContain(
+            withCatalog.DescriptionLines,
+            line => line.StartsWith("Featured:", System.StringComparison.Ordinal)
+        );
+    }
+
     [Fact]
     public void Create_NamesTheRequestedPlayerAndTheTwitchLogin()
     {
@@ -360,4 +472,46 @@ public class YouTubeEntryBuilderTests
         );
         Assert.DoesNotContain("Zemill", entry.Title, System.StringComparison.Ordinal);
     }
+
+    private static readonly Hero[] DiabloCatalog =
+    [
+        new Hero("Diablo", "HeroDiablo", "Diablo", "Diab"),
+        new Hero("Johanna", "HeroJohanna", "Johanna", "L90E"),
+    ];
+
+    /// <summary>A replay from a Russian client: each character name is in Russian.</summary>
+    private static LoadedReplay LocalizedRequest(RewardRequest request) =>
+        new()
+        {
+            ReplayId = 1,
+            Replay = new Replay
+            {
+                Map = "Dragon Shire",
+                Players =
+                [
+                    new Player
+                    {
+                        Character = "Диабло",
+                        HeroAttributeId = "Diab",
+                        Name = "Kazpa",
+                        BattleTag = 2345,
+                    },
+                    new Player
+                    {
+                        Character = "Джоанна",
+                        HeroAttributeId = "L90E",
+                        Name = "Other",
+                        BattleTag = 1,
+                    },
+                ],
+            },
+            HeroesProfileReplay = new HeroesProfileReplay
+            {
+                Id = 1,
+                Map = "Dragon Shire",
+                GameType = "Storm League",
+                Rank = "Diamond 3",
+            },
+            RewardQueueItem = new RewardQueueItem { Request = request },
+        };
 }

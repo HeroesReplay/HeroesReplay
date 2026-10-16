@@ -1,17 +1,23 @@
 using System;
+using System.Collections.Generic;
 using System.CommandLine;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Insights;
+using HeroesReplay.Core.Analysis.Insights.Builds;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Requests;
+using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Metadata;
 using HeroesReplay.Core.YouTube.Metadata.Highlights;
@@ -45,9 +51,15 @@ public class PreviewCommand : Command
         {
             Description = "Also print the insights.json spectate would write.",
         };
+        var focusOption = new Option<string>("--focus")
+        {
+            Description =
+                "Preview the replay as the cycle's focus-hero video (#433) following this player (Name#1234): the 'Build Hero gameplay' title, the 'Hero focus:' line and the focus tags.",
+        };
         Options.Add(replayOption);
         Options.Add(configuredOption);
         Options.Add(insightsOption);
+        Options.Add(focusOption);
 
         SetAction(
             (parseResult, cancellationToken) =>
@@ -57,7 +69,8 @@ public class PreviewCommand : Command
                     parseResult.GetValue(insightsOption),
                     parseResult.InvocationConfiguration.Output,
                     parseResult.InvocationConfiguration.Error,
-                    cancellationToken
+                    cancellationToken,
+                    parseResult.GetValue(focusOption)
                 )
         );
     }
@@ -68,7 +81,8 @@ public class PreviewCommand : Command
         bool printInsights,
         TextWriter console,
         TextWriter error,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        string focus = null
     )
     {
         console ??= Console.Out;
@@ -123,8 +137,25 @@ public class PreviewCommand : Command
             youtube.Titles.Highlights.Enabled = true;
         }
 
+        LoadedReplay loaded = Loaded(path, replay);
+        if (!string.IsNullOrWhiteSpace(focus))
+        {
+            loaded.FocusPick = FocusPickFor(
+                replay,
+                focus,
+                gameData.Heroes,
+                insights,
+                loaded.ReplayId ?? 0
+            );
+            if (loaded.FocusPick == null)
+            {
+                error.WriteLine($"{focus} did not play a catalog hero in this replay.");
+                return 1;
+            }
+        }
+
         YouTubeEntry entry = YouTubeEntryBuilder.Create(
-            Loaded(path, replay),
+            loaded,
             youtube,
             isCompleteRecording: true,
             gameData.Heroes,
@@ -152,6 +183,51 @@ public class PreviewCommand : Command
 
         console.WriteLine();
         console.WriteLine("Tags: " + string.Join(", ", entry.Tags ?? Array.Empty<string>()));
+    }
+
+    /// <summary>
+    /// The focus pick spectate would make for this player: the catalog hero and role, and the
+    /// guide build only when the talents clearly match it. Null when the player is not in the
+    /// replay or plays no catalog hero.
+    /// </summary>
+    internal static FocusPick FocusPickFor(
+        Replay replay,
+        string battleTag,
+        IReadOnlyList<Hero> heroes,
+        MatchInsights insights,
+        int replayId
+    )
+    {
+        int? index = PlayerPriorityRequest.PlayerIndex(
+            replay,
+            new RewardRequest { BattleTag = battleTag?.Trim() }
+        );
+        if (index is not int slot)
+        {
+            return null;
+        }
+
+        Player player = replay.Players[slot];
+        Hero hero = PlayedHero.Find(heroes, replay, player);
+        if (hero == null || string.IsNullOrWhiteSpace(hero.Role))
+        {
+            return null;
+        }
+
+        PlayerBuild build = insights?.Builds?.Players?.FirstOrDefault(candidate =>
+            candidate.PlayerIndex == slot
+        );
+        bool clear = build != null && !build.Ambiguous && build.Score >= 0.85;
+        return new FocusPick(
+            replayId,
+            replayId.ToString(CultureInfo.InvariantCulture),
+            slot,
+            $"{player.Name}#{player.BattleTag}",
+            hero.Name,
+            hero.AttributeId,
+            hero.Role,
+            clear ? build.Build : null
+        );
     }
 
     /// <summary>The replay as spectate holds it, with the mode and rank a cache file name carries.</summary>

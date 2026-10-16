@@ -9,6 +9,7 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
@@ -30,6 +31,7 @@ public sealed class ReplayCacheProvider : IReplayProvider
     private readonly IHeroesProfileService heroesProfile;
     private readonly CancellationTokenProvider tokenProvider;
     private readonly AppSettings settings;
+    private readonly FocusPicker focus;
     private readonly HashSet<int> played = new();
     private Func<IReadOnlyList<string>> installedVersionSource;
 
@@ -55,9 +57,11 @@ public sealed class ReplayCacheProvider : IReplayProvider
         IReplayHelper replayHelper,
         IHeroesProfileService heroesProfile,
         CancellationTokenProvider tokenProvider,
-        AppSettings settings
+        AppSettings settings,
+        FocusPicker focus = null
     )
     {
+        this.focus = focus;
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.loader = loader ?? throw new ArgumentNullException(nameof(loader));
         this.replayHelper = replayHelper ?? throw new ArgumentNullException(nameof(replayHelper));
@@ -165,11 +169,19 @@ public sealed class ReplayCacheProvider : IReplayProvider
             }
         );
 
-        LoadedReplay chosen = await TakeFirstLaunchableAsync(fresh, installed, activity, true)
+        FocusPlan focusPlan = PlanFocus(fresh);
+        fresh = OrderForFocus(fresh, focusPlan);
+        LoadedReplay chosen = await TakeFirstLaunchableAsync(
+                fresh,
+                installed,
+                activity,
+                true,
+                focusPlan
+            )
             .ConfigureAwait(false);
         if (chosen == null)
         {
-            chosen = await TakeFirstLaunchableAsync(older, installed, activity, false)
+            chosen = await TakeFirstLaunchableAsync(older, installed, activity, false, focusPlan)
                 .ConfigureAwait(false);
         }
 
@@ -191,7 +203,8 @@ public sealed class ReplayCacheProvider : IReplayProvider
         List<FileInfo> files,
         IReadOnlyList<string> installed,
         Activity activity,
-        bool deferWhenMissing
+        bool deferWhenMissing,
+        FocusPlan focusPlan
     )
     {
         foreach (FileInfo next in files)
@@ -308,6 +321,12 @@ public sealed class ReplayCacheProvider : IReplayProvider
                 ReplayId = replayId,
                 RewardQueueItem = request,
                 HeroesProfileReplay = profile ?? request?.HeroesProfileReplay,
+                FocusPick = AttachFocus(
+                    replayId,
+                    replay,
+                    request?.Request != null || IsRequest(next),
+                    focusPlan
+                ),
             };
         }
 
@@ -390,6 +409,10 @@ public sealed class ReplayCacheProvider : IReplayProvider
         played.Add(replayId);
         deferredUntil[replayId] = clock().Add(ReplayRetryPlan.DeferWindow(requested, earlier));
         WriteDefers();
+        FocusSafely(
+            () => focus.Abandon(replay.FocusPick, "its replay was deferred"),
+            replay.FocusPick != null
+        );
         if (requested)
         {
             // The request file and its sidecar stay in Data\Requests, so the link and the lease
@@ -420,6 +443,15 @@ public sealed class ReplayCacheProvider : IReplayProvider
         played.Add(replayId);
         requestDefers.Remove(replayId);
         AppendPlayed(replayId);
+        FocusSafely(
+            () =>
+                focus.Played(
+                    replayId,
+                    replay.FocusPick,
+                    replay.RewardQueueItem?.Request != null || IsRequest(replay.FileInfo)
+                ),
+            true
+        );
         if (staged?.ReplayId == replayId)
         {
             staged = null;
@@ -436,6 +468,126 @@ public sealed class ReplayCacheProvider : IReplayProvider
         if (replayId > 0)
         {
             heldBackId = replayId;
+        }
+    }
+
+    /// <summary>
+    /// The focus side of this pick (#433): due or not, the waiting Standard replays ranked, and a
+    /// pick made before a restart. A waiting viewer request leaves the focus for a later pick.
+    /// </summary>
+    private FocusPlan PlanFocus(List<FileInfo> fresh)
+    {
+        if (focus?.Enabled != true)
+        {
+            return FocusPlan.Off;
+        }
+
+        var waiting = new List<int>();
+        bool requestWaiting = false;
+        foreach (FileInfo file in fresh)
+        {
+            if (IsRequest(file))
+            {
+                requestWaiting = true;
+            }
+            else if (replayHelper.TryGetReplayId(file.Name, out int id))
+            {
+                waiting.Add(id);
+            }
+        }
+
+        FocusPlan plan = FocusPlan.Off;
+        FocusSafely(() => plan = focus.Plan(waiting, requestWaiting), true);
+        return plan;
+    }
+
+    /// <summary>
+    /// Requests stay first. Then the plan's replays in its order (a kept pick, then the ranked
+    /// focus candidates), then the rest newest first, and a reserved standout last, so an
+    /// ordinary pick takes it only when nothing else can launch.
+    /// </summary>
+    private List<FileInfo> OrderForFocus(List<FileInfo> fresh, FocusPlan plan)
+    {
+        if (plan.Order.Count == 0 && plan.Reserved == null)
+        {
+            return fresh;
+        }
+
+        var position = new Dictionary<int, int>();
+        for (int index = 0; index < plan.Order.Count; index++)
+        {
+            position.TryAdd(plan.Order[index], index);
+        }
+
+        var ordered = new List<FileInfo>();
+        var focused = new List<(int Position, FileInfo File)>();
+        var rest = new List<FileInfo>();
+        FileInfo reserved = null;
+        foreach (FileInfo file in fresh)
+        {
+            replayHelper.TryGetReplayId(file.Name, out int id);
+            if (IsRequest(file))
+            {
+                ordered.Add(file);
+            }
+            else if (position.TryGetValue(id, out int at))
+            {
+                focused.Add((at, file));
+            }
+            else if (plan.Reserved == id)
+            {
+                reserved = file;
+            }
+            else
+            {
+                rest.Add(file);
+            }
+        }
+
+        ordered.AddRange(focused.OrderBy(pair => pair.Position).Select(pair => pair.File));
+        ordered.AddRange(rest);
+        if (reserved != null)
+        {
+            ordered.Add(reserved);
+            logger.LogInformation(
+                "Replay {Reserved} is held back from this ordinary pick for the next focus slot.",
+                plan.Reserved
+            );
+        }
+
+        return ordered;
+    }
+
+    private FocusPick AttachFocus(int replayId, Replay replay, bool requested, FocusPlan plan)
+    {
+        FocusPick pick = null;
+        FocusSafely(
+            () => pick = focus.Attach(replayId, replay, requested, plan),
+            focus?.Enabled == true
+        );
+        return pick;
+    }
+
+    /// <summary>A focus failure (the ledger locked or unreadable) never stops a pick or a play.</summary>
+    private void FocusSafely(Action action, bool applies)
+    {
+        if (focus?.Enabled != true || !applies)
+        {
+            return;
+        }
+
+        try
+        {
+            action();
+        }
+        catch (Exception e)
+            when (e is IOException or UnauthorizedAccessException or TimeoutException)
+        {
+            logger.LogWarning(
+                e,
+                "The focus ledger {Path} could not be read or written. This pick goes on without a focus change.",
+                focus.LedgerPath
+            );
         }
     }
 

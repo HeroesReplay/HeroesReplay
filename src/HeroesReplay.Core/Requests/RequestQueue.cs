@@ -22,6 +22,7 @@ public class RequestQueue : IRequestQueue, IDisposable
     private readonly string boardPath;
     private readonly ILogger<RequestQueue> logger;
     private readonly IHeroesProfileService heroesProfileService;
+    private readonly IReplayTierLookup tierLookup;
     private readonly AppSettings settings;
     private readonly ICustomRewardsHolder rewardsHolder;
     private static readonly JsonSerializerOptions Options = new()
@@ -41,7 +42,8 @@ public class RequestQueue : IRequestQueue, IDisposable
         ILogger<RequestQueue> logger,
         IHeroesProfileService heroesProfileService,
         AppSettings settings,
-        ICustomRewardsHolder rewardsHolder
+        ICustomRewardsHolder rewardsHolder,
+        IReplayTierLookup tierLookup
     )
         : this(
             logger,
@@ -50,7 +52,8 @@ public class RequestQueue : IRequestQueue, IDisposable
             TimeSpan.FromSeconds(30),
             @"Local\HeroesReplay.RequestQueue",
             @"Local\HeroesReplay.FailedRequests",
-            rewardsHolder
+            rewardsHolder,
+            tierLookup
         ) { }
 
     public RequestQueue(
@@ -60,11 +63,13 @@ public class RequestQueue : IRequestQueue, IDisposable
         TimeSpan mutexWait,
         string queueMutexName,
         string failedMutexName,
-        ICustomRewardsHolder rewardsHolder = null
+        ICustomRewardsHolder rewardsHolder = null,
+        IReplayTierLookup tierLookup = null
     )
     {
         this.logger = logger;
         this.heroesProfileService = heroesProfileService;
+        this.tierLookup = tierLookup;
         this.settings = settings;
         this.rewardsHolder = rewardsHolder;
         this.mutexWait = mutexWait;
@@ -463,10 +468,52 @@ public class RequestQueue : IRequestQueue, IDisposable
 
     private async Task<RewardResponse> QueueByRewardFilterAsync(RewardRequest request)
     {
+        if (request.RankRequired && request.Rank == null)
+        {
+            return Unqueued(request, null, $"that is not a rank. Enter {RankInput.Names}.");
+        }
+
         IEnumerable<HeroesProfileReplay> replays = await heroesProfileService
             .GetReplaysByFilters(request.GameType, request.Rank, request.Map)
             .ConfigureAwait(false);
         HashSet<int> played = PlayedReplayIds.Read(settings.Location?.DataDirectory);
+        string tier = null;
+        if (request.Rank is GameRank rank)
+        {
+            // A repeated delivery of a queued redemption is not refunded, so it must not reach
+            // the search: a search that finds nothing records a refund.
+            if (
+                WithLock(
+                    queueMutex,
+                    () => IsDuplicateRedemption(request, ReadItems(queueFile)),
+                    false
+                )
+            )
+            {
+                return DuplicateResponse(request);
+            }
+
+            RankedPick pick = await PickAtRankAsync(request, rank, replays, played)
+                .ConfigureAwait(false);
+            if (pick.Replay == null && pick.Looked > 0)
+            {
+                return Unqueued(
+                    request,
+                    null,
+                    pick.TimedOut
+                        ? $"Heroes Profile took too long to check the ranks of recent games on {request.Map}."
+                        : $"I couldn't find a recent {rank} game on {request.Map}. None of the {pick.Looked} recent games I checked there was {rank}.",
+                    tip: "Try another rank, or redeem ReplayId and paste a Heroes Profile replay number."
+                );
+            }
+
+            tier = pick.Tier;
+            replays =
+                pick.Replay == null
+                    ? Enumerable.Empty<HeroesProfileReplay>()
+                    : new[] { pick.Replay };
+        }
+
         HeroesProfileReplay chosen = null;
         int position = WithLock(
             queueMutex,
@@ -478,19 +525,10 @@ public class RequestQueue : IRequestQueue, IDisposable
                     return DuplicateQueuePosition;
                 }
 
-                var queued = new HashSet<int>();
-                foreach (RewardQueueItem item in items)
-                {
-                    if (item?.HeroesProfileReplay?.Id > 0)
-                    {
-                        queued.Add(item.HeroesProfileReplay.Id);
-                    }
-                }
-
                 chosen = RewardCandidateFilter.Choose(
                     replays,
                     played,
-                    queued,
+                    QueuedIds(items),
                     settings.Spectate?.VersionsSupported,
                     settings.Spectate?.MinimumGameVersion
                 );
@@ -530,11 +568,107 @@ public class RequestQueue : IRequestQueue, IDisposable
             );
         }
 
-        string rank = ReplayRequestKind.Blind(request) ? ReplayRequestKind.HiddenRank : chosen.Rank;
+        string shown = ReplayRequestKind.Blind(request)
+            ? ReplayRequestKind.HiddenRank
+            : tier ?? chosen.Rank;
         return new RewardResponse(
             success: true,
-            message: $"'{request.RewardTitle}' - {ReplayLabel.MapAndRank(chosen.Map, rank)} has been queued ({position})"
+            message: $"'{request.RewardTitle}' - {ReplayLabel.MapAndRank(chosen.Map, shown)} has been queued ({position})"
         );
+    }
+
+    /// <summary>
+    /// A rank reward's game (#429): the recent games of its type and map that are not played,
+    /// queued or below the patch line, looked up until one is in the entered league. A Storm
+    /// League game keeps that tier as its rank, so its badge needs no second lookup. Other modes
+    /// show no rank badge, so their rank stays unset.
+    /// </summary>
+    private async Task<RankedPick> PickAtRankAsync(
+        RewardRequest request,
+        GameRank rank,
+        IEnumerable<HeroesProfileReplay> replays,
+        ISet<int> played
+    )
+    {
+        if (tierLookup == null || request.GameType is not GameType gameType)
+        {
+            logger.LogWarning(
+                "'{Title}' cannot check ranks: {Missing}.",
+                request.RewardTitle,
+                tierLookup == null ? "no tier lookup" : "no game type"
+            );
+            return new RankedPick(null, null, Looked: 0, TimedOut: false);
+        }
+
+        HashSet<int> queued = WithLock(
+            queueMutex,
+            () => QueuedIds(ReadItems(queueFile)),
+            new HashSet<int>()
+        );
+        List<HeroesProfileReplay> candidates = RewardCandidateFilter.Eligible(
+            replays,
+            played,
+            queued,
+            settings.Spectate?.VersionsSupported,
+            settings.Spectate?.MinimumGameVersion
+        );
+        HeroesProfileApiSettings api = settings.HeroesProfileApi ?? new HeroesProfileApiSettings();
+        using var timeout = new CancellationTokenSource(
+            api.RankSearchTimeout > TimeSpan.Zero ? api.RankSearchTimeout : Timeout.InfiniteTimeSpan
+        );
+        RankedPick pick = await RankedCandidatePick
+            .FindAsync(
+                candidates,
+                rank,
+                (replay, token) => tierLookup.GetTierAsync(replay.Id, gameType, token),
+                api.RankLookupLimit,
+                Random.Shared,
+                timeout.Token
+            )
+            .ConfigureAwait(false);
+        if (pick.Replay == null)
+        {
+            logger.LogInformation(
+                "'{Title}': no {Rank} game among {Looked} of {Candidates} recent {GameType} games on {Map}{TimedOut}.",
+                request.RewardTitle,
+                rank,
+                pick.Looked,
+                candidates.Count,
+                gameType,
+                request.Map,
+                pick.TimedOut ? " (timed out)" : string.Empty
+            );
+            return pick;
+        }
+
+        logger.LogInformation(
+            "'{Title}': replay {ReplayId} is {Tier} ({Looked} of {Candidates} looked up).",
+            request.RewardTitle,
+            pick.Replay.Id,
+            pick.Tier,
+            pick.Looked,
+            candidates.Count
+        );
+        if (gameType == GameType.StormLeague)
+        {
+            pick.Replay.Rank = pick.Tier;
+        }
+
+        return pick;
+    }
+
+    private static HashSet<int> QueuedIds(IEnumerable<RewardQueueItem> items)
+    {
+        var queued = new HashSet<int>();
+        foreach (RewardQueueItem item in items ?? Enumerable.Empty<RewardQueueItem>())
+        {
+            if (item?.HeroesProfileReplay?.Id > 0)
+            {
+                queued.Add(item.HeroesProfileReplay.Id);
+            }
+        }
+
+        return queued;
     }
 
     private (RewardQueueItem Item, int Position)? RemoveItem(string login)

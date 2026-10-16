@@ -56,7 +56,7 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
         Replay replay = loadedReplay.Replay;
 
         RewardRequest request = loadedReplay.RewardQueueItem?.Request;
-        int? priorityPlayer = PlayerPriorityRequest.PlayerIndex(replay, request);
+        int? priorityPlayer = ReplayFocus.PlayerIndex(loadedReplay);
         if (!string.IsNullOrWhiteSpace(request?.BattleTag) && priorityPlayer == null)
         {
             logger.LogWarning(
@@ -65,6 +65,15 @@ public class ReplayContext : IReplayContext, IReplayContextSetter
                 loadedReplay.ReplayId
             );
         }
+        else if (request == null && priorityPlayer is int focusIndex)
+        {
+            logger.LogInformation(
+                "Hero focus: the camera follows {Focus} (player {Index}) whenever they are alive.",
+                loadedReplay.FocusPick?.Label,
+                focusIndex
+            );
+        }
+
         var players = replayAnalyzer.GetPlayers(replay, priorityPlayer);
         var panels = replayAnalyzer.GetPanels(replay);
         var talentTimes = replayAnalyzer.GetTalentTimes(replay);

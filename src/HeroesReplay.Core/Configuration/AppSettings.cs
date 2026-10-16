@@ -8,6 +8,7 @@ using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Replays;
@@ -51,6 +52,7 @@ public class AppSettings
     public ParseOptionsSettings ParseOptions { get; set; }
     public AbilityDetectionSettings AbilityDetection { get; set; }
     public InsightsSettings Insights { get; set; } = new InsightsSettings();
+    public HeroFocusSettings Focus { get; set; } = new HeroFocusSettings();
     public YouTubeSettings YouTube { get; set; }
     public DiskBacklogSettings Disk { get; set; } = SpectateAdmission.DefaultWatermarks();
     public ReplayMediaPolicySettings ReplayMedia { get; set; } = new ReplayMediaPolicySettings();

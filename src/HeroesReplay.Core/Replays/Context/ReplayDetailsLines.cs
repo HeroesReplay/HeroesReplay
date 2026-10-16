@@ -4,7 +4,8 @@ using System.Linq;
 namespace HeroesReplay.Core.Replays.Context;
 
 /// <summary>
-/// The lines of the OBS replay details file: requestor, game type, bans, region, then the patch.
+/// The lines of the OBS replay details file: the hero focus, requestor, game type, bans, region,
+/// then the patch.
 /// A line that is switched off or has no value is left out.
 /// </summary>
 public static class ReplayDetailsLines
@@ -19,6 +20,12 @@ public static class ReplayDetailsLines
         if (writer == null)
         {
             return lines;
+        }
+
+        string focus = HeroFocus(loaded);
+        if (writer.HeroFocus && focus != null)
+        {
+            lines.Add($"Hero focus: {focus}");
         }
 
         string requestor = loaded?.RewardQueueItem?.Request?.Login;
@@ -52,6 +59,10 @@ public static class ReplayDetailsLines
 
         return lines;
     }
+
+    /// <summary>The cycle's focus hero and build (#433); null for a request or an ordinary replay.</summary>
+    public static string HeroFocus(LoadedReplay loaded) =>
+        loaded?.RewardQueueItem?.Request != null ? null : loaded?.FocusPick?.Label;
 
     /// <summary>The replay file's own build, or the Heroes Profile game version when the file has none.</summary>
     public static string Patch(LoadedReplay loaded)

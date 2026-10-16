@@ -27,17 +27,20 @@ Hand-written partials of `HeroesProfileClient` sit next to `Generated/` and use 
 | List / max id | `GET /replays?after={id}&game_type=Storm League` |
 | Download | `GET /download/replay?replayID={id}` |
 | One match | `GET /replays?after={id-1}` then pick `replayID` |
-| Rank badge | `GET /replay/{replayID}` (average player MMR) |
+| Reward search (map and rank rewards) | `GET /replays?after={id}&game_type=…&game_map=…` (every match after `after`, oldest first, up to 1,000; there is no rank or MMR filter) |
+| Rank badge, and a rank reward's candidates (#429) | `GET /replay/{replayID}` (average `player_mmr`), then `GET /mmr/tier?game_type=…&mmr=…`. Each game type has its own ladder: on 2026-10-13, 2,750 was Platinum 4 in `sl`, Diamond 4 in `qm` and Platinum 2 in `aram` |
 | Hero statistics: newest patch | `GET /patches` (newest `game_version` with `valid_globals`; `2.57.0.98348` is major `2.57`) |
 | Hero statistics: ids | `GET /heroes` (`id`, `name`, `attribute_id`) |
 | Hero statistics: every hero on every map | `GET /heroes/stats?timeframe_type=major&timeframe=2.57&game_type=sl&group_by_map=true` (one object per map, a `data` row per hero: `hero_id`, `wins`, `games_played`, `ban_rate`) |
 | Hero statistics: one hero against and with each other | `GET /heroes/matchups?timeframe_type=major&timeframe=2.57&game_type=sl&hero=Valla` (`enemy[]` and `ally[]`, each with `hero.attribute_id`, `wins`, `games_played`) |
 | A job's result | `GET /jobs/{id}` (202 still running, 200 the result) |
 | Map list (Storm League pool check, #425) | `GET /maps` (`name`, `type`, `ranked_rotation`, `playable`) |
+| A player's record on a hero (focus picks, #433) | `GET /players/heroes?battletag=Name%231234&region=2&game_type=sl&hero=Kael'thas` (an array with the hero's row: `wins`, `losses`, `games_played`, `kda`, `sl_mmr_data`, `sl_rank_tier`, `hero.attribute_id`) |
+| Players who went private (#433) | `GET /players/privacy/changes?since=…&after_id=…&limit=1000` (`changes[]` with `battletag`, `region`, `state`; `next_since`, `next_after_id`, `has_more`) |
 
 `region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable`. Skip when `downloadable` is false or `deleted` is non-zero.
 
-Measured on 2026-10-13 (`x-hp-quota-limit`, rolling 7 days): `/replays` allows 60,000 calls a week and `/maps` 1,000,000. The `/replays` list is in replay-id order, which is upload order, not play order: old games are still being uploaded (replay 65960001 is a 2.55.5 game from July 2024), so a filter on `game_version` is what keeps a sample to the current patch.
+Measured on 2026-10-13 (`x-hp-quota-limit`, rolling 7 days, and `x-ratelimit-limit` per minute): `/replays` allows 60,000 calls a week and 200 a minute, `/replay/{id}` 1,000,000 a week and 500 a minute, `/mmr/tier` 1,000,000 a week and 60 a minute, and `/maps` 1,000,000 a week. A rank reward stays within `/mmr/tier`'s minute with at most `HeroesProfileApi:RankLookupLimit` (40) lookups; a 429 waits for its `Retry-After` (1–3 s when measured). The `/replays` list is in replay-id order, which is upload order, not play order: old games are still being uploaded (replay 65960001 is a 2.55.5 game from July 2024), so a filter on `game_version` is what keeps a sample to the current patch.
 
 `/maps` `ranked_rotation` is maintained by hand and lags. On 2026-10-13 it marked every standard map 1 except Blackheart's Bay, while Heroes Profile's own replays had no Storm League game on Hanamura Temple or Warhead Junction since 2.55.17.97605 (20 Jul 2026). `StormLeagueRotation` uses only its 0, and only when too few Storm League replays are cached to see the pool.
 
@@ -61,6 +64,34 @@ The download is `HeroesProfileClient.DownloadReplayAsync`, a hand-written partia
 - 429 waits for `Retry-After` (60 s without one), at most 5 times. Its `HttpClient` (`heroes-profile-stats`) has no retry handler, unlike the replay calls above, so the refresh decides each wait itself. 401 or 403 (`endpoint_not_in_plan`, a bad key) stops the refresh until the download role restarts, with one warning. 422 (`timeframe_unavailable` early in a patch) skips that patch and game type until the next refresh is due. A 5xx or a network error is retried 3 times, 30 s apart. A hero whose matchups fail is saved without them.
 - `enemy[].win_rate` in matchups is the queried hero's loss rate against that enemy (its `hovertext` says "Lost against a team with X"). Every rate is computed from `wins` and `games_played`, never read from `win_rate`.
 - Heroes Profile's terms (section 4) require "Data provided by Heroes Profile" and a visible link to https://www.heroesprofile.com/ on the same screen as the data. The description's second line carries it whenever a hook is used.
+
+All of these calls, and the player lookups below, go through one `HeroesProfileCaller` and one `HeroesProfilePacer` per process (#433), so together they keep the 60 a minute.
+
+### Player records (focus-hero picks)
+
+`PlayerHeroStatsFetch` (download role, and `heroesprofile player-hero`) asks for one player's Storm League record on one hero, for the focus picker's strength gate (#433: at least 20 games and 55% won). Measured on 2026-10-16 with our key (`Risllot#2619`, EU, Kael'thas: 27 wins of 54 games, KDA 6.12, MMR 2300, Silver 1):
+
+- `players/heroes` allows 50,000 calls a week and 60 a minute; `players/privacy/changes` 10,080 a week. A cold `players/heroes` answers 202 with `Retry-After` 10 s and a job, collected from `/jobs/{id}` like a global call; the same query answered 200 at once afterwards. `players/heroes/single` returns the same record with every game type's MMR, about ten times the bytes, so it is not used.
+- Errors carry `error.code`: 403 `player_unavailable` is a private profile, 404 `player_not_found` no such player, 422 `unknown_hero`, `unknown_region` or `unknown_game_type` a bad parameter. Each is kept for `HeroesProfileApi:PlayerStats:UnknownRetryAfter` (1 day). Any other 401 or 403 is the key or plan: lookups stop until a restart, with one warning.
+- Answers are kept under `Data\HeroesProfile\players`, one file per player (region and a hash of the BattleTag): a record for `MaxAge` (7 days). Every call counts toward `WeeklyCallBudget` (15,000) in `calls.json`; past it, a record is unknown and the focus picker treats it so.
+- Heroes Profile's terms require a cache of player data to read the privacy feed at least daily and drop whoever went private. `PlayerPrivacySync` reads it every `PrivacyInterval` (12 h) from the cursor in `privacy.json` (`since`, `after_id`; the first read only sets it, since nothing was cached before) and deletes each private player's file. On 2026-10-16 one day of changes was more than one page, so it follows `has_more` for up to 20 pages of 1,000 a pass.
+- Focus videos never show a player's name or record, so this data needs no attribution line on YouTube.
+
+### Targeted fetches (focus heroes the pool does not bring)
+
+`FocusTargetedFetch` (download role, #433) fetches a game for a hero no focus has covered and no waiting replay has shown for `Focus:Targeted:After` (7 days). Measured on 2026-10-16 with our key:
+
+- `/patches` names each patch's `season`: 34 for 2.57.0.98348, 33 for 2.57.0.98304 and 98285. Seasons 25 to 34 were valid; 35 and 40 answered 422 `invalid_parameters`. The fetch takes the newest season there.
+- `/leaderboard?type=hero&hero=…&game_type=sl&season=…` allows 10,000 calls a week and 60 a minute, and answers 200 at once. Each row has `battletag`, `region_id`, `games_played` and `win_rate` (0 to 100).
+  - One season shows few games: Murky's current board had 23 players, none with 20 games.
+  - Six seasons merged (34 back to 29) had 203 players, and 35 of them had 20 or more games at 55% or more.
+  - So the fetch merges `Focus:Targeted:Seasons` (6): games add up, and wins are each season's win rate times its games. The merged record is the strength bar (`Focus:MinHeroGames`, `MinWinRate`).
+- `/players/matches?battletag=…&region=…&game_type=sl&hero=…&start_date=YYYY-MM-DD` allows 50,000 calls a week and 60 a minute. A cold query answers 202 with a job, like `players/heroes`.
+  - Each row has `replayID`, `game_date` (UTC), `winner` (1 when the player won) and the full score line; there is no game version.
+  - The fetch tries the player's won games first, best KDA first.
+  - For each game, `/replay/{id}` (through the listing) gives the build. A game is downloaded only when it is Storm League, launchable by spectate's rules, and inside the focus media window (`ReplayMedia:FocusCandidateMaxAge`, 7 days; `Focus:Targeted:Lookback` is 6).
+- **Limits.** The fetch makes at most one attempt per `Focus:Targeted:Interval` (2 h), stops while `MaxWaiting` (2) fetched replays wait, and counts its own calls against `WeeklyCallBudget` (2,000).
+- **What it stores.** `Data\Focus\targeted.json` keeps hero attribute ids and replay ids only, never a player.
 
 Auth is `Authorization: Bearer` ([Migrating](https://www.heroesprofile.com/Api/Migrating)). The v1 key is `op://Heroes Replay/Heroes Profile API Key/password` (skill `op-service-account`). The old `api.heroesprofile.com` `api_token` key is not accepted.
 

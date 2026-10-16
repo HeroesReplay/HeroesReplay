@@ -5,12 +5,15 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus.Picking;
+using HeroesReplay.Core.HeroFocus.Targeted;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Requests;
@@ -226,10 +229,105 @@ public class HeroesProfileProvider : IReplayProvider
         return true;
     }
 
-    private bool IsPastMediaWindow(HeroesProfileReplay replay) =>
+    /// <summary>
+    /// A focus target's game (#433), named by its replay id: downloaded into <c>Data\Standard</c>
+    /// like a listed replay when it is a Storm League game spectate can launch, inside its media
+    /// window, and not already on disk or played.
+    /// </summary>
+    public async Task<TargetedDownload> DownloadTargetedAsync(
+        int replayId,
+        CancellationToken cancellationToken
+    )
+    {
+        if (replayId <= 0 || ReadNotWaitingIds().Contains(replayId) || OnDisk(replayId))
+        {
+            return TargetedDownload.Known;
+        }
+
+        HeroesProfileReplay replay = await heroesProfileService
+            .GetReplayByIdAsync(replayId)
+            .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (replay == null)
+        {
+            return TargetedDownload.NotFound;
+        }
+
+        if (!HeroesProfileRankEnricher.IsStormLeague(replay.GameType))
+        {
+            return TargetedDownload.NotStormLeague;
+        }
+
+        IReadOnlyList<string> installed =
+            installedVersionSource != null
+                ? installedVersionSource()
+                : InstalledClientCatalog.FileVersions(settings.Location?.GameInstallDirectory);
+        ReplayListing launchable = ReplayDownloadPick.Launchable(
+            new ReplayListing(new[] { replay }, true, replay.Id, null),
+            installed,
+            ClientDownloadHold.ActiveIn(
+                settings.Location?.DataDirectory,
+                clock(),
+                settings.Spectate?.BuildDownloadHold ?? TimeSpan.Zero
+            ),
+            settings.Spectate?.MinimumGameVersion
+        );
+        if (launchable.Playable.Count == 0)
+        {
+            return TargetedDownload.NotLaunchable;
+        }
+
+        if (IsPastMediaWindow(replay, focus: true))
+        {
+            return TargetedDownload.Old;
+        }
+
+        await heroesProfileService.EnrichRankAsync(replay, cancellationToken).ConfigureAwait(false);
+
+        FileInfo fileInfo = GetFileInfo(StandardDirectory, replay);
+        if (fileInfo.Exists)
+        {
+            return TargetedDownload.Known;
+        }
+
+        try
+        {
+            await DownloadReplayAsync(replay, fileInfo).ConfigureAwait(false);
+        }
+        catch (ApiException e) when (e.ResponseStatusCode > 0)
+        {
+            logger.LogWarning(
+                "Heroes Profile answered the download of focus target replay {ReplayId} with HTTP {Status}.",
+                replayId,
+                e.ResponseStatusCode
+            );
+            return TargetedDownload.Failed;
+        }
+
+        return TargetedDownload.Downloaded;
+    }
+
+    private bool OnDisk(int replayId) =>
+        StandardDirectory.Exists
+        && StandardDirectory
+            .EnumerateFiles(settings.StormReplay.WildCard)
+            .Any(file => replayHelper.TryGetReplayId(file.Name, out int id) && id == replayId);
+
+    /// <summary>
+    /// Past the media policy's window. A focus target is judged by the focus window (#433), so it
+    /// is read as a focus pick; the pick's player is not known yet and does not matter here.
+    /// </summary>
+    private bool IsPastMediaWindow(HeroesProfileReplay replay, bool focus = false) =>
         ReplayMediaPolicy.IsPastWindow(
             ReplayMediaFacts.From(
-                new LoadedReplay { ReplayId = replay.Id, HeroesProfileReplay = replay },
+                new LoadedReplay
+                {
+                    ReplayId = replay.Id,
+                    HeroesProfileReplay = replay,
+                    FocusPick = focus
+                        ? new FocusPick(replay.Id, null, 0, null, "target", null, null, null)
+                        : null,
+                },
                 alreadyPublished: false,
                 alreadyScheduled: false,
                 inOutbox: false
@@ -1209,8 +1307,14 @@ public class HeroesProfileProvider : IReplayProvider
         }
     }
 
+    /// <summary>
+    /// The waiting replays kept: <c>HeroesProfileApi:CachedReplayLimit</c>, plus
+    /// <c>Focus:ExtraCandidates</c> while focus picks are on, so they have a choice (#433).
+    /// </summary>
     private int CachedReplayLimit =>
-        settings.HeroesProfileApi?.CachedReplayLimit > 0
-            ? settings.HeroesProfileApi.CachedReplayLimit
-            : 5;
+        (
+            settings.HeroesProfileApi?.CachedReplayLimit > 0
+                ? settings.HeroesProfileApi.CachedReplayLimit
+                : 5
+        ) + (settings.Focus?.Enabled == true ? Math.Max(0, settings.Focus.ExtraCandidates) : 0);
 }

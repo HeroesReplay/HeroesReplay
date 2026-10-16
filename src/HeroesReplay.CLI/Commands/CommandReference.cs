@@ -7,6 +7,7 @@ using System.Text;
 using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
 using HeroesReplay.CLI.Commands.Deps;
+using HeroesReplay.CLI.Commands.Focus.Commands;
 using HeroesReplay.CLI.Commands.Obs;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Configuration;
@@ -124,6 +125,25 @@ public static class CommandReference
             "A `.StormReplay` (`--replay`) and the heroes-data2 catalog under `Location:DataDirectory`.",
             "Prints each player's talents and best guide build from the shipped reference. Read-only.",
             "0 when the replay parsed. 1 for a missing file or a replay that does not parse."
+        ),
+        new(
+            "heroesprofile player-hero",
+            "`HeroesProfileApi:ApiKey` (the v1 key). Network access to Heroes Profile.",
+            "Calls `players/heroes` at most once (none when the cache under `Data\\HeroesProfile\\players` is fresh) and writes the answer there; counts against `HeroesProfileApi:PlayerStats:WeeklyCallBudget`. `--fresh` deletes that player's cached file first.",
+            "0 when Heroes Profile answered: a record, no games on the hero, a private profile, or no such player. 1 for a bad BattleTag or region, an unanswered lookup (422, a failed job, a network error), a refused key, or a spent budget."
+        ),
+        new(
+            "focus candidates",
+            "A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, the shipped talent-build reference and hero signatures, and `--ledger` when given. Calls Heroes Profile only with `--fetch` (then `HeroesProfileApi:ApiKey`).",
+            "Prints the gates that ruled players out, the best focus candidates with each part of their score, and with `--simulate` a run of focus picks. Never writes the ledger. `--fetch N` makes up to N `players/heroes` calls and fills the cache under `Data\\HeroesProfile\\players`, counting against the weekly budget.",
+            "0 when at least one replay was read. 1 for a missing folder or ledger, or no replays in it. 2 when no replay parsed."
+        ),
+        new(
+            "focus coverage",
+            "`Data\\Focus\\ledger.json` and `Data\\youtube-library.jsonl` under `Location:DataDirectory`, or `--ledger` and `--library`. A missing file counts as empty.",
+            Nothing,
+            Finishes,
+            [CoverageCommand.Read]
         ),
         new(
             "check",

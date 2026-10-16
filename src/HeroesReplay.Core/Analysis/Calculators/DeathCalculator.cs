@@ -58,7 +58,8 @@ public class DeathCalculator : IFocusCalculator
                 unit,
                 unit.PlayerControlledBy,
                 settings.Weights.PlayerDeath,
-                $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name}"
+                $"{unit.PlayerControlledBy.Character} killed by {unit.UnitKilledBy?.Name}",
+                victim: unit
             );
         }
     }

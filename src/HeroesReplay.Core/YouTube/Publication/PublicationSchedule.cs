@@ -785,6 +785,7 @@ public static class PublicationSchedule
 
         if (
             settings.PublicationMode == ReplayPublicationMode.Curated
+            && criteria != ReplayMediaPriority.Focus
             && criteria != ReplayMediaPriority.Notable
             && criteria != ReplayMediaPriority.HighSkill
         )

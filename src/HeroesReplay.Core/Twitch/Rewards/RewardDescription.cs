@@ -1,4 +1,4 @@
-using System;
+using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Twitch.Rewards;
@@ -43,7 +43,8 @@ public static class RewardDescription
 
         if (rewardType.HasFlag(RewardType.Rank))
         {
-            return $"Queues a recent {modeName} replay on {map} at the rank you enter: {string.Join(", ", Enum.GetNames<GameRank>())} (no division).";
+            // The queue checks each candidate's rank and refunds when none matches (#429).
+            return $"Queues a recent {modeName} replay on {map} at the rank you enter: {RankInput.Names}. Your points come back if none is found.";
         }
 
         return $"Queues a random recent {modeName} replay on {map} to watch on stream.";

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Heroes.ReplayParser;
 using HeroesReplay.Core.Analysis.Insights;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.MediaPolicy;
@@ -50,6 +51,9 @@ public static class YouTubeEntryBuilder
                 PlayerPriorityRequest.PlayerIndex(loaded?.Replay, loaded?.RewardQueueItem?.Request)
                 != null,
             NotableEvents = facts.NotableEvents,
+            HeroFocus = facts.HeroFocus,
+            HeroFocusKda = facts.HeroFocus == null ? null : Kda(loaded),
+            HeroFocusPlayer = facts.HeroFocus == null ? null : loaded?.FocusPick?.Player,
             IsCompleteRecording = isCompleteRecording,
             HeroStats = heroStats,
             Insights = insights,
@@ -64,6 +68,7 @@ public static class YouTubeEntryBuilder
                     ? "20"
                     : youtube.CategoryId,
                 Titles = youtube?.Titles,
+                TitleMarker = youtube?.TitlePrefix,
             }
         );
 
@@ -84,13 +89,35 @@ public static class YouTubeEntryBuilder
             Title = YouTubeListing.ApplyMarker(metadata.Title, youtube?.TitlePrefix),
             PrivacyStatus = youtube?.PrivacyStatus ?? "public",
             Requested = facts.ViewerRequested,
-            Hero = facts.FocusHero,
+            // The featured hero spaces repeats: a request's hero, else the focus pick's (#433).
+            Hero = facts.FocusHero ?? facts.HeroFocus?.Hero,
+            HeroFocus =
+                facts.HeroFocus == null
+                    ? null
+                    : new YouTubeHeroFocus
+                    {
+                        Hero = facts.HeroFocus.Hero,
+                        Role = facts.HeroFocus.Role,
+                        Build = facts.HeroFocus.Build,
+                    },
             Heroes = HeroNames(facts.Roster),
             RecordedAtUtc = ToUtc(facts.GameDateUtc),
             CategoryId = metadata.CategoryId,
             DescriptionLines = lines.ToArray(),
             Tags = metadata.Tags == null ? [] : [.. metadata.Tags],
         };
+    }
+
+    /// <summary>The focus player's score screen kills, deaths and assists: <c>12/0/9</c>.</summary>
+    private static string Kda(LoadedReplay loaded)
+    {
+        Player[] players = loaded?.Replay?.Players;
+        int index = loaded?.FocusPick?.PlayerIndex ?? -1;
+        ScoreResult score =
+            players != null && index >= 0 && index < players.Length
+                ? players[index]?.ScoreResult
+                : null;
+        return score == null ? null : $"{score.SoloKills}/{score.Deaths}/{score.Assists}";
     }
 
     private static string[] HeroNames(IReadOnlyList<ReplayMediaPlayer> roster)

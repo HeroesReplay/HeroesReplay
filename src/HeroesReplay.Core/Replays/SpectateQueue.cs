@@ -63,6 +63,38 @@ public static class SpectateQueue
     }
 
     /// <summary>
+    /// Every id in the named files under <paramref name="dataDirectory"/>. A missing file adds
+    /// nothing, and so does one that cannot be read right now.
+    /// </summary>
+    public static HashSet<int> ReadIds(string dataDirectory, params string[] fileNames)
+    {
+        var ids = new HashSet<int>();
+        foreach (string fileName in fileNames ?? Array.Empty<string>())
+        {
+            string path = System.IO.Path.Combine(dataDirectory ?? string.Empty, fileName);
+            try
+            {
+                if (!System.IO.File.Exists(path))
+                {
+                    continue;
+                }
+
+                foreach (string line in System.IO.File.ReadLines(path))
+                {
+                    if (TryParseId(line, out int id))
+                    {
+                        ids.Add(id);
+                    }
+                }
+            }
+            catch (System.IO.IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        return ids;
+    }
+
+    /// <summary>
     /// A spectated line is the id. A deferred line is the id, then the unix time.
     /// </summary>
     public static bool TryParseId(string line, out int id)

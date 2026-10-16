@@ -21,11 +21,19 @@ public enum ReplayPublicationMode
     AllEligible = 3,
 }
 
-/// <summary>Higher values outrank lower ones. Paid uploads are <see cref="Requested"/>.</summary>
+/// <summary>
+/// Paid uploads are <see cref="Requested"/>. The rest rank by their score weight: Requested,
+/// then <see cref="Focus"/>, Notable, HighSkill and Ordinary. The value is never compared; it is
+/// stored by name, so <see cref="Focus"/> is added last and an older build reading it refuses
+/// the manifest instead of taking it for another priority.
+/// </summary>
 public enum ReplayMediaPriority
 {
     Ordinary = 0,
     HighSkill = 1,
     Notable = 2,
     Requested = 3,
+
+    /// <summary>A focus-hero replay the cycle picked itself (#433).</summary>
+    Focus = 4,
 }

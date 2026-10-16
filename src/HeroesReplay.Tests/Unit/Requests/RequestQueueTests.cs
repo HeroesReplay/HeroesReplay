@@ -598,7 +598,196 @@ public class RequestQueueTests
         }
     }
 
-    private static RequestQueue CreateQueue(string directory, ICustomRewardsHolder rewards = null)
+    /// <summary>
+    /// #429: a rank reward queues a game at the rank the viewer entered, looked up on its own
+    /// ladder, and the reply names that game's tier. Before, the rank was ignored.
+    /// </summary>
+    [Fact]
+    public async Task Enqueue_RankReward_QueuesAGameAtThatRank_AndNamesItsTier()
+    {
+        string directory = TempDirectory();
+        var tiers = new StubTiers(id => id == 11 ? "Gold 3" : "Silver 1");
+        RequestQueue queue = CreateQueue(directory, tiers: tiers);
+        try
+        {
+            RewardResponse response = await queue.EnqueueItemAsync(FilterRequest(Guid.NewGuid()));
+
+            Assert.True(response.Success);
+            Assert.Equal(
+                "'Braxis Holdout (Rank SL)' - Braxis Holdout (Gold 3) has been queued (1)",
+                response.Message
+            );
+            RewardQueueItem item = Assert.Single(
+                RequestQueue.Snapshot(Path.Combine(directory, "requests.json"))
+            );
+            Assert.Equal(11, item.HeroesProfileReplay.Id);
+            // A Storm League game keeps the tier as the rank its badge shows.
+            Assert.Equal("Gold 3", item.HeroesProfileReplay.Rank);
+            Assert.All(tiers.Asked, asked => Assert.Equal(GameType.StormLeague, asked.GameType));
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Enqueue_QuickMatchRankReward_ChecksTheQuickMatchLadder_AndSetsNoBadgeRank()
+    {
+        string directory = TempDirectory();
+        var tiers = new StubTiers(_ => "Diamond 4");
+        RequestQueue queue = CreateQueue(directory, tiers: tiers);
+        try
+        {
+            var request = new RewardRequest(
+                "viewer",
+                Guid.NewGuid(),
+                "Braxis Holdout (Rank QM)",
+                replayId: null,
+                GameRank.Diamond,
+                "Braxis Holdout",
+                GameType.QuickMatch
+            )
+            {
+                RankRequired = true,
+            };
+
+            RewardResponse response = await queue.EnqueueItemAsync(request);
+
+            Assert.True(response.Success);
+            Assert.Contains("Braxis Holdout (Diamond 4) has been queued", response.Message);
+            Assert.NotEmpty(tiers.Asked);
+            Assert.All(tiers.Asked, asked => Assert.Equal(GameType.QuickMatch, asked.GameType));
+            // Only Storm League shows a rank badge; a Quick Match tier is not written as one.
+            RewardQueueItem item = Assert.Single(
+                RequestQueue.Snapshot(Path.Combine(directory, "requests.json"))
+            );
+            Assert.NotEqual("Diamond 4", item.HeroesProfileReplay.Rank);
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Enqueue_RankReward_NoGameAtThatRank_ReturnsThePoints()
+    {
+        string directory = TempDirectory();
+        RequestQueue queue = CreateQueue(directory, tiers: new StubTiers(_ => "Silver 1"));
+        try
+        {
+            RewardRequest request = FilterRequest(Guid.NewGuid());
+            request.RewardId = Guid.NewGuid();
+            request.BroadcasterId = "487238352";
+
+            RewardResponse response = await queue.EnqueueItemAsync(request);
+
+            Assert.False(response.Success);
+            Assert.Equal(
+                "I couldn't find a recent Gold game on Braxis Holdout. None of the 2 recent games I checked there was Gold. Your points will be returned. Try another rank, or redeem ReplayId and paste a Heroes Profile replay number.",
+                response.Message
+            );
+            RedemptionDispositionLine line = Assert.Single(
+                RedemptionDispositionLog.Read(
+                    Path.Combine(directory, RedemptionDispositionLog.FileName)
+                )
+            );
+            Assert.Equal(RedemptionEnd.Cancel, line.End);
+            Assert.Equal(request.RedemptionId, line.RedemptionId);
+            Assert.Equal(0, await queue.GetItemsInQueue());
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// #429: Twitch can deliver a redemption twice. The second delivery of a queued rank reward is
+    /// a duplicate, even when no other game at that rank is left: it is not refunded.
+    /// </summary>
+    [Fact]
+    public async Task Enqueue_RankRewardDeliveredTwice_IsNotRefunded_ThoughNoOtherGameMatches()
+    {
+        string directory = TempDirectory();
+        RequestQueue queue = CreateQueue(
+            directory,
+            tiers: new StubTiers(id => id == 10 ? "Gold 1" : "Silver 1")
+        );
+        try
+        {
+            RewardRequest request = FilterRequest(Guid.NewGuid());
+            request.RewardId = Guid.NewGuid();
+
+            RewardResponse first = await queue.EnqueueItemAsync(request);
+            RewardResponse second = await queue.EnqueueItemAsync(request);
+
+            Assert.True(first.Success);
+            Assert.True(second.Duplicate);
+            Assert.False(File.Exists(Path.Combine(directory, RedemptionDispositionLog.FileName)));
+            Assert.Equal(1, await queue.GetItemsInQueue());
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Enqueue_RankRewardWithTextThatIsNoRank_ReturnsThePoints_AndLooksNothingUp()
+    {
+        string directory = TempDirectory();
+        var tiers = new StubTiers(_ => "Gold 1");
+        RequestQueue queue = CreateQueue(directory, tiers: tiers);
+        try
+        {
+            var request = new RewardRequest(
+                "viewer",
+                Guid.NewGuid(),
+                "Braxis Holdout (Rank SL)",
+                replayId: null,
+                rank: null,
+                "Braxis Holdout",
+                GameType.StormLeague
+            )
+            {
+                RankRequired = true,
+                RewardId = Guid.NewGuid(),
+                BroadcasterId = "487238352",
+            };
+
+            RewardResponse response = await queue.EnqueueItemAsync(request);
+
+            Assert.False(response.Success);
+            Assert.Equal(
+                "that is not a rank. Enter Bronze, Silver, Gold, Platinum, Diamond or Master. Your points will be returned.",
+                response.Message
+            );
+            Assert.Empty(tiers.Asked);
+            Assert.Single(
+                RedemptionDispositionLog.Read(
+                    Path.Combine(directory, RedemptionDispositionLog.FileName)
+                )
+            );
+            Assert.Equal(0, await queue.GetItemsInQueue());
+        }
+        finally
+        {
+            queue.Dispose();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static RequestQueue CreateQueue(
+        string directory,
+        ICustomRewardsHolder rewards = null,
+        IReplayTierLookup tiers = null
+    )
     {
         return new RequestQueue(
             new RecordingLogger(),
@@ -615,8 +804,32 @@ public class RequestQueueTests
             TimeSpan.FromSeconds(5),
             @"Local\HeroesReplay.RequestQueue.Test." + Guid.NewGuid().ToString("N"),
             @"Local\HeroesReplay.FailedRequests.Test." + Guid.NewGuid().ToString("N"),
-            rewards
+            rewards,
+            tiers ?? new StubTiers(_ => "Gold 2")
         );
+    }
+
+    /// <summary>Answers each replay's tier from <c>tierOf</c> and records what was asked.</summary>
+    private sealed class StubTiers : IReplayTierLookup
+    {
+        private readonly Func<int, string> tierOf;
+
+        public StubTiers(Func<int, string> tierOf)
+        {
+            this.tierOf = tierOf;
+        }
+
+        public List<(int ReplayId, GameType GameType)> Asked { get; } = new();
+
+        public Task<string> GetTierAsync(
+            int replayId,
+            GameType gameType,
+            CancellationToken cancellationToken
+        )
+        {
+            Asked.Add((replayId, gameType));
+            return Task.FromResult(tierOf(replayId));
+        }
     }
 
     private static RewardRequest FilterRequest(Guid redemptionId)
@@ -629,7 +842,10 @@ public class RequestQueueTests
             GameRank.Gold,
             "Braxis Holdout",
             GameType.StormLeague
-        );
+        )
+        {
+            RankRequired = true,
+        };
     }
 
     private sealed class StubHeroesProfile : IHeroesProfileService

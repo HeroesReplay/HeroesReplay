@@ -38,5 +38,7 @@ public class HeroesProfileServiceRegistrationTests
         IHeroesProfileService resolved = provider.GetRequiredService<IHeroesProfileService>();
 
         Assert.IsType<HeroesProfileService>(resolved);
+        // #429: rank rewards look tiers up through the same instance, so they share its cache.
+        Assert.Same(resolved, provider.GetRequiredService<IReplayTierLookup>());
     }
 }

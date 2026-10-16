@@ -28,6 +28,7 @@ public static class ReplayMediaReason
     public const string RecordedAll = "recorded-all";
     public const string RecordedRequested = "recorded-requested";
     public const string RecordedNotable = "recorded-notable";
+    public const string RecordedFocus = "recorded-focus";
     public const string RecordedHighSkill = "recorded-high-skill";
     public const string RecordedOrdinary = "recorded-ordinary";
     public const string EligibleRequested = "eligible-requested";
@@ -52,6 +53,8 @@ public static class ReplayMediaConfigurationError
     public const string HighSkillMaxAgeTooLarge = "high-skill-max-age-too-large";
     public const string NotableMaxAgeTooLarge = "notable-max-age-too-large";
     public const string RequestedMaxAgeTooLarge = "requested-max-age-too-large";
+    public const string FocusMaxAgeNegative = "focus-max-age-negative";
+    public const string FocusMaxAgeTooLarge = "focus-max-age-too-large";
     public const string HighSkillMmrNegative = "high-skill-mmr-negative";
     public const string HighSkillRankInvalid = "high-skill-rank-invalid";
     public const string PublicDayCapNegative = "public-day-cap-negative";

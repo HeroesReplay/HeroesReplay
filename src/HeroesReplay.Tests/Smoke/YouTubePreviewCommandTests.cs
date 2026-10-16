@@ -29,6 +29,7 @@ public class YouTubePreviewCommandTests
         Assert.Contains("--replay", output, StringComparison.Ordinal);
         Assert.Contains("--configured", output, StringComparison.Ordinal);
         Assert.Contains("--insights", output, StringComparison.Ordinal);
+        Assert.Contains("--focus", output, StringComparison.Ordinal);
         Assert.Equal(1, missing);
         Assert.Contains("was not found", error, StringComparison.Ordinal);
     }

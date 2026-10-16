@@ -125,14 +125,24 @@ public class KillCalculator : IFocusCalculator
                 focusUnit,
                 target,
                 weight,
-                description
+                description,
+                victim: lastVictim
             );
             return;
         }
 
         TimeSpan start = TimeSpan.FromSeconds(streak.StartSecond);
         TimeSpan end = TimeSpan.FromSeconds(streak.EndSecond + holdSeconds);
-        timeline.OfferRange(start, end, GetType(), focusUnit, target, weight, description);
+        timeline.OfferRange(
+            start,
+            end,
+            GetType(),
+            focusUnit,
+            target,
+            weight,
+            description,
+            victim: victims[0]
+        );
     }
 
     private bool IsLongRange(ReplayTimeline timeline, Unit victim, int second)

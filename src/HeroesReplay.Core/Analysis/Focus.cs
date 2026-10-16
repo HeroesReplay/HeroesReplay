@@ -29,4 +29,10 @@ public class Focus
     }
 
     public int Index { get; set; }
+
+    /// <summary>
+    /// The hero whose death this kill or death focus shows; for a kill streak, the first victim.
+    /// The lead-in before the death follows this hero (#431).
+    /// </summary>
+    public Unit Victim { get; set; }
 }

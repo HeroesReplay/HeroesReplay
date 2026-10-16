@@ -3,12 +3,14 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
+using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands.Update;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Calculators;
 using HeroesReplay.Core.Analysis.Insights;
+using HeroesReplay.Core.Builds.Matching;
 using HeroesReplay.Core.Builds.Reference;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
@@ -19,6 +21,13 @@ using HeroesReplay.Core.GameClient.Firewall;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus;
+using HeroesReplay.Core.HeroFocus.Cards;
+using HeroesReplay.Core.HeroFocus.Ledger;
+using HeroesReplay.Core.HeroFocus.Picking;
+using HeroesReplay.Core.HeroFocus.Scoring;
+using HeroesReplay.Core.HeroFocus.Signatures;
+using HeroesReplay.Core.HeroFocus.Targeted;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
@@ -337,6 +346,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IFocusCalculator, KillCalculator>()
             .AddSingleton<IFocusCalculator, DeathCalculator>()
             .AddSingleton<IFocusCalculator, NearEnemyCalculator>()
+            .AddSingleton<IFocusCalculator, SoloLaneCalculator>()
             .AddSingleton<IFocusCalculator, RoamingCalculator>()
             .AddSingleton<IFocusCalculator, NearCaptureBeaconCalculator>()
             .AddSingleton<IFocusCalculator, NearEnemyCoreCalculator>()
@@ -534,6 +544,14 @@ public static class ServiceCollectionExtensions
                 }
             )
             .AddSingleton(typeof(IReplayProvider), replayProvider)
+            // The cycle's focus picks (#433); inert while Focus:Enabled is off.
+            .AddSingleton(serviceProvider => new FocusPicker(
+                settings.Focus,
+                settings.Location?.DataDirectory,
+                settings.ReplayMedia?.FocusCandidateMaxAge ?? TimeSpan.FromDays(7),
+                HeroSignatures.Embedded(),
+                serviceProvider.GetRequiredService<ILogger<FocusPicker>>()
+            ))
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
             .AddSingleton<IAbilityDetector, AbilityDetector>()
@@ -633,7 +651,12 @@ public static class ServiceCollectionExtensions
     {
         return services
             .AddHeroesProfileKiotaClient()
-            .AddSingleton<IHeroesProfileService, HeroesProfileService>();
+            .AddSingleton<HeroesProfileService>()
+            .AddSingleton<IHeroesProfileService>(sp =>
+                sp.GetRequiredService<HeroesProfileService>()
+            )
+            // A rank reward's tier lookups (#429) share the service's client and cache.
+            .AddSingleton<IReplayTierLookup>(sp => sp.GetRequiredService<HeroesProfileService>());
     }
 
     /// <summary>
@@ -643,29 +666,167 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddHeroStatsRefresh(this IServiceCollection services)
     {
-        services.AddHttpClient(
-            HeroStatsApi.HttpClientName,
-            client => client.Timeout = HeroesProfileHttp.AttemptTimeout
-        );
+        services.AddHeroStatsApi();
         return services.AddSingleton(sp =>
         {
             AppSettings settings = sp.GetRequiredService<AppSettings>();
             HeroesProfileApiSettings api = settings.HeroesProfileApi;
-            HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
-                .CreateClient(HeroStatsApi.HttpClientName);
-            HeroesProfileClient client = HeroesProfileClientFactory.Create(
-                api?.ApiKey,
-                httpClient,
-                api?.ExternalV1BaseUri
-            );
             return new HeroStatsRefresh(
-                new HeroStatsApi(client),
+                sp.GetRequiredService<HeroStatsApi>(),
                 new HeroStatsStore(settings.Location.DataDirectory),
                 api?.HeroStats ?? new HeroStatsSettings(),
-                sp.GetRequiredService<ILogger<HeroStatsRefresh>>()
+                sp.GetRequiredService<ILogger<HeroStatsRefresh>>(),
+                pacer: sp.GetRequiredService<HeroesProfilePacer>()
             );
         });
     }
+
+    /// <summary>
+    /// The player lookups behind focus-hero picks (#433): a player's Storm League record on a hero
+    /// (<c>players/heroes</c>) and the privacy feed that purges players who went private. They
+    /// share the statistics calls' client and pacer, so all of them keep one per-minute limit.
+    /// </summary>
+    public static IServiceCollection AddPlayerHeroStats(this IServiceCollection services)
+    {
+        services.AddHeroStatsApi();
+        services.TryAddSingleton(sp => new PlayerHeroStatsStore(
+            PlayerHeroStatsStore.FolderFor(
+                sp.GetRequiredService<AppSettings>().Location.DataDirectory
+            )
+        ));
+        services.TryAddSingleton(sp => new PlayerHeroStatsFetch(
+            HeroesProfileCallerFor(sp),
+            sp.GetRequiredService<PlayerHeroStatsStore>(),
+            PlayerStatsFor(sp),
+            sp.GetRequiredService<ILogger<PlayerHeroStatsFetch>>()
+        ));
+        services.TryAddSingleton(sp => new PlayerPrivacySync(
+            HeroesProfileCallerFor(sp),
+            sp.GetRequiredService<PlayerHeroStatsStore>(),
+            PlayerStatsFor(sp),
+            sp.GetRequiredService<ILogger<PlayerPrivacySync>>()
+        ));
+        return services;
+    }
+
+    /// <summary>
+    /// The download role's focus work (#433): a focus card per waiting Standard replay, the hero
+    /// baselines, the players' Heroes Profile records, and the privacy feed.
+    /// </summary>
+    public static IServiceCollection AddHeroFocusDownload(this IServiceCollection services)
+    {
+        services.AddPlayerHeroStats();
+        services.TryAddSingleton(_ => HeroSignatures.Embedded());
+        services.TryAddSingleton(sp =>
+        {
+            AppSettings settings = sp.GetRequiredService<AppSettings>();
+            IGuideCatalog guides = GuideCatalog.Embedded();
+            InsightsSettings insights = settings.Insights ?? new InsightsSettings();
+            var builder = new FocusCardBuilder(
+                guides,
+                new BuildMatcher(
+                    new BuildMatchOptions
+                    {
+                        MinTiers = insights.Builds.MinTiers,
+                        SituationalWeight = insights.Builds.SituationalWeight,
+                        AmbiguityMargin = insights.Builds.AmbiguityMargin,
+                    }
+                ),
+                settings.YouTube?.Titles
+            );
+            string data = settings.Location.DataDirectory;
+            IGameData gameData = sp.GetRequiredService<IGameData>();
+            return new FocusCardRefresh(
+                builder,
+                new FocusCardStore(FocusCardStore.DirectoryFor(data)),
+                new HeroBaselineStore(HeroBaselineStore.PathFor(data)),
+                sp.GetRequiredService<HeroSignatures>(),
+                settings.Focus,
+                () => gameData.Heroes,
+                path => FocusReplayParse.Read(path).Replay,
+                settings.StandardReplayCachePath,
+                data,
+                FocusCardBuilder.CheckedAt(guides),
+                sp.GetRequiredService<ILogger<FocusCardRefresh>>()
+            );
+        });
+        services.TryAddSingleton(sp => new FocusStrengthRefresh(
+            sp.GetRequiredService<PlayerHeroStatsFetch>(),
+            sp.GetRequiredService<AppSettings>().Focus,
+            PlayerStatsFor(sp),
+            sp.GetRequiredService<ILogger<FocusStrengthRefresh>>()
+        ));
+        services.TryAddSingleton(sp =>
+        {
+            AppSettings settings = sp.GetRequiredService<AppSettings>();
+            string data = settings.Location.DataDirectory;
+            IGameData gameData = sp.GetRequiredService<IGameData>();
+            // The download role's provider fetches a target's game; elsewhere there is none.
+            HeroesProfileProvider provider = sp.GetService<HeroesProfileProvider>();
+            return new FocusTargetedFetch(
+                HeroesProfileCallerFor(sp),
+                new FocusTargetedStore(FocusTargetedStore.PathFor(data)),
+                new FocusLedgerStore(FocusLedgerStore.PathFor(data)),
+                settings.Focus,
+                () => gameData.Heroes,
+                provider == null
+                    ? (_, _) => Task.FromResult(TargetedDownload.Failed)
+                    : new Func<int, CancellationToken, Task<TargetedDownload>>(
+                        provider.DownloadTargetedAsync
+                    ),
+                PlayerStatsFor(sp).JobTimeout,
+                sp.GetRequiredService<ILogger<FocusTargetedFetch>>()
+            );
+        });
+        services.TryAddSingleton(sp => new HeroFocusDownload(
+            sp.GetRequiredService<FocusCardRefresh>(),
+            sp.GetRequiredService<FocusStrengthRefresh>(),
+            sp.GetRequiredService<PlayerPrivacySync>(),
+            sp.GetRequiredService<AppSettings>().Focus,
+            sp.GetRequiredService<ILogger<HeroFocusDownload>>(),
+            targeted: sp.GetRequiredService<FocusTargetedFetch>()
+        ));
+        return services;
+    }
+
+    /// <summary>
+    /// The statistics calls' Heroes Profile client, without a retry handler (the callers read 202,
+    /// 429 and <c>Retry-After</c> themselves), and the process's one Heroes Profile pacer.
+    /// </summary>
+    private static IServiceCollection AddHeroStatsApi(this IServiceCollection services)
+    {
+        services.AddHttpClient(
+            HeroStatsApi.HttpClientName,
+            client => client.Timeout = HeroesProfileHttp.AttemptTimeout
+        );
+        services.TryAddSingleton(sp => new HeroesProfilePacer(
+            (
+                sp.GetRequiredService<AppSettings>().HeroesProfileApi?.HeroStats
+                ?? new HeroStatsSettings()
+            ).RequestSpacing
+        ));
+        services.TryAddSingleton(sp =>
+        {
+            HeroesProfileApiSettings api = sp.GetRequiredService<AppSettings>().HeroesProfileApi;
+            HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
+                .CreateClient(HeroStatsApi.HttpClientName);
+            return new HeroStatsApi(
+                HeroesProfileClientFactory.Create(api?.ApiKey, httpClient, api?.ExternalV1BaseUri)
+            );
+        });
+        return services;
+    }
+
+    private static HeroesProfileCaller HeroesProfileCallerFor(IServiceProvider sp) =>
+        new(
+            sp.GetRequiredService<HeroStatsApi>(),
+            sp.GetRequiredService<HeroesProfilePacer>(),
+            sp.GetRequiredService<ILogger<HeroesProfileCaller>>()
+        );
+
+    private static PlayerStatsSettings PlayerStatsFor(IServiceProvider sp) =>
+        sp.GetRequiredService<AppSettings>().HeroesProfileApi?.PlayerStats
+        ?? new PlayerStatsSettings();
 
     /// <summary>
     /// Heroes Profile's <c>/maps</c> behind the Storm League reward pool (#425). It uses the hero

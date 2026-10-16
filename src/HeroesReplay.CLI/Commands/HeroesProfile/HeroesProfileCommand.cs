@@ -11,6 +11,7 @@ public class HeroesProfileCommand : Command
         Subcommands.Add(new DownloadCommand());
         Subcommands.Add(new HeroStatsCommand());
         Subcommands.Add(new PatchIndexCommand());
+        Subcommands.Add(new PlayerHeroCommand());
         Subcommands.Add(new SampleCommand());
     }
 }

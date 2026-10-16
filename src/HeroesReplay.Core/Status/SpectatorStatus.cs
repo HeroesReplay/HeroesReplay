@@ -1,4 +1,6 @@
 using System;
+using HeroesReplay.Core.HeroFocus.Picking;
+using HeroesReplay.Core.Replays;
 
 namespace HeroesReplay.Core.Status;
 
@@ -90,6 +92,45 @@ public sealed class SpectatorStatus
     public string ObsRecordBlockedBy { get; set; }
     public string ObsDetail { get; set; }
     public SpectatorFocusStatus Focus { get; set; }
+
+    /// <summary>
+    /// The hero the cycle follows for this whole replay (#433): hero, build and role only, never
+    /// the player. Null for any other replay. The Twitch process names it in chat once.
+    /// </summary>
+    public SpectatorHeroFocusStatus HeroFocus { get; set; }
+}
+
+public sealed class SpectatorHeroFocusStatus
+{
+    public int ReplayId { get; set; }
+    public string Hero { get; set; }
+
+    /// <summary>The guide build, only when the talents clearly match it.</summary>
+    public string Build { get; set; }
+    public string Role { get; set; }
+
+    /// <summary>The replay's focus pick, or null for a request or an ordinary replay.</summary>
+    public static SpectatorHeroFocusStatus From(LoadedReplay loaded)
+    {
+        FocusPick pick = loaded?.FocusPick;
+        if (
+            pick == null
+            || loaded.RewardQueueItem?.Request != null
+            || loaded.ReplayId is not int replayId
+            || string.IsNullOrWhiteSpace(pick.Hero)
+        )
+        {
+            return null;
+        }
+
+        return new SpectatorHeroFocusStatus
+        {
+            ReplayId = replayId,
+            Hero = pick.Hero,
+            Build = pick.Build,
+            Role = pick.Role,
+        };
+    }
 }
 
 public sealed class SpectatorFocusStatus
