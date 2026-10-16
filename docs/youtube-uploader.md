@@ -260,7 +260,7 @@ A paid request that ends at 16:00 that day publishes at 16:00, as soon as it is 
 A full match title is one line of at most 100 characters. It never names a date, an MMR, or who won. Without match highlights (below) it does not name a pentakill or a team wipe either. With them, one hero's own pentakill can lead the title, never a wipe shared across players.
 
 - Ordinary: `Volskaya Foundry - Storm League - Diamond - 65389750`.
-- A reward that names a player: `Illidan focus - Dragon Shire - Storm League - Diamond 3 - 65550001`. The title never names the Twitch viewer.
+- A reward that names a player: `Illidan focus - Dragon Shire - Storm League - Diamond 3 - 65550001`. The title never names the Twitch viewer. The hero, here and on the description's `Featured:` line, is the catalog's English name of the hero that player played (below), not the replay's character name, which is in the uploader's game language (a Russian client writes `Диабло` for Diablo). Videos uploaded before that keep their old `Featured:` text.
 - A paid upload that does not name a player has the ordinary title. The requestor is credited in the description only.
 - A new hero in the match: `Ft. Xal'atath - Volskaya Foundry - Storm League - Diamond - 65389750`. Ft. means featuring. One hero only. When the reward already leads with that hero, the title does not say her twice.
 

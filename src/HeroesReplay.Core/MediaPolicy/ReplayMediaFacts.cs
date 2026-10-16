@@ -52,7 +52,8 @@ public static class ReplayMediaFacts
             Roster = Roster(replay, heroes),
             FocusHero = PlayerPriorityRequest.HeroName(
                 replay,
-                PlayerPriorityRequest.PlayerIndex(replay, request)
+                PlayerPriorityRequest.PlayerIndex(replay, request),
+                heroes
             ),
             HeroFocus = FocusFacts(loaded, request),
             ViewerRequested = request != null,

@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Heroes.ReplayParser;
+using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Requests;
 
@@ -125,7 +128,17 @@ public static class PlayerPriorityRequest
         return phase is "Loading" or "TimerDetected" or "EndDetected";
     }
 
-    public static string HeroName(Replay replay, int? playerIndex)
+    /// <summary>
+    /// The requested player's hero. With the hero catalog it is the catalog's English name of the
+    /// hero played (<see cref="PlayedHero.Name"/>): the replay's character name is in the
+    /// uploader's game language (a Russian client wrote Диабло for Diablo). Without a catalog, the
+    /// character name, else the player's name.
+    /// </summary>
+    public static string HeroName(
+        Replay replay,
+        int? playerIndex,
+        IReadOnlyList<Hero> heroes = null
+    )
     {
         if (replay?.Players == null || playerIndex is not int index)
         {
@@ -138,6 +151,11 @@ public static class PlayerPriorityRequest
         }
 
         Player player = replay.Players[index];
+        if (heroes is { Count: > 0 } && PlayedHero.Name(heroes, replay, player) is string played)
+        {
+            return played;
+        }
+
         if (!string.IsNullOrWhiteSpace(player?.Character))
         {
             return player.Character;
