@@ -183,11 +183,12 @@ public sealed class ReplayTimeline
     /// matters, the longer. A death matters by its respawn timer (full at
     /// <see cref="SpectateSettings.DeathContextFullRespawn"/>), and fully when something worth
     /// <see cref="WeightSettings.DeathImpact"/> happens while the hero is dead: an objective, a boss,
-    /// a town hall, the core, a fight of eight heroes. The last
+    /// a town hall, the core, a fight of eight heroes (a solo-lane duel is not one). The last
     /// <see cref="SpectateSettings.PastDeathContextTime"/> weighs as much as the death; before
     /// that the weight fades to <see cref="WeightSettings.DeathLeadInFloor"/> at the start of the
-    /// lead-in, so a fight or an objective elsewhere early in it keeps the camera. After the death
-    /// the event holds for <see cref="SpectateSettings.PresentDeathContextTime"/>.
+    /// lead-in, so a fight or an objective elsewhere early in it keeps the camera, though a
+    /// solo-lane duel never does. After the death the event holds for
+    /// <see cref="SpectateSettings.PresentDeathContextTime"/>.
     /// </summary>
     public void ApplyDeathContext(SpectateSettings spectate, WeightSettings weights)
     {
@@ -241,6 +242,12 @@ public sealed class ReplayTimeline
     private static bool IsDeath(Focus focus) =>
         focus.Calculator == typeof(KillCalculator) || focus.Calculator == typeof(DeathCalculator);
 
+    private static bool IsDuel(Focus focus) => focus.Calculator == typeof(SoloLaneCalculator);
+
+    /// <summary>A fight between heroes, a solo-lane duel included.</summary>
+    private static bool IsFight(Focus focus) =>
+        focus.Calculator == typeof(NearEnemyCalculator) || IsDuel(focus);
+
     private int LeadInSeconds(
         int second,
         Focus focus,
@@ -266,7 +273,7 @@ public sealed class ReplayTimeline
             for (int t = second + 1; t <= respawn && t < TotalSeconds; t++)
             {
                 Focus other = slots[t];
-                if (other != null && !IsDeath(other) && other.Points >= impact)
+                if (other != null && !IsDeath(other) && !IsDuel(other) && other.Points >= impact)
                 {
                     importance = 1;
                     break;
@@ -303,7 +310,8 @@ public sealed class ReplayTimeline
 
     /// <summary>
     /// The last <paramref name="hold"/> seconds before the death weigh as much as the death; the
-    /// seconds before them fade to <paramref name="floor"/> at the start of the lead-in.
+    /// seconds before them fade to <paramref name="floor"/> at the start of the lead-in. Every
+    /// second of it beats a solo-lane duel (#437): a death swings the camera, a duel never does.
     /// </summary>
     private void ApplyLeadIn(int second, Focus focus, int leadIn, int hold, float floor)
     {
@@ -327,7 +335,7 @@ public sealed class ReplayTimeline
                 delta <= hold
                     ? focus.Points
                     : focus.Points - (focus.Points - floor) * (delta - hold) / (leadIn - hold);
-            if (slots[t] == null || slots[t].Points < points)
+            if (slots[t] == null || slots[t].Points < points || IsDuel(slots[t]))
             {
                 slots[t] = new Focus(
                     focus.Calculator,
@@ -419,10 +427,11 @@ public sealed class ReplayTimeline
     /// than that, after which the shown hero wins again, keeps the camera on it too. Only an
     /// outcome worth at least <paramref name="margin"/> more than the shot cuts it short: a kill or
     /// a death (with its lead-in), or anything but a fight worth <paramref name="outcome"/> (a map
-    /// objective, a boss, a town hall, the core). A fight never does, however big, so a solo laner
-    /// in a duel or working the lane keeps the camera through a 4v4 that has not decided anything
-    /// yet. The lead-in of a hero who dies within <paramref name="dwell"/> cuts it too, or the
-    /// death would happen off camera, and the shot ends when the hero it shows dies.
+    /// objective, a boss, a town hall, the core). A fight never does, however big, and neither
+    /// does a solo-lane duel, so a solo laner in a duel or working the lane keeps the camera
+    /// through a 4v4 that has not decided anything yet. The lead-in of a hero who dies within
+    /// <paramref name="dwell"/> cuts it too, or the death would happen off camera, and the shot
+    /// ends when the hero it shows dies.
     /// </summary>
     public void KeepShotsForDwell(TimeSpan dwell, float margin, float outcome)
     {
@@ -484,8 +493,7 @@ public sealed class ReplayTimeline
     /// <paramref name="objective"/>: a map objective, a boss, a town hall, the core.
     /// </summary>
     private static bool IsOutcome(Focus focus, float objective) =>
-        IsDeath(focus)
-        || (focus.Calculator != typeof(NearEnemyCalculator) && focus.Points >= objective);
+        IsDeath(focus) || (!IsFight(focus) && focus.Points >= objective);
 
     private bool WinsAgainWithin(Player player, int second, int seconds)
     {

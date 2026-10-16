@@ -337,6 +337,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IFocusCalculator, KillCalculator>()
             .AddSingleton<IFocusCalculator, DeathCalculator>()
             .AddSingleton<IFocusCalculator, NearEnemyCalculator>()
+            .AddSingleton<IFocusCalculator, SoloLaneCalculator>()
             .AddSingleton<IFocusCalculator, RoamingCalculator>()
             .AddSingleton<IFocusCalculator, NearCaptureBeaconCalculator>()
             .AddSingleton<IFocusCalculator, NearEnemyCoreCalculator>()

@@ -74,6 +74,14 @@ public class SpectateSettings
     /// it off.
     /// </summary>
     public TimeSpan FocusDwellTime { get; set; } = TimeSpan.FromSeconds(4);
+
+    /// <summary>
+    /// How long a solo laner and one enemy hero must stay alone together to count as a duel
+    /// (<c>Weights:SoloLaneDuel</c>, #437). Heroes that only pass each other, or trade for a few
+    /// seconds, do not take the camera; at 12 s the duels add no camera swaps.
+    /// </summary>
+    public TimeSpan SoloLaneDuelTime { get; set; } = TimeSpan.FromSeconds(12);
+
     public TimeSpan KillStreakWindow { get; set; }
     public TimeSpan KillStreakHoldTime { get; set; }
 
