@@ -9,6 +9,30 @@ namespace HeroesReplay.Core.HeroFocus;
 /// </summary>
 public sealed class HeroFocusSettings
 {
+    /// <summary>
+    /// The switch. On, the download role keeps focus cards and player records for the waiting
+    /// replays and keeps <see cref="ExtraCandidates"/> more of them.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>Waiting replays kept beyond <c>HeroesProfileApi:CachedReplayLimit</c>, so focus picks have a choice.</summary>
+    public int ExtraCandidates { get; set; } = 5;
+
+    /// <summary>How often the download role builds a card and looks up records.</summary>
+    public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Cards built per refresh at most, before the lookups: a cold lookup waits about 10 s for
+    /// Heroes Profile's job, so the cards of a backlog come first.
+    /// </summary>
+    public int CardsPerStep { get; set; } = 5;
+
+    /// <summary>Heroes Profile lookups per refresh at most.</summary>
+    public int StrengthLookupsPerStep { get; set; } = 10;
+
+    /// <summary>A record that could not be read is asked for again after this long.</summary>
+    public TimeSpan StrengthRetryAfter { get; set; } = TimeSpan.FromHours(1);
+
     /// <summary>A hero is not focused again until this many other focus picks have played.</summary>
     public int HeroRepeatWindow { get; set; } = 3;
 

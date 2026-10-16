@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
+using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Telemetry;
@@ -65,6 +67,7 @@ public class DownloadCommand : Command
         downloader.ObserveDependency(dependency);
         using IDisposable probing = probes.Watch(stop.Token, downloader.ObserveDependency);
         Task heroStats = StartHeroStats(scope.ServiceProvider, stop.Token);
+        Task heroFocus = StartHeroFocus(scope.ServiceProvider, stop.Token);
         int failures = 0;
         while (!stop.Token.IsCancellationRequested)
         {
@@ -133,6 +136,7 @@ public class DownloadCommand : Command
         }
 
         await StopHeroStatsAsync(heroStats).ConfigureAwait(false);
+        await StopHeroStatsAsync(heroFocus).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -150,6 +154,30 @@ public class DownloadCommand : Command
 
         HeroStatsRefresh refresh = services.GetRequiredService<HeroStatsRefresh>();
         return Task.Run(() => refresh.RunAsync(token), CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Keeps a focus card and the players' Heroes Profile records for each waiting replay while
+    /// <c>Focus:Enabled</c> is on (#433), beside the download loop. The hero catalog loads first.
+    /// </summary>
+    private static Task StartHeroFocus(IServiceProvider services, CancellationToken token)
+    {
+        AppSettings settings = services.GetRequiredService<AppSettings>();
+        if (settings.Focus?.Enabled != true)
+        {
+            return Task.CompletedTask;
+        }
+
+        IGameData gameData = services.GetRequiredService<IGameData>();
+        HeroFocusDownload focus = services.GetRequiredService<HeroFocusDownload>();
+        return Task.Run(
+            async () =>
+            {
+                await gameData.LoadDataAsync().ConfigureAwait(false);
+                await focus.RunAsync(token).ConfigureAwait(false);
+            },
+            CancellationToken.None
+        );
     }
 
     private static async Task StopHeroStatsAsync(Task heroStats)
@@ -176,5 +204,6 @@ public class DownloadCommand : Command
             .AddSingleton<ReplayHelper>()
             .AddSingleton<IReplayHelper>(sp => sp.GetRequiredService<ReplayHelper>())
             .AddSingleton<HeroesProfileProvider>()
-            .AddHeroStatsRefresh();
+            .AddHeroStatsRefresh()
+            .AddHeroFocusDownload();
 }

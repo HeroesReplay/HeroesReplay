@@ -10,11 +10,11 @@ using Microsoft.Extensions.Logging;
 namespace HeroesReplay.Core.HeroesProfile;
 
 /// <summary>
-/// Reads Heroes Profile's privacy feed (<c>players/privacy/changes</c>) and deletes what the
-/// player lookups kept about each player who went private (#433). Heroes Profile's terms require
-/// a cache of player data to poll it at least daily. The cursor (<c>since</c>, <c>after_id</c>)
-/// is kept in <c>privacy.json</c>; the first read starts from now, because nothing was cached
-/// before it.
+/// Reads Heroes Profile's privacy feed (<c>players/privacy/changes</c>) and replaces what the
+/// player lookups kept about each player who went private with a note that they are private, so
+/// the focus cards drop their numbers too (#433). Heroes Profile's terms require a cache of player
+/// data to poll it at least daily. The cursor (<c>since</c>, <c>after_id</c>) is kept in
+/// <c>privacy.json</c>; the first read starts from now, because nothing was cached before it.
 /// </summary>
 public sealed class PlayerPrivacySync
 {
@@ -82,7 +82,7 @@ public sealed class PlayerPrivacySync
             {
                 if (
                     string.Equals(change.State, "private", StringComparison.OrdinalIgnoreCase)
-                    && store.Purge(change.BattleTag, change.Region)
+                    && store.MarkPrivate(change.BattleTag, change.Region, clock())
                 )
                 {
                     purged++;

@@ -7,17 +7,20 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Heroes.ReplayParser;
+using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core.Builds.Matching;
 using HeroesReplay.Core.Builds.Reference;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesData;
+using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.HeroFocus;
 using HeroesReplay.Core.HeroFocus.Cards;
 using HeroesReplay.Core.HeroFocus.Ledger;
 using HeroesReplay.Core.HeroFocus.Scoring;
 using HeroesReplay.Core.HeroFocus.Signatures;
-using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Shared;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HeroesReplay.CLI.Commands.Focus.Commands;
@@ -75,7 +78,13 @@ public class CandidatesCommand : Command
         Options.Add(ledgerOption);
         Options.Add(topOption);
         Options.Add(simulateOption);
+        var fetchOption = new Option<int>("--fetch")
+        {
+            Description =
+                "Look up to this many players' Heroes Profile records on their hero first (newest replay and best KDA first), through the same cache, pacing and weekly budget as the download role. Default 0: none, every record counts as unknown.",
+        };
         Options.Add(anyModeOption);
+        Options.Add(fetchOption);
 
         SetAction(
             (parseResult, cancellationToken) =>
@@ -86,6 +95,7 @@ public class CandidatesCommand : Command
                     parseResult.GetValue(topOption),
                     parseResult.GetValue(simulateOption),
                     parseResult.GetValue(anyModeOption),
+                    parseResult.GetValue(fetchOption),
                     parseResult.InvocationConfiguration.Output,
                     parseResult.InvocationConfiguration.Error,
                     cancellationToken
@@ -100,6 +110,7 @@ public class CandidatesCommand : Command
         int top,
         int simulate,
         bool anyMode,
+        int fetch,
         TextWriter console,
         TextWriter error,
         CancellationToken cancellationToken
@@ -161,6 +172,11 @@ public class CandidatesCommand : Command
             return 2;
         }
 
+        if (fetch > 0)
+        {
+            await FetchAsync(cards, fetch, focus, console, cancellationToken).ConfigureAwait(false);
+        }
+
         Run(
             cards,
             new FocusScorer(focus, signatures),
@@ -173,6 +189,48 @@ public class CandidatesCommand : Command
             console
         );
         return 0;
+    }
+
+    /// <summary>
+    /// Fills up to <paramref name="limit"/> players' Heroes Profile records into the cards, newest
+    /// replay first, through the download role's lookup, cache and budget.
+    /// </summary>
+    private static async Task FetchAsync(
+        IReadOnlyList<FocusCard> cards,
+        int limit,
+        HeroFocusSettings focus,
+        TextWriter console,
+        CancellationToken cancellationToken
+    )
+    {
+        using ServiceProvider provider = new ServiceCollection()
+            .AddTwitchServices(cancellationToken, "heroesreplay-focus-candidates")
+            .AddPlayerHeroStats()
+            .BuildHeroesReplayProvider();
+        AppSettings settings = provider.GetRequiredService<AppSettings>();
+        var strength = new FocusStrengthRefresh(
+            provider.GetRequiredService<PlayerHeroStatsFetch>(),
+            focus,
+            settings.HeroesProfileApi?.PlayerStats,
+            provider.GetRequiredService<ILogger<FocusStrengthRefresh>>()
+        );
+        int calls = 0;
+        foreach (FocusCard card in cards.OrderByDescending(card => card.ReplayId ?? 0))
+        {
+            FocusStrengthRefresh.FillResult result = await strength
+                .FillAsync(card, limit - calls, cancellationToken)
+                .ConfigureAwait(false);
+            calls += result.Calls;
+            if (result.Stop || calls >= limit)
+            {
+                break;
+            }
+        }
+
+        int known = cards.Sum(card =>
+            card.Players.Count(player => player.Strength?.IsKnown == true)
+        );
+        console.WriteLine($"Heroes Profile: {calls} lookups; {known} players have a record.");
     }
 
     /// <summary>The baselines of the corpus itself: every card's signature stats.</summary>
@@ -330,27 +388,8 @@ public class CandidatesCommand : Command
             + $"league {Part("novelty.league")} region {Part("novelty.region")} comp {Part("novelty.comp")}";
     }
 
-    /// <summary>
-    /// The card key of a replay file: its Heroes Profile id when the name starts with one
-    /// (<c>65550003_StormLeague_Diamond_…</c>), else its name without the extension.
-    /// </summary>
-    public static FocusReplayFacts Facts(string file)
-    {
-        string name = Path.GetFileName(file);
-        string stem = Path.GetFileNameWithoutExtension(file);
-        string first = stem.Split('_')[0];
-        int? id =
-            int.TryParse(first, NumberStyles.None, CultureInfo.InvariantCulture, out int parsed)
-            && parsed > 0
-                ? parsed
-                : null;
-        return new FocusReplayFacts(
-            id?.ToString(CultureInfo.InvariantCulture) ?? stem,
-            id,
-            name,
-            RankImage.RankFromCacheFileName(name)
-        );
-    }
+    /// <summary>The card key, id and rank in a replay file's name (<see cref="FocusReplayFacts.FromFile"/>).</summary>
+    public static FocusReplayFacts Facts(string file) => FocusReplayFacts.FromFile(file);
 
     private static List<FocusCard> Read(
         IReadOnlyList<string> files,
@@ -365,7 +404,7 @@ public class CandidatesCommand : Command
         foreach (string file in files)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            (DataParser.ReplayParseResult result, Replay replay) = Parse(file);
+            (DataParser.ReplayParseResult result, Replay replay) = FocusReplayParse.Read(file);
             if (replay?.Players == null || replay.Players.Length == 0)
             {
                 console.WriteLine($"{Path.GetFileName(file)}: not read ({result}).");
@@ -377,32 +416,5 @@ public class CandidatesCommand : Command
         }
 
         return cards;
-    }
-
-    private static (DataParser.ReplayParseResult, Replay) Parse(string file)
-    {
-        try
-        {
-            (DataParser.ReplayParseResult result, Replay replay) = DataParser.ParseReplay(
-                file,
-                false,
-                new ParseOptions
-                {
-                    IgnoreErrors = true,
-                    AllowPTR = true,
-                    ShouldParseEvents = true,
-                    ShouldParseUnits = true,
-                    ShouldParseStatistics = true,
-                    ShouldParseDetailedBattleLobby = true,
-                    ShouldParseMouseEvents = false,
-                    ShouldParseMessageEvents = false,
-                }
-            );
-            return (result, replay);
-        }
-        catch (Exception e) when (e is not OperationCanceledException)
-        {
-            return (DataParser.ReplayParseResult.Exception, null);
-        }
     }
 }

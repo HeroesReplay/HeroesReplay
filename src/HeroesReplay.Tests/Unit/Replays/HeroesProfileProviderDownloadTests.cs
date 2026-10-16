@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
@@ -364,6 +365,41 @@ public class HeroesProfileProviderDownloadTests
         }
     }
 
+    /// <summary>
+    /// #433: while focus picks are on, Focus:ExtraCandidates more fresh replays wait, so a focus
+    /// pick has a choice.
+    /// </summary>
+    [Theory]
+    [InlineData(false, Limit, false)]
+    [InlineData(true, Limit, true)]
+    [InlineData(true, Limit + 5, false)]
+    public async Task DownloadNextAsync_FocusKeepsExtraCandidatesWaiting(
+        bool focus,
+        int fresh,
+        bool downloads
+    )
+    {
+        string root = NewRoot();
+        Dictionary<int, DateTime> played = Backlog(expired: 0, fresh);
+        var service = new ListedDownloads(
+            newest: 65590000,
+            listPage: minId => Builds((minId + 1, Current))
+        );
+
+        try
+        {
+            WriteStandard(root, played.Keys);
+            HeroesProfileProvider provider = Standard(root, service, focus: focus);
+            provider.UseReplayHeaders(path => Header(path, played));
+
+            Assert.Equal(downloads, await provider.DownloadNextAsync());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task DownloadNextAsync_LogsTheWaitingCountAndTheFreshCountAgainstTheLimit()
     {
@@ -525,7 +561,8 @@ public class HeroesProfileProviderDownloadTests
     private static HeroesProfileProvider Standard(
         string root,
         IHeroesProfileService service,
-        ILogger<HeroesProfileProvider> logger = null
+        ILogger<HeroesProfileProvider> logger = null,
+        bool focus = false
     )
     {
         HeroesProfileProvider provider = Provider(
@@ -534,7 +571,8 @@ public class HeroesProfileProviderDownloadTests
             resume: null,
             CancellationToken.None,
             enableRequests: false,
-            logger: logger
+            logger: logger,
+            focus: focus
         );
         provider.UseInstalledVersions(() => new[] { Previous, Current });
         return provider;
@@ -598,11 +636,13 @@ public class HeroesProfileProviderDownloadTests
         CancellationToken token,
         bool enableRequests = true,
         TimeSpan? maxReplayAge = null,
-        ILogger<HeroesProfileProvider> logger = null
+        ILogger<HeroesProfileProvider> logger = null,
+        bool focus = false
     )
     {
         var settings = new AppSettings
         {
+            Focus = new HeroFocusSettings { Enabled = focus, ExtraCandidates = 5 },
             Location = new LocationSettings { DataDirectory = root },
             HeroesProfileApi = new HeroesProfileApiSettings
             {

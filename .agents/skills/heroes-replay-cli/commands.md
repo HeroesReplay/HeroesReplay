@@ -90,9 +90,9 @@ Read one .StormReplay and print, for each player, the talents picked (English na
 
 Read every .StormReplay in a folder, one at a time, into focus cards (each player's catalog hero, role, score screen, awards, closest guide build and team comps), build the hero baselines from them, and rank every player as a focus: the gates that rule a player out, then quality × (0.5 + novelty) with each part. Heroes Profile is not called, so every player's record counts as unknown. Reads the heroes-data2 catalog under Location:DataDirectory, the shipped talent-build reference and hero signatures, and --ledger when given. Read-only.
 
-- **Options:** `--directory` (`-d`, required), `--recursive`, `--ledger`, `--top`, `--simulate`, `--any-mode`
-- **Before:** A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, the shipped talent-build reference and hero signatures, and `--ledger` when given. Calls nothing on the network.
-- **Changes:** Prints the gates that ruled players out, the best focus candidates with each part of their score, and with `--simulate` a run of focus picks. Read-only; never writes the ledger.
+- **Options:** `--directory` (`-d`, required), `--recursive`, `--ledger`, `--top`, `--simulate`, `--any-mode`, `--fetch`
+- **Before:** A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, the shipped talent-build reference and hero signatures, and `--ledger` when given. Calls Heroes Profile only with `--fetch` (then `HeroesProfileApi:ApiKey`).
+- **Changes:** Prints the gates that ruled players out, the best focus candidates with each part of their score, and with `--simulate` a run of focus picks. Never writes the ledger. `--fetch N` makes up to N `players/heroes` calls and fills the cache under `Data\HeroesProfile\players`, counting against the weekly budget.
 - **Exit:** 0 when at least one replay was read. 1 for a missing folder or ledger, or no replays in it. 2 when no replay parsed.
 
 ## `focus coverage`
