@@ -39,8 +39,32 @@ public class SpectateSettings
     public TimeSpan StatsPanelCooldown { get; set; }
     public TimeSpan WaitingTime { get; set; }
 
+    /// <summary>
+    /// The shortest lead-in: the camera follows a hero for at least this long before it dies (#431).
+    /// </summary>
     public TimeSpan PastDeathContextTime { get; set; }
+
+    /// <summary>
+    /// The longest lead-in, for the deaths that matter most: a respawn timer of
+    /// <see cref="DeathContextFullRespawn"/>, or an objective, boss, town hall, core, or big fight
+    /// while the hero is dead (#431). Other deaths scale between this and
+    /// <see cref="PastDeathContextTime"/>.
+    /// </summary>
+    public TimeSpan MaxPastDeathContextTime { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// A respawn timer this long or longer gets the longest lead-in; a shorter one gets its share
+    /// of it (#431). Death timers grow with the match, so late deaths get the longer stories.
+    /// </summary>
+    public TimeSpan DeathContextFullRespawn { get; set; } = TimeSpan.FromSeconds(60);
+
     public TimeSpan PresentDeathContextTime { get; set; }
+
+    /// <summary>
+    /// The camera stays on the hero it shows when the hero that wins the next second is within
+    /// this many map units of it, since both are in the same view (#432). Zero turns it off.
+    /// </summary>
+    public double FocusShareDistance { get; set; } = 5;
     public TimeSpan KillStreakWindow { get; set; }
     public TimeSpan KillStreakHoldTime { get; set; }
 

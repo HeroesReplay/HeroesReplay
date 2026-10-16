@@ -229,8 +229,9 @@ public class ReplayAnalyzer : IReplayAnalyzer
             calculator.Contribute(timeline);
         }
 
-        timeline.ApplyDeathContext(settings.Spectate);
+        timeline.ApplyDeathContext(settings.Spectate, settings.Weights);
         timeline.HoldSelectionAcrossEmptySeconds();
+        timeline.KeepNearbySelection(settings.Spectate?.FocusShareDistance ?? 0);
         if (priorityPlayerIndex is int index && settings.Spectate != null)
         {
             timeline.ApplyPlayerPriority(index);
