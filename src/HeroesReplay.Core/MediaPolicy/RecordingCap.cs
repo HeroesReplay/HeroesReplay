@@ -122,11 +122,14 @@ public readonly record struct RecordingCapDecision(
 /// <see cref="ReplayMediaPolicySettings.OrdinaryCandidateMaxAge"/>, after which the uploader
 /// deletes it as stale), and while the waiting recordings stay under one day of upload calls.
 /// Uploads that only wait for their publish time need no disk and no upload; they count only
-/// because they fill the window. A viewer request is always recorded.
+/// because they fill the window. A viewer request is always recorded. A focus-hero replay
+/// (#433) is recorded while the waiting recordings stay under one day of upload calls: the
+/// uploader sends it right after the requests, so no queue builds behind it.
 /// </summary>
 public static class RecordingCap
 {
     public const string Requested = "cap-requested";
+    public const string Focus = "cap-focus";
     public const string Off = "cap-off";
     public const string NotLive = "cap-not-live";
     public const string Room = "cap-room";
@@ -170,6 +173,13 @@ public static class RecordingCap
         if (pending >= uploads)
         {
             return new RecordingCapDecision(false, UploadBacklog, pending, ahead, uploads);
+        }
+
+        // A focus-hero replay (#433) is sent before every waiting recording but a request's, so
+        // it takes the next free slot whatever waits behind it.
+        if (input.Priority == ReplayMediaPriority.Focus)
+        {
+            return new RecordingCapDecision(true, Focus, pending, ahead, uploads);
         }
 
         if (!input.PublicListing)
