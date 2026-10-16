@@ -392,6 +392,15 @@ Find the first Heroes Profile replay id on the same patch line as the latest rep
 - **Changes:** Nothing, unless `--write`: then it stores `MinReplayId` in `appsettings.json`.
 - **Exit:** 0 when it finishes, 1 when the latest replay's version or (with `--write`) `appsettings.json` or its `MinReplayId` cannot be found.
 
+## `heroesprofile player-hero`
+
+Look up one player's Storm League record on one hero (wins, games, win rate, KDA, hero MMR and tier) from Heroes Profile players/heroes, the lookup behind focus-hero picks. Uses and fills the cache under Data\HeroesProfile\players and counts against HeroesProfileApi:PlayerStats:WeeklyCallBudget. A private profile, a missing player and an unknown hero are answers too.
+
+- **Options:** `--battletag` (required), `--region` (required), `--hero` (required), `--attribute`, `--fresh`
+- **Before:** `HeroesProfileApi:ApiKey` (the v1 key). Network access to Heroes Profile.
+- **Changes:** Calls `players/heroes` at most once (none when the cache under `Data\HeroesProfile\players` is fresh) and writes the answer there; counts against `HeroesProfileApi:PlayerStats:WeeklyCallBudget`. `--fresh` deletes that player's cached file first.
+- **Exit:** 0 when Heroes Profile answered: a record, no games on the hero, a private profile, or no such player. 1 for a bad BattleTag or region, an unanswered lookup (422, a failed job, a network error), a refused key, or a spent budget.
+
 ## `heroesprofile sample`
 
 Download the newest Heroes Profile replays of one map into a folder for calculators units and calculators report. Never into the spectate queue.

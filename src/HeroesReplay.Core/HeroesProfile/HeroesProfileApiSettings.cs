@@ -59,6 +59,9 @@ public class HeroesProfileApiSettings
     /// <summary>The per-patch hero statistics behind YouTube title hooks.</summary>
     public HeroStatsSettings HeroStats { get; set; } = new HeroStatsSettings();
 
+    /// <summary>The player lookups behind focus-hero picks (#433).</summary>
+    public PlayerStatsSettings PlayerStats { get; set; } = new PlayerStatsSettings();
+
     public bool MatchesReplayUrl(Uri url)
     {
         if (url == null)

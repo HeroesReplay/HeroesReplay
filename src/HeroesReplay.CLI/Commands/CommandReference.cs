@@ -127,6 +127,12 @@ public static class CommandReference
             "0 when the replay parsed. 1 for a missing file or a replay that does not parse."
         ),
         new(
+            "heroesprofile player-hero",
+            "`HeroesProfileApi:ApiKey` (the v1 key). Network access to Heroes Profile.",
+            "Calls `players/heroes` at most once (none when the cache under `Data\\HeroesProfile\\players` is fresh) and writes the answer there; counts against `HeroesProfileApi:PlayerStats:WeeklyCallBudget`. `--fresh` deletes that player's cached file first.",
+            "0 when Heroes Profile answered: a record, no games on the hero, a private profile, or no such player. 1 for a bad BattleTag or region, an unanswered lookup (422, a failed job, a network error), a refused key, or a spent budget."
+        ),
+        new(
             "focus candidates",
             "A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, the shipped talent-build reference and hero signatures, and `--ledger` when given. Calls nothing on the network.",
             "Prints the gates that ruled players out, the best focus candidates with each part of their score, and with `--simulate` a run of focus picks. Read-only; never writes the ledger.",
