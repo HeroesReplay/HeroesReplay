@@ -40,6 +40,10 @@ public sealed record FocusCandidate
     public string Role { get; init; }
     public string Build { get; init; }
     public double? BuildScore { get; init; }
+
+    /// <summary>The build is a clear guide match (<see cref="FocusScorer.BuildClarity"/> 1), so it may be named.</summary>
+    public bool BuildClear { get; init; }
+
     public string Map { get; init; }
     public string Rank { get; init; }
     public string League { get; init; }
@@ -74,6 +78,7 @@ public sealed record FocusCandidate
             Role = Role,
             Build = Build,
             BuildScore = BuildScore,
+            BuildClear = BuildClear,
             Map = Map,
             League = League,
             Rank = Rank,
@@ -81,7 +86,9 @@ public sealed record FocusCandidate
             GameVersion = GameVersion,
             AllyComp = AllyComp,
             EnemyComp = EnemyComp,
-            Strength = Strength,
+            // Only whether the record was known: the ledger outlives the player records the
+            // privacy feed purges, so it keeps none of Heroes Profile's numbers.
+            Strength = Strength == null ? null : new FocusStrength { Status = Strength.Status },
             Quality = Quality,
             Novelty = Novelty,
             Score = Score,

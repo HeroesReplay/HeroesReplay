@@ -9,6 +9,7 @@ using HeroesReplay.Core.Spectating.Capture;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
 using HeroesReplay.Core.Telemetry;
+using HeroesReplay.Core.Twitch.ChatMessages;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Client.Interfaces;
 
@@ -84,6 +85,7 @@ public sealed class StatusPredictionWatcher
         }
 
         var tracker = new PredictionSessionTracker();
+        var heroFocus = new HeroFocusChat();
         if (enabled)
         {
             try
@@ -139,6 +141,7 @@ public sealed class StatusPredictionWatcher
                 }
             }
 
+            AnnounceHeroFocus(heroFocus);
             if (reconciled)
             {
                 ServiceHeartbeat.RecordWork();
@@ -338,6 +341,34 @@ public sealed class StatusPredictionWatcher
                 return PredictionSessionFault.VersionMismatch;
             default:
                 return PredictionSessionFault.None;
+        }
+    }
+
+    /// <summary>
+    /// The focus replay's chat line (#433), whether or not predictions run. A failed send is not
+    /// retried: the line is a courtesy, not a record.
+    /// </summary>
+    internal void AnnounceHeroFocus(HeroFocusChat chat)
+    {
+        if (!settings.Twitch.EnableChatBot || string.IsNullOrWhiteSpace(settings.Twitch.Channel))
+        {
+            return;
+        }
+
+        try
+        {
+            string line = chat.Next(statusStore.TryReadShared());
+            if (line == null)
+            {
+                return;
+            }
+
+            twitchClient.SendMessage(settings.Twitch.Channel, line, settings.Twitch.DryRunMode);
+            logger.LogInformation("Announced the hero focus in chat: {Line}", line);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not announce the hero focus in chat.");
         }
     }
 

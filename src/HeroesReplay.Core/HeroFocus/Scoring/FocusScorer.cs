@@ -119,6 +119,7 @@ public sealed class FocusScorer
             Role = player.Role,
             Build = build,
             BuildScore = player.Build?.Score,
+            BuildClear = BuildClarity(player.Build) >= 1,
             Map = card.Map,
             Rank = card.Rank,
             League = YouTubePlaylistNames.League(card.Rank),

@@ -84,7 +84,17 @@ public static class YouTubeEntryBuilder
             Title = YouTubeListing.ApplyMarker(metadata.Title, youtube?.TitlePrefix),
             PrivacyStatus = youtube?.PrivacyStatus ?? "public",
             Requested = facts.ViewerRequested,
-            Hero = facts.FocusHero,
+            // The featured hero spaces repeats: a request's hero, else the focus pick's (#433).
+            Hero = facts.FocusHero ?? facts.HeroFocus?.Hero,
+            HeroFocus =
+                facts.HeroFocus == null
+                    ? null
+                    : new YouTubeHeroFocus
+                    {
+                        Hero = facts.HeroFocus.Hero,
+                        Role = facts.HeroFocus.Role,
+                        Build = facts.HeroFocus.Build,
+                    },
             Heroes = HeroNames(facts.Roster),
             RecordedAtUtc = ToUtc(facts.GameDateUtc),
             CategoryId = metadata.CategoryId,

@@ -604,6 +604,7 @@ public class GameManager : IGameManager
         status.Outcome = null;
         status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(loadedReplay);
         status.RatingPrediction = RatingPrediction.Applies(loadedReplay);
+        status.HeroFocus = SpectatorHeroFocusStatus.From(loadedReplay);
         status.GatesOpen = current?.GatesOpen.ToString();
         status.CoreKilled = current?.CoreKilled.ToString();
     }

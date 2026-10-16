@@ -344,12 +344,7 @@ public class Spectator : ISpectator
                         recordingClock.Observe(Timer);
 
                         LoadedReplay focused = context.Current?.LoadedReplay;
-                        if (
-                            PlayerPriorityRequest.PlayerIndex(
-                                focused?.Replay,
-                                focused?.RewardQueueItem?.Request
-                            ) is int
-                        )
+                        if (ReplayFocus.PlayerIndex(focused) is int)
                         {
                             controller.ShowSelectedUnit();
                         }
@@ -755,6 +750,7 @@ public class Spectator : ISpectator
                 data?.LoadedReplay
             );
             status.RatingPrediction = RatingPrediction.Applies(data?.LoadedReplay);
+            status.HeroFocus = SpectatorHeroFocusStatus.From(data?.LoadedReplay);
         });
     }
 
@@ -809,6 +805,7 @@ public class Spectator : ISpectator
             status.ReplayId = Data.LoadedReplay.ReplayId ?? status.ReplayId;
             status.SuppressPredictions = ReplayRequestKind.ViewerEnteredReplayId(Data.LoadedReplay);
             status.RatingPrediction = RatingPrediction.Applies(Data.LoadedReplay);
+            status.HeroFocus = SpectatorHeroFocusStatus.From(Data.LoadedReplay);
         });
     }
 }
