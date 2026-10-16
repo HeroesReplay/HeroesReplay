@@ -53,6 +53,7 @@ public static class YouTubeEntryBuilder
             NotableEvents = facts.NotableEvents,
             HeroFocus = facts.HeroFocus,
             HeroFocusKda = facts.HeroFocus == null ? null : Kda(loaded),
+            HeroFocusPlayer = facts.HeroFocus == null ? null : loaded?.FocusPick?.Player,
             IsCompleteRecording = isCompleteRecording,
             HeroStats = heroStats,
             Insights = insights,

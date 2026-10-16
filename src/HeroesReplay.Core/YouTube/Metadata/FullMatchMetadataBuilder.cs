@@ -55,6 +55,12 @@ public sealed record FullMatchMetadataInput
     /// <summary>The focus player's kills, deaths and assists (<c>12/0/9</c>), or null.</summary>
     public string HeroFocusKda { get; init; }
 
+    /// <summary>
+    /// The focus player's <c>Name#1234</c>, only so the roster can leave their name out. Never
+    /// written anywhere.
+    /// </summary>
+    public string HeroFocusPlayer { get; init; }
+
     /// <summary>Caller sets this only after completion and media validation. It is not inferred.</summary>
     public bool IsCompleteRecording { get; init; }
     public string Winner { get; init; }
@@ -281,7 +287,7 @@ public static class FullMatchMetadataBuilder
         AddLine(lines, requestor == null ? null : "Requested by: " + requestor);
         string resultLine = winner == null ? null : "Result: " + winner;
         AddLine(lines, resultLine);
-        AddRoster(lines, input.Roster);
+        AddRoster(lines, input.Roster, heroFocus == null ? null : input.HeroFocusPlayer);
         if (highlights != null)
         {
             lines.AddRange(HighlightLines.TalentBuilds(highlights));
@@ -543,16 +549,25 @@ public static class FullMatchMetadataBuilder
         return "Highlights: " + string.Join("; ", parts);
     }
 
-    private static void AddRoster(List<string> lines, IReadOnlyList<ReplayMediaPlayer> roster)
+    /// <summary>
+    /// Each team's heroes with their players' names. A focus video (#433) names its focused hero
+    /// without the player: the video never says who it follows.
+    /// </summary>
+    private static void AddRoster(
+        List<string> lines,
+        IReadOnlyList<ReplayMediaPlayer> roster,
+        string unnamed
+    )
     {
-        AddLine(lines, RosterLine("Blue", roster, 0));
-        AddLine(lines, RosterLine("Red", roster, 1));
+        AddLine(lines, RosterLine("Blue", roster, 0, unnamed));
+        AddLine(lines, RosterLine("Red", roster, 1, unnamed));
     }
 
     private static string RosterLine(
         string teamName,
         IReadOnlyList<ReplayMediaPlayer> roster,
-        int team
+        int team,
+        string unnamed
     )
     {
         if (roster == null)
@@ -568,7 +583,9 @@ public static class FullMatchMetadataBuilder
                 continue;
             }
 
-            string described = Describe(player);
+            string described = IsPlayer(player, unnamed)
+                ? Clean(player.Hero, 40)
+                : Describe(player);
             if (!string.IsNullOrWhiteSpace(described))
             {
                 parts.Add(described);
@@ -582,6 +599,17 @@ public static class FullMatchMetadataBuilder
 
         return teamName + ": " + string.Join(", ", parts);
     }
+
+    /// <summary>The roster player is <paramref name="battleTag"/> (<c>Name#1234</c>).</summary>
+    private static bool IsPlayer(ReplayMediaPlayer player, string battleTag) =>
+        !string.IsNullOrWhiteSpace(battleTag)
+        && !player.IsAi
+        && !string.IsNullOrWhiteSpace(player.Name)
+        && string.Equals(
+            player.Name.Trim() + "#" + player.BattleTag,
+            battleTag.Trim(),
+            StringComparison.OrdinalIgnoreCase
+        );
 
     private static string Describe(ReplayMediaPlayer player)
     {
