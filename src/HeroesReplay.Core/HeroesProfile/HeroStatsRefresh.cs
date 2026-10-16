@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.HeroesProfile.Client;
@@ -22,46 +20,47 @@ namespace HeroesReplay.Core.HeroesProfile;
 /// </summary>
 public sealed class HeroStatsRefresh
 {
-    /// <summary>The wait between job polls when a 202 has no <c>Retry-After</c>.</summary>
-    public static readonly TimeSpan DefaultPollDelay = TimeSpan.FromSeconds(10);
+    /// <summary>The pacer lane of the <c>group_by_map</c> calls, which the API allows once a minute.</summary>
+    public const string GroupByMapLane = "group_by_map";
 
-    public static readonly TimeSpan DefaultRateLimitDelay = TimeSpan.FromSeconds(60);
-
-    public static readonly TimeSpan TransientDelay = TimeSpan.FromSeconds(30);
-
-    public const int MaxRateLimited = 5;
-
-    public const int MaxTransient = 3;
-
-    private readonly IHeroStatsApi api;
     private readonly HeroStatsStore store;
     private readonly HeroStatsSettings settings;
     private readonly ILogger<HeroStatsRefresh> logger;
     private readonly Func<DateTimeOffset> clock;
     private readonly Func<TimeSpan, CancellationToken, Task> delay;
+    private readonly HeroesProfileCaller caller;
     private readonly Dictionary<string, DateTimeOffset> rejectedUntil = new Dictionary<
         string,
         DateTimeOffset
     >(StringComparer.Ordinal);
 
-    private DateTimeOffset? lastRequest;
-    private DateTimeOffset? lastGroupByMap;
-
+    /// <summary>
+    /// <paramref name="pacer"/> is the process's shared Heroes Profile pace; without one the
+    /// refresh paces itself at <c>RequestSpacing</c>.
+    /// </summary>
     public HeroStatsRefresh(
         IHeroStatsApi api,
         HeroStatsStore store,
         HeroStatsSettings settings,
         ILogger<HeroStatsRefresh> logger,
         Func<DateTimeOffset> clock = null,
-        Func<TimeSpan, CancellationToken, Task> delay = null
+        Func<TimeSpan, CancellationToken, Task> delay = null,
+        HeroesProfilePacer pacer = null
     )
     {
-        this.api = api ?? throw new ArgumentNullException(nameof(api));
+        ArgumentNullException.ThrowIfNull(api);
         this.store = store ?? throw new ArgumentNullException(nameof(store));
         this.settings = settings ?? new HeroStatsSettings();
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.clock = clock ?? (() => DateTimeOffset.UtcNow);
         this.delay = delay ?? ((wait, token) => Task.Delay(wait, token));
+        caller = new HeroesProfileCaller(
+            api,
+            pacer ?? new HeroesProfilePacer(this.settings.RequestSpacing, this.clock, this.delay),
+            logger,
+            this.clock,
+            this.delay
+        );
     }
 
     /// <summary>True after a 401 or 403. Nothing more is fetched by this instance.</summary>
@@ -335,6 +334,10 @@ public sealed class HeroStatsRefresh
             .Where(code => code != null)
             .Distinct(StringComparer.Ordinal);
 
+    /// <summary>
+    /// One call through the shared caller: paced, its 202 collected, its 429 and 5xx retried. A
+    /// <c>group_by_map</c> call also keeps <c>GroupByMapSpacing</c> from the last one.
+    /// </summary>
     private async Task<string> FetchAsync(
         string path,
         IReadOnlyList<KeyValuePair<string, string>> query,
@@ -342,199 +345,21 @@ public sealed class HeroStatsRefresh
         CancellationToken cancellationToken
     )
     {
-        int limited = 0;
-        int transient = 0;
-        while (true)
-        {
-            await PaceAsync(groupByMap, cancellationToken).ConfigureAwait(false);
-            HeroesProfileGlobalAnswer answer;
-            try
-            {
-                answer = await api.GetAsync(path, query, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception e) when (IsTransient(e, cancellationToken))
-            {
-                await TransientAsync(path, ++transient, e, cancellationToken).ConfigureAwait(false);
-                continue;
-            }
-
-            if (answer.StatusCode == 200)
-            {
-                return answer.Body;
-            }
-
-            if (answer.StatusCode == 202)
-            {
-                return await CollectAsync(path, answer, cancellationToken).ConfigureAwait(false);
-            }
-
-            if (answer.StatusCode == 429)
-            {
-                if (++limited > MaxRateLimited)
-                {
-                    throw Failed(path, answer);
-                }
-
-                await delay(answer.RetryAfter ?? DefaultRateLimitDelay, cancellationToken)
-                    .ConfigureAwait(false);
-                continue;
-            }
-
-            if (answer.StatusCode >= 500)
-            {
-                await TransientAsync(path, ++transient, Failed(path, answer), cancellationToken)
-                    .ConfigureAwait(false);
-                continue;
-            }
-
-            throw Failed(path, answer);
-        }
+        HeroesProfileGlobalAnswer answer = await caller
+            .GetAsync(
+                path,
+                query,
+                settings.JobTimeout,
+                cancellationToken,
+                groupByMap ? GroupByMapLane : null,
+                settings.GroupByMapSpacing
+            )
+            .ConfigureAwait(false);
+        return answer.StatusCode == 200
+            ? answer.Body
+            : throw HeroesProfileCaller.Failed(path, answer);
     }
-
-    /// <summary>Polls the job a 202 named until it answers 200, fails, or runs past <c>JobTimeout</c>.</summary>
-    private async Task<string> CollectAsync(
-        string path,
-        HeroesProfileGlobalAnswer accepted,
-        CancellationToken cancellationToken
-    )
-    {
-        if (accepted.JobId == null)
-        {
-            throw new HeroStatsException(
-                HeroStatsFailure.Unavailable,
-                $"Heroes Profile accepted {path} without a job id.",
-                accepted.StatusCode
-            );
-        }
-
-        DateTimeOffset deadline = clock() + Positive(settings.JobTimeout, TimeSpan.FromMinutes(15));
-        TimeSpan wait = accepted.RetryAfter ?? DefaultPollDelay;
-        int transient = 0;
-        while (true)
-        {
-            await delay(wait, cancellationToken).ConfigureAwait(false);
-            if (clock() > deadline)
-            {
-                throw new HeroStatsException(
-                    HeroStatsFailure.Unavailable,
-                    $"Heroes Profile job {accepted.JobId} for {path} did not finish within {settings.JobTimeout}."
-                );
-            }
-
-            await PaceAsync(groupByMap: false, cancellationToken).ConfigureAwait(false);
-            HeroesProfileGlobalAnswer answer;
-            try
-            {
-                answer = await api.GetJobAsync(accepted.JobId, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (Exception e) when (IsTransient(e, cancellationToken))
-            {
-                if (++transient > MaxTransient)
-                {
-                    throw new HeroStatsException(
-                        HeroStatsFailure.Unavailable,
-                        $"Could not poll Heroes Profile job {accepted.JobId} for {path}.",
-                        inner: e
-                    );
-                }
-
-                wait = TransientDelay;
-                continue;
-            }
-
-            switch (answer.StatusCode)
-            {
-                case 200:
-                    return answer.Body;
-                case 202:
-                    wait = answer.RetryAfter ?? DefaultPollDelay;
-                    continue;
-                case 429:
-                    wait = answer.RetryAfter ?? DefaultRateLimitDelay;
-                    continue;
-                default:
-                    throw Failed("jobs/" + accepted.JobId + " (" + path + ")", answer);
-            }
-        }
-    }
-
-    /// <summary>Waits until the next request keeps under the per-minute and <c>group_by_map</c> limits.</summary>
-    private async Task PaceAsync(bool groupByMap, CancellationToken cancellationToken)
-    {
-        DateTimeOffset now = clock();
-        TimeSpan wait = TimeSpan.Zero;
-        if (lastRequest is DateTimeOffset last)
-        {
-            wait = Max(wait, last + settings.RequestSpacing - now);
-        }
-
-        if (groupByMap && lastGroupByMap is DateTimeOffset lastBatch)
-        {
-            wait = Max(wait, lastBatch + settings.GroupByMapSpacing - now);
-        }
-
-        if (wait > TimeSpan.Zero)
-        {
-            await delay(wait, cancellationToken).ConfigureAwait(false);
-        }
-
-        lastRequest = clock();
-        if (groupByMap)
-        {
-            lastGroupByMap = lastRequest;
-        }
-    }
-
-    private async Task TransientAsync(
-        string path,
-        int attempt,
-        Exception failure,
-        CancellationToken cancellationToken
-    )
-    {
-        if (attempt > MaxTransient)
-        {
-            throw failure as HeroStatsException
-                ?? new HeroStatsException(
-                    HeroStatsFailure.Unavailable,
-                    $"Could not reach Heroes Profile for {path}.",
-                    inner: failure
-                );
-        }
-
-        logger.LogInformation(
-            "Heroes Profile {Path} failed ({Reason}); trying again in {Delay}.",
-            path,
-            failure.Message,
-            TransientDelay
-        );
-        await delay(TransientDelay, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static HeroStatsException Failed(string path, HeroesProfileGlobalAnswer answer)
-    {
-        HeroStatsFailure failure = answer.StatusCode switch
-        {
-            401 or 403 => HeroStatsFailure.AccessDenied,
-            422 => HeroStatsFailure.Rejected,
-            _ => HeroStatsFailure.Unavailable,
-        };
-        return new HeroStatsException(
-            failure,
-            $"Heroes Profile {path} answered {answer.StatusCode} {answer.ErrorCode}".TrimEnd()
-                + ".",
-            answer.StatusCode,
-            answer.ErrorCode
-        );
-    }
-
-    private static bool IsTransient(Exception e, CancellationToken cancellationToken) =>
-        e is HttpRequestException or IOException
-        || (e is OperationCanceledException && !cancellationToken.IsCancellationRequested);
 
     private static TimeSpan Positive(TimeSpan value, TimeSpan fallback) =>
         value > TimeSpan.Zero ? value : fallback;
-
-    private static TimeSpan Max(TimeSpan a, TimeSpan b) => a > b ? a : b;
 }

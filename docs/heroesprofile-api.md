@@ -35,6 +35,8 @@ Hand-written partials of `HeroesProfileClient` sit next to `Generated/` and use 
 | Hero statistics: one hero against and with each other | `GET /heroes/matchups?timeframe_type=major&timeframe=2.57&game_type=sl&hero=Valla` (`enemy[]` and `ally[]`, each with `hero.attribute_id`, `wins`, `games_played`) |
 | A job's result | `GET /jobs/{id}` (202 still running, 200 the result) |
 | Map list (Storm League pool check, #425) | `GET /maps` (`name`, `type`, `ranked_rotation`, `playable`) |
+| A player's record on a hero (focus picks, #433) | `GET /players/heroes?battletag=Name%231234&region=2&game_type=sl&hero=Kael'thas` (an array with the hero's row: `wins`, `losses`, `games_played`, `kda`, `sl_mmr_data`, `sl_rank_tier`, `hero.attribute_id`) |
+| Players who went private (#433) | `GET /players/privacy/changes?since=…&after_id=…&limit=1000` (`changes[]` with `battletag`, `region`, `state`; `next_since`, `next_after_id`, `has_more`) |
 
 `region` is an integer (1 NA, 2 EU, 3 KR, 5 CN). List rows have `downloadable`. Skip when `downloadable` is false or `deleted` is non-zero.
 
@@ -62,6 +64,18 @@ The download is `HeroesProfileClient.DownloadReplayAsync`, a hand-written partia
 - 429 waits for `Retry-After` (60 s without one), at most 5 times. Its `HttpClient` (`heroes-profile-stats`) has no retry handler, unlike the replay calls above, so the refresh decides each wait itself. 401 or 403 (`endpoint_not_in_plan`, a bad key) stops the refresh until the download role restarts, with one warning. 422 (`timeframe_unavailable` early in a patch) skips that patch and game type until the next refresh is due. A 5xx or a network error is retried 3 times, 30 s apart. A hero whose matchups fail is saved without them.
 - `enemy[].win_rate` in matchups is the queried hero's loss rate against that enemy (its `hovertext` says "Lost against a team with X"). Every rate is computed from `wins` and `games_played`, never read from `win_rate`.
 - Heroes Profile's terms (section 4) require "Data provided by Heroes Profile" and a visible link to https://www.heroesprofile.com/ on the same screen as the data. The description's second line carries it whenever a hook is used.
+
+All of these calls, and the player lookups below, go through one `HeroesProfileCaller` and one `HeroesProfilePacer` per process (#433), so together they keep the 60 a minute.
+
+### Player records (focus-hero picks)
+
+`PlayerHeroStatsFetch` (download role, and `heroesprofile player-hero`) asks for one player's Storm League record on one hero, for the focus picker's strength gate (#433: at least 20 games and 55% won). Measured on 2026-10-16 with our key (`Risllot#2619`, EU, Kael'thas: 27 wins of 54 games, KDA 6.12, MMR 2300, Silver 1):
+
+- `players/heroes` allows 50,000 calls a week and 60 a minute; `players/privacy/changes` 10,080 a week. A cold `players/heroes` answers 202 with `Retry-After` 10 s and a job, collected from `/jobs/{id}` like a global call; the same query answered 200 at once afterwards. `players/heroes/single` returns the same record with every game type's MMR, about ten times the bytes, so it is not used.
+- Errors carry `error.code`: 403 `player_unavailable` is a private profile, 404 `player_not_found` no such player, 422 `unknown_hero`, `unknown_region` or `unknown_game_type` a bad parameter. Each is kept for `HeroesProfileApi:PlayerStats:UnknownRetryAfter` (1 day). Any other 401 or 403 is the key or plan: lookups stop until a restart, with one warning.
+- Answers are kept under `Data\HeroesProfile\players`, one file per player (region and a hash of the BattleTag): a record for `MaxAge` (7 days). Every call counts toward `WeeklyCallBudget` (15,000) in `calls.json`; past it, a record is unknown and the focus picker treats it so.
+- Heroes Profile's terms require a cache of player data to read the privacy feed at least daily and drop whoever went private. `PlayerPrivacySync` reads it every `PrivacyInterval` (12 h) from the cursor in `privacy.json` (`since`, `after_id`; the first read only sets it, since nothing was cached before) and deletes each private player's file. On 2026-10-16 one day of changes was more than one page, so it follows `has_more` for up to 20 pages of 1,000 a pass.
+- Focus videos never show a player's name or record, so this data needs no attribution line on YouTube.
 
 Auth is `Authorization: Bearer` ([Migrating](https://www.heroesprofile.com/Api/Migrating)). The v1 key is `op://Heroes Replay/Heroes Profile API Key/password` (skill `op-service-account`). The old `api.heroesprofile.com` `api_token` key is not accepted.
 

@@ -649,29 +649,87 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddHeroStatsRefresh(this IServiceCollection services)
     {
-        services.AddHttpClient(
-            HeroStatsApi.HttpClientName,
-            client => client.Timeout = HeroesProfileHttp.AttemptTimeout
-        );
+        services.AddHeroStatsApi();
         return services.AddSingleton(sp =>
         {
             AppSettings settings = sp.GetRequiredService<AppSettings>();
             HeroesProfileApiSettings api = settings.HeroesProfileApi;
-            HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
-                .CreateClient(HeroStatsApi.HttpClientName);
-            HeroesProfileClient client = HeroesProfileClientFactory.Create(
-                api?.ApiKey,
-                httpClient,
-                api?.ExternalV1BaseUri
-            );
             return new HeroStatsRefresh(
-                new HeroStatsApi(client),
+                sp.GetRequiredService<HeroStatsApi>(),
                 new HeroStatsStore(settings.Location.DataDirectory),
                 api?.HeroStats ?? new HeroStatsSettings(),
-                sp.GetRequiredService<ILogger<HeroStatsRefresh>>()
+                sp.GetRequiredService<ILogger<HeroStatsRefresh>>(),
+                pacer: sp.GetRequiredService<HeroesProfilePacer>()
             );
         });
     }
+
+    /// <summary>
+    /// The player lookups behind focus-hero picks (#433): a player's Storm League record on a hero
+    /// (<c>players/heroes</c>) and the privacy feed that purges players who went private. They
+    /// share the statistics calls' client and pacer, so all of them keep one per-minute limit.
+    /// </summary>
+    public static IServiceCollection AddPlayerHeroStats(this IServiceCollection services)
+    {
+        services.AddHeroStatsApi();
+        services.TryAddSingleton(sp => new PlayerHeroStatsStore(
+            PlayerHeroStatsStore.FolderFor(
+                sp.GetRequiredService<AppSettings>().Location.DataDirectory
+            )
+        ));
+        services.TryAddSingleton(sp => new PlayerHeroStatsFetch(
+            HeroesProfileCallerFor(sp),
+            sp.GetRequiredService<PlayerHeroStatsStore>(),
+            PlayerStatsFor(sp),
+            sp.GetRequiredService<ILogger<PlayerHeroStatsFetch>>()
+        ));
+        services.TryAddSingleton(sp => new PlayerPrivacySync(
+            HeroesProfileCallerFor(sp),
+            sp.GetRequiredService<PlayerHeroStatsStore>(),
+            PlayerStatsFor(sp),
+            sp.GetRequiredService<ILogger<PlayerPrivacySync>>()
+        ));
+        return services;
+    }
+
+    /// <summary>
+    /// The statistics calls' Heroes Profile client, without a retry handler (the callers read 202,
+    /// 429 and <c>Retry-After</c> themselves), and the process's one Heroes Profile pacer.
+    /// </summary>
+    private static IServiceCollection AddHeroStatsApi(this IServiceCollection services)
+    {
+        services.AddHttpClient(
+            HeroStatsApi.HttpClientName,
+            client => client.Timeout = HeroesProfileHttp.AttemptTimeout
+        );
+        services.TryAddSingleton(sp => new HeroesProfilePacer(
+            (
+                sp.GetRequiredService<AppSettings>().HeroesProfileApi?.HeroStats
+                ?? new HeroStatsSettings()
+            ).RequestSpacing
+        ));
+        services.TryAddSingleton(sp =>
+        {
+            HeroesProfileApiSettings api = sp.GetRequiredService<AppSettings>().HeroesProfileApi;
+            HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
+                .CreateClient(HeroStatsApi.HttpClientName);
+            return new HeroStatsApi(
+                HeroesProfileClientFactory.Create(api?.ApiKey, httpClient, api?.ExternalV1BaseUri)
+            );
+        });
+        return services;
+    }
+
+    private static HeroesProfileCaller HeroesProfileCallerFor(IServiceProvider sp) =>
+        new(
+            sp.GetRequiredService<HeroStatsApi>(),
+            sp.GetRequiredService<HeroesProfilePacer>(),
+            sp.GetRequiredService<ILogger<HeroesProfileCaller>>()
+        );
+
+    private static PlayerStatsSettings PlayerStatsFor(IServiceProvider sp) =>
+        sp.GetRequiredService<AppSettings>().HeroesProfileApi?.PlayerStats
+        ?? new PlayerStatsSettings();
 
     /// <summary>
     /// Heroes Profile's <c>/maps</c> behind the Storm League reward pool (#425). It uses the hero

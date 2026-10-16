@@ -126,8 +126,29 @@ public partial class HeroesProfileClient
             (int)response.StatusCode,
             body,
             RetryAfter(response),
-            headerJob
+            headerJob,
+            HeaderNumber(response, "x-hp-quota-remaining"),
+            HeaderNumber(response, "x-ratelimit-remaining")
         );
+    }
+
+    /// <summary>A numeric response header, or null when it is missing or not a number.</summary>
+    private static long? HeaderNumber(HttpResponseMessage response, string name)
+    {
+        if (!response.Headers.TryGetValues(name, out IEnumerable<string> values))
+        {
+            return null;
+        }
+
+        foreach (string value in values)
+        {
+            if (long.TryParse(value, out long number))
+            {
+                return number;
+            }
+        }
+
+        return null;
     }
 
     private static TimeSpan? RetryAfter(HttpResponseMessage response)
@@ -163,11 +184,19 @@ public sealed class HeroesProfileGlobalAnswer
     /// <summary>The <c>error.code</c> of an error body, such as <c>rate_limited</c> or <c>endpoint_not_in_plan</c>.</summary>
     public string ErrorCode { get; init; }
 
+    /// <summary>The calls left in this endpoint's rolling week (<c>x-hp-quota-remaining</c>).</summary>
+    public long? QuotaRemaining { get; init; }
+
+    /// <summary>The requests left in this minute (<c>x-ratelimit-remaining</c>).</summary>
+    public long? RateLimitRemaining { get; init; }
+
     public static HeroesProfileGlobalAnswer From(
         int statusCode,
         string body,
         TimeSpan? retryAfter,
-        string headerJobId = null
+        string headerJobId = null,
+        long? quotaRemaining = null,
+        long? rateLimitRemaining = null
     )
     {
         string jobId = headerJobId;
@@ -210,6 +239,8 @@ public sealed class HeroesProfileGlobalAnswer
             RetryAfter = retryAfter,
             JobId = string.IsNullOrWhiteSpace(jobId) ? null : jobId.Trim(),
             ErrorCode = string.IsNullOrWhiteSpace(errorCode) ? null : errorCode.Trim(),
+            QuotaRemaining = quotaRemaining,
+            RateLimitRemaining = rateLimitRemaining,
         };
     }
 }
