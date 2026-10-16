@@ -416,13 +416,15 @@ public sealed class ReplayTimeline
     /// <summary>
     /// Once the camera moves to a hero it stays there for at least <paramref name="dwell"/>, so
     /// two heroes far apart that score alike do not flick it between them (#435). A gap shorter
-    /// than that, after which the shown hero wins again, keeps the camera on it too. Only an event
-    /// worth at least <paramref name="margin"/> more than the shot cuts it short (a kill, a death,
-    /// a big objective during a quieter shot). So does the lead-in of a hero who dies within
-    /// <paramref name="dwell"/>, or the death would happen off camera. The shot also ends when the
-    /// hero it shows dies.
+    /// than that, after which the shown hero wins again, keeps the camera on it too. Only an
+    /// outcome worth at least <paramref name="margin"/> more than the shot cuts it short: a kill or
+    /// a death (with its lead-in), or anything but a fight worth <paramref name="outcome"/> (a map
+    /// objective, a boss, a town hall, the core). A fight never does, however big, so a solo laner
+    /// in a duel or working the lane keeps the camera through a 4v4 that has not decided anything
+    /// yet. The lead-in of a hero who dies within <paramref name="dwell"/> cuts it too, or the
+    /// death would happen off camera, and the shot ends when the hero it shows dies.
     /// </summary>
-    public void KeepShotsForDwell(TimeSpan dwell, float margin)
+    public void KeepShotsForDwell(TimeSpan dwell, float margin, float outcome)
     {
         int shortest = Math.Max(0, (int)dwell.TotalSeconds);
         if (shortest <= 1)
@@ -453,7 +455,7 @@ public sealed class ReplayTimeline
                     : null;
             if (
                 kept != null
-                && winner.Points < shot.Points + margin
+                && !(IsOutcome(winner, outcome) && winner.Points >= shot.Points + margin)
                 && !LeadsIntoDeathWithin(winner, second, shortest)
                 && (second - started < shortest || WinsAgainWithin(shown, second, shortest))
             )
@@ -476,6 +478,14 @@ public sealed class ReplayTimeline
             started = second;
         }
     }
+
+    /// <summary>
+    /// A kill or a death (with its lead-in), or anything but a fight worth at least
+    /// <paramref name="objective"/>: a map objective, a boss, a town hall, the core.
+    /// </summary>
+    private static bool IsOutcome(Focus focus, float objective) =>
+        IsDeath(focus)
+        || (focus.Calculator != typeof(NearEnemyCalculator) && focus.Points >= objective);
 
     private bool WinsAgainWithin(Player player, int second, int seconds)
     {

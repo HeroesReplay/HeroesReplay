@@ -13,8 +13,9 @@ using ReplayUnit = Heroes.ReplayParser.Unit;
 namespace HeroesReplay.Tests.Unit.Analysis;
 
 /// <summary>
-/// A shot lasts at least <c>Spectate:FocusDwellTime</c> unless an event worth
-/// <c>Weights:FocusDwellMargin</c> more cuts it or the hero on screen dies.
+/// A shot lasts at least <c>Spectate:FocusDwellTime</c> unless an outcome (a kill, a death, an
+/// objective) worth <c>Weights:FocusDwellMargin</c> more cuts it or the hero on screen dies. A
+/// bigger fight never cuts it (#435).
 /// </summary>
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class FocusDwellTests
@@ -41,15 +42,31 @@ public class FocusDwellTests
     }
 
     [Fact]
-    public void ClearlyBiggerEvent_CutsTheShot()
+    public void Objective_CutsTheShot()
     {
         IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(
             Game(30, first, second, third),
-            new Scripted((0, 9, first, 5), (10, 19, second, 5.5f), (12, 19, third, 6.5f))
+            new Scripted((0, 9, first, 5), (10, 19, second, 5.5f), (12, 19, third, 9.25f))
         );
 
         Assert.Equal(second, focus[Second(11)].Target);
         Assert.Equal(third, focus[Second(12)].Target);
+    }
+
+    [Fact]
+    public void BiggerFight_DoesNotCutASoloLaneDuel()
+    {
+        // A 1v1 in a solo lane (8.09) takes the camera at 10; a 4v4 elsewhere (9.1) is a bigger
+        // fight with no outcome yet, so it waits for the duel's shot to reach 4 s.
+        IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(
+            Game(30, first, second, third),
+            new Scripted((0, 9, first, 1)),
+            new Fight((10, 19, second, 8.09f), (12, 19, third, 9.1f))
+        );
+
+        Assert.Equal(second, focus[Second(10)].Target);
+        Assert.Equal(second, focus[Second(13)].Target);
+        Assert.Equal(third, focus[Second(14)].Target);
     }
 
     [Fact]
@@ -97,11 +114,10 @@ public class FocusDwellTests
     }
 
     [Fact]
-    public void LeadIn_StillReachesTheHeroWhoDies()
+    public void KillLeadIn_CutsTheBiggestFight()
     {
-        // A 9.4 fight takes the camera at 28, over the lead-in's faded start; its full-weight part
-        // (10) starts at 30 but is not a clear margin above the fight, so it waits for the fight's
-        // shot to reach 4 s and still has the last 8 s before the death.
+        // A 9.4 fight takes the camera at 28, over the lead-in's faded start. The lead-in's
+        // full-weight part (10) is a kill's, an outcome above any fight, so it cuts at 30.
         Player victim = Hero("Uther", 0, x: 0);
         Player killer = Hero("Valla", 1, x: 10);
         Player fighter = Hero("Muradin", 1, x: 80);
@@ -110,10 +126,31 @@ public class FocusDwellTests
         IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(
             Game(120, victim, killer, fighter),
             new KillCalculator(Settings()),
-            new Scripted((28, 39, fighter, 9.4f))
+            new Fight((28, 39, fighter, 9.4f))
         );
 
-        Assert.Equal(fighter, focus[Second(31)].Target);
+        Assert.Equal(fighter, focus[Second(29)].Target);
+        Assert.All(Enumerable.Range(30, 10), s => Assert.Equal(victim, focus[Second(s)].Target));
+    }
+
+    [Fact]
+    public void LeadIn_StillReachesTheHeroWhoDies_AfterAnObjectiveShot()
+    {
+        // The push that ends on the core (9.6) takes the camera at 28. The lead-in's full-weight
+        // part (10) starts at 30 but is not 0.5 above it, so it waits for the push's shot to reach
+        // 4 s and still has the last 8 s before the death.
+        Player victim = Hero("Uther", 0, x: 0);
+        Player killer = Hero("Valla", 1, x: 10);
+        Player pusher = Hero("Muradin", 1, x: 80);
+        Kill(victim, killer, at: 40, respawn: 46);
+
+        IReadOnlyDictionary<TimeSpan, Focus> focus = Analyze(
+            Game(120, victim, killer, pusher),
+            new KillCalculator(Settings()),
+            new Scripted((28, 39, pusher, 9.6f))
+        );
+
+        Assert.Equal(pusher, focus[Second(31)].Target);
         Assert.All(Enumerable.Range(32, 8), s => Assert.Equal(victim, focus[Second(s)].Target));
         Assert.Equal(typeof(KillCalculator), focus[Second(32)].Calculator);
     }
@@ -181,7 +218,8 @@ public class FocusDwellTests
                 PlayerDeath = 9.5f,
                 DeathLeadInFloor = 8,
                 DeathImpact = 9,
-                FocusDwellMargin = 1,
+                FocusDwellMargin = 0.5f,
+                FocusDwellOutcome = 9,
             },
             Spectate = new SpectateSettings
             {
@@ -253,9 +291,11 @@ public class FocusDwellTests
     }
 
     /// <summary>Offers a player's hero from one second to another at fixed points.</summary>
-    private sealed class Scripted(params (int From, int To, Player Player, float Points)[] offers)
+    private class Scripted(params (int From, int To, Player Player, float Points)[] offers)
         : IFocusCalculator
     {
+        protected virtual Type Calculator => GetType();
+
         public void Contribute(ReplayTimeline timeline)
         {
             foreach ((int start, int end, Player player, float points) in offers)
@@ -263,7 +303,7 @@ public class FocusDwellTests
                 timeline.OfferRange(
                     Second(start),
                     Second(end),
-                    GetType(),
+                    Calculator,
                     player.HeroUnits[0],
                     player,
                     points,
@@ -271,5 +311,12 @@ public class FocusDwellTests
                 );
             }
         }
+    }
+
+    /// <summary>Offers like a fight between heroes, which is no outcome however big.</summary>
+    private sealed class Fight(params (int From, int To, Player Player, float Points)[] offers)
+        : Scripted(offers)
+    {
+        protected override Type Calculator => typeof(NearEnemyCalculator);
     }
 }

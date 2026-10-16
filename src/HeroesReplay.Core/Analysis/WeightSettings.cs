@@ -61,11 +61,20 @@ public class WeightSettings
     public float DeathImpact { get; set; } = 9.0f;
 
     /// <summary>
-    /// How much more than the shot on screen an event must weigh to cut it before
-    /// <c>Spectate:FocusDwellTime</c> (#435): at 1 a kill (10) cuts a fight up to 9, a death (9.5)
-    /// one up to 8.5, and a fight (8) cuts roaming or a camp.
+    /// How much more than the shot on screen an outcome (<see cref="FocusDwellOutcome"/>) must
+    /// weigh to cut it before <c>Spectate:FocusDwellTime</c> (#435). At 0.5 a kill (10) cuts any
+    /// fight (at most 9.4), a death (9.5) one up to 9, a map objective (9.25) one up to 8.75 (a
+    /// 1v1 is 8.09), and a boss or a town hall (9) one up to 8.5.
     /// </summary>
-    public float FocusDwellMargin { get; set; } = 1.0f;
+    public float FocusDwellMargin { get; set; } = 0.5f;
+
+    /// <summary>
+    /// Besides a kill or a death and its lead-in, what counts as an outcome that may cut a shot
+    /// before <c>Spectate:FocusDwellTime</c> (#435): anything but a fight worth this much, such as
+    /// a boss (9), a town hall (9), a map objective (9.25), the push that ends on the core (9.6), or
+    /// the core (15). A fight never cuts it, however big.
+    /// </summary>
+    public float FocusDwellOutcome { get; set; } = 9.0f;
 
     public float PlayerKill { get; set; }
     public float KillStreakBonus { get; set; }
