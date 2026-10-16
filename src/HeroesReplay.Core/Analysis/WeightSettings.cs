@@ -44,6 +44,14 @@ public class WeightSettings
     /// <summary>The most a fight scores, so a death (9.5) or a kill (10) still wins.</summary>
     public float TeamfightMax { get; set; } = 9.4f;
 
+    /// <summary>
+    /// A solo laner alone with one enemy hero for <c>Spectate:SoloLaneDuelTime</c> (#437). As a
+    /// fight a 1v1 is 8.09, so any bigger fight elsewhere took the camera from it. At 9.15 it is
+    /// worth a 4v4 (9.11). A map objective (9.25), a 4v5 (9.28), a 5v5 (9.4), a death (9.5), a
+    /// kill (10) and every second of a death's lead-in still beat it. 0 turns the duel off.
+    /// </summary>
+    public float SoloLaneDuel { get; set; } = 9.15f;
+
     public float PlayerDeath { get; set; }
 
     /// <summary>
@@ -55,8 +63,8 @@ public class WeightSettings
 
     /// <summary>
     /// Anything other than a kill or death worth this much while the hero is dead (an objective, a
-    /// boss, a town hall, the core, a fight of eight heroes) gives that death the longest lead-in
-    /// (#431).
+    /// boss, a town hall, the core, a fight of eight heroes, but not a solo-lane duel) gives that
+    /// death the longest lead-in (#431).
     /// </summary>
     public float DeathImpact { get; set; } = 9.0f;
 
@@ -72,7 +80,7 @@ public class WeightSettings
     /// Besides a kill or a death and its lead-in, what counts as an outcome that may cut a shot
     /// before <c>Spectate:FocusDwellTime</c> (#435): anything but a fight worth this much, such as
     /// a boss (9), a town hall (9), a map objective (9.25), the push that ends on the core (9.6), or
-    /// the core (15). A fight never cuts it, however big.
+    /// the core (15). A fight never cuts it, however big, and neither does a solo-lane duel.
     /// </summary>
     public float FocusDwellOutcome { get; set; } = 9.0f;
 
