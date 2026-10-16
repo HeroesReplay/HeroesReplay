@@ -19,6 +19,9 @@ public sealed class ReplayMediaPlayer
     public IReadOnlyList<string> Talents { get; init; } = Array.Empty<string>();
 }
 
+/// <summary>A focus-hero replay's hero (catalog English name), attribute id, role and guide build.</summary>
+public sealed record HeroFocusFacts(string Hero, string AttributeId, string Role, string Build);
+
 /// <summary>Null means completion is not known yet. A false flag is a hard miss.</summary>
 public sealed class ReplayMediaCompletion
 {
@@ -47,6 +50,13 @@ public sealed class ReplayMediaPolicyInput
     public double? AverageMmr { get; init; }
     public IReadOnlyList<ReplayMediaPlayer> Roster { get; init; }
     public string FocusHero { get; init; }
+
+    /// <summary>
+    /// The player the cycle chose to follow for a whole match (#433), or null. Not a viewer
+    /// request: <see cref="FocusHero"/> and <see cref="ViewerRequested"/> stay the request's.
+    /// </summary>
+    public HeroFocusFacts HeroFocus { get; init; }
+
     public bool ViewerRequested { get; init; }
     public bool RecordAndUpload { get; init; }
     public string RequestedBy { get; init; }

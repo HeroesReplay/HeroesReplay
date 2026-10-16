@@ -78,4 +78,10 @@ public class ReplayMediaPolicySettings
     public TimeSpan NotableCandidateMaxAge { get; set; } = TimeSpan.FromDays(7);
 
     public TimeSpan RequestedCandidateMaxAge { get; set; } = TimeSpan.FromDays(14);
+
+    /// <summary>
+    /// A focus-hero replay's window (#433). Its game may already be days old when it is picked:
+    /// the focus picker reaches back past the ordinary window for the hero it needs.
+    /// </summary>
+    public TimeSpan FocusCandidateMaxAge { get; set; } = TimeSpan.FromDays(7);
 }

@@ -94,8 +94,9 @@ public static class PendingYouTubeUpload
     }
 
     /// <summary>
-    /// A viewer request is sent first, so it reserves the earliest free publish time. The
-    /// rest keep their order, oldest recording first.
+    /// A viewer request is sent first, so it reserves the earliest free publish time, then a
+    /// focus-hero replay (#433), so a focus video never waits behind ordinary ones. Each group
+    /// keeps its order, oldest recording first.
     /// </summary>
     public static IReadOnlyList<string> RequestsFirst(
         IReadOnlyList<string> recordings,
@@ -103,6 +104,7 @@ public static class PendingYouTubeUpload
     )
     {
         var requests = new List<string>();
+        var focus = new List<string>();
         var others = new List<string>();
         if (recordings == null)
         {
@@ -111,9 +113,14 @@ public static class PendingYouTubeUpload
 
         foreach (string recording in recordings)
         {
-            if (IsRequested(recording, entryFileName))
+            YouTubeEntry entry = EntryOf(recording, entryFileName);
+            if (entry?.Requested == true)
             {
                 requests.Add(recording);
+            }
+            else if (entry?.HeroFocus != null)
+            {
+                focus.Add(recording);
             }
             else
             {
@@ -121,6 +128,7 @@ public static class PendingYouTubeUpload
             }
         }
 
+        requests.AddRange(focus);
         requests.AddRange(others);
         return requests;
     }
@@ -196,15 +204,15 @@ public static class PendingYouTubeUpload
         }
     }
 
-    private static bool IsRequested(string recording, string entryFileName)
+    private static YouTubeEntry EntryOf(string recording, string entryFileName)
     {
         string directory = Path.GetDirectoryName(recording);
         if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(entryFileName))
         {
-            return false;
+            return null;
         }
 
-        return ReadEntry(Path.Combine(directory, entryFileName))?.Requested == true;
+        return ReadEntry(Path.Combine(directory, entryFileName));
     }
 
     public static string AttemptsDirectory(string dataDirectory)

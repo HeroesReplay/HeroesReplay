@@ -16,6 +16,12 @@ public static class ReplayMediaPolicy
     public const string PolicyVersion = "1";
     public const int MaxCandidateAgeDays = 3660;
     public const int RequestedScore = 400_000;
+
+    /// <summary>
+    /// A focus pick's weight (#433): above a notable match's, and low enough that with every
+    /// component at its cap (recency, notable strength, skill) it stays under a request's.
+    /// </summary>
+    public const int FocusScore = 330_000;
     public const int NotableScore = 300_000;
     public const int HighSkillScore = 200_000;
     public const int OrdinaryScore = 100_000;
@@ -94,6 +100,12 @@ public static class ReplayMediaPolicy
             settings.RequestedCandidateMaxAge,
             ReplayMediaConfigurationError.RequestedMaxAgeNegative,
             ReplayMediaConfigurationError.RequestedMaxAgeTooLarge
+        );
+        AddAge(
+            errors,
+            settings.FocusCandidateMaxAge,
+            ReplayMediaConfigurationError.FocusMaxAgeNegative,
+            ReplayMediaConfigurationError.FocusMaxAgeTooLarge
         );
         AddAge(
             errors,
@@ -561,6 +573,7 @@ public static class ReplayMediaPolicy
         if (mode == ReplayRecordingMode.Selected)
         {
             return priority == ReplayMediaPriority.Requested
+                || priority == ReplayMediaPriority.Focus
                 || priority == ReplayMediaPriority.Notable
                 || openPool;
         }
@@ -574,6 +587,8 @@ public static class ReplayMediaPolicy
         {
             case ReplayMediaPriority.Requested:
                 return ReplayMediaReason.RecordedRequested;
+            case ReplayMediaPriority.Focus:
+                return ReplayMediaReason.RecordedFocus;
             case ReplayMediaPriority.Notable:
                 return ReplayMediaReason.RecordedNotable;
             case ReplayMediaPriority.HighSkill:
@@ -592,6 +607,12 @@ public static class ReplayMediaPolicy
         if (input.RecordAndUpload)
         {
             return ReplayMediaPriority.Requested;
+        }
+
+        // A focus pick is never a viewer request: a request plays first and is never picked.
+        if (input.HeroFocus != null && !input.ViewerRequested)
+        {
+            return ReplayMediaPriority.Focus;
         }
 
         if (notable)
@@ -647,6 +668,8 @@ public static class ReplayMediaPolicy
         {
             case ReplayMediaPriority.Requested:
                 return settings.RequestedCandidateMaxAge;
+            case ReplayMediaPriority.Focus:
+                return settings.FocusCandidateMaxAge;
             case ReplayMediaPriority.Notable:
                 return settings.NotableCandidateMaxAge;
             case ReplayMediaPriority.HighSkill:
@@ -738,6 +761,8 @@ public static class ReplayMediaPolicy
         {
             case ReplayMediaPriority.Requested:
                 return RequestedScore;
+            case ReplayMediaPriority.Focus:
+                return FocusScore;
             case ReplayMediaPriority.Notable:
                 return NotableScore;
             case ReplayMediaPriority.HighSkill:

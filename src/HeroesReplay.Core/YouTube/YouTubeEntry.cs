@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace HeroesReplay.Core.YouTube;
 
@@ -36,4 +37,19 @@ public class YouTubeEntry
     public string[] Heroes { get; set; }
     public DateTimeOffset? RecordedAtUtc { get; set; }
     public DateTimeOffset? PublishAtUtc { get; set; }
+
+    /// <summary>
+    /// The hero the cycle followed for the whole match (#433), or null for any other video. A
+    /// focus video is sent right after the viewer requests.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public YouTubeHeroFocus HeroFocus { get; set; }
+}
+
+/// <summary>A focus-hero video's hero (catalog English name), its role, and its guide build.</summary>
+public sealed class YouTubeHeroFocus
+{
+    public string Hero { get; set; }
+    public string Role { get; set; }
+    public string Build { get; set; }
 }
