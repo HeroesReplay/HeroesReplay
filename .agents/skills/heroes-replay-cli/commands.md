@@ -86,6 +86,25 @@ Read one .StormReplay and print, for each player, the talents picked (English na
 - **Changes:** Prints each player's talents and best guide build from the shipped reference. Read-only.
 - **Exit:** 0 when the replay parsed. 1 for a missing file or a replay that does not parse.
 
+## `focus candidates`
+
+Read every .StormReplay in a folder, one at a time, into focus cards (each player's catalog hero, role, score screen, awards, closest guide build and team comps), build the hero baselines from them, and rank every player as a focus: the gates that rule a player out, then quality × (0.5 + novelty) with each part. Heroes Profile is not called, so every player's record counts as unknown. Reads the heroes-data2 catalog under Location:DataDirectory, the shipped talent-build reference and hero signatures, and --ledger when given. Read-only.
+
+- **Options:** `--directory` (`-d`, required), `--recursive`, `--ledger`, `--top`, `--simulate`, `--any-mode`
+- **Before:** A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, the shipped talent-build reference and hero signatures, and `--ledger` when given. Calls nothing on the network.
+- **Changes:** Prints the gates that ruled players out, the best focus candidates with each part of their score, and with `--simulate` a run of focus picks. Read-only; never writes the ledger.
+- **Exit:** 0 when at least one replay was read. 1 for a missing folder or ledger, or no replays in it. 2 when no replay parsed.
+
+## `focus coverage`
+
+Report what the focus picks have covered: picks, plays and uploads; heroes covered out of the roster (the shipped talent-build reference's heroes) and which are not; and the spread over roles, maps, leagues, regions and builds. Reads Data\Focus\ledger.json and Data\youtube-library.jsonl. Read-only.
+
+- **Options:** `--ledger`, `--library`, `--output` (`-o`)
+- **Before:** `Data\Focus\ledger.json` and `Data\youtube-library.jsonl` under `Location:DataDirectory`, or `--ledger` and `--library`. A missing file counts as empty.
+- **Changes:** Nothing. Read only.
+- **Exit:** 0 when it finishes. 1 on a parse error or an unexpected error.
+- **Codes:** `focus.coverage`
+
 ## `check`
 
 Validate configuration, connectivity to Heroes Profile, OBS, Twitch, and the internet, and the ffmpeg tools clips use.

@@ -23,7 +23,24 @@ public static class FileMutexName
             return sharedName;
         }
 
-        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(full.ToUpperInvariant()));
-        return sharedName + "." + Convert.ToHexString(hash, 0, 8);
+        return Hashed(sharedName, full);
+    }
+
+    /// <summary>
+    /// A name from the file's full path alone, for a file new enough that no older build locks
+    /// it under a fixed name: every process that opens the same path agrees on it, and a test's
+    /// temp file always has its own.
+    /// </summary>
+    public static string ForFile(string prefix, string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(prefix);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return Hashed(prefix, Path.GetFullPath(path));
+    }
+
+    private static string Hashed(string name, string fullPath)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(fullPath.ToUpperInvariant()));
+        return name + "." + Convert.ToHexString(hash, 0, 8);
     }
 }
