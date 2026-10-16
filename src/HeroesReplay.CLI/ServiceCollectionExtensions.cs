@@ -22,6 +22,7 @@ using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.HeroFocus;
 using HeroesReplay.Core.HeroFocus.Cards;
+using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.HeroFocus.Scoring;
 using HeroesReplay.Core.HeroFocus.Signatures;
 using HeroesReplay.Core.MediaPolicy;
@@ -540,6 +541,14 @@ public static class ServiceCollectionExtensions
                 }
             )
             .AddSingleton(typeof(IReplayProvider), replayProvider)
+            // The cycle's focus picks (#433); inert while Focus:Enabled is off.
+            .AddSingleton(serviceProvider => new FocusPicker(
+                settings.Focus,
+                settings.Location?.DataDirectory,
+                settings.ReplayMedia?.FocusCandidateMaxAge ?? TimeSpan.FromDays(7),
+                HeroSignatures.Embedded(),
+                serviceProvider.GetRequiredService<ILogger<FocusPicker>>()
+            ))
             .AddSingleton<IGameData, GameData>()
             .AddSingleton<IReplayHelper, ReplayHelper>()
             .AddSingleton<IAbilityDetector, AbilityDetector>()

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Replays.Context;
 using HeroesReplay.Core.Requests;
@@ -166,6 +167,43 @@ public class ReplayDetailsLinesTests
         loaded.HeroesProfileReplay.GameVersion = "2.57.0.98304";
 
         Assert.Equal("2.57.0.98304", ReplayDetailsLines.Patch(loaded));
+    }
+
+    [Fact]
+    public void Build_PutsTheHeroFocusFirst_OnAFocusReplayOnly()
+    {
+        var focus = new ReplayDetailsWriterSettings { HeroFocus = true, GameType = true };
+        LoadedReplay picked = Loaded("2.57.0.98348");
+        picked.FocusPick = new FocusPick(
+            1,
+            "1",
+            0,
+            "Star#1234",
+            "Li-Ming",
+            "Wiza",
+            "Ranged Assassin",
+            "Teleport Build"
+        );
+        LoadedReplay requested = Loaded("2.57.0.98348", login: "viewer");
+        requested.FocusPick = picked.FocusPick;
+
+        Assert.Equal(
+            new[] { "Hero focus: Li-Ming (Teleport Build)", "Storm League" },
+            ReplayDetailsLines.Build(focus, picked, null)
+        );
+        Assert.Equal(
+            new[] { "Storm League" },
+            ReplayDetailsLines.Build(
+                new ReplayDetailsWriterSettings { GameType = true },
+                picked,
+                null
+            )
+        );
+        Assert.Equal(new[] { "Storm League" }, ReplayDetailsLines.Build(focus, requested, null));
+        Assert.Equal(
+            new[] { "Storm League" },
+            ReplayDetailsLines.Build(focus, Loaded("2.57.0.98348"), null)
+        );
     }
 
     [Fact]

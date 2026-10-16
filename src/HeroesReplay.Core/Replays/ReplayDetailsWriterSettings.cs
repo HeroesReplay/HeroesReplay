@@ -7,6 +7,12 @@ public class ReplayDetailsWriterSettings
     public bool GameType { get; set; }
     public bool Requestor { get; set; }
 
+    /// <summary>
+    /// A first "Hero focus: Li-Ming (Teleport Build)" line on the cycle's focus replays (#433).
+    /// Never the player's name.
+    /// </summary>
+    public bool HeroFocus { get; set; }
+
     /// <summary>A "Region: EU" line (NA, EU, KR, CN) before the patch. Left out when the region is unknown.</summary>
     public bool Region { get; set; }
 

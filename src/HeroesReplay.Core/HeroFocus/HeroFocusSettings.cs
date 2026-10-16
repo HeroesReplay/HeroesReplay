@@ -15,6 +15,24 @@ public sealed class HeroFocusSettings
     /// </summary>
     public bool Enabled { get; set; }
 
+    /// <summary>
+    /// Every this many Standard replays the spectator plays, one is a focus replay: 3 is two
+    /// ordinary replays, then a focus. Viewer requests play first and are not counted.
+    /// </summary>
+    public int Every { get; set; } = 3;
+
+    /// <summary>
+    /// While a focus is not due, the best candidate is held back from the ordinary picks when its
+    /// novelty is at least this (an uncovered hero or role), so the next focus slot can take it.
+    /// </summary>
+    public double ReserveNoveltyAt { get; set; } = 0.8;
+
+    /// <summary>
+    /// A pick that has not played this long after it was made (a stop, a release update, a crash)
+    /// is abandoned, and its replay plays as an ordinary one. Until then a restart keeps it.
+    /// </summary>
+    public TimeSpan PickExpiry { get; set; } = TimeSpan.FromHours(12);
+
     /// <summary>Waiting replays kept beyond <c>HeroesProfileApi:CachedReplayLimit</c>, so focus picks have a choice.</summary>
     public int ExtraCandidates { get; set; } = 5;
 

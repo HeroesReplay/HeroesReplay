@@ -2,7 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using Heroes.ReplayParser;
+using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Replays;
+using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
 using HeroesReplay.Core.YouTube.Publication;
@@ -203,6 +207,39 @@ public class HeroFocusMediaTests
 
         Assert.Equal("Focus", MediaPolicyManifest.FromDecision(decision, true).Priority);
         Assert.Equal(ReplayMediaPriority.Focus, read.Priority);
+    }
+
+    [Fact]
+    public void TheMediaFacts_CarryTheCyclesPick_ButNeverForARequest()
+    {
+        var loaded = new LoadedReplay
+        {
+            ReplayId = 65550003,
+            Replay = new Replay { Timestamp = Now.AddHours(-2), Players = [] },
+            FocusPick = new FocusPick(
+                65550003,
+                "65550003",
+                0,
+                "Star#1234",
+                "Li-Ming",
+                "Wiza",
+                "Ranged Assassin",
+                "Teleport Build"
+            ),
+        };
+
+        ReplayMediaPolicyInput facts = ReplayMediaFacts.From(loaded, false, false, false);
+        loaded.RewardQueueItem = new RewardQueueItem
+        {
+            Request = new RewardRequest { Login = "viewer", ReplayId = 65550003 },
+        };
+        ReplayMediaPolicyInput request = ReplayMediaFacts.From(loaded, false, false, false);
+
+        Assert.Equal(LiMing, facts.HeroFocus);
+        Assert.False(facts.ViewerRequested);
+        Assert.Null(facts.FocusHero);
+        Assert.Null(request.HeroFocus);
+        Assert.True(request.ViewerRequested);
     }
 
     [Fact]

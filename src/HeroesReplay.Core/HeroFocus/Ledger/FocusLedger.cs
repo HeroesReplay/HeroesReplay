@@ -37,6 +37,12 @@ public sealed class FocusLedger
 
     public List<FocusLedgerEntry> Entries { get; set; } = new();
 
+    /// <summary>
+    /// The Standard replays played since the last focus replay played, by id, so a replay marked
+    /// spectated twice counts once. A focus is due once it holds <c>Focus:Every</c> − 1 of them.
+    /// </summary>
+    public List<int> SinceFocus { get; set; } = new();
+
     /// <summary>Picked and Played entries, oldest pick first.</summary>
     [JsonIgnore]
     public IReadOnlyList<FocusLedgerEntry> History =>
@@ -104,6 +110,9 @@ public sealed class FocusLedgerEntry
     public string Build { get; set; }
 
     public double? BuildScore { get; set; }
+
+    /// <summary>The build is a clear guide match, so the stream and YouTube name it.</summary>
+    public bool BuildClear { get; set; }
 
     public string Map { get; set; }
 

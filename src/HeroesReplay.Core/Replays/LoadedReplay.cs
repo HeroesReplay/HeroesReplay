@@ -1,6 +1,7 @@
 using System.IO;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.Requests;
 
 /// <summary>
@@ -28,4 +29,10 @@ public class LoadedReplay
     public FileInfo FileInfo { get; set; }
     public HeroesProfileReplay HeroesProfileReplay { get; set; }
     public RewardQueueItem RewardQueueItem { get; set; }
+
+    /// <summary>
+    /// The player the cycle follows for this whole replay (#433), or null. Never set on a viewer
+    /// request: a request's BattleTag decides its camera.
+    /// </summary>
+    public FocusPick FocusPick { get; set; }
 }

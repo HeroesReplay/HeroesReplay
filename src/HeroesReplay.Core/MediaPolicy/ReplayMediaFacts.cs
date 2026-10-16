@@ -5,6 +5,7 @@ using Heroes.ReplayParser;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Shared;
@@ -53,6 +54,7 @@ public static class ReplayMediaFacts
                 replay,
                 PlayerPriorityRequest.PlayerIndex(replay, request)
             ),
+            HeroFocus = FocusFacts(loaded, request),
             ViewerRequested = request != null,
             RecordAndUpload = ReplayRequestKind.RecordsAndUploads(request),
             RequestedBy = FirstText(request?.Login),
@@ -61,6 +63,18 @@ public static class ReplayMediaFacts
             AlreadyScheduled = alreadyScheduled,
             InOutbox = inOutbox,
         };
+    }
+
+    /// <summary>The cycle's focus pick (#433). A viewer request is never a focus.</summary>
+    private static HeroFocusFacts FocusFacts(LoadedReplay loaded, RewardRequest request)
+    {
+        FocusPick pick = loaded.FocusPick;
+        if (request != null || pick == null || string.IsNullOrWhiteSpace(pick.Hero))
+        {
+            return null;
+        }
+
+        return new HeroFocusFacts(pick.Hero, pick.AttributeId, pick.Role, pick.Build);
     }
 
     private static int? ReplayId(LoadedReplay loaded)

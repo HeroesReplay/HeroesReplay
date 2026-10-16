@@ -1,5 +1,6 @@
 using Heroes.ReplayParser;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.YouTube;
@@ -52,6 +53,53 @@ public class YouTubeEntryBuilderTests
             line =>
                 line.StartsWith("Blue:", System.StringComparison.Ordinal)
                 || line.StartsWith("Red:", System.StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void Create_CarriesTheCycleFocus_WithoutTheViewerRequestLead()
+    {
+        var loaded = new LoadedReplay
+        {
+            ReplayId = 65389750,
+            HeroesProfileReplay = new HeroesProfileReplay
+            {
+                Id = 65389750,
+                Map = "Volskaya Foundry",
+                GameType = "Storm League",
+                Rank = "Diamond",
+            },
+            FocusPick = new FocusPick(
+                65389750,
+                "65389750",
+                0,
+                "Star#1234",
+                "Li-Ming",
+                "Wiza",
+                "Ranged Assassin",
+                "Teleport Build"
+            ),
+        };
+
+        YouTubeEntry entry = YouTubeEntryBuilder.Create(
+            loaded,
+            new YouTubeSettings { PrivacyStatus = "public", CategoryId = "20" }
+        );
+
+        Assert.False(entry.Requested);
+        Assert.Equal("Li-Ming", entry.Hero);
+        Assert.Equal("Li-Ming", entry.HeroFocus.Hero);
+        Assert.Equal("Ranged Assassin", entry.HeroFocus.Role);
+        Assert.Equal("Teleport Build", entry.HeroFocus.Build);
+        Assert.DoesNotContain("focus", entry.Title, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            entry.DescriptionLines,
+            line => line.StartsWith("Featured:", System.StringComparison.Ordinal)
+        );
+        Assert.Null(
+            YouTubeEntryBuilder
+                .Create(new LoadedReplay { ReplayId = 1 }, new YouTubeSettings())
+                .HeroFocus
         );
     }
 
