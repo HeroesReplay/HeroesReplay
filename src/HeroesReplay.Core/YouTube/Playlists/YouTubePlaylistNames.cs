@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.YouTube.Playlists;
@@ -15,6 +16,19 @@ public static class YouTubePlaylistNames
 
     public const string ViewerReviews = "Viewer requested reviews";
     public const string DraftPrefix = "Unusual drafts";
+    public const string HeroFocus = "Hero focus";
+
+    /// <summary>
+    /// The focus role group: <c>Hero focus - Ranged Assassin</c>, or null for a role that is not
+    /// one of the six catalog roles.
+    /// </summary>
+    public static string HeroFocusRole(string role)
+    {
+        string known = YouTubeVideoFacts.Roles.FirstOrDefault(name =>
+            string.Equals(name, role?.Trim(), StringComparison.OrdinalIgnoreCase)
+        );
+        return known == null ? null : HeroFocus + " - " + known;
+    }
 
     private const string StormLeague = "Storm League";
 

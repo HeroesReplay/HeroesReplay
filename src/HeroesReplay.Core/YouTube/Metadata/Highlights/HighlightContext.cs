@@ -53,22 +53,11 @@ public sealed class HighlightContext
         PlayerBuild build = Insights.Builds.Players.FirstOrDefault(player =>
             player.PlayerIndex == playerIndex
         );
-        if (
-            build == null
-            || build.Ambiguous
-            || build.Score < Settings.TitleBuildMinScore
-            || string.IsNullOrWhiteSpace(build.Build)
-        )
+        if (build == null || build.Ambiguous || build.Score < Settings.TitleBuildMinScore)
         {
             return null;
         }
 
-        string name = build.Build.Trim();
-        if (name.EndsWith(" Build", StringComparison.OrdinalIgnoreCase))
-        {
-            name = name.Substring(0, name.Length - " Build".Length).Trim();
-        }
-
-        return name.Length == 0 || Settings.IsGenericBuildName(name) ? null : name + " " + hero;
+        return Settings.BuildLabel(build.Build, hero);
     }
 }

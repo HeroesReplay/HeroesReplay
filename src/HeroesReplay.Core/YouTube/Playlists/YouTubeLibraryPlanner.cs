@@ -107,6 +107,19 @@ public static class YouTubeLibraryPlanner
                 Add(YouTubePlaylistNames.ViewerReviews);
             }
 
+            if (!string.IsNullOrWhiteSpace(video.HeroFocus))
+            {
+                if (groups.HeroFocus)
+                {
+                    Add(YouTubePlaylistNames.HeroFocus);
+                }
+
+                if (groups.HeroFocusRole)
+                {
+                    Add(YouTubePlaylistNames.HeroFocusRole(video.HeroFocusRole));
+                }
+            }
+
             if (groups.MapMode)
             {
                 Add(YouTubePlaylistNames.Title(video.Map, video.Mode, video.Rank));
