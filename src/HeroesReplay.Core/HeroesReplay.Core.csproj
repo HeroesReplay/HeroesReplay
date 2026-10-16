@@ -44,5 +44,10 @@
             Include="Builds\Reference\icy-veins-builds.json"
             LogicalName="HeroesReplay.Core.Builds.Reference.icy-veins-builds.json"
         />
+        <!-- The focus-hero signatures (#433): which stats and awards show strength on each hero. -->
+        <EmbeddedResource
+            Include="HeroFocus\Signatures\hero-signatures.json"
+            LogicalName="HeroesReplay.Core.HeroFocus.Signatures.hero-signatures.json"
+        />
     </ItemGroup>
 </Project>

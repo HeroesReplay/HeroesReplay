@@ -48,6 +48,21 @@ public class FileMutexNameTests
     }
 
     [Fact]
+    public void ForFile_NamesEveryFileFromItsPath_SoNoTwoFilesShareALock()
+    {
+        string one = Path.Combine(Path.GetTempPath(), "hr-mutex-" + Guid.NewGuid().ToString("N"));
+        string two = Path.Combine(Path.GetTempPath(), "hr-mutex-" + Guid.NewGuid().ToString("N"));
+
+        string name = FileMutexName.ForFile(Shared, one);
+
+        Assert.StartsWith(Shared + ".", name, StringComparison.Ordinal);
+        Assert.NotEqual(name, FileMutexName.ForFile(Shared, two));
+        Assert.Equal(name, FileMutexName.ForFile(Shared, one.ToUpperInvariant()));
+        Assert.Equal(name, FileMutexName.For(Shared, SharedPath, one));
+        Assert.Throws<ArgumentException>(() => FileMutexName.ForFile(Shared, " "));
+    }
+
+    [Fact]
     public void PanelRequestsAndReplaySessions_LockTheirDefaultFileAsBefore()
     {
         Assert.Equal(

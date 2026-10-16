@@ -7,6 +7,7 @@ using System.Text;
 using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Commands.Client;
 using HeroesReplay.CLI.Commands.Deps;
+using HeroesReplay.CLI.Commands.Focus.Commands;
 using HeroesReplay.CLI.Commands.Obs;
 using HeroesReplay.CLI.Commands.Services;
 using HeroesReplay.Core.Configuration;
@@ -124,6 +125,19 @@ public static class CommandReference
             "A `.StormReplay` (`--replay`) and the heroes-data2 catalog under `Location:DataDirectory`.",
             "Prints each player's talents and best guide build from the shipped reference. Read-only.",
             "0 when the replay parsed. 1 for a missing file or a replay that does not parse."
+        ),
+        new(
+            "focus candidates",
+            "A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, the shipped talent-build reference and hero signatures, and `--ledger` when given. Calls nothing on the network.",
+            "Prints the gates that ruled players out, the best focus candidates with each part of their score, and with `--simulate` a run of focus picks. Read-only; never writes the ledger.",
+            "0 when at least one replay was read. 1 for a missing folder or ledger, or no replays in it. 2 when no replay parsed."
+        ),
+        new(
+            "focus coverage",
+            "`Data\\Focus\\ledger.json` and `Data\\youtube-library.jsonl` under `Location:DataDirectory`, or `--ledger` and `--library`. A missing file counts as empty.",
+            Nothing,
+            Finishes,
+            [CoverageCommand.Read]
         ),
         new(
             "check",
