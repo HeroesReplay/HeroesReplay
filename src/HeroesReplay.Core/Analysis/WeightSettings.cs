@@ -60,6 +60,13 @@ public class WeightSettings
     /// </summary>
     public float DeathImpact { get; set; } = 9.0f;
 
+    /// <summary>
+    /// How much more than the shot on screen an event must weigh to cut it before
+    /// <c>Spectate:FocusDwellTime</c> (#435): at 1 a kill (10) cuts a fight up to 9, a death (9.5)
+    /// one up to 8.5, and a fight (8) cuts roaming or a camp.
+    /// </summary>
+    public float FocusDwellMargin { get; set; } = 1.0f;
+
     public float PlayerKill { get; set; }
     public float KillStreakBonus { get; set; }
     public float PentaKill { get; set; }

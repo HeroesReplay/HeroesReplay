@@ -413,6 +413,102 @@ public sealed class ReplayTimeline
         }
     }
 
+    /// <summary>
+    /// Once the camera moves to a hero it stays there for at least <paramref name="dwell"/>, so
+    /// two heroes far apart that score alike do not flick it between them (#435). A gap shorter
+    /// than that, after which the shown hero wins again, keeps the camera on it too. Only an event
+    /// worth at least <paramref name="margin"/> more than the shot cuts it short (a kill, a death,
+    /// a big objective during a quieter shot). So does the lead-in of a hero who dies within
+    /// <paramref name="dwell"/>, or the death would happen off camera. The shot also ends when the
+    /// hero it shows dies.
+    /// </summary>
+    public void KeepShotsForDwell(TimeSpan dwell, float margin)
+    {
+        int shortest = Math.Max(0, (int)dwell.TotalSeconds);
+        if (shortest <= 1)
+        {
+            return;
+        }
+
+        Player shown = null;
+        Focus shot = null;
+        int started = 0;
+        for (int second = 0; second < TotalSeconds; second++)
+        {
+            Focus winner = slots[second];
+            if (winner == null)
+            {
+                continue;
+            }
+
+            if (winner.Target == shown)
+            {
+                shot = winner;
+                continue;
+            }
+
+            Unit kept =
+                shown != null && shot.Unit.IsAliveAt(TimeSpan.FromSeconds(second))
+                    ? AliveHero(shown, second)
+                    : null;
+            if (
+                kept != null
+                && winner.Points < shot.Points + margin
+                && !LeadsIntoDeathWithin(winner, second, shortest)
+                && (second - started < shortest || WinsAgainWithin(shown, second, shortest))
+            )
+            {
+                slots[second] = new Focus(
+                    shot.Calculator,
+                    kept,
+                    shown,
+                    shot.Points,
+                    $"{shot.Description} (camera held on {shown.Character} over {winner.Description})"
+                )
+                {
+                    Victim = shot.Victim,
+                };
+                continue;
+            }
+
+            shown = winner.Target;
+            shot = winner;
+            started = second;
+        }
+    }
+
+    private bool WinsAgainWithin(Player player, int second, int seconds)
+    {
+        for (int t = second + 1; t < second + seconds && t < TotalSeconds; t++)
+        {
+            if (slots[t]?.Target == player)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The focus is a lead-in: it follows a hero who is alive now and dies within
+    /// <paramref name="seconds"/>.
+    /// </summary>
+    private static bool LeadsIntoDeathWithin(Focus focus, int second, int seconds)
+    {
+        if (
+            focus.Victim == null
+            || focus.Unit != focus.Victim
+            || !focus.Victim.TimeSpanDied.HasValue
+        )
+        {
+            return false;
+        }
+
+        int died = focus.Victim.TimeSpanDied.Value.FloorSeconds();
+        return died > second && died - second <= seconds;
+    }
+
     public void ApplyPlayerPriority(int playerIndex)
     {
         Player[] players = Replay.Players ?? Array.Empty<Player>();

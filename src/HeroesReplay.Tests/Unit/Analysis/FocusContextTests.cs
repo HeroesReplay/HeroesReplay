@@ -231,6 +231,7 @@ public class FocusContextTests
                 PresentDeathContextTime = Second(3),
                 KillStreakWindow = Second(12),
                 FocusShareDistance = share,
+                FocusDwellTime = TimeSpan.Zero,
             },
         };
 
