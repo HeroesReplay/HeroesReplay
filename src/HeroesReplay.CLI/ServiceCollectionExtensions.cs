@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
+using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands.Update;
 using HeroesReplay.CLI.OpenTelemetry;
 using HeroesReplay.Core;
@@ -22,9 +23,11 @@ using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.HeroFocus;
 using HeroesReplay.Core.HeroFocus.Cards;
+using HeroesReplay.Core.HeroFocus.Ledger;
 using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.HeroFocus.Scoring;
 using HeroesReplay.Core.HeroFocus.Signatures;
+using HeroesReplay.Core.HeroFocus.Targeted;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
@@ -753,12 +756,35 @@ public static class ServiceCollectionExtensions
             PlayerStatsFor(sp),
             sp.GetRequiredService<ILogger<FocusStrengthRefresh>>()
         ));
+        services.TryAddSingleton(sp =>
+        {
+            AppSettings settings = sp.GetRequiredService<AppSettings>();
+            string data = settings.Location.DataDirectory;
+            IGameData gameData = sp.GetRequiredService<IGameData>();
+            // The download role's provider fetches a target's game; elsewhere there is none.
+            HeroesProfileProvider provider = sp.GetService<HeroesProfileProvider>();
+            return new FocusTargetedFetch(
+                HeroesProfileCallerFor(sp),
+                new FocusTargetedStore(FocusTargetedStore.PathFor(data)),
+                new FocusLedgerStore(FocusLedgerStore.PathFor(data)),
+                settings.Focus,
+                () => gameData.Heroes,
+                provider == null
+                    ? (_, _) => Task.FromResult(TargetedDownload.Failed)
+                    : new Func<int, CancellationToken, Task<TargetedDownload>>(
+                        provider.DownloadTargetedAsync
+                    ),
+                PlayerStatsFor(sp).JobTimeout,
+                sp.GetRequiredService<ILogger<FocusTargetedFetch>>()
+            );
+        });
         services.TryAddSingleton(sp => new HeroFocusDownload(
             sp.GetRequiredService<FocusCardRefresh>(),
             sp.GetRequiredService<FocusStrengthRefresh>(),
             sp.GetRequiredService<PlayerPrivacySync>(),
             sp.GetRequiredService<AppSettings>().Focus,
-            sp.GetRequiredService<ILogger<HeroFocusDownload>>()
+            sp.GetRequiredService<ILogger<HeroFocusDownload>>(),
+            targeted: sp.GetRequiredService<FocusTargetedFetch>()
         ));
         return services;
     }

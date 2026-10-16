@@ -91,6 +91,44 @@ public sealed class HeroFocusSettings
     public int BaselineMinSamples { get; set; } = 20;
 
     public HeroFocusWeights Weights { get; set; } = new();
+
+    /// <summary>Fetching a strong player's game on a hero the cycle has not covered (#433).</summary>
+    public FocusTargetedSettings Targeted { get; set; } = new();
+}
+
+/// <summary>
+/// The <c>Focus:Targeted</c> section. A hero no focus has covered, and no waiting replay has
+/// shown, for <see cref="After"/> gets a game of its own: the hero's Storm League leaderboard over
+/// the last <see cref="Seasons"/> seasons names a strong player, and their newest launchable game
+/// on the hero is downloaded into <c>Data\Standard</c>.
+/// </summary>
+public sealed class FocusTargetedSettings
+{
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>A hero is a target once it has gone this long without a focus or a sighting.</summary>
+    public TimeSpan After { get; set; } = TimeSpan.FromDays(7);
+
+    /// <summary>At most one targeted fetch this often.</summary>
+    public TimeSpan Interval { get; set; } = TimeSpan.FromHours(2);
+
+    /// <summary>No fetch while this many fetched replays still wait to be played.</summary>
+    public int MaxWaiting { get; set; } = 2;
+
+    /// <summary>The current season and the ones before it whose leaderboards are merged.</summary>
+    public int Seasons { get; set; } = 6;
+
+    /// <summary>Strong players whose match history is read per fetch at most.</summary>
+    public int PlayersPerHero { get; set; } = 5;
+
+    /// <summary>Only games played this recently: a focus replay older than its media window is not recorded.</summary>
+    public TimeSpan Lookback { get; set; } = TimeSpan.FromDays(6);
+
+    /// <summary>A hero that gave no game is not tried again before this.</summary>
+    public TimeSpan RetryAfter { get; set; } = TimeSpan.FromDays(1);
+
+    /// <summary>Heroes Profile calls the fetch may make in a rolling week.</summary>
+    public int WeeklyCallBudget { get; set; } = 2000;
 }
 
 /// <summary>How the parts of a candidate's score are weighed. Each group sums to 1.</summary>

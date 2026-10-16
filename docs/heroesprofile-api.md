@@ -77,6 +77,22 @@ All of these calls, and the player lookups below, go through one `HeroesProfileC
 - Heroes Profile's terms require a cache of player data to read the privacy feed at least daily and drop whoever went private. `PlayerPrivacySync` reads it every `PrivacyInterval` (12 h) from the cursor in `privacy.json` (`since`, `after_id`; the first read only sets it, since nothing was cached before) and deletes each private player's file. On 2026-10-16 one day of changes was more than one page, so it follows `has_more` for up to 20 pages of 1,000 a pass.
 - Focus videos never show a player's name or record, so this data needs no attribution line on YouTube.
 
+### Targeted fetches (focus heroes the pool does not bring)
+
+`FocusTargetedFetch` (download role, #433) fetches a game for a hero no focus has covered and no waiting replay has shown for `Focus:Targeted:After` (7 days). Measured on 2026-10-16 with our key:
+
+- `/patches` names each patch's `season`: 34 for 2.57.0.98348, 33 for 2.57.0.98304 and 98285. Seasons 25 to 34 were valid; 35 and 40 answered 422 `invalid_parameters`. The fetch takes the newest season there.
+- `/leaderboard?type=hero&hero=…&game_type=sl&season=…` allows 10,000 calls a week and 60 a minute, and answers 200 at once. Each row has `battletag`, `region_id`, `games_played` and `win_rate` (0 to 100).
+  - One season shows few games: Murky's current board had 23 players, none with 20 games.
+  - Six seasons merged (34 back to 29) had 203 players, and 35 of them had 20 or more games at 55% or more.
+  - So the fetch merges `Focus:Targeted:Seasons` (6): games add up, and wins are each season's win rate times its games. The merged record is the strength bar (`Focus:MinHeroGames`, `MinWinRate`).
+- `/players/matches?battletag=…&region=…&game_type=sl&hero=…&start_date=YYYY-MM-DD` allows 50,000 calls a week and 60 a minute. A cold query answers 202 with a job, like `players/heroes`.
+  - Each row has `replayID`, `game_date` (UTC), `winner` (1 when the player won) and the full score line; there is no game version.
+  - The fetch tries the player's won games first, best KDA first.
+  - For each game, `/replay/{id}` (through the listing) gives the build. A game is downloaded only when it is Storm League, launchable by spectate's rules, and inside the focus media window (`ReplayMedia:FocusCandidateMaxAge`, 7 days; `Focus:Targeted:Lookback` is 6).
+- **Limits.** The fetch makes at most one attempt per `Focus:Targeted:Interval` (2 h), stops while `MaxWaiting` (2) fetched replays wait, and counts its own calls against `WeeklyCallBudget` (2,000).
+- **What it stores.** `Data\Focus\targeted.json` keeps hero attribute ids and replay ids only, never a player.
+
 Auth is `Authorization: Bearer` ([Migrating](https://www.heroesprofile.com/Api/Migrating)). The v1 key is `op://Heroes Replay/Heroes Profile API Key/password` (skill `op-service-account`). The old `api.heroesprofile.com` `api_token` key is not accepted.
 
 ## Twitch extension
