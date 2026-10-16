@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.HeroFocus.Cards;
+using HeroesReplay.Core.HeroFocus.Targeted;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.HeroFocus;
@@ -20,6 +22,7 @@ public sealed class HeroFocusDownload
     private readonly FocusCardRefresh cards;
     private readonly FocusStrengthRefresh strength;
     private readonly PlayerPrivacySync privacy;
+    private readonly FocusTargetedFetch targeted;
     private readonly HeroFocusSettings settings;
     private readonly ILogger<HeroFocusDownload> logger;
     private readonly Func<TimeSpan, CancellationToken, Task> delay;
@@ -30,9 +33,11 @@ public sealed class HeroFocusDownload
         PlayerPrivacySync privacy,
         HeroFocusSettings settings,
         ILogger<HeroFocusDownload> logger,
-        Func<TimeSpan, CancellationToken, Task> delay = null
+        Func<TimeSpan, CancellationToken, Task> delay = null,
+        FocusTargetedFetch targeted = null
     )
     {
+        this.targeted = targeted;
         this.cards = cards ?? throw new ArgumentNullException(nameof(cards));
         this.strength = strength ?? throw new ArgumentNullException(nameof(strength));
         this.privacy = privacy ?? throw new ArgumentNullException(nameof(privacy));
@@ -86,7 +91,7 @@ public sealed class HeroFocusDownload
 
     /// <summary>
     /// Up to <c>CardsPerStep</c> missing cards, then records for the waiting cards, then the
-    /// privacy feed when it is due.
+    /// privacy feed when it is due, then a targeted fetch when one is due (#433).
     /// </summary>
     public async Task StepAsync(CancellationToken cancellationToken)
     {
@@ -105,6 +110,16 @@ public sealed class HeroFocusDownload
         if (privacy.IsDue())
         {
             await privacy.SyncAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (targeted != null)
+        {
+            List<FocusCard> waiting = cards
+                .Waiting()
+                .Select(facts => cards.Cards.Read(facts.Key))
+                .Where(card => card != null)
+                .ToList();
+            await targeted.StepAsync(waiting, cancellationToken).ConfigureAwait(false);
         }
     }
 }

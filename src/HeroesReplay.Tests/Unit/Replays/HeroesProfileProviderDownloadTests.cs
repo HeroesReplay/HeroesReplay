@@ -8,12 +8,14 @@ using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Connectivity;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.HeroFocus;
+using HeroesReplay.Core.HeroFocus.Targeted;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Requests;
 using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Twitch;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Kiota.Abstractions;
@@ -512,6 +514,81 @@ public class HeroesProfileProviderDownloadTests
     }
 
     /// <summary>Week-old replays from 6553xxxx, then fresh ones from 6558xxxx.</summary>
+    /// <summary>
+    /// A focus target's game (#433) is fetched once, when it is a Storm League game spectate can
+    /// launch and inside the focus window, which is longer than an ordinary replay's.
+    /// </summary>
+    [Fact]
+    public async Task DownloadTargetedAsync_FetchesALaunchableStormLeagueGameInsideTheFocusWindow()
+    {
+        string root = NewRoot();
+        try
+        {
+            DateTime now = DateTime.UtcNow;
+            var byId = new Dictionary<int, HeroesProfileReplay>
+            {
+                [65590001] = Target(65590001, Current, now.AddDays(-5)),
+                [65590002] = Target(65590002, "2.58.0.99999", now.AddHours(-2)),
+                [65590003] = Target(65590003, Current, now.AddDays(-9)),
+                [65590004] = Target(65590004, Current, now.AddHours(-2), "Quick Match"),
+            };
+            var service = new ListedDownloads(0, _ => ReplayListing.Empty)
+            {
+                ById = id => byId.GetValueOrDefault(id),
+            };
+            HeroesProfileProvider provider = Standard(root, service, focus: true);
+
+            Assert.Equal(
+                TargetedDownload.Downloaded,
+                await provider.DownloadTargetedAsync(65590001, CancellationToken.None)
+            );
+            Assert.Equal(
+                TargetedDownload.Known,
+                await provider.DownloadTargetedAsync(65590001, CancellationToken.None)
+            );
+            Assert.Equal(
+                TargetedDownload.NotLaunchable,
+                await provider.DownloadTargetedAsync(65590002, CancellationToken.None)
+            );
+            Assert.Equal(
+                TargetedDownload.Old,
+                await provider.DownloadTargetedAsync(65590003, CancellationToken.None)
+            );
+            Assert.Equal(
+                TargetedDownload.NotStormLeague,
+                await provider.DownloadTargetedAsync(65590004, CancellationToken.None)
+            );
+            Assert.Equal(
+                TargetedDownload.NotFound,
+                await provider.DownloadTargetedAsync(65590005, CancellationToken.None)
+            );
+            Assert.Equal(new[] { 65590001 }, service.Downloaded);
+            Assert.Single(
+                Directory.GetFiles(Path.Combine(root, "Standard"), "65590001_Storm League_*")
+            );
+        }
+        finally
+        {
+            TestTemp.Delete(root);
+        }
+    }
+
+    private static HeroesProfileReplay Target(
+        int id,
+        string version,
+        DateTime played,
+        string gameType = "Storm League"
+    ) =>
+        new()
+        {
+            Id = id,
+            GameType = gameType,
+            GameVersion = version,
+            Map = "Cursed Hollow",
+            Fingerprint = "abc",
+            GameDate = played.ToString("yyyy-MM-dd HH:mm:ss"),
+        };
+
     private static Dictionary<int, DateTime> Backlog(int expired, int fresh)
     {
         DateTime now = DateTime.UtcNow;
@@ -816,8 +893,12 @@ public class HeroesProfileProviderDownloadTests
             string gameMap = null
         ) => throw new NotSupportedException();
 
+        /// <summary>The replay `/replays` lists for an id, or null when it lists none.</summary>
+        public Func<int, HeroesProfileReplay> ById { get; init; } =
+            _ => throw new NotSupportedException();
+
         public Task<HeroesProfileReplay> GetReplayByIdAsync(int replayId) =>
-            throw new NotSupportedException();
+            Task.FromResult(ById(replayId));
 
         public Task<IEnumerable<HeroesProfileReplay>> GetReplaysByMinId(int minId) =>
             throw new NotSupportedException();
