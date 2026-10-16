@@ -53,7 +53,11 @@ public class AnalyzerTests : IClassFixture<ReplayFixture>
         var results = analyzer.GetPlayers(fixture.Replay);
         Assert.NotEmpty(results);
 
-        var killSecond = results.First(kv => kv.Value.Calculator == typeof(KillCalculator));
+        // The second the victim dies, not the lead-in before it (#431).
+        var killSecond = results.First(kv =>
+            kv.Value.Calculator == typeof(KillCalculator)
+            && kv.Value.Victim?.TimeSpanDied?.FloorSeconds() == kv.Key.FloorSeconds()
+        );
         Assert.True(killSecond.Value.Points >= settings.Weights.PlayerKill);
 
         for (int second = 1; second < 3; second++)

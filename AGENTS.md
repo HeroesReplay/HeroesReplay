@@ -198,6 +198,8 @@ On **ASA-SERVER**, prove a change with a short run, then read `%LOCALAPPDATA%\He
 
 `Calculators:Enabled` in appsettings (type name, default on) for A/B. Example: `"EmotingCalculator": false`.
 
+After the calculators, `ReplayTimeline` adds a lead-in before each kill and death that follows the hero who dies (#431). It lasts `Spectate:PastDeathContextTime` (10 s) at the death's full weight, and runs up to `MaxPastDeathContextTime` (30 s) as the death matters more: by the respawn timer (full at `DeathContextFullRespawn`, 60 s), and fully when something worth `Weights:DeathImpact` (9) other than a kill happens while the hero is dead. Before the full-weight part, the lead-in's weight fades to `Weights:DeathLeadInFloor` (8), so a bigger fight elsewhere keeps the camera. The camera then stays on the hero it shows when the hero that wins the next second is within `Spectate:FocusShareDistance` (5) map units, since both are in one view (#432; 0 turns it off).
+
 ### Directory tree
 
 Both are Windows 11. Use the **same directory tree** so spectate, downloads, and OBS assets match.
@@ -231,7 +233,7 @@ New machine: clone into `C:\heroesreplay\HeroesReplay`, then `pwsh -File tools/b
 - Target `net10.0-windows10.0.19041.0` for CLI/Core/Tests. The PrintWindow/BitBlt capture and the WinRT OCR of `check battlenet` need the Windows TFM.
 - File-scoped namespaces, usings outside the namespace, `using` declarations where they reduce nesting.
 - Calculators implement `IFocusCalculator.Contribute(ReplayTimeline)`. Do not bring back `GetFocusPlayers(TimeSpan, Replay)` × PLINQ.
-- Focus pipeline: parse replay → calculators offer weighted events → hold last winner across empty seconds → spectator looks up by the memory match clock until core kill. Do not recompute calculators in the live loop.
+- Focus pipeline: parse replay → calculators offer weighted events → death lead-ins → hold last winner across empty seconds → keep a nearby hero → spectator looks up by the memory match clock until core kill. Do not recompute calculators in the live loop.
 - Living units: `unit.IsAliveAt(now)` (`TimeSpanDied == null` means alive).
 - OBS: websocket **5**, port **4455**, **one connection per replay** (`BeginSession` / `EndSession`). Do not connect-disconnect per request. The read-only MCP OBS tools are a separate client: one short session per tool call, Get requests only.
 - Cache the Heroes of the Storm HWND after launch; do not `GetProcessesByName` on every keystroke.

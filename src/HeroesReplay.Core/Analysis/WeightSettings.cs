@@ -45,6 +45,21 @@ public class WeightSettings
     public float TeamfightMax { get; set; } = 9.4f;
 
     public float PlayerDeath { get; set; }
+
+    /// <summary>
+    /// What a death's lead-in weighs at its start (#431). It climbs to the death's own weight for the
+    /// last <c>Spectate:PastDeathContextTime</c>, so a big enough fight or objective early in the
+    /// lead-in keeps the camera. At 8 a 1v1 elsewhere loses to it and a 3v3 wins its first seconds.
+    /// </summary>
+    public float DeathLeadInFloor { get; set; } = 8.0f;
+
+    /// <summary>
+    /// Anything other than a kill or death worth this much while the hero is dead (an objective, a
+    /// boss, a town hall, the core, a fight of eight heroes) gives that death the longest lead-in
+    /// (#431).
+    /// </summary>
+    public float DeathImpact { get; set; } = 9.0f;
+
     public float PlayerKill { get; set; }
     public float KillStreakBonus { get; set; }
     public float PentaKill { get; set; }

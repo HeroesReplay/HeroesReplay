@@ -376,6 +376,8 @@ public class ActivityFocusTests
                 MaxDistanceToEnemyKill = 20,
                 MaxDistanceToBoss = 9,
                 RemoteBodyHeroes = new[] { "Abathur" },
+                // Each test is one calculator rule: the camera goes where the calculator says.
+                FocusShareDistance = 0,
             },
             FocusUnits = new FocusUnitSettings
             {
