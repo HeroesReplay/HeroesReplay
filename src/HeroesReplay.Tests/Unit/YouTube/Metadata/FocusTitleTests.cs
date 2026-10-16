@@ -121,6 +121,36 @@ public class FocusTitleTests
     }
 
     [Fact]
+    public void TheRoster_NamesTheFocusedHero_WithoutItsPlayer()
+    {
+        LoadedReplay focused = Focused("Li-Ming", "Ranged Assassin", "Teleport Build");
+        YouTubeEntry focus = YouTubeEntryBuilder.Create(
+            focused,
+            new YouTubeSettings { PrivacyStatus = "public" }
+        );
+        focused.FocusPick = null;
+        YouTubeEntry ordinary = YouTubeEntryBuilder.Create(
+            focused,
+            new YouTubeSettings { PrivacyStatus = "public" }
+        );
+
+        Assert.Equal(
+            "Blue: Li-Ming, Hero1 (Other1), Hero2 (Other2), Hero3 (Other3), Hero4 (Other4)",
+            focus.DescriptionLines.Single(line =>
+                line.StartsWith("Blue: ", StringComparison.Ordinal)
+            )
+        );
+        Assert.DoesNotContain(
+            focus.DescriptionLines,
+            line => line.Contains("Star", StringComparison.Ordinal)
+        );
+        Assert.Contains(
+            ordinary.DescriptionLines,
+            line => line.StartsWith("Blue: Li-Ming (Star), ", StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
     public void APlainBuild_LeavesTheHeroAlone_AndTheLineStillNamesIt()
     {
         YouTubeEntry entry = YouTubeEntryBuilder.Create(
@@ -170,6 +200,7 @@ public class FocusTitleTests
             .Select(index => new Player
             {
                 Name = index == 0 ? "Star" : "Other" + index,
+                Character = index == 0 ? hero : "Hero" + index,
                 BattleTag = index == 0 ? 1234 : 2000 + index,
                 Team = index < 5 ? 0 : 1,
                 PlayerType = PlayerType.Human,
