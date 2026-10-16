@@ -314,8 +314,24 @@ public sealed class PlayerHeroStatsTests : IDisposable
         Assert.Equal(2, api.Calls.Count);
         Assert.Equal("1000", api.Calls[0].Query["limit"]);
         Assert.Equal("1055", api.Calls[1].Query["after_id"]);
-        Assert.False(File.Exists(store.PathFor("Risllot#2619", 2)));
-        Assert.True(File.Exists(store.PathFor("Open#3", 1)));
+        Assert.True(store.IsPrivate("Risllot#2619", 2));
+        Assert.Equal(
+            PlayerHeroLookupStatus.Private,
+            store
+                .Fresh(
+                    "Risllot#2619",
+                    2,
+                    "Kael",
+                    api.Now,
+                    TimeSpan.FromDays(7),
+                    TimeSpan.FromDays(1)
+                )
+                .Status
+        );
+        Assert.False(store.IsPrivate("Open#3", 1));
+        Assert.NotNull(
+            store.Fresh("Open#3", 1, "Kael", api.Now, TimeSpan.FromDays(7), TimeSpan.FromDays(1))
+        );
         Assert.Equal(1055, store.ReadPrivacy().AfterId);
     }
 

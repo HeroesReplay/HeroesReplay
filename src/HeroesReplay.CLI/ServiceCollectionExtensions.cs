@@ -9,6 +9,7 @@ using HeroesReplay.Core;
 using HeroesReplay.Core.Analysis;
 using HeroesReplay.Core.Analysis.Calculators;
 using HeroesReplay.Core.Analysis.Insights;
+using HeroesReplay.Core.Builds.Matching;
 using HeroesReplay.Core.Builds.Reference;
 using HeroesReplay.Core.Clips;
 using HeroesReplay.Core.Configuration;
@@ -19,6 +20,10 @@ using HeroesReplay.Core.GameClient.Firewall;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesData.Rotation;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.HeroFocus;
+using HeroesReplay.Core.HeroFocus.Cards;
+using HeroesReplay.Core.HeroFocus.Scoring;
+using HeroesReplay.Core.HeroFocus.Signatures;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
@@ -688,6 +693,63 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<PlayerHeroStatsStore>(),
             PlayerStatsFor(sp),
             sp.GetRequiredService<ILogger<PlayerPrivacySync>>()
+        ));
+        return services;
+    }
+
+    /// <summary>
+    /// The download role's focus work (#433): a focus card per waiting Standard replay, the hero
+    /// baselines, the players' Heroes Profile records, and the privacy feed.
+    /// </summary>
+    public static IServiceCollection AddHeroFocusDownload(this IServiceCollection services)
+    {
+        services.AddPlayerHeroStats();
+        services.TryAddSingleton(_ => HeroSignatures.Embedded());
+        services.TryAddSingleton(sp =>
+        {
+            AppSettings settings = sp.GetRequiredService<AppSettings>();
+            IGuideCatalog guides = GuideCatalog.Embedded();
+            InsightsSettings insights = settings.Insights ?? new InsightsSettings();
+            var builder = new FocusCardBuilder(
+                guides,
+                new BuildMatcher(
+                    new BuildMatchOptions
+                    {
+                        MinTiers = insights.Builds.MinTiers,
+                        SituationalWeight = insights.Builds.SituationalWeight,
+                        AmbiguityMargin = insights.Builds.AmbiguityMargin,
+                    }
+                ),
+                settings.YouTube?.Titles
+            );
+            string data = settings.Location.DataDirectory;
+            IGameData gameData = sp.GetRequiredService<IGameData>();
+            return new FocusCardRefresh(
+                builder,
+                new FocusCardStore(FocusCardStore.DirectoryFor(data)),
+                new HeroBaselineStore(HeroBaselineStore.PathFor(data)),
+                sp.GetRequiredService<HeroSignatures>(),
+                settings.Focus,
+                () => gameData.Heroes,
+                path => FocusReplayParse.Read(path).Replay,
+                settings.StandardReplayCachePath,
+                data,
+                FocusCardBuilder.CheckedAt(guides),
+                sp.GetRequiredService<ILogger<FocusCardRefresh>>()
+            );
+        });
+        services.TryAddSingleton(sp => new FocusStrengthRefresh(
+            sp.GetRequiredService<PlayerHeroStatsFetch>(),
+            sp.GetRequiredService<AppSettings>().Focus,
+            PlayerStatsFor(sp),
+            sp.GetRequiredService<ILogger<FocusStrengthRefresh>>()
+        ));
+        services.TryAddSingleton(sp => new HeroFocusDownload(
+            sp.GetRequiredService<FocusCardRefresh>(),
+            sp.GetRequiredService<FocusStrengthRefresh>(),
+            sp.GetRequiredService<PlayerPrivacySync>(),
+            sp.GetRequiredService<AppSettings>().Focus,
+            sp.GetRequiredService<ILogger<HeroFocusDownload>>()
         ));
         return services;
     }

@@ -134,8 +134,8 @@ public static class CommandReference
         ),
         new(
             "focus candidates",
-            "A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, the shipped talent-build reference and hero signatures, and `--ledger` when given. Calls nothing on the network.",
-            "Prints the gates that ruled players out, the best focus candidates with each part of their score, and with `--simulate` a run of focus picks. Read-only; never writes the ledger.",
+            "A folder of replays (`--directory`, `--recursive` for subfolders), the heroes-data2 catalog under `Location:DataDirectory`, the shipped talent-build reference and hero signatures, and `--ledger` when given. Calls Heroes Profile only with `--fetch` (then `HeroesProfileApi:ApiKey`).",
+            "Prints the gates that ruled players out, the best focus candidates with each part of their score, and with `--simulate` a run of focus picks. Never writes the ledger. `--fetch N` makes up to N `players/heroes` calls and fills the cache under `Data\\HeroesProfile\\players`, counting against the weekly budget.",
             "0 when at least one replay was read. 1 for a missing folder or ledger, or no replays in it. 2 when no replay parsed."
         ),
         new(

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.Builds.Matching;
@@ -8,6 +9,7 @@ using HeroesReplay.Core.Builds.Played;
 using HeroesReplay.Core.Builds.Reference;
 using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.YouTube.Metadata;
 
@@ -24,7 +26,31 @@ public sealed record FocusReplayFacts(
     string Rank = null,
     double? AverageMmr = null,
     string HeroesProfileMap = null
-);
+)
+{
+    /// <summary>
+    /// The facts in a replay file's name: its Heroes Profile id when the name starts with one
+    /// (<c>65550003_Storm League_Diamond 3_…</c>, the download cache's form) and the rank after
+    /// it; else the key is the name without its extension.
+    /// </summary>
+    public static FocusReplayFacts FromFile(string path)
+    {
+        string name = Path.GetFileName(path);
+        string stem = Path.GetFileNameWithoutExtension(path);
+        string first = stem.Split('_')[0];
+        int? id =
+            int.TryParse(first, NumberStyles.None, CultureInfo.InvariantCulture, out int parsed)
+            && parsed > 0
+                ? parsed
+                : null;
+        return new FocusReplayFacts(
+            id?.ToString(CultureInfo.InvariantCulture) ?? stem,
+            id,
+            name,
+            RankImage.RankFromCacheFileName(name)
+        );
+    }
+}
 
 /// <summary>
 /// Reads a parsed replay (events and statistics on) into a <see cref="FocusCard"/> (#433): each
@@ -118,16 +144,17 @@ public sealed class FocusCardBuilder
                     : DateTime.SpecifyKind(replay.Timestamp, DateTimeKind.Utc),
             LengthSeconds = Math.Round(replay.ReplayLength.TotalSeconds),
             WinnerTeam = winner,
-            GuideCheckedAt = guides.Reference?.CheckedAt?.ToString(
-                "yyyy-MM-dd",
-                CultureInfo.InvariantCulture
-            ),
+            GuideCheckedAt = CheckedAt(guides),
             BuiltAtUtc = nowUtc,
             Players = seats
                 .Select(seat => Player(seat.Player, seat.Index, seat.Hero, winner, aram, comps))
                 .ToList(),
         };
     }
+
+    /// <summary>The talent-build reference's check date, as a card keeps it (<c>2026-10-12</c>).</summary>
+    public static string CheckedAt(IGuideCatalog guides) =>
+        guides?.Reference?.CheckedAt?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     /// <summary>NA, EU, KR or CN for a Battle.net region id; null for PTR or an unknown one.</summary>
     public static string RegionName(int regionId) =>

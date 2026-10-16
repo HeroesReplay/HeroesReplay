@@ -167,6 +167,25 @@ public sealed class PlayerHeroStatsStore
         }
     }
 
+    /// <summary>
+    /// Replaces what is kept about a player who went private with a note that they are private,
+    /// so their numbers are gone and every card learns it. False when nothing was kept.
+    /// </summary>
+    public bool MarkPrivate(string battleTag, int region, DateTimeOffset now)
+    {
+        StoredPlayer player = Read(battleTag, region);
+        if (player == null)
+        {
+            return false;
+        }
+
+        player.Status = PlayerHeroLookupStatus.Private;
+        player.StatusAtUtc = now;
+        player.Heroes?.Clear();
+        DurableFile.Replace(PathFor(battleTag, region), JsonSerializer.Serialize(player, Json));
+        return true;
+    }
+
     /// <summary>True when the player's file says their profile is private.</summary>
     public bool IsPrivate(string battleTag, int region) =>
         Read(battleTag, region)?.Status == PlayerHeroLookupStatus.Private;

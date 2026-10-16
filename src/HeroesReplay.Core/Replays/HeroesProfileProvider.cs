@@ -1209,8 +1209,14 @@ public class HeroesProfileProvider : IReplayProvider
         }
     }
 
+    /// <summary>
+    /// The waiting replays kept: <c>HeroesProfileApi:CachedReplayLimit</c>, plus
+    /// <c>Focus:ExtraCandidates</c> while focus picks are on, so they have a choice (#433).
+    /// </summary>
     private int CachedReplayLimit =>
-        settings.HeroesProfileApi?.CachedReplayLimit > 0
-            ? settings.HeroesProfileApi.CachedReplayLimit
-            : 5;
+        (
+            settings.HeroesProfileApi?.CachedReplayLimit > 0
+                ? settings.HeroesProfileApi.CachedReplayLimit
+                : 5
+        ) + (settings.Focus?.Enabled == true ? Math.Max(0, settings.Focus.ExtraCandidates) : 0);
 }
