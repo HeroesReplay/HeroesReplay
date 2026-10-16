@@ -65,6 +65,15 @@ public class SpectateSettings
     /// this many map units of it, since both are in the same view (#432). Zero turns it off.
     /// </summary>
     public double FocusShareDistance { get; set; } = 5;
+
+    /// <summary>
+    /// Once the camera moves to a hero it stays at least this long, unless an outcome (a kill, a
+    /// death, an objective: <c>Weights:FocusDwellOutcome</c>) worth <c>Weights:FocusDwellMargin</c>
+    /// more than the shot cuts it, or the hero dies (#435). A bigger fight never cuts it. A gap
+    /// this short before the shown hero wins again keeps the camera too. One second or less turns
+    /// it off.
+    /// </summary>
+    public TimeSpan FocusDwellTime { get; set; } = TimeSpan.FromSeconds(4);
     public TimeSpan KillStreakWindow { get; set; }
     public TimeSpan KillStreakHoldTime { get; set; }
 

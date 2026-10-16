@@ -413,6 +413,112 @@ public sealed class ReplayTimeline
         }
     }
 
+    /// <summary>
+    /// Once the camera moves to a hero it stays there for at least <paramref name="dwell"/>, so
+    /// two heroes far apart that score alike do not flick it between them (#435). A gap shorter
+    /// than that, after which the shown hero wins again, keeps the camera on it too. Only an
+    /// outcome worth at least <paramref name="margin"/> more than the shot cuts it short: a kill or
+    /// a death (with its lead-in), or anything but a fight worth <paramref name="outcome"/> (a map
+    /// objective, a boss, a town hall, the core). A fight never does, however big, so a solo laner
+    /// in a duel or working the lane keeps the camera through a 4v4 that has not decided anything
+    /// yet. The lead-in of a hero who dies within <paramref name="dwell"/> cuts it too, or the
+    /// death would happen off camera, and the shot ends when the hero it shows dies.
+    /// </summary>
+    public void KeepShotsForDwell(TimeSpan dwell, float margin, float outcome)
+    {
+        int shortest = Math.Max(0, (int)dwell.TotalSeconds);
+        if (shortest <= 1)
+        {
+            return;
+        }
+
+        Player shown = null;
+        Focus shot = null;
+        int started = 0;
+        for (int second = 0; second < TotalSeconds; second++)
+        {
+            Focus winner = slots[second];
+            if (winner == null)
+            {
+                continue;
+            }
+
+            if (winner.Target == shown)
+            {
+                shot = winner;
+                continue;
+            }
+
+            Unit kept =
+                shown != null && shot.Unit.IsAliveAt(TimeSpan.FromSeconds(second))
+                    ? AliveHero(shown, second)
+                    : null;
+            if (
+                kept != null
+                && !(IsOutcome(winner, outcome) && winner.Points >= shot.Points + margin)
+                && !LeadsIntoDeathWithin(winner, second, shortest)
+                && (second - started < shortest || WinsAgainWithin(shown, second, shortest))
+            )
+            {
+                slots[second] = new Focus(
+                    shot.Calculator,
+                    kept,
+                    shown,
+                    shot.Points,
+                    $"{shot.Description} (camera held on {shown.Character} over {winner.Description})"
+                )
+                {
+                    Victim = shot.Victim,
+                };
+                continue;
+            }
+
+            shown = winner.Target;
+            shot = winner;
+            started = second;
+        }
+    }
+
+    /// <summary>
+    /// A kill or a death (with its lead-in), or anything but a fight worth at least
+    /// <paramref name="objective"/>: a map objective, a boss, a town hall, the core.
+    /// </summary>
+    private static bool IsOutcome(Focus focus, float objective) =>
+        IsDeath(focus)
+        || (focus.Calculator != typeof(NearEnemyCalculator) && focus.Points >= objective);
+
+    private bool WinsAgainWithin(Player player, int second, int seconds)
+    {
+        for (int t = second + 1; t < second + seconds && t < TotalSeconds; t++)
+        {
+            if (slots[t]?.Target == player)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The focus is a lead-in: it follows a hero who is alive now and dies within
+    /// <paramref name="seconds"/>.
+    /// </summary>
+    private static bool LeadsIntoDeathWithin(Focus focus, int second, int seconds)
+    {
+        if (
+            focus.Victim == null
+            || focus.Unit != focus.Victim
+            || !focus.Victim.TimeSpanDied.HasValue
+        )
+        {
+            return false;
+        }
+
+        int died = focus.Victim.TimeSpanDied.Value.FloorSeconds();
+        return died > second && died - second <= seconds;
+    }
+
     public void ApplyPlayerPriority(int playerIndex)
     {
         Player[] players = Replay.Players ?? Array.Empty<Player>();

@@ -232,6 +232,11 @@ public class ReplayAnalyzer : IReplayAnalyzer
         timeline.ApplyDeathContext(settings.Spectate, settings.Weights);
         timeline.HoldSelectionAcrossEmptySeconds();
         timeline.KeepNearbySelection(settings.Spectate?.FocusShareDistance ?? 0);
+        timeline.KeepShotsForDwell(
+            settings.Spectate?.FocusDwellTime ?? TimeSpan.Zero,
+            settings.Weights?.FocusDwellMargin ?? 0,
+            settings.Weights?.FocusDwellOutcome ?? 0
+        );
         if (priorityPlayerIndex is int index && settings.Spectate != null)
         {
             timeline.ApplyPlayerPriority(index);
