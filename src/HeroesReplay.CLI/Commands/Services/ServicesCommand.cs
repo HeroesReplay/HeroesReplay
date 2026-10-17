@@ -263,9 +263,31 @@ public class ServicesCommand : Command
             "supervise",
             "Supervise the roles `services start` recorded, in the foreground: restart failed roles with backoff (10s, 30s, 2m, 5m), kill and restart roles whose heartbeat is 2 minutes old, at most 5 restarts per role in 30 minutes (ServiceRestart), then leave the role down (service.restart_budget_exhausted). One supervisor at a time, across logon sessions (an SSH session sees the desktop's through supervisor.json). `services stop` ends it; Ctrl+C leaves the roles running unsupervised."
         );
+        // A supervisor on a serviced runtime starts its successor with its own pid (#450).
+        var afterPid = new Option<int>(ServiceSupervisorHandOver.AfterPidOption)
+        {
+            Description =
+                "Wait up to 60 s for this supervisor pid to exit before taking over (the hand-over off a serviced .NET runtime).",
+            Hidden = true,
+        };
+        command.Options.Add(afterPid);
         command.SetAction(
             (parseResult, cancellationToken) =>
             {
+                int predecessor = parseResult.GetValue(afterPid);
+                if (
+                    predecessor > 0
+                    && !ServiceSupervisorHandOver.WaitForPredecessor(
+                        predecessor,
+                        ServiceSupervisorHandOver.PredecessorWait
+                    )
+                )
+                {
+                    Console.Error.WriteLine(
+                        $"supervisor pid {predecessor} has not exited after {ServiceHealthClassifier.Describe(ServiceSupervisorHandOver.PredecessorWait)}; taking over only if it no longer supervises."
+                    );
+                }
+
                 // Refuses while a supervisor runs in this session or another (#293).
                 using ServiceSupervisorMutex claim = SupervisorGate().TryClaim();
                 if (claim == null)
@@ -289,12 +311,16 @@ public class ServicesCommand : Command
 
     /// <summary>
     /// Runs the supervisor in this process until <c>services stop</c> or Ctrl+C. The caller holds
-    /// the supervisor mutex on this thread.
+    /// the supervisor mutex on this thread. When this process's .NET runtime is serviced under it
+    /// (#450), it starts a new supervisor on the current runtime and returns; if that one does
+    /// not start, it keeps supervising here.
     /// </summary>
     private static int Supervise(string exe, CancellationToken cancellationToken)
     {
         ServiceConsoleTitle.Apply(ServiceRoleLog.SupervisorRole);
         ServiceRestartSettings settings = ServiceCollectionExtensions.LoadServiceRestartSettings();
+        ServiceHealthSettings health = ServiceCollectionExtensions.LoadServiceHealthSettings();
+        var runtime = RuntimeFolder.ForThisProcess(health.RuntimeDirectory);
         using ServiceProvider provider = new ServiceCollection()
             .AddSupervisorServices()
             .BuildHeroesReplayProvider();
@@ -305,10 +331,53 @@ public class ServicesCommand : Command
         ILogger<ServiceSupervision> logger = provider.GetRequiredService<
             ILogger<ServiceSupervision>
         >();
-        var supervision = new ServiceSupervision
+        ServiceSupervision supervision = CreateSupervision(
+            exe,
+            settings,
+            health,
+            runtime.Missing,
+            provider,
+            log,
+            logger,
+            cancellationToken
+        );
+        int code = supervision.Run(cancellationToken);
+        if (
+            supervision.HandOverCause == null
+            || ServiceSupervisorHandOver.StartSuccessor(exe, logger)
+        )
+        {
+            return code;
+        }
+
+        return CreateSupervision(
+                exe,
+                settings,
+                health,
+                runtimeServiced: null,
+                provider,
+                log,
+                logger,
+                cancellationToken
+            )
+            .Run(cancellationToken);
+    }
+
+    private static ServiceSupervision CreateSupervision(
+        string exe,
+        ServiceRestartSettings settings,
+        ServiceHealthSettings health,
+        Func<string> runtimeServiced,
+        ServiceProvider provider,
+        ServiceRoleLogProvider log,
+        ILogger<ServiceSupervision> logger,
+        CancellationToken cancellationToken
+    ) =>
+        new()
         {
             Settings = settings,
-            Health = ServiceCollectionExtensions.LoadServiceHealthSettings(),
+            Health = health,
+            RuntimeServiced = runtimeServiced,
             ProcessNameOrNull = ProcessNameOrNull,
             Probe = ServiceProcessProbe.TryFromProcess,
             ReadHeartbeat = record => ServiceReadyFile.TryRead(record),
@@ -348,8 +417,6 @@ public class ServicesCommand : Command
             ),
             Obs = CreateObsWatchdog(settings, provider.GetRequiredService<ILogger<ObsWatchdog>>()),
         };
-        return supervision.Run(cancellationToken);
-    }
 
     /// <summary>
     /// The supervisor's OBS watchdog (#398) on the real process table, a short read-only

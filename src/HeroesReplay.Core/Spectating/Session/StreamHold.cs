@@ -20,7 +20,10 @@ public enum StreamHoldEnd
     /// <summary>The hold no longer applies: connectivity is down (outage mode), the setting or the arm changed.</summary>
     NotDesired,
 
-    /// <summary>A new release is staged; this install hands off to it.</summary>
+    /// <summary>
+    /// A new release is staged, or the runtime was serviced (#450): this process stops so the new
+    /// install, or the supervisor, starts spectate again.
+    /// </summary>
     ReleaseStaged,
 
     /// <summary>Spectate is stopping.</summary>
@@ -241,7 +244,8 @@ public sealed class StreamHold
                     if (await Staged(releaseStaged).ConfigureAwait(false))
                     {
                         end = StreamHoldEnd.ReleaseStaged;
-                        why = "a new release is staged and installs now";
+                        why =
+                            "spectate stops now for a staged release or a restart off a serviced .NET runtime";
                         break;
                     }
                 }

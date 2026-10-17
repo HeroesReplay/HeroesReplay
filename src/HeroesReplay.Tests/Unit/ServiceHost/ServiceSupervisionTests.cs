@@ -77,6 +77,98 @@ public class ServiceSupervisionTests
     }
 
     [Fact]
+    public void ServicedRuntime_RestartsTheOtherRolesAtOnce_AndSpectateOnceItExits()
+    {
+        // #450: the stream PC's processes all loaded 10.0.12, and a .NET update deleted it.
+        using var stack = new FakeStack(("spectate", 100), ("download", 101), ("youtube", 102));
+        var serviced = new HashSet<int> { 100, 101, 102 };
+        stack.Runtime = record =>
+            serviced.Contains(record.Pid)
+                ? new ServiceRoleRuntime
+                {
+                    Code = ServiceHealthCodes.RuntimeServiced,
+                    Folder = @"C:\Program Files\dotnet\shared\Microsoft.NETCore.App\10.0.12",
+                    Cause =
+                        "The .NET runtime folder ...\\10.0.12 that this process loaded is gone.",
+                    Since = stack.Clock.Now,
+                }
+                : null;
+        ServiceSupervision supervision = stack.Supervision();
+        Assert.True(supervision.Begin());
+
+        // One pass kills download and youtube; spectate plays on to the end of its replay.
+        Assert.True(supervision.Tick());
+        Assert.Equal(new[] { 101, 102 }, stack.Killed.ToArray());
+        Assert.Contains(
+            stack.Log.Entries,
+            entry =>
+                entry.Level == LogLevel.Warning
+                && entry.Message.Contains(ServiceHealthCodes.RuntimeServiced)
+                && entry.Message.Contains("Killing pid 101")
+        );
+
+        // No backoff: the next passes start both again on the current runtime.
+        DateTimeOffset killed = stack.Clock.Now;
+        stack.RunUntil(supervision, () => stack.Launches.Count == 2);
+        Assert.Equal(new[] { "download", "youtube" }, stack.Launches.Select(item => item.Role));
+        Assert.All(
+            stack.Launches,
+            launch => Assert.True(launch.At - killed <= TimeSpan.FromSeconds(2))
+        );
+        Assert.Equal(
+            ServiceRestartPolicy.RuntimeServicedReason,
+            supervision.Ledger("download").LastReason
+        );
+        Assert.Equal(1, supervision.Ledger("download").Recent.Count);
+        stack.Ticks(supervision, 60);
+        Assert.Equal(2, stack.Launches.Count);
+        Assert.Equal(100, stack.PidOf("spectate"));
+
+        // Spectate leaves its loop between replays; it is started again at once too.
+        stack.Exit("spectate", 100);
+        DateTimeOffset exited = stack.Clock.Now;
+        stack.RunUntil(supervision, () => stack.Launches.Count == 3);
+        Assert.Equal("spectate", stack.Launches[2].Role);
+        Assert.True(stack.Launches[2].At - exited <= TimeSpan.FromSeconds(2));
+        Assert.Equal(
+            ServiceRestartPolicy.RuntimeServicedReason,
+            supervision.Ledger("spectate").LastReason
+        );
+        Assert.DoesNotContain(100, stack.Killed);
+
+        // The new processes loaded the current runtime: nothing more restarts.
+        stack.Ticks(supervision, 600);
+        Assert.Equal(3, stack.Launches.Count);
+    }
+
+    [Fact]
+    public void ServicedSupervisor_HandsOverBeforeItTouchesAnyRole()
+    {
+        using var stack = new FakeStack(("download", 101), ("youtube", 102));
+        ServiceSupervision supervision = stack.Supervision();
+        Assert.True(supervision.Begin());
+        stack.Crash(101);
+        stack.SupervisorRuntime =
+            "The .NET runtime folder C:\\dotnet\\10.0.12 that this process loaded is gone.";
+
+        Assert.False(supervision.Tick());
+        Assert.Equal(stack.SupervisorRuntime, supervision.HandOverCause);
+        Assert.Empty(stack.Launches);
+        Assert.Empty(stack.Killed);
+        LogEntry warning = Assert.Single(
+            stack.Log.Entries,
+            entry => entry.Level == LogLevel.Warning
+        );
+        Assert.Contains(ServiceHealthCodes.RuntimeServiced, warning.Message);
+        Assert.Contains("services supervise", warning.Message);
+
+        // Run leaves supervisor.json behind for nobody: the new supervisor writes its own.
+        Assert.Equal(0, supervision.Run(CancellationToken.None));
+        Assert.Null(ServiceSupervisorFile.TryLoad(stack.StatePath));
+        Assert.Empty(stack.Launches);
+    }
+
+    [Fact]
     public void SpectateThatUsesItsBudget_MakesObsSafeOnce_AndOtherRolesDoNot()
     {
         using var stack = new FakeStack(("spectate", 100), ("download", 101));
@@ -1046,12 +1138,33 @@ public class ServiceSupervisionTests
 
         /// <summary>The dependency probe each live role reports in its heartbeat (#305).</summary>
         public Func<ServiceProcessRecord, ServiceRoleDependency> Dependency { get; set; }
+
+        /// <summary>The serviced runtime each live role reports in its heartbeat (#450).</summary>
+        public Func<ServiceProcessRecord, ServiceRoleRuntime> Runtime { get; set; }
+
+        /// <summary>Why the supervisor's own runtime is gone, or null (#450).</summary>
+        public string SupervisorRuntime { get; set; }
+
+        /// <summary>The last heartbeat of a role that exited on its own, by pid.</summary>
+        public Dictionary<int, ServiceReadyReport> LastBeats { get; } = new();
         public List<(string Role, int Pid, DateTimeOffset At)> Launches { get; } = new();
         public List<int> Killed { get; } = new();
         public List<DateTimeOffset> KilledAt { get; } = new();
         public ListLogger Log { get; } = new();
 
         public void Crash(int pid) => alive.Remove(pid);
+
+        /// <summary>
+        /// The role leaves its loop and exits; its ready file keeps its last heartbeat, marked
+        /// exited, as <see cref="ServiceHeartbeat.Dispose"/> writes it.
+        /// </summary>
+        public void Exit(string role, int pid)
+        {
+            ServiceReadyReport last = Heartbeat(Record(role, pid));
+            last.Readiness = ServiceReadiness.Exited;
+            LastBeats[pid] = last;
+            alive.Remove(pid);
+        }
 
         public void Freeze(int pid) => frozen[pid] = Clock.Now;
 
@@ -1093,6 +1206,7 @@ public class ServiceSupervisionTests
                 LockPath = LockPath,
                 StatePath = StatePath,
                 Obs = obs,
+                RuntimeServiced = () => SupervisorRuntime,
                 Time = Clock,
                 ProcessNameOrNull = pid => alive.Contains(pid) ? "heroesreplay" : null,
                 Probe = _ => null,
@@ -1246,7 +1360,12 @@ public class ServiceSupervisionTests
 
         private ServiceReadyReport Heartbeat(ServiceProcessRecord record)
         {
-            if (!alive.Contains(record.Pid) || silent.Contains(record.Pid))
+            if (!alive.Contains(record.Pid))
+            {
+                return LastBeats.GetValueOrDefault(record.Pid);
+            }
+
+            if (silent.Contains(record.Pid))
             {
                 return null;
             }
@@ -1265,6 +1384,7 @@ public class ServiceSupervisionTests
                 HeartbeatIntervalSeconds = 15,
                 LastSuccessfulWorkAt = beat,
                 Dependency = Dependency?.Invoke(record),
+                Runtime = Runtime?.Invoke(record),
             };
         }
 

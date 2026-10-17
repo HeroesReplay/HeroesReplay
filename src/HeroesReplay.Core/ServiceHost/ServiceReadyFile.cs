@@ -78,6 +78,40 @@ public sealed class ServiceReadyReport
     /// role whose probes are off.
     /// </summary>
     public ServiceRoleDependency Dependency { get; set; }
+
+    /// <summary>
+    /// Set once the .NET runtime folder this role loaded is gone (#450): a .NET update serviced
+    /// it, and the runtime libraries the role loads from now on fail. <c>services status</c>
+    /// reports the role degraded with <c>runtime.serviced</c>; spectate restarts itself between
+    /// replays and the supervisor restarts the other roles at once. Null while the runtime is
+    /// there, and in files from older roles.
+    /// </summary>
+    public ServiceRoleRuntime Runtime { get; set; }
+}
+
+/// <summary>The serviced runtime, as the role writes it in its heartbeat (#450).</summary>
+public sealed class ServiceRoleRuntime
+{
+    /// <summary><see cref="ServiceHealthCodes.RuntimeServiced"/>.</summary>
+    public string Code { get; set; }
+
+    /// <summary>The runtime folder the role watched, such as <c>...\Microsoft.NETCore.App\10.0.12</c>.</summary>
+    public string Folder { get; set; }
+
+    /// <summary>What was gone, or the runtime library that did not load.</summary>
+    public string Cause { get; set; }
+
+    /// <summary>When the role first saw it.</summary>
+    public DateTimeOffset? Since { get; set; }
+
+    public ServiceRoleRuntime Copy() =>
+        new()
+        {
+            Code = Code,
+            Folder = Folder,
+            Cause = Cause,
+            Since = Since,
+        };
 }
 
 /// <summary>The last dependency probe, as the role writes it in its heartbeat.</summary>

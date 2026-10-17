@@ -11,6 +11,7 @@ using HeroesReplay.Core.HeroesData;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.SelfUpdate;
+using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Spectating.Session;
 using HeroesReplay.Core.Status;
@@ -154,6 +155,149 @@ public class ReleaseHandoffTests
         Assert.Equal("keep stream False", steps[^1]);
         Assert.Equal(new[] { 101, 202 }, provider.SpectatedIds.ToArray());
     }
+
+    [Fact]
+    public async Task ServicedRuntime_StopsAfterTheReplayOnTheWaitingScene_AndPreloadsNothing()
+    {
+        // #450: the release did not stage (zlib would not load); spectate restarts instead.
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        var steps = new List<string>();
+        var provider = new ScriptedReplays(continuesWhenEmpty: false);
+        provider.Enqueue(101);
+        provider.Enqueue(202);
+        var game = new RecordingGame { Steps = steps };
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new IdleWatchdog { Steps = steps },
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false, handOff: false) { Steps = steps },
+            runtimeRestart: new RuntimeRestart(
+                NullLogger.Instance,
+                () => game.Spectated.Count > 0 ? ServicedRuntime() : null,
+                () => true
+            )
+        );
+
+        try
+        {
+            Assert.True(await engine.RunAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        Assert.Equal(
+            new[]
+            {
+                "report",
+                "stage",
+                "session end",
+                "keep stream True",
+                "hand off",
+                "keep stream False",
+                "keep stream True",
+            },
+            steps.ToArray()
+        );
+        Assert.Equal(new int?[] { 101 }, game.Spectated.ToArray());
+        Assert.Equal(new int?[] { null }, game.LaunchedDuringReport.ToArray());
+        Assert.Equal(new[] { 101 }, provider.SpectatedIds.ToArray());
+        Assert.Equal(202, (await provider.TryLoadNextReplayAsync()).ReplayId);
+    }
+
+    [Fact]
+    public async Task ServicedRuntime_BeforeAnyReplay_StopsWithoutLoadingOne()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        var steps = new List<string>();
+        var provider = new ScriptedReplays(continuesWhenEmpty: true);
+        provider.Enqueue(101);
+        var game = new RecordingGame { Steps = steps };
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new IdleWatchdog { Steps = steps },
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false) { Steps = steps },
+            runtimeRestart: new RuntimeRestart(NullLogger.Instance, ServicedRuntime, () => true)
+        );
+
+        try
+        {
+            Assert.True(await engine.RunAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        Assert.Equal(new[] { "keep stream True" }, steps.ToArray());
+        Assert.Empty(game.Spectated);
+        Assert.Equal(101, (await provider.TryLoadNextReplayAsync()).ReplayId);
+    }
+
+    [Fact]
+    public async Task ServicedRuntime_WithoutASupervisor_KeepsSpectating()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "hr-handoff-" + Path.GetRandomFileName());
+        var provider = new ScriptedReplays(continuesWhenEmpty: false);
+        provider.Enqueue(101);
+        provider.Enqueue(202);
+        var game = new RecordingGame();
+        var engine = new Engine(
+            NullLogger<Engine>.Instance,
+            game,
+            new IdleGameData(),
+            provider,
+            new CancellationTokenProvider(),
+            new SpectatorStatusStore(Path.Combine(root, "status.json")),
+            new IdleWatchdog(),
+            new IdleResume(),
+            new StubLoader(),
+            new FlagGate(stage: false),
+            runtimeRestart: new RuntimeRestart(NullLogger.Instance, ServicedRuntime, () => false)
+        );
+
+        try
+        {
+            Assert.True(await engine.RunAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+
+        Assert.Equal(new int?[] { 101, 202 }, game.Spectated.ToArray());
+    }
+
+    private static ServiceRoleRuntime ServicedRuntime() =>
+        new()
+        {
+            Code = ServiceHealthCodes.RuntimeServiced,
+            Cause = "A .NET runtime library did not load (DllNotFoundException: zlib).",
+            Since = new DateTimeOffset(2026, 10, 17, 9, 0, 0, TimeSpan.Zero),
+        };
 
     [Fact]
     public async Task Update_LeavesTheNextReplayForTheNewProcess()
