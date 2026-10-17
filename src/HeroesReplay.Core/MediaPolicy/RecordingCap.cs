@@ -21,6 +21,9 @@ public sealed class RecordingCapInput
     /// </summary>
     public int PendingUploads { get; init; }
 
+    /// <summary>The focus-hero recordings (#433) among <see cref="PendingUploads"/>.</summary>
+    public int FocusPending { get; init; }
+
     /// <summary>Publication slots after now: uploads (or sends) that are not public yet.</summary>
     public int ScheduledAhead { get; init; }
 
@@ -84,6 +87,10 @@ public readonly record struct RecordingCapDecision(
                     CultureInfo.InvariantCulture,
                     $"{counts}; {Pending} waiting is a day of upload calls ({Capacity})."
                 ),
+                RecordingCap.FocusLane => string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{counts}, a day of upload calls or more; focus recordings have their own lane of {Capacity}, and fewer wait."
+                ),
                 RecordingCap.Room when Capacity >= 0 => string.Create(
                     CultureInfo.InvariantCulture,
                     $"{counts}; the publication window holds {Capacity}, so its slot is free now."
@@ -123,13 +130,16 @@ public readonly record struct RecordingCapDecision(
 /// deletes it as stale), and while the waiting recordings stay under one day of upload calls.
 /// Uploads that only wait for their publish time need no disk and no upload; they count only
 /// because they fill the window. A viewer request is always recorded. A focus-hero replay
-/// (#433) is recorded while the waiting recordings stay under one day of upload calls: the
-/// uploader sends it right after the requests, so no queue builds behind it.
+/// (#433) is recorded while the waiting recordings stay under one day of upload calls, and past
+/// that while fewer than <see cref="ReplayMediaPolicySettings.FocusRecordingLane"/> (8) focus
+/// recordings wait: the uploader sends it right after the requests, so it never waits behind
+/// the ordinary backlog.
 /// </summary>
 public static class RecordingCap
 {
     public const string Requested = "cap-requested";
     public const string Focus = "cap-focus";
+    public const string FocusLane = "cap-focus-lane";
     public const string Off = "cap-off";
     public const string NotLive = "cap-not-live";
     public const string Room = "cap-room";
@@ -172,6 +182,16 @@ public static class RecordingCap
         int uploads = Math.Max(0, input.UploadsPerDay);
         if (pending >= uploads)
         {
+            // Focus videos keep their own lane (#433): the ordinary backlog never starves them.
+            int lane = Math.Max(0, settings.FocusRecordingLane);
+            if (
+                input.Priority == ReplayMediaPriority.Focus
+                && Math.Max(0, input.FocusPending) < lane
+            )
+            {
+                return new RecordingCapDecision(true, FocusLane, pending, ahead, lane);
+            }
+
             return new RecordingCapDecision(false, UploadBacklog, pending, ahead, uploads);
         }
 
@@ -267,6 +287,7 @@ public static class RecordingCap
             PendingUploads = string.IsNullOrWhiteSpace(data)
                 ? 0
                 : NeedingSlot(settings, youtube, ledger, now),
+            FocusPending = string.IsNullOrWhiteSpace(data) ? 0 : FocusWaiting(settings, youtube),
             ScheduledAhead = PublicationReservation.CountAfter(ledger, now),
             Live = youtube.Enabled && !youtube.DryRun,
             PublicListing = YouTubeListing.IsPublic(youtube),
@@ -308,6 +329,39 @@ public static class RecordingCap
         }
 
         return needing;
+    }
+
+    /// <summary>Waiting recordings whose entry is a focus-hero video (#433), not yet sent.</summary>
+    internal static int FocusWaiting(AppSettings settings, YouTubeSettings youtube)
+    {
+        int waiting = 0;
+        foreach (
+            string recording in PendingUploadSize.Recordings(
+                settings.ContextsDirectory,
+                youtube.EntryFileName,
+                youtube.EntryFileNameUploaded
+            )
+        )
+        {
+            string directory = Path.GetDirectoryName(recording);
+            if (
+                string.IsNullOrWhiteSpace(directory)
+                || string.IsNullOrWhiteSpace(youtube.EntryFileName)
+            )
+            {
+                continue;
+            }
+
+            YouTubeEntry entry = PendingYouTubeUpload.ReadEntry(
+                Path.Combine(directory, youtube.EntryFileName)
+            );
+            if (entry?.HeroFocus != null && string.IsNullOrWhiteSpace(entry.VideoId))
+            {
+                waiting++;
+            }
+        }
+
+        return waiting;
     }
 
     private static bool HoldsSlotAfter(
