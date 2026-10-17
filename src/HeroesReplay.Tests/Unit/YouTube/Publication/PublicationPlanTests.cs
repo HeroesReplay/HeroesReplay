@@ -386,7 +386,7 @@ public class PublicationPlanTests
     }
 
     [Fact]
-    public void Plan_StreamPcKeepsTheSameRankFourHoursApart()
+    public void Plan_StreamPcKeepsTheSameRankTwoHoursApart()
     {
         var slots = new[]
         {
@@ -396,11 +396,94 @@ public class PublicationPlanTests
         PublicationDecision gold = Plan(Ordinary(), slots, StreamPcSettings(), rank: "Gold");
         PublicationDecision silver = Plan(Ordinary(), slots, StreamPcSettings(), rank: "Silver");
 
-        Assert.Equal(Now.AddHours(4), gold.PublishAtUtc);
+        Assert.Equal(Now.AddHours(2), gold.PublishAtUtc);
         Assert.Equal(Now.AddHours(1), silver.PublishAtUtc);
     }
 
-    /// <summary><c>appsettings.prod.json</c> since 2026-10-13.</summary>
+    /// <summary>
+    /// Production on 2026-10-17: the roster check pooled the heroes of every video within 8 h,
+    /// which at 24 a day covers most of the roster, so no waiting recording found a slot. It now
+    /// compares each nearby video on its own.
+    /// </summary>
+    [Fact]
+    public void Plan_ChecksRosterOverlapAgainstEachVideo_NotTheirPooledHeroes()
+    {
+        string[] roster = { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J" };
+        var pooled = new[]
+        {
+            new PublicationSample { At = Now.AddHours(1), Heroes = new[] { "A", "B", "X1", "X2" } },
+            new PublicationSample { At = Now.AddHours(2), Heroes = new[] { "C", "D", "X3", "X4" } },
+        };
+        var one = new[]
+        {
+            new PublicationSample { At = Now.AddHours(1), Heroes = new[] { "A", "B", "C", "D" } },
+        };
+
+        PublicationDecision spread = PublicationSchedule.Plan(
+            StreamPcSettings(),
+            Ordinary(),
+            true,
+            0,
+            Now,
+            pooled,
+            null,
+            null,
+            null,
+            roster
+        );
+        PublicationDecision repeat = PublicationSchedule.Plan(
+            StreamPcSettings(),
+            Ordinary(),
+            true,
+            0,
+            Now,
+            one,
+            null,
+            null,
+            null,
+            roster
+        );
+
+        Assert.Equal(Now, spread.PublishAtUtc);
+        Assert.Equal(Now.AddHours(9), repeat.PublishAtUtc);
+    }
+
+    [Fact]
+    public void Plan_PacesAFocusVideoWithHalfTheMapAndRankCooldowns_ButTheWholeHeroCooldown()
+    {
+        var slots = new[]
+        {
+            new PublicationSample
+            {
+                At = Now,
+                Map = "Alterac Pass",
+                Rank = "Gold",
+                Hero = "Li-Ming",
+            },
+        };
+        var focus = new PublicationSendFacts
+        {
+            Criteria = ReplayMediaPriority.Focus,
+            RecordedAtUtc = Now,
+        };
+
+        PublicationDecision ordinaryMap = Plan(
+            Ordinary(),
+            slots,
+            StreamPcSettings(),
+            map: "Alterac Pass"
+        );
+        PublicationDecision focusMap = Plan(focus, slots, StreamPcSettings(), map: "Alterac Pass");
+        PublicationDecision focusRank = Plan(focus, slots, StreamPcSettings(), rank: "Gold");
+        PublicationDecision focusHero = Plan(focus, slots, StreamPcSettings(), hero: "Li-Ming");
+
+        Assert.Equal(Now.AddHours(8), ordinaryMap.PublishAtUtc);
+        Assert.Equal(Now.AddHours(4), focusMap.PublishAtUtc);
+        Assert.Equal(Now.AddHours(1), focusRank.PublishAtUtc);
+        Assert.Equal(Now.AddHours(8), focusHero.PublishAtUtc);
+    }
+
+    /// <summary><c>appsettings.prod.json</c> since 2026-10-17 (the rank cooldown was 4 h from 2026-10-13).</summary>
     private static ReplayMediaPolicySettings StreamPcSettings() =>
         new()
         {
@@ -413,7 +496,7 @@ public class PublicationPlanTests
             MaxPublishAhead = TimeSpan.FromDays(3),
             OrdinaryCandidateMaxAge = TimeSpan.FromDays(3),
             MapCooldown = TimeSpan.FromHours(8),
-            RankCooldown = TimeSpan.FromHours(4),
+            RankCooldown = TimeSpan.FromHours(2),
             FeaturedHeroCooldown = TimeSpan.FromHours(8),
             MaxSharedHeroes = 4,
             ReservedRequestSlotsPerDay = 2,

@@ -92,4 +92,23 @@ public class ReplayMediaPolicySettings
     /// after the requests. Zero turns the lane off.
     /// </summary>
     public int FocusRecordingLane { get; set; } = 8;
+
+    /// <summary>
+    /// The share of <see cref="MapCooldown"/> and <see cref="RankCooldown"/> a focus-hero video
+    /// (#433) is paced with, 0 to 1, so it publishes a little sooner than an ordinary video. The
+    /// featured-hero cooldown and the roster check apply to it in full.
+    /// </summary>
+    public double FocusCooldownShare { get; set; } = 0.5;
+
+    /// <summary>A copy for pacing a focus-hero video: the map and rank cooldowns scaled by <see cref="FocusCooldownShare"/>.</summary>
+    public ReplayMediaPolicySettings ForFocusPacing()
+    {
+        double share = double.IsFinite(FocusCooldownShare)
+            ? Math.Clamp(FocusCooldownShare, 0, 1)
+            : 1;
+        var copy = (ReplayMediaPolicySettings)MemberwiseClone();
+        copy.MapCooldown = TimeSpan.FromTicks((long)(MapCooldown.Ticks * share));
+        copy.RankCooldown = TimeSpan.FromTicks((long)(RankCooldown.Ticks * share));
+        return copy;
+    }
 }
