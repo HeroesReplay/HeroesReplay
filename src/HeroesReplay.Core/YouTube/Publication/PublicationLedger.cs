@@ -32,8 +32,6 @@ public static class PublicationLedgerStore
 {
     public const string FileName = "youtube-publication.json";
 
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
-
     public static string PathFor(string dataDirectory)
     {
         if (string.IsNullOrWhiteSpace(dataDirectory))
@@ -54,7 +52,10 @@ public static class PublicationLedgerStore
 
         try
         {
-            return JsonSerializer.Deserialize<PublicationLedger>(File.ReadAllText(path));
+            return JsonSerializer.Deserialize(
+                File.ReadAllText(path),
+                YouTubeJsonContext.Default.PublicationLedger
+            );
         }
         catch (Exception ex) when (ex is JsonException or IOException)
         {
@@ -72,7 +73,10 @@ public static class PublicationLedgerStore
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         string temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(ledger, Json));
+        File.WriteAllText(
+            temp,
+            JsonSerializer.Serialize(ledger, YouTubeJsonContext.Indented.PublicationLedger)
+        );
         File.Move(temp, path, overwrite: true);
     }
 }

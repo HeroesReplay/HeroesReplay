@@ -127,7 +127,9 @@ public static class YouTubeLibraryRecord
             return;
         }
 
-        string line = JsonSerializer.Serialize(video) + Environment.NewLine;
+        string line =
+            JsonSerializer.Serialize(video, YouTubeJsonContext.Default.YouTubeLibraryVideo)
+            + Environment.NewLine;
         lock (Gate)
         {
             string directory = Path.GetDirectoryName(path);
@@ -180,7 +182,10 @@ public static class YouTubeLibraryRecord
         {
             try
             {
-                YouTubeLibraryVideo video = JsonSerializer.Deserialize<YouTubeLibraryVideo>(line);
+                YouTubeLibraryVideo video = JsonSerializer.Deserialize(
+                    line,
+                    YouTubeJsonContext.Default.YouTubeLibraryVideo
+                );
                 if (!string.IsNullOrWhiteSpace(video?.VideoId))
                 {
                     videos[video.VideoId.Trim()] = video;
