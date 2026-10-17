@@ -224,6 +224,13 @@ public static class CommandReference
             CheckCodesFor("ffmpeg")
         ),
         new(
+            "check runtime",
+            "None. Reads no secret and no setting.",
+            "Nothing. Reads `runtime.txt` beside the exe. `package-release.ps1` runs it on the packaged exe and writes the runtime into the zip's `runtime.txt` (#462).",
+            CheckExit,
+            CheckCodesFor("runtime")
+        ),
+        new(
             "client configure",
             "Heroes of the Storm closed (it rewrites `Variables.txt` on exit).",
             "Writes root and account `Variables.txt` (windowed 1080p, AhliObs) and copies the AhliObs `.StormInterface` into Documents.",

@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Status;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,13 +18,18 @@ namespace HeroesReplay.CLI.Commands.Mcp;
 /// <summary>
 /// <see cref="SpectatorMcpTools.GetSpectatorStatus"/>: the snapshot, where it is, the game
 /// process, and the machine as <c>services status</c> reads it (memory, commit, and above their
-/// limits the processes holding the most commit, #399).
+/// limits the processes holding the most commit, #399). The .NET runtime (#462): spectate's is
+/// <c>status.dotnetRuntime</c>; <see cref="DotnetRuntime"/> is this server's, which a role started
+/// now loads too; <see cref="ReleaseRuntime"/> is the one the release was built and tested on
+/// (runtime.txt, null for a source build or a release from before #462).
 /// </summary>
 public sealed record SpectatorStatusResult(
     SpectatorStatus Status,
     string StatusFile,
     GameProcessInfo GameProcess,
-    MachineHealthReport Machine
+    MachineHealthReport Machine,
+    string DotnetRuntime,
+    string ReleaseRuntime
 );
 
 /// <summary>The Heroes of the Storm processes by name, or the error that stopped the lookup.</summary>
@@ -66,11 +73,18 @@ public sealed class SpectatorMcpTools
             UseStructuredContent = true
         ),
         Description(
-            "Live spectator snapshot: phase, timer, replay, focus, OBS session, and whether the snapshot is stale. Also the machine: memory, commit charge, and, above their limits, the processes holding the most commit (report only)."
+            "Live spectator snapshot: phase, timer, replay, focus, OBS session, and whether the snapshot is stale. Also the machine: memory, commit charge, and, above their limits, the processes holding the most commit (report only). And the .NET runtime: spectate's (status.dotnetRuntime), this server's, and the one the release was built on (runtime.txt)."
         )
     ]
     public SpectatorStatusResult GetSpectatorStatus() =>
-        new(statusStore.Read(), statusStore.FilePath, ProbeGameProcess(), ReadMachine());
+        new(
+            statusStore.Read(),
+            statusStore.FilePath,
+            ProbeGameProcess(),
+            ReadMachine(),
+            ReleaseRuntime.Current,
+            ReleaseRuntime.Read(Path.GetDirectoryName(Environment.ProcessPath))
+        );
 
     [
         McpServerTool(

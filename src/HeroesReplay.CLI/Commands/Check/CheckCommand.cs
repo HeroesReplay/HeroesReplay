@@ -4,6 +4,7 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesClientSDK;
@@ -17,6 +18,7 @@ using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.Shared;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.Twitch;
@@ -97,6 +99,12 @@ public class CheckCommand : Command
             "Resolve ffmpeg and ffprobe (Clips:FfmpegDirectory, the deps install folder, C:\\ffmpeg\\bin, PATH) and report each path and -version line. Fails when one is missing, does not run, or ffmpeg cannot encode libx264; a working build that is not the pinned version is a warning.",
             CheckFfmpegAsync,
             InAll: true
+        ),
+        new(
+            "runtime",
+            "Report the .NET runtime this exe runs on (RuntimeInformation.FrameworkDescription) and the one its release was built and tested on (runtime.txt). A runtime older than the release's is a warning.",
+            CheckRuntimeAsync,
+            InAll: false
         ),
     ];
 
@@ -807,6 +815,33 @@ public class CheckCommand : Command
             return Fail("ffmpeg", e);
         }
     }
+
+    /// <summary>
+    /// The runtime this exe runs on and its release's (#462). <c>package-release.ps1</c> reads the
+    /// JSON detail, which starts with the runtime, into the zip's runtime.txt.
+    /// </summary>
+    public static Task<CheckResult> CheckRuntimeAsync(CheckRun run)
+    {
+        _ = run;
+        return Task.FromResult(
+            ToCheckResult(
+                ReleaseRuntime.Evaluate(
+                    ReleaseRuntime.Current,
+                    RuntimeEnvironment.GetRuntimeDirectory(),
+                    ReleaseRuntime.Read(Path.GetDirectoryName(Environment.ProcessPath))
+                )
+            )
+        );
+    }
+
+    /// <summary>A runtime older than the release's is a warning: it passes (exit 0).</summary>
+    public static CheckResult ToCheckResult(ReleaseRuntimeReport report) =>
+        new(
+            "runtime",
+            true,
+            report.OlderThanRelease ? WarningPrefix + report.Detail : report.Detail,
+            report.OlderThanRelease ? CheckCodes.RuntimeOlderThanRelease : CheckCodes.RuntimeOk
+        );
 
     /// <summary>A warning passes (exit 0) and prints as <c>[WARN]</c>.</summary>
     public static CheckResult ToCheckResult(FfmpegCheckReport report) =>

@@ -105,6 +105,9 @@ public sealed record ServiceRoleHealth
     public string Arguments { get; init; }
     public string Nonce { get; init; }
     public string Version { get; init; }
+
+    /// <summary>The .NET runtime the role runs on, from its heartbeat (#462). Null from older roles.</summary>
+    public string DotnetRuntime { get; init; }
     public string ExecutablePath { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
     public string Readiness { get; init; }
@@ -273,6 +276,19 @@ public sealed record ServiceStatusReport : ICliResult
     /// build ran with (#304), or null. It does not change <see cref="Ok"/>.
     /// </summary>
     public string ObsRestorePending { get; init; }
+
+    /// <summary>
+    /// The .NET runtime <c>services status</c> runs on, which a role started now loads too (#462).
+    /// A role on an older one is still on the runtime it started with
+    /// (<see cref="ServiceRoleHealth.DotnetRuntime"/>).
+    /// </summary>
+    public string DotnetRuntime { get; init; }
+
+    /// <summary>
+    /// The runtime this install's release was built and tested on (runtime.txt). Null for a source
+    /// build or a release from before #462.
+    /// </summary>
+    public string ReleaseRuntime { get; init; }
 
     [JsonIgnore]
     public int ExitCode => Ok ? 0 : 1;

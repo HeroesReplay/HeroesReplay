@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Status;
 using Xunit;
@@ -33,6 +34,14 @@ public class SpectatorStatusStoreTests
             Assert.Equal("00:03:21", read.Timer);
             Assert.Equal("Cursed Hollow", read.Map);
             Assert.False(read.SnapshotStale);
+
+            // The runtime spectate runs on (#462), in the file another process reads.
+            Assert.Equal(RuntimeInformation.FrameworkDescription, read.DotnetRuntime);
+            Assert.Contains(
+                $"\"dotnetRuntime\": \"{RuntimeInformation.FrameworkDescription}\"",
+                File.ReadAllText(path),
+                StringComparison.Ordinal
+            );
         }
         finally
         {

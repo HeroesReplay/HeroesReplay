@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.SelfUpdate;
@@ -135,6 +136,97 @@ public class ReleaseWorkflowTests
             Assert.DoesNotContain("packages: read", text, StringComparison.Ordinal);
             Assert.DoesNotContain("nuget update source", text, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void BothWorkflows_InstallTheSdkGlobalJsonPins()
+    {
+        // #462: the SDK carries the runtime a release is built on, so it is pinned and
+        // Dependabot moves it, never whatever 10.0.x the runner has that day.
+        using var global = JsonDocument.Parse(ReadRepoFile("global.json"));
+        JsonElement sdk = global.RootElement.GetProperty("sdk");
+        Assert.Matches(@"^10\.0\.\d{3}$", sdk.GetProperty("version").GetString());
+        Assert.Equal("latestPatch", sdk.GetProperty("rollForward").GetString());
+
+        foreach (string workflow in new[] { "ci.yml", "release.yml" })
+        {
+            string text = ReadRepoFile(".github", "workflows", workflow);
+            Assert.Contains("global-json-file: global.json", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("dotnet-version:", text, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("global.json", ReadRepoFile("tools", "bootstrap-workstation.ps1"));
+    }
+
+    [Fact]
+    public void Dependabot_MovesTheSdkAndPackagesButNotHeroesClientSdk()
+    {
+        string config = ReadRepoFile(".github", "dependabot.yml");
+
+        foreach (string ecosystem in new[] { "dotnet-sdk", "nuget", "github-actions" })
+        {
+            Assert.Contains("package-ecosystem: " + ecosystem, config, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("- dependency-name: HeroesClientSDK", config, StringComparison.Ordinal);
+        foreach (string group in new[] { "microsoft-extensions:", "opentelemetry:", "kiota:" })
+        {
+            Assert.Contains(group, config, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("version-update:semver-major", config, StringComparison.Ordinal);
+        Assert.Contains("target-branch: develop", config, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Release_NamesTheRuntimeFromRuntimeTxtInItsNotes()
+    {
+        string package = ReadRepoFile("tools", "package-release.ps1");
+        string verify = ReadRepoFile("tools", "verify-release.ps1");
+        string release = ReadRepoFile(".github", "workflows", "release.yml");
+
+        // version.txt stays the tag alone: the update compares it to the release tag.
+        Assert.Contains(
+            "'runtime.txt') -Value $runtime -NoNewline",
+            package,
+            StringComparison.Ordinal
+        );
+        Assert.Contains("'runtime.txt'", verify, StringComparison.Ordinal);
+        Assert.Contains(
+            "@('check', 'runtime', '--output', 'json')",
+            verify,
+            StringComparison.Ordinal
+        );
+
+        int read = release.IndexOf("GetEntry('runtime.txt')", StringComparison.Ordinal);
+        int upload = release.IndexOf("softprops/action-gh-release", StringComparison.Ordinal);
+        Assert.True(read > 0 && read < upload, "release.yml does not read runtime.txt first.");
+        Assert.Contains(
+            "Runtime: ${{ steps.runtime.outputs.runtime }}",
+            release[upload..],
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public void RuntimeCurrency_RunsWeeklyAgainstTheDotnetReleaseMetadata()
+    {
+        string workflow = ReadRepoFile(".github", "workflows", "runtime-currency.yml");
+        string script = ReadRepoFile("tools", "check-runtime-currency.ps1");
+
+        Assert.Matches(@"cron: ""\d+ \d+ \* \* 3""", workflow);
+        Assert.Contains("workflow_dispatch:", workflow, StringComparison.Ordinal);
+        Assert.Contains("issues: write", workflow, StringComparison.Ordinal);
+        Assert.Contains("tools/check-runtime-currency.ps1", workflow, StringComparison.Ordinal);
+
+        Assert.Contains(
+            "https://builds.dotnet.microsoft.com/dotnet/release-metadata/$Channel/releases.json",
+            script,
+            StringComparison.Ordinal
+        );
+        Assert.Contains("'latest-runtime'", script, StringComparison.Ordinal);
+        Assert.Contains("$_.security -eq $true", script, StringComparison.Ordinal);
+        Assert.Contains("(?m)^Runtime: ", script, StringComparison.Ordinal);
     }
 
     [Fact]

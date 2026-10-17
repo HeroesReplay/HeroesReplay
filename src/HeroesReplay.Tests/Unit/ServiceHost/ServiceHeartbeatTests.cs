@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using HeroesReplay.Core.ServiceHost;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,7 @@ public class ServiceHeartbeatTests
             ServiceReadyReport read = Read("download", "beat1", root);
             Assert.Equal("download", read.Role);
             Assert.Equal("9.9.9", read.Version);
+            Assert.Equal(RuntimeInformation.FrameworkDescription, read.DotnetRuntime);
             Assert.Equal(@"C:\heroesreplay\app\heroesreplay.exe", read.ExecutablePath);
             Assert.Equal(4242, read.Pid);
             Assert.Equal(ServiceReadiness.Ready, read.Readiness);

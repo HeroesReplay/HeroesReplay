@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using HeroesReplay.Core.ServiceHost.Logs;
 using Microsoft.Extensions.Logging;
@@ -56,6 +57,7 @@ public sealed class ServiceHeartbeat : IDisposable
             Role = identity.Role,
             Nonce = identity.Nonce,
             Version = identity.Version,
+            DotnetRuntime = RuntimeInformation.FrameworkDescription,
             ExecutablePath = identity.ExecutablePath,
             Pid = identity.Pid,
             HeartbeatIntervalSeconds = (int)Math.Ceiling(Interval.TotalSeconds),
@@ -434,6 +436,7 @@ public sealed class ServiceHeartbeat : IDisposable
                 Role = report.Role,
                 Nonce = report.Nonce,
                 Version = report.Version,
+                DotnetRuntime = report.DotnetRuntime,
                 ExecutablePath = report.ExecutablePath,
                 Pid = report.Pid,
                 Readiness = report.Readiness,
