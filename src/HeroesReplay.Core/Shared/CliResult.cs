@@ -1,6 +1,10 @@
+using System;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using HeroesReplay.Core.Obs.Collection;
+using HeroesReplay.Core.ServiceHost;
 
 namespace HeroesReplay.Core.Shared;
 
@@ -48,18 +52,62 @@ public static class CliJson
     /// <summary>The environment variable whose value is <see cref="CliResult{TDetails}.Environment"/>.</summary>
     public const string EnvironmentVariable = "HEROES_REPLAY_ENV";
 
-    public static readonly JsonSerializerOptions Options = new()
+    /// <summary>Core's results (<see cref="CliJsonContext"/>) with the envelope's options.</summary>
+    internal static readonly CliJsonContext Json = new(NewOptions());
+
+    /// <summary>The options of every result Core writes.</summary>
+    public static JsonSerializerOptions Options => Json.Options;
+
+    /// <summary>
+    /// The envelope's options over <paramref name="resolver"/>'s results and Core's: the CLI's
+    /// own results, with <paramref name="converters"/> for the enums only they hold.
+    /// </summary>
+    public static JsonSerializerOptions CreateOptions(
+        IJsonTypeInfoResolver resolver,
+        params JsonConverter[] converters
+    )
     {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
+        JsonSerializerOptions options = NewOptions();
+        options.TypeInfoResolver = JsonTypeInfoResolver.Combine(resolver, CliJsonContext.Default);
+        foreach (JsonConverter converter in converters)
+        {
+            options.Converters.Add(converter);
+        }
+
+        return options;
+    }
 
     /// <summary>The result as its runtime type, so an <see cref="ICliResult"/> keeps every field.</summary>
-    public static string Serialize(ICliResult result) =>
-        JsonSerializer.Serialize(result, result?.GetType() ?? typeof(object), Options);
+    public static string Serialize(ICliResult result) => Serialize(result, Options);
+
+    /// <summary>
+    /// <see cref="Serialize(ICliResult)"/> with <paramref name="options"/> from
+    /// <see cref="CreateOptions"/>. A result type no resolver holds throws <see cref="NotSupportedException"/>.
+    /// </summary>
+    public static string Serialize(ICliResult result, JsonSerializerOptions options) =>
+        result == null
+            ? "null"
+            : JsonSerializer.Serialize(result, options.GetTypeInfo(result.GetType()));
 
     public static string CurrentEnvironment() =>
         System.Environment.GetEnvironmentVariable(EnvironmentVariable);
+
+    /// <summary>
+    /// camelCase names, indented, no HTML escaping, and the enums Core's results hold as camelCase
+    /// strings. Source generation needs each enum's converter by name (#454).
+    /// </summary>
+    private static JsonSerializerOptions NewOptions() =>
+        new()
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            Converters =
+            {
+                new JsonStringEnumConverter<ObsDiffApply>(JsonNamingPolicy.CamelCase),
+                new JsonStringEnumConverter<ObsDiffEntity>(JsonNamingPolicy.CamelCase),
+                new JsonStringEnumConverter<ObsDiffKind>(JsonNamingPolicy.CamelCase),
+                new JsonStringEnumConverter<ServiceRoleState>(JsonNamingPolicy.CamelCase),
+            },
+        };
 }

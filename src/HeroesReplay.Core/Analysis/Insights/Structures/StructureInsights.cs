@@ -6,7 +6,7 @@ namespace HeroesReplay.Core.Analysis.Insights.Structures;
 /// <summary>Forts and keeps each team lost (#412).</summary>
 public sealed record StructureInsights
 {
-    public IReadOnlyList<TeamStructures> Teams { get; init; } = Array.Empty<TeamStructures>();
+    public IReadOnlyList<TeamStructures> Teams { get; set; } = Array.Empty<TeamStructures>();
 }
 
 public sealed record TeamStructures

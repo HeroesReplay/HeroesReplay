@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.IO;
+using HeroesReplay.CLI.Commands.Check;
 using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
@@ -51,11 +52,11 @@ public class CliOutputTests
         var output = new StringWriter();
 
         int failed = CliOutput.WriteJson(
-            new CliResult<object> { Ok = false, Code = "x.failed" },
+            new CliResult<CheckDetails> { Ok = false, Code = "x.failed" },
             output
         );
         int passed = CliOutput.WriteJson(
-            new CliResult<object> { Ok = true, Code = "x.ok" },
+            new CliResult<CheckDetails> { Ok = true, Code = "x.ok" },
             new StringWriter()
         );
 

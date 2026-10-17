@@ -13,7 +13,7 @@ public sealed record LaneInsights
     /// <summary>2 on Battlefield of Eternity, Braxis Holdout, Hanamura and Haunted Mines; 3 elsewhere.</summary>
     public int LaneCount { get; init; }
 
-    public IReadOnlyList<TeamLanes> Teams { get; init; } = Array.Empty<TeamLanes>();
+    public IReadOnlyList<TeamLanes> Teams { get; set; } = Array.Empty<TeamLanes>();
 }
 
 /// <summary>One team's lanes in the laning window.</summary>
@@ -25,7 +25,7 @@ public sealed record TeamLanes
     public int GroupLane { get; init; }
 
     /// <summary>Players mostly alone in a side lane, most alone first.</summary>
-    public IReadOnlyList<LaneSoaker> Soakers { get; init; } = Array.Empty<LaneSoaker>();
+    public IReadOnlyList<LaneSoaker> Soakers { get; set; } = Array.Empty<LaneSoaker>();
 
     /// <summary>The solo laner, or null when <see cref="Confidence"/> is <see cref="LaneConfidence.None"/>.</summary>
     public LaneSoaker SoloLaner { get; init; }

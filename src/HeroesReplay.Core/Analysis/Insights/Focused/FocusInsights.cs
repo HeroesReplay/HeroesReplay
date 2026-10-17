@@ -10,7 +10,7 @@ namespace HeroesReplay.Core.Analysis.Insights.Focused;
 public sealed record FocusInsights
 {
     /// <summary>Most followed first.</summary>
-    public IReadOnlyList<FocusShare> Players { get; init; } = Array.Empty<FocusShare>();
+    public IReadOnlyList<FocusShare> Players { get; set; } = Array.Empty<FocusShare>();
 
     public FocusShare Top { get; init; }
 }

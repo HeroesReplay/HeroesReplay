@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using HeroesReplay.CLI.Commands.Config;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Configuration;
@@ -327,7 +328,7 @@ public class EffectiveConfigurationTests : IDisposable
     private void WriteJson(string file, object values) =>
         File.WriteAllText(
             Path.Combine(root, file),
-            JsonSerializer.Serialize(new Dictionary<string, object> { [probe] = values })
+            TestJson.Write(new Dictionary<string, object> { [probe] = values })
         );
 
     private void SetVariable(string name, string value)

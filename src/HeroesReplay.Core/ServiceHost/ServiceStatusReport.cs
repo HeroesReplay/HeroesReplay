@@ -280,5 +280,5 @@ public sealed record ServiceStatusReport : ICliResult
     public string ToJson() => CliJson.Serialize(this);
 
     public static ServiceStatusReport FromJson(string json) =>
-        JsonSerializer.Deserialize<ServiceStatusReport>(json, CliJson.Options);
+        JsonSerializer.Deserialize(json, CliJson.Json.ServiceStatusReport);
 }

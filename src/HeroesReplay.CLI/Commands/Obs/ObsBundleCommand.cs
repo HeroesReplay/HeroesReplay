@@ -110,7 +110,7 @@ public static class ObsBundleCommand
 
         if (json)
         {
-            output.WriteLine(CliJson.Serialize(report));
+            output.WriteLine(CliOutput.Serialize(report));
         }
         else
         {

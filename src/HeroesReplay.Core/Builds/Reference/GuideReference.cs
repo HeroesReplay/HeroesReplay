@@ -23,7 +23,7 @@ public sealed record GuideReference
     /// <summary>The heroes-data build the talents were checked against, such as <c>2.57.0.98304</c>.</summary>
     public string GameVersion { get; init; }
 
-    public IReadOnlyList<HeroGuide> Heroes { get; init; } = Array.Empty<HeroGuide>();
+    public IReadOnlyList<HeroGuide> Heroes { get; set; } = Array.Empty<HeroGuide>();
 }
 
 /// <summary>One hero's guide: its link, the day the guide was last updated, and its builds.</summary>
@@ -44,7 +44,7 @@ public sealed record HeroGuide
     public DateOnly? GuideUpdated { get; init; }
 
     /// <summary>The guide's builds in page order.</summary>
-    public IReadOnlyList<GuideBuild> Builds { get; init; } = Array.Empty<GuideBuild>();
+    public IReadOnlyList<GuideBuild> Builds { get; set; } = Array.Empty<GuideBuild>();
 }
 
 /// <summary>One named build of a guide, such as Li-Ming's Teleport Build.</summary>
@@ -60,7 +60,7 @@ public sealed record GuideBuild
     public string CalculatorUrl { get; init; }
 
     /// <summary>Seven tiers in level order.</summary>
-    public IReadOnlyList<GuideTier> Tiers { get; init; } = Array.Empty<GuideTier>();
+    public IReadOnlyList<GuideTier> Tiers { get; set; } = Array.Empty<GuideTier>();
 }
 
 /// <summary>
@@ -73,9 +73,9 @@ public sealed record GuideTier
     /// <summary>The level the guide labels the tier with (Chromie's tiers unlock at 1, 2, 5, 8, 11, 14, 18).</summary>
     public int Level { get; init; }
 
-    public IReadOnlyList<string> Recommended { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Recommended { get; set; } = Array.Empty<string>();
 
-    public IReadOnlyList<string> Situational { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Situational { get; set; } = Array.Empty<string>();
 
     public bool Stale { get; init; }
 }

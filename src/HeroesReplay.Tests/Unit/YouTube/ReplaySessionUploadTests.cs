@@ -4,12 +4,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Telemetry;
 using HeroesReplay.Core.YouTube;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -51,7 +51,7 @@ public class ReplaySessionUploadTests
         };
         await File.WriteAllTextAsync(
             Path.Combine(directory, "youtube-entry.json"),
-            JsonSerializer.Serialize(entry)
+            TestJson.Entry(entry)
         );
 
         var log = new ReceiptLogger();

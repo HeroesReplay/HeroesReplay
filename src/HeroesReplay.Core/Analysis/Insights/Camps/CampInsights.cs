@@ -6,7 +6,7 @@ namespace HeroesReplay.Core.Analysis.Insights.Camps;
 /// <summary>Merc camp control per team (#412). ARAM has no camps, so it is empty there.</summary>
 public sealed record CampInsights
 {
-    public IReadOnlyList<TeamCamps> Teams { get; init; } = Array.Empty<TeamCamps>();
+    public IReadOnlyList<TeamCamps> Teams { get; set; } = Array.Empty<TeamCamps>();
 
     public int TotalCaptures { get; init; }
 }

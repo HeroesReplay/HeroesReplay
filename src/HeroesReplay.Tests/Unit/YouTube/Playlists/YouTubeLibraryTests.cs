@@ -18,6 +18,7 @@ using HeroesReplay.Core.YouTube.Playlists;
 using HeroesReplay.Core.YouTube.Publication;
 using HeroesReplay.Core.YouTube.Quota;
 using HeroesReplay.Core.YouTube.Search;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -756,7 +757,7 @@ public sealed class YouTubeLibraryTests : IDisposable
     {
         File.WriteAllText(
             Path.Combine(directory, YouTubeQuotaUnits.FileName),
-            JsonSerializer.Serialize(
+            TestJson.Write(
                 new
                 {
                     QuotaDay = PublicationSchedule.QuotaDayStart(Noon),
@@ -1085,7 +1086,8 @@ public sealed class YouTubeLibraryTests : IDisposable
                     {
                         ["Dragon Shire"] = "cached-map",
                     },
-                }
+                },
+                YouTubeJsonContext.Indented.YouTubePlaylistCache
             )
         );
         AppendRecord("video-7", "Dragon Shire", "2.57.0.98304");
@@ -1252,8 +1254,9 @@ public sealed class YouTubeLibraryTests : IDisposable
         };
 
     private YouTubePlaylistCache ReadCache() =>
-        JsonSerializer.Deserialize<YouTubePlaylistCache>(
-            File.ReadAllText(Path.Combine(directory, YouTubeLibrary.CacheFileName))
+        JsonSerializer.Deserialize(
+            File.ReadAllText(Path.Combine(directory, YouTubeLibrary.CacheFileName)),
+            YouTubeJsonContext.Default.YouTubePlaylistCache
         );
 
     private void AppendRecord(string videoId, string map, string version) =>
@@ -1293,7 +1296,7 @@ public sealed class YouTubeLibraryTests : IDisposable
         Directory.CreateDirectory(folder);
         File.WriteAllText(
             Path.Combine(folder, "youtube-entry-uploaded.json"),
-            JsonSerializer.Serialize(entry)
+            TestJson.Entry(entry)
         );
     }
 

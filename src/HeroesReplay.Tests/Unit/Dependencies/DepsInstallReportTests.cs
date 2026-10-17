@@ -70,7 +70,7 @@ public class DepsInstallReportTests
             null
         );
 
-        using JsonDocument json = JsonDocument.Parse(CliJson.Serialize(report));
+        using JsonDocument json = JsonDocument.Parse(CliOutput.Serialize(report));
         JsonElement tool = json.RootElement.GetProperty("details").GetProperty("tools")[0];
         Assert.Equal("ffmpeg", tool.GetProperty("name").GetString());
         Assert.Equal("alreadyInstalled", tool.GetProperty("outcome").GetString());

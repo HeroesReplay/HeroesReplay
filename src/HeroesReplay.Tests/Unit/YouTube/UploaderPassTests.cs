@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
@@ -13,6 +12,7 @@ using HeroesReplay.Core.YouTube.Outbox;
 using HeroesReplay.Core.YouTube.Playlists;
 using HeroesReplay.Core.YouTube.Publication;
 using HeroesReplay.Core.YouTube.Search;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -372,7 +372,7 @@ public sealed class UploaderPassTests : IDisposable
         await File.WriteAllBytesAsync(recording, new byte[] { 0, 0, 0, 24, 102, 116, 121, 112 });
         await File.WriteAllTextAsync(
             Path.Combine(context, "youtube-entry.json"),
-            JsonSerializer.Serialize(
+            TestJson.Entry(
                 new YouTubeEntry
                 {
                     Title = map + " - Storm League - Diamond - " + replayId,

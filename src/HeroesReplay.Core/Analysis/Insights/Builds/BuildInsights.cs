@@ -6,7 +6,7 @@ namespace HeroesReplay.Core.Analysis.Insights.Builds;
 /// <summary>The guide build each player's talents fit best (#412).</summary>
 public sealed record BuildInsights
 {
-    public IReadOnlyList<PlayerBuild> Players { get; init; } = Array.Empty<PlayerBuild>();
+    public IReadOnlyList<PlayerBuild> Players { get; set; } = Array.Empty<PlayerBuild>();
 }
 
 /// <summary>One player's best guide build: names and links only, never guide text.</summary>

@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Obs.Inspection;
-using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Commands.Obs;
 
@@ -58,7 +57,7 @@ public static class ObsLiveCommands
             run.Value ?? ObsInspector.Unavailable(run.Settings, run.Code, run.Message);
         if (json)
         {
-            output.WriteLine(CliJson.Serialize(inspection));
+            output.WriteLine(CliOutput.Serialize(inspection));
         }
         else
         {
@@ -84,7 +83,7 @@ public static class ObsLiveCommands
             run.Value ?? ObsValidator.Unavailable(run.Settings, run.Code, run.Message);
         if (json)
         {
-            output.WriteLine(CliJson.Serialize(validation));
+            output.WriteLine(CliOutput.Serialize(validation));
         }
         else
         {
