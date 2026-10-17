@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using HeroesReplay.Core.ServiceHost.Logs;
+using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.ServiceHost;
 
@@ -25,15 +26,23 @@ public sealed class ServiceHeartbeat : IDisposable
     private readonly ServiceReadyReport report;
     private readonly TimeProvider time;
     private readonly string directory;
+    private readonly RuntimeFolder runtime;
+    private ILogger logger;
     private ITimer timer;
     private CancellationTokenRegistration stopRegistration;
     private bool closed;
 
+    /// <summary>
+    /// <paramref name="runtime"/> is the .NET runtime folder this role loaded (#450). Each beat
+    /// checks it, and the heartbeat says <c>runtime.serviced</c> once it is gone. Null checks
+    /// nothing.
+    /// </summary>
     public ServiceHeartbeat(
         ServiceReadyReport identity,
         TimeSpan interval,
         TimeProvider time = null,
-        string directory = null
+        string directory = null,
+        RuntimeFolder runtime = null
     )
     {
         ArgumentNullException.ThrowIfNull(identity);
@@ -41,6 +50,7 @@ public sealed class ServiceHeartbeat : IDisposable
             interval > TimeSpan.Zero ? interval : ServiceHealthSettings.DefaultHeartbeatInterval;
         this.time = time ?? TimeProvider.System;
         this.directory = directory;
+        this.runtime = runtime;
         report = new ServiceReadyReport
         {
             Role = identity.Role,
@@ -65,11 +75,15 @@ public sealed class ServiceHeartbeat : IDisposable
     /// The first dependency probe (#305), so the ready file already says when the role starts
     /// degraded. Null writes none.
     /// </param>
+    /// <param name="logger">
+    /// Logs one warning when the .NET runtime this role loaded is serviced (#450). Null logs none.
+    /// </param>
     public static ServiceHeartbeat StartFromEnvironment(
         string role,
         ServiceHealthSettings settings,
         CancellationToken stop,
-        ServiceDependencyResult dependency = null
+        ServiceDependencyResult dependency = null,
+        ILogger logger = null
     )
     {
         if (!LaunchedAsServiceRole)
@@ -92,8 +106,12 @@ public sealed class ServiceHeartbeat : IDisposable
                 ExecutablePath = Environment.ProcessPath,
                 Pid = Environment.ProcessId,
             },
-            (settings ?? new ServiceHealthSettings()).Interval
-        );
+            (settings ?? new ServiceHealthSettings()).Interval,
+            runtime: RuntimeFolder.ForThisProcess(settings?.RuntimeDirectory)
+        )
+        {
+            logger = logger,
+        };
         if (dependency != null)
         {
             heartbeat.Dependency(dependency);
@@ -146,6 +164,69 @@ public sealed class ServiceHeartbeat : IDisposable
                 CheckedAt = now,
                 Since = same && previous.Since is DateTimeOffset since ? since : now,
             };
+        }
+    }
+
+    /// <summary>
+    /// A runtime library did not load (#450), such as the release unzip's zlib: the runtime this
+    /// role loaded was serviced. No-op outside a service role. See <see cref="RuntimeServiced"/>.
+    /// </summary>
+    public static void RecordRuntimeServiced(string cause) =>
+        Volatile.Read(ref current)?.RuntimeServiced(cause);
+
+    /// <summary>
+    /// Checks the runtime folder now: the serviced runtime once it is gone or a runtime library
+    /// did not load, else null. Always null outside a service role. See <see cref="CheckRuntime"/>.
+    /// </summary>
+    public static ServiceRoleRuntime CheckCurrentRuntime() =>
+        Volatile.Read(ref current)?.CheckRuntime();
+
+    /// <summary>
+    /// The runtime folder this role watches is gone, or a runtime library did not load: the role
+    /// reports <c>runtime.serviced</c> from now on, with the first cause, logged once.
+    /// </summary>
+    public void RuntimeServiced(string cause)
+    {
+        ServiceRoleRuntime found;
+        lock (gate)
+        {
+            if (report.Runtime != null || string.IsNullOrWhiteSpace(cause))
+            {
+                return;
+            }
+
+            report.Runtime = new ServiceRoleRuntime
+            {
+                Code = ServiceHealthCodes.RuntimeServiced,
+                Folder = runtime?.Folder,
+                Cause = Redact(cause),
+                Since = time.GetUtcNow(),
+            };
+            found = report.Runtime.Copy();
+        }
+
+        logger?.LogWarning(
+            "The .NET runtime this {Role} process loaded was serviced under it [{Code}]: {Cause} Runtime libraries it has not loaded yet fail until it restarts, so it restarts onto the current runtime: spectate between replays, the other roles by the supervisor at once.",
+            report.Role,
+            found.Code,
+            found.Cause
+        );
+    }
+
+    /// <summary>
+    /// Checks the runtime folder (<see cref="RuntimeFolder.Missing"/>) now. The serviced runtime,
+    /// or null while it is there.
+    /// </summary>
+    public ServiceRoleRuntime CheckRuntime()
+    {
+        if (runtime?.Missing() is string cause)
+        {
+            RuntimeServiced(cause);
+        }
+
+        lock (gate)
+        {
+            return report.Runtime?.Copy();
         }
     }
 
@@ -327,6 +408,7 @@ public sealed class ServiceHeartbeat : IDisposable
 
     public void Beat()
     {
+        CheckRuntime();
         lock (gate)
         {
             if (closed || report.ReadyAt == null)
@@ -386,6 +468,7 @@ public sealed class ServiceHeartbeat : IDisposable
                             Since = report.Concern.Since,
                         },
                 Dependency = report.Dependency?.Copy(),
+                Runtime = report.Runtime?.Copy(),
             };
         }
     }

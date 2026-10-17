@@ -35,6 +35,7 @@ public class Engine : IEngine
     private readonly Action<bool, string> recordSession;
     private readonly SpectateMemoryLog memoryLog;
     private readonly StreamHold streamHold;
+    private readonly RuntimeRestart runtimeRestart;
     private readonly Dictionary<int, int> frontAttempts = new();
     private LoadedReplay preparedNext;
 
@@ -50,7 +51,8 @@ public class Engine : IEngine
         IReplayLoader replayLoader,
         IReleaseUpdateGate releaseUpdate,
         SpectateMemoryLog memoryLog = null,
-        StreamHold streamHold = null
+        StreamHold streamHold = null,
+        RuntimeRestart runtimeRestart = null
     )
         : this(
             logger,
@@ -65,7 +67,8 @@ public class Engine : IEngine
             releaseUpdate,
             heartbeat: null,
             memoryLog,
-            streamHold
+            streamHold,
+            runtimeRestart
         ) { }
 
     /// <summary>
@@ -73,7 +76,9 @@ public class Engine : IEngine
     /// role's installed heartbeat (<see cref="ServiceHeartbeat.RecordSession"/>).
     /// <paramref name="memoryLog"/> logs spectate's own memory at each session end (#399).
     /// <paramref name="streamHold"/> holds the next replay while the desired stream is down
-    /// (#396). Null never holds.
+    /// (#396). Null never holds. <paramref name="runtimeRestart"/> stops spectate between replays
+    /// once the .NET runtime it loaded was serviced and a supervisor will start it again (#450).
+    /// Null never does.
     /// </summary>
     internal Engine(
         ILogger<Engine> logger,
@@ -88,7 +93,8 @@ public class Engine : IEngine
         IReleaseUpdateGate releaseUpdate,
         ServiceHeartbeat heartbeat,
         SpectateMemoryLog memoryLog = null,
-        StreamHold streamHold = null
+        StreamHold streamHold = null,
+        RuntimeRestart runtimeRestart = null
     )
     {
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -108,6 +114,7 @@ public class Engine : IEngine
         recordSession = heartbeat == null ? ServiceHeartbeat.RecordSession : heartbeat.Session;
         this.memoryLog = memoryLog;
         this.streamHold = streamHold;
+        this.runtimeRestart = runtimeRestart;
     }
 
     public async Task<bool> RunAsync()
@@ -195,6 +202,17 @@ public class Engine : IEngine
     private async Task<bool> SpectateOneAsync()
     {
         using Activity replayActivity = HeroesReplayTelemetry.StartSpan("heroesreplay.replay");
+        // Between replays, whatever the last one did (played, deferred, failed, an empty queue,
+        // an outage pause): a serviced runtime restarts spectate before the next one (#450).
+        if (runtimeRestart?.Due() == true && HandOffRuntime())
+        {
+            ReturnPreparedNext();
+            logger.LogInformation(
+                "Stopping before the next replay so the supervisor starts spectate again on the current .NET runtime."
+            );
+            return false;
+        }
+
         if (
             !MayStartReplay(
                 connectivityWatchdog.IsOnline,
@@ -218,12 +236,10 @@ public class Engine : IEngine
             StreamHoldEnd end = await streamHold
                 .HoldAsync(hold, StageReleaseAsync, consoleTokenProvider.Token)
                 .ConfigureAwait(false);
-            if (end == StreamHoldEnd.ReleaseStaged && HandOffRelease())
+            if (end == StreamHoldEnd.ReleaseStaged && HandOffRestart() is string reason)
             {
                 ReturnPreparedNext();
-                logger.LogInformation(
-                    "Stopping during the stream hold so the new release can replace this install."
-                );
+                logger.LogInformation("Stopping during the stream hold so {Reason}.", reason);
                 return false;
             }
 
@@ -400,14 +416,12 @@ public class Engine : IEngine
             // Without a report (OBS off, or an outcome that has none) nothing was checked yet,
             // and no next replay was launched either.
             bool releaseStaged = await (releaseCheck ?? StageReleaseAsync()).ConfigureAwait(false);
-            if (releaseStaged && HandOffRelease())
+            if (releaseStaged && HandOffRestart() is string reason)
             {
                 // spectated-ids.txt now contains this replay. A new process only reads that
                 // file, so put a preloaded replay back before this one exits.
                 ReturnPreparedNext();
-                logger.LogInformation(
-                    "Stopping after this replay so the new release can replace this install."
-                );
+                logger.LogInformation("Stopping after this replay so {Reason}.", reason);
                 return false;
             }
 
@@ -491,19 +505,27 @@ public class Engine : IEngine
         return true;
     }
 
-    /// <summary>False when no release is staged, including a stop during the check.</summary>
+    /// <summary>
+    /// True when this process stops after the replay: a release is staged, or the .NET runtime
+    /// it loaded was serviced and a supervisor will start it again (#450; a release that could
+    /// not unzip for want of zlib reports that too). False otherwise, including a stop during the
+    /// check.
+    /// </summary>
     private async Task<bool> StageReleaseAsync()
     {
         try
         {
-            return await releaseUpdate
-                .TryStageAsync(consoleTokenProvider.Token)
-                .ConfigureAwait(false);
+            if (await releaseUpdate.TryStageAsync(consoleTokenProvider.Token).ConfigureAwait(false))
+            {
+                return true;
+            }
         }
         catch (OperationCanceledException) when (consoleTokenProvider.Token.IsCancellationRequested)
         {
             return false;
         }
+
+        return runtimeRestart?.Due() == true;
     }
 
     /// <summary>
@@ -524,11 +546,39 @@ public class Engine : IEngine
         return next == null ? null : await next.ConfigureAwait(false);
     }
 
-    private bool HandOffRelease()
+    /// <summary>
+    /// Why spectate stops now: the staged release is handed to the installer, or else the
+    /// restart off a serviced runtime (#450). Null when neither happens and spectate plays on.
+    /// </summary>
+    private string HandOffRestart()
     {
         // Before the stop file exists: the watchdog stops the stream as soon as it sees it.
         connectivityWatchdog.KeepStreamThroughRestart(true);
         if (releaseUpdate.HandOff())
+        {
+            return "the new release can replace this install";
+        }
+
+        connectivityWatchdog.KeepStreamThroughRestart(false);
+        return HandOffRuntime()
+            ? "the supervisor starts spectate again on the current .NET runtime"
+            : null;
+    }
+
+    /// <summary>
+    /// The restart off a serviced runtime (#450): no stop file and no installer. Spectate leaves
+    /// its loop, the stream stays up on the waiting scene as it does for a release, and the
+    /// supervisor starts spectate again once it exits.
+    /// </summary>
+    private bool HandOffRuntime()
+    {
+        if (runtimeRestart == null)
+        {
+            return false;
+        }
+
+        connectivityWatchdog.KeepStreamThroughRestart(true);
+        if (runtimeRestart.HandOff())
         {
             return true;
         }

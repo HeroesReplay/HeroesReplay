@@ -61,6 +61,14 @@ public static class ServiceHealthCodes
     /// </summary>
     public const string SpectateStreamHold = "spectate.stream_hold";
 
+    /// <summary>
+    /// The .NET runtime folder the process loaded is gone: a .NET update serviced it under the
+    /// running process, and the runtime libraries it loads from now on fail (#450). Spectate
+    /// restarts itself between replays; the supervisor restarts the other roles at once, and
+    /// itself.
+    /// </summary>
+    public const string RuntimeServiced = "runtime.serviced";
+
     public static string For(ServiceRoleState state) =>
         state switch
         {

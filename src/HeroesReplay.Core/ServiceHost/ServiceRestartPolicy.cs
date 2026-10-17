@@ -43,7 +43,10 @@ public sealed class ServiceRoleRestarts
     public List<DateTimeOffset> Recent { get; set; } = new();
     public DateTimeOffset? LastRestartAt { get; set; }
 
-    /// <summary><c>failed</c>, <c>stale</c>, or <c>launch_stalled</c>: why the last restart happened.</summary>
+    /// <summary>
+    /// <c>failed</c>, <c>stale</c>, <c>launch_stalled</c>, or <c>runtime_serviced</c>: why the last
+    /// restart happened.
+    /// </summary>
     public string LastReason { get; set; }
 
     /// <summary>Why the last attempt did not get ready. Null when it did.</summary>
@@ -73,7 +76,9 @@ public sealed class ServiceRoleRestarts
 /// stale past <see cref="ServiceRestartSettings.StaleRestartAfter"/> is killed first. When the
 /// window already holds the whole budget, the role stays down. Ready, degraded, and stopped roles
 /// are left alone, except a spectate launch that stalled, which is killed like a stale role
-/// while the budget has room. A stop request is the caller's to check before any restart.
+/// while the budget has room, and a role other than spectate on a serviced .NET runtime (#450),
+/// which is killed and restarts at once. A stop request is the caller's to check before any
+/// restart.
 /// </summary>
 public static class ServiceRestartPolicy
 {
@@ -82,6 +87,20 @@ public static class ServiceRestartPolicy
 
     /// <summary>A spectate launch with no match progress past its threshold.</summary>
     public const string StalledReason = "launch_stalled";
+
+    /// <summary>
+    /// The role ran on a .NET runtime that a .NET update serviced under it (#450). It restarts at
+    /// once, with no backoff: the exit or the kill is the fix, not a crash loop.
+    /// </summary>
+    public const string RuntimeServicedReason = "runtime_serviced";
+
+    /// <summary>
+    /// Spectate restarts itself off a serviced runtime: it stops between replays, so a match on
+    /// the stream is never cut, and the supervisor starts it again once it exits. The supervisor
+    /// kills and restarts every other role at once.
+    /// </summary>
+    public static bool RestartsItself(string role) =>
+        string.Equals(role, "spectate", StringComparison.OrdinalIgnoreCase);
 
     public static ServiceRestartAction Decide(
         ServiceRoleHealth health,
@@ -106,14 +125,21 @@ public static class ServiceRestartPolicy
                 if (ledger.DownSince == null)
                 {
                     ledger.DownSince = now;
-                    ledger.DownReason ??= FailedReason;
+                    ledger.DownReason ??=
+                        health.CauseCode == ServiceHealthCodes.RuntimeServiced
+                            ? RuntimeServicedReason
+                            : FailedReason;
                     ledger.DownCause = health.Cause;
                     if (ledger.Recent.Count >= settings.Limit)
                     {
                         return Exhaust(ledger, now);
                     }
 
-                    ledger.NextRestartAt = now + settings.BackoffFor(ledger.Recent.Count);
+                    // A role off a serviced runtime is down on purpose (#450): no backoff.
+                    ledger.NextRestartAt =
+                        ledger.DownReason == RuntimeServicedReason
+                            ? now
+                            : now + settings.BackoffFor(ledger.Recent.Count);
                     return ServiceRestartAction.Scheduled;
                 }
 
@@ -154,6 +180,18 @@ public static class ServiceRestartPolicy
                 }
 
                 ledger.DownReason = StalledReason;
+                ledger.DownCause = health.Cause;
+                return ServiceRestartAction.Kill;
+
+            // A role on a serviced runtime (#450) is killed and restarts at once, while the
+            // budget has room. Spectate is left to stop between replays by itself; its exit then
+            // restarts it the same way.
+            case ServiceRoleState.Degraded
+                when health.CauseCode == ServiceHealthCodes.RuntimeServiced
+                    && !RestartsItself(health.Role)
+                    && ledger.Recent.Count < settings.Limit:
+                ledger.StaleSince = null;
+                ledger.DownReason = RuntimeServicedReason;
                 ledger.DownCause = health.Cause;
                 return ServiceRestartAction.Kill;
 

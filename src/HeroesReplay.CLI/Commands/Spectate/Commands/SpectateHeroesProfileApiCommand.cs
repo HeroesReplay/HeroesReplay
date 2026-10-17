@@ -56,7 +56,8 @@ public class SpectateHeroesProfileApiCommand : Command
             "spectate",
             settings.ServiceHealth,
             stop.Token,
-            await firstProbe
+            await firstProbe,
+            scope.ServiceProvider.GetRequiredService<ILogger<ServiceHeartbeat>>()
         );
         using IDisposable probing = probes.Watch(stop.Token);
         // Before the first replay: a recording the restarted spectate left running (#342).

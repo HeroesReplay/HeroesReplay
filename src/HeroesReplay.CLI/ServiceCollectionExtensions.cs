@@ -586,6 +586,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IReleaseUpdateGate, ReleaseUpdateGate>()
             .AddSingleton<SpectateMemoryLog>()
             .AddSingleton<StreamHold>()
+            .AddSingleton<RuntimeRestart>()
             .AddSingleton<IEngine, Engine>()
             .AddSingleton<SpectatorStatusStore>()
             .AddConnectivityServices()
