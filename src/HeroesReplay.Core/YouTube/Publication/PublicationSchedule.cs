@@ -231,6 +231,13 @@ public static class PublicationSchedule
             return PublicationDecision.Scheduled("ready", now);
         }
 
+        // A focus-hero video (#433) keeps a share of the map and rank cooldowns, so it gets a
+        // slightly earlier slot than an ordinary video; its hero and roster rules stay whole.
+        if (facts.Criteria == ReplayMediaPriority.Focus)
+        {
+            settings = settings.ForFocusPacing();
+        }
+
         DateTimeOffset horizon = now + settings.MaxPublishAhead;
         TimeSpan reach = Reach(settings);
         List<PublicationSample> paced = Within(slots, now - reach, horizon + reach);
@@ -713,7 +720,8 @@ public static class PublicationSchedule
             return false;
         }
 
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Each nearby video on its own: the pooled heroes of a day's videos cover most of the
+        // roster, so a pooled count blocked nearly every video once the channel published hourly.
         foreach (PublicationSample sample in shown)
         {
             if (!Near(at, sample.At, cooldown))
@@ -721,28 +729,29 @@ public static class PublicationSchedule
                 continue;
             }
 
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             AddHero(seen, sample.Hero);
-            if (sample.Heroes == null)
-            {
-                continue;
-            }
-
-            foreach (string name in sample.Heroes)
+            foreach (string name in sample.Heroes ?? Array.Empty<string>())
             {
                 AddHero(seen, name);
             }
-        }
 
-        int shared = 0;
-        foreach (string name in candidate)
-        {
-            if (seen.Contains(name))
+            int shared = 0;
+            foreach (string name in candidate)
             {
-                shared++;
+                if (seen.Contains(name))
+                {
+                    shared++;
+                }
+            }
+
+            if (shared >= sharedLimit)
+            {
+                return true;
             }
         }
 
-        return shared >= sharedLimit;
+        return false;
     }
 
     private static void AddHero(HashSet<string> names, string hero)
