@@ -16,7 +16,7 @@ public class YouTubePlaylistSettings
     /// <summary>One playlist per Storm League tier: <c>Storm League - Diamond</c>.</summary>
     public bool Rank { get; set; } = true;
 
-    /// <summary>One playlist per draft note: <c>Unusual drafts - Double healer</c>.</summary>
+    /// <summary>One playlist for every game with a draft note: <c>Unusual drafts</c>.</summary>
     public bool Draft { get; set; } = true;
 
     /// <summary>
@@ -24,17 +24,14 @@ public class YouTubePlaylistSettings
     /// </summary>
     public bool ViewerReview { get; set; } = true;
 
-    /// <summary>One playlist for the cycle's own focus-hero videos (#433): <c>Hero focus</c>.</summary>
+    /// <summary>One playlist for the cycle's own focus-hero videos (#433): <c>Hero gameplay</c>.</summary>
     public bool HeroFocus { get; set; } = true;
 
-    /// <summary>One playlist per role of those videos: <c>Hero focus - Healer</c>.</summary>
-    public bool HeroFocusRole { get; set; } = true;
-
     /// <summary>
-    /// The current patch line (or <c>YouTube:SeasonName</c>), then <c>Patch 2.55 archive</c>.
-    /// Clips are filed here only.
+    /// One playlist per role of those videos: <c>Hero gameplay - Healer</c>. Off by default,
+    /// because <c>Hero gameplay</c> already holds every one of them.
     /// </summary>
-    public bool Patch { get; set; } = true;
+    public bool HeroFocusRole { get; set; }
 
     /// <summary>
     /// The earlier combined playlist: <c>Alterac Pass - Storm League - Diamond</c>. Off by

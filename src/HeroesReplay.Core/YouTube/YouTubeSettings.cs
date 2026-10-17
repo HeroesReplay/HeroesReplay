@@ -101,11 +101,6 @@ public class YouTubeSettings
     public int LibraryLookupsPerPass { get; set; } = 50;
 
     /// <summary>
-    /// Display name of the current patch playlist. Blank uses the patch number.
-    /// </summary>
-    public string SeasonName { get; set; }
-
-    /// <summary>
     /// Which playlist groups the library pass files public videos into.
     /// </summary>
     public YouTubePlaylistSettings Playlists { get; set; } = new YouTubePlaylistSettings();
