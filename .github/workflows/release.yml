@@ -74,7 +74,7 @@ jobs:
             }
           }
       # Without target_commitish, GitHub creates a new tag on the default branch (develop).
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.gitversion.outputs.semVer }}
           target_commitish: ${{ github.sha }}
