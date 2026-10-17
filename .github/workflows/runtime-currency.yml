@@ -1,0 +1,34 @@
+name: runtime-currency
+
+# Weekly (#462): compares the .NET runtime the latest GitHub Release names (the "Runtime:" line
+# release.yml writes from the zip's runtime.txt) with latest-runtime and the security flags in the
+# .NET 10.0 release metadata, and opens or updates one issue while a newer security release is
+# out. .NET servicing ships on Patch Tuesday (the second Tuesday of the month), so Wednesday's run
+# sees it the next day. docs/runtime-currency.md has the cadence.
+on:
+  schedule:
+    - cron: "17 6 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: runtime-currency
+  cancel-in-progress: false
+
+jobs:
+  runtime-currency:
+    name: runtime-currency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools
+      - name: Compare the latest release's runtime with .NET security releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pwsh -NoProfile -File tools/check-runtime-currency.ps1 -Repository '${{ github.repository }}' -Channel '10.0'

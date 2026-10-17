@@ -7,13 +7,13 @@ description: >
 
 # Release install
 
-Production runs the zip attached to a GitHub Release. It does not clone the repo and it does not run `dotnet build`. ASA-SERVER keeps compiling from the `develop` worktree. A push to `master` runs `.github/workflows/release.yml`: Unit and Smoke tests, `tools/package-release.ps1` (publish `win-x64`, the `obs/bundle.manifest` assets and the schema 2 manifest with their sizes, SHA-256, and the scene and source contract, `version.txt`, no secrets or `service.json`), `tools/verify-release.ps1`, then upload `heroesreplay-win-x64.zip`. `ci.yml` builds and checks the same zip on every pull request and push. The check extracts it, runs `heroesreplay.exe --help`, requires every bundle asset and what the update reads, checks every bundle hash and the contract (and the packaged `obs bundle`), and fails on `service.json`, `appsettings.secrets.json`, `client_secrets.json`, or a token file. GitVersion names the `master` release. The tag and `version.txt` are `v` plus that version, such as `v1.0.0`. `develop` stays a pre-release (`1.1.0-alpha.N`) and is not published.
+Production runs the zip attached to a GitHub Release. It does not clone the repo and it does not run `dotnet build`. ASA-SERVER keeps compiling from the `develop` worktree. A push to `master` runs `.github/workflows/release.yml`: Unit and Smoke tests, `tools/package-release.ps1` (publish `win-x64`, the `obs/bundle.manifest` assets and the schema 2 manifest with their sizes, SHA-256, and the scene and source contract, `version.txt`, `runtime.txt`, no secrets or `service.json`), `tools/verify-release.ps1`, then upload `heroesreplay-win-x64.zip` with release notes that name the .NET runtime and SDK (`Runtime: .NET 10.0.13`, `SDK: 10.0.402`). `ci.yml` builds and checks the same zip on every pull request and push. The check extracts it, runs `heroesreplay.exe --help`, requires every bundle asset and what the update reads, checks every bundle hash and the contract (and the packaged `obs bundle`), and fails on `service.json`, `appsettings.secrets.json`, `client_secrets.json`, or a token file. GitVersion names the `master` release. The tag and `version.txt` are `v` plus that version, such as `v1.0.0`. `runtime.txt` is the .NET runtime the packaged exe ran on in CI (`heroesreplay check runtime`, #462); `version.txt` stays the tag alone, because the update compares it to the tag. `develop` stays a pre-release (`1.1.0-alpha.N`) and is not published.
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `C:\heroesreplay\app` | The published exe, `appsettings.json`, `appsettings.prod.json`, `apply-release.ps1`, `version.txt`, and `obs\`. This is the directory that gets replaced. The update keeps the previous copy at `C:\heroesreplay\app.previous`. |
+| `C:\heroesreplay\app` | The published exe, `appsettings.json`, `appsettings.prod.json`, `apply-release.ps1`, `version.txt`, `runtime.txt`, and `obs\`. This is the directory that gets replaced. The update keeps the previous copy at `C:\heroesreplay\app.previous`. |
 | `C:\heroesreplay\Data` | Queue, replays, `spectated-ids.txt`, `requests.json`, contexts. Not in the zip. An update must not delete or rewrite it. |
 | `C:\heroesreplay\secrets\appsettings.secrets.json` | Tokens. Not in the zip. The helper copies it back to `appsettings.secrets.json` beside the exe. |
 | `C:\heroesreplay\tools\ffmpeg` | `ffmpeg.exe` and `ffprobe.exe` for clips, from `heroesreplay deps install` (`Dependencies:Directory`). Not in the zip, and outside `app`, so an update or a rollback leaves it alone. |
@@ -54,6 +54,17 @@ Stream arm migration: before the files are replaced, the staged exe runs `update
 `apply-release.ps1` runs in a minimized window (never hidden; open it from the taskbar to watch the update). It also appends what it did (OBS files kept or copied, the arm decision, the health verdict, a rollback) to `%LOCALAPPDATA%\HeroesReplay\logs\apply-release.log`, and stops that log when it ends, even in a window left open with `-NoExit`. When another window still holds `apply-release.log`, the update writes `apply-release-<tag>.log` in the same folder instead; its path is the window's first line and is added to a `skipped-releases.txt` line (#281).
 
 `heroesreplay update check` prints the installed version and the latest tag. It does not download or restart.
+
+## Runtime currency
+
+The release is framework-dependent: the stream PC runs it on the machine-wide .NET 10 runtime, which Microsoft Update services. `heroesreplay check runtime` prints that runtime and the one the release was built and tested on (`runtime.txt`). It warns (`check.runtime.older_than_release`) when the machine's runtime is older. `services status` shows each role's runtime, and `status.json` and the MCP `get_spectator_status` show spectate's (`dotnetRuntime`).
+
+A self-contained or Native AOT release (#453, #461) carries its own runtime, so a .NET security fix reaches the stream PC only through a release. The cadence (`docs/runtime-currency.md`):
+
+- .NET servicing ships on Patch Tuesday, the second Tuesday of the month. Dependabot opens the SDK (`global.json`) and `microsoft-extensions` pull requests the next day.
+- Within 7 days, merge them on `develop`, let `ci` build and smoke them, prove the build on ASA-SERVER, and release `develop` to `master`.
+- When the .NET release notes list a CVE, do the same within 72 hours.
+- The weekly `runtime-currency` workflow keeps one `Stale .NET runtime:` issue open while the latest release's `Runtime:` line is older than the newest .NET security release. It closes the issue once a release catches up.
 
 ## Agent on the production machine
 

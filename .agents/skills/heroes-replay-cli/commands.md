@@ -215,6 +215,16 @@ Resolve ffmpeg and ffprobe (Clips:FfmpegDirectory, the deps install folder, C:\f
 - **Exit:** 0 when both tools work (a build that is not the pinned one is a warning and passes), 1 when one is missing, does not run, or cannot encode libx264.
 - **Codes:** `check.ffmpeg.ok`, `check.ffmpeg.not_pinned`, `check.ffmpeg.missing`, `check.ffmpeg.not_runnable`, `check.ffmpeg.libx264_missing`, `check.ffmpeg.error`
 
+## `check runtime`
+
+Report the .NET runtime this exe runs on (RuntimeInformation.FrameworkDescription) and the one its release was built and tested on (runtime.txt). A runtime older than the release's is a warning.
+
+- **Options:** `--output` (`-o`)
+- **Before:** None. Reads no secret and no setting.
+- **Changes:** Nothing. Reads `runtime.txt` beside the exe. `package-release.ps1` runs it on the packaged exe and writes the runtime into the zip's `runtime.txt` (#462).
+- **Exit:** 0 when the check passes (a warning passes), 1 when it fails or on a parse error.
+- **Codes:** `check.runtime.ok`, `check.runtime.older_than_release`, `check.runtime.error`
+
 ## `client configure`
 
 Write Variables.txt (windowed 1080p, AhliObs) and copy the StormInterface into Documents.

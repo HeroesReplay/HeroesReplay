@@ -2,6 +2,7 @@ using System;
 using System.CommandLine;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using HeroesReplay.CLI;
@@ -31,6 +32,7 @@ public class CliJsonOutputTests
             "check twitch-extension",
             "check battlenet",
             "check ffmpeg",
+            "check runtime",
             "obs status",
             "obs inspect",
             "obs validate",
@@ -103,6 +105,25 @@ public class CliJsonOutputTests
         Assert.Equal(check.GetProperty("code").GetString(), root.GetProperty("code").GetString());
         Assert.Equal(root.GetProperty("ok").GetBoolean() ? 0 : 1, code);
         Assert.DoesNotContain("[OK]", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CheckRuntime_PrintsTheRuntimeFirstInItsDetail()
+    {
+        // package-release.ps1 reads the runtime from the start of this detail (#462).
+        (int code, string output, _) = await InvokeAsync("check runtime --output json");
+
+        JsonElement root = Envelope(output);
+        JsonElement check = Assert.Single(
+            root.GetProperty("details").GetProperty("checks").EnumerateArray()
+        );
+        Assert.Equal("runtime", check.GetProperty("name").GetString());
+        Assert.StartsWith("check.runtime.", check.GetProperty("code").GetString());
+        Assert.StartsWith(
+            RuntimeInformation.FrameworkDescription + ", from ",
+            check.GetProperty("detail").GetString()
+        );
+        Assert.Equal(0, code);
     }
 
     [Fact]

@@ -7,6 +7,7 @@
 # in PowerShell and with the packaged `obs bundle`, and fails on service.json,
 # appsettings.secrets.json, client_secrets.json, or any token-like file.
 # -Version also requires version.txt to equal it: the update compares that file to the tag.
+# runtime.txt must name a .NET runtime, the one the packaged exe reports in `check runtime` (#462).
 param(
     [Parameter(Mandatory = $true)][string]$ZipPath,
     [string]$Version = ''
@@ -40,6 +41,7 @@ $required = [System.Collections.Generic.List[string]]::new()
     'appsettings.prod.json',
     'apply-release.ps1',
     'version.txt',
+    'runtime.txt',
     'Assets\Interfaces\AhliObs 0.75.StormInterface',
     'Assets\Interfaces\AhliObs 0.75 Blind.StormInterface',
     'obs\Default.json',
@@ -225,6 +227,15 @@ try {
         }
     }
 
+    $runtimeFile = Join-Path $extract 'runtime.txt'
+    $runtime = ''
+    if (Test-Path -LiteralPath $runtimeFile -PathType Leaf) {
+        $runtime = [System.IO.File]::ReadAllText($runtimeFile)
+        if ($runtime -notmatch '^\.NET \d+\.\d+\.\d+\S*$') {
+            $failures.Add("runtime.txt is '$runtime', not a .NET runtime such as '.NET 10.0.13'.")
+        }
+    }
+
     foreach ($file in Get-ChildItem -LiteralPath $extract -Recurse -File -Force) {
         $fileCount++
         $relative = [System.IO.Path]::GetRelativePath($extract, $file.FullName)
@@ -256,6 +267,26 @@ try {
             $failures.Add('heroesreplay.exe --help did not list the spectate command.')
         }
 
+        # The packaged exe runs on the runtime runtime.txt names (#462). check runtime reads the file
+        # beside the exe and warns (check.runtime.older_than_release) when it runs on an older one.
+        if ($runtime) {
+            $check = Invoke-Packaged $exe @('check', 'runtime', '--output', 'json')
+            $code = ''
+            $detail = ($check.Output + ' ' + $check.Error).Trim()
+            try {
+                $result = $check.Output | ConvertFrom-Json
+                $code = $result.code
+                $detail = $result.details.checks[0].detail
+            }
+            catch {
+                $code = ''
+            }
+
+            if ($check.ExitCode -ne 0 -or $code -ne 'check.runtime.ok') {
+                $failures.Add("heroesreplay.exe check runtime exited $($check.ExitCode) with '$code' for runtime.txt '$runtime', not check.runtime.ok: $detail")
+            }
+        }
+
         # The app-side reader that update install-obs and obs validate use, on the same bytes.
         if (Test-Path -LiteralPath $bundleFile -PathType Leaf) {
             $bundle = Invoke-Packaged $exe @('obs', 'bundle', '--install', $extract)
@@ -283,5 +314,5 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
-Write-Host "Release zip ok: $zip ($fileCount files, $($manifest.Count) OBS bundle assets matching obs\bundle.manifest SHA-256 and contract, version.txt '$packaged', --help exit 0)."
+Write-Host "Release zip ok: $zip ($fileCount files, $($manifest.Count) OBS bundle assets matching obs\bundle.manifest SHA-256 and contract, version.txt '$packaged', runtime.txt '$runtime', --help exit 0)."
 exit 0

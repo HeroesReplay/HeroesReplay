@@ -7,6 +7,12 @@ namespace HeroesReplay.Core.Status;
 public sealed class SpectatorStatus
 {
     public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>
+    /// The .NET runtime the spectate process runs on (<c>RuntimeInformation.FrameworkDescription</c>,
+    /// such as <c>.NET 10.0.13</c>, #462). Null in files from older builds.
+    /// </summary>
+    public string DotnetRuntime { get; set; }
     public bool SpectatorRunning { get; set; }
     public bool SnapshotStale { get; set; }
     public string Phase { get; set; } = "Idle";

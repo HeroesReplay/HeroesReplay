@@ -236,6 +236,9 @@ public class CliHelpTests
         Command ffmpeg = check.Subcommands.Single(c => c.Name == "ffmpeg");
         Assert.Contains("-version", ffmpeg.Description);
         Assert.Empty(root.Parse("check ffmpeg --help").Errors);
+        Command runtime = check.Subcommands.Single(c => c.Name == "runtime");
+        Assert.Contains("runtime.txt", runtime.Description);
+        Assert.Empty(root.Parse("check runtime --help").Errors);
     }
 
     [Fact]

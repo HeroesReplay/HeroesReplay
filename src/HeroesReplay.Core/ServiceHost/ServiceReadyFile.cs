@@ -16,6 +16,12 @@ public sealed class ServiceReadyReport
     public string Role { get; set; }
     public string Nonce { get; set; }
     public string Version { get; set; }
+
+    /// <summary>
+    /// The .NET runtime the role runs on (<c>RuntimeInformation.FrameworkDescription</c>, such as
+    /// <c>.NET 10.0.13</c>, #462). Null in files from older roles.
+    /// </summary>
+    public string DotnetRuntime { get; set; }
     public string ExecutablePath { get; set; }
     public int? Pid { get; set; }
 

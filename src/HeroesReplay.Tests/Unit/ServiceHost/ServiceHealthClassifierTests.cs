@@ -100,6 +100,7 @@ public class ServiceHealthClassifierTests
         Assert.Equal(900, health.WorkThresholdSeconds);
         Assert.Equal(Exe, health.ExecutablePath);
         Assert.Equal("1.2.3", health.Version);
+        Assert.Equal(".NET 10.0.13", health.DotnetRuntime);
     }
 
     [Fact]
@@ -849,6 +850,7 @@ public class ServiceHealthClassifierTests
             Role = role,
             Nonce = nonce,
             Version = "1.2.3",
+            DotnetRuntime = ".NET 10.0.13",
             ExecutablePath = Exe,
             Readiness = ServiceReadiness.Ready,
             ReadyAt = Now.AddHours(-2),

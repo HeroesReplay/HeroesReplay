@@ -66,6 +66,8 @@ public class CliResultTests
                 "supervisor",
                 "machine",
                 "obsRestorePending",
+                "dotnetRuntime",
+                "releaseRuntime",
             ],
             Names(report.ToJson())
         );

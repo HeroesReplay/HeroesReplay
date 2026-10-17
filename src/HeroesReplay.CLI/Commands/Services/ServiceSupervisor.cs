@@ -9,6 +9,7 @@ using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.GameClient;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Recording;
+using HeroesReplay.Core.SelfUpdate;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.ServiceHost.Logs;
 using HeroesReplay.Core.Status;
@@ -771,10 +772,14 @@ public static class ServiceSupervisor
             query.SupervisorLiveness?.Invoke(),
             now
         );
+        string runtime = ReleaseRuntime.Current;
+        string release = ReleaseRuntime.Read(Path.GetDirectoryName(Environment.ProcessPath));
         report = report with
         {
             Machine = ReadMachine(query.ReadMachine),
             ObsRestorePending = ReadObsRestorePending(query.ReadObsRestorePending),
+            DotnetRuntime = runtime,
+            ReleaseRuntime = release,
         };
         TextWriter output = query.Out ?? Console.Out;
         if (query.Output == CliOutputFormat.Json)
@@ -801,6 +806,7 @@ public static class ServiceSupervisor
             output.WriteLine("  A stop request is pending (services.stop).");
         }
 
+        WriteRuntimeText(output, report);
         WriteSupervisorText(output, report.Supervisor, report.CheckedAt);
         foreach (ServiceRoleHealth role in report.Roles)
         {
@@ -830,6 +836,11 @@ public static class ServiceSupervisor
             if (!string.IsNullOrWhiteSpace(role.Version))
             {
                 facts.Add("version " + role.Version);
+            }
+
+            if (!string.IsNullOrWhiteSpace(role.DotnetRuntime))
+            {
+                facts.Add(role.DotnetRuntime);
             }
 
             output.WriteLine($"  {role.Role, -9}{state, -9}{string.Join(", ", facts)}");
@@ -885,6 +896,21 @@ public static class ServiceSupervisor
                 $"Last completion: replay {spectator.CompletedReplayId} team {spectator.CompletedWinnerTeam} at {spectator.CompletedAt:O}"
             );
         }
+    }
+
+    /// <summary>The runtime a role started now loads, and the one the release was built on (#462).</summary>
+    private static void WriteRuntimeText(TextWriter output, ServiceStatusReport report)
+    {
+        if (string.IsNullOrWhiteSpace(report.DotnetRuntime))
+        {
+            return;
+        }
+
+        output.WriteLine(
+            string.IsNullOrWhiteSpace(report.ReleaseRuntime)
+                ? $"  Runtime: {report.DotnetRuntime} for a role started now."
+                : $"  Runtime: {report.DotnetRuntime} for a role started now; this release was built and tested on {report.ReleaseRuntime} (runtime.txt)."
+        );
     }
 
     private static void WriteSupervisorText(

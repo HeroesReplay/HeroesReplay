@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using HeroesReplay.Core.Shared;
@@ -39,6 +40,7 @@ public sealed class SpectatorStatusStore
         new()
         {
             UpdatedAt = DateTimeOffset.UtcNow,
+            DotnetRuntime = RuntimeInformation.FrameworkDescription,
             SpectatorRunning = false,
             Phase = "Idle",
         };

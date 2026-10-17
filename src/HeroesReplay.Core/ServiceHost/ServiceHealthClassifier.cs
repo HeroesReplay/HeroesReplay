@@ -108,6 +108,7 @@ public static class ServiceHealthClassifier
             Arguments = record?.Arguments,
             Nonce = record?.Nonce,
             Version = First(heartbeat?.Version, record?.Version),
+            DotnetRuntime = heartbeat?.DotnetRuntime,
             ExecutablePath = First(heartbeat?.ExecutablePath, record?.ExecutablePath),
             StartedAt = record?.StartedAt,
             Readiness = heartbeat?.Readiness,
