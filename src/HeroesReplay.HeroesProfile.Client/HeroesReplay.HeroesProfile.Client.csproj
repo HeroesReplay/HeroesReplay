@@ -6,6 +6,8 @@
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
         <NoWarn>$(NoWarn);CS1591;CS8618;CS8632</NoWarn>
         <RootNamespace>HeroesReplay.HeroesProfile.Client</RootNamespace>
+        <!-- Native AOT spike (#aot): not for merge -->
+        <IsAotCompatible>true</IsAotCompatible>
         <Description>
             Kiota-generated Heroes Profile external v1 client. Regenerate with
             tools/generate-heroesprofile-client.ps1.

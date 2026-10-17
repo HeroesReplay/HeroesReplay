@@ -7,8 +7,13 @@
         <IsPackable>false</IsPackable>
         <ApplicationIcon>heroesreplay.ico</ApplicationIcon>
         <ApplicationManifest>app.manifest</ApplicationManifest>
-        <UseWindowsForms>true</UseWindowsForms>
+        <!-- spike: WinForms dropped; System.Drawing.Common package instead -->
         <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+        <!-- Native AOT spike (#aot): not for merge -->
+        <PublishAot>true</PublishAot>
+        <IsAotCompatible>true</IsAotCompatible>
+        <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+        <TrimmerSingleWarn>false</TrimmerSingleWarn>
     </PropertyGroup>
 
     <ItemGroup>

@@ -1,9 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
-        <UseWindowsForms>true</UseWindowsForms>
+        <!-- spike: WinForms dropped; System.Drawing.Common package instead -->
         <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
         <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <!-- Native AOT spike (#aot): not for merge -->
+        <IsAotCompatible>true</IsAotCompatible>
     </PropertyGroup>
 
     <ItemGroup>
@@ -22,6 +24,7 @@
         <PackageReference Include="Newtonsoft.Json" />
         <PackageReference Include="obs-websocket-dotnet" />
         <PackageReference Include="PInvoke.User32" />
+        <PackageReference Include="System.Drawing.Common" />
         <PackageReference Include="TwitchLib" />
     </ItemGroup>
 

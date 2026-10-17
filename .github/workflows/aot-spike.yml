@@ -1,0 +1,77 @@
+# Native AOT spike only (branch spike/native-aot, never merged). Publishes the CLI the usual way
+# (framework-dependent) and as Native AOT, then runs the same offline commands against both.
+name: aot-spike
+
+on:
+  push:
+    branches:
+      - spike/native-aot
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aot-spike:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      HEROESREPLAY_SKIP_VERIFY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Fetch HeroesClientSDK
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/restore-sdk-package.ps1
+      - name: Publish framework-dependent (today's release shape)
+        shell: pwsh
+        run: dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c Release -r win-x64 --self-contained false -p:PublishAot=false -o "$env:RUNNER_TEMP\jit" -nologo
+      - name: Publish Native AOT
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\out" | Out-Null
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c Release -r win-x64 -p:PublishAot=true -p:TrimmerSingleWarn=false -o "$env:RUNNER_TEMP\aot" -nologo -fl "-flp:WarningsOnly;logfile=$env:RUNNER_TEMP\out\aot-publish-warnings.log" 2>&1 | Tee-Object "$env:RUNNER_TEMP\out\aot-publish.log" | Select-Object -Last 30
+          "publish exit $LASTEXITCODE in $($sw.Elapsed)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Sizes
+        shell: pwsh
+        run: |
+          foreach ($d in 'jit', 'aot') {
+            $dir = "$env:RUNNER_TEMP\$d"
+            $exe = Get-Item "$dir\heroesreplay.exe"
+            $all = (Get-ChildItem $dir -Recurse -File | Measure-Object Length -Sum).Sum
+            $line = "$d exe $([math]::Round($exe.Length / 1MB, 1)) MB, folder $([math]::Round($all / 1MB, 1)) MB, files $((Get-ChildItem $dir -Recurse -File).Count)"
+            $line; $line | Add-Content "$env:RUNNER_TEMP\out\sizes.txt"
+          }
+          Get-ChildItem "$env:RUNNER_TEMP\aot" -File | Sort-Object Length -Descending | Select-Object -First 15 Name, Length | Format-Table | Out-String | Add-Content "$env:RUNNER_TEMP\out\sizes.txt"
+      - name: Smoke JIT
+        shell: pwsh
+        continue-on-error: true
+        run: pwsh -NoProfile -File tools/aot-spike-smoke.ps1 -Exe "$env:RUNNER_TEMP\jit\heroesreplay.exe" -Label jit -Replay "$env:GITHUB_WORKSPACE\src\HeroesReplay.Tests\Assets\hour-long-replay-provided-by-mgatner.StormReplay" -OutDir "$env:RUNNER_TEMP\out"
+      - name: Smoke AOT
+        shell: pwsh
+        continue-on-error: true
+        run: pwsh -NoProfile -File tools/aot-spike-smoke.ps1 -Exe "$env:RUNNER_TEMP\aot\heroesreplay.exe" -Label aot -Replay "$env:GITHUB_WORKSPACE\src\HeroesReplay.Tests\Assets\hour-long-replay-provided-by-mgatner.StormReplay" -OutDir "$env:RUNNER_TEMP\out"
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          Get-Content "$env:RUNNER_TEMP\out\sizes.txt" -ErrorAction SilentlyContinue | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-ChildItem "$env:RUNNER_TEMP\out\*-summary.md" -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_ | Add-Content $env:GITHUB_STEP_SUMMARY; "" | Add-Content $env:GITHUB_STEP_SUMMARY }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aot-spike-logs
+          path: ${{ runner.temp }}/out
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aot-spike-exe
+          path: ${{ runner.temp }}/aot
+          retention-days: 3
