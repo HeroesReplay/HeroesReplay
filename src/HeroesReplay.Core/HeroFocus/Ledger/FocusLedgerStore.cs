@@ -19,12 +19,14 @@ public sealed class FocusLedgerStore
     /// <summary>The prefix of the lock's name; the rest comes from the file's full path.</summary>
     public const string MutexPrefix = @"Local\HeroesReplay.FocusLedger";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-    };
+    internal static readonly HeroFocusJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+        }
+    );
 
     private readonly TimeSpan lockWait;
 
@@ -58,7 +60,7 @@ public sealed class FocusLedgerStore
                 FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete
             );
-            return JsonSerializer.Deserialize<FocusLedger>(stream, Json) ?? new FocusLedger();
+            return JsonSerializer.Deserialize(stream, Json.FocusLedger) ?? new FocusLedger();
         }
         catch (JsonException)
         {
@@ -123,7 +125,7 @@ public sealed class FocusLedgerStore
 
         try
         {
-            return JsonSerializer.Deserialize<FocusLedger>(text, Json) ?? new FocusLedger();
+            return JsonSerializer.Deserialize(text, Json.FocusLedger) ?? new FocusLedger();
         }
         catch (JsonException)
         {
@@ -134,7 +136,7 @@ public sealed class FocusLedgerStore
 
     private void Write(FocusLedger ledger)
     {
-        string json = JsonSerializer.Serialize(ledger ?? new FocusLedger(), Json);
+        string json = JsonSerializer.Serialize(ledger ?? new FocusLedger(), Json.FocusLedger);
         // A reader in another process may hold the file for a moment; the move then fails.
         for (int attempt = 1; ; attempt++)
         {

@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
@@ -162,13 +163,12 @@ public sealed class EventSubRewardListener : IDisposable
     private async Task SubscribeAsync(string sessionId, CancellationToken cancellationToken)
     {
         string channelId = await GetChannelIdAsync().ConfigureAwait(false);
-        var body = new
-        {
-            type = EventSubRedemption.AddType,
-            version = "1",
-            condition = new { broadcaster_user_id = channelId },
-            transport = new { method = "websocket", session_id = sessionId },
-        };
+        var body = new EventSubSubscribeBody(
+            EventSubRedemption.AddType,
+            "1",
+            new EventSubCondition(channelId),
+            new EventSubTransport("websocket", sessionId)
+        );
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             "https://api.twitch.tv/helix/eventsub/subscriptions"
@@ -179,7 +179,7 @@ public sealed class EventSubRewardListener : IDisposable
             "Bearer " + settings.Twitch.AccessToken
         );
         request.Content = new StringContent(
-            JsonSerializer.Serialize(body),
+            JsonSerializer.Serialize(body, TwitchJsonContext.Default.EventSubSubscribeBody),
             Encoding.UTF8,
             "application/json"
         );
@@ -237,3 +237,20 @@ public sealed class EventSubRewardListener : IDisposable
         http.Dispose();
     }
 }
+
+/// <summary>The body of <c>POST helix/eventsub/subscriptions</c> for redemptions on this socket.</summary>
+internal sealed record EventSubSubscribeBody(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("version")] string Version,
+    [property: JsonPropertyName("condition")] EventSubCondition Condition,
+    [property: JsonPropertyName("transport")] EventSubTransport Transport
+);
+
+internal sealed record EventSubCondition(
+    [property: JsonPropertyName("broadcaster_user_id")] string BroadcasterUserId
+);
+
+internal sealed record EventSubTransport(
+    [property: JsonPropertyName("method")] string Method,
+    [property: JsonPropertyName("session_id")] string SessionId
+);

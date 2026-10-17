@@ -41,7 +41,9 @@ public static class ClientDownloadHold
     /// <summary>The default for <c>Spectate:BuildDownloadLimit</c>.</summary>
     public static readonly TimeSpan DefaultDownloadLimit = TimeSpan.FromMinutes(10);
 
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    internal static readonly GameClientJsonContext Json = new(
+        new JsonSerializerOptions { WriteIndented = true }
+    );
 
     public static TimeSpan Hold(TimeSpan configured) =>
         configured > TimeSpan.Zero ? configured : DefaultHold;
@@ -132,9 +134,10 @@ public static class ClientDownloadHold
 
         try
         {
-            Dictionary<string, DateTimeOffset> read = JsonSerializer.Deserialize<
-                Dictionary<string, DateTimeOffset>
-            >(json);
+            Dictionary<string, DateTimeOffset> read = JsonSerializer.Deserialize(
+                json,
+                GameClientJsonContext.Default.DictionaryStringDateTimeOffset
+            );
             if (read != null)
             {
                 foreach (KeyValuePair<string, DateTimeOffset> entry in read)
@@ -178,6 +181,9 @@ public static class ClientDownloadHold
         }
 
         kept[build] = failedAt;
-        DurableFile.Replace(path, JsonSerializer.Serialize(kept, Json));
+        DurableFile.Replace(
+            path,
+            JsonSerializer.Serialize(kept, Json.SortedDictionaryStringDateTimeOffset)
+        );
     }
 }

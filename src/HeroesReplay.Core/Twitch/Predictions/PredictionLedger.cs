@@ -94,12 +94,19 @@ public sealed class PredictionLedger
 {
     public const string FileName = "prediction-ledger.json";
 
-    private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() },
-    };
+    internal static readonly TwitchJsonContext JsonOptions = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters =
+            {
+                new JsonStringEnumConverter<PredictionIntent>(),
+                new JsonStringEnumConverter<PredictionKind>(),
+                new JsonStringEnumConverter<PredictionLedgerState>(),
+            },
+        }
+    );
 
     private readonly string path;
     private readonly List<PredictionLedgerEntry> entries = new List<PredictionLedgerEntry>();
@@ -131,11 +138,10 @@ public sealed class PredictionLedger
 
         try
         {
-            PredictionLedgerDocument document =
-                JsonSerializer.Deserialize<PredictionLedgerDocument>(
-                    File.ReadAllText(path),
-                    JsonOptions
-                );
+            PredictionLedgerDocument document = JsonSerializer.Deserialize(
+                File.ReadAllText(path),
+                JsonOptions.PredictionLedgerDocument
+            );
             if (document?.Entries == null)
             {
                 return ledger;
@@ -292,7 +298,7 @@ public sealed class PredictionLedger
 
         string json = JsonSerializer.Serialize(
             new PredictionLedgerDocument { Entries = entries },
-            JsonOptions
+            JsonOptions.PredictionLedgerDocument
         );
         string temp = path + ".tmp";
         File.WriteAllText(temp, json);

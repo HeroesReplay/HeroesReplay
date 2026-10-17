@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.Obs.Collection;
@@ -54,7 +55,9 @@ public sealed class ObsManagedFiles
     /// <summary>The newest template copies kept, besides every one a record names.</summary>
     public const int TemplatesKept = 10;
 
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    internal static readonly ObsJsonContext Json = new(
+        new JsonSerializerOptions { WriteIndented = true }
+    );
 
     public ObsManagedFiles(string root)
     {
@@ -163,14 +166,15 @@ public sealed class ObsManagedFiles
 
     /// <summary>The record from before the last <c>obs apply</c>, or null.</summary>
     public ObsApplyUndo ReadApplyUndo() =>
-        ReadJson<ObsApplyUndo>(ApplyUndoPath) is { CollectionPath: not null, Backup: not null } undo
+        ReadJson(ApplyUndoPath, ObsJsonContext.Default.ObsApplyUndo)
+            is { CollectionPath: not null, Backup: not null } undo
             ? undo
             : null;
 
     public void SaveApplyUndo(ObsApplyUndo undo)
     {
         ArgumentNullException.ThrowIfNull(undo);
-        DurableFile.Replace(ApplyUndoPath, JsonSerializer.Serialize(undo, Json));
+        DurableFile.Replace(ApplyUndoPath, JsonSerializer.Serialize(undo, Json.ObsApplyUndo));
     }
 
     public void ClearApplyUndo() => Delete(ApplyUndoPath);
@@ -204,7 +208,10 @@ public sealed class ObsManagedFiles
     {
         Dictionary<string, ObsManagedCollection> all = ReadAll();
         all[Key(collectionPath)] = record;
-        DurableFile.Replace(RecordPath, JsonSerializer.Serialize(all, Json));
+        DurableFile.Replace(
+            RecordPath,
+            JsonSerializer.Serialize(all, Json.DictionaryStringObsManagedCollection)
+        );
     }
 
     /// <summary>Saves <paramref name="record"/>, or forgets the collection when it is null.</summary>
@@ -219,27 +226,34 @@ public sealed class ObsManagedFiles
         Dictionary<string, ObsManagedCollection> all = ReadAll();
         if (all.Remove(Key(collectionPath)))
         {
-            DurableFile.Replace(RecordPath, JsonSerializer.Serialize(all, Json));
+            DurableFile.Replace(
+                RecordPath,
+                JsonSerializer.Serialize(all, Json.DictionaryStringObsManagedCollection)
+            );
         }
     }
 
     /// <summary>The last release install's rollback record, or null.</summary>
     public ObsReleaseRollback ReadRollback() =>
-        ReadJson<ObsReleaseRollback>(RollbackPath) is { CollectionPath: not null } rollback
+        ReadJson(RollbackPath, ObsJsonContext.Default.ObsReleaseRollback)
+            is { CollectionPath: not null } rollback
             ? rollback
             : null;
 
     public void SaveRollback(ObsReleaseRollback rollback)
     {
         ArgumentNullException.ThrowIfNull(rollback);
-        DurableFile.Replace(RollbackPath, JsonSerializer.Serialize(rollback, Json));
+        DurableFile.Replace(
+            RollbackPath,
+            JsonSerializer.Serialize(rollback, Json.ObsReleaseRollback)
+        );
     }
 
     public void ClearRollback() => Delete(RollbackPath);
 
     /// <summary>The rollback that waits for OBS, or null.</summary>
     public ObsPendingRestore ReadPendingRestore() =>
-        ReadJson<ObsPendingRestore>(PendingRestorePath)
+        ReadJson(PendingRestorePath, ObsJsonContext.Default.ObsPendingRestore)
             is { CollectionPath: not null, Backup: not null } pending
             ? pending
             : null;
@@ -247,7 +261,10 @@ public sealed class ObsManagedFiles
     public void SavePendingRestore(ObsPendingRestore pending)
     {
         ArgumentNullException.ThrowIfNull(pending);
-        DurableFile.Replace(PendingRestorePath, JsonSerializer.Serialize(pending, Json));
+        DurableFile.Replace(
+            PendingRestorePath,
+            JsonSerializer.Serialize(pending, Json.ObsPendingRestore)
+        );
     }
 
     /// <summary>Forgets the pending restore, only when it is for <paramref name="collectionPath"/>.</summary>
@@ -273,9 +290,10 @@ public sealed class ObsManagedFiles
             if (File.Exists(RecordPath))
             {
                 foreach (
-                    (string path, ObsManagedCollection record) in JsonSerializer.Deserialize<
-                        Dictionary<string, ObsManagedCollection>
-                    >(File.ReadAllText(RecordPath)) ?? []
+                    (string path, ObsManagedCollection record) in JsonSerializer.Deserialize(
+                        File.ReadAllText(RecordPath),
+                        ObsJsonContext.Default.DictionaryStringObsManagedCollection
+                    ) ?? []
                 )
                 {
                     if (
@@ -296,12 +314,14 @@ public sealed class ObsManagedFiles
         return all;
     }
 
-    private static T ReadJson<T>(string path)
+    private static T ReadJson<T>(string path, JsonTypeInfo<T> type)
         where T : class
     {
         try
         {
-            return File.Exists(path) ? JsonSerializer.Deserialize<T>(File.ReadAllText(path)) : null;
+            return File.Exists(path)
+                ? JsonSerializer.Deserialize(File.ReadAllText(path), type)
+                : null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {

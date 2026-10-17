@@ -26,11 +26,13 @@ public sealed record DependencyInstallRecord(
 {
     public const string FileName = "installed.json";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-    };
+    internal static readonly DependenciesJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+        }
+    );
 
     public static string PathIn(string toolDirectory) => Path.Combine(toolDirectory, FileName);
 
@@ -45,7 +47,7 @@ public sealed record DependencyInstallRecord(
 
         try
         {
-            return JsonSerializer.Deserialize<DependencyInstallRecord>(text, Json);
+            return JsonSerializer.Deserialize(text, Json.DependencyInstallRecord);
         }
         catch (JsonException)
         {
@@ -54,7 +56,10 @@ public sealed record DependencyInstallRecord(
     }
 
     public void Write(string toolDirectory) =>
-        DurableFile.Replace(PathIn(toolDirectory), JsonSerializer.Serialize(this, Json));
+        DurableFile.Replace(
+            PathIn(toolDirectory),
+            JsonSerializer.Serialize(this, Json.DependencyInstallRecord)
+        );
 
     public DependencyInstalledFile FindFile(string name) =>
         Files?.FirstOrDefault(file =>

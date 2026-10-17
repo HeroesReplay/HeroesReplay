@@ -38,7 +38,9 @@ public static class ReplayResumeRules
 
 public sealed class ReplayResumeFile : IReplayResume
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    internal static readonly ConnectivityJsonContext Json = new(
+        new JsonSerializerOptions { WriteIndented = true }
+    );
 
     public static string SharedPath =>
         Path.Combine(
@@ -71,7 +73,7 @@ public sealed class ReplayResumeFile : IReplayResume
                 Directory.CreateDirectory(directory);
             }
 
-            File.WriteAllText(path, JsonSerializer.Serialize(request, JsonOptions));
+            File.WriteAllText(path, JsonSerializer.Serialize(request, Json.ReplayResumeRequest));
         }
     }
 
@@ -102,9 +104,9 @@ public sealed class ReplayResumeFile : IReplayResume
 
         try
         {
-            ReplayResumeRequest request = JsonSerializer.Deserialize<ReplayResumeRequest>(
+            ReplayResumeRequest request = JsonSerializer.Deserialize(
                 File.ReadAllText(path),
-                JsonOptions
+                Json.ReplayResumeRequest
             );
             if (
                 request == null
@@ -144,7 +146,7 @@ public sealed class ReplayResumeFile : IReplayResume
         }
     }
 
-    private sealed class ReplayResumeRequest
+    internal sealed class ReplayResumeRequest
     {
         public int ReplayId { get; set; }
 

@@ -19,10 +19,9 @@ public sealed record HeroMatchups(List<HeroPairStats> Enemies, List<HeroPairStat
 /// </summary>
 public static class HeroStatsJson
 {
-    private static readonly JsonSerializerOptions FileOptions = new JsonSerializerOptions
-    {
-        WriteIndented = false,
-    };
+    internal static readonly HeroesProfileJsonContext FileJson = new(
+        new JsonSerializerOptions { WriteIndented = false }
+    );
 
     /// <summary>Every hero of <c>GET /heroes</c> that has an id, a name, and an <c>attribute_id</c>.</summary>
     public static IReadOnlyList<HeroStatsHeroRef> ReadHeroes(string body)
@@ -167,7 +166,7 @@ public static class HeroStatsJson
     }
 
     public static string Write(HeroStatsSnapshot snapshot) =>
-        JsonSerializer.Serialize(snapshot, FileOptions);
+        JsonSerializer.Serialize(snapshot, FileJson.HeroStatsSnapshot);
 
     /// <summary>The saved snapshot, or null when the text is not one.</summary>
     public static HeroStatsSnapshot ReadSnapshot(string text)
@@ -179,9 +178,9 @@ public static class HeroStatsJson
 
         try
         {
-            HeroStatsSnapshot snapshot = JsonSerializer.Deserialize<HeroStatsSnapshot>(
+            HeroStatsSnapshot snapshot = JsonSerializer.Deserialize(
                 text,
-                FileOptions
+                FileJson.HeroStatsSnapshot
             );
             return snapshot?.Heroes == null ? null : snapshot;
         }

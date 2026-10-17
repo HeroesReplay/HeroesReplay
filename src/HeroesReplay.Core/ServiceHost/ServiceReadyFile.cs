@@ -185,11 +185,13 @@ public static class ServiceReadyFile
     public const string RoleVariable = "HEROESREPLAY_SERVICE_ROLE";
     public const string VersionVariable = "HEROESREPLAY_SERVICE_VERSION";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
+    internal static readonly ServiceHostJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        }
+    );
 
     public static string DefaultDirectory =>
         Path.Combine(
@@ -249,7 +251,7 @@ public static class ServiceReadyFile
         Directory.CreateDirectory(folder);
         string path = Path.Combine(folder, report.Nonce + ".json");
         string temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(report, Json));
+        File.WriteAllText(temp, JsonSerializer.Serialize(report, Json.ServiceReadyReport));
         File.Move(temp, path, overwrite: true);
     }
 
@@ -294,9 +296,9 @@ public static class ServiceReadyFile
             return null;
         }
 
-        ServiceReadyReport report = JsonSerializer.Deserialize<ServiceReadyReport>(
+        ServiceReadyReport report = JsonSerializer.Deserialize(
             File.ReadAllText(path),
-            Json
+            Json.ServiceReadyReport
         );
         if (report == null || !string.Equals(report.Nonce, record.Nonce, StringComparison.Ordinal))
         {

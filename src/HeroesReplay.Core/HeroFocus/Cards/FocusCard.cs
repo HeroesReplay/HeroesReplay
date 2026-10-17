@@ -137,7 +137,7 @@ public enum FocusStrengthStatus
 /// <summary>The player's Storm League record on the hero, from Heroes Profile.</summary>
 public sealed class FocusStrength
 {
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<FocusStrengthStatus>))]
     public FocusStrengthStatus Status { get; set; } = FocusStrengthStatus.Unknown;
 
     public int Wins { get; set; }

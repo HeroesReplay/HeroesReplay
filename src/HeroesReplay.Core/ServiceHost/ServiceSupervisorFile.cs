@@ -48,11 +48,13 @@ public static class ServiceSupervisorFile
     /// <summary>One supervisor per Windows session. It is held for the supervisor's lifetime.</summary>
     public const string MutexName = @"Local\HeroesReplay.ServiceSupervisor";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
+    internal static readonly ServiceHostJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        }
+    );
 
     public static string DefaultPath =>
         Path.Combine(
@@ -72,7 +74,7 @@ public static class ServiceSupervisorFile
         }
 
         string temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(state, Json));
+        File.WriteAllText(temp, JsonSerializer.Serialize(state, Json.ServiceSupervisorState));
         File.Move(temp, path, overwrite: true);
     }
 
@@ -88,9 +90,9 @@ public static class ServiceSupervisorFile
                     return null;
                 }
 
-                return JsonSerializer.Deserialize<ServiceSupervisorState>(
+                return JsonSerializer.Deserialize(
                     File.ReadAllText(path),
-                    Json
+                    Json.ServiceSupervisorState
                 );
             }
             catch (IOException) when (attempt < 2)

@@ -6,11 +6,13 @@ namespace HeroesReplay.Core.ServiceHost;
 
 public static class ServiceLockStore
 {
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
+    internal static readonly ServiceHostJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        }
+    );
 
     public static string DefaultPath =>
         Path.Combine(
@@ -38,7 +40,7 @@ public static class ServiceLockStore
         }
 
         string temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(snapshot, Json));
+        File.WriteAllText(temp, JsonSerializer.Serialize(snapshot, Json.ServiceLock));
         File.Move(temp, path, overwrite: true);
     }
 
@@ -51,7 +53,7 @@ public static class ServiceLockStore
                 return null;
             }
 
-            return JsonSerializer.Deserialize<ServiceLock>(File.ReadAllText(path), Json);
+            return JsonSerializer.Deserialize(File.ReadAllText(path), Json.ServiceLock);
         }
         catch (IOException)
         {
