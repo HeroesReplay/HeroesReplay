@@ -136,14 +136,9 @@ public class RequestQueueTests
                 response.Message
             );
             Assert.DoesNotContain("Gold", response.Message);
-            List<RewardQueueItem> items = System.Text.Json.JsonSerializer.Deserialize<
-                List<RewardQueueItem>
-            >(
+            List<RewardQueueItem> items = System.Text.Json.JsonSerializer.Deserialize(
                 File.ReadAllText(Path.Combine(directory, "requests.json")),
-                new System.Text.Json.JsonSerializerOptions
-                {
-                    Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
-                }
+                RequestQueue.Options.ListRewardQueueItem
             );
             RewardQueueItem queued = Assert.Single(items);
             Assert.True(queued.Request.Blind);

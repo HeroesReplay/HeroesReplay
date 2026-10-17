@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
 using Heroes.ReplayParser;
 using HeroesReplay.Core.HeroFocus.Picking;
 using HeroesReplay.Core.MediaPolicy;
@@ -245,7 +244,7 @@ public class HeroFocusMediaTests
     [Fact]
     public void AnEntryWithoutAFocus_WritesNoFocusField()
     {
-        string json = JsonSerializer.Serialize(new YouTubeEntry { ReplayId = 1 });
+        string json = TestJson.Entry(new YouTubeEntry { ReplayId = 1 });
 
         Assert.DoesNotContain("HeroFocus", json, StringComparison.Ordinal);
     }
@@ -254,7 +253,7 @@ public class HeroFocusMediaTests
     {
         string folder = Path.Combine(root, name);
         Directory.CreateDirectory(folder);
-        File.WriteAllText(Path.Combine(folder, "entry.json"), JsonSerializer.Serialize(entry));
+        File.WriteAllText(Path.Combine(folder, "entry.json"), TestJson.Entry(entry));
         string recording = Path.Combine(folder, "match.mp4");
         File.WriteAllText(recording, "video");
         return recording;

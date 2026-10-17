@@ -31,7 +31,7 @@ public class CheckJsonTests
             ),
         ]);
 
-        using JsonDocument json = JsonDocument.Parse(CliJson.Serialize(report));
+        using JsonDocument json = JsonDocument.Parse(CliOutput.Serialize(report));
         JsonElement root = json.RootElement;
         Assert.Equal(
             ["schemaVersion", "ok", "code", "message", "environment", "details"],
@@ -165,7 +165,7 @@ public class CheckJsonTests
             ),
         ]);
 
-        string json = CliJson.Serialize(report);
+        string json = CliOutput.Serialize(report);
 
         Assert.DoesNotContain(TwitchToken, json);
         Assert.Contains("Bearer [redacted]", json);

@@ -16,8 +16,7 @@ public sealed record GuideExtractHero
     /// <summary>The guide's "last updated" text, such as <c>Oct 27, 2020</c>.</summary>
     public string Updated { get; init; }
 
-    public IReadOnlyList<GuideExtractBuild> Builds { get; init; } =
-        Array.Empty<GuideExtractBuild>();
+    public IReadOnlyList<GuideExtractBuild> Builds { get; set; } = Array.Empty<GuideExtractBuild>();
 }
 
 public sealed record GuideExtractBuild
@@ -29,7 +28,7 @@ public sealed record GuideExtractBuild
     /// <summary>The talent calculator code after the <c>#</c>, such as <c>48.2!2232123</c>, or null.</summary>
     public string Calculator { get; init; }
 
-    public IReadOnlyList<GuideExtractTier> Tiers { get; init; } = Array.Empty<GuideExtractTier>();
+    public IReadOnlyList<GuideExtractTier> Tiers { get; set; } = Array.Empty<GuideExtractTier>();
 }
 
 public sealed record GuideExtractTier
@@ -41,17 +40,16 @@ public sealed record GuideExtractTier
     public string Marks { get; init; }
 
     /// <summary>The recommended talents' slugs (<c>calamity</c>), used to check the column order.</summary>
-    public IReadOnlyList<string> Recommended { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Recommended { get; set; } = Array.Empty<string>();
 }
 
 public static class GuideExtractJson
 {
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
+    internal static readonly BuildsJsonContext Json = new(
+        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+    );
 
     public static IReadOnlyList<GuideExtractHero> Parse(string json) =>
-        JsonSerializer.Deserialize<GuideExtractHero[]>(json, Options)
+        JsonSerializer.Deserialize(json, Json.GuideExtractHeroArray)
         ?? Array.Empty<GuideExtractHero>();
 }

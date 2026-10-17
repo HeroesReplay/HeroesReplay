@@ -7,6 +7,10 @@
         <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
         <TestCategory Condition="'$(TestCategory)' == ''">Unit</TestCategory>
         <VSTestTestCaseFilter>Category=$(TestCategory)</VSTestTestCaseFilter>
+        <!-- Native AOT has no reflection-based System.Text.Json (#454). With it off here too, a
+             JsonSerializer call without source-generated metadata fails a test instead of the
+             AOT exe. A test that needs reflection names DefaultJsonTypeInfoResolver itself. -->
+        <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     </PropertyGroup>
 
     <ItemGroup>

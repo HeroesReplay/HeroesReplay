@@ -195,7 +195,10 @@ public static class PendingYouTubeUpload
         try
         {
             return File.Exists(path)
-                ? JsonSerializer.Deserialize<YouTubeEntry>(File.ReadAllText(path))
+                ? JsonSerializer.Deserialize(
+                    File.ReadAllText(path),
+                    YouTubeJsonContext.Default.YouTubeEntry
+                )
                 : null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)

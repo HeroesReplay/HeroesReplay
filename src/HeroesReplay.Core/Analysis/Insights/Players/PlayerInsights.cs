@@ -6,13 +6,13 @@ namespace HeroesReplay.Core.Analysis.Insights.Players;
 /// <summary>Every player's score line, the game's MVP, and the positive standouts (#412).</summary>
 public sealed record PlayerInsights
 {
-    public IReadOnlyList<PlayerLine> Lines { get; init; } = Array.Empty<PlayerLine>();
+    public IReadOnlyList<PlayerLine> Lines { get; set; } = Array.Empty<PlayerLine>();
 
     /// <summary>The player with the game's MVP award, or null. Either team can have it.</summary>
     public PlayerLine Mvp { get; init; }
 
     /// <summary>Standout performances, most remarkable first.</summary>
-    public IReadOnlyList<Standout> Standouts { get; init; } = Array.Empty<Standout>();
+    public IReadOnlyList<Standout> Standouts { get; set; } = Array.Empty<Standout>();
 }
 
 /// <summary>One player's score line, hero in English.</summary>

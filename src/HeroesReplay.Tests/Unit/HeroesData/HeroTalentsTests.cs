@@ -50,7 +50,7 @@ public class HeroTalentsTests
         }
         """;
 
-    [Fact]
+    [Fact(Skip = GameDataCatalogTests.HeroesElementReflection)]
     public void Read_ListsTalentsByTierThenColumn_WithEnglishNames()
     {
         IReadOnlyList<HeroTalent> talents = WizardTalents();

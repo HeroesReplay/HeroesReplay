@@ -115,7 +115,7 @@ public sealed record ServiceEnsureReport : ICliResult
     public string ToJson() => CliJson.Serialize(this);
 
     public static ServiceEnsureReport FromJson(string json) =>
-        JsonSerializer.Deserialize<ServiceEnsureReport>(json, CliJson.Options);
+        JsonSerializer.Deserialize(json, CliJson.Json.ServiceEnsureReport);
 }
 
 /// <summary>

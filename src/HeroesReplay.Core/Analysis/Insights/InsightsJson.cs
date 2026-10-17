@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HeroesReplay.Core.Analysis.Insights.Lanes;
+using HeroesReplay.Core.Analysis.Insights.Players;
 
 namespace HeroesReplay.Core.Analysis.Insights;
 
@@ -8,17 +10,23 @@ public static class InsightsJson
 {
     public const string FileName = "insights.json";
 
-    public static readonly JsonSerializerOptions Options = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
+    internal static readonly InsightsJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+            WriteIndented = true,
+            Converters =
+            {
+                new JsonStringEnumConverter<LaneConfidence>(),
+                new JsonStringEnumConverter<StandoutKind>(),
+            },
+        }
+    );
 
     public static string Write(MatchInsights insights) =>
-        JsonSerializer.Serialize(insights ?? new MatchInsights(), Options) + "\n";
+        JsonSerializer.Serialize(insights ?? new MatchInsights(), Json.MatchInsights) + "\n";
 
     public static MatchInsights Parse(string json) =>
-        JsonSerializer.Deserialize<MatchInsights>(json, Options) ?? new MatchInsights();
+        JsonSerializer.Deserialize(json, Json.MatchInsights) ?? new MatchInsights();
 }

@@ -19,21 +19,21 @@ public sealed record MatchInsights
 {
     public const int CurrentVersion = 1;
 
-    public int Version { get; init; } = CurrentVersion;
+    public int Version { get; set; } = CurrentVersion;
 
-    public PlayerInsights Players { get; init; } = new();
+    public PlayerInsights Players { get; set; } = new();
 
-    public LaneInsights Lanes { get; init; } = new();
+    public LaneInsights Lanes { get; set; } = new();
 
-    public CampInsights Camps { get; init; } = new();
+    public CampInsights Camps { get; set; } = new();
 
-    public StructureInsights Structures { get; init; } = new();
+    public StructureInsights Structures { get; set; } = new();
 
-    public FinishInsights Finish { get; init; } = new();
+    public FinishInsights Finish { get; set; } = new();
 
-    public ComebackInsights Comeback { get; init; } = new();
+    public ComebackInsights Comeback { get; set; } = new();
 
-    public BuildInsights Builds { get; init; } = new();
+    public BuildInsights Builds { get; set; } = new();
 
-    public FocusInsights Focus { get; init; } = new();
+    public FocusInsights Focus { get; set; } = new();
 }

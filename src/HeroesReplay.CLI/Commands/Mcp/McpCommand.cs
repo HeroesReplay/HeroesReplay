@@ -1,5 +1,7 @@
 using System;
 using System.CommandLine;
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Obs.Inspection;
@@ -7,11 +9,28 @@ using HeroesReplay.Core.Status;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 
 namespace HeroesReplay.CLI.Commands.Mcp;
 
 public class McpCommand : Command
 {
+    /// <summary>
+    /// The MCP SDK's own options (camelCase, nulls left out) with its resolver first and then
+    /// <see cref="McpToolsJsonContext"/>, so a tool's schema, arguments and result need no
+    /// reflection (#454). Options without a resolver, or a tool type missing from the context,
+    /// throw when the host starts.
+    /// </summary>
+    public static readonly JsonSerializerOptions ToolJsonOptions = new(
+        McpJsonUtilities.DefaultOptions
+    )
+    {
+        TypeInfoResolver = JsonTypeInfoResolver.Combine(
+            McpJsonUtilities.DefaultOptions.TypeInfoResolver,
+            McpToolsJsonContext.Default
+        ),
+    };
+
     public McpCommand()
         : base(
             "mcp",
@@ -44,8 +63,8 @@ public class McpCommand : Command
         builder
             .Services.AddMcpServer()
             .WithStdioServerTransport()
-            .WithTools<SpectatorMcpTools>()
-            .WithTools<ObsMcpTools>();
+            .WithTools<SpectatorMcpTools>(ToolJsonOptions)
+            .WithTools<ObsMcpTools>(ToolJsonOptions);
 
         using IHost host = builder.Build();
         await host.RunAsync(cancellationToken);

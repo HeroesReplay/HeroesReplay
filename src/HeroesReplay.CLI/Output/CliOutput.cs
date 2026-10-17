@@ -1,6 +1,9 @@
 using System;
 using System.CommandLine;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.CLI.Output;
@@ -64,13 +67,25 @@ public static class CliOutput
         TextWriter text
     ) => format == CliOutputFormat.Json ? Error(parseResult) : text;
 
+    /// <summary>
+    /// <see cref="CliJson"/>'s options over the CLI's own results (<see cref="CliOutputJsonContext"/>)
+    /// and Core's, with the enums only the CLI's results hold (#454).
+    /// </summary>
+    public static readonly JsonSerializerOptions JsonOptions = CliJson.CreateOptions(
+        CliOutputJsonContext.Default,
+        new JsonStringEnumConverter<DependencyInstallOutcome>(JsonNamingPolicy.CamelCase)
+    );
+
     /// <summary>Writes <paramref name="result"/> as one JSON document and returns its exit code.</summary>
     public static int WriteJson(ICliResult result, TextWriter output)
     {
         ArgumentNullException.ThrowIfNull(result);
-        (output ?? Console.Out).WriteLine(CliJson.Serialize(result));
+        (output ?? Console.Out).WriteLine(Serialize(result));
         return ExitCode(result);
     }
+
+    /// <summary><paramref name="result"/> as its runtime type, Core's results or the CLI's.</summary>
+    public static string Serialize(ICliResult result) => CliJson.Serialize(result, JsonOptions);
 
     public static int ExitCode(ICliResult result) => result?.Ok == true ? 0 : 1;
 }

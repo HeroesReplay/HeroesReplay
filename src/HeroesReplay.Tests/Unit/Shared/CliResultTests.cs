@@ -5,11 +5,13 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HeroesReplay.CLI.Commands.Obs;
+using HeroesReplay.CLI.Output;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
+using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Shared;
@@ -36,7 +38,7 @@ public class CliResultTests
 
         Assert.Equal(
             ["schemaVersion", "ok", "code", "message", "environment", "details"],
-            Names(CliJson.Serialize(result))
+            Names(CliJson.Serialize(result, TestShapes))
         );
         Assert.Equal(CliJson.SchemaVersion, result.SchemaVersion);
     }
@@ -175,7 +177,7 @@ public class CliResultTests
         Assert.IsAssignableFrom<ICliResult>(report);
         Assert.Equal(
             ["schemaVersion", "ok", "code", "format", "manifest", "files", "problems", "message"],
-            Names(CliJson.Serialize(report))
+            Names(CliOutput.Serialize(report))
         );
     }
 
@@ -228,7 +230,7 @@ public class CliResultTests
         );
         Assert.Equal(plan.ToJson(), CliJson.Serialize(plan));
         // Byte for byte what obs plan printed before it moved onto CliJson.
-        Assert.Equal(JsonSerializer.Serialize(plan, BeforeWithEnums), CliJson.Serialize(plan));
+        Assert.Equal(JsonParity.Written(BeforeWithEnums, plan), CliJson.Serialize(plan));
         Assert.Contains("\"kind\": \"operatorOverride\"", plan.ToJson(), StringComparison.Ordinal);
         ObsCollectionPlanResult read = ObsCollectionPlanResult.FromJson(plan.ToJson());
         Assert.Equal(ObsPlanCodes.Changes, read.Code);
@@ -263,7 +265,7 @@ public class CliResultTests
             Names(result.ToJson())
         );
         Assert.Equal(result.ToJson(), CliJson.Serialize(result));
-        Assert.Equal(JsonSerializer.Serialize(result, Before), CliJson.Serialize(result));
+        Assert.Equal(JsonParity.Written(Before, result), CliJson.Serialize(result));
     }
 
     [Fact]
@@ -312,7 +314,7 @@ public class CliResultTests
             ],
             Names(CliJson.Serialize(effective))
         );
-        Assert.Equal(JsonSerializer.Serialize(effective, Before), CliJson.Serialize(effective));
+        Assert.Equal(JsonParity.Written(Before, effective), CliJson.Serialize(effective));
     }
 
     [Fact]
@@ -324,7 +326,7 @@ public class CliResultTests
             Details = ServiceRoleState.Ready,
         };
 
-        using JsonDocument json = JsonDocument.Parse(CliJson.Serialize(result));
+        using JsonDocument json = JsonDocument.Parse(CliJson.Serialize(result, TestShapes));
 
         Assert.Equal("ready", json.RootElement.GetProperty("details").GetString());
     }
@@ -337,6 +339,11 @@ public class CliResultTests
             CliJson.CurrentEnvironment()
         );
     }
+
+    /// <summary>The envelope over shapes only these tests use (#454), through the same <see cref="CliJson.CreateOptions"/> the CLI uses.</summary>
+    private static readonly JsonSerializerOptions TestShapes = CliJson.CreateOptions(
+        CliResultTestJsonContext.Default
+    );
 
     /// <summary>The options <c>obs backup</c>, <c>obs restore</c>, and <c>config effective</c> had before #311.</summary>
     private static readonly JsonSerializerOptions Before = new()
@@ -358,3 +365,7 @@ public class CliResultTests
         return document.RootElement.EnumerateObject().Select(property => property.Name).ToArray();
     }
 }
+
+[JsonSerializable(typeof(CliResult<string[]>))]
+[JsonSerializable(typeof(CliResult<ServiceRoleState>))]
+internal sealed partial class CliResultTestJsonContext : JsonSerializerContext;

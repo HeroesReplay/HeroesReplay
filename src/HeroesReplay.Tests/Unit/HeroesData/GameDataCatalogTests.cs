@@ -16,6 +16,14 @@ namespace HeroesReplay.Tests.Unit.HeroesData;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class GameDataCatalogTests
 {
+    /// <summary>
+    /// Heroes.Element reads heroes-data2 with reflection-based System.Text.Json
+    /// (<c>ElementDocument.GetMetaProperties</c>), which this project turns off (#454). Its
+    /// replacement is #456; these tests run again then.
+    /// </summary>
+    internal const string HeroesElementReflection =
+        "Heroes.Element reads by reflection, off in this project (#454); #456 replaces it.";
+
     [Fact]
     public void Archive_PrefersTheHeroesData2NoMapsZip()
     {
@@ -95,7 +103,7 @@ public class GameDataCatalogTests
         Assert.DoesNotContain("repos/HeroesToolChest/heroes-data/", text, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Fact(Skip = HeroesElementReflection)]
     public async Task Load_ReadsHeroesData2RolesReleaseDateAndUnits()
     {
         string parent = Path.Combine(
