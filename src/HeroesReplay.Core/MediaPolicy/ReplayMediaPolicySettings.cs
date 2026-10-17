@@ -84,4 +84,12 @@ public class ReplayMediaPolicySettings
     /// the focus picker reaches back past the ordinary window for the hero it needs.
     /// </summary>
     public TimeSpan FocusCandidateMaxAge { get; set; } = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// Focus-hero recordings (#433) that may wait for upload past a full upload backlog: a focus
+    /// replay is recorded while fewer than this many focus recordings wait, so focus videos keep
+    /// coming when ordinary recordings fill a day of upload calls. The uploader sends them right
+    /// after the requests. Zero turns the lane off.
+    /// </summary>
+    public int FocusRecordingLane { get; set; } = 8;
 }

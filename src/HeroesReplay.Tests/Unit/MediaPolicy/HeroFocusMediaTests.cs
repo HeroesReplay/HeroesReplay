@@ -128,6 +128,7 @@ public class HeroFocusMediaTests
             {
                 Priority = ReplayMediaPriority.Focus,
                 PendingUploads = 20,
+                FocusPending = 8,
                 Live = true,
                 PublicListing = true,
                 UploadsPerDay = 20,
@@ -152,6 +153,109 @@ public class HeroFocusMediaTests
         Assert.False(backlog.Allow);
         Assert.Equal(RecordingCap.UploadBacklog, backlog.Reason);
         Assert.False(ordinary.Allow);
+    }
+
+    /// <summary>
+    /// Production on 2026-10-17: 30 recordings waited, a day of upload calls, so the first focus
+    /// replay was spectated without a recording. Focus has its own lane of 8 past that backlog.
+    /// </summary>
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(7, true)]
+    [InlineData(8, false)]
+    public void PastAFullUploadBacklog_AFocusReplayStillRecords_WhileItsLaneHasRoom(
+        int focusWaiting,
+        bool recorded
+    )
+    {
+        var input = new RecordingCapInput
+        {
+            Priority = ReplayMediaPriority.Focus,
+            PendingUploads = 30,
+            FocusPending = focusWaiting,
+            ScheduledAhead = 42,
+            Live = true,
+            PublicListing = true,
+            UploadsPerDay = 30,
+        };
+        ReplayMediaPolicySettings off = Settings();
+        off.FocusRecordingLane = 0;
+
+        RecordingCapDecision decision = RecordingCap.Decide(input, Settings());
+        RecordingCapDecision ordinary = RecordingCap.Decide(
+            new RecordingCapInput
+            {
+                Priority = ReplayMediaPriority.Ordinary,
+                PendingUploads = 30,
+                Live = true,
+                PublicListing = true,
+                UploadsPerDay = 30,
+            },
+            Settings()
+        );
+
+        Assert.Equal(recorded, decision.Allow);
+        Assert.Equal(
+            recorded ? RecordingCap.FocusLane : RecordingCap.UploadBacklog,
+            decision.Reason
+        );
+        Assert.False(RecordingCap.Decide(input, off).Allow);
+        Assert.False(ordinary.Allow);
+        if (recorded)
+        {
+            Assert.Contains("own lane of 8", decision.Summary, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void TheCap_CountsOnlyUnsentFocusRecordings()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "hr-focus-lane-" + Guid.NewGuid().ToString("N")
+        );
+        try
+        {
+            string contexts = Path.Combine(root, "Contexts");
+            Recording(
+                contexts,
+                "1",
+                new YouTubeEntry
+                {
+                    ReplayId = 1,
+                    HeroFocus = new YouTubeHeroFocus { Hero = "Cassia" },
+                }
+            );
+            Recording(
+                contexts,
+                "2",
+                new YouTubeEntry
+                {
+                    ReplayId = 2,
+                    HeroFocus = new YouTubeHeroFocus { Hero = "Diablo" },
+                    VideoId = "sent",
+                }
+            );
+            Recording(contexts, "3", new YouTubeEntry { ReplayId = 3 });
+            var settings = new HeroesReplay.Core.Configuration.AppSettings
+            {
+                Location = new HeroesReplay.Core.Configuration.LocationSettings
+                {
+                    DataDirectory = root,
+                },
+                YouTube = new YouTubeSettings
+                {
+                    EntryFileName = "entry.json",
+                    EntryFileNameUploaded = "uploaded.json",
+                },
+            };
+
+            Assert.Equal(1, RecordingCap.FocusWaiting(settings, settings.YouTube));
+        }
+        finally
+        {
+            TestTemp.Delete(root);
+        }
     }
 
     [Fact]
