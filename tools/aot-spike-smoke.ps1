@@ -59,6 +59,8 @@ $rows = @(
     Invoke-Case 'services-status-json' @('services', 'status', '--output', 'json')
     Invoke-Case 'focus-coverage' @('focus', 'coverage')
     Invoke-Case 'calculators-coordinates' @('calculators', 'coordinates', '--file', $Replay) -TimeoutSec 600
+    # Loads the heroes-data2 catalog (Heroes.Element) and the embedded talent-build reference.
+    Invoke-Case 'builds-match' @('builds', 'match', '--replay', $Replay) -TimeoutSec 600
     Invoke-Case 'mcp-stdio' @('mcp') -StdinLines $mcp -TimeoutSec 60
 )
 $rows | Export-Csv (Join-Path $OutDir "$Label-summary.csv") -NoTypeInformation

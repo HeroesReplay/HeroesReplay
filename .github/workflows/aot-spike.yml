@@ -30,6 +30,10 @@ jobs:
       - name: Publish framework-dependent (today's release shape)
         shell: pwsh
         run: dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c Release -r win-x64 --self-contained false -p:PublishAot=false -o "$env:RUNNER_TEMP\jit" -nologo
+      # The runtime in the release folder, not trimmed: no code changes, no installed runtime needed.
+      - name: Publish self-contained (no trimming)
+        shell: pwsh
+        run: dotnet publish src/HeroesReplay.CLI/HeroesReplay.CLI.csproj -c Release -r win-x64 --self-contained true -p:PublishAot=false -o "$env:RUNNER_TEMP\sc" -nologo
       - name: Publish Native AOT
         shell: pwsh
         run: |
@@ -41,7 +45,7 @@ jobs:
       - name: Sizes
         shell: pwsh
         run: |
-          foreach ($d in 'jit', 'aot') {
+          foreach ($d in 'jit', 'sc', 'aot') {
             $dir = "$env:RUNNER_TEMP\$d"
             $exe = Get-Item "$dir\heroesreplay.exe"
             $all = (Get-ChildItem $dir -Recurse -File | Measure-Object Length -Sum).Sum
@@ -53,6 +57,10 @@ jobs:
         shell: pwsh
         continue-on-error: true
         run: pwsh -NoProfile -File tools/aot-spike-smoke.ps1 -Exe "$env:RUNNER_TEMP\jit\heroesreplay.exe" -Label jit -Replay "$env:GITHUB_WORKSPACE\src\HeroesReplay.Tests\Assets\hour-long-replay-provided-by-mgatner.StormReplay" -OutDir "$env:RUNNER_TEMP\out"
+      - name: Smoke self-contained
+        shell: pwsh
+        continue-on-error: true
+        run: pwsh -NoProfile -File tools/aot-spike-smoke.ps1 -Exe "$env:RUNNER_TEMP\sc\heroesreplay.exe" -Label sc -Replay "$env:GITHUB_WORKSPACE\src\HeroesReplay.Tests\Assets\hour-long-replay-provided-by-mgatner.StormReplay" -OutDir "$env:RUNNER_TEMP\out"
       - name: Smoke AOT
         shell: pwsh
         continue-on-error: true
