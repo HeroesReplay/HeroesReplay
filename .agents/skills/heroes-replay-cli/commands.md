@@ -19,9 +19,9 @@ Spectate one .StormReplay file, or each file in a directory, then exit.
 Spectate StormReplay files already in Data\Standard and Data\Requests. Does not call Heroes Profile.
 
 - **Before:** As `spectate file`, with replays already in `Data\Standard` and `Data\Requests` (`heroesprofile download`). `services start` runs it as the spectate role.
-- **Changes:** As `spectate file`, over the cached replays, in a loop. Does not call Heroes Profile.
+- **Changes:** As `spectate file`, over the cached replays, in a loop. Does not call Heroes Profile. Between replays, once the .NET runtime it loaded was serviced under it (`runtime.serviced`, #450) and a supervisor runs, it stops as it does for a release (the stream stays up on the waiting scene) so the supervisor starts it again.
 - **Exit:** Runs until stopped (Ctrl+C, or `services stop` for a role). 1 on a parse error or an unexpected error.
-- **Codes:** `obs.stream_stuck_reconnecting`, `obs.stream_stalled`, `obs.ingest_unreachable`
+- **Codes:** `obs.stream_stuck_reconnecting`, `obs.stream_stalled`, `obs.ingest_unreachable`, `runtime.serviced`
 
 ## `calculators report`
 
@@ -214,6 +214,16 @@ Resolve ffmpeg and ffprobe (Clips:FfmpegDirectory, the deps install folder, C:\f
 - **Changes:** Nothing. Runs `ffmpeg -version`, `ffmpeg -encoders`, and `ffprobe -version`.
 - **Exit:** 0 when both tools work (a build that is not the pinned one is a warning and passes), 1 when one is missing, does not run, or cannot encode libx264.
 - **Codes:** `check.ffmpeg.ok`, `check.ffmpeg.not_pinned`, `check.ffmpeg.missing`, `check.ffmpeg.not_runnable`, `check.ffmpeg.libx264_missing`, `check.ffmpeg.error`
+
+## `check runtime`
+
+Report the .NET runtime this exe runs on (RuntimeInformation.FrameworkDescription) and the one its release was built and tested on (runtime.txt). A runtime older than the release's is a warning.
+
+- **Options:** `--output` (`-o`)
+- **Before:** None. Reads no secret and no setting.
+- **Changes:** Nothing. Reads `runtime.txt` beside the exe. `package-release.ps1` runs it on the packaged exe and writes the runtime into the zip's `runtime.txt` (#462).
+- **Exit:** 0 when the check passes (a warning passes), 1 when it fails or on a parse error.
+- **Codes:** `check.runtime.ok`, `check.runtime.older_than_release`, `check.runtime.error`
 
 ## `client configure`
 
@@ -446,16 +456,16 @@ Classify each role as ready, degraded, stale, stopped, or failed from its heartb
 - **Before:** None. Over SSH the supervisor's mutex is not visible, so `supervisor.json` decides.
 - **Changes:** Nothing. Read only.
 - **Exit:** 0 when no role is failed, stale, or degraded; 1 otherwise.
-- **Codes:** `service.ready`, `service.degraded`, `service.stale`, `service.stopped`, `service.failed`, `service.restart_budget_exhausted`, `spectate.no_match_progress`, `spectate.launch_stalled`, `spectate.stream_hold`, `download.heroesprofile_rejected`, `download.heroesprofile_unreachable`, `twitch.token_invalid`, `twitch.unreachable`, `youtube.oauth_invalid`, `youtube.oauth_missing`, `youtube.oauth_unreachable`, `youtube.quota_blocked`, `youtube.not_publishing`, `spectate.obs_rejected`, `spectate.obs_unreachable`
+- **Codes:** `service.ready`, `service.degraded`, `service.stale`, `service.stopped`, `service.failed`, `service.restart_budget_exhausted`, `spectate.no_match_progress`, `spectate.launch_stalled`, `spectate.stream_hold`, `runtime.serviced`, `download.heroesprofile_rejected`, `download.heroesprofile_unreachable`, `twitch.token_invalid`, `twitch.unreachable`, `youtube.oauth_invalid`, `youtube.oauth_missing`, `youtube.oauth_unreachable`, `youtube.quota_blocked`, `youtube.not_publishing`, `spectate.obs_rejected`, `spectate.obs_unreachable`
 
 ## `services supervise`
 
 Supervise the roles `services start` recorded, in the foreground: restart failed roles with backoff (10s, 30s, 2m, 5m), kill and restart roles whose heartbeat is 2 minutes old, at most 5 restarts per role in 30 minutes (ServiceRestart), then leave the role down (service.restart_budget_exhausted). One supervisor at a time, across logon sessions (an SSH session sees the desktop's through supervisor.json). `services stop` ends it; Ctrl+C leaves the roles running unsupervised.
 
 - **Before:** Roles recorded by `services start`; no other supervisor in any session.
-- **Changes:** Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397). With `ServiceRestart:ObsWatchdog` (prod) and streaming desired (`OBS:StreamingEnabled` and the machine arm), it starts OBS when obs64 is gone and restarts it (CloseMainWindow, then a kill) when its websocket has not answered for `OBS:HungAfter` (3 min) and the stream is not live; it never passes `--startstreaming`, never kills OBS while its stream bytes advance, and does nothing once `services stop` is under way (#398). It starts OBS detached through `cmd /c start`, the same launcher as spectate's, and a role kill leaves any obs64 in the role's tree running (#409).
-- **Exit:** Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised). 1 when a supervisor already runs.
-- **Codes:** `service.restart_budget_exhausted`, `service.role_adopted`, `service.untracked_role_killed`, `service.role_kill_spared_obs`, `obs.process_missing`, `obs.websocket_hung`, `obs.watchdog_exhausted`
+- **Changes:** Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397). With `ServiceRestart:ObsWatchdog` (prod) and streaming desired (`OBS:StreamingEnabled` and the machine arm), it starts OBS when obs64 is gone and restarts it (CloseMainWindow, then a kill) when its websocket has not answered for `OBS:HungAfter` (3 min) and the stream is not live; it never passes `--startstreaming`, never kills OBS while its stream bytes advance, and does nothing once `services stop` is under way (#398). It starts OBS detached through `cmd /c start`, the same launcher as spectate's, and a role kill leaves any obs64 in the role's tree running (#409). A role whose .NET runtime folder a .NET update removed under it (`runtime.serviced`, #450) is killed and restarted at once with no backoff; spectate stops between replays by itself and is started again once it exits. When the supervisor's own runtime is serviced, it starts `services supervise` in a new console, which waits for it to exit and takes over, and exits; the roles keep running.
+- **Exit:** Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised), or until it hands over off a serviced runtime (0). 1 when a supervisor already runs.
+- **Codes:** `service.restart_budget_exhausted`, `service.role_adopted`, `service.untracked_role_killed`, `service.role_kill_spared_obs`, `obs.process_missing`, `obs.websocket_hung`, `obs.watchdog_exhausted`, `runtime.serviced`
 
 ## `services install-task`
 

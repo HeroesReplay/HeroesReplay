@@ -61,7 +61,8 @@ public class DownloadCommand : Command
             "download",
             settings.ServiceHealth,
             stop.Token,
-            dependency
+            dependency,
+            scope.ServiceProvider.GetRequiredService<ILogger<ServiceHeartbeat>>()
         );
         // A rejected key pauses the replay list until a probe passes (#358).
         downloader.ObserveDependency(dependency);

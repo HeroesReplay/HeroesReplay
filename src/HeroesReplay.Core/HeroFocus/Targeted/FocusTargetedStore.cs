@@ -66,12 +66,14 @@ public sealed class FocusTargetedStore
 {
     public const string FileName = "targeted.json";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-    };
+    internal static readonly HeroFocusJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+        }
+    );
 
     public FocusTargetedStore(string path)
     {
@@ -95,7 +97,7 @@ public sealed class FocusTargetedStore
             }
 
             FocusTargetedState state =
-                JsonSerializer.Deserialize<FocusTargetedState>(File.ReadAllText(FilePath), Json)
+                JsonSerializer.Deserialize(File.ReadAllText(FilePath), Json.FocusTargetedState)
                 ?? new FocusTargetedState();
             state.Seen ??= new();
             state.Tried ??= new();
@@ -110,5 +112,8 @@ public sealed class FocusTargetedStore
     }
 
     public void Write(FocusTargetedState state) =>
-        DurableFile.Replace(FilePath, JsonSerializer.Serialize(state ?? new(), Json));
+        DurableFile.Replace(
+            FilePath,
+            JsonSerializer.Serialize(state ?? new(), Json.FocusTargetedState)
+        );
 }

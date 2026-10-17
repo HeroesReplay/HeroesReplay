@@ -121,7 +121,7 @@ public sealed record ObsCollectionPlanResult : ICliResult
     public string ToJson() => CliJson.Serialize(this);
 
     public static ObsCollectionPlanResult FromJson(string json) =>
-        JsonSerializer.Deserialize<ObsCollectionPlanResult>(json, CliJson.Options);
+        JsonSerializer.Deserialize(json, CliJson.Json.ObsCollectionPlanResult);
 }
 
 /// <summary>The stable <c>code</c> of an <c>obs plan</c>.</summary>

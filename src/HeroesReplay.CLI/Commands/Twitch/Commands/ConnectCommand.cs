@@ -91,7 +91,8 @@ public class ConnectCommand : Command
             "twitch",
             settings.ServiceHealth,
             stop.Token,
-            await firstProbe
+            await firstProbe,
+            scope.ServiceProvider.GetRequiredService<ILogger<ServiceHeartbeat>>()
         );
         using IDisposable probing = probes.Watch(stop.Token);
         StatusPredictionWatcher predictions =

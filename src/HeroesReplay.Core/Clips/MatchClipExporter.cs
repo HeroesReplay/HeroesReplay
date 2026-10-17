@@ -16,6 +16,15 @@ namespace HeroesReplay.Core.Clips;
 
 public static class MatchClipExporter
 {
+    /// <summary><c>clips.json</c>: indented, and camelCase as its anonymous rows were before #454.</summary>
+    internal static readonly ClipsJsonContext Index = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        }
+    );
+
     public static async Task ExportAsync(
         Replay replay,
         int? replayId,
@@ -129,7 +138,7 @@ public static class MatchClipExporter
 
         string clipRoot = Path.Combine(contextDirectory, "clips");
         Directory.CreateDirectory(clipRoot);
-        var written = new List<object>();
+        var written = new List<ClipIndexRow>();
         foreach (TeamKillClip clip in clips)
         {
             if (
@@ -199,40 +208,41 @@ public static class MatchClipExporter
         string index = Path.Combine(contextDirectory, "clips.json");
         await File.WriteAllTextAsync(
                 index,
-                JsonSerializer.Serialize(
-                    written,
-                    new JsonSerializerOptions { WriteIndented = true }
-                )
+                JsonSerializer.Serialize(written, Index.ListClipIndexRow)
             )
             .ConfigureAwait(false);
     }
 
-    private static object Row(TeamKillClip clip, double start, double duration, string output) =>
-        new
-        {
-            kind = clip.Kind,
-            hero = clip.Hero,
-            description = clip.Description,
-            hudStart = clip.HudStartSecond,
-            hudEnd = clip.HudEndSecond,
-            fileStart = start,
+    private static ClipIndexRow Row(
+        TeamKillClip clip,
+        double start,
+        double duration,
+        string output
+    ) =>
+        new(
+            clip.Kind,
+            clip.Hero,
+            clip.Description,
+            clip.HudStartSecond,
+            clip.HudEndSecond,
+            start,
             duration,
-            file = output,
-            kills = KillRows(clip),
-        };
+            output,
+            KillRows(clip)
+        );
 
-    private static object[] KillRows(TeamKillClip clip)
+    private static ClipIndexKill[] KillRows(TeamKillClip clip)
     {
         if (clip.Kills == null || clip.Kills.Count == 0)
         {
-            return Array.Empty<object>();
+            return Array.Empty<ClipIndexKill>();
         }
 
-        var rows = new object[clip.Kills.Count];
+        var rows = new ClipIndexKill[clip.Kills.Count];
         for (int i = 0; i < clip.Kills.Count; i++)
         {
             TeamKillBlow blow = clip.Kills[i];
-            rows[i] = new { second = blow.Second, victim = blow.Victim };
+            rows[i] = new ClipIndexKill(blow.Second, blow.Victim);
         }
 
         return rows;
@@ -277,7 +287,7 @@ public static class MatchClipExporter
         };
         File.WriteAllText(
             Path.Combine(folder, name),
-            JsonSerializer.Serialize(entry, new JsonSerializerOptions { WriteIndented = true })
+            JsonSerializer.Serialize(entry, YouTubeJsonContext.Indented.YouTubeEntry)
         );
     }
 

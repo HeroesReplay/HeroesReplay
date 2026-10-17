@@ -76,12 +76,13 @@ public static class CommandReference
         new(
             "spectate heroesprofile",
             "As `spectate file`, with replays already in `Data\\Standard` and `Data\\Requests` (`heroesprofile download`). `services start` runs it as the spectate role.",
-            "As `spectate file`, over the cached replays, in a loop. Does not call Heroes Profile.",
+            "As `spectate file`, over the cached replays, in a loop. Does not call Heroes Profile. Between replays, once the .NET runtime it loaded was serviced under it (`runtime.serviced`, #450) and a supervisor runs, it stops as it does for a release (the stream stays up on the waiting scene) so the supervisor starts it again.",
             Blocks,
             [
                 ObsStreamHealth.StuckReconnectingCode,
                 ObsStreamHealth.StalledCode,
                 ObsIngest.UnreachableCode,
+                ServiceHealthCodes.RuntimeServiced,
             ]
         ),
         new(
@@ -221,6 +222,13 @@ public static class CommandReference
             "Nothing. Runs `ffmpeg -version`, `ffmpeg -encoders`, and `ffprobe -version`.",
             "0 when both tools work (a build that is not the pinned one is a warning and passes), 1 when one is missing, does not run, or cannot encode libx264.",
             CheckCodesFor("ffmpeg")
+        ),
+        new(
+            "check runtime",
+            "None. Reads no secret and no setting.",
+            "Nothing. Reads `runtime.txt` beside the exe. `package-release.ps1` runs it on the packaged exe and writes the runtime into the zip's `runtime.txt` (#462).",
+            CheckExit,
+            CheckCodesFor("runtime")
         ),
         new(
             "client configure",
@@ -399,8 +407,8 @@ public static class CommandReference
         new(
             "services supervise",
             "Roles recorded by `services start`; no other supervisor in any session.",
-            "Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397). With `ServiceRestart:ObsWatchdog` (prod) and streaming desired (`OBS:StreamingEnabled` and the machine arm), it starts OBS when obs64 is gone and restarts it (CloseMainWindow, then a kill) when its websocket has not answered for `OBS:HungAfter` (3 min) and the stream is not live; it never passes `--startstreaming`, never kills OBS while its stream bytes advance, and does nothing once `services stop` is under way (#398). It starts OBS detached through `cmd /c start`, the same launcher as spectate's, and a role kill leaves any obs64 in the role's tree running (#409).",
-            "Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised). 1 when a supervisor already runs.",
+            "Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397). With `ServiceRestart:ObsWatchdog` (prod) and streaming desired (`OBS:StreamingEnabled` and the machine arm), it starts OBS when obs64 is gone and restarts it (CloseMainWindow, then a kill) when its websocket has not answered for `OBS:HungAfter` (3 min) and the stream is not live; it never passes `--startstreaming`, never kills OBS while its stream bytes advance, and does nothing once `services stop` is under way (#398). It starts OBS detached through `cmd /c start`, the same launcher as spectate's, and a role kill leaves any obs64 in the role's tree running (#409). A role whose .NET runtime folder a .NET update removed under it (`runtime.serviced`, #450) is killed and restarted at once with no backoff; spectate stops between replays by itself and is started again once it exits. When the supervisor's own runtime is serviced, it starts `services supervise` in a new console, which waits for it to exit and takes over, and exits; the roles keep running.",
+            "Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised), or until it hands over off a serviced runtime (0). 1 when a supervisor already runs.",
             [
                 ServiceHealthCodes.RestartBudgetExhausted,
                 ServiceSupervision.RoleAdoptedCode,
@@ -409,6 +417,7 @@ public static class CommandReference
                 ObsWatchdogState.ProcessMissingCode,
                 ObsWatchdogState.WebsocketHungCode,
                 ObsWatchdogState.ExhaustedCode,
+                ServiceHealthCodes.RuntimeServiced,
             ]
         ),
         new(

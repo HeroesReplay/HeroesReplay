@@ -568,8 +568,12 @@ public class YouTubeLibrary : IYouTubeLibrary
                 index.Unresolved.Add(
                     new YouTubeUnresolvedVideo
                     {
-                        Video = JsonSerializer.Deserialize<YouTubeLibraryVideo>(
-                            JsonSerializer.Serialize(video)
+                        Video = JsonSerializer.Deserialize(
+                            JsonSerializer.Serialize(
+                                video,
+                                YouTubeJsonContext.Default.YouTubeLibraryVideo
+                            ),
+                            YouTubeJsonContext.Default.YouTubeLibraryVideo
                         ),
                         NextAttemptAt = now,
                     }
@@ -1061,42 +1065,40 @@ public class YouTubeLibrary : IYouTubeLibrary
         YouTubeQuotaDay day = units.Read(now);
         var due = index.Unresolved.Where(item => item.NextAttemptAt <= now).ToList();
         string json = JsonSerializer.Serialize(
-            new
-            {
-                Simulated = true,
-                Recorded = record.Count,
-                Planned = items.Count,
-                InsertUnits = items.Count * YouTubeQuotaUnits.PlaylistItemInsert,
-                Playlists = items
+            new YouTubeLibraryDryRun(
+                Simulated: true,
+                Recorded: record.Count,
+                Planned: items.Count,
+                InsertUnits: items.Count * YouTubeQuotaUnits.PlaylistItemInsert,
+                Playlists: items
                     .GroupBy(item => item.PlaylistTitle, StringComparer.Ordinal)
-                    .Select(group => new { Title = group.Key, Videos = group.Count() }),
-                Items = items,
-                Discovery = new
-                {
-                    WouldList = true,
-                    UploadsPlaylistKnown = !string.IsNullOrWhiteSpace(index.PlaylistId),
-                    index.ListedToEnd,
-                    KnownVideos = index.VideoIds.Count,
-                    Unresolved = index.Unresolved.Count,
-                    HeroesProfileLookups = Math.Min(
+                    .Select(group => new YouTubeLibraryDryRunPlaylist(group.Key, group.Count()))
+                    .ToList(),
+                Items: items,
+                Discovery: new YouTubeLibraryDryRunDiscovery(
+                    WouldList: true,
+                    UploadsPlaylistKnown: !string.IsNullOrWhiteSpace(index.PlaylistId),
+                    ListedToEnd: index.ListedToEnd,
+                    KnownVideos: index.VideoIds.Count,
+                    Unresolved: index.Unresolved.Count,
+                    HeroesProfileLookups: Math.Min(
                         due.Count,
                         Math.Max(0, settings.YouTube?.LibraryLookupsPerPass ?? 0)
                     ),
-                    WouldResolve = due.Select(item => new
-                    {
-                        item.Video.VideoId,
-                        item.Video.ReplayId,
-                    }),
-                },
-                Units = new
-                {
+                    WouldResolve: due.Select(item => new YouTubeLibraryDryRunLookup(
+                            item.Video.VideoId,
+                            item.Video.ReplayId
+                        ))
+                        .ToList()
+                ),
+                Units: new YouTubeLibraryDryRunUnits(
                     day.QuotaDay,
                     day.UploadCalls,
                     day.LibraryUnits,
-                    LibraryRoom = units.LibraryRoom(day),
-                },
-            },
-            new JsonSerializerOptions { WriteIndented = true }
+                    units.LibraryRoom(day)
+                )
+            ),
+            YouTubeJsonContext.Indented.YouTubeLibraryDryRun
         );
         await File.WriteAllTextAsync(Path.Combine(data, DryRunFileName), json, cancellationToken)
             .ConfigureAwait(false);
@@ -1138,8 +1140,9 @@ public class YouTubeLibrary : IYouTubeLibrary
         {
             try
             {
-                YouTubeEntry entry = JsonSerializer.Deserialize<YouTubeEntry>(
-                    File.ReadAllText(path)
+                YouTubeEntry entry = JsonSerializer.Deserialize(
+                    File.ReadAllText(path),
+                    YouTubeJsonContext.Default.YouTubeEntry
                 );
                 if (entry != null)
                 {
@@ -1165,7 +1168,7 @@ public class YouTubeLibrary : IYouTubeLibrary
 
         try
         {
-            return JsonSerializer.Deserialize<YouTubePlaylistCache>(json)
+            return JsonSerializer.Deserialize(json, YouTubeJsonContext.Default.YouTubePlaylistCache)
                 ?? new YouTubePlaylistCache();
         }
         catch (JsonException exception)
@@ -1179,7 +1182,7 @@ public class YouTubeLibrary : IYouTubeLibrary
     private void SaveCache(YouTubePlaylistCache cache) =>
         DurableFile.Replace(
             CachePath(),
-            JsonSerializer.Serialize(cache, new JsonSerializerOptions { WriteIndented = true })
+            JsonSerializer.Serialize(cache, YouTubeJsonContext.Indented.YouTubePlaylistCache)
         );
 
     private string CachePath()

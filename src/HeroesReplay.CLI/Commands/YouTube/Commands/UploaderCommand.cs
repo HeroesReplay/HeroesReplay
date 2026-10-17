@@ -49,7 +49,8 @@ public class UploaderCommand : Command
             "youtube",
             settings.ServiceHealth,
             stop.Token,
-            dependency
+            dependency,
+            scope.ServiceProvider.GetRequiredService<ILogger<ServiceHeartbeat>>()
         );
         using IDisposable probing = probes.Watch(stop.Token);
         await uploader.ListenAsync();

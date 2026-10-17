@@ -8,12 +8,15 @@ namespace HeroesReplay.Core.YouTube.Outbox;
 
 public static class UploadAttemptManifestCodec
 {
-    private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
+    internal static readonly YouTubeJsonContext JsonOptions = new(CreateOptions());
 
     /// <summary>The session URI is written without the API key (#368).</summary>
     public static string Write(UploadAttemptManifest manifest)
     {
-        return JsonSerializer.Serialize(manifest?.WithoutSessionKey(), JsonOptions);
+        return JsonSerializer.Serialize(
+            manifest?.WithoutSessionKey(),
+            JsonOptions.UploadAttemptManifest
+        );
     }
 
     /// <summary>
@@ -391,7 +394,7 @@ public static class UploadAttemptManifestCodec
 
         try
         {
-            policy = element.Deserialize<UploadAttemptPolicy>(JsonOptions);
+            policy = element.Deserialize(JsonOptions.UploadAttemptPolicy);
         }
         catch (JsonException)
         {
@@ -625,7 +628,9 @@ public static class UploadAttemptManifestCodec
     private static JsonSerializerOptions CreateOptions()
     {
         var options = new JsonSerializerOptions { WriteIndented = true };
-        options.Converters.Add(new JsonStringEnumConverter(null, allowIntegerValues: false));
+        options.Converters.Add(
+            new JsonStringEnumConverter<UploadAttemptState>(null, allowIntegerValues: false)
+        );
         return options;
     }
 }

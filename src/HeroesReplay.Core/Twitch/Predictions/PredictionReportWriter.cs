@@ -44,8 +44,10 @@ public sealed class PredictionReportWriter
         }
 
         PredictionReport report =
-            JsonSerializer.Deserialize<PredictionReport>(File.ReadAllText(saved))
-            ?? throw new JsonException(SavedReportFileName + " is empty.");
+            JsonSerializer.Deserialize(
+                File.ReadAllText(saved),
+                TwitchJsonContext.Default.PredictionReport
+            ) ?? throw new JsonException(SavedReportFileName + " is empty.");
         DurableFile.Replace(
             Path.Combine(dataDirectory, ReportFileName),
             PredictionReportPage.ToHtml(report)
@@ -136,7 +138,7 @@ public sealed class PredictionReportWriter
         // The report is saved beside the page so `obs pages` can render it again after an update.
         DurableFile.Replace(
             Path.Combine(settings.Location.DataDirectory, SavedReportFileName),
-            JsonSerializer.Serialize(report)
+            JsonSerializer.Serialize(report, TwitchJsonContext.Default.PredictionReport)
         );
         DurableFile.Replace(ReportPath, PredictionReportPage.ToHtml(report));
     }

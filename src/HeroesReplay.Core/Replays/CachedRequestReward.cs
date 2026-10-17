@@ -15,7 +15,9 @@ public static class CachedRequestReward
 {
     public const string Extension = ".request.json";
 
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    internal static readonly RequestsJsonContext Json = new(
+        new JsonSerializerOptions { WriteIndented = true }
+    );
 
     public static string PathFor(string replayPath)
     {
@@ -36,7 +38,7 @@ public static class CachedRequestReward
         }
 
         string temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(item, Json));
+        File.WriteAllText(temp, JsonSerializer.Serialize(item, Json.RewardQueueItem));
         File.Move(temp, path, overwrite: true);
     }
 
@@ -141,8 +143,9 @@ public static class CachedRequestReward
 
         try
         {
-            RewardQueueItem item = JsonSerializer.Deserialize<RewardQueueItem>(
-                File.ReadAllText(path)
+            RewardQueueItem item = JsonSerializer.Deserialize(
+                File.ReadAllText(path),
+                RequestsJsonContext.Default.RewardQueueItem
             );
             return item?.Request == null ? null : item;
         }

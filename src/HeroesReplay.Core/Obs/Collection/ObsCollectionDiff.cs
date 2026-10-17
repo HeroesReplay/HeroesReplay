@@ -151,10 +151,9 @@ public sealed record ObsCollectionDiffResult(
 /// </summary>
 public static class ObsCollectionDiff
 {
-    private static readonly JsonSerializerOptions Strings = new()
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
+    internal static readonly ObsJsonContext Strings = new(
+        new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }
+    );
 
     /// <summary>Not compared on a source or scene.</summary>
     private static readonly HashSet<string> SourceIgnored = new(StringComparer.Ordinal)
@@ -662,7 +661,7 @@ public static class ObsCollectionDiff
                         .EnumerateObject()
                         .OrderBy(property => property.Name, StringComparer.Ordinal)
                         .Select(property =>
-                            JsonSerializer.Serialize(property.Name, Strings)
+                            JsonSerializer.Serialize(property.Name, Strings.String)
                             + ":"
                             + Canonical(property.Value)
                         )
@@ -671,7 +670,7 @@ public static class ObsCollectionDiff
             JsonValueKind.Array => "["
                 + string.Join(",", element.EnumerateArray().Select(Canonical))
                 + "]",
-            JsonValueKind.String => JsonSerializer.Serialize(element.GetString(), Strings),
+            JsonValueKind.String => JsonSerializer.Serialize(element.GetString(), Strings.String),
             JsonValueKind.Number => Number(element.GetRawText()),
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",

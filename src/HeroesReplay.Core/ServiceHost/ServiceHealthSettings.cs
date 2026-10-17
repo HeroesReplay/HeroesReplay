@@ -107,6 +107,15 @@ public sealed class ServiceHealthSettings
     /// </summary>
     public bool SpectateObsProbe { get; set; }
 
+    /// <summary>
+    /// The .NET runtime folder each role and the supervisor watch (#450). Empty (the default)
+    /// watches the shared runtime folder this process loaded; once it is gone, a .NET update
+    /// serviced it under the process, and the process restarts onto the current runtime
+    /// (<c>runtime.serviced</c>). Only for a proof: point it at a folder of its own, then delete
+    /// that folder. A process started after the deletion does not watch it.
+    /// </summary>
+    public string RuntimeDirectory { get; set; }
+
     /// <summary>The wait before the next probe: shorter after a failure, never under a minute.</summary>
     public TimeSpan NextDependencyProbe(bool failed)
     {

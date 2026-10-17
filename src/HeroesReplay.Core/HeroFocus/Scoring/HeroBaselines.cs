@@ -186,11 +186,13 @@ public sealed class HeroBaselineStore
 {
     public const string FileName = "baselines.json";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-    };
+    internal static readonly HeroFocusJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+        }
+    );
 
     public HeroBaselineStore(string path)
     {
@@ -219,7 +221,7 @@ public sealed class HeroBaselineStore
                 FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete
             );
-            HeroBaselines read = JsonSerializer.Deserialize<HeroBaselines>(stream, Json);
+            HeroBaselines read = JsonSerializer.Deserialize(stream, Json.HeroBaselines);
             return read == null || read.Version != HeroBaselines.CurrentVersion
                 ? new HeroBaselines()
                 : read;
@@ -241,6 +243,6 @@ public sealed class HeroBaselineStore
     public void Write(HeroBaselines baselines) =>
         DurableFile.Replace(
             FilePath,
-            JsonSerializer.Serialize(baselines ?? new HeroBaselines(), Json)
+            JsonSerializer.Serialize(baselines ?? new HeroBaselines(), Json.HeroBaselines)
         );
 }

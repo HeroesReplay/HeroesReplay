@@ -126,8 +126,9 @@ public static class PendingUploadSize
 
         try
         {
-            YouTubeEntry entry = JsonSerializer.Deserialize<YouTubeEntry>(
-                File.ReadAllText(entryPath)
+            YouTubeEntry entry = JsonSerializer.Deserialize(
+                File.ReadAllText(entryPath),
+                YouTubeJsonContext.Default.YouTubeEntry
             );
             return !string.IsNullOrWhiteSpace(entry?.VideoId);
         }

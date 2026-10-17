@@ -61,6 +61,14 @@ public static class ServiceHealthCodes
     /// </summary>
     public const string SpectateStreamHold = "spectate.stream_hold";
 
+    /// <summary>
+    /// The .NET runtime folder the process loaded is gone: a .NET update serviced it under the
+    /// running process, and the runtime libraries it loads from now on fail (#450). Spectate
+    /// restarts itself between replays; the supervisor restarts the other roles at once, and
+    /// itself.
+    /// </summary>
+    public const string RuntimeServiced = "runtime.serviced";
+
     public static string For(ServiceRoleState state) =>
         state switch
         {
@@ -97,6 +105,9 @@ public sealed record ServiceRoleHealth
     public string Arguments { get; init; }
     public string Nonce { get; init; }
     public string Version { get; init; }
+
+    /// <summary>The .NET runtime the role runs on, from its heartbeat (#462). Null from older roles.</summary>
+    public string DotnetRuntime { get; init; }
     public string ExecutablePath { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
     public string Readiness { get; init; }
@@ -266,11 +277,24 @@ public sealed record ServiceStatusReport : ICliResult
     /// </summary>
     public string ObsRestorePending { get; init; }
 
+    /// <summary>
+    /// The .NET runtime <c>services status</c> runs on, which a role started now loads too (#462).
+    /// A role on an older one is still on the runtime it started with
+    /// (<see cref="ServiceRoleHealth.DotnetRuntime"/>).
+    /// </summary>
+    public string DotnetRuntime { get; init; }
+
+    /// <summary>
+    /// The runtime this install's release was built and tested on (runtime.txt). Null for a source
+    /// build or a release from before #462.
+    /// </summary>
+    public string ReleaseRuntime { get; init; }
+
     [JsonIgnore]
     public int ExitCode => Ok ? 0 : 1;
 
     public string ToJson() => CliJson.Serialize(this);
 
     public static ServiceStatusReport FromJson(string json) =>
-        JsonSerializer.Deserialize<ServiceStatusReport>(json, CliJson.Options);
+        JsonSerializer.Deserialize(json, CliJson.Json.ServiceStatusReport);
 }

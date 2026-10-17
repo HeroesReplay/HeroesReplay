@@ -7,7 +7,9 @@ namespace HeroesReplay.Core.Twitch.Predictions;
 
 public sealed class PredictionStreakBook
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    internal static readonly TwitchJsonContext JsonOptions = new(
+        new JsonSerializerOptions { WriteIndented = true }
+    );
 
     public string LastPredictionId { get; set; }
 
@@ -28,9 +30,9 @@ public sealed class PredictionStreakBook
 
         try
         {
-            PredictionStreakBook book = JsonSerializer.Deserialize<PredictionStreakBook>(
+            PredictionStreakBook book = JsonSerializer.Deserialize(
                 File.ReadAllText(path),
-                JsonOptions
+                JsonOptions.PredictionStreakBook
             );
             if (book == null)
             {
@@ -55,7 +57,7 @@ public sealed class PredictionStreakBook
             Directory.CreateDirectory(directory);
         }
 
-        File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions));
+        File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOptions.PredictionStreakBook));
     }
 
     public int Apply(string predictionId, string userId, bool won)

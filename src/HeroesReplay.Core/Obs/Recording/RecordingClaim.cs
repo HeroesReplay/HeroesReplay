@@ -48,11 +48,13 @@ public sealed record RecordingClaim
 /// </summary>
 public sealed class RecordingClaimStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
+    internal static readonly ObsJsonContext JsonOptions = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        }
+    );
 
     public RecordingClaimStore(string path)
     {
@@ -76,7 +78,7 @@ public sealed class RecordingClaimStore
     public void Save(RecordingClaim claim)
     {
         ArgumentNullException.ThrowIfNull(claim);
-        DurableFile.Replace(FilePath, JsonSerializer.Serialize(claim, JsonOptions));
+        DurableFile.Replace(FilePath, JsonSerializer.Serialize(claim, JsonOptions.RecordingClaim));
     }
 
     /// <summary>Null when there is no claim. An unreadable file is moved aside.</summary>
@@ -90,7 +92,7 @@ public sealed class RecordingClaimStore
 
         try
         {
-            return JsonSerializer.Deserialize<RecordingClaim>(json, JsonOptions);
+            return JsonSerializer.Deserialize(json, JsonOptions.RecordingClaim);
         }
         catch (JsonException)
         {

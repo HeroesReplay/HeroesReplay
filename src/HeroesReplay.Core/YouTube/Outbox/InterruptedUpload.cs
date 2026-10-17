@@ -117,7 +117,6 @@ public sealed class InterruptedUploadRetries
     public const string FileName = "youtube-upload-retries.json";
 
     private static readonly object Gate = new();
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
     private readonly string path;
 
@@ -196,8 +195,9 @@ public sealed class InterruptedUploadRetries
 
         try
         {
-            Dictionary<string, Entry> read = JsonSerializer.Deserialize<Dictionary<string, Entry>>(
-                json
+            Dictionary<string, Entry> read = JsonSerializer.Deserialize(
+                json,
+                YouTubeJsonContext.Default.DictionaryStringEntry
             );
             return read == null
                 ? empty
@@ -214,7 +214,10 @@ public sealed class InterruptedUploadRetries
     {
         if (path != null)
         {
-            DurableFile.Replace(path, JsonSerializer.Serialize(entries, Options));
+            DurableFile.Replace(
+                path,
+                JsonSerializer.Serialize(entries, YouTubeJsonContext.Indented.DictionaryStringEntry)
+            );
         }
     }
 

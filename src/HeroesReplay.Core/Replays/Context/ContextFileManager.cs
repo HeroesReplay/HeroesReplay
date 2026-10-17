@@ -109,10 +109,7 @@ public class ContextFileManager : IContextFileManager
                 contextData.Directory.FullName,
                 settings.YouTube.EntryFileName
             );
-            string json = JsonSerializer.Serialize(
-                entry,
-                new JsonSerializerOptions { WriteIndented = true }
-            );
+            string json = JsonSerializer.Serialize(entry, YouTubeJsonContext.Indented.YouTubeEntry);
 
             await File.WriteAllTextAsync(file, json);
             logger.LogInformation("Wrote YouTube entry {File}.", file);

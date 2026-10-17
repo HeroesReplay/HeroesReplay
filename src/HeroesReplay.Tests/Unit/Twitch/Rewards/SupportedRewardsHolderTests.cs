@@ -310,17 +310,11 @@ public class SupportedRewardsHolderTests
     [InlineData("\"SL, Blind\"", RewardType.SL | RewardType.Blind)]
     public void RewardType_StoredNamesParseToTheIntendedValue(string json, RewardType expected)
     {
-        var options = new JsonSerializerOptions
-        {
-            Converters =
-            {
-                new System.Text.Json.Serialization.JsonStringEnumConverter(
-                    allowIntegerValues: true
-                ),
-            },
-        };
-
-        Assert.Equal(expected, JsonSerializer.Deserialize<RewardType>(json, options));
+        // custom-rewards.json is written with these converters (#454).
+        Assert.Equal(
+            expected,
+            JsonSerializer.Deserialize(json, TwitchRewardsManager.Json.RewardType)
+        );
     }
 
     /// <summary>

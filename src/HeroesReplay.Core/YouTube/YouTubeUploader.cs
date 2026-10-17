@@ -290,8 +290,9 @@ public class YouTubeUploader : IYouTubeUploader
             return LogMissingEntry(recording);
         }
 
-        YouTubeEntry entry = JsonSerializer.Deserialize<YouTubeEntry>(
-            await File.ReadAllTextAsync(entryFile.FullName, token)
+        YouTubeEntry entry = JsonSerializer.Deserialize(
+            await File.ReadAllTextAsync(entryFile.FullName, token),
+            YouTubeJsonContext.Default.YouTubeEntry
         );
         if (entry == null)
         {
@@ -789,7 +790,7 @@ public class YouTubeUploader : IYouTubeUploader
 
         await File.WriteAllTextAsync(
                 entryFile.FullName,
-                JsonSerializer.Serialize(entry, new JsonSerializerOptions { WriteIndented = true }),
+                JsonSerializer.Serialize(entry, YouTubeJsonContext.Indented.YouTubeEntry),
                 CancellationToken.None
             )
             .ConfigureAwait(false);
@@ -2250,21 +2251,20 @@ public class YouTubeUploader : IYouTubeUploader
         );
         Video video = UploadBody.Build(entry);
         string receipt = JsonSerializer.Serialize(
-            new
-            {
+            new YouTubeDryRunReceipt(
                 entry.Title,
                 entry.PrivacyStatus,
                 entry.DesiredPrivacyStatus,
-                PublishAtUtc = video.Status.PublishAtDateTimeOffset,
-                Schedule = slot?.Kind,
-                ScheduleReason = slot?.Reason,
+                PublishAtUtc: video.Status.PublishAtDateTimeOffset,
+                Schedule: slot?.Kind,
+                ScheduleReason: slot?.Reason,
                 video.Status.SelfDeclaredMadeForKids,
                 video.Snippet.CategoryId,
-                Bytes = recording.Length,
-                Recording = recording.Name,
-                Simulated = true,
-            },
-            new JsonSerializerOptions { WriteIndented = true }
+                Bytes: recording.Length,
+                Recording: recording.Name,
+                Simulated: true
+            ),
+            YouTubeJsonContext.Indented.YouTubeDryRunReceipt
         );
         await File.WriteAllTextAsync(receiptPath, receipt, token).ConfigureAwait(false);
         logger.LogInformation(

@@ -26,8 +26,6 @@ public sealed class YouTubeUploadsIndex
 {
     public const string FileName = "youtube-uploads-index.json";
 
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
-
     public DateTimeOffset? LastRunAt { get; set; }
     public string PlaylistId { get; set; }
 
@@ -57,7 +55,10 @@ public sealed class YouTubeUploadsIndex
 
         try
         {
-            YouTubeUploadsIndex index = JsonSerializer.Deserialize<YouTubeUploadsIndex>(json);
+            YouTubeUploadsIndex index = JsonSerializer.Deserialize(
+                json,
+                YouTubeJsonContext.Default.YouTubeUploadsIndex
+            );
             if (index == null)
             {
                 return new YouTubeUploadsIndex();
@@ -76,7 +77,10 @@ public sealed class YouTubeUploadsIndex
     }
 
     public void Save(string path) =>
-        DurableFile.Replace(path, JsonSerializer.Serialize(this, Options));
+        DurableFile.Replace(
+            path,
+            JsonSerializer.Serialize(this, YouTubeJsonContext.Indented.YouTubeUploadsIndex)
+        );
 
     public bool IsDue(DateTimeOffset utcNow, TimeSpan interval) =>
         LastRunAt is not DateTimeOffset at || at > utcNow || utcNow - at >= interval;

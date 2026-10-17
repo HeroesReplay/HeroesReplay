@@ -9,6 +9,7 @@ using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
 using HeroesReplay.Core.YouTube.Publication;
 using HeroesReplay.Core.YouTube.Quota;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -109,7 +110,7 @@ public sealed class UploadDryRunPlanTests : IDisposable
         await File.WriteAllBytesAsync(recording, new byte[] { 0, 0, 0, 24, 102, 116, 121, 112 });
         await File.WriteAllTextAsync(
             Path.Combine(context, "youtube-entry.json"),
-            JsonSerializer.Serialize(
+            TestJson.Entry(
                 new YouTubeEntry
                 {
                     Title = map + " - Storm League - " + rank + " - " + replayId,

@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -113,7 +112,15 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
             }
 
             string extracted = Path.Combine(staging, "extract");
-            ZipFile.ExtractToDirectory(zipPath, extracted);
+            if (ReleaseUnzip.Extract(zipPath, extracted, RuntimeLoadFailed))
+            {
+                logger.LogInformation(
+                    "Release {Version} was unzipped by {Tar} in a process of its own.",
+                    found.Version,
+                    ReleaseUnzip.TarPath
+                );
+            }
+
             string publish = ReleaseInstall.FindPublishRoot(extracted);
             if (publish == null)
             {
@@ -141,9 +148,41 @@ public sealed class ReleaseUpdateGate : IReleaseUpdateGate
         // A lookup timeout is a cancellation too. Only a stop request ends the check that way.
         catch (Exception e) when (!cancellationToken.IsCancellationRequested)
         {
+            // A runtime library that did not load, or a runtime folder that is gone, is a
+            // serviced runtime (#450): spectate restarts onto the current one between replays
+            // and stages the release from there, instead of failing here on every replay.
+            if (
+                ReleaseUnzip.ReportServiced(e, ServiceHeartbeat.RecordRuntimeServiced)
+                || ServiceHeartbeat.CheckCurrentRuntime() != null
+            )
+            {
+                logger.LogWarning(
+                    e,
+                    "Release update did not stage [{Code}]: the .NET runtime this process loaded was serviced under it. Spectate restarts onto the current runtime between replays when a supervisor runs, and stages the release from there.",
+                    ServiceHealthCodes.RuntimeServiced
+                );
+                return false;
+            }
+
             logger.LogWarning(e, "Release update did not stage. This version keeps running.");
             return false;
         }
+    }
+
+    /// <summary>
+    /// The in-process unzip could not load zlib (#450): the heartbeat reports the serviced
+    /// runtime, and <c>tar.exe</c> unzips the release instead.
+    /// </summary>
+    private void RuntimeLoadFailed(Exception error)
+    {
+        ReleaseUnzip.ReportServiced(error, ServiceHeartbeat.RecordRuntimeServiced);
+        logger.LogWarning(
+            error,
+            "The release did not unzip in this process [{Code}]: {Cause} The .NET runtime this process loaded was serviced under it. Unzipping it with {Tar} instead.",
+            ServiceHealthCodes.RuntimeServiced,
+            ReleaseUnzip.Cause(error),
+            ReleaseUnzip.TarPath
+        );
     }
 
     public bool HandOff()

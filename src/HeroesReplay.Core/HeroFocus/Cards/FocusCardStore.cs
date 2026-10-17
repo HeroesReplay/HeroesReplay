@@ -16,12 +16,14 @@ public sealed class FocusCardStore
 {
     public const string FolderName = "cards";
 
-    internal static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-    };
+    internal static readonly HeroFocusJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+        }
+    );
 
     public FocusCardStore(string directory)
     {
@@ -44,7 +46,7 @@ public sealed class FocusCardStore
             throw new ArgumentException("A card needs a key.", nameof(card));
         }
 
-        DurableFile.Replace(PathFor(card.Key), JsonSerializer.Serialize(card, Json));
+        DurableFile.Replace(PathFor(card.Key), JsonSerializer.Serialize(card, Json.FocusCard));
     }
 
     /// <summary>The card, or null when it is missing or cannot be read right now.</summary>
@@ -114,7 +116,7 @@ public sealed class FocusCardStore
                 FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete
             );
-            FocusCard card = JsonSerializer.Deserialize<FocusCard>(stream, Json);
+            FocusCard card = JsonSerializer.Deserialize(stream, Json.FocusCard);
             return string.IsNullOrWhiteSpace(card?.Key) ? null : card;
         }
         catch (JsonException)

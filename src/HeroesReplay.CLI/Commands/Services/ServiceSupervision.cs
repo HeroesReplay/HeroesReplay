@@ -119,12 +119,28 @@ public sealed class ServiceSupervision
     /// </summary>
     public ObsWatchdog Obs { get; init; }
 
+    /// <summary>
+    /// Why the .NET runtime this supervisor loaded is gone (<see cref="RuntimeFolder.Missing"/>),
+    /// or null while it is there (#450). Checked on every pass before the roles. Null checks
+    /// nothing.
+    /// </summary>
+    public Func<string> RuntimeServiced { get; init; }
+
+    /// <summary>
+    /// Set when a pass found this supervisor's runtime serviced and <see cref="Run"/> returned so
+    /// a new supervisor on the current runtime can take over (#450). The roles keep running.
+    /// </summary>
+    public string HandOverCause { get; private set; }
+
     public IReadOnlyList<string> Supervised => supervised;
 
     public ServiceRoleRestarts Ledger(string role) =>
         ledgers.TryGetValue(role, out ServiceRoleRestarts ledger) ? ledger : null;
 
-    /// <summary>Supervises until a stop request, Ctrl+C, or the lock is gone. Exit code 1 when nothing is recorded.</summary>
+    /// <summary>
+    /// Supervises until a stop request, Ctrl+C, the lock is gone, or this process's runtime is
+    /// serviced (<see cref="HandOverCause"/>). Exit code 1 when nothing is recorded.
+    /// </summary>
     public int Run(CancellationToken cancellation)
     {
         try
@@ -202,11 +218,27 @@ public sealed class ServiceSupervision
         return true;
     }
 
-    /// <summary>One pass. False when the supervisor should exit: a stop request, or no lock.</summary>
+    /// <summary>
+    /// One pass. False when the supervisor should exit: a stop request, no lock, or a serviced
+    /// runtime (<see cref="HandOverCause"/>).
+    /// </summary>
     public bool Tick()
     {
         if (Stopping())
         {
+            return false;
+        }
+
+        // Before any role: a restart launched from a serviced runtime could fail on a library
+        // it never loaded, so the new supervisor does the restarts (#450).
+        if (RuntimeServiced?.Invoke() is string serviced)
+        {
+            HandOverCause = serviced;
+            Logger.LogWarning(
+                "This supervisor runs on a serviced .NET runtime [{Code}]: {Cause} It hands over to a new `heroesreplay services supervise` on the current runtime and exits. The roles keep running; the new supervisor restarts each one still on the old runtime.",
+                ServiceHealthCodes.RuntimeServiced,
+                serviced
+            );
             return false;
         }
 
@@ -601,6 +633,16 @@ public sealed class ServiceSupervision
         {
             Logger.LogWarning(
                 "{Role} made no match progress while launching [{Code}]: {Cause} Killing pid {Pid}; it restarts after its backoff.",
+                role,
+                health.CauseCode,
+                health.Cause,
+                record.Pid
+            );
+        }
+        else if (health.CauseCode == ServiceHealthCodes.RuntimeServiced)
+        {
+            Logger.LogWarning(
+                "{Role} runs on a serviced .NET runtime [{Code}]: {Cause} Killing pid {Pid}; it restarts at once on the current runtime.",
                 role,
                 health.CauseCode,
                 health.Cause,

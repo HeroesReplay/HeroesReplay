@@ -53,8 +53,6 @@ public sealed class YouTubeQuotaUnits
     public const int PlaylistItemInsert = 50;
     public const int PlaylistInsert = 50;
     public const int List = 1;
-
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
     private static readonly TimeSpan LockWait = TimeSpan.FromSeconds(10);
 
     private readonly string path;
@@ -248,7 +246,10 @@ public sealed class YouTubeQuotaUnits
 
         if (change(current) || migrated)
         {
-            DurableFile.Replace(path, JsonSerializer.Serialize(current, Options));
+            DurableFile.Replace(
+                path,
+                JsonSerializer.Serialize(current, YouTubeJsonContext.Indented.YouTubeQuotaDay)
+            );
         }
 
         return current;
@@ -264,7 +265,8 @@ public sealed class YouTubeQuotaUnits
 
         try
         {
-            return JsonSerializer.Deserialize<YouTubeQuotaDay>(json) ?? new YouTubeQuotaDay();
+            return JsonSerializer.Deserialize(json, YouTubeJsonContext.Default.YouTubeQuotaDay)
+                ?? new YouTubeQuotaDay();
         }
         catch (JsonException)
         {

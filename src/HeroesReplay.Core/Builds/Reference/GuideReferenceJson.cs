@@ -17,14 +17,17 @@ public static class GuideReferenceJson
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
         WriteIndented = true,
-        TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { SkipEmptyLists } },
+        TypeInfoResolver = BuildsJsonContext.Default.WithAddedModifier(SkipEmptyLists),
     };
 
+    private static readonly JsonTypeInfo<GuideReference> Reference =
+        (JsonTypeInfo<GuideReference>)Options.GetTypeInfo(typeof(GuideReference));
+
     public static GuideReference Parse(string json) =>
-        JsonSerializer.Deserialize<GuideReference>(json, Options) ?? new GuideReference();
+        JsonSerializer.Deserialize(json, Reference) ?? new GuideReference();
 
     public static string Write(GuideReference reference) =>
-        JsonSerializer.Serialize(reference ?? new GuideReference(), Options) + "\n";
+        JsonSerializer.Serialize(reference ?? new GuideReference(), Reference) + "\n";
 
     private static void SkipEmptyLists(JsonTypeInfo type)
     {

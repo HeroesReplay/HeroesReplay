@@ -80,8 +80,9 @@ public class PlayerPriorityRequestTests
     public void PlayerIndex_KeepsTheSlotOfARequestQueuedBeforeTheBattleTagChange()
     {
         Replay replay = Players(("A", 1), ("B", 2), ("C", 3), ("D", 4), ("E", 5));
-        RewardRequest legacy = System.Text.Json.JsonSerializer.Deserialize<RewardRequest>(
-            """{ "Login": "viewer", "ReplayId": 65268119, "PlayerIndex": 3 }"""
+        RewardRequest legacy = System.Text.Json.JsonSerializer.Deserialize(
+            """{ "Login": "viewer", "ReplayId": 65268119, "PlayerIndex": 3 }""",
+            RequestsJsonContext.Default.RewardRequest
         );
 
         Assert.Equal(3, PlayerPriorityRequest.PlayerIndex(replay, legacy));
@@ -97,7 +98,10 @@ public class PlayerPriorityRequestTests
         );
         Assert.DoesNotContain(
             "PlayerIndex",
-            System.Text.Json.JsonSerializer.Serialize(new RewardRequest { BattleTag = "B#2" })
+            System.Text.Json.JsonSerializer.Serialize(
+                new RewardRequest { BattleTag = "B#2" },
+                RequestsJsonContext.Default.RewardRequest
+            )
         );
     }
 

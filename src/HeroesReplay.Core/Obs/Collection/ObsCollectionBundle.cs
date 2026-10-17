@@ -40,7 +40,7 @@ public sealed record ObsBundleManifest
     public string Collection { get; init; }
 
     public string CollectionSha256 { get; init; }
-    public IReadOnlyList<ObsBundleAsset> Assets { get; init; } = [];
+    public IReadOnlyList<ObsBundleAsset> Assets { get; set; } = [];
     public ObsBundleContract Contract { get; init; }
 }
 
@@ -115,13 +115,15 @@ public static class ObsCollectionBundle
     public const int SchemaVersion = 2;
     public const string InvalidCode = ObsValidator.BundleInvalid;
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
+    internal static readonly ObsJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        }
+    );
 
     /// <summary>
     /// The manifest for the files <paramref name="assets"/> names under
@@ -191,12 +193,12 @@ public static class ObsCollectionBundle
     public static string Serialize(ObsBundleManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(manifest);
-        return JsonSerializer.Serialize(manifest, Json) + Environment.NewLine;
+        return JsonSerializer.Serialize(manifest, Json.ObsBundleManifest) + Environment.NewLine;
     }
 
     /// <exception cref="JsonException">The text is not a schema 2 manifest.</exception>
     public static ObsBundleManifest Parse(string text) =>
-        JsonSerializer.Deserialize<ObsBundleManifest>(text, Json)
+        JsonSerializer.Deserialize(text, Json.ObsBundleManifest)
         ?? throw new JsonException("The manifest is empty.");
 
     /// <summary>The asset paths of the manifest in <paramref name="obsDirectory"/>, in either format.</summary>

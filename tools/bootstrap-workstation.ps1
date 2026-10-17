@@ -3,7 +3,8 @@
 # gitignored secrets from 1Password. Scene paths in Default.json are relative to obs\.
 # heroesreplay rewrites the live collection to this folder when OBS is closed. Pass the
 # names when OBS:ProfileName or OBS:SceneCollectionName is not HeroesReplay on this machine.
-# It also fetches the pinned HeroesClientSDK package into .packages (tools/restore-sdk-package.ps1).
+# It also fetches the pinned HeroesClientSDK package into .packages (tools/restore-sdk-package.ps1)
+# and notes when no installed .NET SDK satisfies the one global.json pins.
 # See AGENTS.md and .agents/skills/op-service-account/SKILL.md.
 param(
     [string]$ProfileName = 'HeroesReplay',
@@ -97,6 +98,22 @@ if (Test-Path $sdk) {
         Write-Warning "HeroesClientSDK was not fetched: $($_.Exception.Message)"
         Write-Warning 'Run pwsh -File tools/restore-sdk-package.ps1 before dotnet restore.'
     }
+}
+
+# global.json pins the .NET SDK (#462) with rollForward latestPatch: any SDK of the same feature
+# band (10.0.4xx for 10.0.402) at or above the pin builds. Dependabot moves the pin; this only
+# notes when this machine has no SDK that satisfies it.
+$pin = "$((Get-Content -LiteralPath (Join-Path $root 'global.json') -Raw | ConvertFrom-Json).sdk.version)"
+$pinned = [version]$pin
+$band = [math]::Floor($pinned.Build / 100)
+$sdks = @(dotnet --list-sdks 2>$null | ForEach-Object { ($_ -split '\s+', 2)[0] } | Where-Object { $_ -match '^\d+\.\d+\.\d+$' } | ForEach-Object { [version]$_ })
+$matching = @($sdks | Where-Object { $_.Major -eq $pinned.Major -and $_.Minor -eq $pinned.Minor -and [math]::Floor($_.Build / 100) -eq $band -and $_.Build -ge $pinned.Build })
+if ($matching.Count -gt 0) {
+    Write-Host ".NET SDK $(($matching | Sort-Object -Descending)[0]) satisfies global.json ($pin, latestPatch)."
+}
+else {
+    Write-Warning ".NET SDK $pin (global.json) is not installed. Installed: $(if ($sdks) { $sdks -join ', ' } else { 'none' })."
+    Write-Warning "Install it: winget install --id Microsoft.DotNet.SDK.$($pinned.Major) --version $pin, or the SDK $pin installer from https://dotnet.microsoft.com/download/dotnet/$($pinned.Major).$($pinned.Minor)."
 }
 
 $hooks = Join-Path $root 'tools\install-git-hooks.ps1'

@@ -3,11 +3,12 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using HeroesReplay.CLI.Commands.Mcp;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Shared;
 using HeroesReplay.Tests.Unit.Support;
-using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json.Linq;
@@ -18,6 +19,11 @@ namespace HeroesReplay.Tests.Unit.Obs.Inspection;
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class ObsMcpToolsTests : IDisposable
 {
+    /// <summary>What the MCP server writes a tool result with (#454).</summary>
+    private static readonly JsonTypeInfo McpTool = McpCommand.ToolJsonOptions.GetTypeInfo(
+        typeof(ObsInspection)
+    );
+
     private readonly string data = Path.Combine(
         Path.GetTempPath(),
         "hr-obs-mcp-" + Path.GetRandomFileName()
@@ -106,8 +112,8 @@ public class ObsMcpToolsTests : IDisposable
         ObsInspection inspection = Tools(obs).Inspect();
         string[] outputs =
         {
-            JsonSerializer.Serialize(inspection, McpJsonUtilities.DefaultOptions),
-            JsonSerializer.Serialize(inspection),
+            JsonSerializer.Serialize(inspection, McpTool),
+            CliJson.Serialize(inspection),
             inspection.ToString(),
         };
 
@@ -145,7 +151,7 @@ public class ObsMcpToolsTests : IDisposable
         Assert.Equal("unit-password", obs.OpenedPassword);
         Assert.DoesNotContain(
             "unit-password",
-            JsonSerializer.Serialize(inspection, McpJsonUtilities.DefaultOptions),
+            JsonSerializer.Serialize(inspection, McpTool),
             StringComparison.Ordinal
         );
     }

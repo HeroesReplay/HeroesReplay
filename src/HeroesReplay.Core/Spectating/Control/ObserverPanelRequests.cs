@@ -17,11 +17,13 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
     /// <summary>The lock on <see cref="DefaultPath"/> that twitch and spectate share.</summary>
     public const string SharedMutexName = @"Local\HeroesReplay.PanelRequests";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
+    internal static readonly SpectatingJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        }
+    );
 
     private readonly AppSettings settings;
     private readonly string filePath;
@@ -167,7 +169,7 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
                 return new StoredPanels();
             }
 
-            return JsonSerializer.Deserialize<StoredPanels>(File.ReadAllText(filePath), Json)
+            return JsonSerializer.Deserialize(File.ReadAllText(filePath), Json.StoredPanels)
                 ?? new StoredPanels();
         }
         catch (JsonException)
@@ -189,7 +191,7 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
         }
 
         string temp = filePath + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(state, Json));
+        File.WriteAllText(temp, JsonSerializer.Serialize(state, Json.StoredPanels));
         File.Move(temp, filePath, overwrite: true);
     }
 
@@ -247,7 +249,7 @@ public sealed class ObserverPanelRequests : IObserverPanelRequests
         catch (ApplicationException) { }
     }
 
-    private sealed class StoredPanels
+    internal sealed class StoredPanels
     {
         public bool? AutomaticTalents { get; set; }
         public string PendingPanel { get; set; }

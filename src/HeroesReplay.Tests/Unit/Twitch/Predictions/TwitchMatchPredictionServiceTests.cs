@@ -213,8 +213,9 @@ public class TwitchMatchPredictionServiceTests
             catch (IOException) { }
         }
 
-        PredictionReport report = System.Text.Json.JsonSerializer.Deserialize<PredictionReport>(
-            saved
+        PredictionReport report = System.Text.Json.JsonSerializer.Deserialize(
+            saved,
+            TwitchJsonContext.Default.PredictionReport
         );
         List<(string Channel, string Message)> sent = ((ChatRecorder)(object)chat).Sent;
         Assert.Contains("\"RESOLVED\"", http.EndPredictionBody, StringComparison.Ordinal);
@@ -333,8 +334,9 @@ public class TwitchMatchPredictionServiceTests
 
         Assert.Contains("\"RESOLVED\"", http.EndPredictionBody, StringComparison.Ordinal);
         Assert.Contains("rating-diamond", http.EndPredictionBody, StringComparison.Ordinal);
-        PredictionReport report = System.Text.Json.JsonSerializer.Deserialize<PredictionReport>(
-            saved
+        PredictionReport report = System.Text.Json.JsonSerializer.Deserialize(
+            saved,
+            TwitchJsonContext.Default.PredictionReport
         );
         Assert.Equal(PredictionKind.Rating, report.Kind);
         Assert.Equal("Diamond", report.WinningOutcome);

@@ -25,11 +25,17 @@ public class RequestQueue : IRequestQueue, IDisposable
     private readonly IReplayTierLookup tierLookup;
     private readonly AppSettings settings;
     private readonly ICustomRewardsHolder rewardsHolder;
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter(allowIntegerValues: true) },
-    };
+    internal static readonly RequestsJsonContext Options = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Converters =
+            {
+                new JsonStringEnumConverter<GameRank>(),
+                new JsonStringEnumConverter<GameType>(),
+            },
+        }
+    );
     private readonly Mutex queueMutex;
     private readonly Mutex failedMutex;
     private readonly TimeSpan mutexWait;
@@ -112,10 +118,8 @@ public class RequestQueue : IRequestQueue, IDisposable
 
         try
         {
-            return JsonSerializer.Deserialize<List<RewardQueueItem>>(
-                    File.ReadAllText(path),
-                    Options
-                ) ?? new List<RewardQueueItem>();
+            return JsonSerializer.Deserialize(File.ReadAllText(path), Options.ListRewardQueueItem)
+                ?? new List<RewardQueueItem>();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -845,9 +849,9 @@ public class RequestQueue : IRequestQueue, IDisposable
                 return new List<RewardQueueItem>();
             }
 
-            List<RewardQueueItem> items = JsonSerializer.Deserialize<List<RewardQueueItem>>(
+            List<RewardQueueItem> items = JsonSerializer.Deserialize(
                 json,
-                Options
+                Options.ListRewardQueueItem
             );
             return items ?? new List<RewardQueueItem>();
         }
@@ -866,7 +870,10 @@ public class RequestQueue : IRequestQueue, IDisposable
 
     private void WriteItems(FileInfo file, List<RewardQueueItem> items)
     {
-        DurableFile.Replace(file.FullName, JsonSerializer.Serialize(items, Options));
+        DurableFile.Replace(
+            file.FullName,
+            JsonSerializer.Serialize(items, Options.ListRewardQueueItem)
+        );
         file.Refresh();
     }
 

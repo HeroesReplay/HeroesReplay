@@ -1,12 +1,12 @@
 using System;
 using System.IO;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
+using HeroesReplay.Tests.Unit.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -43,7 +43,7 @@ public class YouTubeDryRunUploadTests
             };
             await File.WriteAllTextAsync(
                 Path.Combine(directory, "youtube-entry.json"),
-                JsonSerializer.Serialize(entry)
+                TestJson.Entry(entry)
             );
 
             var settings = new AppSettings
@@ -120,7 +120,7 @@ public class YouTubeDryRunUploadTests
             );
             await File.WriteAllTextAsync(
                 Path.Combine(directory, "youtube-entry.json"),
-                JsonSerializer.Serialize(
+                TestJson.Entry(
                     new YouTubeEntry
                     {
                         Title = "Volskaya Foundry - 65389750",
@@ -179,9 +179,7 @@ public class YouTubeDryRunUploadTests
             );
             await File.WriteAllTextAsync(
                 Path.Combine(directory, "youtube-entry.json"),
-                JsonSerializer.Serialize(
-                    new YouTubeEntry { Title = "Volskaya", PrivacyStatus = "public" }
-                )
+                TestJson.Entry(new YouTubeEntry { Title = "Volskaya", PrivacyStatus = "public" })
             );
 
             var uploader = new YouTubeUploader(

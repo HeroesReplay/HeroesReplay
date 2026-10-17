@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HeroesReplay.Core.Clips;
+using HeroesReplay.Core.SelfUpdate;
 
 namespace HeroesReplay.CLI.Commands.Check;
 
@@ -101,6 +102,16 @@ public static class CheckCodes
     public const string FfmpegNotRunnable = "check.ffmpeg." + FfmpegCheck.NotRunnable;
     public const string FfmpegNoLibx264 = "check.ffmpeg." + FfmpegCheck.NoLibx264;
     public const string FfmpegError = "check.ffmpeg.error";
+
+    public const string RuntimeOk = "check.runtime.ok";
+
+    /// <summary>
+    /// This machine's .NET runtime is older than the one the release was built and tested on
+    /// (runtime.txt, #462). A warning: Microsoft Update has not serviced it yet.
+    /// </summary>
+    public const string RuntimeOlderThanRelease =
+        "check.runtime." + ReleaseRuntime.OlderThanRelease;
+    public const string RuntimeError = "check.runtime.error";
 
     /// <summary>Every code above, for the docs and their tests.</summary>
     public static IReadOnlyList<string> All { get; } =

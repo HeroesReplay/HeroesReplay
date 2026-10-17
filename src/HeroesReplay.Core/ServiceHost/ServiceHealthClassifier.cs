@@ -14,6 +14,9 @@ public static class ServiceHealthClassifier
     private const string RestartStack =
         "run `heroesreplay services stop`, then `heroesreplay services start`.";
 
+    private const string RestartSupervised =
+        "run `heroesreplay services stop`, then `heroesreplay services start --supervise`.";
+
     public static ServiceStatusReport Build(
         ServiceLock snapshot,
         Func<int, string> processNameOrNull,
@@ -105,6 +108,7 @@ public static class ServiceHealthClassifier
             Arguments = record?.Arguments,
             Nonce = record?.Nonce,
             Version = First(heartbeat?.Version, record?.Version),
+            DotnetRuntime = heartbeat?.DotnetRuntime,
             ExecutablePath = First(heartbeat?.ExecutablePath, record?.ExecutablePath),
             StartedAt = record?.StartedAt,
             Readiness = heartbeat?.Readiness,
@@ -171,6 +175,28 @@ public static class ServiceHealthClassifier
                 heartbeat?.Readiness == ServiceReadiness.Exited
                     ? $"pid {pid} left its loop and exited without a stop request."
                     : $"pid {pid} exited unexpectedly: no clean shutdown was recorded (crash or kill).";
+            if (heartbeat?.Runtime != null)
+            {
+                // It left, or was killed off, a runtime a .NET update serviced (#450). That is
+                // the restart, not a crash loop: the supervisor starts it again at once.
+                return With(
+                    health,
+                    ServiceRoleState.Failed,
+                    (
+                        heartbeat.Readiness == ServiceReadiness.Exited
+                            ? $"pid {pid} exited to restart on the current .NET runtime."
+                            : exit
+                    )
+                        + $" Its runtime was serviced: {heartbeat.Runtime.Cause}"
+                        + LastSeen(heartbeatAge),
+                    $"A supervisor starts {role} again at once on the current runtime. Without one, "
+                        + RestartSupervised
+                ) with
+                {
+                    CauseCode = ServiceHealthCodes.RuntimeServiced,
+                };
+            }
+
             return With(
                 health,
                 ServiceRoleState.Failed,
@@ -208,6 +234,52 @@ public static class ServiceHealthClassifier
         string degradedFix =
             $"Check the {role} console, its log file, or the Aspire logs. If it does not recover, "
             + RestartStack;
+        TimeSpan stallLimit = settings.LaunchStallThreshold(role);
+        TimeSpan? launchAge = null;
+        if (
+            stallLimit > TimeSpan.Zero
+            && heartbeat.StreamHoldSince == null
+            && heartbeat.Readiness != ServiceReadiness.Stopping
+            && heartbeat.LaunchingSince is DateTimeOffset launching
+            && (
+                heartbeat.LastSuccessfulWorkAt == null
+                || heartbeat.LastSuccessfulWorkAt.Value < launching
+            )
+            && Age(now, launching) is TimeSpan launchingFor
+            && launchingFor > stallLimit
+        )
+        {
+            launchAge = launchingFor;
+        }
+
+        // The runtime this process loaded is gone (#450): every runtime library it loads from now
+        // on fails, so it says so before anything else. A stalled launch still wins: its kill is
+        // the restart, and a stalled spectate never reaches the end of its replay.
+        if (
+            heartbeat.Runtime != null
+            && heartbeat.Readiness != ServiceReadiness.Stopping
+            && launchAge == null
+        )
+        {
+            TimeSpan? servicedFor = Age(now, heartbeat.Runtime.Since);
+            string since =
+                servicedFor == null ? string.Empty : $" For {Describe(servicedFor.Value)}.";
+            return With(
+                health,
+                ServiceRoleState.Degraded,
+                $"It runs on a .NET runtime that a .NET update serviced under it: {heartbeat.Runtime.Cause}{since} Runtime libraries it has not loaded yet fail (a release cannot unzip), so it restarts onto the current runtime."
+                    + LastError(heartbeat, now),
+                ServiceRestartPolicy.RestartsItself(role)
+                    ? $"Nothing to do while a supervisor runs: {role} stops after this replay (a live stream stays up on the waiting scene) and the supervisor starts it again. Without a supervisor, "
+                        + RestartSupervised
+                    : $"Nothing to do while a supervisor runs: it restarts {role} at once. Without a supervisor, "
+                        + RestartSupervised
+            ) with
+            {
+                CauseCode = ServiceHealthCodes.RuntimeServiced,
+            };
+        }
+
         // A spectate that holds the next replay while the desired stream is down is not failing
         // (#396): no match progress is expected, so no launch stall, no run of sessions without
         // progress, and no work age makes it degraded. Its heartbeat still has to be fresh.
@@ -231,23 +303,12 @@ public static class ServiceHealthClassifier
             };
         }
 
-        TimeSpan stallLimit = settings.LaunchStallThreshold(role);
-        if (
-            stallLimit > TimeSpan.Zero
-            && heartbeat.Readiness != ServiceReadiness.Stopping
-            && heartbeat.LaunchingSince is DateTimeOffset launching
-            && (
-                heartbeat.LastSuccessfulWorkAt == null
-                || heartbeat.LastSuccessfulWorkAt.Value < launching
-            )
-            && Age(now, launching) is TimeSpan launchAge
-            && launchAge > stallLimit
-        )
+        if (launchAge is TimeSpan stalledFor)
         {
             return With(
                 health,
                 ServiceRoleState.Degraded,
-                $"One replay has been launching or loading for {Describe(launchAge)} with no match progress (no match clock, no match on screen; limit {Describe(stallLimit)})."
+                $"One replay has been launching or loading for {Describe(stalledFor)} with no match progress (no match clock, no match on screen; limit {Describe(stallLimit)})."
                     + LastError(heartbeat, now),
                 $"A supervisor restarts {role} within its restart budget. Read the {role} log for the launch step and what the client showed. Without a supervisor, "
                     + RestartStack

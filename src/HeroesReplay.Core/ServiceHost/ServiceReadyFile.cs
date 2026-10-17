@@ -16,6 +16,12 @@ public sealed class ServiceReadyReport
     public string Role { get; set; }
     public string Nonce { get; set; }
     public string Version { get; set; }
+
+    /// <summary>
+    /// The .NET runtime the role runs on (<c>RuntimeInformation.FrameworkDescription</c>, such as
+    /// <c>.NET 10.0.13</c>, #462). Null in files from older roles.
+    /// </summary>
+    public string DotnetRuntime { get; set; }
     public string ExecutablePath { get; set; }
     public int? Pid { get; set; }
 
@@ -78,6 +84,40 @@ public sealed class ServiceReadyReport
     /// role whose probes are off.
     /// </summary>
     public ServiceRoleDependency Dependency { get; set; }
+
+    /// <summary>
+    /// Set once the .NET runtime folder this role loaded is gone (#450): a .NET update serviced
+    /// it, and the runtime libraries the role loads from now on fail. <c>services status</c>
+    /// reports the role degraded with <c>runtime.serviced</c>; spectate restarts itself between
+    /// replays and the supervisor restarts the other roles at once. Null while the runtime is
+    /// there, and in files from older roles.
+    /// </summary>
+    public ServiceRoleRuntime Runtime { get; set; }
+}
+
+/// <summary>The serviced runtime, as the role writes it in its heartbeat (#450).</summary>
+public sealed class ServiceRoleRuntime
+{
+    /// <summary><see cref="ServiceHealthCodes.RuntimeServiced"/>.</summary>
+    public string Code { get; set; }
+
+    /// <summary>The runtime folder the role watched, such as <c>...\Microsoft.NETCore.App\10.0.12</c>.</summary>
+    public string Folder { get; set; }
+
+    /// <summary>What was gone, or the runtime library that did not load.</summary>
+    public string Cause { get; set; }
+
+    /// <summary>When the role first saw it.</summary>
+    public DateTimeOffset? Since { get; set; }
+
+    public ServiceRoleRuntime Copy() =>
+        new()
+        {
+            Code = Code,
+            Folder = Folder,
+            Cause = Cause,
+            Since = Since,
+        };
 }
 
 /// <summary>The last dependency probe, as the role writes it in its heartbeat.</summary>
@@ -145,11 +185,13 @@ public static class ServiceReadyFile
     public const string RoleVariable = "HEROESREPLAY_SERVICE_ROLE";
     public const string VersionVariable = "HEROESREPLAY_SERVICE_VERSION";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
+    internal static readonly ServiceHostJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        }
+    );
 
     public static string DefaultDirectory =>
         Path.Combine(
@@ -209,7 +251,7 @@ public static class ServiceReadyFile
         Directory.CreateDirectory(folder);
         string path = Path.Combine(folder, report.Nonce + ".json");
         string temp = path + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(report, Json));
+        File.WriteAllText(temp, JsonSerializer.Serialize(report, Json.ServiceReadyReport));
         File.Move(temp, path, overwrite: true);
     }
 
@@ -254,9 +296,9 @@ public static class ServiceReadyFile
             return null;
         }
 
-        ServiceReadyReport report = JsonSerializer.Deserialize<ServiceReadyReport>(
+        ServiceReadyReport report = JsonSerializer.Deserialize(
             File.ReadAllText(path),
-            Json
+            Json.ServiceReadyReport
         );
         if (report == null || !string.Equals(report.Nonce, record.Nonce, StringComparison.Ordinal))
         {

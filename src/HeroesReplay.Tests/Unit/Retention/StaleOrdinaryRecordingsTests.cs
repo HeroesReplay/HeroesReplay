@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
@@ -9,6 +8,7 @@ using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.YouTube;
 using HeroesReplay.Core.YouTube.Outbox;
 using HeroesReplay.Core.YouTube.Publication;
+using HeroesReplay.Tests.Unit.Support;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Retention;
@@ -162,7 +162,7 @@ public sealed class StaleOrdinaryRecordingsTests : IDisposable
         await File.WriteAllBytesAsync(recording, new byte[RecordingBytes]);
         await File.WriteAllTextAsync(
             Path.Combine(context, settings.YouTube.EntryFileName),
-            JsonSerializer.Serialize(
+            TestJson.Entry(
                 new YouTubeEntry
                 {
                     Title = "Dragon Shire - Storm League - " + replayId,

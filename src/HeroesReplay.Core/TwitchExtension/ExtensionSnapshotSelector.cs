@@ -10,10 +10,9 @@ public static class ExtensionSnapshotSelector
     public const string InGame = "in_game";
     public const string Ended = "ended";
 
-    public static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    };
+    internal static readonly TwitchExtensionJsonContext Json = new(
+        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }
+    );
 
     public static ExtensionSnapshot Select(ExtensionGame game, string phase, TimeSpan? timer)
     {
@@ -53,7 +52,7 @@ public static class ExtensionSnapshotSelector
     }
 
     public static string Hash(ExtensionSnapshot snapshot) =>
-        JsonSerializer.Serialize(snapshot, Json);
+        JsonSerializer.Serialize(snapshot, Json.ExtensionSnapshot);
 
     private static IReadOnlyList<string>[] TalentsFor(
         ExtensionGame game,
