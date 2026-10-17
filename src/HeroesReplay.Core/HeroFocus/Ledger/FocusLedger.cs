@@ -85,7 +85,7 @@ public sealed class FocusLedgerEntry
 
     public int? ReplayId { get; set; }
 
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<FocusEntryState>))]
     public FocusEntryState State { get; set; }
 
     public DateTime PickedAtUtc { get; set; }

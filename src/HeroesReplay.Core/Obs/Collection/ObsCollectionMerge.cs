@@ -469,7 +469,7 @@ public static class ObsCollectionMerge
                 live[list] = sources;
             }
 
-            sources.Add(copy);
+            sources.Add((JsonNode)copy);
             if (IsScene(copy))
             {
                 inserted.AddRange(Items(copy)?.OfType<JsonObject>() ?? []);

@@ -30,11 +30,13 @@ public sealed class HeroSignatures
     public const string ResourceName =
         "HeroesReplay.Core.HeroFocus.Signatures.hero-signatures.json";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-    };
+    internal static readonly HeroFocusJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            ReadCommentHandling = JsonCommentHandling.Skip,
+        }
+    );
 
     private readonly Dictionary<string, RoleSignature> roles = new(
         StringComparer.OrdinalIgnoreCase
@@ -91,7 +93,7 @@ public sealed class HeroSignatures
         new(
             string.IsNullOrWhiteSpace(json)
                 ? new HeroSignatureFile()
-                : JsonSerializer.Deserialize<HeroSignatureFile>(json, Json)
+                : JsonSerializer.Deserialize(json, Json.HeroSignatureFile)
         );
 
     /// <summary>The hero's entry: by unit id, then by English name. Null when it has none.</summary>

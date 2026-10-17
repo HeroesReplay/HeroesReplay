@@ -100,13 +100,14 @@ public sealed class HeroesProfileMapList
         foreach (HeroesProfileMap map in Maps)
         {
             maps.Add(
-                new JsonObject
-                {
-                    ["name"] = map.Name,
-                    ["type"] = map.Type,
-                    ["ranked_rotation"] = map.RankedRotation ? 1 : 0,
-                    ["playable"] = map.Playable ? 1 : 0,
-                }
+                (JsonNode)
+                    new JsonObject
+                    {
+                        ["name"] = map.Name,
+                        ["type"] = map.Type,
+                        ["ranked_rotation"] = map.RankedRotation ? 1 : 0,
+                        ["playable"] = map.Playable ? 1 : 0,
+                    }
             );
         }
 

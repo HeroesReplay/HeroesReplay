@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
 using TwitchLib.Api.Helix.Models.ChannelPoints.CreateCustomReward;
 using TwitchLib.Api.Helix.Models.ChannelPoints.UpdateCustomReward;
@@ -15,11 +16,23 @@ namespace HeroesReplay.Core.Twitch.Rewards;
 
 public class TwitchRewardsManager : ITwitchRewardsManager
 {
+    /// <summary><c>custom-rewards.json</c>: indented, enums by name.</summary>
+    internal static readonly TwitchJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Converters =
+            {
+                new JsonStringEnumConverter<GameType>(),
+                new JsonStringEnumConverter<RewardType>(),
+            },
+        }
+    );
+
     private readonly ILogger<TwitchRewardsManager> logger;
     private readonly ITwitchAPI twitchApi;
     private readonly ICustomRewardsHolder rewardsHolder;
     private readonly AppSettings settings;
-    private readonly JsonSerializerOptions options;
 
     public TwitchRewardsManager(
         ILogger<TwitchRewardsManager> logger,
@@ -32,11 +45,6 @@ public class TwitchRewardsManager : ITwitchRewardsManager
         this.twitchApi = twitchApi;
         this.rewardsHolder = rewardsHolder;
         this.settings = settings;
-        options = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            Converters = { new JsonStringEnumConverter(allowIntegerValues: true) },
-        };
     }
 
     public async Task CreateOrUpdateAsync()
@@ -279,7 +287,7 @@ public class TwitchRewardsManager : ITwitchRewardsManager
         var path = Path.Combine(settings.Location.DataDirectory, "custom-rewards.json");
         await File.WriteAllTextAsync(
             path,
-            JsonSerializer.Serialize<IEnumerable<SupportedReward>>(rewardsHolder.Rewards, options)
+            JsonSerializer.Serialize(rewardsHolder.Rewards, Json.IEnumerableSupportedReward)
         );
     }
 

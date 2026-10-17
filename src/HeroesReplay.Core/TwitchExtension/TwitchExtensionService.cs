@@ -63,7 +63,7 @@ public class TwitchExtensionService : ITwitchExtensionService
                 GameVersion = snapshot.GameVersion,
                 Players = snapshot.Players,
             },
-            ExtensionSnapshotSelector.Json
+            ExtensionSnapshotSelector.Json.SnapshotBody
         );
 
         for (int attempt = 0; attempt < 4; attempt++)
@@ -187,9 +187,9 @@ public class TwitchExtensionService : ITwitchExtensionService
                 };
             }
 
-            WhoAmIBody parsed = JsonSerializer.Deserialize<WhoAmIBody>(
+            WhoAmIBody parsed = JsonSerializer.Deserialize(
                 body,
-                ExtensionSnapshotSelector.Json
+                ExtensionSnapshotSelector.Json.WhoAmIBody
             );
             return new ExtensionWhoAmI
             {
@@ -276,7 +276,7 @@ public class TwitchExtensionService : ITwitchExtensionService
         return text.Length <= 300 ? text : text.Substring(0, 300);
     }
 
-    private sealed class SnapshotBody
+    internal sealed class SnapshotBody
     {
         public string GameId { get; set; }
         public int Seq { get; set; }
@@ -287,7 +287,7 @@ public class TwitchExtensionService : ITwitchExtensionService
         public System.Collections.Generic.IReadOnlyList<ExtensionSnapshotPlayer> Players { get; set; }
     }
 
-    private sealed class WhoAmIBody
+    internal sealed class WhoAmIBody
     {
         public string TwitchLogin { get; set; }
         public string TwitchDisplayName { get; set; }
@@ -295,7 +295,7 @@ public class TwitchExtensionService : ITwitchExtensionService
         public EntitlementBody Entitlement { get; set; }
     }
 
-    private sealed class EntitlementBody
+    internal sealed class EntitlementBody
     {
         public bool Active { get; set; }
     }

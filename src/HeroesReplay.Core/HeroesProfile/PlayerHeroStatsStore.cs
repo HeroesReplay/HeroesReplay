@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.HeroesProfile;
@@ -23,13 +24,15 @@ public sealed class PlayerHeroStatsStore
     public const string CallsFileName = "calls.json";
     public const string PrivacyFileName = "privacy.json";
 
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
+    internal static readonly HeroesProfileJsonContext Json = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter<PlayerHeroLookupStatus>() },
+        }
+    );
 
     public PlayerHeroStatsStore(string folder)
     {
@@ -140,7 +143,10 @@ public sealed class PlayerHeroStatsStore
             };
         }
 
-        DurableFile.Replace(PathFor(battleTag, region), JsonSerializer.Serialize(player, Json));
+        DurableFile.Replace(
+            PathFor(battleTag, region),
+            JsonSerializer.Serialize(player, Json.StoredPlayer)
+        );
     }
 
     /// <summary>Deletes everything kept about a player. True when there was a file.</summary>
@@ -182,7 +188,10 @@ public sealed class PlayerHeroStatsStore
         player.Status = PlayerHeroLookupStatus.Private;
         player.StatusAtUtc = now;
         player.Heroes?.Clear();
-        DurableFile.Replace(PathFor(battleTag, region), JsonSerializer.Serialize(player, Json));
+        DurableFile.Replace(
+            PathFor(battleTag, region),
+            JsonSerializer.Serialize(player, Json.StoredPlayer)
+        );
         return true;
     }
 
@@ -192,7 +201,7 @@ public sealed class PlayerHeroStatsStore
 
     /// <summary>The lookups made in the 7 days before <paramref name="now"/>.</summary>
     public int CallsThisWeek(DateTimeOffset now) =>
-        ReadFile<List<DateTimeOffset>>(Path.Combine(Folder, CallsFileName))
+        ReadFile(Path.Combine(Folder, CallsFileName), Json.ListDateTimeOffset)
             ?.Count(at => now - at < TimeSpan.FromDays(7))
         ?? 0;
 
@@ -200,28 +209,28 @@ public sealed class PlayerHeroStatsStore
     public void NoteCall(DateTimeOffset now)
     {
         string path = Path.Combine(Folder, CallsFileName);
-        List<DateTimeOffset> calls = (ReadFile<List<DateTimeOffset>>(path) ?? new())
+        List<DateTimeOffset> calls = (ReadFile(path, Json.ListDateTimeOffset) ?? new())
             .Where(at => now - at < TimeSpan.FromDays(7))
             .ToList();
         calls.Add(now);
-        DurableFile.Replace(path, JsonSerializer.Serialize(calls, Json));
+        DurableFile.Replace(path, JsonSerializer.Serialize(calls, Json.ListDateTimeOffset));
     }
 
     public PlayerPrivacyCursor ReadPrivacy() =>
-        ReadFile<PlayerPrivacyCursor>(Path.Combine(Folder, PrivacyFileName));
+        ReadFile(Path.Combine(Folder, PrivacyFileName), Json.PlayerPrivacyCursor);
 
     public void WritePrivacy(PlayerPrivacyCursor cursor) =>
         DurableFile.Replace(
             Path.Combine(Folder, PrivacyFileName),
-            JsonSerializer.Serialize(cursor ?? new PlayerPrivacyCursor(), Json)
+            JsonSerializer.Serialize(cursor ?? new PlayerPrivacyCursor(), Json.PlayerPrivacyCursor)
         );
 
     private StoredPlayer Read(string battleTag, int region) =>
         string.IsNullOrWhiteSpace(battleTag)
             ? null
-            : ReadFile<StoredPlayer>(PathFor(battleTag, region));
+            : ReadFile(PathFor(battleTag, region), Json.StoredPlayer);
 
-    private static T ReadFile<T>(string path)
+    private static T ReadFile<T>(string path, JsonTypeInfo<T> type)
         where T : class
     {
         try
@@ -237,7 +246,7 @@ public sealed class PlayerHeroStatsStore
                 FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete
             );
-            return JsonSerializer.Deserialize<T>(stream, Json);
+            return JsonSerializer.Deserialize(stream, type);
         }
         catch (JsonException)
         {
@@ -253,7 +262,7 @@ public sealed class PlayerHeroStatsStore
         }
     }
 
-    private sealed class StoredPlayer
+    internal sealed class StoredPlayer
     {
         public string BattleTag { get; set; }
         public int Region { get; set; }
@@ -262,7 +271,7 @@ public sealed class PlayerHeroStatsStore
         public Dictionary<string, StoredHero> Heroes { get; set; } = new();
     }
 
-    private sealed class StoredHero
+    internal sealed class StoredHero
     {
         public PlayerHeroLookupStatus Status { get; set; }
         public PlayerHeroStats Stats { get; set; }

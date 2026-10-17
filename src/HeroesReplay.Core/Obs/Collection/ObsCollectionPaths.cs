@@ -413,7 +413,10 @@ public static class ObsCollectionPaths
                     }
 
                     string raw = element.GetRawText();
-                    string encoded = JsonSerializer.Serialize(updated);
+                    string encoded = JsonSerializer.Serialize(
+                        updated,
+                        ObsJsonContext.Default.String
+                    );
                     if (!string.Equals(raw, encoded, StringComparison.Ordinal))
                     {
                         replacements.Add((raw, encoded));

@@ -50,9 +50,8 @@ public sealed record PredictionReport
     /// </summary>
     public string Verdict { get; init; }
 
-    public IReadOnlyList<PredictionParticipant> Winners { get; init; } =
+    public IReadOnlyList<PredictionParticipant> Winners { get; set; } =
         new PredictionParticipant[0];
 
-    public IReadOnlyList<PredictionParticipant> Losers { get; init; } =
-        new PredictionParticipant[0];
+    public IReadOnlyList<PredictionParticipant> Losers { get; set; } = new PredictionParticipant[0];
 }

@@ -10,11 +10,13 @@ public sealed class SpectatorStatusStore
 {
     public static readonly TimeSpan StaleAfter = TimeSpan.FromSeconds(15);
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
+    internal static readonly StatusJsonContext JsonOptions = new(
+        new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        }
+    );
 
     private readonly object gate = new();
     private SpectatorStatus current = Idle();
@@ -126,15 +128,15 @@ public sealed class SpectatorStatusStore
         }
     }
 
-    public string ReadJson() => JsonSerializer.Serialize(Read(), JsonOptions);
+    public string ReadJson() => JsonSerializer.Serialize(Read(), JsonOptions.SpectatorStatus);
 
     private SpectatorStatus CopyCurrent()
     {
         lock (gate)
         {
-            return JsonSerializer.Deserialize<SpectatorStatus>(
-                    JsonSerializer.Serialize(current, JsonOptions),
-                    JsonOptions
+            return JsonSerializer.Deserialize(
+                    JsonSerializer.Serialize(current, JsonOptions.SpectatorStatus),
+                    JsonOptions.SpectatorStatus
                 ) ?? Idle();
         }
     }
@@ -149,7 +151,7 @@ public sealed class SpectatorStatusStore
             }
 
             string json = File.ReadAllText(FilePath);
-            return JsonSerializer.Deserialize<SpectatorStatus>(json, JsonOptions);
+            return JsonSerializer.Deserialize(json, JsonOptions.SpectatorStatus);
         }
         catch (IOException)
         {
@@ -163,7 +165,7 @@ public sealed class SpectatorStatusStore
 
     private void WriteUnlocked(SpectatorStatus status)
     {
-        string json = JsonSerializer.Serialize(status, JsonOptions);
+        string json = JsonSerializer.Serialize(status, JsonOptions.SpectatorStatus);
         // A watcher can hold status.json open. Replace retries instead of failing the focus loop.
         for (int attempt = 0; ; attempt++)
         {
