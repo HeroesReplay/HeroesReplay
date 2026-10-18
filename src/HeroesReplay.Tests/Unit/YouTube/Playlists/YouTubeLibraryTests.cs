@@ -194,8 +194,7 @@ public sealed class YouTubeLibraryTests : IDisposable
                 PublicEntry(3, "vid-1", "Cursed Hollow", "Quick Match"),
                 PublicEntry(4, "vid-1", "Sky Temple", "ARAM"),
             }.Select(entry => YouTubeLibraryRecord.FromEntry(entry, uploadedAt: null)),
-            new YouTubePlaylistSettings { Patch = false },
-            "2.57.0.98304"
+            new YouTubePlaylistSettings()
         );
 
         Assert.Equal(
@@ -303,7 +302,13 @@ public sealed class YouTubeLibraryTests : IDisposable
         YouTubeLibraryPass pass = await Library(client).RunOnceAsync(true, CancellationToken.None);
 
         Assert.Equal(
-            new[] { "Cursed Hollow", "Storm League", "Storm League - Platinum", "Season 2026" },
+            new[]
+            {
+                "Cursed Hollow",
+                "Storm League",
+                "Storm League - Platinum",
+                YouTubePlaylistNames.HeroGameplay,
+            },
             client.Created
         );
         Assert.Equal(
@@ -334,7 +339,7 @@ public sealed class YouTubeLibraryTests : IDisposable
             Rank = true,
             Draft = false,
             ViewerReview = false,
-            Patch = false,
+            HeroFocus = false,
             MapMode = true,
         };
 
@@ -392,7 +397,10 @@ public sealed class YouTubeLibraryTests : IDisposable
         await library.RunOnceAsync(true, CancellationToken.None);
         YouTubeLibraryPass second = await library.RunOnceAsync(true, CancellationToken.None);
 
-        Assert.Equal(new[] { "Storm League - Platinum", "Season 2026" }, client.Created);
+        Assert.Equal(
+            new[] { "Storm League - Platinum", YouTubePlaylistNames.HeroGameplay },
+            client.Created
+        );
         Assert.Contains(("existing-map", "video-7"), client.Inserted);
         Assert.Contains(("existing-sl", "video-7"), client.Inserted);
         Assert.Equal(4, client.Inserted.Count);
@@ -445,7 +453,6 @@ public sealed class YouTubeLibraryTests : IDisposable
         Assert.Null(record["v-old"].FocusHero);
         Assert.Contains("Sky Temple", client.Created);
         Assert.Contains("Storm League - Platinum", client.Created);
-        Assert.Contains("Patch 2.55 archive", client.Created);
         Assert.Contains("Towers of Doom", client.Created);
         Assert.Contains("Storm League - Master", client.Created);
         Assert.DoesNotContain(client.Created, title => title.StartsWith("Unusual drafts"));
@@ -479,14 +486,12 @@ public sealed class YouTubeLibraryTests : IDisposable
                 "Dragon Shire",
                 "Storm League",
                 "Storm League - Diamond",
-                "Unusual drafts - No tank",
-                "Unusual drafts - Double healer",
+                YouTubePlaylistNames.UnusualDrafts,
                 YouTubePlaylistNames.ViewerReviews,
-                "Season 2026",
             },
             pass.Planned.Select(item => item.PlaylistTitle)
         );
-        Assert.Equal(7, pass.Filed);
+        Assert.Equal(5, pass.Filed);
     }
 
     [Fact]
@@ -532,7 +537,7 @@ public sealed class YouTubeLibraryTests : IDisposable
         Assert.Equal("Uther", known.FocusHero);
         Assert.Contains(
             first.Planned,
-            item => item.PlaylistTitle == "Unusual drafts - Double healer"
+            item => item.PlaylistTitle == YouTubePlaylistNames.UnusualDrafts
         );
         Assert.Contains(
             first.Planned,
@@ -656,8 +661,8 @@ public sealed class YouTubeLibraryTests : IDisposable
             "2.57.0.98304",
             YouTubeLibraryRecord.Read(YouTubeLibraryRecord.PathFor(directory))["clip-1"].GameVersion
         );
-        YouTubeLibraryItem item = Assert.Single(pass.Planned);
-        Assert.Equal("Season 2026", item.PlaylistTitle);
+        // A clip is recorded but goes into no playlist.
+        Assert.Empty(pass.Planned);
     }
 
     [Fact]
@@ -992,7 +997,7 @@ public sealed class YouTubeLibraryTests : IDisposable
         Assert.Equal(5, next.Planned.Count);
         Assert.Equal(5, next.Filed);
         Assert.Equal(
-            new[] { "Storm League - Platinum", "Season 2026", "Dragon Shire" },
+            new[] { "Storm League - Platinum", YouTubePlaylistNames.HeroGameplay, "Dragon Shire" },
             client.Created
         );
         Assert.Equal(8, client.Inserted.Distinct().Count());
@@ -1022,7 +1027,13 @@ public sealed class YouTubeLibraryTests : IDisposable
         YouTubeLibraryPass second = await library.RunOnceAsync(true, CancellationToken.None);
 
         Assert.Equal(
-            new[] { "Storm League", "Storm League - Platinum", "Season 2026", "Dragon Shire" },
+            new[]
+            {
+                "Storm League",
+                "Storm League - Platinum",
+                YouTubePlaylistNames.HeroGameplay,
+                "Dragon Shire",
+            },
             client.Created
         );
         Assert.Equal(3, second.Filed);
@@ -1095,7 +1106,7 @@ public sealed class YouTubeLibraryTests : IDisposable
         client.Existing.Add(new YouTubePlaylist("yt-sl", "Storm League"));
         // YouTube Studio may keep a title with other case or spacing.
         client.Existing.Add(new YouTubePlaylist("yt-rank", "storm league -  Platinum "));
-        client.Existing.Add(new YouTubePlaylist("yt-season", "Season 2026"));
+        client.Existing.Add(new YouTubePlaylist("yt-hero", YouTubePlaylistNames.HeroGameplay));
         YouTubeLibrary library = Library(client);
 
         YouTubeLibraryPass pass = await library.RunOnceAsync(true, CancellationToken.None);
@@ -1108,7 +1119,7 @@ public sealed class YouTubeLibraryTests : IDisposable
                 ("cached-map", "video-7"),
                 ("yt-sl", "video-7"),
                 ("yt-rank", "video-7"),
-                ("yt-season", "video-7"),
+                ("yt-hero", "video-7"),
             },
             client.Inserted
         );
@@ -1225,7 +1236,6 @@ public sealed class YouTubeLibraryTests : IDisposable
             {
                 DryRun = dryRun,
                 EntryFileNameUploaded = "youtube-entry-uploaded.json",
-                SeasonName = "Season 2026",
                 // Most tests file one video into four new playlists; the cap has its own tests.
                 LibraryMaxNewPlaylistsPerPass = 10,
             },
@@ -1259,6 +1269,7 @@ public sealed class YouTubeLibraryTests : IDisposable
             YouTubeJsonContext.Default.YouTubePlaylistCache
         );
 
+    // A focus-hero video, so it goes into four playlists: map, mode, rank, and Hero gameplay.
     private void AppendRecord(string videoId, string map, string version) =>
         YouTubeLibraryRecord.Append(
             YouTubeLibraryRecord.PathFor(directory),
@@ -1272,6 +1283,7 @@ public sealed class YouTubeLibraryTests : IDisposable
                 Rank = "Platinum",
                 GameVersion = version,
                 PrivacyStatus = "public",
+                HeroFocus = "Li-Ming",
             }
         );
 

@@ -15,19 +15,19 @@ public static class YouTubePlaylistNames
     public const int MaxTitleLength = 150;
 
     public const string ViewerReviews = "Viewer requested reviews";
-    public const string DraftPrefix = "Unusual drafts";
-    public const string HeroFocus = "Hero focus";
+    public const string UnusualDrafts = "Unusual drafts";
+    public const string HeroGameplay = "Hero gameplay";
 
     /// <summary>
-    /// The focus role group: <c>Hero focus - Ranged Assassin</c>, or null for a role that is not
-    /// one of the six catalog roles.
+    /// The focus role group: <c>Hero gameplay - Ranged Assassin</c>, or null for a role that is
+    /// not one of the six catalog roles.
     /// </summary>
     public static string HeroFocusRole(string role)
     {
         string known = YouTubeVideoFacts.Roles.FirstOrDefault(name =>
             string.Equals(name, role?.Trim(), StringComparison.OrdinalIgnoreCase)
         );
-        return known == null ? null : HeroFocus + " - " + known;
+        return known == null ? null : HeroGameplay + " - " + known;
     }
 
     private const string StormLeague = "Storm League";
@@ -57,23 +57,10 @@ public static class YouTubePlaylistNames
     }
 
     /// <summary>
-    /// The draft group: one title per note. <c>Blue no tank, Red double healer</c> is two
-    /// notes, <c>No tank</c> and <c>Double healer</c>, so each team's note has one playlist.
+    /// The draft group: <c>Unusual drafts</c> for a <c>Draft:</c> line with at least one note,
+    /// whatever the notes are. Null for a usual draft.
     /// </summary>
-    public static IReadOnlyList<string> Drafts(string draft)
-    {
-        var titles = new List<string>();
-        foreach (string note in DraftNotes(draft))
-        {
-            string title = Fit(DraftPrefix + " - " + note);
-            if (title != null && !titles.Contains(title))
-            {
-                titles.Add(title);
-            }
-        }
-
-        return titles;
-    }
+    public static string Draft(string draft) => DraftNotes(draft).Count > 0 ? UnusualDrafts : null;
 
     /// <summary>
     /// The notes in a <c>Draft:</c> line without the team names, first letter upper case.

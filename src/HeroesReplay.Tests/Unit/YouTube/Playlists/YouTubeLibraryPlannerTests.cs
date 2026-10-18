@@ -17,28 +17,24 @@ namespace HeroesReplay.Tests.Unit.YouTube.Playlists;
 public class YouTubeLibraryPlannerTests
 {
     private const string Line = "2.57.0.98304";
-    private const string Season = "Season 2026";
 
     private static readonly DateTimeOffset Noon = new(2026, 10, 2, 19, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Titles_RankedStormLeagueGoesIntoMapModeRankAndPatch()
+    public void Titles_RankedStormLeagueGoesIntoMapModeAndRank()
     {
         IReadOnlyList<string> titles = Titles(
             Video("v", "Alterac Pass", "Storm League", "Diamond 2")
         );
 
-        Assert.Equal(
-            new[] { "Alterac Pass", "Storm League", "Storm League - Diamond", Season },
-            titles
-        );
+        Assert.Equal(new[] { "Alterac Pass", "Storm League", "Storm League - Diamond" }, titles);
     }
 
     [Fact]
     public void Titles_UnrankedStormLeagueHasNoRankPlaylist()
     {
         Assert.Equal(
-            new[] { "Cursed Hollow", "Storm League", Season },
+            new[] { "Cursed Hollow", "Storm League" },
             Titles(Video("v", "Cursed Hollow", "Storm League", null))
         );
     }
@@ -47,44 +43,42 @@ public class YouTubeLibraryPlannerTests
     public void Titles_QuickMatchAndAramHaveNoRankPlaylist()
     {
         Assert.Equal(
-            new[] { "Sky Temple", "Quick Match", Season },
+            new[] { "Sky Temple", "Quick Match" },
             Titles(Video("qm", "Sky Temple", "Quick Match", "Gold 2"))
         );
         Assert.Equal(
-            new[] { "Braxis Outpost", "ARAM", Season },
+            new[] { "Braxis Outpost", "ARAM" },
             Titles(Video("aram", "Braxis Outpost", "ARAM", null))
         );
     }
 
     [Theory]
-    [InlineData("No healer", new[] { "Unusual drafts - No healer" })]
-    [InlineData("Blue no tank", new[] { "Unusual drafts - No tank" })]
-    [InlineData(
-        "Blue no tank, Red double healer",
-        new[] { "Unusual drafts - No tank", "Unusual drafts - Double healer" }
-    )]
-    [InlineData("Red no tank or healer", new[] { "Unusual drafts - No tank or healer" })]
-    [InlineData(
-        "Blue triple bruiser, Red 4 healers",
-        new[] { "Unusual drafts - Triple bruiser", "Unusual drafts - 4 healers" }
-    )]
-    [InlineData(
-        "Blue double bruiser, Red dive, Split push",
-        new[]
-        {
-            "Unusual drafts - Double bruiser",
-            "Unusual drafts - Dive",
-            "Unusual drafts - Split push",
-        }
-    )]
-    public void Titles_UnusualDraftGoesIntoOnePlaylistPerNote(string draft, string[] expected)
+    [InlineData("No healer")]
+    [InlineData("Blue no tank")]
+    [InlineData("Blue no tank, Red double healer")]
+    [InlineData("Red no tank or healer")]
+    [InlineData("Blue triple bruiser, Red 4 healers")]
+    [InlineData("Blue double bruiser, Red dive, Split push")]
+    public void Titles_UnusualDraftGoesIntoTheOneUnusualDraftsPlaylist(string draft)
     {
         YouTubeLibraryVideo video = Video("v", "Dragon Shire", "Storm League", "Master");
         video.Draft = draft;
 
         IReadOnlyList<string> titles = Titles(video);
 
-        Assert.Equal(expected, titles.Where(title => title.StartsWith("Unusual drafts")));
+        Assert.Equal(
+            new[] { YouTubePlaylistNames.UnusualDrafts },
+            titles.Where(title => title.StartsWith("Unusual drafts"))
+        );
+    }
+
+    [Fact]
+    public void Titles_UsualDraftHasNoDraftPlaylist()
+    {
+        YouTubeLibraryVideo video = Video("v", "Dragon Shire", "Storm League", "Master");
+        video.Draft = " ";
+
+        Assert.DoesNotContain(YouTubePlaylistNames.UnusualDrafts, Titles(video));
     }
 
     [Fact]
@@ -98,7 +92,7 @@ public class YouTubeLibraryPlannerTests
     }
 
     [Fact]
-    public void Titles_OldTemplateVideoIsFiledByMapModeRankAndPatchOnly()
+    public void Titles_OldTemplateVideoIsFiledByMapModeAndRankOnly()
     {
         YouTubeLibraryVideo video = YouTubeVideoFacts.Read(
             "old",
@@ -115,13 +109,13 @@ public class YouTubeLibraryPlannerTests
         Assert.Null(video.Draft);
         Assert.Null(video.FocusHero);
         Assert.Equal(
-            new[] { "Sky Temple", "Storm League", "Storm League - Platinum", "Patch 2.55 archive" },
+            new[] { "Sky Temple", "Storm League", "Storm League - Platinum" },
             Titles(video)
         );
     }
 
     [Fact]
-    public void Titles_ClipGoesIntoThePatchPlaylistOnly()
+    public void Titles_ClipGoesIntoNoPlaylist()
     {
         var clip = new YouTubeLibraryVideo
         {
@@ -133,16 +127,16 @@ public class YouTubeLibraryPlannerTests
             FocusHero = "Li-Ming",
         };
 
-        Assert.Equal(new[] { Season }, Titles(clip));
+        Assert.Empty(Titles(clip));
     }
 
     [Fact]
-    public void Titles_UnfiledModeGoesIntoThePatchPlaylistOnly()
+    public void Titles_UnfiledModeGoesIntoNoPlaylist()
     {
         YouTubeLibraryVideo video = Video("v", "Alterac Pass", "Custom", null);
         video.Draft = "No healer";
 
-        Assert.Equal(new[] { Season }, Titles(video));
+        Assert.Empty(Titles(video));
     }
 
     [Fact]
@@ -160,14 +154,13 @@ public class YouTubeLibraryPlannerTests
             Titles(video, Only(groups => groups.Rank = true))
         );
         Assert.Equal(
-            new[] { "Unusual drafts - Double tank" },
+            new[] { YouTubePlaylistNames.UnusualDrafts },
             Titles(video, Only(groups => groups.Draft = true))
         );
         Assert.Equal(
             new[] { YouTubePlaylistNames.ViewerReviews },
             Titles(video, Only(groups => groups.ViewerReview = true))
         );
-        Assert.Equal(new[] { Season }, Titles(video, Only(groups => groups.Patch = true)));
         Assert.Equal(
             new[] { "Alterac Pass - Storm League - Diamond" },
             Titles(video, Only(groups => groups.MapMode = true))
@@ -184,7 +177,8 @@ public class YouTubeLibraryPlannerTests
         Assert.True(groups.Rank);
         Assert.True(groups.Draft);
         Assert.True(groups.ViewerReview);
-        Assert.True(groups.Patch);
+        Assert.True(groups.HeroFocus);
+        Assert.False(groups.HeroFocusRole);
         Assert.False(groups.MapMode);
         Assert.NotNull(new YouTubeSettings().Playlists);
     }
@@ -200,7 +194,8 @@ public class YouTubeLibraryPlannerTests
 
         YouTubePlaylistSettings groups = youtube.Playlists;
         Assert.True(groups.Map && groups.Mode && groups.Rank && groups.Draft);
-        Assert.True(groups.ViewerReview && groups.Patch);
+        Assert.True(groups.ViewerReview && groups.HeroFocus);
+        Assert.False(groups.HeroFocusRole);
         Assert.False(groups.MapMode);
     }
 
@@ -213,9 +208,7 @@ public class YouTubeLibraryPlannerTests
 
         IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Plan(
             new[] { first, again },
-            Groups(true),
-            Line,
-            seasonName: "Storm League"
+            Groups(true)
         );
 
         Assert.Equal(
@@ -224,7 +217,7 @@ public class YouTubeLibraryPlannerTests
         );
         Assert.All(items, item => Assert.Equal("v-1", item.VideoId));
         Assert.DoesNotContain(items, item => item.PlaylistTitle == "Sky Temple");
-        Assert.Single(items, item => item.PlaylistTitle == "Unusual drafts - No tank");
+        Assert.Single(items, item => item.PlaylistTitle == YouTubePlaylistNames.UnusualDrafts);
         Assert.Single(items, item => item.PlaylistTitle == "Storm League");
     }
 
@@ -241,9 +234,7 @@ public class YouTubeLibraryPlannerTests
 
         IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Plan(
             new[] { undated, old, hidden, fresh },
-            Groups(true),
-            Line,
-            Season
+            Groups(true)
         );
 
         Assert.Equal(
@@ -254,46 +245,20 @@ public class YouTubeLibraryPlannerTests
     }
 
     [Fact]
-    public void Plan_PatchGroupRollsOlderLinesToAnArchiveAndUnknownBuildsApart()
-    {
-        YouTubeEntry[] entries =
-        {
-            Entry("pub", "public", "2.57.0.98304"),
-            Entry("pub", "public", "2.57.0.98304"),
-            Entry("test", "private", "2.57.0.98304"),
-            Entry("old", "public", "2.55.17.98025"),
-            Entry("mystery", "public", null),
-        };
-
-        IReadOnlyList<YouTubeLibraryItem> items = YouTubeLibraryPlanner.Plan(
-            entries.Select(entry => YouTubeLibraryRecord.FromEntry(entry, uploadedAt: null)),
-            Only(groups => groups.Patch = true),
-            "2.57"
-        );
-
-        Assert.Equal(
-            new[] { "Patch 2.57", "Patch 2.55 archive", PatchPlaylist.Unknown },
-            items.Select(item => item.PlaylistTitle)
-        );
-        Assert.DoesNotContain(items, item => item.VideoId == "test");
-    }
-
-    [Fact]
     public void Plan_FilesAPrivateStagingEntryOnceYouTubeReportsItPublic()
     {
         YouTubeEntry staged = Entry("staged", "private", "2.57.0.98304");
         staged.ActualPrivacyStatus = "public";
+        YouTubeEntry test = Entry("test", "private", "2.57.0.98304");
 
         YouTubeLibraryItem item = Assert.Single(
             YouTubeLibraryPlanner.Plan(
-                new[] { YouTubeLibraryRecord.FromEntry(staged, Noon) },
-                Only(groups => groups.Patch = true),
-                "2.57",
-                Season
+                new[] { staged, test }.Select(entry => YouTubeLibraryRecord.FromEntry(entry, Noon)),
+                Only(groups => groups.Map = true)
             )
         );
 
-        Assert.Equal(Season, item.PlaylistTitle);
+        Assert.Equal("Alterac Pass", item.PlaylistTitle);
         Assert.Equal("staged", item.VideoId);
     }
 
@@ -315,7 +280,6 @@ public class YouTubeLibraryPlannerTests
             "Blue double bruiser, Red triple healer",
             "Red " + new string('x', 400),
         };
-        string longSeason = new('S', 200);
         foreach (string map in maps)
         foreach (string rank in ranks)
         foreach (string draft in drafts)
@@ -324,18 +288,8 @@ public class YouTubeLibraryPlannerTests
             video.Draft = draft;
             video.FocusHero = "Illidan";
 
-            IReadOnlyList<string> first = YouTubeLibraryPlanner.Titles(
-                video,
-                Groups(true),
-                Line,
-                longSeason
-            );
-            IReadOnlyList<string> second = YouTubeLibraryPlanner.Titles(
-                video,
-                Groups(true),
-                Line,
-                longSeason
-            );
+            IReadOnlyList<string> first = YouTubeLibraryPlanner.Titles(video, Groups(true));
+            IReadOnlyList<string> second = YouTubeLibraryPlanner.Titles(video, Groups(true));
 
             Assert.Equal(first, second);
             Assert.All(
@@ -405,9 +359,8 @@ public class YouTubeLibraryPlannerTests
                 "Dragon Shire",
                 "Storm League",
                 "Storm League - Diamond",
-                "Unusual drafts - No tank",
+                YouTubePlaylistNames.UnusualDrafts,
                 YouTubePlaylistNames.ViewerReviews,
-                Season,
             },
             Titles(inserted)
         );
@@ -448,7 +401,7 @@ public class YouTubeLibraryPlannerTests
     private static IReadOnlyList<string> Titles(
         YouTubeLibraryVideo video,
         YouTubePlaylistSettings groups = null
-    ) => YouTubeLibraryPlanner.Titles(video, groups ?? new YouTubePlaylistSettings(), Line, Season);
+    ) => YouTubeLibraryPlanner.Titles(video, groups ?? new YouTubePlaylistSettings());
 
     private static YouTubeLibraryVideo Video(string id, string map, string mode, string rank) =>
         new()
@@ -470,6 +423,8 @@ public class YouTubeLibraryPlannerTests
             PrivacyStatus = privacy,
             GameVersion = build,
             ReplayId = 1,
+            Map = "Alterac Pass",
+            GameType = "Storm League",
         };
 
     private static YouTubePlaylistSettings Groups(bool on) =>
@@ -480,7 +435,6 @@ public class YouTubeLibraryPlannerTests
             Rank = on,
             Draft = on,
             ViewerReview = on,
-            Patch = on,
             MapMode = on,
         };
 

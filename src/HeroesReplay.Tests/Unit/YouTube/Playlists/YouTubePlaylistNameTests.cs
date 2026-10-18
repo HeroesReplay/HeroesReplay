@@ -81,10 +81,8 @@ public class YouTubePlaylistNameTests
         );
         Assert.Equal(new[] { "No healer" }, YouTubePlaylistNames.DraftNotes("No healer"));
         Assert.Empty(YouTubePlaylistNames.DraftNotes(null));
-        Assert.Equal(
-            new[] { "Unusual drafts - No tank or healer" },
-            YouTubePlaylistNames.Drafts("Red no tank or healer")
-        );
+        Assert.Equal("Unusual drafts", YouTubePlaylistNames.Draft("Red no tank or healer"));
+        Assert.Null(YouTubePlaylistNames.Draft(null));
     }
 
     [Fact]
