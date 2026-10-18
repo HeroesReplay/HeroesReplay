@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using HeroesReplay.Core.HeroesProfile;
 
 namespace HeroesReplay.Core.YouTube.Playlists;
 
@@ -17,9 +16,7 @@ public static class YouTubeLibraryPlanner
 {
     public static IReadOnlyList<YouTubeLibraryItem> Plan(
         IEnumerable<YouTubeLibraryVideo> videos,
-        YouTubePlaylistSettings groups,
-        string currentPatchLine,
-        string seasonName = null
+        YouTubePlaylistSettings groups
     )
     {
         if (videos == null)
@@ -35,10 +32,7 @@ public static class YouTubeLibraryPlanner
                 .OrderByDescending(video => video.UploadedAt ?? DateTimeOffset.MinValue)
         )
         {
-            if (
-                string.IsNullOrWhiteSpace(video.VideoId)
-                || !PatchPlaylist.MayFile(video.PrivacyStatus)
-            )
+            if (string.IsNullOrWhiteSpace(video.VideoId) || !MayFile(video.PrivacyStatus))
             {
                 continue;
             }
@@ -49,7 +43,7 @@ public static class YouTubeLibraryPlanner
                 continue;
             }
 
-            foreach (string title in Titles(video, groups, currentPatchLine, seasonName))
+            foreach (string title in Titles(video, groups))
             {
                 items.Add(new YouTubeLibraryItem(title, videoId, video.ReplayId));
             }
@@ -59,15 +53,13 @@ public static class YouTubeLibraryPlanner
     }
 
     /// <summary>
-    /// The playlists one video belongs in, in group order, each title once. A full match needs
-    /// a filed mode (Storm League, Quick Match, ARAM, or Unranked Draft) for every group except
-    /// the patch. A clip goes into the patch playlist only.
+    /// The playlists one video belongs in, in group order, each title once. Only a full match
+    /// with a filed mode (Storm League, Quick Match, ARAM, or Unranked Draft) is filed. A clip
+    /// goes into no playlist.
     /// </summary>
     public static IReadOnlyList<string> Titles(
         YouTubeLibraryVideo video,
-        YouTubePlaylistSettings groups,
-        string currentPatchLine,
-        string seasonName = null
+        YouTubePlaylistSettings groups
     )
     {
         var titles = new List<string>();
@@ -96,10 +88,7 @@ public static class YouTubeLibraryPlanner
 
             if (groups.Draft)
             {
-                foreach (string draft in YouTubePlaylistNames.Drafts(video.Draft))
-                {
-                    Add(draft);
-                }
+                Add(YouTubePlaylistNames.Draft(video.Draft));
             }
 
             if (groups.ViewerReview && video.IsViewerReview)
@@ -111,7 +100,7 @@ public static class YouTubeLibraryPlanner
             {
                 if (groups.HeroFocus)
                 {
-                    Add(YouTubePlaylistNames.HeroFocus);
+                    Add(YouTubePlaylistNames.HeroGameplay);
                 }
 
                 if (groups.HeroFocusRole)
@@ -126,12 +115,6 @@ public static class YouTubeLibraryPlanner
             }
         }
 
-        if (groups.Patch)
-        {
-            string line = GameVersionOrder.PatchLine(currentPatchLine) ?? currentPatchLine;
-            Add(YouTubePlaylistNames.Fit(PatchPlaylist.Name(video.GameVersion, line, seasonName)));
-        }
-
         return titles;
 
         void Add(string title)
@@ -142,4 +125,7 @@ public static class YouTubeLibraryPlanner
             }
         }
     }
+
+    private static bool MayFile(string privacyStatus) =>
+        string.Equals(privacyStatus, "public", StringComparison.OrdinalIgnoreCase);
 }

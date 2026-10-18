@@ -309,7 +309,7 @@ The labels go into four places:
 - **Title.** At most one composition label, the rarest by `Frequencies`, in the draft note's slot. The role notes keep the slot unless the label is rarer than each of them: `Blue double bruiser, Red dive` in the description is `Red dive` in the title, because dive is 3.7% of games and double bruiser 14.9%. A label both teams have has no team. The slot is still the first part dropped at 100 characters.
 - **Description.** The `Draft:` line lists every role note and every named label for both teams: `Draft: Red double tank, Blue dive, Red triple sustain`.
 - **Tags.** One tag per label (`Dive`, `Triple sustain`), after `Heroes of the Storm`, so the 500-character limit drops them first.
-- **Playlists.** Each label is a draft note to the library pass: `Unusual drafts - Dive`.
+- **Playlists.** A label is a draft note to the library pass, so the video goes into `Unusual drafts`.
 
 Titles from the corpus:
 
@@ -438,7 +438,7 @@ A pass does three things.
 3. **File.** The record's resolved public videos, plus any public `youtube-entry-uploaded.json` still under `Data\Contexts` that the record does not have, are planned with the playlist groups below. The newest upload is planned first, so a new video is filed before the backlog of older ones. Each video id is filed once per playlist (`Data\youtube-playlists.json`). Nothing is removed from a playlist. Filing runs in this order:
    1. **Look up.** When a planned title is not in `youtube-playlists.json`, the channel's playlists are listed once (`playlists.list`, `mine`, 1 unit per 50) before anything is created. A playlist already on the channel under that title is used, even when the cache never heard of it (a run whose cache write was lost, or one made by hand) and even when its case or spacing differs (`storm league -  Platinum`). So the pass never makes a second playlist of the same name. If the channel already has two playlists of one title, the pass logs `The YouTube channel has 2 playlists titled ... The library pass files into <id>; delete the others in YouTube Studio.`
    2. **Existing playlists first.** Every planned item whose playlist exists is filed (`playlistItems.insert`, 50 units), newest video first. A backlog is never held behind a playlist that still has to be created.
-   3. **New playlists.** Then at most `YouTube:LibraryMaxNewPlaylistsPerPass` (3) playlists are created (`playlists.insert`, 50 units), each followed by its items. The playlist the most planned items wait for goes first; on a tie, the one holding the newest video. That way each create, the scarce call, files as many videos as it can. The rest wait for later passes: `<n> playlist insert(s) wait for <m> new playlist(s) past YouTube:LibraryMaxNewPlaylistsPerPass (3); later passes create them: Storm League - Diamond (12); Unusual drafts - Dive (3); ...`. 0 creates none and only files existing playlists.
+   3. **New playlists.** Then at most `YouTube:LibraryMaxNewPlaylistsPerPass` (3) playlists are created (`playlists.insert`, 50 units), each followed by its items. The playlist the most planned items wait for goes first; on a tie, the one holding the newest video. That way each create, the scarce call, files as many videos as it can. The rest wait for later passes: `<n> playlist insert(s) wait for <m> new playlist(s) past YouTube:LibraryMaxNewPlaylistsPerPass (3); later passes create them: Storm League - Diamond (12); Unusual drafts (3); ...`. 0 creates none and only files existing playlists.
 
    Every playlist write waits `YouTube:LibraryWriteSpacing` (5 s) after the one before, because YouTube throttles writes sent back to back. Three failures in a row stop the filing for that pass.
 
@@ -463,7 +463,8 @@ Renaming or retitling published videos is not part of the pass. That stays in `t
   "Rank": true,
   "Draft": true,
   "ViewerReview": true,
-  "Patch": true,
+  "HeroFocus": true,
+  "HeroFocusRole": false,
   "MapMode": false
 }
 ```
@@ -471,32 +472,45 @@ Renaming or retitling published videos is not part of the pass. That stays in `t
 | Group | Title | Filed when |
 | --- | --- | --- |
 | `Map` | `Alterac Pass` | A full match with a filed mode. Every mode shares one playlist per map. The map is the English catalog name. |
-| `Mode` | `Storm League`, `Quick Match`, `ARAM`, `Unranked Draft` | A full match in one of those modes. Other modes (brawls, custom) are not filed in any group except the patch. |
+| `Mode` | `Storm League`, `Quick Match`, `ARAM`, `Unranked Draft` | A full match in one of those modes. Other modes (brawls, custom) are not filed in any group. |
 | `Rank` | `Storm League - Diamond` | A Storm League game with a known league: Grandmaster, Master, Diamond, Platinum, Gold, Silver, or Bronze, without division. Unranked Storm League, Quick Match, and ARAM have no rank playlist. |
-| `Draft` | `Unusual drafts - Double healer` | The description has a `Draft:` note. One playlist per note, without the team: `Blue no tank, Red double healer` goes into `Unusual drafts - No tank` and `Unusual drafts - Double healer`. A composition label is a note too: `Red dive` goes into `Unusual drafts - Dive`. |
+| `Draft` | `Unusual drafts` | The description has a `Draft:` note. Every note shares the one playlist: `Blue no tank, Red double healer` and `Red dive` both go into `Unusual drafts`, once each. |
 | `ViewerReview` | `Viewer requested reviews` | The description has a `Featured:` hero, which only a request that named a player writes. A paid upload that named no player is not a review. |
-| `Patch` | `Patch 2.57`, `YouTube:SeasonName`, `Patch 2.55 archive`, `Unknown patch` | Every public video, clips included. The current line of `Spectate:MinimumGameVersion` uses `SeasonName` when that is set. An older line is an archive. A record video waits for its build. A context entry with no build uses `Unknown patch`. Nothing is deleted when the patch rolls. |
+| `HeroFocus` | `Hero gameplay` | The cycle's focus-hero video (#433): the description has a `Hero focus:` line. |
+| `HeroFocusRole` | `Hero gameplay - Healer` | Off by default. The focus-hero video's role, one playlist per catalog role. |
 | `MapMode` | `Alterac Pass - Storm League - Diamond`, `Alterac Pass - Quick Match` | Off by default. The earlier combined playlist. |
 
-A clip goes into the patch playlist only. Every other group needs a full match in a filed mode. Only a public video is filed.
+Only a public full match in a filed mode is filed. A clip goes into no playlist. There are no patch playlists: the build is still recorded, but nothing is filed by it.
 
-The draft notes are the title's notes (see "What the video contains"): no tank or healer, no healer, double or triple healer, double bruiser without a tank, no tank, double tank, triple bruiser, double support, and no ranged assassin, with counts above three written as a number (`4 healers`), plus the composition labels: split push, siege, dive, poke, double or triple melee assassin, all melee, one ranged, triple sustain, triple specialist, merc control, and glass cannon. That is about twenty playlists in practice. One playlist per note, rather than a single `Unusual drafts` list, lets a viewer open "every double healer game". Each distinct note costs one insert. In the issue #140 corpus, half the games had no note, 94 of 295 had one, 43 had two, and 11 had three or four, so about 0.7 inserts a game.
+The draft notes are the title's notes (see "What the video contains"): no tank or healer, no healer, double or triple healer, double bruiser without a tank, no tank, double tank, triple bruiser, double support, and no ranged assassin, with counts above three written as a number (`4 healers`), plus the composition labels: split push, siege, dive, poke, double or triple melee assassin, all melee, one ranged, triple sustain, triple specialist, merc control, and glass cannon. Each of those used to have its own `Unusual drafts - <note>` playlist, about twenty in practice, most holding a few videos. One `Unusual drafts` playlist is one insert a game, however many notes it has.
 
 `MapMode` is off because it is one playlist per map and tier: 15 maps times 8 Storm League shapes, plus Quick Match and ARAM, is well over 100 playlists of a few videos each, and every one of them repeats what the map and rank playlists already show. Turning it off stops new inserts. The combined playlists already on the channel keep their videos and are not filled any further. Delete them in YouTube Studio if they are not wanted, or set `MapMode` true to keep them growing.
 
-Old videos. The first template (`Sky Temple - 65269475 - Platinum`, with a `Game type:` line) has no `Draft:` or `Featured:` line, and Heroes Profile does not know about a draft note or a Twitch request. Those videos go into the map, mode, rank, and patch playlists only. A current-template video gets the draft note only when `YouTube:Titles:DraftNotes` was on at upload, and composition labels only from `TemplateVersion` 6 with `YouTube:Titles:Compositions:Enabled` on. The `Draft:` line kept its shape, so the library pass reads both templates the same way.
+Old videos. The first template (`Sky Temple - 65269475 - Platinum`, with a `Game type:` line) has no `Draft:` or `Featured:` line, and Heroes Profile does not know about a draft note or a Twitch request. Those videos go into the map, mode, and rank playlists only. A current-template video gets the draft note only when `YouTube:Titles:DraftNotes` was on at upload, and composition labels only from `TemplateVersion` 6 with `YouTube:Titles:Compositions:Enabled` on. The `Draft:` line kept its shape, so the library pass reads both templates the same way.
 
 Cost per video. Each group that applies is one `playlistItems.insert`, 50 units:
 
 | Video | Inserts with the defaults | Units |
 | --- | --- | --- |
-| Ranked Storm League (map, mode, rank, patch) | 4 | 200 |
-| Unranked Storm League, Quick Match, or ARAM (map, mode, patch) | 3 | 150 |
-| Plus an unusual draft | +1 per note (usually 1 or 2, at most 4 in the corpus) | +50 to +200 |
+| Ranked Storm League (map, mode, rank) | 3 | 150 |
+| Unranked Storm League, Quick Match, or ARAM (map, mode) | 2 | 100 |
+| Plus an unusual draft | +1 | +50 |
 | Plus a viewer review | +1 | +50 |
-| Clip (patch) | 1 | 50 |
+| Plus a focus-hero video | +1 | +50 |
+| Clip | 0 | 0 |
 
-The earlier rules cost 2 inserts (100 units) per full match.
+### Retired playlists
+
+The patch playlists (`Patch 2.57`, `Patch 2.55 archive`, `Unknown patch`, and the old `YouTube:SeasonName` title), the `Unusual drafts - <note>` playlists, and the `Hero focus` and `Hero focus - <role>` playlists are no longer filed, and the library pass leaves the ones on the channel alone. `tools/youtube-retire-playlists.cs` cleans the channel up once:
+
+```powershell
+heroesreplay services stop
+dotnet run tools/youtube-retire-playlists.cs                              # dry run: print the plan
+dotnet run tools/youtube-retire-playlists.cs -- --season "Season 2026"    # also retire the season title
+dotnet run tools/youtube-retire-playlists.cs -- --apply
+```
+
+It renames `Hero focus` to `Hero gameplay`, so its videos stay on it (or deletes it when `Hero gameplay` already exists), and deletes the other retired playlists. Deleting a playlist never deletes its videos. It rewrites `Data\youtube-playlists.json` (backup `youtube-playlists.json.bak`) so the library pass forgets the deleted playlists and does not insert the renamed playlist's videos again. The next passes file the backlog into `Unusual drafts` and `Hero gameplay`, newest first, within the usual units. Each rename or delete is 50 units of the same day, not recorded in `Data\youtube-quota-units.json`, so run it on a day with room.
 
 ## Quota units
 
@@ -519,7 +533,7 @@ A file written before #250 has `UploadUnits` (1600 per insert) instead of `Uploa
 
 A quota response from YouTube during the pass pauses the pass until the next Pacific quota day, and uploads continue. A daily quota response during an upload pauses new uploads until then (`UploadsPausedUntil`), and the pass continues. YouTube checks quota when the upload session is created, so a quota refusal before any session exists means nothing was sent: the attempt goes back to pending and is retried automatically after the quota day turns. An upload that stopped after its session started is ambiguous until the next pass checks its session (see Interrupted uploads).
 
-Backfilling the 338 videos on the channel today (4 already on the current template) costs about 7 units of listing (and 7 more once, for the full re-listing that reads the draft note and named player), 334 Heroes Profile lookups (the older template has no build) spread over 7 passes, and the playlist inserts. Each group that is on adds one insert per video: 338 × 50 = 16,900 units, about 6 days at 3000 units a day. With the defaults a ranked Storm League video is 4 inserts (map, mode, rank, patch), so the backlog is about 1,352 × 50 = 67,600 units, plus 50 for each playlist that does not exist yet (about 30: one per map, mode, league, patch line, draft note, and the review playlist). At production's 8000 units a day that is about 9 days, while new public videos take about 1,200 units a day of the same room. An insert an earlier pass already made (the patch playlist) is not made again. To shorten the backlog, turn `Mode` off first: almost every video is Storm League, so the `Storm League` playlist is close to the whole channel.
+Backfilling the 338 videos on the channel today (4 already on the current template) costs about 7 units of listing (and 7 more once, for the full re-listing that reads the draft note and named player), 334 Heroes Profile lookups (the older template has no build) spread over 7 passes, and the playlist inserts. Each group that is on adds one insert per video: 338 × 50 = 16,900 units, about 6 days at 3000 units a day. With the defaults a ranked Storm League video is 3 inserts (map, mode, rank), so the backlog is about 1,014 × 50 = 50,700 units, plus 50 for each playlist that does not exist yet (about 25: one per map, mode, and league, plus the unusual drafts, review, and hero gameplay playlists). At production's 8000 units a day that is about 7 days, while new public videos take about 900 units a day of the same room. An insert an earlier pass already made is not made again. To shorten the backlog, turn `Mode` off first: almost every video is Storm League, so the `Storm League` playlist is close to the whole channel.
 
 ## The score
 

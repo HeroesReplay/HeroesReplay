@@ -70,7 +70,7 @@ public interface IYouTubeLibrary
 /// <c>Data\youtube-library.jsonl</c> does not have yet (Heroes Profile fills a missing map,
 /// mode, rank, or build), adds the replay ids to the duplicate catalog, and files the record
 /// into the playlist groups that <c>YouTube:Playlists</c> turns on (map, mode, rank, draft,
-/// viewer review, patch). Each call reserves its units in <see cref="YouTubeQuotaUnits"/>
+/// viewer review, hero gameplay). Each call reserves its units in <see cref="YouTubeQuotaUnits"/>
 /// first and the pass stops when the day's library room is gone.
 /// </summary>
 public class YouTubeLibrary : IYouTubeLibrary
@@ -673,12 +673,7 @@ public class YouTubeLibrary : IYouTubeLibrary
             }
         }
 
-        return YouTubeLibraryPlanner.Plan(
-            videos,
-            settings.YouTube?.Playlists,
-            settings.Spectate?.MinimumGameVersion,
-            settings.YouTube?.SeasonName
-        );
+        return YouTubeLibraryPlanner.Plan(videos, settings.YouTube?.Playlists);
     }
 
     private static IReadOnlyList<YouTubeLibraryItem> Pending(

@@ -7,7 +7,7 @@ namespace HeroesReplay.Tests.Unit.YouTube.Playlists;
 
 /// <summary>
 /// The library reads a focus-hero video back from its <c>Hero focus:</c> line (#433) and files it
-/// into "Hero focus" and its role's playlist, never into the viewer reviews.
+/// into "Hero gameplay", never into the viewer reviews.
 /// </summary>
 [Trait(TestCategories.Category, TestCategories.Unit)]
 public class HeroFocusPlaylistTests
@@ -90,16 +90,15 @@ public class HeroFocusPlaylistTests
     }
 
     [Fact]
-    public void AFocusVideo_IsFiledUnderHeroFocusAndItsRole()
+    public void AFocusVideo_IsFiledUnderHeroGameplayOnlyByDefault()
     {
         IReadOnlyList<string> titles = YouTubeLibraryPlanner.Titles(
             Video("Li-Ming", "Ranged Assassin"),
-            new YouTubePlaylistSettings(),
-            Line
+            new YouTubePlaylistSettings()
         );
 
-        Assert.Contains(YouTubePlaylistNames.HeroFocus, titles);
-        Assert.Contains("Hero focus - Ranged Assassin", titles);
+        Assert.Contains(YouTubePlaylistNames.HeroGameplay, titles);
+        Assert.DoesNotContain(titles, title => title.StartsWith("Hero gameplay - "));
         Assert.DoesNotContain(YouTubePlaylistNames.ViewerReviews, titles);
     }
 
@@ -108,26 +107,31 @@ public class HeroFocusPlaylistTests
     {
         IReadOnlyList<string> off = YouTubeLibraryPlanner.Titles(
             Video("Li-Ming", "Ranged Assassin"),
-            new YouTubePlaylistSettings { HeroFocus = false, HeroFocusRole = false },
-            Line
+            new YouTubePlaylistSettings { HeroFocus = false, HeroFocusRole = false }
+        );
+        IReadOnlyList<string> role = YouTubeLibraryPlanner.Titles(
+            Video("Li-Ming", "Ranged Assassin"),
+            new YouTubePlaylistSettings { HeroFocusRole = true }
         );
         IReadOnlyList<string> noRole = YouTubeLibraryPlanner.Titles(
             Video("Li-Ming", null),
-            new YouTubePlaylistSettings(),
-            Line
+            new YouTubePlaylistSettings { HeroFocusRole = true }
         );
         IReadOnlyList<string> ordinary = YouTubeLibraryPlanner.Titles(
             Video(null, null),
-            new YouTubePlaylistSettings(),
-            Line
+            new YouTubePlaylistSettings()
         );
 
-        Assert.DoesNotContain(off, title => title.StartsWith(YouTubePlaylistNames.HeroFocus));
-        Assert.Contains(YouTubePlaylistNames.HeroFocus, noRole);
-        Assert.DoesNotContain(noRole, title => title.StartsWith("Hero focus - "));
-        Assert.DoesNotContain(ordinary, title => title.StartsWith(YouTubePlaylistNames.HeroFocus));
+        Assert.DoesNotContain(off, title => title.StartsWith(YouTubePlaylistNames.HeroGameplay));
+        Assert.Contains("Hero gameplay - Ranged Assassin", role);
+        Assert.Contains(YouTubePlaylistNames.HeroGameplay, noRole);
+        Assert.DoesNotContain(noRole, title => title.StartsWith("Hero gameplay - "));
+        Assert.DoesNotContain(
+            ordinary,
+            title => title.StartsWith(YouTubePlaylistNames.HeroGameplay)
+        );
         Assert.Null(YouTubePlaylistNames.HeroFocusRole("Wizard"));
-        Assert.Equal("Hero focus - Healer", YouTubePlaylistNames.HeroFocusRole("healer"));
+        Assert.Equal("Hero gameplay - Healer", YouTubePlaylistNames.HeroFocusRole("healer"));
     }
 
     private static YouTubeLibraryVideo Video(string hero, string role) =>
