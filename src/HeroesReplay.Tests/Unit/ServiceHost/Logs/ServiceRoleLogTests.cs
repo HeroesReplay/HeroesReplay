@@ -67,6 +67,66 @@ public class ServiceRoleLogTests
     }
 
     [Fact]
+    public void Writer_WhenTheNewDaysFileCannotBeWritten_MovesToTheNextPartAndSaysWhatWasLost()
+    {
+        string root = TempDir();
+        try
+        {
+            var clock = new FakeClock(Start);
+            using var writer = Writer(root, clock, maxBytes: 1024 * 1024);
+            writer.Write("before midnight");
+
+            // Another process holds the new day's file without sharing writes.
+            string blocked = Path.Combine(root, "download-2026-10-03.log");
+            using (new FileStream(blocked, FileMode.Create, FileAccess.ReadWrite, FileShare.Read))
+            {
+                clock.Now = Start.AddMinutes(2);
+                writer.Write("lost at midnight");
+                clock.Now = Start.AddMinutes(3);
+                writer.Write("after midnight");
+            }
+
+            string next = Path.Combine(root, "download-2026-10-03.1.log");
+            Assert.Equal(next, writer.CurrentPath);
+            string[] lines = ReadWhileOpen(next)
+                .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal("2026-10-03T00:02:00.000+00:00 --- download pid 4242 ---", lines[0]);
+            Assert.StartsWith(
+                "2026-10-03T00:02:00.000+00:00 --- 1 log entries since 2026-10-03T00:01:00.000+00:00 were lost: could not write download-2026-10-03.log. IOException:",
+                lines[1]
+            );
+            Assert.Equal("after midnight", lines[2]);
+            Assert.Equal(0, new FileInfo(blocked).Length);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("spectate heroesprofile", "spectate")]
+    [InlineData("twitch connect", "twitch")]
+    [InlineData("HeroesProfile Download", "download")]
+    [InlineData("youtube uploader", "youtube")]
+    [InlineData("youtube library --once", null)]
+    [InlineData("spectate file", null)]
+    [InlineData("services start --supervise", null)]
+    [InlineData("", null)]
+    public void RoleFromCommand_NamesTheRoleOfAHandStartedRoleCommand(
+        string commandLine,
+        string expected
+    )
+    {
+        Assert.Equal(
+            expected,
+            ServiceRoleLog.RoleFromCommand(
+                commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            )
+        );
+    }
+
+    [Fact]
     public void Writer_UsesTheClocksLocalZoneForTheDay()
     {
         string root = TempDir();
