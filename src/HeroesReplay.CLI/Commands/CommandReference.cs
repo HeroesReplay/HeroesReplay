@@ -252,7 +252,7 @@ public static class CommandReference
         new(
             "otel up",
             "The local Aspire CLI tool (`dotnet tool restore`).",
-            "Starts the Aspire dashboard (UI :18888, OTLP :4317) and records its pid.",
+            "Starts the Aspire dashboard (UI :18888, OTLP :4317), records its pid, and opens the UI in the default browser. It is the only command that opens it: services and spectate start the dashboard headless.",
             "0 when the dashboard listens, 1 otherwise."
         ),
         new(

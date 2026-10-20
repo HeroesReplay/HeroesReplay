@@ -256,7 +256,7 @@ Add an inbound Windows Firewall rule for each installed Heroes client exe. Needs
 Start the Aspire dashboard with the Aspire CLI (UI :18888, OTLP gRPC :4317).
 
 - **Before:** The local Aspire CLI tool (`dotnet tool restore`).
-- **Changes:** Starts the Aspire dashboard (UI :18888, OTLP :4317) and records its pid.
+- **Changes:** Starts the Aspire dashboard (UI :18888, OTLP :4317), records its pid, and opens the UI in the default browser. It is the only command that opens it: services and spectate start the dashboard headless.
 - **Exit:** 0 when the dashboard listens, 1 otherwise.
 
 ## `otel down`
