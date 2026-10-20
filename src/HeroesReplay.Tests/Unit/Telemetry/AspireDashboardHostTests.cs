@@ -513,6 +513,42 @@ public class AspireDashboardHostTests
     }
 
     [Fact]
+    public void Ensure_WhenTheDashboardComesUpHeadless_LogsTheUrlAndOpensNothing()
+    {
+        bool started = false;
+        var lines = new List<string>();
+        DashboardEnsureResult result = AspireDashboardHost.Ensure(
+            () => started,
+            invocation =>
+            {
+                started = true;
+                return new AspireProcessStart(42, null, null);
+            },
+            pid => true,
+            Array.Empty<string>(),
+            path => false,
+            aspireOnPath: true,
+            pathFallbackDirectory: @"C:\repo",
+            lines.Add,
+            wait: _ => { },
+            startupBudget: TimeSpan.FromMinutes(5),
+            openBrowser: AspireDashboardHost.BrowserOpener(false)
+        );
+
+        Assert.True(result.Listening);
+        Assert.True(result.Launched);
+        Assert.Contains(lines, line => line.Contains("UI http://127.0.0.1:18888"));
+        Assert.DoesNotContain(lines, line => line.StartsWith("Opening "));
+    }
+
+    [Fact]
+    public void BrowserOpener_OnlyOtelUpGetsABrowser()
+    {
+        Assert.Null(AspireDashboardHost.BrowserOpener(false));
+        Assert.NotNull(AspireDashboardHost.BrowserOpener(true));
+    }
+
+    [Fact]
     public void Ensure_WhenAlreadyListening_DoesNotOpenTheBrowser()
     {
         var opened = new List<string>();
