@@ -70,7 +70,7 @@ public class ServiceSupervisionTests
         Assert.Equal(5, download.Restarts.BudgetLimit);
         Assert.Equal(1800, download.Restarts.BudgetWindowSeconds);
         Assert.Contains("stays down", download.Cause);
-        Assert.Contains("services start --supervise", download.Remediation);
+        Assert.Contains("services reset download", download.Remediation);
         Assert.False(report.Ok);
         Assert.Equal(1, report.ExitCode);
         Assert.Contains("Restart budget exhausted: download.", report.Message);
@@ -268,6 +268,105 @@ public class ServiceSupervisionTests
         stack.Crash(stack.PidOf(role));
         stack.Ticks(supervision, 3);
         Assert.True(supervision.Ledger(role).Exhausted);
+    }
+
+    [Fact]
+    public void AReset_RestartsOnlyTheExhaustedRole_WithItsWholeBudgetBack()
+    {
+        using var stack = new FakeStack(("spectate", 100), ("download", 101), ("youtube", 102));
+        var resets = new List<string>();
+        ServiceSupervision supervision = stack.Supervision(resets: () =>
+        {
+            List<string> taken = resets.ToList();
+            resets.Clear();
+            return taken;
+        });
+        supervision.Begin();
+        Exhaust(stack, supervision, "download");
+        int spectate = stack.PidOf("spectate");
+        int youtube = stack.PidOf("youtube");
+        int launches = stack.Launches.Count;
+        stack.Ticks(supervision, 600);
+        Assert.Equal(launches, stack.Launches.Count);
+
+        resets.Add("download");
+        DateTimeOffset asked = stack.Clock.Now;
+        stack.RunUntil(supervision, () => stack.Launches.Count == launches + 1);
+
+        Assert.Equal("download", stack.Launches.Last().Role);
+        Assert.Equal(10, (stack.Launches.Last().At - asked).TotalSeconds, precision: 0);
+        ServiceRoleRestarts ledger = supervision.Ledger("download");
+        Assert.False(ledger.Exhausted);
+        Assert.Equal(1, ledger.Resets);
+        Assert.Equal(asked, ledger.LastResetAt);
+        Assert.Single(ledger.Recent);
+        Assert.Equal(6, ledger.Count);
+        Assert.Contains(
+            stack.Log.Entries,
+            entry =>
+                entry.Message.Contains(ServiceSupervision.RoleResetCode)
+                && entry.Message.Contains("download")
+                && entry.Message.Contains("it was left down")
+        );
+
+        // The other roles, spectate and the stream with it, were never touched.
+        Assert.Equal(spectate, stack.PidOf("spectate"));
+        Assert.Equal(youtube, stack.PidOf("youtube"));
+        Assert.Empty(stack.Killed);
+        Assert.Equal(0, supervision.Ledger("spectate").Count);
+
+        // It has the whole budget again: the next crash is restarted after the first backoff.
+        stack.Ticks(supervision, 5);
+        stack.Crash(stack.PidOf("download"));
+        stack.RunUntil(supervision, () => stack.Launches.Count == launches + 2);
+        Assert.Equal(
+            ServiceRoleState.Ready,
+            stack.Status(running: true).Roles.Single(role => role.Role == "download").State
+        );
+    }
+
+    [Fact]
+    public void AReset_TakesOverACopyStartedByHand_InsteadOfStartingASecond()
+    {
+        using var stack = new FakeStack(("download", 101));
+        var resets = new List<string>();
+        ServiceSupervision supervision = stack.Supervision(resets: () =>
+        {
+            List<string> taken = resets.ToList();
+            resets.Clear();
+            return taken;
+        });
+        supervision.Begin();
+        Exhaust(stack, supervision, "download");
+        int launches = stack.Launches.Count;
+        stack.RunUntracked("download", 17332);
+
+        resets.Add("download");
+        stack.RunUntil(supervision, () => stack.PidOf("download") == 17332);
+
+        Assert.Equal(launches, stack.Launches.Count);
+        Assert.Empty(stack.Killed);
+        Assert.False(supervision.Ledger("download").Exhausted);
+        Assert.Equal(1, supervision.Ledger("download").Adopted);
+    }
+
+    [Fact]
+    public void AReset_ForARoleNotSupervised_ChangesNothing()
+    {
+        using var stack = new FakeStack(("download", 101));
+        ServiceSupervision supervision = stack.Supervision(resets: () => new[] { "twitch" });
+        supervision.Begin();
+
+        Assert.True(supervision.Tick());
+
+        Assert.Null(supervision.Ledger("twitch"));
+        Assert.Contains(
+            stack.Log.Entries,
+            entry =>
+                entry.Level == LogLevel.Warning
+                && entry.Message.Contains("services reset twitch")
+                && entry.Message.Contains("Nothing was reset")
+        );
     }
 
     [Fact]
@@ -1199,7 +1298,8 @@ public class ServiceSupervisionTests
             Action<TimeSpan> wait = null,
             Func<bool> closeGame = null,
             Func<string> spectateDown = null,
-            ObsWatchdog obs = null
+            ObsWatchdog obs = null,
+            Func<IReadOnlyList<string>> resets = null
         ) =>
             new()
             {
@@ -1213,6 +1313,7 @@ public class ServiceSupervisionTests
                 ReadHeartbeat = Heartbeat,
                 DeleteHeartbeat = _ => { },
                 StopRequested = () => StopRequested,
+                TakeResets = resets,
                 Launch = Launch,
                 Kill = pid =>
                 {

@@ -513,7 +513,7 @@ public static class ServiceHealthClassifier
                         $"The supervisor restarted it {ledger.Count} times and its budget of {state.Budget} restarts in {Describe(window)} is exhausted, so it stays down. "
                         + role.Cause,
                     Remediation =
-                        $"Read {log}, fix the cause, then run `heroesreplay services stop` and `heroesreplay services start --supervise`.",
+                        $"Read {log}, fix the cause, then run `heroesreplay services reset {role.Role}`. The other roles keep running.",
                 };
             }
             else if (

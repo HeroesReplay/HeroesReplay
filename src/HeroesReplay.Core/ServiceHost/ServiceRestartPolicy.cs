@@ -68,6 +68,10 @@ public sealed class ServiceRoleRestarts
     public int Adopted { get; set; }
     public DateTimeOffset? LastAdoptedAt { get; set; }
     public int? LastAdoptedPid { get; set; }
+
+    /// <summary>Times <c>services reset</c> cleared this role's budget (#480).</summary>
+    public int Resets { get; set; }
+    public DateTimeOffset? LastResetAt { get; set; }
 }
 
 /// <summary>
@@ -261,6 +265,27 @@ public static class ServiceRestartPolicy
         ledger.DownCause = null;
         ledger.StaleSince = null;
         ledger.NextRestartAt = null;
+    }
+
+    /// <summary>
+    /// <c>services reset</c> (#480): the role gets its whole budget back and is no longer left
+    /// down. A role that is down is seen down again on the next <see cref="Decide"/> and restarts
+    /// after the first backoff; a running role carries on. The restart count stays, for history.
+    /// </summary>
+    public static void Reset(ServiceRoleRestarts ledger, DateTimeOffset at)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        ledger.Recent ??= new List<DateTimeOffset>();
+        ledger.Recent.Clear();
+        ledger.Exhausted = false;
+        ledger.ExhaustedAt = null;
+        ledger.DownSince = null;
+        ledger.DownReason = null;
+        ledger.DownCause = null;
+        ledger.StaleSince = null;
+        ledger.NextRestartAt = null;
+        ledger.Resets++;
+        ledger.LastResetAt = at;
     }
 
     private static ServiceRestartAction Exhaust(ServiceRoleRestarts ledger, DateTimeOffset now)

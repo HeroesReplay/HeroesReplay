@@ -36,7 +36,45 @@ public class ServicesCommand : Command
         Subcommands.Add(StopCommand());
         Subcommands.Add(StatusCommand());
         Subcommands.Add(SuperviseCommand());
+        Subcommands.Add(ResetCommand());
         Subcommands.Add(InstallTaskCommand());
+    }
+
+    private static Command ResetCommand()
+    {
+        var command = new Command(
+            "reset",
+            "Give one role its restart budget back through the running supervisor, without touching the other roles. A role the supervisor left down (service.restart_budget_exhausted) restarts after the first backoff; a copy of it started by hand is taken over when it heartbeats, otherwise replaced. A running role carries on. Exit 0 when the supervisor took the request, 1 when no supervisor runs, the role is unknown, or the supervisor did not take it within 15 s (it stays queued)."
+        );
+        var role = new Argument<string>("role")
+        {
+            Description = "spectate, twitch, download, or youtube.",
+        };
+        command.Arguments.Add(role);
+        command.SetAction(
+            (parseResult, cancellationToken) =>
+            {
+                ServiceHealthSettings health =
+                    ServiceCollectionExtensions.LoadServiceHealthSettings();
+                int code = ServiceSupervisor.Reset(
+                    parseResult.GetValue(role),
+                    new ServiceResetRequest
+                    {
+                        SupervisorLiveness = () =>
+                            ServiceSupervisorFile.Check(
+                                freshFor: ServiceSupervisorFile.FreshFor(health)
+                            ),
+                        Request = name => ServiceResetFile.Request(name),
+                        Pending = name => ServiceResetFile.Pending(name),
+                        Wait = Thread.Sleep,
+                    },
+                    Console.Out,
+                    Console.Error
+                );
+                return Task.FromResult(code);
+            }
+        );
+        return command;
     }
 
     private static Command InstallTaskCommand()
@@ -383,6 +421,7 @@ public class ServicesCommand : Command
             ReadHeartbeat = record => ServiceReadyFile.TryRead(record),
             DeleteHeartbeat = record => ServiceReadyFile.Delete(record?.Nonce),
             StopRequested = () => File.Exists(ServiceStopFile.DefaultPath),
+            TakeResets = () => ServiceResetFile.Take(),
             Launch = request =>
                 LaunchRole(
                     exe,
