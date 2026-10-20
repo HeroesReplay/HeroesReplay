@@ -732,6 +732,62 @@ public static class ServiceSupervisor
     }
 
     /// <summary>
+    /// <c>services reset &lt;role&gt;</c> (#480): queues the role for the running supervisor and
+    /// waits for it to take the request. Exit 0 once taken; 1 for an unknown role, no supervisor,
+    /// or a request still queued after <see cref="ServiceResetRequest.Timeout"/>.
+    /// </summary>
+    public static int Reset(
+        string role,
+        ServiceResetRequest request,
+        TextWriter output,
+        TextWriter error
+    )
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        string name = role?.Trim().ToLowerInvariant();
+        if (!ServiceProcessPlan.Names.Contains(name, StringComparer.OrdinalIgnoreCase))
+        {
+            error.WriteLine(
+                $"`{role}` is not a role. Roles: {string.Join(", ", ServiceProcessPlan.Names)}."
+            );
+            return 1;
+        }
+
+        ServiceSupervisorLiveness liveness = request.SupervisorLiveness?.Invoke();
+        if (liveness?.Running != true)
+        {
+            string why = string.IsNullOrWhiteSpace(liveness?.Detail)
+                ? string.Empty
+                : $" ({liveness.Detail})";
+            error.WriteLine(
+                $"No supervisor runs{why}, so no restart budget is kept. `heroesreplay services ensure --roles {name}` starts {name} if it is down."
+            );
+            return 1;
+        }
+
+        request.Request(name);
+        TimeSpan waited = TimeSpan.Zero;
+        while (request.Pending(name))
+        {
+            if (waited >= request.Timeout)
+            {
+                error.WriteLine(
+                    $"The supervisor has not taken the reset of {name} within {ServiceHealthClassifier.Describe(request.Timeout)}. It stays queued in services.reset for the supervisor's next pass; `heroesreplay services status` shows the budget."
+                );
+                return 1;
+            }
+
+            request.Wait(request.Poll);
+            waited += request.Poll;
+        }
+
+        output.WriteLine(
+            $"The supervisor gave {name} its restart budget back. If it was down it restarts shortly; if it runs it carries on. The other roles were not touched. Its log line is service.role_reset."
+        );
+        return 0;
+    }
+
+    /// <summary>
     /// Classify every role as ready, degraded, stale, stopped, or failed from the lock, the
     /// process table, and each role's heartbeat. Exit code 0 unless a role is failed, stale, or
     /// degraded.

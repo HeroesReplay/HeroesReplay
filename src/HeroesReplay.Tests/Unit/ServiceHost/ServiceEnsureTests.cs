@@ -180,7 +180,7 @@ public class ServiceEnsureTests
 
         Assert.Equal(ServiceEnsureCodes.BudgetExhausted, report.Code);
         Assert.Contains("youtube", report.Message);
-        Assert.Contains("services start --supervise", report.Remediation);
+        Assert.Contains("services reset", report.Remediation);
         Assert.Empty(stack.Launches);
     }
 

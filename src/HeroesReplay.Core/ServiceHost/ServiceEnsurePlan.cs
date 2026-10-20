@@ -212,8 +212,8 @@ public static class ServiceEnsurePlan
             return Refuse(
                 report,
                 ServiceEnsureCodes.BudgetExhausted,
-                $"{Names(exhausted)} used the restart budget and stays down until the stack is stopped and started again.",
-                $"Read the role log for the cause and fix it, then run `heroesreplay services stop` and `heroesreplay services start --supervise`.",
+                $"{Names(exhausted)} used the restart budget and stays down. `heroesreplay services reset <role>` gives it the budget back through the supervisor.",
+                $"Read the role log for the cause and fix it, then run `heroesreplay services reset <role>` for each one.",
                 Describe(status, requested, role => Action(role, exhausted))
             );
         }

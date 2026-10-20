@@ -405,6 +405,13 @@ public static class CommandReference
             ]
         ),
         new(
+            "services reset",
+            "A running supervisor (any session; over SSH `supervisor.json` decides).",
+            "Appends the role to `services.reset`. The supervisor takes it on its next pass, gives that role its whole restart budget back, and logs `service.role_reset`; a role it left down (`service.restart_budget_exhausted`) restarts after the first backoff, a copy started by hand is taken over when it heartbeats and replaced when it does not, and a running role carries on. No other role, and not the stream, is touched (#480).",
+            "0 when the supervisor took the request; 1 for an unknown role, no running supervisor, or a request not taken within 15 s (it stays queued).",
+            [ServiceSupervision.RoleResetCode]
+        ),
+        new(
             "services supervise",
             "Roles recorded by `services start`; no other supervisor in any session.",
             "Restarts failed roles with backoff, kills and restarts stale ones, writes `supervisor.json` and its log, and makes a live stream safe when spectate stays down (`ServiceRestart:SpectateDownObs`). Before a restart it takes over a live, heartbeating process of that role from this install that `services.json` does not track, and kills one it cannot watch, so a role never runs twice or unsupervised (#397). With `ServiceRestart:ObsWatchdog` (prod) and streaming desired (`OBS:StreamingEnabled` and the machine arm), it starts OBS when obs64 is gone and restarts it (CloseMainWindow, then a kill) when its websocket has not answered for `OBS:HungAfter` (3 min) and the stream is not live; it never passes `--startstreaming`, never kills OBS while its stream bytes advance, and does nothing once `services stop` is under way (#398). It starts OBS detached through `cmd /c start`, the same launcher as spectate's, and a role kill leaves any obs64 in the role's tree running (#409). A role whose .NET runtime folder a .NET update removed under it (`runtime.serviced`, #450) is killed and restarted at once with no backoff; spectate stops between replays by itself and is started again once it exits. When the supervisor's own runtime is serviced, it starts `services supervise` in a new console, which waits for it to exit and takes over, and exits; the roles keep running.",

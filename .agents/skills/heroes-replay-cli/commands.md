@@ -467,6 +467,15 @@ Supervise the roles `services start` recorded, in the foreground: restart failed
 - **Exit:** Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised), or until it hands over off a serviced runtime (0). 1 when a supervisor already runs.
 - **Codes:** `service.restart_budget_exhausted`, `service.role_adopted`, `service.untracked_role_killed`, `service.role_kill_spared_obs`, `obs.process_missing`, `obs.websocket_hung`, `obs.watchdog_exhausted`, `runtime.serviced`
 
+## `services reset`
+
+Give one role its restart budget back through the running supervisor, without touching the other roles. A role the supervisor left down (service.restart_budget_exhausted) restarts after the first backoff; a copy of it started by hand is taken over when it heartbeats, otherwise replaced. A running role carries on. Exit 0 when the supervisor took the request, 1 when no supervisor runs, the role is unknown, or the supervisor did not take it within 15 s (it stays queued).
+
+- **Before:** A running supervisor (any session; over SSH `supervisor.json` decides).
+- **Changes:** Appends the role to `services.reset`. The supervisor takes it on its next pass, gives that role its whole restart budget back, and logs `service.role_reset`; a role it left down (`service.restart_budget_exhausted`) restarts after the first backoff, a copy started by hand is taken over when it heartbeats and replaced when it does not, and a running role carries on. No other role, and not the stream, is touched (#480).
+- **Exit:** 0 when the supervisor took the request; 1 for an unknown role, no running supervisor, or a request not taken within 15 s (it stays queued).
+- **Codes:** `service.role_reset`
+
 ## `services install-task`
 
 Register the Windows scheduled task HeroesReplay-live: `services start --supervise` from this install when you log on, interactive and not elevated (no administrator rights needed). apply-release.ps1 restarts the stack through it after an update, so the stack comes back supervised. --remove deletes it.

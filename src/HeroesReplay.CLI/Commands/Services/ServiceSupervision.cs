@@ -36,6 +36,12 @@ public sealed class ServiceSupervision
     /// </summary>
     public const string UntrackedRoleKilledCode = "service.untracked_role_killed";
 
+    /// <summary>
+    /// Supervisor log: <c>services reset</c> cleared a role's restart budget, so a role left
+    /// down restarts without restarting the stack (#480).
+    /// </summary>
+    public const string RoleResetCode = "service.role_reset";
+
     private readonly Dictionary<string, ServiceRoleRestarts> ledgers = new(
         StringComparer.OrdinalIgnoreCase
     );
@@ -59,6 +65,12 @@ public sealed class ServiceSupervision
 
     /// <summary>True once <c>services stop</c> has its stop file down.</summary>
     public Func<bool> StopRequested { get; init; }
+
+    /// <summary>
+    /// The roles <c>services reset</c> asked for since the last pass (<see cref="ServiceResetFile"/>,
+    /// #480). Each gets its restart budget back. Null asks for none.
+    /// </summary>
+    public Func<IReadOnlyList<string>> TakeResets { get; init; }
 
     /// <summary>
     /// Starts a role again. The request's callback sees the record as soon as the process has a
@@ -262,6 +274,7 @@ public sealed class ServiceSupervision
             Health
         );
         bool changed = TickObs(now);
+        changed |= ApplyResets(now);
         foreach (string role in supervised)
         {
             ServiceProcessRecord record = Find(snapshot, role);
@@ -294,12 +307,13 @@ public sealed class ServiceSupervision
                 case ServiceRestartAction.Exhausted:
                     changed = true;
                     Logger.LogError(
-                        "{Role} used its restart budget ({Budget} restarts in {Window}) and stays down [{Code}]. {Cause} Fix the cause, then run `heroesreplay services stop` and `heroesreplay services start --supervise`.",
+                        "{Role} used its restart budget ({Budget} restarts in {Window}) and stays down [{Code}]. {Cause} Fix the cause, then run `heroesreplay services reset {Role}`; the other roles keep running.",
                         role,
                         Settings.Limit,
                         ServiceHealthClassifier.Describe(Settings.Window),
                         ServiceHealthCodes.RestartBudgetExhausted,
-                        health.Cause
+                        health.Cause,
+                        role
                     );
                     if (string.Equals(role, "spectate", StringComparison.OrdinalIgnoreCase))
                     {
@@ -326,6 +340,58 @@ public sealed class ServiceSupervision
         Save(changed);
         MachineHealth?.Tick(now);
         return true;
+    }
+
+    /// <summary>
+    /// Gives each role <c>services reset</c> asked for its restart budget back (#480). A role left
+    /// down is then restarted by this same pass's policy, after the first backoff; a copy of it
+    /// started by hand is taken over when it heartbeats and replaced when it does not, like any
+    /// untracked process. True when a ledger changed.
+    /// </summary>
+    private bool ApplyResets(DateTimeOffset now)
+    {
+        IReadOnlyList<string> roles;
+        try
+        {
+            roles = TakeResets?.Invoke() ?? Array.Empty<string>();
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning("Could not read the services reset requests: {Message}", e.Message);
+            return false;
+        }
+
+        bool changed = false;
+        foreach (string role in roles)
+        {
+            if (!ledgers.TryGetValue(role, out ServiceRoleRestarts ledger))
+            {
+                Logger.LogWarning(
+                    "`services reset {Role}` asked for a role this supervisor does not supervise ({Supervised}). Nothing was reset.",
+                    role,
+                    string.Join(", ", supervised)
+                );
+                continue;
+            }
+
+            bool exhausted = ledger.Exhausted;
+            int used = ledger.Recent?.Count ?? 0;
+            ServiceRestartPolicy.Reset(ledger, now);
+            changed = true;
+            Logger.LogWarning(
+                "`services reset {Role}`: its restart budget is back to {Budget} restarts in {Window} ({Used} used{Exhausted}). A down {Role} restarts after {Delay}; a running one carries on. The other roles were not touched [{Code}].",
+                role,
+                Settings.Limit,
+                ServiceHealthClassifier.Describe(Settings.Window),
+                used,
+                exhausted ? ", it was left down" : string.Empty,
+                role,
+                ServiceHealthClassifier.Describe(Settings.BackoffFor(0)),
+                RoleResetCode
+            );
+        }
+
+        return changed;
     }
 
     /// <summary>One OBS watchdog pass. True when its state or restarts changed, so the file is saved.</summary>
