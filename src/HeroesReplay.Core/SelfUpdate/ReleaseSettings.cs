@@ -23,4 +23,19 @@ public class ReleaseSettings
     /// (<see cref="ReleaseHealth"/>) before it restores <c>.previous</c>.
     /// </summary>
     public TimeSpan HealthWindow { get; set; } = ReleaseHealth.DefaultWindow;
+
+    public const int DefaultRetainedVersions = 1;
+    public const int DefaultRetainedLogs = 10;
+
+    /// <summary>
+    /// How many releases older than the installed one the housekeeping pass keeps in
+    /// <c>%LOCALAPPDATA%\HeroesReplay\updates</c>, besides the one <c>app.previous</c> holds (#488).
+    /// </summary>
+    public int RetainedVersions { get; set; } = DefaultRetainedVersions;
+
+    /// <summary>
+    /// How many earlier updates' logs (<c>apply-release.&lt;time&gt;.log</c>,
+    /// <c>apply-release-&lt;tag&gt;.log</c>) the housekeeping pass keeps (#488).
+    /// </summary>
+    public int RetainedLogs { get; set; } = DefaultRetainedLogs;
 }

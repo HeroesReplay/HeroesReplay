@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.SelfUpdate;
 using Microsoft.Extensions.Logging;
 
 namespace HeroesReplay.Core.Retention;
@@ -18,7 +19,12 @@ public static class Housekeeping
     public const string ReportTrigger = "storage report --apply";
 
     public static IReadOnlyList<IPruner> Pruners(AppSettings settings) =>
-        [MediaRetention.Pruner(settings), DryRunRecordings.Pruner(settings)];
+        [
+            MediaRetention.Pruner(settings),
+            DryRunRecordings.Pruner(settings),
+            ReleaseCache.Pruner(settings, StateDirectory(settings)),
+            ReleaseCache.LogsPruner(settings, StateDirectory(settings)),
+        ];
 
     public static HousekeepingPass CreatePass(AppSettings settings, ILogger logger) =>
         new(settings?.Housekeeping, Pruners(settings), logger);

@@ -354,6 +354,28 @@ function Get-LogBlocker([string]$Path) {
     }
 }
 
+function Move-PreviousUpdateLog {
+    # One update per file (#488): the last update's apply-release.log becomes
+    # apply-release.<its last write, UTC>.log, so the log never grows without end. The housekeeping
+    # pass keeps the newest Release:RetainedLogs of those. A log another window holds stays (#281).
+    if (-not (Test-Path -LiteralPath $mainLog) -or (Get-LogBlocker $mainLog)) {
+        return
+    }
+
+    try {
+        $written = (Get-Item -LiteralPath $mainLog).LastWriteTimeUtc.ToString('yyyyMMdd-HHmmss')
+        $archive = Join-Path $logDir "apply-release.$written.log"
+        if (Test-Path -LiteralPath $archive) {
+            $archive = Join-Path $logDir ("apply-release.$written-" + [System.IO.Path]::GetRandomFileName().Replace('.', '') + '.log')
+        }
+
+        Move-Item -LiteralPath $mainLog -Destination $archive -ErrorAction Stop
+    }
+    catch {
+        Write-Host "The last update's apply-release.log was not moved aside, so this update appends to it: $($_.Exception.Message)"
+    }
+}
+
 function Start-UpdateLog {
     # apply-release.log, or apply-release-<tag>.log in the same folder when another window still
     # holds it (a hand run with -NoExit kept it for a day, #281). The fallback is the first console line.
@@ -364,6 +386,8 @@ function Start-UpdateLog {
         Write-Host "Could not start the update log: $($_.Exception.Message)"
         return
     }
+
+    Move-PreviousUpdateLog
 
     $tag = $Version
     if (-not $tag) {
