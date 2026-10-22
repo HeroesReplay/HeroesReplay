@@ -46,10 +46,10 @@ Production is `HEROES_REPLAY_ENV=prod` (`DESKTOP-8SJEK72`). The environment deci
 
 ### Why these numbers (#507)
 
-The pace follows what the stream plays, about 60 games a day, and stays inside what YouTube gives the project:
+The pace follows what the stream can play, and stays inside what YouTube gives the project. One stream plays one game at a time. A recording, from the loading screen to the MVP screen, averages 20.6 minutes (median 19.8, 90% under 26.6, on the channel's 200 newest videos on 2026-10-22). So a stream that runs 24/7 plays at most about 70 games a day with no gap between replays, and about 55 to 60 with the report and the next load between them. Nothing past that can be uploaded, whatever the quota allows:
 
-- **Uploads.** The Video Uploads bucket is 100 calls a day and 5 are held back, so `MaxInsertsPerQuotaDay` is 95: the app's cap no longer stops uploads before YouTube does. 60 games a day use about 60.
-- **Publication.** One video every 20 minutes is at most 72 a day, 70 of them not requests. The map (2 h), rank (1 h) and hero (4 h) cooldowns are short enough that the channel's mix of 12 maps and 6 tiers does not push a day of games back. A video still never goes further ahead than `MaxPublishAhead` (3 days). The recording cap stops recording once the window is full, so the schedule cannot grow into a backlog of old games.
+- **Uploads.** The Video Uploads bucket is 100 calls a day and 5 are held back, so `MaxInsertsPerQuotaDay` is 95: the app's cap no longer stops uploads before YouTube does. The stream fills about 55 to 60 of them. It cannot fill the bucket.
+- **Publication.** One video every 20 minutes is at most 72 a day, 70 of them not requests: just above the 70 the stream could play with no gaps, so publication cannot hold the stream back. The map (2 h), rank (1 h) and hero (4 h) cooldowns are short enough that the channel's mix of 12 maps and 6 tiers does not push a day of games back. A video still never goes further ahead than `MaxPublishAhead` (3 days). The recording cap stops recording once the window is full, so the schedule cannot grow into a backlog of old games.
 - **Playlists.** Without the `Storm League` mode playlist (every video is Storm League, so it repeated the channel's uploads), a video costs about 130 units of playlist inserts (map and rank, plus a draft note on 43% and a focus hero on 17% of videos). 72 a day is about 9,400 units, inside `LibraryUnitsPerDay` 9,500. The pool's reserve is 500.
 - **Disk.** `MaxWaitingRecordings` 6 lets about 15 GB wait for an upload. When uploads stall, new ordinary recordings stop after a few games instead of piling up a day of uploads.
 
