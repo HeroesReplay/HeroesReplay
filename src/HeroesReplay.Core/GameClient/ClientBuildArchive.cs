@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
+using HeroesReplay.Core.Retention;
 
 namespace HeroesReplay.Core.GameClient;
 
@@ -82,6 +86,98 @@ public static class ClientBuildArchive
         string floor = ReplayClientRoute.Normalize(minimumVersion);
         return GameVersionOrder.SamePatch(candidate, floor)
             || GameVersionOrder.IsAtLeast(candidate, floor);
+    }
+
+    public const string PrunerName = "client-builds";
+
+    /// <summary>The retained client builds pruner for the housekeeping pass (#493).</summary>
+    public static IPruner Pruner(AppSettings settings) =>
+        new Pruner(
+            PrunerName,
+            "Retained client builds (Data\\Clients\\Base*) below the Spectate:MinimumGameVersion patch line, after Retention:ClientBuildKeepDays. Builds on the line stay: a viewer can request any of them.",
+            now =>
+                Plan(
+                    ResolveDirectory(
+                        settings?.Location?.RetainedClientDirectory,
+                        settings?.Location?.DataDirectory
+                    ),
+                    settings?.Spectate?.MinimumGameVersion,
+                    InstalledClientCatalog.FileVersions(settings?.Location?.GameInstallDirectory),
+                    (settings?.Retention ?? new RetentionSettings()).EffectiveClientBuildKeepDays,
+                    now
+                )
+        );
+
+    /// <summary>
+    /// The retained builds nothing can play any more (#493): <see cref="Preserve"/> copies every
+    /// build on the patch line and nothing removed one. A copy below the line goes once its
+    /// folder is <paramref name="keepDays"/> old; one on or above the line, one that is installed
+    /// (<paramref name="installed"/>), and one whose version does not read stay. Writes nothing.
+    /// </summary>
+    public static PrunePlan Plan(
+        string archiveDirectory,
+        string minimumVersion,
+        IReadOnlyList<string> installed,
+        int keepDays,
+        DateTimeOffset utcNow,
+        Func<string, string> readVersion = null
+    )
+    {
+        readVersion ??= FileVersion;
+        var plan = new PrunePlan(PrunerName);
+        if (
+            string.IsNullOrWhiteSpace(archiveDirectory)
+            || string.IsNullOrWhiteSpace(minimumVersion)
+            || !Directory.Exists(archiveDirectory)
+        )
+        {
+            return plan;
+        }
+
+        DateTime before = utcNow.AddDays(-Math.Max(1, keepDays)).UtcDateTime;
+        foreach (
+            DirectoryInfo folder in new DirectoryInfo(archiveDirectory).GetDirectories("Base*")
+        )
+        {
+            string version = readVersion(
+                Path.Combine(folder.FullName, InstalledClientCatalog.ExeFileName)
+            );
+            if (
+                string.IsNullOrEmpty(version)
+                || ShouldKeep(version, minimumVersion)
+                || folder.LastWriteTimeUtc >= before
+                || (installed ?? Array.Empty<string>()).Any(live =>
+                    ReplayClientRoute.SameBuild(live, version)
+                )
+            )
+            {
+                continue;
+            }
+
+            plan.Add(
+                PruneItem.ForDirectory(
+                    folder,
+                    $"retained build {version} is below the Spectate:MinimumGameVersion patch line ({minimumVersion}): no replay of it can be played or requested"
+                )
+            );
+        }
+
+        return plan;
+    }
+
+    private static string FileVersion(string exe)
+    {
+        try
+        {
+            return File.Exists(exe)
+                ? ReplayClientRoute.Normalize(FileVersionInfo.GetVersionInfo(exe).FileVersion)
+                : null;
+        }
+        catch (Exception e)
+            when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     public static IReadOnlyList<ClientBuildKeepItem> Preserve(

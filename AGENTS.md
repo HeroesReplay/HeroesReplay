@@ -143,6 +143,11 @@ Role logs do not need Aspire. Each role that `services start` launches writes `%
   - **Ledgers are trimmed by their owners, not the supervisor**, because neither file has a cross-process lock:
     - the twitch role drops settled predictions older than `LedgerKeepDays` (30) from `prediction-ledger.json` when it loads it;
     - the youtube role drops slots more than `LedgerKeepDays` past from `publication-reservations*.txt` at its retention sweep, under the reservation lock. Its `terminal|` marks stay.
+  - **Caches (#493):**
+    - **`replay-cache`** removes, after `Retention:UnplayedReplayKeepDays` (14), cached replays that will never play: quarantined ones, ones below the floor, and ordinary replays never played. Ordinary replays play newest first. A waiting request or a leased replay stays. It also removes a request's `.request.json` once its replay was played or is gone, after `ReplayKeepDays`.
+    - **`client-builds`** removes `Data\Clients\Base*` copies below the `Spectate:MinimumGameVersion` patch line after `ClientBuildKeepDays` (7), never an installed build. Every build on the line stays, because a viewer can request any of them.
+    - **`heroes-data`** removes older builds' heroes-data2 files and the downloaded zips.
+    - Played replays stay `ReplayKeepDays` (30). The Storm League map pool reads the newest 300 cached Storm League replays.
   - **Kept on purpose:**
     - `spectated-ids.txt`, `quarantine-ids.txt`, `youtube-replay-ids.txt` and `redemption-*.txt` are dedupe keys with no timestamps. They grow by about 10 bytes per replay, so about 200 KB a year at 55 replays a day.
     - The zero-byte `Data\*.lock` files are named cross-process locks.
@@ -236,7 +241,7 @@ Both are Windows 11. Use the **same directory tree** so spectate, downloads, and
 | `C:\heroesreplay\Data\Standard` | Heroes Profile downloaded `.StormReplay` files |
 | `C:\heroesreplay\Data\Requests` | Twitch-requested downloads |
 | `C:\heroesreplay\Data\Contexts` | Per-replay context + OBS recordings (`RecFilePath`) |
-| `C:\heroesreplay\Data\HeroesData` | heroes-data2 JSON cache (Heroes.Element). Downloaded from HeroesToolChest/heroes-data2 when that cache is missing |
+| `C:\heroesreplay\Data\HeroesData` | heroes-data2 JSON cache (Heroes.Element). Downloaded from HeroesToolChest/heroes-data2 when that cache is missing, and once per `HeroesToolChest:RefreshInterval` (1 day) a role that loads game data downloads a newer live build when one is released (#493); housekeeping keeps the newest `RetainedVersions` (2) builds |
 | `C:\heroesreplay\secrets` | Local backup of gitignored `appsettings.secrets.json` |
 | `C:\heroesreplay\tools\ffmpeg` | `ffmpeg.exe` and `ffprobe.exe` for clips, from `heroesreplay deps install` (`Dependencies:Directory`). `apply-release.ps1` runs it after every install. Never set up by hand |
 | `%USERPROFILE%\Documents\Heroes of the Storm\Interfaces` | AhliObs (`client configure`) |

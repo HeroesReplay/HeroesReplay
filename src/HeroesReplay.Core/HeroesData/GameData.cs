@@ -10,6 +10,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Heroes.Element;
 using Heroes.LocaleText;
@@ -444,22 +445,138 @@ public class GameData : IGameData
         );
     }
 
+    /// <summary>The file whose write time is the last check for a newer heroes-data2 release (#493).</summary>
+    public const string RefreshStampFileName = "refresh-checked.txt";
+
+    /// <summary>
+    /// Downloads heroes-data2 when the folder has none. With data present, at most once per
+    /// <c>HeroesToolChest:RefreshInterval</c> (off when zero) it asks for the latest release and
+    /// downloads it when it is a newer live build than the local data (#493): the cache was never
+    /// refreshed, so the stream PC still read 2.57.0.98304 data for 98348 replays, and a patch
+    /// that adds a hero would leave it out. One process at a time downloads, and a failed refresh
+    /// keeps the data there is.
+    /// </summary>
     private async Task DownloadIfEmptyAsync()
     {
-        logger.LogInformation("Downloading heroes-data2 if needed.");
-
-        if (HasHeroesData2(settings.HeroesDataPath))
+        string path = settings.HeroesDataPath;
+        bool present = HasHeroesData2(path);
+        TimeSpan interval = settings.HeroesToolChest?.RefreshInterval ?? TimeSpan.Zero;
+        if (present && !RefreshDue(path, interval, DateTimeOffset.UtcNow))
         {
             logger.LogDebug("heroes-data2 is already present. No download needed.");
             return;
         }
 
-        logger.LogInformation(
-            "heroes-data2 is not in {Path}. Downloading the latest HeroesToolChest/heroes-data2 release.",
-            settings.HeroesDataPath
+        Directory.CreateDirectory(path);
+        using var gate = new Mutex(
+            false,
+            FileMutexName.ForFile(@"Local\HeroesReplay.HeroesData", path)
         );
-        Directory.CreateDirectory(settings.HeroesDataPath);
+        bool owned = false;
+        try
+        {
+            try
+            {
+                owned = gate.WaitOne(TimeSpan.FromMinutes(5));
+            }
+            catch (AbandonedMutexException)
+            {
+                owned = true;
+            }
 
+            if (!owned)
+            {
+                logger.LogWarning(
+                    "Another process is downloading heroes-data2. This one uses the data there is."
+                );
+                return;
+            }
+
+            if (!present)
+            {
+                logger.LogInformation(
+                    "heroes-data2 is not in {Path}. Downloading the latest HeroesToolChest/heroes-data2 release.",
+                    path
+                );
+                await DownloadLatestAsync(onlyNewerThan: null).ConfigureAwait(false);
+                return;
+            }
+
+            try
+            {
+                int local = BuildNumber(
+                    NewestDocument(path, "herodata_*.json", false) ?? string.Empty
+                );
+                await DownloadLatestAsync(local).ConfigureAwait(false);
+                File.WriteAllText(
+                    Path.Combine(path, RefreshStampFileName),
+                    DateTimeOffset.UtcNow.ToString("o", CultureInfo.InvariantCulture)
+                );
+            }
+            catch (Exception e)
+                when (e
+                        is HttpRequestException
+                            or IOException
+                            or InvalidOperationException
+                            or JsonException
+                            or TaskCanceledException
+                            or InvalidDataException
+                )
+            {
+                logger.LogWarning(
+                    e,
+                    "Could not check for a newer heroes-data2 release. The data in {Path} stays in use.",
+                    path
+                );
+            }
+        }
+        finally
+        {
+            if (owned)
+            {
+                gate.ReleaseMutex();
+            }
+        }
+    }
+
+    /// <summary>True when the last refresh check is older than <paramref name="interval"/>; never while it is zero.</summary>
+    internal static bool RefreshDue(string path, TimeSpan interval, DateTimeOffset utcNow)
+    {
+        if (interval <= TimeSpan.Zero)
+        {
+            return false;
+        }
+
+        var stamp = new FileInfo(Path.Combine(path, RefreshStampFileName));
+        return !stamp.Exists || utcNow - stamp.LastWriteTimeUtc >= interval;
+    }
+
+    /// <summary>
+    /// The build of a heroes-data2 release tag (<c>v2.57.0.98348</c> is 98348), or -1 for a PTR
+    /// build or a tag that is not one: only a live build replaces the local data.
+    /// </summary>
+    internal static int ReleaseBuild(string tag)
+    {
+        if (
+            string.IsNullOrWhiteSpace(tag)
+            || tag.Contains("ptr", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return -1;
+        }
+
+        string last = tag.Trim().Split('.')[^1];
+        return int.TryParse(last, NumberStyles.None, CultureInfo.InvariantCulture, out int build)
+            ? build
+            : -1;
+    }
+
+    /// <summary>
+    /// Downloads and extracts the latest release, or with <paramref name="onlyNewerThan"/> only a
+    /// live build newer than that one.
+    /// </summary>
+    private async Task DownloadLatestAsync(int? onlyNewerThan)
+    {
         using (var client = new HttpClient())
         {
             client.DefaultRequestHeaders.UserAgent.Add(
@@ -490,6 +607,31 @@ public class GameData : IGameData
                 string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 using (JsonDocument document = JsonDocument.Parse(json))
                 {
+                    if (onlyNewerThan is int local)
+                    {
+                        string tag =
+                            document.RootElement.TryGetProperty("tag_name", out JsonElement name)
+                            && name.ValueKind == JsonValueKind.String
+                                ? name.GetString()
+                                : null;
+                        int remote = ReleaseBuild(tag);
+                        if (remote <= local)
+                        {
+                            logger.LogDebug(
+                                "heroes-data2 {Tag} is not a newer live build than the local {Local}.",
+                                tag,
+                                local
+                            );
+                            return;
+                        }
+
+                        logger.LogInformation(
+                            "heroes-data2 {Tag} is newer than the local data ({Local}). Downloading it; the housekeeping pass removes the older build's files.",
+                            tag,
+                            local
+                        );
+                    }
+
                     if (!TrySelectArchive(document.RootElement, out HeroesDataArchive archive))
                     {
                         throw new InvalidOperationException(
