@@ -9,6 +9,9 @@ namespace HeroesReplay.Core.Shared;
 /// </summary>
 public static class DurableFile
 {
+    /// <summary>An unreadable file is moved to <c>&lt;file&gt;.corrupt-&lt;UTC ticks&gt;</c>.</summary>
+    public const string CorruptSuffix = ".corrupt-";
+
     public static void Replace(string path, string contents)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -93,7 +96,7 @@ public static class DurableFile
             return;
         }
 
-        string dest = path + ".corrupt-" + DateTime.UtcNow.Ticks;
+        string dest = path + CorruptSuffix + DateTime.UtcNow.Ticks;
         try
         {
             File.Move(path, dest, overwrite: false);

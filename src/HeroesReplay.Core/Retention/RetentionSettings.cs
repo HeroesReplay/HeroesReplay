@@ -38,4 +38,35 @@ public class RetentionSettings
 
     /// <summary>Played .StormReplay files older than this are removed. They are much smaller than videos.</summary>
     public int ReplayKeepDays { get; set; } = 30;
+
+    /// <summary>
+    /// An upload attempt folder in a terminal state (uploaded, simulated, disabled, never
+    /// recorded, or its recording gone) is removed once its manifest is this old (#492). One in
+    /// <c>UploadPending</c>, <c>Uploading</c> or <c>AmbiguousUpload</c> never is.
+    /// </summary>
+    public int AttemptKeepDays { get; set; } = 14;
+
+    /// <summary>A replay lease (<c>Data\leases</c>) is removed once this old (#492). Nothing reads one after its replay is taken.</summary>
+    public int LeaseKeepDays { get; set; } = 2;
+
+    /// <summary>
+    /// Settled predictions in <c>prediction-ledger.json</c> and past publication reservations
+    /// older than this are dropped by the process that owns each file, when it next loads or
+    /// sweeps it (#492). Open predictions and future slots always stay.
+    /// </summary>
+    public int LedgerKeepDays { get; set; } = 30;
+
+    /// <summary>
+    /// <c>DurableFile</c> moves an unreadable file aside as <c>&lt;file&gt;.corrupt-&lt;ticks&gt;</c>.
+    /// The newest <see cref="CorruptKeepCount"/> per file stay, each at most this many days (#492).
+    /// </summary>
+    public int CorruptKeepDays { get; set; } = 30;
+
+    public int CorruptKeepCount { get; set; } = 3;
+
+    public int EffectiveAttemptKeepDays => AttemptKeepDays > 0 ? AttemptKeepDays : 14;
+    public int EffectiveLeaseKeepDays => LeaseKeepDays > 0 ? LeaseKeepDays : 2;
+    public int EffectiveLedgerKeepDays => LedgerKeepDays > 0 ? LedgerKeepDays : 30;
+    public int EffectiveCorruptKeepDays => CorruptKeepDays > 0 ? CorruptKeepDays : 30;
+    public int EffectiveCorruptKeepCount => CorruptKeepCount > 0 ? CorruptKeepCount : 3;
 }
