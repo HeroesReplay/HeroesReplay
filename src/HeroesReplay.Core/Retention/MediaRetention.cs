@@ -232,13 +232,20 @@ public static class MediaRetention
                 && inserted
             )
             {
-                // The video is on YouTube. Its entry may wait for publishAt, but the mp4 is not needed.
+                // The video is on YouTube. Its entry may wait for publishAt, but the mp4 is not
+                // needed, and nor is the end capture (#491): it goes with the mp4, not the folder.
                 foreach (FileInfo video in dir.GetFiles("*.mp4"))
                 {
                     plan.Add(
                         PruneItem.ForFile(video, "uploaded recording: the video is on YouTube")
                     );
                     planned.Add(video.FullName);
+                }
+
+                foreach (FileInfo capture in dir.GetFiles("end*.png"))
+                {
+                    plan.Add(PruneItem.ForFile(capture, "end capture of an uploaded recording"));
+                    planned.Add(capture.FullName);
                 }
             }
 
