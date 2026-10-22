@@ -52,10 +52,19 @@ public class ReplayMediaPolicySettings
     /// A replay that is not a viewer request is recorded only while its recording would still be
     /// uploaded before the replay expires: the publication window (<see cref="MaxPublishAhead"/>)
     /// has a free slot, or the recordings ahead of it drain at the pacing rules' pace with a day
-    /// to spare. The waiting recordings must also fit one day of upload calls
-    /// (<see cref="RecordingCap"/>, #250, #370). False records whatever the mode selects.
+    /// to spare. The waiting recordings must also stay under <see cref="MaxWaitingRecordings"/>
+    /// (<see cref="RecordingCap"/>, #250, #370, #507). False records whatever the mode selects.
     /// </summary>
     public bool CapRecordingToPublication { get; set; } = true;
+
+    /// <summary>
+    /// Recordings that may wait on disk for their <c>videos.insert</c> before the recording cap
+    /// stops recording a replay that is not a viewer request (#507). Zero or less means one day of
+    /// upload calls. A larger value is held to one day of upload calls too. Production keeps it to
+    /// a few hours of games, so a stalled uploader stops new recordings within hours instead of
+    /// letting a day of uploads (about 220 GB at 95 a day) pile up.
+    /// </summary>
+    public int MaxWaitingRecordings { get; set; }
 
     /// <summary>When true, <see cref="MinimumGameVersion"/> is required and off-patch replays are rejected.</summary>
     public bool RequireCurrentPatch { get; set; }
@@ -88,7 +97,7 @@ public class ReplayMediaPolicySettings
     /// <summary>
     /// Focus-hero recordings (#433) that may wait for upload past a full upload backlog: a focus
     /// replay is recorded while fewer than this many focus recordings wait, so focus videos keep
-    /// coming when ordinary recordings fill a day of upload calls. The uploader sends them right
+    /// coming when ordinary recordings fill <see cref="MaxWaitingRecordings"/>. The uploader sends them right
     /// after the requests. Zero turns the lane off.
     /// </summary>
     public int FocusRecordingLane { get; set; } = 8;
