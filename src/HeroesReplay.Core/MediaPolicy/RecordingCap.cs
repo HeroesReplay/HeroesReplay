@@ -52,8 +52,8 @@ public sealed class RecordingCapInput
 /// <param name="Pending">Recordings that wait for their upload and need a slot.</param>
 /// <param name="Scheduled">Uploads (or sends) that hold a slot after now.</param>
 /// <param name="Capacity">
-/// The slots the publication window holds, or a day of upload calls for the upload backlog and a
-/// private listing. -1 when nothing caps the replay.
+/// The slots the publication window holds, the waiting limit (<see cref="RecordingCap.WaitingLimit"/>) for the upload
+/// backlog, or a day of upload calls for a private listing. -1 when nothing caps the replay.
 /// </param>
 /// <param name="Wait">
 /// How long this replay's recording would wait on disk for its slot, when the window is full.
@@ -85,11 +85,11 @@ public readonly record struct RecordingCapDecision(
             {
                 RecordingCap.UploadBacklog => string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{counts}; {Pending} waiting is a day of upload calls ({Capacity})."
+                    $"{counts}; {Pending} waiting reaches the limit of {Capacity} (ReplayMedia:MaxWaitingRecordings, at most a day of upload calls)."
                 ),
                 RecordingCap.FocusLane => string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{counts}, a day of upload calls or more; focus recordings have their own lane of {Capacity}, and fewer wait."
+                    $"{counts}, the waiting limit or more; focus recordings have their own lane of {Capacity}, and fewer wait."
                 ),
                 RecordingCap.Room when Capacity >= 0 => string.Create(
                     CultureInfo.InvariantCulture,
@@ -127,10 +127,10 @@ public readonly record struct RecordingCapDecision(
 /// recorded while that wait still leaves <see cref="SendSlack"/> before its candidate expiry
 /// (for an ordinary replay, its game time plus
 /// <see cref="ReplayMediaPolicySettings.OrdinaryCandidateMaxAge"/>, after which the uploader
-/// deletes it as stale), and while the waiting recordings stay under one day of upload calls.
+/// deletes it as stale), and while the waiting recordings stay under the waiting limit (#507).
 /// Uploads that only wait for their publish time need no disk and no upload; they count only
 /// because they fill the window. A viewer request is always recorded. A focus-hero replay
-/// (#433) is recorded while the waiting recordings stay under one day of upload calls, and past
+/// (#433) is recorded while the waiting recordings stay under the waiting limit, and past
 /// that while fewer than <see cref="ReplayMediaPolicySettings.FocusRecordingLane"/> (8) focus
 /// recordings wait: the uploader sends it right after the requests, so it never waits behind
 /// the ordinary backlog.
@@ -180,7 +180,8 @@ public static class RecordingCap
         }
 
         int uploads = Math.Max(0, input.UploadsPerDay);
-        if (pending >= uploads)
+        int waiting = WaitingLimit(settings, uploads);
+        if (pending >= waiting)
         {
             // Focus videos keep their own lane (#433): the ordinary backlog never starves them.
             int lane = Math.Max(0, settings.FocusRecordingLane);
@@ -192,7 +193,7 @@ public static class RecordingCap
                 return new RecordingCapDecision(true, FocusLane, pending, ahead, lane);
             }
 
-            return new RecordingCapDecision(false, UploadBacklog, pending, ahead, uploads);
+            return new RecordingCapDecision(false, UploadBacklog, pending, ahead, waiting);
         }
 
         // A focus-hero replay (#433) is sent before every waiting recording but a request's, so
@@ -250,6 +251,18 @@ public static class RecordingCap
             wait,
             expires
         );
+    }
+
+    /// <summary>
+    /// How many recordings may wait for their insert before an ordinary replay is not recorded:
+    /// <see cref="ReplayMediaPolicySettings.MaxWaitingRecordings"/>, or a day of upload calls when
+    /// it is not set, and never more than a day of upload calls (#507).
+    /// </summary>
+    public static int WaitingLimit(ReplayMediaPolicySettings settings, int uploadsPerDay)
+    {
+        int day = Math.Max(0, uploadsPerDay);
+        int limit = settings?.MaxWaitingRecordings ?? 0;
+        return limit > 0 ? Math.Min(limit, day) : day;
     }
 
     /// <summary>

@@ -22,6 +22,9 @@ public class RecordingCapTests
         // The upload calls still cap it: 20 a day over 3 days.
         Assert.Equal(60, RecordingCap.PublicationCapacity(StreamPcSettings(), 20));
 
+        // The stream PC since #507: 72 a day less 2 is 70, under 504/7 = 72 a week, over 3 days.
+        Assert.Equal(210, RecordingCap.PublicationCapacity(SupplyPaceSettings(), 95));
+
         ReplayMediaPolicySettings fortnight = Production();
         fortnight.MaxPublishAhead = TimeSpan.FromDays(14);
         Assert.Equal(56, RecordingCap.PublicationCapacity(fortnight, 95));
@@ -229,6 +232,67 @@ public class RecordingCapTests
         Assert.Equal(20, decision.Capacity);
     }
 
+    /// <summary>
+    /// #507: with 95 inserts a day, a day of upload calls is about 220 GB on disk. Production lets
+    /// 6 recordings wait instead, so when uploads stall new recordings stop within a few games,
+    /// although the publication window still has room.
+    /// </summary>
+    [Theory]
+    [InlineData(5, true, RecordingCap.Room)]
+    [InlineData(6, false, RecordingCap.UploadBacklog)]
+    public void WaitingLimit_StopsRecordingLongBeforeADayOfUploads(
+        int pending,
+        bool allow,
+        string reason
+    )
+    {
+        RecordingCapDecision decision = RecordingCap.Decide(
+            Paced(ReplayMediaPriority.Ordinary, pending),
+            SupplyPaceSettings()
+        );
+
+        Assert.Equal(allow, decision.Allow);
+        Assert.Equal(reason, decision.Reason);
+        if (!allow)
+        {
+            Assert.Equal(6, decision.Capacity);
+            Assert.Contains("limit of 6", decision.Summary, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void WaitingLimit_IsADayOfUploadCallsWhenUnsetAndNeverMore()
+    {
+        var settings = new ReplayMediaPolicySettings();
+        Assert.Equal(95, RecordingCap.WaitingLimit(settings, 95));
+
+        settings.MaxWaitingRecordings = 6;
+        Assert.Equal(6, RecordingCap.WaitingLimit(settings, 95));
+        Assert.Equal(4, RecordingCap.WaitingLimit(settings, 4));
+
+        settings.MaxWaitingRecordings = -1;
+        Assert.Equal(20, RecordingCap.WaitingLimit(settings, 20));
+    }
+
+    /// <summary>The waiting limit holds back ordinary replays only: a request and the focus lane still record.</summary>
+    [Fact]
+    public void WaitingLimit_StillRecordsARequestAndAFocusReplay()
+    {
+        RecordingCapDecision request = RecordingCap.Decide(
+            Paced(ReplayMediaPriority.Requested, 6),
+            SupplyPaceSettings()
+        );
+        RecordingCapDecision focus = RecordingCap.Decide(
+            Paced(ReplayMediaPriority.Focus, 6),
+            SupplyPaceSettings()
+        );
+
+        Assert.True(request.Allow);
+        Assert.Equal(RecordingCap.Requested, request.Reason);
+        Assert.True(focus.Allow);
+        Assert.Equal(RecordingCap.FocusLane, focus.Reason);
+    }
+
     /// <summary>A replay with no game time cannot be shown to be sent in time, so it waits for room.</summary>
     [Fact]
     public void FullWindow_WithoutAGameTimeIsNotRecorded()
@@ -265,6 +329,20 @@ public class RecordingCapTests
             UploadsPerDay = 80,
         };
 
+    /// <summary>A replay played 30 minutes ago on the stream PC since #507: 95 inserts a day, nothing scheduled.</summary>
+    private static RecordingCapInput Paced(ReplayMediaPriority priority, int pending) =>
+        new()
+        {
+            Priority = priority,
+            PendingUploads = pending,
+            ScheduledAhead = 0,
+            Live = true,
+            PublicListing = true,
+            UploadsPerDay = 95,
+            ExpiresAtUtc = Now - TimeSpan.FromMinutes(30) + TimeSpan.FromDays(3),
+            Now = Now,
+        };
+
     /// <summary>An ordinary replay on the stream PC: 20 inserts a day, expiring 3 days after its game.</summary>
     private static RecordingCapInput StreamPc(int pending, int ahead, TimeSpan playedAgo) =>
         new()
@@ -299,6 +377,24 @@ public class RecordingCapTests
         settings.MinimumPublicInterval = TimeSpan.FromHours(1);
         settings.RankCooldown = TimeSpan.FromHours(4);
         settings.MaxInsertsPerQuotaDay = 30;
+        return settings;
+    }
+
+    /// <summary>
+    /// <c>appsettings.prod.json</c> since #507: 72 a day, 20 minutes apart, 504 a week, 95 inserts,
+    /// 6 recordings waiting at most.
+    /// </summary>
+    private static ReplayMediaPolicySettings SupplyPaceSettings()
+    {
+        ReplayMediaPolicySettings settings = StreamPcSettings();
+        settings.MaxPublicPerDay = 72;
+        settings.MaxPublicPerWeek = 504;
+        settings.MinimumPublicInterval = TimeSpan.FromMinutes(20);
+        settings.MapCooldown = TimeSpan.FromHours(2);
+        settings.RankCooldown = TimeSpan.FromHours(1);
+        settings.FeaturedHeroCooldown = TimeSpan.FromHours(4);
+        settings.MaxInsertsPerQuotaDay = 95;
+        settings.MaxWaitingRecordings = 6;
         return settings;
     }
 

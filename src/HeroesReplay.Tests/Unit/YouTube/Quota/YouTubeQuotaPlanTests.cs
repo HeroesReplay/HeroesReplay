@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using HeroesReplay.Core.MediaPolicy;
 using HeroesReplay.Core.YouTube;
+using HeroesReplay.Core.YouTube.Playlists;
 using HeroesReplay.Core.YouTube.Quota;
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.YouTube.Quota;
@@ -74,6 +76,65 @@ public class YouTubeQuotaPlanTests
         );
     }
 
+    /// <summary>
+    /// A ranked Storm League video: map, mode and rank, plus a draft note on 43% and a focus hero
+    /// on 17% of the channel's videos (#507). Without the mode playlist it is one insert less.
+    /// </summary>
+    [Fact]
+    public void PlaylistUnitsPerVideo_CountsTheGroupsThatAreOn()
+    {
+        var groups = new YouTubePlaylistSettings();
+        Assert.Equal(180, YouTubeQuotaPlan.PlaylistUnitsPerVideo(groups));
+
+        groups.Mode = false;
+        Assert.Equal(130, YouTubeQuotaPlan.PlaylistUnitsPerVideo(groups));
+
+        groups.MapMode = true;
+        Assert.Equal(180, YouTubeQuotaPlan.PlaylistUnitsPerVideo(groups));
+
+        Assert.Equal(
+            0,
+            YouTubeQuotaPlan.PlaylistUnitsPerVideo(
+                new YouTubePlaylistSettings
+                {
+                    Map = false,
+                    Mode = false,
+                    Rank = false,
+                    Draft = false,
+                    ViewerReview = false,
+                    HeroFocus = false,
+                }
+            )
+        );
+    }
+
+    /// <summary>
+    /// The production overlay (#507): 72 public videos a day at 130 units fit the 9,500 the
+    /// library pass may spend, and 95 inserts fit the upload bucket.
+    /// </summary>
+    [Fact]
+    public void Warnings_TheReleasedProductionSettingsFit()
+    {
+        (YouTubeSettings youtube, ReplayMediaPolicySettings media) = Released();
+
+        Assert.Empty(YouTubeQuotaPlan.Warnings(youtube, media));
+        Assert.Equal(95, media.MaxInsertsPerQuotaDay);
+        Assert.Equal(9500, youtube.LibraryUnitsPerDay);
+    }
+
+    /// <summary>With the mode playlist back on, 72 videos a day at 180 units outgrow the pool.</summary>
+    [Fact]
+    public void Warnings_TheModePlaylistAtProductionPaceFallsBehind()
+    {
+        (YouTubeSettings youtube, ReplayMediaPolicySettings media) = Released();
+        youtube.Playlists.Mode = true;
+
+        Assert.Contains(
+            YouTubeQuotaPlan.Warnings(youtube, media),
+            w => w.Contains("Playlists fall behind", StringComparison.Ordinal)
+        );
+    }
+
     [Fact]
     public void Warnings_RequestRoomTakesTheWholeDay()
     {
@@ -85,6 +146,20 @@ public class YouTubeQuotaPlanTests
         Assert.Contains(
             warnings,
             w => w.Contains("Only viewer requests", StringComparison.Ordinal)
+        );
+    }
+
+    /// <summary>The settings a release packages: appsettings.json and the prod overlay.</summary>
+    private static (YouTubeSettings YouTube, ReplayMediaPolicySettings Media) Released()
+    {
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json")
+            .AddJsonFile("appsettings.prod.json")
+            .Build();
+        return (
+            configuration.GetSection("YouTube").Get<YouTubeSettings>(),
+            configuration.GetSection("ReplayMedia").Get<ReplayMediaPolicySettings>()
         );
     }
 
