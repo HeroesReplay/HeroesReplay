@@ -483,7 +483,99 @@ public class PublicationPlanTests
         Assert.Equal(Now.AddHours(8), focusHero.PublishAtUtc);
     }
 
-    /// <summary><c>appsettings.prod.json</c> since 2026-10-17 (the rank cooldown was 4 h from 2026-10-13).</summary>
+    /// <summary>
+    /// #507: the stream plays about 60 games a day. A day of them, one every 24 minutes over the
+    /// 12 Storm League maps and 6 tiers, publishes as each one is uploaded at the production pace
+    /// since then. At the pace before it (24 a day, an hour apart) the same day's last game would
+    /// go public about two days after its upload, and the queue behind it kept growing.
+    /// </summary>
+    [Fact]
+    public void SupplyPace_PublishesADayOfGamesAsTheyAreUploaded()
+    {
+        Assert.Equal(TimeSpan.Zero, LongestWait(SupplyPaceSettings()));
+        Assert.True(LongestWait(StreamPcSettings()) > TimeSpan.FromDays(1.5));
+    }
+
+    /// <summary>The longest time from upload to publish over 60 games played 24 minutes apart.</summary>
+    private static TimeSpan LongestWait(ReplayMediaPolicySettings settings)
+    {
+        string[] maps =
+        {
+            "Alterac Pass",
+            "Battlefield of Eternity",
+            "Braxis Holdout",
+            "Cursed Hollow",
+            "Dragon Shire",
+            "Garden of Terror",
+            "Haunted Mines",
+            "Infernal Shrines",
+            "Sky Temple",
+            "Tomb of the Spider Queen",
+            "Towers of Doom",
+            "Volskaya Foundry",
+        };
+        string[] tiers = { "Bronze 1", "Silver 2", "Gold 3", "Platinum 4", "Diamond 5", "Master" };
+        var slots = new List<PublicationSample>();
+        TimeSpan longest = TimeSpan.Zero;
+        for (int game = 0; game < 60; game++)
+        {
+            DateTimeOffset uploaded = Now + TimeSpan.FromMinutes(24 * game);
+            string map = maps[game % maps.Length];
+            string rank = tiers[game % tiers.Length];
+            PublicationDecision decision = PublicationSchedule.Plan(
+                settings,
+                new PublicationSendFacts
+                {
+                    Criteria = ReplayMediaPriority.Ordinary,
+                    RecordedAtUtc = uploaded,
+                },
+                true,
+                0,
+                uploaded,
+                slots,
+                map,
+                rank,
+                null,
+                null
+            );
+            Assert.True(decision.Allow, $"game {game}: {decision.Reason}");
+            DateTimeOffset at = decision.PublishAtUtc.GetValueOrDefault();
+            slots.Add(
+                new PublicationSample
+                {
+                    At = at,
+                    Map = map,
+                    Rank = rank,
+                }
+            );
+            if (at - uploaded > longest)
+            {
+                longest = at - uploaded;
+            }
+        }
+
+        return longest;
+    }
+
+    /// <summary>
+    /// <c>appsettings.prod.json</c> since #507: 72 a day, 20 minutes apart, 2 h map, 1 h rank and
+    /// 4 h hero cooldowns, 95 inserts.
+    /// </summary>
+    private static ReplayMediaPolicySettings SupplyPaceSettings()
+    {
+        ReplayMediaPolicySettings settings = StreamPcSettings();
+        settings.MaxPublicPerDay = 72;
+        settings.MaxPublicPerWeek = 504;
+        settings.MinimumPublicInterval = TimeSpan.FromMinutes(20);
+        settings.MapCooldown = TimeSpan.FromHours(2);
+        settings.RankCooldown = TimeSpan.FromHours(1);
+        settings.FeaturedHeroCooldown = TimeSpan.FromHours(4);
+        settings.MaxInsertsPerQuotaDay = 95;
+        settings.MaxWaitingRecordings = 6;
+        return settings;
+    }
+
+    /// <summary><c>appsettings.prod.json</c> from 2026-10-17 to #507 (the rank cooldown was 4 h from 2026-10-13).</summary>
     private static ReplayMediaPolicySettings StreamPcSettings() =>
         new()
         {

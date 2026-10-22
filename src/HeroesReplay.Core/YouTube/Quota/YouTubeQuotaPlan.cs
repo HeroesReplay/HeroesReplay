@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using HeroesReplay.Core.MediaPolicy;
+using HeroesReplay.Core.YouTube.Playlists;
 using HeroesReplay.Core.YouTube.Publication;
 
 namespace HeroesReplay.Core.YouTube.Quota;
@@ -12,11 +13,31 @@ namespace HeroesReplay.Core.YouTube.Quota;
 /// </summary>
 public static class YouTubeQuotaPlan
 {
+    /// <summary>Videos with a draft note among the channel's 200 newest on 2026-10-22 (#507).</summary>
+    private const double DraftShare = 0.43;
+
+    /// <summary>Focus-hero videos among the channel's 200 newest on 2026-10-22 (#507).</summary>
+    private const double FocusShare = 0.17;
+
     /// <summary>
-    /// Playlist inserts a ranked Storm League video gets with the default groups (map, mode,
-    /// rank, patch), plus about one draft note. 50 units each.
+    /// The playlist units a public ranked Storm League video costs on average with these groups:
+    /// one <c>playlistItems.insert</c> (50 units) for each of map, mode, rank and the combined
+    /// map-mode playlist that is on, plus the share of videos that have a draft note or are
+    /// focus-hero videos. Viewer reviews are too few to count, and a clip is never filed.
     /// </summary>
-    public const int PlaylistUnitsPerVideo = 5 * YouTubeQuotaUnits.PlaylistItemInsert;
+    public static int PlaylistUnitsPerVideo(YouTubePlaylistSettings groups)
+    {
+        groups ??= new YouTubePlaylistSettings();
+        double inserts =
+            (groups.Map ? 1 : 0)
+            + (groups.Mode ? 1 : 0)
+            + (groups.Rank ? 1 : 0)
+            + (groups.MapMode ? 1 : 0)
+            + (groups.Draft ? DraftShare : 0)
+            + (groups.HeroFocus ? FocusShare : 0)
+            + (groups.HeroFocusRole ? FocusShare : 0);
+        return (int)Math.Ceiling(inserts * YouTubeQuotaUnits.PlaylistItemInsert);
+    }
 
     public static string Describe(YouTubeSettings youtube, ReplayMediaPolicySettings media)
     {
@@ -24,7 +45,7 @@ public static class YouTubeQuotaPlan
         media ??= new ReplayMediaPolicySettings();
         return string.Format(
             CultureInfo.InvariantCulture,
-            "YouTube quota: uploads {0} videos.insert calls a day ({1} held back, {2} usable, MaxInsertsPerQuotaDay {3}); pool {4} units a day for list and playlist calls ({5} held back, library pass {6}). Uploads spend nothing from the pool. Publication: {7} a day, {8} a week, {9} reserved for requests, interval {10}, ahead {11}; about {12:0.#} non-request videos go public a day.",
+            "YouTube quota: uploads {0} videos.insert calls a day ({1} held back, {2} usable, MaxInsertsPerQuotaDay {3}); pool {4} units a day for list and playlist calls ({5} held back, library pass {6}, about {13} playlist units a public video). Uploads spend nothing from the pool. Publication: {7} a day, {8} a week, {9} reserved for requests, interval {10}, ahead {11}; about {12:0.#} non-request videos go public a day.",
             youtube.DailyUploadCalls,
             youtube.UploadCallReserve,
             YouTubeQuotaUnits.UsableUploadCalls(youtube),
@@ -37,7 +58,8 @@ public static class YouTubeQuotaPlan
             media.ReservedRequestSlotsPerDay,
             media.MinimumPublicInterval,
             media.MaxPublishAhead,
-            PublicationSchedule.OrdinaryPublishPerDay(media)
+            PublicationSchedule.OrdinaryPublishPerDay(media),
+            PlaylistUnitsPerVideo(youtube.Playlists)
         );
     }
 
@@ -79,7 +101,7 @@ public static class YouTubeQuotaPlan
         }
 
         int library = Math.Min(Math.Max(0, youtube.LibraryUnitsPerDay), Math.Max(0, pool));
-        int filing = media.MaxPublicPerDay * PlaylistUnitsPerVideo;
+        int filing = media.MaxPublicPerDay * PlaylistUnitsPerVideo(youtube.Playlists);
         if (library > 0 && filing > library)
         {
             warnings.Add(

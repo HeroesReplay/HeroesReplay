@@ -38,7 +38,8 @@ public static class ServiceHealthCodes
 
     /// <summary>
     /// A failed role the supervisor restarted as often as its budget allows. It stays down until
-    /// the stack is stopped and started again.
+    /// <c>services reset &lt;role&gt;</c> gives it the budget back (#480), or the stack is stopped
+    /// and started again.
     /// </summary>
     public const string RestartBudgetExhausted = "service.restart_budget_exhausted";
 

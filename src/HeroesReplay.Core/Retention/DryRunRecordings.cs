@@ -20,8 +20,25 @@ public static class DryRunRecordings
     /// <summary>The plan the uploader writes in a dry run instead of calling YouTube.</summary>
     public const string PlanFileName = "youtube-dry-run.json";
 
+    /// <summary>Its name in the housekeeping pass and <c>storage report</c> (#487).</summary>
+    public const string PrunerName = "dry-run-recordings";
+
+    public static IPruner Pruner(AppSettings settings) =>
+        new Pruner(
+            PrunerName,
+            "With YouTube:DryRun on, recordings the uploader planned and never sends, after Retention:DryRunRecordingMaxAge.",
+            now => Plan(settings, now)
+        );
+
     public static void SweepAndLog(AppSettings settings, ILogger logger)
     {
+        if (settings?.Housekeeping?.DryRun == true)
+        {
+            // Housekeeping:DryRun covers the in-role sweeps too: log, remove nothing (#487).
+            HousekeepingPass.LogDryRun(Plan(settings, DateTimeOffset.UtcNow), logger);
+            return;
+        }
+
         RetentionSweep sweep = Sweep(settings, DateTimeOffset.UtcNow);
         if (sweep.DeletedFiles > 0)
         {
@@ -47,9 +64,13 @@ public static class DryRunRecordings
         }
     }
 
-    public static RetentionSweep Sweep(AppSettings settings, DateTimeOffset utcNow)
+    public static RetentionSweep Sweep(AppSettings settings, DateTimeOffset utcNow) =>
+        Plan(settings, utcNow).DeleteAll();
+
+    /// <summary>What <see cref="Sweep"/> would remove now. Writes nothing (#487).</summary>
+    public static PrunePlan Plan(AppSettings settings, DateTimeOffset utcNow)
     {
-        var result = new RetentionSweep();
+        var plan = new PrunePlan(PrunerName);
         TimeSpan maxAge = settings?.Retention?.DryRunRecordingMaxAge ?? TimeSpan.Zero;
         if (
             settings?.Retention?.Enabled == false
@@ -58,7 +79,7 @@ public static class DryRunRecordings
             || string.IsNullOrWhiteSpace(settings.Location?.DataDirectory)
         )
         {
-            return result;
+            return plan;
         }
 
         string contexts = settings.ContextsDirectory;
@@ -68,49 +89,54 @@ public static class DryRunRecordings
         {
             if (!Directory.Exists(contexts))
             {
-                return result;
+                return plan;
             }
 
             directories = Directory.GetDirectories(contexts);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            result.Warnings.Add("Could not list " + contexts + ": " + e.Message);
-            return result;
+            plan.Warnings.Add("Could not list " + contexts + ": " + e.Message);
+            return plan;
         }
 
+        string reason =
+            "dry-run recording older than Retention:DryRunRecordingMaxAge ("
+            + maxAge.ToString("c", CultureInfo.InvariantCulture)
+            + ")";
         foreach (string directory in directories)
         {
             try
             {
-                DeletePlannedRecordings(new DirectoryInfo(directory), oldBefore, result);
+                PlanRecordings(new DirectoryInfo(directory), oldBefore, reason, plan);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                result.Warnings.Add(
+                plan.Warnings.Add(
                     "Could not sweep dry-run recordings in " + directory + ": " + e.Message
                 );
             }
         }
 
-        return result;
+        return plan;
     }
 
-    private static void DeletePlannedRecordings(
+    private static void PlanRecordings(
         DirectoryInfo context,
         DateTime oldBefore,
-        RetentionSweep result
+        string reason,
+        PrunePlan plan
     )
     {
-        var plan = new FileInfo(Path.Combine(context.FullName, PlanFileName));
-        if (!plan.Exists)
+        var receipt = new FileInfo(Path.Combine(context.FullName, PlanFileName));
+        if (!receipt.Exists)
         {
             return;
         }
 
         // The plan is written after the recording is finished. A newer mp4 in the same context
         // (the replay spectated again) has no plan of its own yet, so it stays.
-        DateTime planned = plan.LastWriteTimeUtc;
+        DateTime planned = receipt.LastWriteTimeUtc;
         foreach (FileInfo video in context.GetFiles("*.mp4", SearchOption.TopDirectoryOnly))
         {
             if (
@@ -122,7 +148,7 @@ public static class DryRunRecordings
                 continue;
             }
 
-            MediaRetention.DeleteFile(video.FullName, result, warning: null);
+            plan.Add(PruneItem.ForFile(video, reason));
         }
     }
 }

@@ -22,11 +22,48 @@ public static class ServiceRoleLog
 
     private const string DayFormat = "yyyy-MM-dd";
 
-    /// <summary>The role <c>services start</c> launched this process as, or null.</summary>
+    /// <summary>
+    /// The role <c>services start</c> launched this process as. A role command started by hand
+    /// (<c>heroesprofile download</c>) has no role variable, so its command line names the role
+    /// instead and it keeps a role log too (#479). Null for any other command.
+    /// </summary>
     public static string RoleFromEnvironment()
     {
         string role = Environment.GetEnvironmentVariable(ServiceReadyFile.RoleVariable);
-        return IsSafeRole(role) ? role.ToLowerInvariant() : null;
+        if (IsSafeRole(role))
+        {
+            return role.ToLowerInvariant();
+        }
+
+        return RoleFromCommand(Environment.GetCommandLineArgs().Skip(1));
+    }
+
+    /// <summary>The role whose command <paramref name="args"/> run, or null.</summary>
+    public static string RoleFromCommand(IEnumerable<string> args)
+    {
+        if (args == null)
+        {
+            return null;
+        }
+
+        string[] words = args.Take(2).ToArray();
+        foreach ((string name, string arguments) in ServiceProcessPlan.All)
+        {
+            string[] command = arguments.Split(' ');
+            if (
+                words.Length == command.Length
+                && words
+                    .Zip(command)
+                    .All(pair =>
+                        string.Equals(pair.First, pair.Second, StringComparison.OrdinalIgnoreCase)
+                    )
+            )
+            {
+                return name;
+            }
+        }
+
+        return null;
     }
 
     public static bool IsSafeRole(string role)

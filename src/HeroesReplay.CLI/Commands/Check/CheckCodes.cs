@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HeroesReplay.Core.Clips;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.SelfUpdate;
 
 namespace HeroesReplay.CLI.Commands.Check;
@@ -112,6 +113,21 @@ public static class CheckCodes
     public const string RuntimeOlderThanRelease =
         "check.runtime." + ReleaseRuntime.OlderThanRelease;
     public const string RuntimeError = "check.runtime.error";
+
+    public const string StorageOk = "check.storage.ok";
+
+    /// <summary>No housekeeping pass is recorded (#487). A warning.</summary>
+    public const string StorageNeverRan = "check.storage." + HousekeepingCheck.NeverRan;
+
+    /// <summary>The last pass is older than 3 intervals: no supervisor runs them. A warning.</summary>
+    public const string StorageStale = "check.storage." + HousekeepingCheck.Stale;
+
+    /// <summary>A pruner failed in the last pass. A warning.</summary>
+    public const string StorageLastFailed = "check.storage." + HousekeepingCheck.LastFailed;
+
+    /// <summary>A parked viewer request has waited past Retention:ParkedKeepDays (#490). A warning.</summary>
+    public const string StorageParkedRequest = "check.storage." + HousekeepingCheck.ParkedRequest;
+    public const string StorageError = "check.storage.error";
 
     /// <summary>Every code above, for the docs and their tests.</summary>
     public static IReadOnlyList<string> All { get; } =

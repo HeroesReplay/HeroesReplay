@@ -225,6 +225,16 @@ Report the .NET runtime this exe runs on (RuntimeInformation.FrameworkDescriptio
 - **Exit:** 0 when the check passes (a warning passes), 1 when it fails or on a parse error.
 - **Codes:** `check.runtime.ok`, `check.runtime.older_than_release`, `check.runtime.error`
 
+## `check storage`
+
+Measure Location:DataDirectory and %LOCALAPPDATA%\HeroesReplay (total, largest category, free space) and report the last housekeeping pass (housekeeping.json). A pass that never ran, ran more than 3 Housekeeping:Interval ago, or failed is a warning.
+
+- **Options:** `--output` (`-o`)
+- **Before:** None. Reads no secret.
+- **Changes:** Nothing. Measures `Location:DataDirectory` and `%LOCALAPPDATA%\HeroesReplay` and reads `housekeeping.json`.
+- **Exit:** 0 always unless the read throws (a pass that never ran, ran more than 3 `Housekeeping:Interval` ago, or failed is a warning), 1 on a parse error or an unexpected error.
+- **Codes:** `check.storage.ok`, `check.storage.never_ran`, `check.storage.stale`, `check.storage.last_failed`, `check.storage.parked_request`, `check.storage.error`
+
 ## `client configure`
 
 Write Variables.txt (windowed 1080p, AhliObs) and copy the StormInterface into Documents.
@@ -256,7 +266,7 @@ Add an inbound Windows Firewall rule for each installed Heroes client exe. Needs
 Start the Aspire dashboard with the Aspire CLI (UI :18888, OTLP gRPC :4317).
 
 - **Before:** The local Aspire CLI tool (`dotnet tool restore`).
-- **Changes:** Starts the Aspire dashboard (UI :18888, OTLP :4317) and records its pid.
+- **Changes:** Starts the Aspire dashboard (UI :18888, OTLP :4317), records its pid, and opens the UI in the default browser. It is the only command that opens it: services and spectate start the dashboard headless.
 - **Exit:** 0 when the dashboard listens, 1 otherwise.
 
 ## `otel down`
@@ -467,6 +477,15 @@ Supervise the roles `services start` recorded, in the foreground: restart failed
 - **Exit:** Runs until `services stop` or Ctrl+C (which leaves the roles unsupervised), or until it hands over off a serviced runtime (0). 1 when a supervisor already runs.
 - **Codes:** `service.restart_budget_exhausted`, `service.role_adopted`, `service.untracked_role_killed`, `service.role_kill_spared_obs`, `obs.process_missing`, `obs.websocket_hung`, `obs.watchdog_exhausted`, `runtime.serviced`
 
+## `services reset`
+
+Give one role its restart budget back through the running supervisor, without touching the other roles. A role the supervisor left down (service.restart_budget_exhausted) restarts after the first backoff; a copy of it started by hand is taken over when it heartbeats, otherwise replaced. A running role carries on. Exit 0 when the supervisor took the request, 1 when no supervisor runs, the role is unknown, or the supervisor did not take it within 15 s (it stays queued).
+
+- **Before:** A running supervisor (any session; over SSH `supervisor.json` decides).
+- **Changes:** Appends the role to `services.reset`. The supervisor takes it on its next pass, gives that role its whole restart budget back, and logs `service.role_reset`; a role it left down (`service.restart_budget_exhausted`) restarts after the first backoff, a copy started by hand is taken over when it heartbeats and replaced when it does not, and a running role carries on. No other role, and not the stream, is touched (#480).
+- **Exit:** 0 when the supervisor took the request; 1 for an unknown role, no running supervisor, or a request not taken within 15 s (it stays queued).
+- **Codes:** `service.role_reset`
+
 ## `services install-task`
 
 Register the Windows scheduled task HeroesReplay-live: `services start --supervise` from this install when you log on, interactive and not elevated (no administrator rights needed). apply-release.ps1 restarts the stack through it after an update, so the stack comes back supervised. --remove deletes it.
@@ -663,3 +682,13 @@ Print every effective setting with the layer that set it (base appsettings.json,
 - **Changes:** Nothing. Secrets are always redacted.
 - **Exit:** 0 when printed, 1 when `appsettings.json` is missing or unreadable, or `--section` matches nothing.
 - **Codes:** `config.base_missing`, `config.unreadable`, `config.section_not_found`
+
+## `storage report`
+
+Show every storage category (files, size, oldest item) and what each pruner's next housekeeping pass would remove, and why. Read only. With --apply, run the pass now (as the supervisor does every Housekeeping:Interval) and report what it removed; Housekeeping:DryRun makes it log only.
+
+- **Options:** `--apply`, `--items`, `--output` (`-o`)
+- **Before:** None. Reads no secret. Safe beside a running stack: without `--apply` it only reads.
+- **Changes:** Nothing without `--apply`. With `--apply` it runs the housekeeping pass now, as the supervisor does every `Housekeeping:Interval`: each enabled pruner removes what its plan names (nothing under `Housekeeping:DryRun`), and it writes `housekeeping.json`.
+- **Exit:** 0 when the report is printed, 1 when a pruner failed under `--apply`, on a parse error, or on an unexpected error.
+- **Codes:** `storage.report`, `storage.applied`, `storage.dry_run`, `storage.apply_failed`

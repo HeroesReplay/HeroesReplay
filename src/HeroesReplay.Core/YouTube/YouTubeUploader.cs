@@ -373,9 +373,16 @@ public class YouTubeUploader : IYouTubeUploader
                     .ConfigureAwait(false);
                 if (recovered.Outcome is UploadOutcome done)
                 {
+                    if (done != UploadOutcome.Parked)
+                    {
+                        ParkedRecordings.Clear(recording.FullName);
+                    }
+
                     return done;
                 }
 
+                // The upload goes on (an operator allowed more retries, or a session resumes).
+                ParkedRecordings.Clear(recording.FullName);
                 recovery = recovered.How;
                 interrupted = recovered.Manifest;
             }
@@ -889,6 +896,41 @@ public class YouTubeUploader : IYouTubeUploader
     {
         MediaRetention.SweepAndLog(settings, logger);
         DryRunRecordings.SweepAndLog(settings, logger);
+        TrimReservations();
+    }
+
+    /// <summary>
+    /// Slots whose publish time is more than <c>Retention:LedgerKeepDays</c> past leave the
+    /// reservation ledger (#492). Only this role writes it, and the trim takes the same lock as
+    /// a reservation, so no slot is lost to it; terminal marks stay.
+    /// </summary>
+    private void TrimReservations()
+    {
+        int days = (settings.Retention ?? new RetentionSettings()).EffectiveLedgerKeepDays;
+        foreach (bool dryRun in new[] { false, true })
+        {
+            string path = PublicationReservation.PathFor(settings.Location?.DataDirectory, dryRun);
+            try
+            {
+                int dropped = PublicationReservation.Trim(
+                    path,
+                    DateTimeOffset.UtcNow.AddDays(-days)
+                );
+                if (dropped > 0)
+                {
+                    logger.LogInformation(
+                        "Dropped {Count} publication slots more than Retention:LedgerKeepDays ({Days}) past from {Path}.",
+                        dropped,
+                        days,
+                        path
+                    );
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(e, "Could not trim {Path}. It keeps every slot.", path);
+            }
+        }
     }
 
     private enum Recovery
@@ -963,6 +1005,7 @@ public class YouTubeUploader : IYouTubeUploader
                     attemptId,
                     InterruptedUploadRetries.FileName
                 );
+                Park(path, ParkedRecordings.OperatorRetry, attemptId, entry, now);
                 return new RecoveryResult(UploadOutcome.Parked, Recovery.None, manifest);
             case InterruptedUploadAction.AlreadyOnYouTube:
                 LogWait(
@@ -973,6 +1016,7 @@ public class YouTubeUploader : IYouTubeUploader
                     entry.ReplayId,
                     YouTubeReplayCatalog.FileName
                 );
+                Park(path, ParkedRecordings.OnChannel, attemptId, entry, now);
                 return new RecoveryResult(UploadOutcome.Parked, Recovery.None, manifest);
             case InterruptedUploadAction.Restart:
                 return new RecoveryResult(null, Recovery.Restart, manifest);
@@ -1028,6 +1072,7 @@ public class YouTubeUploader : IYouTubeUploader
                     path,
                     status.HttpStatus
                 );
+                Park(path, ParkedRecordings.SessionGone, attemptId, entry, now);
                 return new RecoveryResult(UploadOutcome.Parked, Recovery.None, manifest);
             case InterruptedUploadAction.Resume:
                 incompleteSessions[attemptId] = 0;
@@ -1380,6 +1425,28 @@ public class YouTubeUploader : IYouTubeUploader
         }
     }
 
+    /// <summary>
+    /// Marks a parked recording (#490), so retention gives it a lifetime and <c>check storage</c>
+    /// shows it. A mark that cannot be written leaves the recording parked as before.
+    /// </summary>
+    private void Park(
+        string path,
+        string reason,
+        string attemptId,
+        YouTubeEntry entry,
+        DateTimeOffset now
+    )
+    {
+        try
+        {
+            ParkedRecordings.Mark(path, reason, attemptId, entry, now);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(e, "Could not mark {Path} parked.", path);
+        }
+    }
+
     private void LogWait(string path, string reason, string message, params object[] args)
     {
         if (waits.Wait(path, reason))
@@ -1569,6 +1636,8 @@ public class YouTubeUploader : IYouTubeUploader
                 settings.ReplayMedia?.OrdinaryCandidateMaxAge
             );
             DeleteRecording(path);
+            // Retired: the folder then ages out instead of waiting for an insert forever (#489).
+            RetiredRecordings.MarkExpired(path, settings.YouTube?.EntryFileName, logger);
             return reserved;
         }
 

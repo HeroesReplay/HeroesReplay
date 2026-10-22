@@ -57,6 +57,7 @@ public class AppSettings
     public DiskBacklogSettings Disk { get; set; } = SpectateAdmission.DefaultWatermarks();
     public ReplayMediaPolicySettings ReplayMedia { get; set; } = new ReplayMediaPolicySettings();
     public RetentionSettings Retention { get; set; }
+    public HousekeepingSettings Housekeeping { get; set; } = new HousekeepingSettings();
     public ClipSettings Clips { get; set; } = new ClipSettings();
     public DependencySettings Dependencies { get; set; } = new DependencySettings();
     public ReleaseSettings Release { get; set; }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -1956,7 +1955,6 @@ public class GameController : IGameController
                 return;
             }
 
-            Directory.CreateDirectory(directory);
             using Bitmap bitmap = capture.Capture(handle);
             if (bitmap == null)
             {
@@ -1965,11 +1963,7 @@ public class GameController : IGameController
             }
 
             TimeSpan timer = context.Current.Timer ?? TimeSpan.Zero;
-            string name =
-                $"end-{((int)timer.TotalHours):D2}-{timer.Minutes:D2}-{timer.Seconds:D2}.png";
-            string path = Path.Combine(directory, name);
-            bitmap.Save(path, ImageFormat.Png);
-            File.Copy(path, Path.Combine(directory, "end.png"), overwrite: true);
+            string path = EndScreenshot.Save(bitmap, directory);
             logger.LogInformation(
                 "Wrote end screenshot {Path} ({Width}x{Height}) timer={Timer}.",
                 path,

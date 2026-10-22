@@ -73,6 +73,13 @@ public sealed class StaleOrdinaryRecordingsTests : IDisposable
         Assert.Contains("reason: stale", warning, StringComparison.Ordinal);
         Assert.Contains(stale, warning, StringComparison.Ordinal);
         Assert.Contains("OrdinaryCandidateMaxAge", warning, StringComparison.Ordinal);
+        // #489: the cleared recording's entry is marked expired, so its folder ages out.
+        string staleFolder = Path.GetDirectoryName(stale);
+        Assert.False(File.Exists(Path.Combine(staleFolder, settings.YouTube.EntryFileName)));
+        Assert.True(File.Exists(Path.Combine(staleFolder, RetiredRecordings.EntryFileName)));
+        Assert.True(
+            File.Exists(Path.Combine(Path.GetDirectoryName(fresh), settings.YouTube.EntryFileName))
+        );
     }
 
     /// <summary>

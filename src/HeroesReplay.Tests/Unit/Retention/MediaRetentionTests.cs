@@ -1,9 +1,12 @@
 using System;
 using System.IO;
+using System.Linq;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Retention;
+using HeroesReplay.Core.YouTube;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Retention;
@@ -432,6 +435,293 @@ public class MediaRetentionTests
         Assert.True(File.Exists(Path.Combine(replayOnly, "young.StormReplay")));
         Assert.False(File.Exists(Path.Combine(replayOnly, "old.StormReplay")));
         Assert.True(Directory.Exists(replayOnly));
+    }
+
+    /// <summary>
+    /// #487: the plan names what the sweep removes, with a reason, and removes nothing itself.
+    /// </summary>
+    [Fact]
+    public void Plan_ListsWhatTheSweepRemoves_WithAReason_AndRemovesNothing()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string uploaded = library.AddContext("uploaded");
+        string orphan = library.AddContext("orphan");
+        string old = library.AddContext("old");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(uploaded, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.WriteFile(uploaded, "match.mp4", 64, now.AddHours(-2));
+        TempLibrary.WriteFile(orphan, "match.mp4", 32, now.AddHours(-3));
+        TempLibrary.WriteText(old, "youtube-entry-uploaded.json", "{}");
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(uploaded, now.AddHours(-2));
+        TempLibrary.SetDirectoryTime(orphan, now.AddHours(-3));
+        TempLibrary.SetDirectoryTime(old, now.AddDays(-5));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        PrunePlan plan = MediaRetention.Plan(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(uploaded, "match.mp4")));
+        Assert.True(File.Exists(Path.Combine(orphan, "match.mp4")));
+        Assert.True(Directory.Exists(old));
+        Assert.Equal(MediaRetention.PrunerName, plan.Pruner);
+        Assert.Collection(
+            plan.Items.OrderBy(item => item.Path, StringComparer.Ordinal),
+            item =>
+            {
+                Assert.Equal(old, item.Path);
+                Assert.True(item.IsDirectory);
+                Assert.Contains("VideoKeepDays", item.Reason);
+            },
+            item =>
+            {
+                Assert.Equal(Path.Combine(orphan, "match.mp4"), item.Path);
+                Assert.Contains("no youtube-entry.json", item.Reason);
+                Assert.Contains("reason: no-entry", item.Warning);
+            },
+            item =>
+            {
+                Assert.Equal(Path.Combine(uploaded, "match.mp4"), item.Path);
+                Assert.Equal(64, item.Bytes);
+                Assert.Contains("on YouTube", item.Reason);
+            }
+        );
+
+        RetentionSweep sweep = MediaRetention.Pruner(Settings(library.Root)).Apply(plan);
+
+        Assert.Equal(3, sweep.DeletedFiles);
+        Assert.False(File.Exists(Path.Combine(uploaded, "match.mp4")));
+        Assert.False(Directory.Exists(old));
+        Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
+    }
+
+    [Fact]
+    public void SweepAndLog_UnderHousekeepingDryRun_RemovesNothing()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        string orphan = library.AddContext("orphan");
+        string live = library.AddContext("live");
+        TempLibrary.WriteFile(orphan, "match.mp4", 32, now.AddHours(-3));
+        TempLibrary.SetDirectoryTime(orphan, now.AddHours(-3));
+        TempLibrary.SetDirectoryTime(live, now);
+        AppSettings settings = Settings(library.Root);
+        settings.Housekeeping = new HousekeepingSettings { DryRun = true };
+
+        MediaRetention.SweepAndLog(settings, NullLogger.Instance);
+
+        Assert.True(File.Exists(Path.Combine(orphan, "match.mp4")));
+    }
+
+    /// <summary>
+    /// #489, the stream PC's 140 orphans: an entry with no video id whose recording is gone (a
+    /// stale or Terminal delete before the entry was marked expired) was protected forever. It
+    /// goes once untouched for VideoKeepDays; a younger one, and one whose recording still waits,
+    /// stay.
+    /// </summary>
+    [Fact]
+    public void Sweep_RemovesAnEntryWithNoVideoIdAndNoRecording_AfterVideoKeepDays()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string orphan = library.AddContext("orphan");
+        string young = library.AddContext("young");
+        string waiting = library.AddContext("waiting");
+        string live = library.AddContext("live");
+        foreach (string folder in new[] { orphan, young, waiting })
+        {
+            TempLibrary.WriteText(folder, "youtube-entry.json", "{\"ReplayId\":1}");
+            TempLibrary.WriteFile(folder, "1_x.StormReplay", 16, now.AddDays(-10));
+            TempLibrary.WriteFile(folder, "end.png", 8, now.AddDays(-10));
+        }
+
+        File.SetLastWriteTimeUtc(
+            Path.Combine(orphan, "youtube-entry.json"),
+            now.AddDays(-4).UtcDateTime
+        );
+        File.SetLastWriteTimeUtc(
+            Path.Combine(young, "youtube-entry.json"),
+            now.AddDays(-1).UtcDateTime
+        );
+        TempLibrary.WriteFile(waiting, "match.mp4", 32, now.AddDays(-10));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(orphan, now.AddDays(-4));
+        TempLibrary.SetDirectoryTime(young, now.AddDays(-4));
+        TempLibrary.SetDirectoryTime(waiting, now.AddDays(-10));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        PrunePlan plan = MediaRetention.Plan(Settings(library.Root), now);
+        MediaRetention.Sweep(Settings(library.Root), now);
+
+        PruneItem item = Assert.Single(plan.Items);
+        Assert.Equal(orphan, item.Path);
+        Assert.Contains("no video id and no recording", item.Reason);
+        Assert.False(Directory.Exists(orphan));
+        Assert.True(Directory.Exists(young));
+        Assert.True(File.Exists(Path.Combine(waiting, "match.mp4")));
+    }
+
+    /// <summary>#489: a folder with only the replay and screenshots, no entry and no recording.</summary>
+    [Fact]
+    public void Sweep_RemovesAReplayAndScreenshotsOnlyFolder_AfterVideoKeepDays()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string leftover = library.AddContext("leftover");
+        string live = library.AddContext("live");
+        TempLibrary.WriteFile(leftover, "1_x.StormReplay", 16, now.AddDays(-5));
+        TempLibrary.WriteFile(leftover, "end.png", 8, now.AddDays(-5));
+        TempLibrary.WriteFile(leftover, "end-12-00-00.png", 8, now.AddDays(-5));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(leftover, now.AddDays(-5));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.False(Directory.Exists(leftover));
+    }
+
+    /// <summary>
+    /// #489: VideoMaxAgeDays bounds a dry run's context while YouTube:DryRun is on, even with its
+    /// entry still waiting: first the recording, then the folder. With DryRun off a live uploader
+    /// would send it, so it waits like any other recording.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Sweep_DryRunContexts_GoAfterVideoMaxAgeDays_OnlyWhileDryRunIsOn(bool dryRun)
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string planned = library.AddContext("planned");
+        string emptied = library.AddContext("emptied");
+        string live = library.AddContext("live");
+        foreach (string folder in new[] { planned, emptied })
+        {
+            TempLibrary.WriteText(folder, "youtube-entry.json", "{\"ReplayId\":1}");
+            TempLibrary.WriteText(folder, DryRunRecordings.PlanFileName, "{}");
+        }
+
+        TempLibrary.WriteFile(planned, "match.mp4", 32, now.AddDays(-8));
+        TempLibrary.WriteFile(emptied, "end.png", 8, now.AddDays(-8));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(planned, now.AddDays(-8));
+        TempLibrary.SetDirectoryTime(emptied, now.AddDays(-8));
+        TempLibrary.SetDirectoryTime(live, now);
+        AppSettings settings = Settings(library.Root);
+        settings.YouTube = new YouTubeSettings { DryRun = dryRun };
+
+        RetentionSweep sweep = MediaRetention.Sweep(settings, now);
+
+        Assert.Equal(!dryRun, File.Exists(Path.Combine(planned, "match.mp4")));
+        Assert.Equal(!dryRun, Directory.Exists(emptied));
+        if (dryRun)
+        {
+            Assert.Contains(sweep.Warnings, warning => warning.Contains("reason: dry-run"));
+        }
+    }
+
+    /// <summary>
+    /// #489: a recording the uploader or the pending-bytes gate retired leaves an expired entry.
+    /// A recording its delete missed goes on the next sweep, and the folder ages out
+    /// VideoKeepDays after the rename.
+    /// </summary>
+    [Fact]
+    public void Sweep_ARetiredRecordingsFolder_AgesOutLikeAnUpload()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string missed = library.AddContext("missed");
+        string retired = library.AddContext("retired");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(missed, RetiredRecordings.EntryFileName, "{}");
+        TempLibrary.WriteFile(missed, "match.mp4", 32, now.AddDays(-1));
+        TempLibrary.WriteText(retired, RetiredRecordings.EntryFileName, "{}");
+        TempLibrary.WriteFile(retired, "end.png", 8, now.AddDays(-6));
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(missed, now.AddHours(-2));
+        TempLibrary.SetDirectoryTime(retired, now.AddDays(-4));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        RetentionSweep sweep = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.False(File.Exists(Path.Combine(missed, "match.mp4")));
+        Assert.True(Directory.Exists(missed));
+        Assert.False(Directory.Exists(retired));
+        Assert.DoesNotContain(sweep.Warnings, warning => warning.Contains("no-entry"));
+    }
+
+    [Fact]
+    public void MarkExpired_RenamesTheEntry_SoTheFolderNoLongerWaits()
+    {
+        using TempLibrary library = new TempLibrary();
+        string context = library.AddContext("stale");
+        TempLibrary.WriteText(context, "youtube-entry.json", "{\"ReplayId\":1}");
+        string recording = Path.Combine(context, "match.mp4");
+
+        Assert.True(RetiredRecordings.MarkExpired(recording, "youtube-entry.json"));
+        Assert.False(File.Exists(Path.Combine(context, "youtube-entry.json")));
+        Assert.Equal(
+            "{\"ReplayId\":1}",
+            File.ReadAllText(Path.Combine(context, RetiredRecordings.EntryFileName))
+        );
+        Assert.False(RetiredRecordings.MarkExpired(recording, "youtube-entry.json"));
+    }
+
+    /// <summary>
+    /// #489: OBS records into the Contexts root when SetRecordDirectory failed. Nothing can upload
+    /// that file; it goes once quiet, and one OBS may still write stays.
+    /// </summary>
+    [Fact]
+    public void Sweep_RemovesAQuietRecordingInTheContextsRoot()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        TempLibrary.WriteFile(library.Contexts, "2026-10-20 12-00-00.mp4", 32, now.AddHours(-3));
+        TempLibrary.WriteFile(library.Contexts, "2026-10-22 11-50-00.mp4", 32, now.AddMinutes(-5));
+
+        RetentionSweep sweep = MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.False(File.Exists(Path.Combine(library.Contexts, "2026-10-20 12-00-00.mp4")));
+        Assert.True(File.Exists(Path.Combine(library.Contexts, "2026-10-22 11-50-00.mp4")));
+        Assert.Contains(sweep.Warnings, warning => warning.Contains("reason: contexts-root"));
+    }
+
+    /// <summary>
+    /// #491: once the video is on YouTube the end capture has no further use, so it goes with the
+    /// mp4 (the legacy end-HH-MM-SS.png copy too), not days later with the folder.
+    /// </summary>
+    [Fact]
+    public void Sweep_DropsTheEndCaptureWithAnUploadedRecording()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string uploaded = library.AddContext("uploaded");
+        string waiting = library.AddContext("waiting");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(uploaded, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.WriteText(waiting, "youtube-entry.json", "{\"ReplayId\":2}");
+        foreach (string folder in new[] { uploaded, waiting })
+        {
+            TempLibrary.WriteFile(folder, "match.mp4", 32, now.AddHours(-2));
+            TempLibrary.WriteFile(folder, "end.png", 8, now.AddHours(-2));
+            TempLibrary.WriteFile(folder, "end-00-21-14.png", 8, now.AddHours(-2));
+            TempLibrary.WriteFile(folder, "2_x.StormReplay", 16, now.AddHours(-2));
+        }
+
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(uploaded, now.AddHours(-2));
+        TempLibrary.SetDirectoryTime(waiting, now.AddHours(-2));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        MediaRetention.Sweep(Settings(library.Root), now);
+
+        Assert.Equal(
+            new[] { "2_x.StormReplay", "youtube-entry.json" },
+            Directory.GetFiles(uploaded).Select(Path.GetFileName).Order()
+        );
+        Assert.True(File.Exists(Path.Combine(waiting, "end.png")));
+        Assert.True(File.Exists(Path.Combine(waiting, "match.mp4")));
     }
 
     private static DateTimeOffset FixedNow() => new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);

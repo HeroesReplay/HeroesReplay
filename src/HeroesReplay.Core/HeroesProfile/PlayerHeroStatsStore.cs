@@ -7,6 +7,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using HeroesReplay.Core.Configuration;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.Shared;
 
 namespace HeroesReplay.Core.HeroesProfile;
@@ -224,6 +226,93 @@ public sealed class PlayerHeroStatsStore
             Path.Combine(Folder, PrivacyFileName),
             JsonSerializer.Serialize(cursor ?? new PlayerPrivacyCursor(), Json.PlayerPrivacyCursor)
         );
+
+    public const string PrunerName = "player-stats";
+
+    /// <summary>The player cache pruner for the housekeeping pass (#492).</summary>
+    public static IPruner Pruner(AppSettings settings) =>
+        new Pruner(
+            PrunerName,
+            "Player lookups (Data\\HeroesProfile\\players) a lookup would no longer reuse: older than PlayerStats:MaxAge, or a private mark older than PlayerStats:PrivateKeep. calls.json and privacy.json stay.",
+            now =>
+                string.IsNullOrWhiteSpace(settings?.Location?.DataDirectory)
+                    ? new PrunePlan(PrunerName)
+                    : new PlayerHeroStatsStore(
+                        FolderFor(settings.Location.DataDirectory)
+                    ).PlanPrune(
+                        now,
+                        settings.HeroesProfileApi?.PlayerStats ?? new PlayerStatsSettings()
+                    )
+        );
+
+    /// <summary>
+    /// The player files nothing reuses any more (#492): about 600 new a day on the stream PC, and
+    /// nothing removed one. A record older than <see cref="PlayerStatsSettings.MaxAge"/> (and
+    /// <see cref="PlayerStatsSettings.UnknownRetryAfter"/>) is looked up again anyway; a private
+    /// mark, which tells focus cards to drop the player's numbers, stays for
+    /// <see cref="PlayerStatsSettings.PrivateKeep"/>. Writes nothing.
+    /// </summary>
+    public PrunePlan PlanPrune(DateTimeOffset utcNow, PlayerStatsSettings settings)
+    {
+        var plan = new PrunePlan(PrunerName);
+        if (!Directory.Exists(Folder))
+        {
+            return plan;
+        }
+
+        settings ??= new PlayerStatsSettings();
+        TimeSpan reuse =
+            settings.MaxAge > settings.UnknownRetryAfter
+                ? settings.MaxAge
+                : settings.UnknownRetryAfter;
+        foreach (FileInfo file in new DirectoryInfo(Folder).GetFiles("*.json"))
+        {
+            if (
+                string.Equals(file.Name, CallsFileName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(file.Name, PrivacyFileName, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                continue;
+            }
+
+            StoredPlayer player = ReadFile(file.FullName, Json.StoredPlayer);
+            DateTimeOffset newest = Newest(player) ?? file.LastWriteTimeUtc;
+            bool marked = player?.Status == PlayerHeroLookupStatus.Private;
+            TimeSpan limit = marked ? settings.PrivateKeep : reuse;
+            if (limit > TimeSpan.Zero && utcNow - newest >= limit)
+            {
+                plan.Add(
+                    PruneItem.ForFile(
+                        file,
+                        marked
+                            ? "private mark older than HeroesProfileApi:PlayerStats:PrivateKeep"
+                            : "player lookup older than HeroesProfileApi:PlayerStats:MaxAge: it would be looked up again"
+                    )
+                );
+            }
+        }
+
+        return plan;
+    }
+
+    private static DateTimeOffset? Newest(StoredPlayer player)
+    {
+        if (player == null)
+        {
+            return null;
+        }
+
+        DateTimeOffset newest = player.StatusAtUtc;
+        foreach (StoredHero hero in player.Heroes?.Values ?? Enumerable.Empty<StoredHero>())
+        {
+            if (hero != null && hero.FetchedAtUtc > newest)
+            {
+                newest = hero.FetchedAtUtc;
+            }
+        }
+
+        return newest == default ? null : newest;
+    }
 
     private StoredPlayer Read(string battleTag, int region) =>
         string.IsNullOrWhiteSpace(battleTag)

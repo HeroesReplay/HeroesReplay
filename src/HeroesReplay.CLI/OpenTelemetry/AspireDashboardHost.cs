@@ -91,10 +91,16 @@ public static class AspireDashboardHost
         }
     }
 
-    public static bool EnsureRunning(bool openWhenAlreadyListening = false)
+    /// <summary>
+    /// Starts the dashboard when it is not listening yet. Only <c>otel up</c> passes
+    /// <paramref name="openBrowser"/>. The supervisor and spectate start it headless and only log
+    /// its URL, because a dashboard tab left open on the stream PC grows without bound (#478).
+    /// </summary>
+    public static bool EnsureRunning(bool openBrowser = false)
     {
         try
         {
+            Action<string> opener = BrowserOpener(openBrowser);
             ApplyExporterEnvironment();
             using var mutex = new Mutex(false, @"Local\HeroesReplay.AspireDashboard");
             bool locked = false;
@@ -114,9 +120,9 @@ public static class AspireDashboardHost
                     Console.WriteLine(
                         $"Aspire dashboard is already listening. UI {UiUrl}. OTLP gRPC {OtlpGrpcEndpoint}."
                     );
-                    if (openWhenAlreadyListening)
+                    if (openBrowser)
                     {
-                        TryOpenDashboard(OpenInBrowser, Log);
+                        TryOpenDashboard(opener, Log);
                     }
 
                     return true;
@@ -141,8 +147,8 @@ public static class AspireDashboardHost
                     Log,
                     Thread.Sleep,
                     StartupBudget,
-                    openWhenAlreadyListening,
-                    OpenInBrowser
+                    openBrowser,
+                    opener
                 );
                 return result.Listening;
             }
@@ -731,6 +737,13 @@ public static class AspireDashboardHost
             yield return processDir;
         }
     }
+
+    /// <summary>
+    /// The browser launch <see cref="Ensure"/> gets: none unless the caller asked for the UI, so a
+    /// fresh start from the supervisor or spectate opens no tab.
+    /// </summary>
+    public static Action<string> BrowserOpener(bool openBrowser) =>
+        openBrowser ? OpenInBrowser : null;
 
     private static void TryOpenDashboard(Action<string> openBrowser, Action<string> log)
     {

@@ -305,6 +305,23 @@ public sealed class PredictionLedger
         File.Move(temp, path, overwrite: true);
     }
 
+    /// <summary>
+    /// Drops settled and terminal entries created before <paramref name="before"/> and saves when
+    /// any went (#492). Open and pending ones always stay. Returns how many went.
+    /// </summary>
+    public int TrimSettled(DateTimeOffset before)
+    {
+        int dropped = entries.RemoveAll(entry =>
+            entry != null && !IsUnsettled(entry) && entry.CreatedAt < before
+        );
+        if (dropped > 0)
+        {
+            Save();
+        }
+
+        return dropped;
+    }
+
     private static bool IsUnsettled(PredictionLedgerEntry entry) =>
         entry.State is PredictionLedgerState.Open or PredictionLedgerState.Pending;
 }

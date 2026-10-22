@@ -80,6 +80,22 @@ public class CliHelpTests
     }
 
     [Fact]
+    public void StorageHelp_HasReport_WithApplyAndItems()
+    {
+        var root = new HeroesReplayCommand();
+        Assert.Empty(root.Parse("storage report").Errors);
+        Assert.Empty(root.Parse("storage report --apply --items").Errors);
+        Command report = root
+            .Subcommands.Single(c => c.Name == "storage")
+            .Subcommands.Single(c => c.Name == "report");
+        Assert.Contains("Read only", report.Description);
+        Assert.Contains(
+            "Housekeeping:DryRun",
+            report.Options.Single(o => o.Name == "--apply").Description
+        );
+    }
+
+    [Fact]
     public async Task DepsInstallAndCheckFfmpegHelp_ExitZero()
     {
         Assert.Equal(

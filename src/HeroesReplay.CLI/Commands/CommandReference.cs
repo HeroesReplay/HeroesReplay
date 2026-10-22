@@ -15,6 +15,7 @@ using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Twitch;
 using HeroesReplay.Core.YouTube;
@@ -231,6 +232,13 @@ public static class CommandReference
             CheckCodesFor("runtime")
         ),
         new(
+            "check storage",
+            "None. Reads no secret.",
+            "Nothing. Measures `Location:DataDirectory` and `%LOCALAPPDATA%\\HeroesReplay` and reads `housekeeping.json`.",
+            "0 always unless the read throws (a pass that never ran, ran more than 3 `Housekeeping:Interval` ago, or failed is a warning), 1 on a parse error or an unexpected error.",
+            CheckCodesFor("storage")
+        ),
+        new(
             "client configure",
             "Heroes of the Storm closed (it rewrites `Variables.txt` on exit).",
             "Writes root and account `Variables.txt` (windowed 1080p, AhliObs) and copies the AhliObs `.StormInterface` into Documents.",
@@ -252,7 +260,7 @@ public static class CommandReference
         new(
             "otel up",
             "The local Aspire CLI tool (`dotnet tool restore`).",
-            "Starts the Aspire dashboard (UI :18888, OTLP :4317) and records its pid.",
+            "Starts the Aspire dashboard (UI :18888, OTLP :4317), records its pid, and opens the UI in the default browser. It is the only command that opens it: services and spectate start the dashboard headless.",
             "0 when the dashboard listens, 1 otherwise."
         ),
         new(
@@ -403,6 +411,13 @@ public static class CommandReference
                 ObsWebsocketProbe.RejectedCode,
                 ObsWebsocketProbe.UnreachableCode,
             ]
+        ),
+        new(
+            "services reset",
+            "A running supervisor (any session; over SSH `supervisor.json` decides).",
+            "Appends the role to `services.reset`. The supervisor takes it on its next pass, gives that role its whole restart budget back, and logs `service.role_reset`; a role it left down (`service.restart_budget_exhausted`) restarts after the first backoff, a copy started by hand is taken over when it heartbeats and replaced when it does not, and a running role carries on. No other role, and not the stream, is touched (#480).",
+            "0 when the supervisor took the request; 1 for an unknown role, no running supervisor, or a request not taken within 15 s (it stays queued).",
+            [ServiceSupervision.RoleResetCode]
         ),
         new(
             "services supervise",
@@ -591,6 +606,18 @@ public static class CommandReference
             "Downloads, checks, and installs `ffmpeg.exe` and `ffprobe.exe` into `<dir>\\ffmpeg` (staged, then moved into place); nothing when the pinned build is already there.",
             "0 when installed or already installed, 1 when the download, the hash, or the copy failed.",
             [DepsCommand.Installed, DepsCommand.AlreadyInstalled, DepsCommand.Failed]
+        ),
+        new(
+            "storage report",
+            "None. Reads no secret. Safe beside a running stack: without `--apply` it only reads.",
+            "Nothing without `--apply`. With `--apply` it runs the housekeeping pass now, as the supervisor does every `Housekeeping:Interval`: each enabled pruner removes what its plan names (nothing under `Housekeeping:DryRun`), and it writes `housekeeping.json`.",
+            "0 when the report is printed, 1 when a pruner failed under `--apply`, on a parse error, or on an unexpected error.",
+            [
+                StorageReport.ReportCode,
+                StorageReport.AppliedCode,
+                StorageReport.DryRunCode,
+                StorageReport.ApplyFailedCode,
+            ]
         ),
     ];
 

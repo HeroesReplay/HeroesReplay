@@ -16,31 +16,44 @@ Production is `HEROES_REPLAY_ENV=prod` (`DESKTOP-8SJEK72`). The environment deci
   "DailyUploadCalls": 100,
   "UploadCallReserve": 5,
   "DailyQuotaUnits": 10000,
-  "QuotaReserveUnits": 1000,
-  "LibraryUnitsPerDay": 8000
+  "QuotaReserveUnits": 500,
+  "LibraryUnitsPerDay": 9500,
+  "Playlists": { "Mode": false }
 },
 "Disk": {
-  "WarnWhenPendingBytesAtLeast": 42949672960,
-  "StopWhenPendingBytesAtLeast": 85899345920
+  "WarnWhenPendingBytesAtLeast": 107374182400,
+  "StopWhenPendingBytesAtLeast": 128849018880
 },
 "ReplayMedia": {
   "Version": "1",
   "RecordingMode": "Selected",
   "PublicationMode": "AllEligible",
-  "MaxPublicPerDay": 24,
-  "MaxPublicPerWeek": 168,
-  "MinimumPublicInterval": "01:00:00",
+  "MaxPublicPerDay": 72,
+  "MaxPublicPerWeek": 504,
+  "MinimumPublicInterval": "00:20:00",
   "MaxPublishAhead": "3.00:00:00",
   "OrdinaryCandidateMaxAge": "3.00:00:00",
-  "MapCooldown": "08:00:00",
-  "RankCooldown": "04:00:00",
-  "FeaturedHeroCooldown": "08:00:00",
+  "MapCooldown": "02:00:00",
+  "RankCooldown": "01:00:00",
+  "FeaturedHeroCooldown": "04:00:00",
   "MaxSharedHeroes": 4,
   "ReservedRequestSlotsPerDay": 2,
-  "MaxInsertsPerQuotaDay": 30,
+  "MaxInsertsPerQuotaDay": 95,
+  "MaxWaitingRecordings": 6,
   "CapRecordingToPublication": true
 }
 ```
+
+### Why these numbers (#507)
+
+The pace follows what the stream can play, and stays inside what YouTube gives the project. One stream plays one game at a time. A recording, from the loading screen to the MVP screen, averages 20.6 minutes (median 19.8, 90% under 26.6, on the channel's 200 newest videos on 2026-10-22). So a stream that runs 24/7 plays at most about 70 games a day with no gap between replays, and about 55 to 60 with the report and the next load between them. Nothing past that can be uploaded, whatever the quota allows:
+
+- **Uploads.** The Video Uploads bucket is 100 calls a day and 5 are held back, so `MaxInsertsPerQuotaDay` is 95: the app's cap no longer stops uploads before YouTube does. The stream fills about 55 to 60 of them. It cannot fill the bucket.
+- **Publication.** One video every 20 minutes is at most 72 a day, 70 of them not requests: just above the 70 the stream could play with no gaps, so publication cannot hold the stream back. The map (2 h), rank (1 h) and hero (4 h) cooldowns are short enough that the channel's mix of 12 maps and 6 tiers does not push a day of games back. A video still never goes further ahead than `MaxPublishAhead` (3 days). The recording cap stops recording once the window is full, so the schedule cannot grow into a backlog of old games.
+- **Playlists.** Without the `Storm League` mode playlist (every video is Storm League, so it repeated the channel's uploads), a video costs about 130 units of playlist inserts (map and rank, plus a draft note on 43% and a focus hero on 17% of videos). 72 a day is about 9,400 units, inside `LibraryUnitsPerDay` 9,500. The pool's reserve is 500.
+- **Disk.** `MaxWaitingRecordings` 6 lets about 15 GB wait for an upload. When uploads stall, new ordinary recordings stop after a few games instead of piling up a day of uploads.
+
+Before #507 the stream PC published 22 videos a day an hour apart (24 a day, 168 a week, 8 h map and hero cooldowns, 30 inserts). Google's own count for Oct 1 to 22 showed at most 39 of 100 upload calls a day, no quota response, and the pool at the 8,000 the library pass was allowed. The 3-day window stayed full, the recording cap kept 30 recordings (70.8 GiB) waiting and skipped about half the games, and the channel's 200 newest videos went public a median of 88 to 137 hours after their game. A simulation of `PublicationSchedule.Plan` and `RecordingCap.Decide` over those videos' maps, ranks and rosters reproduces that (21.6 a day, 30 waiting). At these settings it records and publishes 60 games a day with nothing waiting and a median lag of under 5 hours, at most 15. With 24 hours of no uploads, 6 recordings wait and the rest of that day's ordinary games are not recorded.
 
 `OrdinaryCandidateMaxAge` of `3.00:00:00` is 72 hours. `72:00:00` is 72 days, because that is how .NET reads a time span. `MaxPublishAhead` of `3.00:00:00` is 3 days (the code default stays 14). The library pass checks a scheduled video by id once its publish time has passed (#154), so how far back it sits in the uploads listing does not matter.
 
@@ -94,12 +107,12 @@ The first matching line decides, and the spectator logs it as `recording cap ...
 | `cap-requested` | yes | A paid `RecordAndUpload` request. Always recorded. |
 | `cap-off` | yes | `CapRecordingToPublication` is false. |
 | `cap-not-live` | yes | YouTube is disabled or a dry run (dev): nothing piles up for YouTube. |
-| `cap-upload-backlog` | no | The recordings waiting for upload are at least one day of upload calls: `min(DailyUploadCalls - UploadCallReserve, MaxInsertsPerQuotaDay)`. |
+| `cap-upload-backlog` | no | The recordings waiting for upload reach the waiting limit: `MaxWaitingRecordings` (6 in production, #507), and never more than a day of upload calls, `min(DailyUploadCalls - UploadCallReserve, MaxInsertsPerQuotaDay)`. Zero or unset is a day of upload calls. |
 | `cap-room` | yes | A private listing, or the window has a free slot: waiting plus scheduled is under what it holds. |
 | `cap-queued` | yes | The window is full, and the slots that must open first (waiting plus scheduled plus this one, less what the window holds), at the window's daily pace, still leave a day before the replay expires. |
 | `cap-publication-full` | no | The window is full, and this replay would wait until less than a day before it expires, or its game time is unknown. |
 
-With the production settings the window holds 22 a day over 3 days, so 66 slots, and a full window opens about one slot an hour (until 2026-10-13 it held 10 a day, so 30 slots, one every 2.4 hours). On 2026-10-08 the stream PC had 10 recordings waiting for upload and 29 uploads scheduled (#370). Before #370 the cap stopped at 30 in flight, so it recorded nothing for about a day, although a replay played 6 hours earlier would have waited one day and still had 1.75 days of its 3 left. Now that replay is recorded (`cap-queued`). One played 2 days earlier is not. In steady state about 17 fresh recordings wait (about 37 GB), and a video goes public about 4 to 5 days after its game. Without the queue only about one waited, so a slot whose map, rank, or hero cooldown ruled out that one recording went unused. The publication pace is the same either way.
+With the production settings since #507 the window holds 70 a day over 3 days, so 210 slots, and the stream's 60 or so games a day do not fill it: a recording waits on disk only for the uploads ahead of it, and at most `MaxWaitingRecordings` (6) wait before ordinary replays stop being recorded. From 2026-10-13 to #507 the window held 22 a day, so 66 slots, and a full window opened about one slot an hour (until 2026-10-13 it held 10 a day, so 30 slots, one every 2.4 hours). On 2026-10-08 the stream PC had 10 recordings waiting for upload and 29 uploads scheduled (#370). Before #370 the cap stopped at 30 in flight, so it recorded nothing for about a day, although a replay played 6 hours earlier would have waited one day and still had 1.75 days of its 3 left. Now that replay is recorded (`cap-queued`). One played 2 days earlier is not. Until #507 the waiting recordings were limited only by a day of upload calls (30), and on 2026-10-22 30 recordings (70.8 GiB) waited while a video went public 4 to 5 days after its game. Without the queue only about one waited, so a slot whose map, rank, or hero cooldown ruled out that one recording went unused. The publication pace is the same either way.
 
 Notable and high-skill replays are capped like ordinary ones. Only a request goes past the cap. A capped replay is still spectated and streamed, without an mp4. Before the cap, production recorded about 25 replays a day while 4 a day could go public, and the rest waited on disk until they were too old to publish (#250).
 
@@ -158,7 +171,7 @@ A recording stays on disk only for the YouTube quota or for the media rules. The
 1. Configuration is valid.
 2. The replay is not already published, incomplete, or uncorrelated.
 3. The mode allows this class. `Disabled` refuses everyone. `RequestedOnly` refuses anything except a request. `Curated` refuses ordinary. `AllEligible` allows every class.
-4. The upload bucket has room. `Data\youtube-quota-units.json` counts `videos.insert` calls today, and they stay under `YouTube:DailyUploadCalls` (100) less `YouTube:UploadCallReserve` (5). Library spend is a different bucket and never holds an upload. No quota response from an upload paused uploads, and `videos.insert` calls today are under `MaxInsertsPerQuotaDay`. The quota day starts at midnight Pacific. A held upload logs when uploads resume: the pause a quota response set, or the next Pacific midnight. `MaxInsertsPerQuotaDay` (20 in production) is this app's own cap, not YouTube's bucket, and its reason is `insert-cap` (it was `quota`, which read like YouTube's quota). When the bucket or the insert cap is closed, the pass does not open each recording: it logs one line (`N recording(s) wait: the daily insert cap is reached (20 of ReplayMedia:MaxInsertsPerQuotaDay 20 ...). Uploads resume at ...`) when the gate closes, and only an interrupted upload (below) still goes on, because resuming its session spends no new insert.
+4. The upload bucket has room. `Data\youtube-quota-units.json` counts `videos.insert` calls today, and they stay under `YouTube:DailyUploadCalls` (100) less `YouTube:UploadCallReserve` (5). Library spend is a different bucket and never holds an upload. No quota response from an upload paused uploads, and `videos.insert` calls today are under `MaxInsertsPerQuotaDay`. The quota day starts at midnight Pacific. A held upload logs when uploads resume: the pause a quota response set, or the next Pacific midnight. `MaxInsertsPerQuotaDay` (95 in production since #507, the usable bucket) is this app's own cap, not YouTube's bucket, and its reason is `insert-cap` (it was `quota`, which read like YouTube's quota). When the bucket or the insert cap is closed, the pass does not open each recording: it logs one line (`N recording(s) wait: the daily insert cap is reached (20 of ReplayMedia:MaxInsertsPerQuotaDay 20 ...). Uploads resume at ...`) when the gate closes, and only an interrupted upload (below) still goes on, because resuming its session spends no new insert.
 5. When `YouTube:PrivacyStatus` is public, an ordinary replay's game time is inside `OrdinaryCandidateMaxAge`. A request, a notable replay, and a high-skill replay do not use this age at send time. They already expired by their own windows above. An ordinary replay that is too old is not retried, and its recording is deleted with a warning (`Removed recording that was eligible but never uploaded ... stale`). The recording cap exists so this does not happen.
 6. When `YouTube:PrivacyStatus` is public, a publish time inside `MaxPublishAhead` (3 days in production; the code default is 14) keeps every rule below. With none, the reason is `publication-full` (it was `horizon`): every time in that window breaks a pacing rule for this replay, and the recording waits for a later pass. Another replay with a different map, rank, or heroes can still find a time in the same window.
 
@@ -232,11 +245,13 @@ A dry run plans in `Data\publication-reservations-dry-run.txt`, so its times nev
 
 The spectator plays the next queued replay as soon as the previous session ends. YouTube does not follow that clock.
 
-A recording is uploaded as soon as the upload bucket and a publish slot allow. YouTube's Video Uploads bucket is 100 calls a day; 5 are held back, and production's `MaxInsertsPerQuotaDay` (30) caps it lower. Full matches and clips share it, and library spend never takes from it. Before #250 the app charged each insert 1600 units from the 10,000-unit pool, so it stopped at 6 uploads a day and starved the library pass, while Google's console showed 6 of 100 upload calls and 4 of 10,000 pool units used.
+A recording is uploaded as soon as the upload bucket and a publish slot allow. YouTube's Video Uploads bucket is 100 calls a day; 5 are held back, and production's `MaxInsertsPerQuotaDay` is the other 95 (#507; it was 30, which held uploads below the bucket). Full matches and clips share it, and library spend never takes from it. Before #250 the app charged each insert 1600 units from the 10,000-unit pool, so it stopped at 6 uploads a day and starved the library pass, while Google's console showed 6 of 100 upload calls and 4 of 10,000 pool units used.
 
-With the production settings the videos go public at most every hour (`MinimumPublicInterval`), at most 24 in any rolling 24 hours (`MaxPublicPerDay`; a non-request only while fewer than 22 are in it, because `ReservedRequestSlotsPerDay` keeps 2 for requests), and at most 168 in any rolling 7 days (`MaxPublicPerWeek`). In practice ordinary videos go out up to 22 a day, an hour apart. The same map or a roster that shares 4 or more heroes with a video 8 hours either side, or the same rank tier 4 hours either side (`RankCooldown`), moves the time later. Until 2026-10-13 production ran 12 a day, 2 hours apart, with an 8-hour rank cooldown: 10 ordinary videos a day, which filled the 3-day window, stopped new recordings (`cap-publication-full`) and let eligible recordings expire unpublished while the stream played about 60 games a day.
+With the production settings (#507) the videos go public at most every 20 minutes (`MinimumPublicInterval`), at most 72 in any rolling 24 hours (`MaxPublicPerDay`; a non-request only while fewer than 70 are in it, because `ReservedRequestSlotsPerDay` keeps 2 for requests), and at most 504 in any rolling 7 days (`MaxPublicPerWeek`). The same map 2 hours either side, the same rank tier 1 hour either side, or the same featured hero or a roster that shares 4 or more heroes 4 hours either side moves the time later. The stream plays about 60 games a day, a game every 24 minutes, so in practice each video publishes within a few hours of its upload, most at once.
 
-Twelve ordinary games that end at 10:00, 10:30, and every half hour to 15:30 UTC, on a quota day with nothing spent yet. No map repeats within 8 hours, no rank tier within 4, and no two rosters share 4 heroes. `PublicationSchedule.Plan` with the production settings gives:
+From 2026-10-13 to #507 production ran 24 a day, an hour apart, with 8-hour map and hero cooldowns and a 2-hour rank cooldown (4 hours until 2026-10-17): 22 ordinary videos a day, which kept the 3-day window full, so 30 recordings waited on disk, about half the games were not recorded, and a video went public 4 to 5 days after its game. Until 2026-10-13 it ran 12 a day, 2 hours apart, with an 8-hour rank cooldown: 10 ordinary videos a day, which filled the 3-day window, stopped new recordings (`cap-publication-full`) and let eligible recordings expire unpublished.
+
+Twelve ordinary games that end at 10:00, 10:30, and every half hour to 15:30 UTC, on a quota day with nothing spent yet. No map repeats within 8 hours, no rank tier within 4, and no two rosters share 4 heroes. At the production settings each one publishes as it is uploaded: 30 minutes apart is more than the 20-minute interval. `PublicationSchedule.Plan` with the settings before #507 (an hour apart) gave:
 
 | Game | Uploaded | Publishes | Why not earlier |
 | --- | --- | --- | --- |
@@ -253,7 +268,7 @@ Twelve ordinary games that end at 10:00, 10:30, and every half hour to 15:30 UTC
 | 11 | 15:00 | 20:00 | interval |
 | 12 | 15:30 | 21:00 | interval |
 
-A paid request that ends at 16:00 that day publishes at 16:00, as soon as it is uploaded, at the same time as game 7: a request is not paced. All twelve uploads stay under `MaxInsertsPerQuotaDay` (30), so each recording goes on the retention sweep that follows its upload. With `MaxPublishAhead` 3 days and 22 non-request videos a day, the publication window holds 66 slots, and a full window opens about one slot an hour. Once it is full, the recording cap still records an ordinary game while the slots ahead of it leave at least a day before the game is 3 days old (`cap-queued`, see [The recording cap](#the-recording-cap)). In steady state a video then goes public about 3 to 4 days after its game.
+A paid request that ends at 16:00 that day publishes at 16:00, as soon as it is uploaded, at the same time as game 7: a request is not paced. All twelve uploads stay under `MaxInsertsPerQuotaDay`, so each recording goes on the retention sweep that follows its upload. With `MaxPublishAhead` 3 days and 70 non-request videos a day, the publication window holds 210 slots, more than three days of the stream's games, so it fills only when the stream plays more than 70 games a day. Once it is full, the recording cap still records an ordinary game while the slots ahead of it leave at least a day before the game is 3 days old (`cap-queued`, see [The recording cap](#the-recording-cap)), and no more than `MaxWaitingRecordings` wait on disk. A video then goes public at most 3 days after its upload.
 
 ## What the video contains
 
@@ -421,6 +436,19 @@ Clips are individual pentakills only (#369): one full-frame cut per pentakill un
 
 After a successful upload, retention deletes the mp4 on the next sweep, which the uploader runs right after the insert. The video may still be waiting for its `publishAt`. The context folder itself lasts `VideoKeepDays` (3 in production), and an entry that waits for `publishAt` no longer keeps it.
 
+A recording retired before upload (#489) is handled like this:
+- **Retiring it.** The uploader deletes a recording past the publication window (a Terminal slot), and the spectator's pending-bytes gate clears one the uploader would delete. Either way the entry is renamed `youtube-entry-expired.json`. A recording that delete missed goes on the next sweep. The folder then lasts `VideoKeepDays` from the rename, like an upload.
+- **Entries with no recording.** An entry with no video id and no recording left in the folder can never upload, for example from before entries were marked expired. Its folder goes once it has been untouched for `VideoKeepDays`. A recording that still waits for its insert is never removed for its age.
+- **Dry runs.** While `YouTube:DryRun` is on, a dry-run context's recording goes after `VideoMaxAgeDays` (7), then its folder.
+- **The Contexts root.** OBS writes an mp4 into the Contexts root itself when the replay's record directory could not be set. Such a file goes once quiet for `Retention:UnpublishedGrace`, with a `contexts-root` warning. The spectator no longer starts a recording when that directory fails.
+
+A parked recording (#490) is an interrupted upload the uploader will not send again on its own. That happens when its automatic retries are used (`operator-retry`), when YouTube no longer knows its upload session (`session-gone`), or when its replay is already on the channel (`on-channel`).
+- **The mark.** The uploader writes `youtube-parked.json` beside the recording, with the reason and when it was first parked. It removes the file as soon as the upload goes on, for example when an operator allows more retries.
+- **The pending-bytes gate.** A parked recording is no longer counted towards it, because it waits for an operator, not the uploader.
+- **How long it stays.** The housekeeping pass (`parked-recordings`) removes an `on-channel` recording at once, as a duplicate. Others go after `Retention:ParkedKeepDays` (7). Each removal marks the entry expired and keeps the attempt for the record.
+- **Viewer requests.** A request is never removed. Past `ParkedKeepDays` it waits for an operator, and `check storage` warns `check.storage.parked_request` with the replay, requester and reward.
+- **Where to see them.** `check storage` lists every parked recording: count, size, oldest, and reasons. A send in progress (`UploadPending`, `Uploading`) is never touched, whatever the mark says.
+
 ## The library record
 
 Every successful `videos.insert`, full match or clip, appends one line to `Data\youtube-library.jsonl`: the video id, the replay id, `full` or `clip`, the English map, the mode, the rank, the build, the privacy, and the upload time. A full match also keeps `Draft`, the description's `Draft:` note with its composition labels (`Blue no tank, Red double healer, Red dive`), and `FocusHero`, the description's `Featured:` hero. Only a viewer request that named a player (`{replayId},{BattleTag}` on the ReplayId reward, or `spectate file --player Name#1234`) writes `Featured:`. Both keys are left out of the line when the video has neither. The file sits in `Data`, not in a context folder, so retention never deletes it. A later line for the same video wins. A clip is recorded without a mode, a build, a draft note, or a named player.
@@ -499,6 +527,8 @@ Cost per video. Each group that applies is one `playlistItems.insert`, 50 units:
 | Plus a focus-hero video | +1 | +50 |
 | Clip | 0 | 0 |
 
+On the channel's 200 newest videos (2026-10-22) every one was ranked Storm League, 43% had a draft note and 17% were focus-hero videos, so a video cost about 3.6 inserts, 180 units. Production turns `Mode` off (#507): the `Storm League` playlist held the whole channel, and at the stream's 60 or so games a day 180 units a video is about 10,800 units, more than the pool. Without it a video costs about 130 units, and 72 a day fit in `LibraryUnitsPerDay` 9,500. The `Storm League` playlist on the channel keeps its videos and is not filled any further. `YouTubeQuotaPlan.PlaylistUnitsPerVideo` makes the same estimate from the groups that are on, and the uploader warns at start when `MaxPublicPerDay` videos would cost more than the library pass may spend.
+
 ### Retired playlists
 
 The patch playlists (`Patch 2.57`, `Patch 2.55 archive`, `Unknown patch`, and the old `YouTube:SeasonName` title), the `Unusual drafts - <note>` playlists, and the `Hero focus` and `Hero focus - <role>` playlists are no longer filed, and the library pass leaves the ones on the channel alone. `tools/youtube-retire-playlists.cs` cleans the channel up once:
@@ -526,14 +556,14 @@ The uploader process and `youtube library` share one ledger per Pacific quota da
 
 An insert is counted when it is sent. A new upload starts only while `UploadCalls` is under `YouTube:DailyUploadCalls` (100) minus `YouTube:UploadCallReserve` (5), and `MaxInsertsPerQuotaDay` still caps it. Otherwise the recording stays on disk until the next Pacific quota day. The library pass reserves each call's units before it makes the call, and it stops when either limit is reached:
 
-- `YouTube:LibraryUnitsPerDay` (3000 in the base file, 8000 in production) for the pass in one day.
-- `YouTube:DailyQuotaUnits` (10000) minus `YouTube:QuotaReserveUnits` (500 in the base file, 1000 in production) for the whole pool.
+- `YouTube:LibraryUnitsPerDay` (3000 in the base file, 9500 in production since #507) for the pass in one day.
+- `YouTube:DailyQuotaUnits` (10000) minus `YouTube:QuotaReserveUnits` (500 in the base file and in production since #507) for the whole pool.
 
 A file written before #250 has `UploadUnits` (1600 per insert) instead of `UploadCalls`. Reading it turns those units into calls (9600 is 6 calls) and frees the pool, so the first library pass after the update runs. Newer files keep `UploadUnits` at 0.
 
 A quota response from YouTube during the pass pauses the pass until the next Pacific quota day, and uploads continue. A daily quota response during an upload pauses new uploads until then (`UploadsPausedUntil`), and the pass continues. YouTube checks quota when the upload session is created, so a quota refusal before any session exists means nothing was sent: the attempt goes back to pending and is retried automatically after the quota day turns. An upload that stopped after its session started is ambiguous until the next pass checks its session (see Interrupted uploads).
 
-Backfilling the 338 videos on the channel today (4 already on the current template) costs about 7 units of listing (and 7 more once, for the full re-listing that reads the draft note and named player), 334 Heroes Profile lookups (the older template has no build) spread over 7 passes, and the playlist inserts. Each group that is on adds one insert per video: 338 × 50 = 16,900 units, about 6 days at 3000 units a day. With the defaults a ranked Storm League video is 3 inserts (map, mode, rank), so the backlog is about 1,014 × 50 = 50,700 units, plus 50 for each playlist that does not exist yet (about 25: one per map, mode, and league, plus the unusual drafts, review, and hero gameplay playlists). At production's 8000 units a day that is about 7 days, while new public videos take about 900 units a day of the same room. An insert an earlier pass already made is not made again. To shorten the backlog, turn `Mode` off first: almost every video is Storm League, so the `Storm League` playlist is close to the whole channel.
+Backfilling the 338 videos on the channel today (4 already on the current template) costs about 7 units of listing (and 7 more once, for the full re-listing that reads the draft note and named player), 334 Heroes Profile lookups (the older template has no build) spread over 7 passes, and the playlist inserts. Each group that is on adds one insert per video: 338 × 50 = 16,900 units, about 6 days at 3000 units a day. With the defaults a ranked Storm League video is 3 inserts (map, mode, rank), so the backlog is about 1,014 × 50 = 50,700 units, plus 50 for each playlist that does not exist yet (about 25: one per map, mode, and league, plus the unusual drafts, review, and hero gameplay playlists). At production's 8000 units a day that is about 7 days, while new public videos take about 900 units a day of the same room. An insert an earlier pass already made is not made again. To shorten the backlog, turn `Mode` off first: almost every video is Storm League, so the `Storm League` playlist is close to the whole channel. Production turned it off in #507.
 
 ## The score
 

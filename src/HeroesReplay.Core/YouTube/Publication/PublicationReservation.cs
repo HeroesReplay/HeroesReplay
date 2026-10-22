@@ -313,6 +313,31 @@ public static class PublicationReservation
         };
     }
 
+    /// <summary>
+    /// Drops the slots whose publish time is before <paramref name="before"/> and writes the
+    /// ledger when any went (#492). Terminal marks stay: they are the stale work keys. Returns
+    /// how many slots went. Only the uploader writes this ledger, under the same lock.
+    /// </summary>
+    public static int Trim(string path, DateTimeOffset before)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
+        {
+            return 0;
+        }
+
+        lock (Sync)
+        {
+            Ledger ledger = Read(path);
+            int dropped = ledger.Reserved.RemoveAll(slot => slot.At < before);
+            if (dropped > 0)
+            {
+                Write(path, ledger);
+            }
+
+            return dropped;
+        }
+    }
+
     /// <summary>The publish time held for <paramref name="workKey"/>, or null when it holds no slot.</summary>
     public static DateTimeOffset? HeldAt(string path, string workKey)
     {
