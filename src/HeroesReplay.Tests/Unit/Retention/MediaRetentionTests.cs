@@ -1,9 +1,11 @@
 using System;
 using System.IO;
+using System.Linq;
 using HeroesReplay.Core.Configuration;
 using HeroesReplay.Core.HeroesProfile;
 using HeroesReplay.Core.Replays;
 using HeroesReplay.Core.Retention;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Retention;
@@ -432,6 +434,82 @@ public class MediaRetentionTests
         Assert.True(File.Exists(Path.Combine(replayOnly, "young.StormReplay")));
         Assert.False(File.Exists(Path.Combine(replayOnly, "old.StormReplay")));
         Assert.True(Directory.Exists(replayOnly));
+    }
+
+    /// <summary>
+    /// #487: the plan names what the sweep removes, with a reason, and removes nothing itself.
+    /// </summary>
+    [Fact]
+    public void Plan_ListsWhatTheSweepRemoves_WithAReason_AndRemovesNothing()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = FixedNow();
+        string uploaded = library.AddContext("uploaded");
+        string orphan = library.AddContext("orphan");
+        string old = library.AddContext("old");
+        string live = library.AddContext("live");
+        TempLibrary.WriteText(uploaded, "youtube-entry.json", "{\"VideoId\":\"abc\"}");
+        TempLibrary.WriteFile(uploaded, "match.mp4", 64, now.AddHours(-2));
+        TempLibrary.WriteFile(orphan, "match.mp4", 32, now.AddHours(-3));
+        TempLibrary.WriteText(old, "youtube-entry-uploaded.json", "{}");
+        TempLibrary.WriteFile(live, "current.mp4", 4, now);
+        TempLibrary.SetDirectoryTime(uploaded, now.AddHours(-2));
+        TempLibrary.SetDirectoryTime(orphan, now.AddHours(-3));
+        TempLibrary.SetDirectoryTime(old, now.AddDays(-5));
+        TempLibrary.SetDirectoryTime(live, now);
+
+        PrunePlan plan = MediaRetention.Plan(Settings(library.Root), now);
+
+        Assert.True(File.Exists(Path.Combine(uploaded, "match.mp4")));
+        Assert.True(File.Exists(Path.Combine(orphan, "match.mp4")));
+        Assert.True(Directory.Exists(old));
+        Assert.Equal(MediaRetention.PrunerName, plan.Pruner);
+        Assert.Collection(
+            plan.Items.OrderBy(item => item.Path, StringComparer.Ordinal),
+            item =>
+            {
+                Assert.Equal(old, item.Path);
+                Assert.True(item.IsDirectory);
+                Assert.Contains("VideoKeepDays", item.Reason);
+            },
+            item =>
+            {
+                Assert.Equal(Path.Combine(orphan, "match.mp4"), item.Path);
+                Assert.Contains("no youtube-entry.json", item.Reason);
+                Assert.Contains("reason: no-entry", item.Warning);
+            },
+            item =>
+            {
+                Assert.Equal(Path.Combine(uploaded, "match.mp4"), item.Path);
+                Assert.Equal(64, item.Bytes);
+                Assert.Contains("on YouTube", item.Reason);
+            }
+        );
+
+        RetentionSweep sweep = MediaRetention.Pruner(Settings(library.Root)).Apply(plan);
+
+        Assert.Equal(3, sweep.DeletedFiles);
+        Assert.False(File.Exists(Path.Combine(uploaded, "match.mp4")));
+        Assert.False(Directory.Exists(old));
+        Assert.True(File.Exists(Path.Combine(live, "current.mp4")));
+    }
+
+    [Fact]
+    public void SweepAndLog_UnderHousekeepingDryRun_RemovesNothing()
+    {
+        using TempLibrary library = new TempLibrary();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        string orphan = library.AddContext("orphan");
+        string live = library.AddContext("live");
+        TempLibrary.WriteFile(orphan, "match.mp4", 32, now.AddHours(-3));
+        TempLibrary.SetDirectoryTime(orphan, now.AddHours(-3));
+        TempLibrary.SetDirectoryTime(live, now);
+        AppSettings settings = Settings(library.Root);
+        settings.Housekeeping = new HousekeepingSettings { DryRun = true };
+
+        MediaRetention.SweepAndLog(settings, NullLogger.Instance);
+
+        Assert.True(File.Exists(Path.Combine(orphan, "match.mp4")));
     }
 
     private static DateTimeOffset FixedNow() => new(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);

@@ -33,6 +33,7 @@ public class CliJsonOutputTests
             "check battlenet",
             "check ffmpeg",
             "check runtime",
+            "check storage",
             "obs status",
             "obs inspect",
             "obs validate",
@@ -45,7 +46,8 @@ public class CliJsonOutputTests
             "client status",
             "deps install",
             "services status",
-            "services ensure"
+            "services ensure",
+            "storage report"
         );
 
     [Theory]
@@ -124,6 +126,27 @@ public class CliJsonOutputTests
             check.GetProperty("detail").GetString()
         );
         Assert.Equal(0, code);
+    }
+
+    [Fact]
+    public async Task StorageReport_WithoutApply_PrintsTheEnvelope()
+    {
+        // Read only: without --apply it plans every pruner and removes nothing (#487).
+        (int code, string output, _) = await InvokeAsync("storage report --output json");
+
+        JsonElement root = Envelope(output);
+        Assert.Equal(0, code);
+        Assert.Equal("storage.report", root.GetProperty("code").GetString());
+        JsonElement details = root.GetProperty("details");
+        Assert.Contains(
+            details.GetProperty("categories").EnumerateArray(),
+            row => row.GetProperty("name").GetString() == "recordings"
+        );
+        Assert.Contains(
+            details.GetProperty("pruners").EnumerateArray(),
+            row => row.GetProperty("name").GetString() == "media"
+        );
+        Assert.Equal(JsonValueKind.Null, details.GetProperty("applied").ValueKind);
     }
 
     [Fact]

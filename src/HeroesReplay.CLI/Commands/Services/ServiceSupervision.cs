@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using HeroesReplay.Core.Obs;
+using HeroesReplay.Core.Retention;
 using HeroesReplay.Core.ServiceHost;
 using HeroesReplay.Core.Shared;
 using Microsoft.Extensions.Logging;
@@ -123,6 +124,12 @@ public sealed class ServiceSupervision
 
     /// <summary>The hourly machine line (#251). Null logs none.</summary>
     public MachineHealthLog MachineHealth { get; init; }
+
+    /// <summary>
+    /// The housekeeping pass (#487): every pruner when the supervisor starts and then on its
+    /// interval, off this thread, whether or not a role is busy. Null runs none.
+    /// </summary>
+    public HousekeepingSchedule Housekeeping { get; init; }
 
     /// <summary>
     /// The OBS watchdog (#398): starts OBS when it is gone and restarts it when its websocket
@@ -339,6 +346,7 @@ public sealed class ServiceSupervision
 
         Save(changed);
         MachineHealth?.Tick(now);
+        Housekeeping?.Tick(now);
         return true;
     }
 

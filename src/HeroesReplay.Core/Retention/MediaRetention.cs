@@ -23,8 +23,18 @@ public sealed class RetentionSweep
 
 public static class MediaRetention
 {
+    /// <summary>The media pruner's name in the housekeeping pass and <c>storage report</c>.</summary>
+    public const string PrunerName = "media";
+
     public static void SweepAndLog(AppSettings settings, ILogger logger)
     {
+        if (settings?.Housekeeping?.DryRun == true)
+        {
+            // Housekeeping:DryRun covers the in-role sweeps too: log, remove nothing (#487).
+            HousekeepingPass.LogDryRun(Plan(settings, DateTimeOffset.UtcNow), logger);
+            return;
+        }
+
         RetentionSweep sweep = Sweep(settings, DateTimeOffset.UtcNow);
         if (sweep.DeletedFiles > 0)
         {
@@ -49,12 +59,24 @@ public static class MediaRetention
         }
     }
 
-    public static RetentionSweep Sweep(AppSettings settings, DateTimeOffset utcNow)
+    public static RetentionSweep Sweep(AppSettings settings, DateTimeOffset utcNow) =>
+        Plan(settings, utcNow).DeleteAll();
+
+    /// <summary>The media pruner for the housekeeping pass (#487).</summary>
+    public static IPruner Pruner(AppSettings settings) =>
+        new Pruner(
+            PrunerName,
+            "Played replays after Retention:ReplayKeepDays; uploaded recordings; context folders after Retention:VideoKeepDays; recordings that can never be uploaded.",
+            now => Plan(settings, now)
+        );
+
+    /// <summary>What a sweep would remove now, in the order it removes it. Writes nothing (#487).</summary>
+    public static PrunePlan Plan(AppSettings settings, DateTimeOffset utcNow)
     {
-        var result = new RetentionSweep();
+        var plan = new PrunePlan(PrunerName);
         if (settings?.Retention?.Enabled == false || settings?.Location == null)
         {
-            return result;
+            return plan;
         }
 
         int videoKeepDays =
@@ -65,9 +87,6 @@ public static class MediaRetention
                 : videoKeepDays + 4;
         int replayKeepDays =
             settings.Retention?.ReplayKeepDays > 0 ? settings.Retention.ReplayKeepDays : 30;
-        DateTimeOffset keepBefore = utcNow.AddDays(-videoKeepDays);
-        DateTimeOffset dropBefore = utcNow.AddDays(-videoMaxDays);
-        DateTimeOffset replayBefore = utcNow.AddDays(-replayKeepDays);
         string separator = string.IsNullOrEmpty(settings.StormReplay?.Seperator)
             ? "_"
             : settings.StormReplay.Seperator;
@@ -76,36 +95,45 @@ public static class MediaRetention
         HashSet<int> played = PlayedReplayIds.Read(settings.Location.DataDirectory);
         if (settings.HeroesProfileApi != null)
         {
-            DeletePlayedReplays(
-                settings.StandardReplayCachePath,
-                played,
-                protectedId,
-                separator,
-                replayBefore,
-                result
-            );
-            DeletePlayedReplays(
-                settings.RequestedReplayCachePath,
-                played,
-                protectedId,
-                separator,
-                replayBefore,
-                result
-            );
+            var replays = new ReplayRule(played, protectedId, separator, replayKeepDays, utcNow);
+            PlanPlayedReplays(settings.StandardReplayCachePath, replays, plan);
+            PlanPlayedReplays(settings.RequestedReplayCachePath, replays, plan);
         }
+
         TimeSpan grace =
             settings.Retention?.UnpublishedGrace > TimeSpan.Zero
                 ? settings.Retention.UnpublishedGrace
                 : TimeSpan.FromHours(1);
-        DeleteOldContexts(
+        PlanOldContexts(
             settings.ContextsDirectory,
             protectedId,
-            keepBefore,
-            dropBefore,
-            utcNow - grace,
-            result
+            new ContextRule(videoKeepDays, videoMaxDays, grace, utcNow),
+            plan
         );
-        return result;
+        return plan;
+    }
+
+    private sealed record ReplayRule(
+        HashSet<int> Played,
+        string ProtectedId,
+        string Separator,
+        int KeepDays,
+        DateTimeOffset UtcNow
+    )
+    {
+        public DateTime Before => UtcNow.AddDays(-KeepDays).UtcDateTime;
+    }
+
+    private sealed record ContextRule(
+        int KeepDays,
+        int MaxDays,
+        TimeSpan Grace,
+        DateTimeOffset UtcNow
+    )
+    {
+        public DateTime KeepBefore => UtcNow.AddDays(-KeepDays).UtcDateTime;
+        public DateTime DropBefore => UtcNow.AddDays(-MaxDays).UtcDateTime;
+        public DateTime QuietBefore => (UtcNow - Grace).UtcDateTime;
     }
 
     private static string ProtectNewestContext(string contextsDirectory)
@@ -122,47 +150,42 @@ public static class MediaRetention
         return newest?.Name;
     }
 
-    private static void DeletePlayedReplays(
-        string directory,
-        HashSet<int> played,
-        string protectedId,
-        string separator,
-        DateTimeOffset replayBefore,
-        RetentionSweep result
-    )
+    private static void PlanPlayedReplays(string directory, ReplayRule rule, PrunePlan plan)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
         {
             return;
         }
 
-        foreach (string path in Directory.EnumerateFiles(directory, "*.StormReplay"))
+        foreach (FileInfo replay in new DirectoryInfo(directory).EnumerateFiles("*.StormReplay"))
         {
-            string name = Path.GetFileName(path);
-            if (!TryReplayId(name, separator, out int id))
+            if (!TryReplayId(replay.Name, rule.Separator, out int id))
             {
                 continue;
             }
 
-            if (string.Equals(id.ToString(), protectedId, StringComparison.Ordinal))
+            if (string.Equals(id.ToString(), rule.ProtectedId, StringComparison.Ordinal))
             {
                 continue;
             }
 
-            if (played.Contains(id) && File.GetLastWriteTimeUtc(path) < replayBefore.UtcDateTime)
+            if (rule.Played.Contains(id) && replay.LastWriteTimeUtc < rule.Before)
             {
-                DeleteFile(path, result, warning: null);
+                plan.Add(
+                    PruneItem.ForFile(
+                        replay,
+                        $"played replay older than Retention:ReplayKeepDays ({rule.KeepDays} days)"
+                    )
+                );
             }
         }
     }
 
-    private static void DeleteOldContexts(
+    private static void PlanOldContexts(
         string contextsDirectory,
         string protectedId,
-        DateTimeOffset keepBefore,
-        DateTimeOffset dropBefore,
-        DateTimeOffset quietBefore,
-        RetentionSweep result
+        ContextRule rule,
+        PrunePlan plan
     )
     {
         if (string.IsNullOrWhiteSpace(contextsDirectory) || !Directory.Exists(contextsDirectory))
@@ -172,6 +195,8 @@ public static class MediaRetention
 
         foreach (DirectoryInfo dir in new DirectoryInfo(contextsDirectory).GetDirectories())
         {
+            // A file this plan already removes is not looked at again for the same folder.
+            var planned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool inserted = PendingUploadSize.IsInserted(dir.FullName, "youtube-entry.json");
             if (
                 !string.Equals(dir.Name, protectedId, StringComparison.OrdinalIgnoreCase)
@@ -181,7 +206,10 @@ public static class MediaRetention
                 // The video is on YouTube. Its entry may wait for publishAt, but the mp4 is not needed.
                 foreach (FileInfo video in dir.GetFiles("*.mp4"))
                 {
-                    DeleteFile(video.FullName, result, warning: null);
+                    plan.Add(
+                        PruneItem.ForFile(video, "uploaded recording: the video is on YouTube")
+                    );
+                    planned.Add(video.FullName);
                 }
             }
 
@@ -193,11 +221,20 @@ public static class MediaRetention
             bool dryRun = dir.GetFiles(DryRunRecordings.PlanFileName).Length > 0;
             bool remoteUpload =
                 !dryRun && (inserted || dir.GetFiles("youtube-entry-uploaded.json").Length > 0);
-            FileInfo[] videos = dir.GetFiles("*.mp4");
+            FileInfo[] videos = dir.GetFiles("*.mp4")
+                .Where(video => !planned.Contains(video.FullName))
+                .ToArray();
             DateTime written = dir.LastWriteTimeUtc;
             if (dryRun)
             {
-                DeleteHeavyFilesOlderThan(dir, dropBefore, result, warnNeverUploaded: true);
+                PlanHeavyFilesOlderThan(
+                    dir,
+                    rule.DropBefore,
+                    $"dry-run media older than Retention:VideoMaxAgeDays ({rule.MaxDays} days)",
+                    planned,
+                    plan,
+                    warnNeverUploaded: true
+                );
                 continue;
             }
 
@@ -209,26 +246,39 @@ public static class MediaRetention
             {
                 foreach (FileInfo video in videos)
                 {
-                    if (video.LastWriteTimeUtc >= quietBefore.UtcDateTime)
+                    if (video.LastWriteTimeUtc >= rule.QuietBefore)
                     {
                         continue;
                     }
 
-                    DeleteFile(video.FullName, result, NoEntryWarning(video.FullName));
+                    plan.Add(
+                        PruneItem.ForFile(
+                            video,
+                            "recording with no youtube-entry.json, quiet for Retention:UnpublishedGrace",
+                            NoEntryWarning(video.FullName)
+                        )
+                    );
                 }
 
                 continue;
             }
 
-            bool retainedYoungMedia = DeleteHeavyFilesOlderThan(
+            bool retainedYoungMedia = PlanHeavyFilesOlderThan(
                 dir,
-                keepBefore,
-                result,
+                rule.KeepBefore,
+                $"media older than Retention:VideoKeepDays ({rule.KeepDays} days)",
+                planned,
+                plan,
                 warnNeverUploaded: false
             );
-            if (!retainedYoungMedia && written < keepBefore.UtcDateTime)
+            if (!retainedYoungMedia && written < rule.KeepBefore)
             {
-                DeleteDirectory(dir, result);
+                plan.Add(
+                    PruneItem.ForDirectory(
+                        dir,
+                        $"context folder older than Retention:VideoKeepDays ({rule.KeepDays} days)"
+                    )
+                );
             }
         }
     }
@@ -259,17 +309,24 @@ public static class MediaRetention
         return !inserted && dir.GetFiles("youtube-entry.json").Length > 0;
     }
 
-    private static bool DeleteHeavyFilesOlderThan(
+    private static bool PlanHeavyFilesOlderThan(
         DirectoryInfo dir,
-        DateTimeOffset deleteBefore,
-        RetentionSweep result,
+        DateTime deleteBefore,
+        string reason,
+        HashSet<string> planned,
+        PrunePlan plan,
         bool warnNeverUploaded
     )
     {
         bool retainedYoungMedia = false;
         foreach (FileInfo heavy in dir.GetFiles("*.mp4").Concat(dir.GetFiles("*.StormReplay")))
         {
-            if (heavy.LastWriteTimeUtc >= deleteBefore.UtcDateTime)
+            if (planned.Contains(heavy.FullName))
+            {
+                continue;
+            }
+
+            if (heavy.LastWriteTimeUtc >= deleteBefore)
             {
                 retainedYoungMedia = true;
                 continue;
@@ -282,13 +339,14 @@ public static class MediaRetention
                         + heavy.FullName
                         + " (reason: dry-run. A dry run never sends it.)"
                     : null;
-            DeleteFile(heavy.FullName, result, warning);
+            plan.Add(PruneItem.ForFile(heavy, reason, warning));
+            planned.Add(heavy.FullName);
         }
 
         return retainedYoungMedia;
     }
 
-    private static void DeleteDirectory(DirectoryInfo dir, RetentionSweep result)
+    internal static void DeleteDirectory(DirectoryInfo dir, RetentionSweep result)
     {
         try
         {

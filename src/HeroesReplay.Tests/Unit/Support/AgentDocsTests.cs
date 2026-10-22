@@ -15,6 +15,7 @@ using HeroesReplay.Core.Dependencies;
 using HeroesReplay.Core.Obs;
 using HeroesReplay.Core.Obs.Collection;
 using HeroesReplay.Core.Obs.Inspection;
+using HeroesReplay.Core.Retention;
 using Xunit;
 
 namespace HeroesReplay.Tests.Unit.Support;
@@ -66,6 +67,7 @@ public class AgentDocsTests
             .. CommandReference.CodesIn(typeof(ObsPlanCodes)),
             .. CommandReference.CodesIn(typeof(ObsBackupCodes)),
             .. CommandReference.CodesIn(typeof(ConfigurationProvenance)),
+            .. CommandReference.CodesIn(typeof(StorageReport)),
         ];
 
         List<string> missing = codes

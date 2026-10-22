@@ -225,6 +225,16 @@ Report the .NET runtime this exe runs on (RuntimeInformation.FrameworkDescriptio
 - **Exit:** 0 when the check passes (a warning passes), 1 when it fails or on a parse error.
 - **Codes:** `check.runtime.ok`, `check.runtime.older_than_release`, `check.runtime.error`
 
+## `check storage`
+
+Measure Location:DataDirectory and %LOCALAPPDATA%\HeroesReplay (total, largest category, free space) and report the last housekeeping pass (housekeeping.json). A pass that never ran, ran more than 3 Housekeeping:Interval ago, or failed is a warning.
+
+- **Options:** `--output` (`-o`)
+- **Before:** None. Reads no secret.
+- **Changes:** Nothing. Measures `Location:DataDirectory` and `%LOCALAPPDATA%\HeroesReplay` and reads `housekeeping.json`.
+- **Exit:** 0 always unless the read throws (a pass that never ran, ran more than 3 `Housekeeping:Interval` ago, or failed is a warning), 1 on a parse error or an unexpected error.
+- **Codes:** `check.storage.ok`, `check.storage.never_ran`, `check.storage.stale`, `check.storage.last_failed`, `check.storage.error`
+
 ## `client configure`
 
 Write Variables.txt (windowed 1080p, AhliObs) and copy the StormInterface into Documents.
@@ -672,3 +682,13 @@ Print every effective setting with the layer that set it (base appsettings.json,
 - **Changes:** Nothing. Secrets are always redacted.
 - **Exit:** 0 when printed, 1 when `appsettings.json` is missing or unreadable, or `--section` matches nothing.
 - **Codes:** `config.base_missing`, `config.unreadable`, `config.section_not_found`
+
+## `storage report`
+
+Show every storage category (files, size, oldest item) and what each pruner's next housekeeping pass would remove, and why. Read only. With --apply, run the pass now (as the supervisor does every Housekeeping:Interval) and report what it removed; Housekeeping:DryRun makes it log only.
+
+- **Options:** `--apply`, `--items`, `--output` (`-o`)
+- **Before:** None. Reads no secret. Safe beside a running stack: without `--apply` it only reads.
+- **Changes:** Nothing without `--apply`. With `--apply` it runs the housekeeping pass now, as the supervisor does every `Housekeeping:Interval`: each enabled pruner removes what its plan names (nothing under `Housekeeping:DryRun`), and it writes `housekeeping.json`.
+- **Exit:** 0 when the report is printed, 1 when a pruner failed under `--apply`, on a parse error, or on an unexpected error.
+- **Codes:** `storage.report`, `storage.applied`, `storage.dry_run`, `storage.apply_failed`
