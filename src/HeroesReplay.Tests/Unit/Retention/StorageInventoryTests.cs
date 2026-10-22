@@ -179,7 +179,7 @@ public sealed class StorageInventoryTests : IDisposable
         Assert.Equal(1, read.LastRun.Deleted);
         Assert.Equal(Housekeeping.SupervisorTrigger, read.LastRun.Trigger);
         Assert.Equal(state.Storage.DataBytes, read.Storage.DataBytes);
-        Assert.Equal(2, read.LastRun.Pruners.Count);
+        Assert.Equal(Housekeeping.Pruners(settings).Count, read.LastRun.Pruners.Count);
     }
 
     [Fact]

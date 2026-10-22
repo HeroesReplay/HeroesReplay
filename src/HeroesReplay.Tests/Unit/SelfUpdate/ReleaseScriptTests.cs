@@ -407,6 +407,28 @@ public class ReleaseScriptTests
         Assert.Contains("log released", output);
     }
 
+    [Fact]
+    public void ApplyRelease_MovesTheLastUpdatesLogAside_SoEachUpdateHasItsOwn()
+    {
+        // #488: every update appended to apply-release.log, so it grew without end.
+        using var sandbox = new ScriptSandbox();
+        File.WriteAllText(sandbox.MainLog, "the last update" + Environment.NewLine);
+        File.SetLastWriteTimeUtc(
+            sandbox.MainLog,
+            new DateTime(2026, 10, 21, 9, 30, 0, DateTimeKind.Utc)
+        );
+
+        (int code, string output) = sandbox.Run(sandbox.MainLog);
+
+        Assert.Equal(0, code);
+        string archived = Path.Combine(sandbox.Logs, "apply-release.20261021-093000.log");
+        Assert.Equal("the last update" + Environment.NewLine, File.ReadAllText(archived));
+        string log = File.ReadAllText(sandbox.MainLog);
+        Assert.Contains("Refusing to replace a source build", log);
+        Assert.DoesNotContain("the last update", log);
+        Assert.Contains("log released", output);
+    }
+
     /// <summary>
     /// Runs apply-release.ps1 under Windows PowerShell 5.1, the host the spectator starts it with,
     /// with LOCALAPPDATA in a temp folder and an InstallDir under \worktrees\, so the script
