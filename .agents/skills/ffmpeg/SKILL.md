@@ -55,4 +55,4 @@ ffmpeg -y -f concat -safe 0 -i list.txt -c copy clips.mp4
 
 `list.txt` lines are `file 'clip-1.mp4'`.
 
-After either command, `ffprobe` the output and check duration, width, and height. Width and height match the source, 1920x1080 for an OBS match recording. Delete nothing from `Data\Contexts` until that check passes. `MediaRetention` deletes old match mp4s on its own (`Retention:VideoKeepDays` 3, `VideoMaxAgeDays` 7), so cut from a recent recording.
+After either command, `ffprobe` the output and check duration, width, and height. Width and height match the source, 1920x1080 for an OBS match recording. Delete nothing from `Data\Contexts` until that check passes. `MediaRetention` deletes match mp4s on its own (right after the upload, and dry-run ones after `Retention:VideoMaxAgeDays` 7), so cut from a recent recording.

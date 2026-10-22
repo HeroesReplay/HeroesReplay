@@ -6,11 +6,18 @@ public class RetentionSettings
 {
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Remotely uploaded recordings and their context folders older than this are removed.</summary>
+    /// <summary>
+    /// Context folders with nothing left to upload are removed once untouched for this many days:
+    /// uploaded ones, ones whose recording was retired (<c>youtube-entry-expired.json</c>), and
+    /// ones whose entry has no recording (#489).
+    /// </summary>
     public int VideoKeepDays { get; set; } = 3;
 
     /// <summary>
-    /// Recordings that were not uploaded to YouTube, including dry runs, are removed after this many days.
+    /// Dry-run recordings (a context with <c>youtube-dry-run.json</c>; one whose entry still waits
+    /// counts only while <c>YouTube:DryRun</c> is on) are removed after this many days, then their
+    /// folder (#489). A recording that waits for its insert in a live run is never removed for its
+    /// age here: the pending-bytes gate and the uploader's publication window decide it.
     /// </summary>
     public int VideoMaxAgeDays { get; set; } = 7;
 

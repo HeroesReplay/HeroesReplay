@@ -107,7 +107,13 @@ public static class MediaRetention
         PlanOldContexts(
             settings.ContextsDirectory,
             protectedId,
-            new ContextRule(videoKeepDays, videoMaxDays, grace, utcNow),
+            new ContextRule(
+                videoKeepDays,
+                videoMaxDays,
+                grace,
+                utcNow,
+                settings.YouTube?.DryRun == true
+            ),
             plan
         );
         return plan;
@@ -124,11 +130,17 @@ public static class MediaRetention
         public DateTime Before => UtcNow.AddDays(-KeepDays).UtcDateTime;
     }
 
+    /// <summary>
+    /// <see cref="DryRun"/> is <c>YouTube:DryRun</c>: a recording the dry run planned is never
+    /// sent, even while its entry waits, so VideoMaxAgeDays bounds it. With DryRun off a live
+    /// uploader sends a recording an earlier dry run planned, so it waits like any other.
+    /// </summary>
     private sealed record ContextRule(
         int KeepDays,
         int MaxDays,
         TimeSpan Grace,
-        DateTimeOffset UtcNow
+        DateTimeOffset UtcNow,
+        bool DryRun
     )
     {
         public DateTime KeepBefore => UtcNow.AddDays(-KeepDays).UtcDateTime;
@@ -193,7 +205,24 @@ public static class MediaRetention
             return;
         }
 
-        foreach (DirectoryInfo dir in new DirectoryInfo(contextsDirectory).GetDirectories())
+        var root = new DirectoryInfo(contextsDirectory);
+        // OBS records into the Contexts root when it never got the replay's folder (#489). No
+        // entry names such a file, so nothing can upload it: it goes once OBS is done with it.
+        foreach (FileInfo stray in root.GetFiles("*.mp4"))
+        {
+            if (stray.LastWriteTimeUtc < rule.QuietBefore)
+            {
+                plan.Add(
+                    PruneItem.ForFile(
+                        stray,
+                        "recording in the Contexts root, quiet for Retention:UnpublishedGrace: no replay folder or entry names it",
+                        StrayWarning(stray.FullName)
+                    )
+                );
+            }
+        }
+
+        foreach (DirectoryInfo dir in root.GetDirectories())
         {
             // A file this plan already removes is not looked at again for the same folder.
             var planned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -213,21 +242,43 @@ public static class MediaRetention
                 }
             }
 
-            if (IsProtectedContext(dir, protectedId, inserted))
+            if (string.Equals(dir.Name, protectedId, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
             bool dryRun = dir.GetFiles(DryRunRecordings.PlanFileName).Length > 0;
-            bool remoteUpload =
-                !dryRun && (inserted || dir.GetFiles("youtube-entry-uploaded.json").Length > 0);
             FileInfo[] videos = dir.GetFiles("*.mp4")
                 .Where(video => !planned.Contains(video.FullName))
                 .ToArray();
             DateTime written = dir.LastWriteTimeUtc;
+            FileInfo entry = WaitingEntry(dir, inserted);
+            if (entry != null && !(dryRun && rule.DryRun))
+            {
+                // A recording that waits for its insert is kept (#250). Without a recording the
+                // entry can never upload: a recording retired before it was marked expired, or one
+                // that never finished (#489). It goes once untouched for VideoKeepDays.
+                DateTime touched =
+                    entry.LastWriteTimeUtc > written ? entry.LastWriteTimeUtc : written;
+                if (videos.Length == 0 && touched < rule.KeepBefore)
+                {
+                    plan.Add(
+                        PruneItem.ForDirectory(
+                            dir,
+                            $"youtube-entry.json with no video id and no recording, untouched for Retention:VideoKeepDays ({rule.KeepDays} days): nothing in it can be uploaded"
+                        )
+                    );
+                }
+
+                continue;
+            }
+
+            bool remoteUpload =
+                !dryRun && (inserted || dir.GetFiles("youtube-entry-uploaded.json").Length > 0);
             if (dryRun)
             {
-                PlanHeavyFilesOlderThan(
+                // YouTube:DryRun never sends it: the media goes after VideoMaxAgeDays, then the folder.
+                bool retainedDryRun = PlanHeavyFilesOlderThan(
                     dir,
                     rule.DropBefore,
                     $"dry-run media older than Retention:VideoMaxAgeDays ({rule.MaxDays} days)",
@@ -235,14 +286,43 @@ public static class MediaRetention
                     plan,
                     warnNeverUploaded: true
                 );
+                if (!retainedDryRun && written < rule.DropBefore)
+                {
+                    plan.Add(
+                        PruneItem.ForDirectory(
+                            dir,
+                            $"dry-run context folder older than Retention:VideoMaxAgeDays ({rule.MaxDays} days)"
+                        )
+                    );
+                }
+
                 continue;
             }
 
+            if (dir.GetFiles(RetiredRecordings.EntryFileName).Length > 0)
+            {
+                // Retired before upload (#489): the uploader or the pending-bytes gate already
+                // decided it goes, so a recording left behind (a delete that failed) goes too.
+                foreach (
+                    FileInfo video in videos.Where(video =>
+                        video.LastWriteTimeUtc < rule.QuietBefore
+                    )
+                )
+                {
+                    plan.Add(
+                        PruneItem.ForFile(
+                            video,
+                            "recording retired before upload (youtube-entry-expired.json)"
+                        )
+                    );
+                    planned.Add(video.FullName);
+                }
+            }
             // The spectator writes the YouTube entry seconds after OBS stops. A recording with no
             // entry that has not been written for UnpublishedGrace can never be published, so it
             // goes now, not after VideoMaxAgeDays (#204). The newest context by time is not
             // always the live session, so the file's own write time protects it (#212).
-            if (videos.Length > 0 && !remoteUpload)
+            else if (videos.Length > 0 && !remoteUpload)
             {
                 foreach (FileInfo video in videos)
                 {
@@ -295,18 +375,26 @@ public static class MediaRetention
         + path
         + " (reason: no-entry. It has no youtube-entry.json, so the uploader can never send it: the session ended before the publication decision, for example a crash or a stop mid-match, or the publication was withheld).";
 
+    /// <summary>A recording OBS wrote into the Contexts root goes, and the operator hears why.</summary>
+    public static string StrayWarning(string path) =>
+        "Removed recording that was never uploaded: "
+        + path
+        + " (reason: contexts-root. OBS wrote it into the Contexts folder itself, not a replay's folder, so no entry names it and the uploader can never send it).";
+
     /// <summary>
-    /// The newest context and a recording still waiting for its insert are kept. An entry that
-    /// already has a video id only waits for publishAt, so its context ages out like an upload.
+    /// The entry of a recording that still waits for its insert: <c>youtube-entry.json</c> with
+    /// no video id. An entry that has one only waits for publishAt, so its folder ages out like an
+    /// upload. Null when there is none.
     /// </summary>
-    private static bool IsProtectedContext(DirectoryInfo dir, string protectedId, bool inserted)
+    private static FileInfo WaitingEntry(DirectoryInfo dir, bool inserted)
     {
-        if (string.Equals(dir.Name, protectedId, StringComparison.OrdinalIgnoreCase))
+        if (inserted)
         {
-            return true;
+            return null;
         }
 
-        return !inserted && dir.GetFiles("youtube-entry.json").Length > 0;
+        var entry = new FileInfo(Path.Combine(dir.FullName, "youtube-entry.json"));
+        return entry.Exists ? entry : null;
     }
 
     private static bool PlanHeavyFilesOlderThan(
